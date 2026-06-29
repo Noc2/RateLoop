@@ -15,6 +15,7 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract AdversarialConfidentialityProtocolConfig {
@@ -152,7 +153,7 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, EPOCH_DURATION, 3, 100);
 
         // Fund actors
         address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8];
@@ -250,8 +251,10 @@ contract AdversarialTests is VotingTestBase {
     }
 
     function _settleAfterFinalGrace(uint256 contentId, uint256 roundId, bytes32[] memory commitKeys) internal {
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() + 1);
+        vm.warp(
+            _lastCommitRevealableAfter(engine, contentId, roundId)
+                + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() + 1
+        );
         for (uint256 i = 0; i < commitKeys.length; i++) {
             _reveal(contentId, roundId, commitKeys[i]);
         }
@@ -266,7 +269,7 @@ contract AdversarialTests is VotingTestBase {
     function test_RewardExhaustion_MultipleWinners_CantExceedPool() public {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 5, 100);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, EPOCH_DURATION, 5, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();
@@ -385,16 +388,18 @@ contract AdversarialTests is VotingTestBase {
     function test_DoubleClaim_Refund_Reverts() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        vm.warp(1000 + 7 days + 1);
-        engine.cancelExpiredRound(contentId, 1);
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION + 1);
+        engine.cancelExpiredRound(contentId, roundId);
 
         vm.prank(voter1);
-        engine.claimCancelledRoundRefund(contentId, 1);
+        engine.claimCancelledRoundRefund(contentId, roundId);
 
         vm.prank(voter1);
         vm.expectRevert(RoundVotingEngine.AlreadyClaimed.selector);
-        engine.claimCancelledRoundRefund(contentId, 1);
+        engine.claimCancelledRoundRefund(contentId, roundId);
     }
 
     /// @notice Voter who committed but was not revealed cannot claim reward (only refund path)
@@ -462,36 +467,41 @@ contract AdversarialTests is VotingTestBase {
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
     }
 
-    /// @notice Unrevealed voter from current epoch at settlement should be refunded, not forfeited
-    function test_ProcessUnrevealed_CurrentEpochVoter_Refunded() public {
+    /// @notice Reveal-failed rounds refund unrevealed voters because no winning side exists.
+    function test_ProcessUnrevealed_RevealFailedVoter_Refunded() public {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        MockRaterIdentityRegistry mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
+        mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
+        mockRaterIdentityRegistry.setHolder(voter4);
+        vm.prank(owner);
+        protocolConfig.setRaterRegistry(address(mockRaterIdentityRegistry));
+
         uint256 contentId = _submitContent();
 
-        // Epoch 1 voters
         (bytes32 ck1,) = _commit(voter1, contentId, true, STAKE);
-        (bytes32 ck2,) = _commit(voter2, contentId, false, STAKE);
-        (bytes32 ck3,) = _commit(voter3, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+        _commit(voter4, contentId, true, 2_500_000);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        // Move into epoch 2, add voter3 before the reveal threshold is reached,
-        // then reveal the epoch 1 voters.
+        // Reveal fewer than the RBTS quorum, then wait until the reveal-failed deadline.
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
-        _commit(voter4, contentId, true, 2_500_000);
         _reveal(contentId, roundId, ck1);
-        _reveal(contentId, roundId, ck2);
-        _reveal(contentId, roundId, ck3);
 
-        // Settle immediately (voter3's epoch hasn't ended)
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        vm.warp(block.timestamp + 365 days);
+        engine.finalizeRevealFailedRound(contentId, roundId);
 
         uint256 voter4Before = lrepToken.balanceOf(voter4);
 
-        // Process unrevealed — voter4 should be refunded (epoch not ended at settlement)
+        // Process unrevealed — voter4 should be refunded because RevealFailed has no winners.
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         uint256 voter4After = lrepToken.balanceOf(voter4);
-        assertEq(voter4After - voter4Before, 2_500_000, "Current-epoch voter should get full refund");
+        assertEq(voter4After - voter4Before, 2_500_000, "reveal-failed voter should get full refund");
     }
 
     // =========================================================================
@@ -566,8 +576,8 @@ contract AdversarialTests is VotingTestBase {
         _reveal(contentId, roundId, ck2);
         _reveal(contentId, roundId, ck3);
 
-        // Warp past maxDuration
-        vm.warp(round.startTime + 7 days + 1);
+        // Warp past maxDuration.
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION + 1);
 
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -587,7 +597,7 @@ contract AdversarialTests is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
 
-        vm.warp(round.startTime + 7 days + 1);
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION + 1);
 
         engine.cancelExpiredRound(contentId, roundId);
         RoundLib.Round memory cancelled = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -598,12 +608,14 @@ contract AdversarialTests is VotingTestBase {
     function test_StateTransition_CommitAfterCancel_CreatesNewRound() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        vm.warp(1000 + 7 days + 1);
-        engine.cancelExpiredRound(contentId, 1);
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION + 1);
+        engine.cancelExpiredRound(contentId, roundId);
 
         // Next commit should create round 2
-        vm.warp(1000 + 7 days + 1 + 24 hours + 1); // past cooldown
+        vm.warp(block.timestamp + 24 hours + 1); // past cooldown
         (bytes32 ck2,) = _commit(voter2, contentId, false, STAKE);
         uint256 newRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         assertEq(newRoundId, 2, "Should create new round after cancellation");
@@ -614,13 +626,15 @@ contract AdversarialTests is VotingTestBase {
     function test_StateTransition_CannotClaimRewardFromCancelledRound() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        vm.warp(1000 + 7 days + 1);
-        engine.cancelExpiredRound(contentId, 1);
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION + 1);
+        engine.cancelExpiredRound(contentId, roundId);
 
         vm.prank(voter1);
         vm.expectRevert("Round not settled");
-        distributor.claimReward(contentId, 1);
+        distributor.claimReward(contentId, roundId);
     }
 
     /// @notice Cannot claim refund from a settled round
@@ -722,7 +736,7 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, EPOCH_DURATION, 3, 100);
 
         token2.mint(submitter, 100_000e6);
         token2.mint(voter1, 100_000e6);
@@ -1132,38 +1146,36 @@ contract AdversarialTests is VotingTestBase {
     }
 
     // =========================================================================
-    // 9. EPOCH WEIGHTED SIGNAL — early voters carry more weight
+    // 9. SINGLE-DURATION SIGNAL — late shared-window voters keep full weight
     // =========================================================================
 
-    /// @notice Epoch-1 stake carries 4x the weighted signal of epoch-2 stake.
-    function test_EpochWeight_EarlyVoteCarries4xWeight() public {
+    /// @notice Stake committed before the shared blind window closes carries full signal weight.
+    function test_SingleDuration_LateVoteKeepsFullWeight() public {
         uint256 contentId = _submitContent();
 
-        // Epoch 1: voter1 UP (large stake to ensure UP wins), voter2 DOWN (loser provides pool)
-        // Weighted UP epoch1: 10e6, Weighted DOWN epoch1: 10e6. UP wins.
+        // Early in the shared window: voter1 UP, voter2 DOWN.
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, false, 10e6); // loser
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        // Wait for epoch 1 to end and add the epoch-2 voter before threshold is reached.
-        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
+        // Add voter3 near the end of the same shared window, before it expires.
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION - 1);
         (bytes32 ck3,) = _commit(voter3, contentId, true, 10e6);
-        uint256 voter3RevealableAfter = block.timestamp + EPOCH_DURATION;
+
+        // Wait until the shared window is revealable, then reveal all commits.
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         _reveal(contentId, roundId, ck1);
         _reveal(contentId, roundId, ck2);
-
-        // Wait for epoch 2 to end, reveal voter3
-        _warpPastTlockRevealTime(voter3RevealableAfter);
         _reveal(contentId, roundId, ck3);
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertTrue(settledRound.upWins);
-        assertEq(settledRound.weightedUpPool, 12_500_000, "Epoch-1 and epoch-2 UP weight should combine");
-        assertEq(settledRound.weightedDownPool, 10_000_000, "Epoch-1 DOWN weight should remain full stake");
+        assertEq(settledRound.weightedUpPool, 20_000_000, "late UP vote should keep full stake weight");
+        assertEq(settledRound.weightedDownPool, 10_000_000, "DOWN vote should keep full stake weight");
     }
 
     // =========================================================================

@@ -32,9 +32,9 @@ contract MockClusterPayoutOracleForGameTheory {
     }
 }
 
-/// @title Game-Theory Improvement Tests (tlock commit-reveal, epoch-weighted rewards)
-/// @notice Integration tests verifying the tlock commit-reveal flow with epoch weighting:
-///         1. Epoch-1 (blind) = 100% weight (10000 BPS), epoch-2+ (informed) = 25% weight (2500 BPS)
+/// @title Game-Theory Improvement Tests (tlock commit-reveal, single-duration rewards)
+/// @notice Integration tests verifying the tlock commit-reveal flow with one shared round duration:
+///         1. All accepted votes share the same blind response window and carry full weight.
 ///         2. minVoters = 3 required for settlement
 ///         3. Expired rounds cancelled after maxDuration without enough voters
 ///         4. Unanimous rounds receive only forfeiture-derived rewards, not a reserve subsidy
@@ -51,11 +51,12 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     address bob = address(11);
     address carol = address(12);
     address dave = address(13);
+    address erin = address(14);
 
     // epochDuration = 1 hour (default, matching contract default)
     uint256 constant EPOCH_DURATION = 1 hours;
-    // maxDuration = 7 days (default)
-    uint256 constant MAX_DURATION = 7 days;
+    // maxDuration equals epochDuration in the single-duration model.
+    uint256 constant MAX_DURATION = EPOCH_DURATION;
     // minVoters = 3 (new default after tlock redesign)
     uint256 constant MIN_VOTERS = 3;
 
@@ -115,7 +116,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Override config: 1-hour epochs, 7-day max, minVoters=3, maxVoters=100
+        // Override config: 1-hour shared duration, minVoters=3, maxVoters=100
         _setTlockRoundConfig(
             ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 100
         );
@@ -126,6 +127,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         lrepToken.mint(bob, 100_000e6);
         lrepToken.mint(carol, 100_000e6);
         lrepToken.mint(dave, 100_000e6);
+        lrepToken.mint(erin, 100_000e6);
 
         vm.stopPrank();
     }
@@ -199,25 +201,29 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         ProtocolConfig(protocolConfig).setClusterPayoutOracle(address(oracle));
     }
 
-    function _settleWeightedTieBoundary(uint256 earlyDownStake)
+    function _settleFullWeightStakeScenario(uint256 daveDownStake, uint256 erinDownStake)
         internal
         returns (RoundLib.Round memory revealed, RoundLib.Round memory settled)
     {
         uint256 cid = _submit();
 
         _commit(alice, cid, true, 10e6);
-        _commit(bob, cid, false, earlyDownStake);
+        _commit(carol, cid, true, 10e6);
+        _commit(bob, cid, false, 10e6);
+        _commit(dave, cid, false, daveDownStake);
+        if (erinDownStake > 0) {
+            _commit(erin, cid, false, erinDownStake);
+        }
 
         uint256 roundId = engine.currentRoundId(cid);
-        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, cid, roundId);
-        uint256 roundStart = uint256(openRound.startTime);
-        _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
+        _warpPastTlockRevealTime(_lastCommitRevealableAfter(engine, cid, roundId));
         _reveal(alice, cid, roundId, true);
+        _reveal(carol, cid, roundId, true);
         _reveal(bob, cid, roundId, false);
-
-        _commit(carol, cid, false, 10e6);
-        _warpPastTlockRevealTime(roundStart + 2 * EPOCH_DURATION);
-        _reveal(carol, cid, roundId, false);
+        _reveal(dave, cid, roundId, false);
+        if (erinDownStake > 0) {
+            _reveal(erin, cid, roundId, false);
+        }
 
         revealed = RoundEngineReadHelpers.round(engine, cid, roundId);
         _settle(cid, roundId);
@@ -225,36 +231,28 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     }
 
     // =========================================================================
-    // TEST 1: EpochWeightWinCondition
+    // TEST 1: SingleDurationRawMajorityWinsWithFullWeight
     // =========================================================================
 
-    /// @notice DOWN wins despite raw UP majority (30 vs 10) because epoch weighting
-    ///         gives epoch-1 votes 100% weight and epoch-2+ votes only 25% weight.
+    /// @notice UP wins by raw majority because all accepted votes carry full weight.
     ///
-    ///   Alice: DOWN, 10 LREP, epoch-1 -> effectiveStake = 10 LREP (weight = 10000 BPS)
-    ///   Bob, Carol, Dave: UP, 10 LREP each, epoch-2 -> effectiveStake = 2.5 LREP each
+    ///   Alice: DOWN, 10 LREP -> effectiveStake = 10 LREP
+    ///   Bob, Carol, Dave: UP, 10 LREP each -> effectiveStake = 10 LREP each
     ///
-    ///   weightedDownPool = 10, weightedUpPool = 7.5 -> DOWN wins.
-    function test_EpochWeightWinCondition() public {
+    ///   weightedDownPool = 10, weightedUpPool = 30 -> UP wins.
+    function test_SingleDurationRawMajorityWinsWithFullWeight() public {
         _setRoundMinVoters(4);
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
-        // --- Epoch-1 commits (blind, at round start) ---
-        _commit(alice, cid, false, 10e6); // DOWN, epoch-1
-
-        // --- Epoch-2 commits (informed, after epoch-1 ends) ---
-        _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
-        _commit(bob, cid, true, 10e6); // UP, epoch-2
-        _commit(carol, cid, true, 10e6); // UP, epoch-2
-        _commit(dave, cid, true, 10e6); // UP, epoch-2
+        _commit(alice, cid, false, 10e6);
+        _commit(bob, cid, true, 10e6);
+        _commit(carol, cid, true, 10e6);
+        _commit(dave, cid, true, 10e6);
 
         uint256 roundId = engine.currentRoundId(cid);
 
-        // Reveal all votes. Epoch-1 commits are revealable after roundStart + EPOCH_DURATION.
-        // Epoch-2 commits are revealable after roundStart + 2 * EPOCH_DURATION.
-        // Warp past epoch-2 end so all can be revealed.
-        _warpPastTlockRevealTime(roundStart + 2 * EPOCH_DURATION);
+        _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
 
         _reveal(alice, cid, roundId, false);
         _reveal(bob, cid, roundId, true);
@@ -265,10 +263,8 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(round.revealedCount, 4, "All 4 votes revealed");
 
-        // weightedDownPool = 10e6 * 10000 / 10000 = 10e6
-        // weightedUpPool = 3 * (10e6 * 2500 / 10000) = 3 * 2_500_000 = 7_500_000
-        assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP (epoch-1 full weight)");
-        assertEq(round.weightedUpPool, 7_500_000, "weighted UP pool = 7.5 LREP (3x epoch-2 at 25% each)");
+        assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP");
+        assertEq(round.weightedUpPool, 30e6, "weighted UP pool = 30 LREP");
 
         // thresholdReachedAt was set when the 4th vote was revealed (minVoters = 4)
         assertGt(round.thresholdReachedAt, 0, "threshold reached");
@@ -279,43 +275,41 @@ contract GameTheoryImprovementsTest is VotingTestBase {
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
-        assertFalse(settled.upWins, "DOWN wins despite raw UP majority - epoch weighting prevails");
+        assertTrue(settled.upWins, "UP wins by full-weight raw majority");
         assertEq(registry.getRating(cid), 5_000, "public rating waits for correlation snapshot");
         vm.prank(address(oracle));
         assertGt(
             registry.roundPayoutSnapshotSourceReadyAt(3, 0, cid, roundId),
             0,
-            "weighted DOWN evidence is pending correlation review"
+            "weighted UP evidence is pending correlation review"
         );
     }
 
-    function test_WeightedTieBreak_PreventsLateEpochRefundGrief() public {
+    function test_SingleDurationMajorityPreventsRefundClaim() public {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
         _commit(alice, cid, true, 10e6);
         _commit(bob, cid, false, 7_500_000);
+        _commit(carol, cid, false, 10e6);
 
         uint256 roundId = engine.currentRoundId(cid);
         _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
         _reveal(alice, cid, roundId, true);
         _reveal(bob, cid, roundId, false);
-
-        _commit(carol, cid, false, 10e6);
-        _warpPastTlockRevealTime(roundStart + 2 * EPOCH_DURATION);
         _reveal(carol, cid, roundId, false);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, roundId);
-        assertEq(round.weightedUpPool, 10e6, "epoch-1 UP weight");
-        assertEq(round.weightedDownPool, 10e6, "epoch-1 plus late DOWN equalizes weight");
+        assertEq(round.weightedUpPool, 10e6, "UP weight");
+        assertEq(round.weightedDownPool, 17_500_000, "DOWN weight");
         assertEq(round.upPool, 10e6, "raw UP pool");
         assertEq(round.downPool, 17_500_000, "raw DOWN pool");
 
         _settle(cid, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
-        assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "weighted-only tie settles");
-        assertTrue(settled.upWins, "earlier higher-weight side wins weighted-only tie");
+        assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "round settles");
+        assertFalse(settled.upWins, "DOWN wins by full-weight majority");
         assertEq(
             _roundWinningStake(engine, cid, roundId),
             _roundRbtsRewardWeight(engine, cid, roundId),
@@ -327,54 +321,42 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         engine.claimCancelledRoundRefund(cid, roundId);
     }
 
-    function test_WeightedTieBreak_KnifeEdgeBoundaryAroundOneAtomicStake() public {
-        (RoundLib.Round memory below, RoundLib.Round memory belowSettled) = _settleWeightedTieBoundary(7_499_999);
-        assertEq(below.weightedUpPool, 10e6, "below: weighted UP");
-        assertEq(below.weightedDownPool, 9_999_999, "below: weighted DOWN");
-        assertTrue(belowSettled.upWins, "below boundary: UP wins by weighted majority");
+    function test_SingleDurationMinimumStakeStepFlipsMajority() public {
+        (RoundLib.Round memory below, RoundLib.Round memory belowSettled) =
+            _settleFullWeightStakeScenario(9e6, 0);
+        assertEq(below.weightedUpPool, 20_000_000, "below: weighted UP");
+        assertEq(below.weightedDownPool, 19_000_000, "below: weighted DOWN");
+        assertTrue(belowSettled.upWins, "below boundary: UP wins by full-weight majority");
 
-        (RoundLib.Round memory exact, RoundLib.Round memory exactSettled) = _settleWeightedTieBoundary(7_500_000);
-        assertEq(exact.weightedUpPool, 10e6, "exact: weighted UP");
-        assertEq(exact.weightedDownPool, 10e6, "exact: weighted DOWN");
-        assertEq(exact.upPool, 10e6, "exact: raw UP");
-        assertEq(exact.downPool, 17_500_000, "exact: raw DOWN");
-        assertTrue(exactSettled.upWins, "exact boundary: smaller raw pool wins");
-
-        (RoundLib.Round memory above, RoundLib.Round memory aboveSettled) = _settleWeightedTieBoundary(7_500_001);
-        assertEq(above.weightedUpPool, 10e6, "above: weighted UP");
-        assertEq(above.weightedDownPool, 10_000_001, "above: weighted DOWN");
-        assertFalse(aboveSettled.upWins, "above boundary: one atomic stake flips to DOWN");
+        (RoundLib.Round memory above, RoundLib.Round memory aboveSettled) =
+            _settleFullWeightStakeScenario(10e6, 1e6);
+        assertEq(above.weightedUpPool, 20_000_000, "above: weighted UP");
+        assertEq(above.weightedDownPool, 21_000_000, "above: weighted DOWN");
+        assertFalse(aboveSettled.upWins, "above boundary: one minimum stake step flips to DOWN");
     }
 
     // =========================================================================
-    // TEST 2: EpochWeightSignal
+    // TEST 2: SingleDurationSignal
     // =========================================================================
 
-    /// @notice Epoch-1 voters carry 4x signal weight per LREP vs epoch-2 voters.
+    /// @notice Every accepted voter carries one full-weight signal per LREP.
     ///
-    ///   Alice: UP, 10 LREP, epoch-1 -> effectiveStake = 10 LREP
-    ///   Bob:   DOWN, 10 LREP, epoch-1 -> effectiveStake = 10 LREP
-    ///   Carol: UP, 10 LREP, epoch-2 -> effectiveStake = 2.5 LREP
+    ///   Alice: UP, 10 LREP -> effectiveStake = 10 LREP
+    ///   Bob:   DOWN, 10 LREP -> effectiveStake = 10 LREP
+    ///   Carol: UP, 10 LREP -> effectiveStake = 10 LREP
     ///
-    ///   UP wins. weightedUpPool = 10 + 2.5 = 12.5 LREP.
-    ///   Alice carries 4x Carol's signal weight per LREP. RBTS scoring calibrates
-    ///   individual reward returns after settlement.
-    function test_EpochWeightSignalPools() public {
+    ///   UP wins. weightedUpPool = 20 LREP.
+    function test_SingleDurationSignalPools() public {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
-        // --- Epoch-1 commits ---
-        _commit(alice, cid, true, 10e6); // UP, epoch-1
-        _commit(bob, cid, false, 10e6); // DOWN, epoch-1
-
-        // --- Epoch-2 commit ---
-        _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
-        _commit(carol, cid, true, 10e6); // UP, epoch-2
+        _commit(alice, cid, true, 10e6);
+        _commit(bob, cid, false, 10e6);
+        _commit(carol, cid, true, 10e6);
 
         uint256 roundId = engine.currentRoundId(cid);
 
-        // Warp past epoch-2 end to allow all reveals
-        _warpPastTlockRevealTime(roundStart + 2 * EPOCH_DURATION);
+        _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
 
         _reveal(alice, cid, roundId, true);
         _reveal(bob, cid, roundId, false);
@@ -383,16 +365,14 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertGt(round.thresholdReachedAt, 0, "threshold reached after 3 reveals");
 
-        // weightedUpPool = 10e6 + 2_500_000 = 12_500_000
-        // weightedDownPool = 10e6
-        assertEq(round.weightedUpPool, 12_500_000, "weighted UP pool = 12.5 LREP");
+        assertEq(round.weightedUpPool, 20e6, "weighted UP pool = 20 LREP");
         assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP");
 
         _settle(cid, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
-        assertTrue(settled.upWins, "UP wins (weighted UP pool 125 > DOWN pool 100)");
+        assertTrue(settled.upWins, "UP wins (weighted UP pool 20 > DOWN pool 10)");
 
         uint256 voterPool = _roundVoterPool(engine, cid, roundId);
 
@@ -448,7 +428,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     }
 
     // =========================================================================
-    // TEST 4: ExpiredRoundCancellation (only 2 voters over 7 days)
+    // TEST 4: ExpiredRoundCancellation (only 2 voters through maxDuration)
     // =========================================================================
 
     /// @notice Only 2 voters commit over the full maxDuration window. Round cannot
@@ -463,7 +443,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
 
         uint256 roundId = engine.currentRoundId(cid);
 
-        // Warp past maxDuration (7 days) without any more commits
+        // Warp past maxDuration without any more commits
         vm.warp(roundStart + MAX_DURATION + 1);
 
         // cancelExpiredRound should succeed

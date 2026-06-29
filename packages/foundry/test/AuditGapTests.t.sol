@@ -120,7 +120,7 @@ contract AuditGapTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, EPOCH_DURATION, 3, 100);
 
         // Mint LREP to test users
         address[10] memory users = [submitter, voter1, voter2, voter3, voter4, frontend, voter5, voter6, voter7, voter8];
@@ -153,8 +153,19 @@ contract AuditGapTests is VotingTestBase {
         returns (bytes32 salt, bytes32 commitKey)
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, contentId, isUp));
-        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
-        bytes32 hash = _commitHash(isUp, salt, voter, contentId, ciphertext);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 hash = _commitHash(
+            isUp,
+            salt,
+            voter,
+            contentId,
+            _defaultRatingReferenceBps(),
+            targetRound,
+            drandChainHash,
+            ciphertext
+        );
         _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), stakeAmt);
@@ -163,8 +174,8 @@ contract AuditGapTests is VotingTestBase {
         votingEngine.commitVote(
             contentId,
             cachedRoundContext1,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
+            targetRound,
+            drandChainHash,
             hash,
             ciphertext,
             stakeAmt,
@@ -190,21 +201,20 @@ contract AuditGapTests is VotingTestBase {
         votingEngine.pause();
 
         bytes32 salt = keccak256("salt");
-        bytes memory ct = _testCiphertext(true, salt, contentId);
-        bytes32 hash = _commitHash(true, salt, voter1, contentId, ct);
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(votingEngine), voter1, true, salt, contentId);
 
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext2 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext2 = _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps);
         vm.expectRevert(); // EnforcedPause
         votingEngine.commitVote(
             contentId,
             cachedRoundContext2,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            hash,
-            ct,
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
             STAKE,
             address(0)
         );
@@ -240,7 +250,7 @@ contract AuditGapTests is VotingTestBase {
         uint256 contentId = _submitContent("https://pause-test-3.com");
         _commit(voter1, contentId, true, STAKE, address(0));
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH_DURATION + 1);
 
         vm.prank(owner);
         votingEngine.pause();
@@ -254,7 +264,7 @@ contract AuditGapTests is VotingTestBase {
         uint256 contentId = _submitContent("https://pause-test-3.com");
         _commit(voter1, contentId, true, STAKE, address(0));
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH_DURATION + 1);
 
         uint256 keeperBalanceBefore = lrepToken.balanceOf(voter4);
 
@@ -278,7 +288,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
         // Warp past final reveal grace so unrevealed votes are processable after settlement.
-        vm.warp(block.timestamp + 7 days + 60 minutes + 1);
+        vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         vm.prank(owner);
@@ -293,7 +303,7 @@ contract AuditGapTests is VotingTestBase {
         uint256 contentId = _submitContent("https://pause-test-5.com");
         _commit(voter1, contentId, true, STAKE, address(0));
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH_DURATION + 1);
         votingEngine.cancelExpiredRound(contentId, 1);
 
         vm.prank(owner);
@@ -445,7 +455,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter2, contentId, 1, ck2, true, s2);
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
-        vm.warp(block.timestamp + 7 days + 60 minutes + 1);
+        vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // count=0 should process all
@@ -466,7 +476,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter2, contentId, 1, ck2, true, s2);
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
-        vm.warp(block.timestamp + 7 days + 60 minutes + 1);
+        vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // count=999 should clamp to array length and still succeed
@@ -487,7 +497,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter2, contentId, 1, ck2, true, s2);
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
-        vm.warp(block.timestamp + 7 days + 60 minutes + 1);
+        vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // startIndex == array.length should revert
@@ -509,7 +519,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter2, contentId, 1, ck2, true, s2);
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
-        vm.warp(block.timestamp + 7 days + 60 minutes + 1);
+        vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // Process first 2 (both revealed, nothing to process)
@@ -525,39 +535,39 @@ contract AuditGapTests is VotingTestBase {
     // SECTION 4 — Cooldown Boundary Timing
     // =========================================================================
 
-    /// @notice Vote at T, try again at T+24h-1s should revert, at T+24h should succeed
-    function test_Cooldown_ExactBoundary() public {
+    /// @notice Cooldown preempts duplicate same-round commits, then expires at the 24h boundary.
+    function test_Cooldown_PreemptsDuplicateAndExpiresAtBoundary() public {
         uint256 contentId = _submitContent("https://cooldown-test-1.com");
-        uint256 contentId2 = _submitContent("https://cooldown-test-2.com");
 
         uint256 voteTime = block.timestamp;
         _commit(voter1, contentId, true, STAKE, address(0));
+        uint256 firstRoundId = votingEngine.currentRoundId(contentId);
 
-        // At exactly 24h - 1 second: should revert
-        vm.warp(voteTime + 24 hours - 1);
+        // While the round is still open, cooldown is the first duplicate-commit guard.
+        vm.warp(voteTime + 1);
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId));
-        bytes memory ct = _testCiphertext(true, salt, contentId);
-        bytes32 hash = _commitHash(true, salt, voter1, contentId, ct);
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(votingEngine), voter1, true, salt, contentId);
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext3 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext3 = _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps);
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         votingEngine.commitVote(
             contentId,
             cachedRoundContext3,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            hash,
-            ct,
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
             STAKE,
             address(0)
         );
         vm.stopPrank();
 
-        // At exactly 24h: should succeed (on different content since already committed on contentId round)
+        // At exactly 24h: after expiry/cancel, the same voter can enter the next round.
         vm.warp(voteTime + 24 hours);
-        _commit(voter1, contentId2, true, STAKE, address(0));
+        votingEngine.cancelExpiredRound(contentId, firstRoundId);
+        _commit(voter1, contentId, true, STAKE, address(0));
     }
 
     // =========================================================================

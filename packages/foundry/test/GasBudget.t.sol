@@ -11,9 +11,9 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 
 contract GasBudgetTest is RoundIntegrationTest {
-    // Content submission validates uploaded/content-addressed media URLs, uses a live
-    // CategoryRegistry lookup, and emits digest/spec anchor logs for off-chain reconstruction.
-    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 952_000;
+    // Content submission validates media/category metadata, emits reconstruction anchors, and
+    // opens the first rewardable round so all duration semantics share the creation timestamp.
+    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 1_800_000;
     // commitVote validates the full armored AGE envelope and emits ciphertext for indexed availability,
     // while storing only compact hash/tlock metadata on-chain.
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_700_000;
@@ -69,7 +69,10 @@ contract GasBudgetTest is RoundIntegrationTest {
 
     function _gasRoundConfig(uint16 maxVoters) internal pure returns (RoundLib.RoundConfig memory) {
         return RoundLib.RoundConfig({
-            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: maxVoters
+            epochDuration: uint32(EPOCH_DURATION),
+            maxDuration: uint32(EPOCH_DURATION),
+            minVoters: 3,
+            maxVoters: maxVoters
         });
     }
 
@@ -293,7 +296,7 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(config, 5 minutes, 7 days, 3, 100);
+        _setTlockRoundConfig(config, 5 minutes, 5 minutes, 3, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();
@@ -311,7 +314,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         uint256 roundId = _getActiveOrLatestRoundId(contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
 
-        uint256 maxEpochEnd = uint256(round.startTime) + 7 days + 5 minutes;
+        uint256 maxEpochEnd = uint256(round.startTime) + 5 minutes;
         vm.warp(maxEpochEnd + config.revealGracePeriod() + 1);
         vm.roll(block.number + 1);
 
@@ -343,7 +346,8 @@ contract GasBudgetTest is RoundIntegrationTest {
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, s3);
 
         vm.warp(
-            round.startTime + 7 days + ProtocolConfig(address(votingEngine.protocolConfig())).revealGracePeriod() + 1
+            _lastCommitRevealableAfter(votingEngine, contentId, roundId)
+                + ProtocolConfig(address(votingEngine.protocolConfig())).revealGracePeriod() + 1
         );
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
@@ -379,7 +383,7 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-        vm.warp(round.startTime + 7 days + 1);
+        vm.warp(uint256(round.startTime) + EPOCH_DURATION + 1);
 
         uint256 gasUsed = _measureCall(
             address(votingEngine), abi.encodeCall(RoundVotingEngine.cancelExpiredRound, (contentId, roundId))

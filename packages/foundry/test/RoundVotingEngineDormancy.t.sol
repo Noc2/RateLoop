@@ -241,7 +241,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
     function test_CommitVoteAgainstRevivedStaleRoundReverts() public {
         ProtocolConfig config = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
-        config.setConfig(1 hours, 60 days, 3, 100);
+        config.setConfig(1 hours, 1 hours, 3, 100);
         uint256 contentId = _submitContent();
 
         _commitWithKey(voter1, contentId, true);

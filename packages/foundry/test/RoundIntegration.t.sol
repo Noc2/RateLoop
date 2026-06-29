@@ -222,7 +222,9 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // setConfig(epochDuration, maxDuration, minVoters, maxVoters)
         // Use short 10-minute epochs for tests.
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
+        _setTlockRoundConfig(
+            ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, EPOCH_DURATION, 3, 100
+        );
 
         // Mint LREP to all test users
         address[7] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6];
@@ -679,7 +681,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(roundId, 1, "round id");
         assertEq(round.startTime, block.timestamp, "start time");
         assertEq(roundCfg.epochDuration, EPOCH_DURATION, "epoch duration");
-        assertEq(roundCfg.maxDuration, 7 days, "max duration");
+        assertEq(roundCfg.maxDuration, EPOCH_DURATION, "max duration");
         assertEq(roundCfg.maxVoters, 100, "max voters");
         assertEq(roundReferenceRatingBps, _defaultRatingReferenceBps(), "reference rating");
         assertEq(drandChainHash, _tlockDrandChainHash(), "drand hash");
@@ -740,27 +742,30 @@ contract RoundIntegrationTest is VotingTestBase {
         votingEngine.openRound(contentId);
     }
 
-    function test_CommitVote_RequiresPreparedRound() public {
+    function test_CommitVote_UsesSubmissionPreparedRound() public {
         uint256 contentId = _submitContentWithoutOpeningRound();
+        uint256 preparedRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        assertEq(preparedRoundId, 1, "question submission prepares first round");
+
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
-        bytes32 ch = _commitHash(true, salt, voter1, contentId);
+        uint64 targetRound = _tlockCommitTargetRound(votingEngine, contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ct = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
+        bytes32 ch = _commitHash(
+            true, salt, voter1, contentId, preparedRoundId, referenceRatingBps, targetRound, drandChainHash, ct
+        );
 
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
+        uint256 cachedRoundContext = _roundContext(preparedRoundId, referenceRatingBps);
         votingEngine.commitVote(
-            contentId,
-            cachedRoundContext,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch,
-            _testCiphertext(true, salt, contentId),
-            STAKE,
-            address(0)
+            contentId, cachedRoundContext, targetRound, drandChainHash, ch, ct, STAKE, address(0)
         );
         vm.stopPrank();
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, preparedRoundId);
+        assertEq(round.voteCount, 1, "prepared round accepts first commit");
     }
 
     function test_FullRoundLifecycle_UpWins() public {
@@ -1375,7 +1380,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.expectRevert(RoundVotingEngine.RoundNotExpired.selector);
         votingEngine.cancelExpiredRound(contentId, roundId);
 
-        // Warp past maxDuration (7 days)
+        // Warp past maxDuration
         vm.warp(block.timestamp + 8 days);
         votingEngine.cancelExpiredRound(contentId, roundId);
 
@@ -1478,7 +1483,7 @@ contract RoundIntegrationTest is VotingTestBase {
         bytes32 salt2 = keccak256(abi.encodePacked(voter2, contentId, false, uint256(1)));
         _commitWithSalt(voter2, contentId, false, STAKE, salt2);
 
-        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 2, "New round should be created");
+        assertGt(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 1, "new round should be created");
     }
 
     // =========================================================================
@@ -2182,7 +2187,7 @@ contract RoundIntegrationTest is VotingTestBase {
     // DOUBLE COMMIT PREVENTION
     // =========================================================================
 
-    function test_CannotDoubleCommitInSameRound() public {
+    function test_CannotDoubleCommitInSameRound_CooldownPreemptsDuplicate() public {
         uint256 contentId = _submitContent();
 
         bytes32 salt1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
@@ -2204,25 +2209,23 @@ contract RoundIntegrationTest is VotingTestBase {
         );
         vm.stopPrank();
 
-        // Warp past 24h cooldown so CooldownActive doesn't fire first
-        vm.warp(block.timestamp + 25 hours);
-
-        // Same voter, same round — second commit reverts with AlreadyCommitted (cooldown cleared)
+        // Same voter, same round: cooldown is checked before duplicate-commit state.
         bytes32 salt2 = keccak256(abi.encodePacked(voter1, contentId, false, uint256(1)));
-        bytes32 ch2 = _commitHash(false, salt2, voter2, contentId);
+        (bytes32 ch2, bytes memory ct2, uint64 targetRound2, bytes32 drandChainHash2) =
+            _buildCommitPayload(false, salt2, voter1, contentId);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
 
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext34 = _roundContext(_previewCommitRoundId(votingEngine, contentId), referenceRatingBps);
-        vm.expectRevert(RoundVotingEngine.AlreadyCommitted.selector);
+        vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         votingEngine.commitVote(
             contentId,
             cachedRoundContext34,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
+            targetRound2,
+            drandChainHash2,
             ch2,
-            _testCiphertext(false, salt2, contentId),
+            ct2,
             STAKE,
             address(0)
         );
@@ -2261,7 +2264,7 @@ contract RoundIntegrationTest is VotingTestBase {
         votingEngine.commitVote(contentId, cachedRoundContext36, targetRound, drandChainHash, ch, ct, STAKE, address(0));
         vm.stopPrank();
 
-        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 2, "New round should be created");
+        assertGt(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 1, "new round should be created");
     }
 
     // =========================================================================
@@ -2362,14 +2365,12 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.startPrank(owner);
         registry.setTreasury(treasury);
         protocolConfig.setSlashConfig(4_000, 1, 2 days, 1e6);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 6, 100);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, EPOCH_DURATION, 6, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContentWithoutOpeningRound();
         uint256 submitterBalanceBefore = lrepToken.balanceOf(submitter);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-
-        vm.warp(block.timestamp + 1 days + 1);
 
         address[] memory voters = new address[](6);
         voters[0] = voter1;
@@ -2410,8 +2411,6 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 contentId = _submitContent();
         uint256 submitterBalanceBefore = lrepToken.balanceOf(submitter);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-
-        vm.warp(block.timestamp + 4 days + 1);
 
         address[] memory voters = new address[](3);
         voters[0] = voter1;
@@ -2501,13 +2500,13 @@ contract RoundIntegrationTest is VotingTestBase {
         // Verify snapshot matches config at creation
         RoundLib.RoundConfig memory cfg = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);
         assertEq(cfg.epochDuration, EPOCH_DURATION);
-        assertEq(cfg.maxDuration, 7 days);
+        assertEq(cfg.maxDuration, EPOCH_DURATION);
         assertEq(cfg.minVoters, 3);
 
         // Change config: increase minVoters to 10
         ProtocolConfig protoCfg = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
-        _setTlockRoundConfig(protoCfg, EPOCH_DURATION, 7 days, 10, 100);
+        _setTlockRoundConfig(protoCfg, EPOCH_DURATION, EPOCH_DURATION, 10, 100);
 
         // Snapshot unchanged
         cfg = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);
@@ -2737,7 +2736,7 @@ contract RoundIntegrationTest is VotingTestBase {
     }
 
     // =========================================================================
-    // EPOCH-WEIGHTED REWARDS — early blind voters get 4x weight vs informed
+    // SINGLE-DURATION WEIGHTS — all accepted blind-window voters get full weight
     // =========================================================================
 
     function test_EpochWeighting_Epoch1VoterGetsFullWeight() public {
@@ -2780,7 +2779,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(round.weightedUpPool, STAKE, "Epoch-1 vote should have 100% weight (effectiveStake = stake)");
     }
 
-    function test_EpochWeighting_Epoch2VoterGetsReducedWeight() public {
+    function test_EpochWeighting_SingleDurationLateVoterKeepsFullWeight() public {
         uint256 contentId = _submitContent();
 
         // voter1 commits in epoch-1 (blind)
@@ -2806,40 +2805,37 @@ contract RoundIntegrationTest is VotingTestBase {
         bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, true, uint256(2)));
         (, bytes32 ck3) = _commitWithSalt(voter3, contentId, true, STAKE, s3);
 
-        // Advance into epoch-2 — use absolute time from round.startTime
-        // voter2 commits after epoch-1 ends (epoch-2, epochIndex=1 → 25% weight)
+        // Advance later into the same shared duration. The fresh model has no
+        // second rewardable epoch; accepted blind-window votes remain epochIndex=0.
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory rEW0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(rEW0.startTime) + EPOCH_DURATION);
+        vm.warp(uint256(rEW0.startTime) + EPOCH_DURATION / 2);
 
-        // Reveal voter1's vote to make results visible
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, s1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, 5_000, s3);
-
-        // voter2 commits in epoch-2 (informed, epochIndex=1 → 25% weight)
+        // voter2 commits late in the same single-duration window.
         bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, false, uint256(1)));
         (, bytes32 ck2) = _commitWithSalt(voter2, contentId, false, STAKE, s2);
         uint256 voter2RevealableAfter = block.timestamp + EPOCH_DURATION;
 
         RoundLib.Commit memory commit2 = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, ck2);
-        assertEq(commit2.epochIndex, 1, "Second-epoch voter should have epochIndex=1");
+        assertEq(commit2.epochIndex, 0, "Single-duration voter should remain epochIndex=0");
 
-        // Reveal voter2's vote after another epoch boundary (absolute: startTime + 2 * EPOCH_DURATION + 2)
-        // voter2 committed at startTime+EPOCH_DURATION+1, so revealableAfter = startTime+2*EPOCH_DURATION+1
+        // Reveal voter2's vote after its tlock target.
         _warpPastTlockRevealTime(voter2RevealableAfter);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, s1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, 5_000, s3);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
 
-        // Verify weighted pools: UP has two epoch-1 votes, DOWN has one epoch-2 vote at 25%.
+        // Verify weighted pools: all accepted votes receive full weight.
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(round.weightedUpPool, 2 * STAKE, "Epoch-1 UP votes should have 100% weight");
-        assertEq(round.weightedDownPool, STAKE * 2500 / 10000, "Epoch-2 DOWN vote should have 25% weight");
+        assertEq(round.weightedDownPool, STAKE, "Single-duration DOWN vote should have 100% weight");
 
-        // UP wins despite equal raw stakes (epoch-weighting penalises late voter)
+        // UP wins because it has two votes to one at full weight.
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Should be settled");
-        assertTrue(settled.upWins, "UP should win due to epoch-1 weight advantage");
+        assertTrue(settled.upWins, "UP should win by full-weight majority");
     }
 
     // =========================================================================

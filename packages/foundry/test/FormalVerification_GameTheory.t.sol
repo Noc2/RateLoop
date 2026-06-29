@@ -30,7 +30,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     // Config values matching the Robust BTS 3-rater settlement floor.
     uint64 constant MIN_EPOCH_BLOCKS = 10;
     uint64 constant MAX_EPOCH_BLOCKS = 50;
-    uint256 constant MAX_DURATION = 7 days;
+    uint256 constant MAX_DURATION = 1 hours;
     uint256 constant MIN_VOTERS = 3;
 
     uint256 contentNonce;
@@ -89,7 +89,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=100
+        // Config: epochDuration=maxDuration=1h, minVoters=3, maxVoters=100
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, MAX_DURATION, MIN_VOTERS, 100);
 
         // Fund submitter and voters

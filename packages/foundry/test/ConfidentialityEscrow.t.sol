@@ -512,12 +512,12 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
     }
 
-    function testOldEngineCannotRecordGatedNexusForUntrackedContentAfterRotation() public {
-        uint256 contentId = _submitGatedQuestion("untracked-old-engine-after-rotation", 0);
+    function testOldEngineCannotRecordGatedNexusForReplacementTrackedContentAfterRotation() public {
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         _rotateRegistryVotingEngine(replacementEngine);
 
-        assertEq(registry.trackedVotingEngine(contentId), address(0));
+        uint256 contentId = _submitGatedQuestion("replacement-tracked-after-rotation", 0);
+        assertEq(registry.trackedVotingEngine(contentId), address(replacementEngine));
 
         vm.prank(address(engine));
         vm.expectRevert("Not voting engine");

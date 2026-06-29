@@ -103,7 +103,7 @@ abstract contract SecurityHarnessBase is VotingTestBase {
         config.setCategoryRegistry(address(mockCategoryRegistry));
         config.setTreasury(treasury);
         _setTlockDrandConfig(config, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
-        _setTlockRoundConfig(config, epochDuration, 7 days, 3, 100);
+        _setTlockRoundConfig(config, epochDuration, epochDuration, 3, 100);
     }
 }
 
@@ -204,7 +204,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         _commit(voter1, contentId, true);
 
         // Advance past maxDuration to expire the round
-        vm.warp(1000 + 7 days + 1);
+        vm.warp(1000 + EPOCH_DURATION + 1);
         votingEngine.cancelExpiredRound(contentId, 1);
 
         vm.prank(voter1);
@@ -324,9 +324,10 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
         vm.prank(voter);
         lrepToken.transfer(address(votingEngine), STAKE);
 
-        assertEq(
-            RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0, "plain transfers do not create rounds"
-        );
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(round.voteCount, 0, "plain transfers do not create votes");
+        assertEq(round.totalStake, 0, "plain transfers do not stake into the round");
         assertEq(lrepToken.balanceOf(address(votingEngine)), STAKE, "tokens transferred without vote");
     }
 
@@ -577,7 +578,7 @@ contract SecurityAccessControlTest is Test {
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(protocolConfigAddress).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(protocolConfigAddress).setTreasury(treasury);
-        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 100);
+        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 5 minutes, 3, 100);
 
         vm.stopPrank();
 
@@ -624,7 +625,7 @@ contract SecurityAccessControlTest is Test {
     function test_ACL_Engine_setConfig_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_ENGINE);
-        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 100);
+        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 5 minutes, 3, 100);
     }
 
     function test_ACL_Engine_setRaterRegistry_Unauthorized() public {

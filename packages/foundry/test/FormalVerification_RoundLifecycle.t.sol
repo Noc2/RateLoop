@@ -29,7 +29,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     address[10] v; // voter addresses
 
     uint256 constant EPOCH_DURATION = 5 minutes;
-    uint256 constant MAX_DURATION = 7 days;
+    uint256 constant MAX_DURATION = EPOCH_DURATION;
     uint256 constant MIN_VOTERS = 3;
 
     uint256 contentNonce;
@@ -88,7 +88,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Config: epochDuration=5min, maxDuration=7d, minVoters=3, maxVoters=100
+        // Config: epochDuration=maxDuration=5min, minVoters=3, maxVoters=100
         _setTlockRoundConfig(
             ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 100
         );
@@ -213,24 +213,24 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         assertEq(round.voteCount, 2, "Two votes committed");
     }
 
-    // ==================== Test 2: Vote in Epoch 2 Gets Reduced Weight ====================
+    // ==================== Test 2: Late Vote Keeps Single-Duration Weight ====================
 
-    /// @notice A vote placed after the first epoch ends receives epoch-2 weight (2500 bps = 25%).
-    function test_EpochBoundary_VoteInEpoch2GetsReducedWeight() public {
+    /// @notice A vote placed later in the shared blind window remains a first-epoch vote.
+    function test_EpochBoundary_LateSingleDurationVoteKeepsFullWeight() public {
         uint256 cid = _submit();
 
         // First vote in epoch 1
         _vote(v[0], cid, true, 10e6);
 
-        // Advance time past first epoch boundary
-        _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
+        // Advance later into the shared duration without leaving the blind window.
+        vm.warp(block.timestamp + EPOCH_DURATION / 2);
 
-        // Second vote is in epoch 2
+        // Second vote is still in the single rewardable epoch.
         (bytes32 ck1,) = _vote(v[1], cid, false, 10e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Commit memory c1 = RoundEngineReadHelpers.commit(engine, cid, rid, ck1);
-        assertEq(c1.epochIndex, 1, "v[1] in epoch 2+ (index 1)");
+        assertEq(c1.epochIndex, 0, "v[1] remains in single-duration epoch");
 
         // Verify round still open and accepts new votes
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -504,9 +504,10 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         engine.revealVoteByCommitKey(cid, rid, ck0, true, 5_000, s0);
 
-        vm.warp(
-            round.startTime + MAX_DURATION + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() * 24
-        );
+        uint256 revealBase = _lastCommitRevealableAfter(engine, cid, rid);
+        uint256 votingWindowEnd = uint256(round.startTime) + MAX_DURATION;
+        if (votingWindowEnd > revealBase) revealBase = votingWindowEnd;
+        vm.warp(revealBase + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() * 24 + 1);
         engine.finalizeRevealFailedRound(cid, rid);
 
         RoundLib.Round memory failed = RoundEngineReadHelpers.round(engine, cid, rid);

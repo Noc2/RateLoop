@@ -100,7 +100,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
 
-        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=100
+        // Shared round duration=1h, minVoters=3, maxVoters=100
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 1 hours, 3, 100);
 
         FrontendRegistry frImpl = new FrontendRegistry();
@@ -433,7 +433,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         // Warp to exactly start + maxDuration
-        vm.warp(round.startTime + 7 days);
+        vm.warp(round.startTime + EPOCH);
 
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -448,7 +448,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         // Warp to 1 second BEFORE maxDuration
-        vm.warp(round.startTime + 7 days - 1);
+        vm.warp(round.startTime + EPOCH - 1);
 
         vm.expectRevert(RoundVotingEngine.RoundNotExpired.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -491,7 +491,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, false, s3);
 
         // Warp past maxDuration
-        vm.warp(r0.startTime + 7 days + 1);
+        vm.warp(r0.startTime + EPOCH + 1);
 
         // Should revert because threshold was reached
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
@@ -514,7 +514,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
 
         // Warp past maxDuration without revealing.
-        vm.warp(r0.startTime + 7 days + 1);
+        vm.warp(r0.startTime + EPOCH + 1);
 
         engine.cancelExpiredRound(contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -553,7 +553,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, false, s2);
 
         // Even after long delay, should fail
-        vm.warp(block.timestamp + 7 days);
+        vm.warp(block.timestamp + EPOCH);
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
         engine.settleRound(contentId, roundId);
@@ -691,7 +691,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days);
+        vm.warp(round.startTime + EPOCH);
 
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -709,7 +709,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days);
+        vm.warp(round.startTime + EPOCH);
 
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -729,7 +729,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days);
+        vm.warp(round.startTime + EPOCH);
 
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -801,9 +801,11 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days);
+        vm.warp(round.startTime + EPOCH);
 
         engine.cancelExpiredRound(contentId, roundId);
+
+        vm.warp(block.timestamp + 24 hours + 1);
 
         _commit(voter1, contentId, true, STAKE);
         uint256 newRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);

@@ -86,7 +86,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH, EPOCH, 3, 100);
         ProtocolConfig(address(engine.protocolConfig())).setRevealGracePeriod(GRACE_PERIOD);
 
         lrepToken.mint(owner, 2_000_000e6);
@@ -241,15 +241,14 @@ contract SelectiveRevelationTest is VotingTestBase {
     }
 
     // =========================================================================
-    // MULTI-EPOCH: CURRENT EPOCH DOESN'T BLOCK
+    // SINGLE-DURATION: LATE SAME-WINDOW COMMITS
     // =========================================================================
 
-    /// @notice Epoch-1 votes all revealed. Epoch-2 votes still in current epoch (unrevealed).
-    ///         Settlement should succeed because current-epoch votes don't block.
-    function test_MultiEpoch_CurrentEpochDoesNotBlock() public {
+    /// @notice Votes committed late in the shared blind window settle normally once revealed.
+    function test_SingleDuration_LateSameWindowCommitsSettleWhenRevealed() public {
         uint256 contentId = _submitContent();
 
-        // 3 voters in epoch 1
+        // 3 voters early in the shared window.
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
@@ -257,39 +256,38 @@ contract SelectiveRevelationTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        // Warp to epoch 2 (past epoch-1 end, within epoch-2)
+        // 2 more voters near the end of the same shared blind window.
+        vm.warp(uint256(r.startTime) + EPOCH - 1);
+        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, false, STAKE);
+        (bytes32 ck5, bytes32 s5) = _commit(voters[4], contentId, false, STAKE);
+
         _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
 
-        // 2 more voters in epoch 2 (current epoch — not yet revealable)
-        _commit(voters[3], contentId, false, STAKE);
-        _commit(voters[4], contentId, false, STAKE);
-
-        // Reveal all 3 epoch-1 votes
+        // Reveal all votes from the shared window.
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
+        _reveal(contentId, roundId, ck4, false, s4);
+        _reveal(contentId, roundId, ck5, false, s5);
 
-        // Settlement succeeds — epoch-2 votes are in current epoch, don't block
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
+        assertFalse(round.upWins, "late same-window down votes are counted");
     }
 
-    function test_MultiEpoch_CurrentEpochUnrevealedDoesNotAffectRbtsSeed() public {
+    function test_SingleDuration_UnrevealedAfterGraceDoesNotAffectRbtsSeed() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
+        (bytes32 unrevealedKey1,) = _commit(voters[3], contentId, false, STAKE);
+        (bytes32 unrevealedKey2,) = _commit(voters[4], contentId, false, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
-
-        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
-
-        (bytes32 currentEpochKey1,) = _commit(voters[3], contentId, false, STAKE);
-        (bytes32 currentEpochKey2,) = _commit(voters[4], contentId, false, STAKE);
+        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD + 1);
 
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
@@ -316,8 +314,8 @@ contract SelectiveRevelationTest is VotingTestBase {
         );
 
         bytes32 pollutedSetHash = scoringSetHash;
-        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, currentEpochKey1));
-        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, currentEpochKey2));
+        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, unrevealedKey1));
+        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, unrevealedKey2));
         bytes32 pollutedSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(5), pollutedSetHash, settlementEntropy
@@ -325,22 +323,19 @@ contract SelectiveRevelationTest is VotingTestBase {
         );
 
         assertEq(actualSeed, expectedSeed, "score seed only includes threshold scoring set");
-        assertNotEq(actualSeed, pollutedSeed, "current-epoch unrevealed commits must not perturb seed");
+        assertNotEq(actualSeed, pollutedSeed, "unrevealed commits must not perturb seed after grace");
     }
 
-    function test_MultiEpoch_CurrentEpochUnrevealedDoesNotCreateSubsidy() public {
+    function test_SingleDuration_UnrevealedAfterGraceDoesNotCreateSubsidy() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, true, STAKE);
+        _commit(voters[3], contentId, false, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
-
-        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
-
-        _commit(voters[3], contentId, false, STAKE);
+        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD + 1);
 
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
@@ -350,7 +345,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
             assertEq(_roundVoterPool(engine, contentId, roundId), forfeitedPool);
@@ -474,12 +469,10 @@ contract SelectiveRevelationTest is VotingTestBase {
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, true, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, false, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
-
-        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, false, STAKE);
+        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD + 1);
 
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
@@ -492,7 +485,6 @@ contract SelectiveRevelationTest is VotingTestBase {
         (,,,, bool revealedBefore,,) = engine.commitCore(contentId, roundId, ck4);
         assertFalse(revealedBefore, "commit starts unrevealed");
 
-        _warpPastTlockRevealTime(uint256(r.startTime) + 2 * EPOCH);
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
         _reveal(contentId, roundId, ck4, false, s4);
 
@@ -766,37 +758,27 @@ contract SelectiveRevelationTest is VotingTestBase {
     }
 
     // =========================================================================
-    // MULTI-EPOCH SETTLEMENT: BOTH EPOCHS PAST
+    // SINGLE-DURATION SETTLEMENT: UNREVEALED SAME-WINDOW VOTES
     // =========================================================================
 
-    /// @notice Two epochs past: epoch-1 fully revealed, epoch-2 has unrevealed within grace.
-    ///         Settlement blocked by epoch-2 unrevealed votes.
-    function test_MultiEpoch_Epoch2UnrevealedBlocks() public {
+    /// @notice Unrevealed same-window votes block settlement while still inside reveal grace.
+    function test_SingleDuration_UnrevealedSameWindowBlocksWithinGrace() public {
         uint256 contentId = _submitContent();
 
-        // 3 voters in epoch 1
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
-
-        // Warp to epoch 2
-        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
-
-        // 1 voter in epoch 2
         _commit(voters[3], contentId, false, STAKE);
 
-        // Reveal all epoch-1 votes
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        // Reveal quorum after the blind window, but before the unrevealed vote's grace expires.
+        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + 30 minutes);
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
-        // Warp past epoch-2 end but within epoch-2 grace period
-        _warpPastTlockRevealTime(uint256(r.startTime) + 2 * EPOCH);
-
-        // Settlement blocked — epoch-2 has unrevealed vote within grace period
+        // Settlement blocked — one same-window unrevealed vote remains inside grace.
         vm.roll(block.number + 1);
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
         engine.settleRound(contentId, roundId);
