@@ -1357,6 +1357,37 @@ describe("local signer", () => {
     ).rejects.toThrow(/Quoted payment exceeds maxPaymentAmount/);
   });
 
+  it("rejects agent_wallet alias feedback bonus funding before asking the agent", async () => {
+    const payload = feedbackBonusAskPayload();
+    payload.paymentMode = "agent_wallet" as never;
+    const agent = {
+      askHumans: async () => {
+        throw new Error("askHumans should not run");
+      },
+      confirmAskTransactions: async () => {
+        throw new Error("confirmAskTransactions should not run");
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
+
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          ...validationConfig(),
+          chainId: 480,
+          chainName: "test",
+          pollingIntervalMs: 1,
+          receiptTimeoutMs: 1,
+        },
+        payload,
+      }),
+    ).rejects.toThrow(/Feedback Bonus funding requires eip3009_usdc_authorization payment mode/);
+  });
+
   it("rejects unsafe numeric maxPaymentAmount before asking the agent", async () => {
     const payload = askPayload();
     payload.maxPaymentAmount = Number.MAX_SAFE_INTEGER + 1;

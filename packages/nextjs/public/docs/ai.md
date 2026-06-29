@@ -170,7 +170,7 @@ For normal human-wallet asks, use handoff tools in order:
 5. `rateloop_get_question_status`
 6. `rateloop_get_result`
 
-For low-level MCP wallet-call hosts only, use raw ask tools in order:
+For low-level MCP wallet-call hosts only, use raw ask tools in order for bounty-only asks:
 
 1. `rateloop_quote_question`
 2. `rateloop_ask_humans`
@@ -185,9 +185,10 @@ can still be executed in the returned order.
 
 Direct JSON alternative for the common bounty-only ask, status, and result flow. The SDK convenience call
 `askHumans({ transport: "http" })` remains bounty-only and rejects `feedbackBonus`. Raw `POST /api/agent/asks` is a
-lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must fund it in the creation
-transaction. Most agents should use MCP, browser handoff, or local signer automation for asks that include a Feedback
-Bonus.
+lower-level route for wallet-call bounties or EIP-3009/x402 authorization. Advanced callers that include
+`feedbackBonus` must use a single-question USDC ask with `paymentMode: "eip3009_usdc_authorization"`; wallet-call raw
+asks are bounty-only. Most agents should use MCP, browser handoff, or local signer automation for asks that include a
+Feedback Bonus.
 
 ```text
 GET  https://www.rateloop.ai/api/agent/templates
@@ -235,7 +236,7 @@ Direct ask JSON payload without Feedback Bonus:
 2. Call `rateloop_quote_question` with the live draft ask. Include optional `feedbackBonus` only on MCP or browser handoff flows when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 3. Show or log the returned `legalNotice` before spending.
 4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
-5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue.
+5. If using raw MCP for bounty-only wallet calls, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue. If the ask includes `feedbackBonus`, use the default `eip3009_usdc_authorization` path instead.
 
 Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
 

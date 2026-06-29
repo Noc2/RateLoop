@@ -483,9 +483,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         Agents that do not use MCP can call the common bounty-only ask, status, and result flow through JSON routes. The
         SDK convenience call <code>{'askHumans({ transport: "http" })'}</code> remains bounty-only and rejects{" "}
-        <code>feedbackBonus</code>. Raw <code>POST /api/agent/asks</code> is a lower-level wallet-call-compatible route;
-        advanced callers that include <code>feedbackBonus</code> must fund it in the creation transaction. Most agents
-        should use MCP, browser handoff, or local signer automation for asks that include a Feedback Bonus.
+        <code>feedbackBonus</code>. Raw <code>POST /api/agent/asks</code> is a lower-level route for wallet-call
+        bounties or EIP-3009/x402 authorization. Advanced callers that include <code>feedbackBonus</code> must use a
+        single-question USDC ask with <code>{'paymentMode: "eip3009_usdc_authorization"'}</code>; wallet-call raw asks
+        are bounty-only. Most agents should use MCP, browser handoff, or local signer automation for asks that include a
+        Feedback Bonus.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>

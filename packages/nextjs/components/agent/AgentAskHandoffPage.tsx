@@ -1661,6 +1661,9 @@ async function buildDraftRequestBody(
   delete draftBounty.feedbackWindowSeconds;
   let feedbackBonusPaymentAmount = 0n;
   if (form.feedbackBonusAmount !== null) {
+    if (form.bountyAsset !== "usdc") {
+      throw new Error("Feedback Bonuses require a single-question USDC ask.");
+    }
     const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
     if (feedbackBonusAmount === null) {
       throw new Error("Feedback Bonus must be a positive amount with up to 6 decimals.");
@@ -2044,6 +2047,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   );
   const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
+  const canDraftFeedbackBonusForBounty = (draftForm?.bountyAsset ?? readBountyAsset(handoff)) === "usdc";
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
@@ -2240,6 +2244,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         ...current,
         bountyAmount: parsedAmount === null ? current.bountyAmount : formatSubmissionRewardInput(parsedAmount, asset),
         bountyAsset: asset,
+        feedbackBonusAmount: asset === "usdc" ? current.feedbackBonusAmount : null,
+        feedbackBonusAsset: asset === "usdc" ? current.feedbackBonusAsset : null,
       };
     });
     setDraftError(null);
@@ -3392,10 +3398,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       type="button"
                       aria-pressed={draftForm?.feedbackBonusAmount !== null}
                       className={`btn btn-sm ${draftForm?.feedbackBonusAmount !== null ? "btn-primary" : "btn-outline"}`}
-                      disabled={!canEditDraft || hasQuestionBundle}
+                      disabled={!canEditDraft || hasQuestionBundle || !canDraftFeedbackBonusForBounty}
                       onClick={() => {
                         if (hasQuestionBundle) {
                           notification.info("Feedback Bonuses can be added to single-question handoffs.");
+                          return;
+                        }
+                        if (!canDraftFeedbackBonusForBounty) {
+                          notification.info("Feedback Bonuses require a USDC bounty.");
                           return;
                         }
                         enableDraftFeedbackBonus();
@@ -3408,6 +3418,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
                       Feedback Bonuses are per question and round. Browser handoffs support them for single-question
                       asks first.
+                    </p>
+                  ) : !canDraftFeedbackBonusForBounty ? (
+                    <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+                      Feedback Bonuses require a single-question USDC ask. Switch the bounty asset to USDC before adding
+                      one.
                     </p>
                   ) : null}
                   {draftForm?.feedbackBonusAmount !== null ? (

@@ -77,9 +77,10 @@ GET  /api/agent/results/{operationKey}
 ```
 
 The SDK convenience call `askHumans({ transport: "http" })` is bounty-only and rejects `feedbackBonus`. Raw
-`POST /api/agent/asks` is a lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus`
-must fund it in the creation transaction. SDK users should prefer MCP or browser handoff for Feedback Bonus asks; direct `createAskHandoff` can still carry the full handoff
-payload because the browser completes the funded flow.
+`POST /api/agent/asks` is a lower-level route for wallet-call bounties or EIP-3009/x402 authorization. Advanced callers
+that include `feedbackBonus` must use a single-question USDC ask with `paymentMode: "eip3009_usdc_authorization"`;
+wallet-call raw asks are bounty-only. SDK users should prefer MCP or browser handoff for Feedback Bonus asks; direct
+`createAskHandoff` can still carry the full handoff payload because the browser completes the funded flow.
 
 ## Generated Images And Mockups
 

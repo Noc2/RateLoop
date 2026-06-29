@@ -3466,7 +3466,8 @@ export async function askHumansWithLocalSigner(params: {
   if (params.paymentMode) {
     baseAsk.paymentMode = params.paymentMode;
   }
-  if (baseAsk.feedbackBonus && baseAsk.paymentMode === "wallet_calls") {
+  const paymentMode: string = typeof baseAsk.paymentMode === "string" ? baseAsk.paymentMode : "";
+  if (baseAsk.feedbackBonus && (paymentMode === "wallet_calls" || paymentMode === "agent_wallet")) {
     throw new Error("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
   }
   assertProductionQuestionMetadataBaseUrlPinned(params.config);
