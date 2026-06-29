@@ -141,7 +141,12 @@ export async function continueToBountyStep(page: Page): Promise<void> {
 
 export async function continueToFeedbackBonusStep(page: Page): Promise<void> {
   const noBonusButton = page.getByRole("button", { name: /^No bonus$/i }).first();
-  if (await noBonusButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
+  if (await noBonusButton.isVisible({ timeout: 500 }).catch(() => false)) {
+    return;
+  }
+
+  const bountyStepButton = page.getByRole("button", { name: /^Go to bounty details$/i });
+  if ((await bountyStepButton.getAttribute("aria-current").catch(() => null)) === "step") {
     return;
   }
 

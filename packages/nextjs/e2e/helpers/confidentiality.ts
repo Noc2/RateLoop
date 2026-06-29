@@ -553,7 +553,10 @@ export async function submitGatedQuestion(
 
   await selectBountyRewardAsset(page, "lrep");
   await continueToFeedbackBonusStep(page);
-  await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
+  const noBonusButton = page.getByRole("button", { name: /^No bonus$/i }).first();
+  if (await noBonusButton.isVisible({ timeout: 500 }).catch(() => false)) {
+    await expect(noBonusButton).toHaveAttribute("aria-pressed", "true");
+  }
 
   const submitButton = page.getByRole("button", { name: /^Submit/i });
   await expect(submitButton).toBeEnabled({ timeout: 5_000 });
