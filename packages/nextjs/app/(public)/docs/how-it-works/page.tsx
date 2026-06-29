@@ -173,7 +173,7 @@ const HowItWorks: NextPage = () => {
       <div className="not-prose my-4 rounded-lg bg-warning/10 p-4 text-sm text-base-content">
         <p className="font-semibold text-warning">USDC payout timing</p>
         <p className="mt-1 text-base-content/75">
-          USDC bounty claims usually unlock <strong>12-24 hours</strong> after settlement while payout roots pass oracle
+          USDC bounty claims usually unlock <strong>2-4 hours</strong> after settlement while payout roots pass oracle
           challenge windows; challenged snapshots take longer.
         </p>
       </div>

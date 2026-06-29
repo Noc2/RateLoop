@@ -55,7 +55,7 @@ const ROUND_CONFIG_BOUNDS = {
   maxVoterCap: 200,
 } as const;
 
-const CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS = 12 * 60 * 60;
+const CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS = 2 * 60 * 60;
 const USDC_BOUNTY_PAYOUT_MINIMUM_DELAY_SECONDS = CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS;
 
 export const protocolDocFacts = {
@@ -122,9 +122,9 @@ export const protocolDocFacts = {
   )}`,
   clusterPayoutChallengeWindowLabel: formatDurationLabel(CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS),
   usdcBountyPayoutMinimumDelayLabel: formatDurationLabel(USDC_BOUNTY_PAYOUT_MINIMUM_DELAY_SECONDS),
-  usdcBountyPayoutHappyPathMaxDelayLabel: "24 hours",
+  usdcBountyPayoutHappyPathMaxDelayLabel: "4 hours",
   usdcBountyPayoutTimingTooltip:
-    "USDC bounty claims wait for finalized payout roots after settlement: minimum 12 hours when the correlation epoch is already finalized, normally up to 24 hours if both oracle layers still need their challenge windows. Keeper polling, transactions, and artifact availability can add a little; challenged roots wait for arbiter resolution.",
+    "USDC bounty claims wait for finalized payout roots after settlement: minimum 2 hours when the correlation epoch is already finalized, normally up to 4 hours if both oracle layers still need their 2-hour challenge windows. Keeper polling, transactions, and artifact availability can add a little; challenged roots wait for arbiter resolution.",
 } as const;
 
 export const whitepaperSettlementConfigRows: string[][] = [

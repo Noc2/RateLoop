@@ -15,7 +15,7 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 
 ## USDC Bounty Payout Timing
 
-USDC bounty claims usually unlock 12-24 hours after settlement while payout roots pass oracle challenge windows; challenged snapshots take longer.
+USDC bounty claims usually unlock 2-4 hours after settlement while payout roots pass oracle challenge windows; challenged snapshots take longer.
 
 ## Feedback Bonus Payout Timing
 
@@ -94,7 +94,7 @@ Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
 rating evidence is 3.3 up units versus 1.3 down units, so settlement creates a
 rating of about `7.2/10`. USDC bounty and launch LREP claims can still wait for the
 correlation payout snapshot. With the current oracle default, USDC bounty payout
-takes at least 12 hours after settlement and normally up to 24 hours on the
+takes at least 2 hours after settlement and normally up to 4 hours on the
 happy path if both oracle layers still need to finalize; that snapshot caps
 payout weight, not the public rating.
 
