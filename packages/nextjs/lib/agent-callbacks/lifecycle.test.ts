@@ -1,4 +1,8 @@
-import { __setAgentLifecycleTestOverridesForTests, sweepAgentLifecycleCallbacks } from "./lifecycle";
+import {
+  __setAgentLifecycleTargetChainIdsForTests,
+  __setAgentLifecycleTestOverridesForTests,
+  sweepAgentLifecycleCallbacks,
+} from "./lifecycle";
 import { publicWebhookAgentId } from "./publicWebhooks";
 import { upsertAgentCallbackSubscription } from "./registry";
 import assert from "node:assert/strict";
@@ -41,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __setAgentLifecycleTargetChainIdsForTests(undefined);
   __setAgentLifecycleTestOverridesForTests(null);
   __setDatabaseResourcesForTests(null);
   __setUrlSafetyDnsResolversForTests(null);
@@ -130,6 +135,36 @@ test("sweepAgentLifecycleCallbacks scopes content and feedback reads by candidat
       terminalRoundIds: new Set(),
     },
     deploymentKey: deployment.deploymentKey,
+  });
+});
+
+test("sweepAgentLifecycleCallbacks skips candidates outside configured target networks", async () => {
+  let contentReads = 0;
+
+  __setAgentLifecycleTargetChainIdsForTests([8453]);
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async () => [],
+    getContentById: async () => {
+      contentReads += 1;
+      return contentResponse() as never;
+    },
+    listCandidates: async () => [{ ...CANDIDATE, chainId: 84532 }],
+    listContentFeedback: async () =>
+      ({
+        items: [],
+      }) as never,
+  });
+
+  const result = await sweepAgentLifecycleCallbacks();
+
+  assert.equal(contentReads, 0);
+  assert.equal(result.scanned, 1);
+  assert.deepEqual(result.emitted, {
+    bountyLowResponse: 0,
+    feedbackUnlocked: 0,
+    questionOpen: 0,
+    questionSettled: 0,
+    questionSettling: 0,
   });
 });
 

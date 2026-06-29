@@ -31,6 +31,7 @@ type AgentLifecycleDependencies = {
 };
 
 let lifecycleTestOverrides: Partial<AgentLifecycleDependencies> | null = null;
+let targetChainIdsTestOverride: Set<number> | null | undefined;
 
 function getLifecycleDependencies(): AgentLifecycleDependencies {
   return {
@@ -43,6 +44,11 @@ function getLifecycleDependencies(): AgentLifecycleDependencies {
 
 export function __setAgentLifecycleTestOverridesForTests(overrides: Partial<AgentLifecycleDependencies> | null) {
   lifecycleTestOverrides = overrides;
+}
+
+export function __setAgentLifecycleTargetChainIdsForTests(chainIds: readonly number[] | null | undefined) {
+  targetChainIdsTestOverride =
+    chainIds === undefined ? undefined : chainIds === null ? null : new Set(chainIds.filter(Number.isSafeInteger));
 }
 
 function toOptionalUnixSeconds(value: unknown): number | null {
@@ -63,6 +69,18 @@ function isTerminalRoundState(state: unknown) {
     state === ROUND_STATE.Tied ||
     state === ROUND_STATE.RevealFailed
   );
+}
+
+function configuredTargetChainIds() {
+  if (targetChainIdsTestOverride !== undefined) return targetChainIdsTestOverride;
+  if (process.env.NODE_ENV !== "production") return null;
+  const raw = process.env.NEXT_PUBLIC_TARGET_NETWORKS?.trim();
+  if (!raw) return null;
+  const chainIds = raw
+    .split(",")
+    .map(value => Number.parseInt(value.trim(), 10))
+    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0);
+  return chainIds.length > 0 ? new Set(chainIds) : null;
 }
 
 function lifecycleEventsForContent(params: {
@@ -193,6 +211,7 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
   const now = params.now ?? new Date();
   const nowSeconds = Math.floor(now.getTime() / 1000);
   const dependencies = getLifecycleDependencies();
+  const targetChainIds = configuredTargetChainIds();
   const emitted = {
     bountyLowResponse: 0,
     feedbackUnlocked: 0,
@@ -217,6 +236,11 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
       if (scanned >= maxCandidates) {
         hasMore = true;
         break;
+      }
+
+      if (targetChainIds && !targetChainIds.has(candidate.chainId)) {
+        scanned += 1;
+        continue;
       }
 
       const deployment = resolveProtocolDeploymentScope(candidate.chainId);
