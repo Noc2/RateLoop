@@ -52,7 +52,7 @@ export type AgentAskExample = {
   clientRequestId: string;
   feedbackBonus?: {
     amount: string | number | bigint;
-    asset?: "USDC" | "usdc" | "LREP" | "lrep" | string;
+    asset?: "USDC" | "usdc" | string;
     awarder?: string;
   };
   maxPaymentAmount?: string | number | bigint;

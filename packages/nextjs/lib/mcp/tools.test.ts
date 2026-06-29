@@ -1387,20 +1387,33 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
   __setMcpToolTestOverridesForTests({
     ...quoteOverrides(),
     getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
-    prepareAgentWalletQuestionSubmissionRequest: async params => {
+    prepareNativeX402QuestionSubmissionRequest: async params => {
       prepared.push(params);
       return {
         body: {
           operationKey: OPERATION_KEY,
           payment: {
-            amount: "1000000",
+            amount: "3000000",
             asset: "USDC",
             bountyAmount: "1000000",
             decimals: 6,
             spender: "0x0000000000000000000000000000000000000002",
             tokenAddress: "0x0000000000000000000000000000000000000001",
           },
+          paymentMode: "x402_authorization",
+          paymentScheme: "eip3009_usdc_authorization",
           status: "awaiting_wallet_signature",
+          transactionPlan: null,
+          x402AuthorizationRequest: {
+            authorization: {
+              from: params.walletAddress,
+              nonce: `0x${"4".repeat(64)}`,
+              to: "0x0000000000000000000000000000000000000002",
+              validAfter: "0",
+              validBefore: "1762000000",
+              value: "3000000",
+            },
+          },
         },
         status: 202,
       };
@@ -1416,7 +1429,6 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
     arguments: askArguments({
       feedbackBonus: { amount: "2000000" },
       maxPaymentAmount: "3000000",
-      paymentMode: "wallet_calls",
     }),
     name: "rateloop_ask_humans",
   });
@@ -1451,7 +1463,7 @@ test("rateloop_ask_humans rejects mixed-asset feedback bonuses", async () => {
         }),
         name: "rateloop_ask_humans",
       }),
-    /Feedback Bonus creation-time funding currently requires USDC x402 authorization/,
+    /feedbackBonus\.asset must be USDC/,
   );
 });
 
@@ -1491,7 +1503,28 @@ test("public rateloop_ask_humans dry-run rejects mixed-asset feedback bonuses", 
         }),
         name: "rateloop_ask_humans",
       }),
-    /Feedback Bonus creation-time funding currently requires USDC x402 authorization/,
+    /feedbackBonus\.asset must be USDC/,
+  );
+});
+
+test("rateloop_ask_humans rejects wallet-call feedback bonus funding", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: askArguments({
+          feedbackBonus: { amount: "2000000" },
+          maxPaymentAmount: "3000000",
+          paymentMode: "wallet_calls",
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /Feedback Bonus funding requires eip3009_usdc_authorization payment mode/,
   );
 });
 

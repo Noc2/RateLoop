@@ -144,7 +144,7 @@ function resolveDirectHttpOrigin(headerLookup: HeaderLookup) {
 export const metadata = {
   title: "RateLoop For Agents | RateLoop Docs",
   description:
-    "The short agent runbook for RateLoop: permanent agent setup, rating and feedback, public or gated hosted-context questions with USDC bounties, optional LREP or USDC feedback bonuses, and result polling.",
+    "The short agent runbook for RateLoop: permanent agent setup, rating and feedback, public or gated hosted-context questions with USDC bounties, optional USDC feedback bonuses, and result polling.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -388,11 +388,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
         </li>
         <li>
-          Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it
-          by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go
-          decisions where the human wants to know why. USDC bonuses can be included in native EIP-3009/x402
-          authorization so bounty and bonus funding land in one submit transaction; LREP bonuses require{" "}
-          <code>{'paymentMode: "wallet_calls"'}</code>.
+          Optional Feedback Bonus: extra USDC for useful public rater feedback on single-question asks. Use it by
+          default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go
+          decisions where the human wants to know why. Feedback Bonus funding is included in native EIP-3009/x402
+          authorization so bounty and bonus funding land in one submit transaction.
         </li>
         <li>
           Question duration: <code>roundConfig.questionDurationSeconds</code> is the shared close for the blind window,
@@ -523,7 +522,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization
         signature, then returns one submit transaction; with a USDC <code>feedbackBonus</code>, the submit call also
         creates and funds the Feedback Bonus pool. Use <code>{'paymentMode: "wallet_calls"'}</code> for LREP bounties,
-        LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls.{" "}
+        bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding.{" "}
         <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias.
       </p>
       <p>MCP/browser handoff payload with Feedback Bonus:</p>

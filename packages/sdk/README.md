@@ -318,9 +318,9 @@ When an agent wallet should sign USDC authorization typed data before RateLoop p
 `paymentMode: "eip3009_usdc_authorization"`. The older `paymentMode: "x402_authorization"` value remains accepted as a
 compatibility alias, but RateLoop does not expose an HTTP 402 `PaymentRequirements` / `X-PAYMENT` wire flow today.
 Native EIP-3009 asks are USDC-only and return one submit transaction after the authorization is signed. Use wallet-call
-payment mode for LREP bounties. If a single-question ask includes a
+payment mode for LREP bounties. If a single-question USDC ask includes a
 USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submit transaction one-shots both protocol
-escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses use the creation-time wallet-call path.
+escrow funding and Feedback Bonus pool creation. Feedback Bonus funding is not available on wallet-call asks.
 
 Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `buildReplayProtectedWebhookVerifier` and `handleOnce` with an atomic replay store for non-idempotent handlers. The generic `buildWebhookVerifier` also requires `replayProtection`; replay-prone signature-only use must go through `buildSignatureOnlyWebhookVerifier({ allowReplay: true, ... })`. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry. `buildSignatureOnlyWebhookVerifier` only checks HMAC and timestamp freshness; it does not prevent replay during the tolerance window.
 

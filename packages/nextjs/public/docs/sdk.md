@@ -140,7 +140,7 @@ Use this shape after a successful MCP or browser handoff quote. USDC amounts are
   "chainId": 8453,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
-  "paymentMode": "wallet_calls",
+  "paymentMode": "eip3009_usdc_authorization",
   "bounty": {
     "amount": "2500000",
     "asset": "USDC",

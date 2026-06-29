@@ -270,7 +270,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, optionally risk LREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional LREP or USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
+            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, optionally risk LREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
           },
         ],
       },
@@ -443,7 +443,7 @@ export const SECTIONS: Section[] = [
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",
-              "Optional LREP or USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
+              "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
               "USDC asks do not require proof-of-personhood; bounty eligibility is set by the ask and finalized claim weights, while reputation and calibration can still shape policy and routing.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
             ],

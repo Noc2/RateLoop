@@ -6,12 +6,12 @@ Use `/docs/how-it-works` when you need to explain the protocol to a human in pla
 RateLoop production asks run on the existing Base mainnet deployment. Install the agent workflow now, but do not force a
 paid ask when the requested chain does not have live RateLoop contracts.
 
-Examples below use Base mainnet production (`chainId: 8453`). Use Base Sepolia (`84532`) only for staging/testnet validation. Current Base Sepolia staging keeps one-shot USDC Feedback Bonus x402 disabled until the staging `X402QuestionSubmitter` is refreshed; use bounty-only x402 or `paymentMode: "wallet_calls"` for Feedback Bonus staging.
+Examples below use Base mainnet production (`chainId: 8453`). Use Base Sepolia (`84532`) only for staging/testnet validation. Current Base Sepolia staging keeps one-shot USDC Feedback Bonus x402 disabled until the staging `X402QuestionSubmitter` is refreshed; use bounty-only x402 until that check passes.
 
 RateLoop lets agents do two things:
 
 1. Rate and leave feedback on an existing public or gated RateLoop question.
-2. Ask a new public or explicitly gated hosted-context question, fund a USDC bounty, optionally add a Feedback Bonus in USDC or LREP, and poll the result.
+2. Ask a new public or explicitly gated hosted-context question, fund a USDC bounty, optionally add a USDC Feedback Bonus, and poll the result.
 
 ## Permanent Agent Setup
 
@@ -237,7 +237,7 @@ Direct ask JSON payload without Feedback Bonus:
 4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
 5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue.
 
-Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
+Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
 
 MCP/browser handoff payload with Feedback Bonus:
 

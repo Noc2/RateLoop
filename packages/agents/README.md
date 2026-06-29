@@ -23,7 +23,7 @@ remote MCP is the default headless path:
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility`, and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
-- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include the bonus in `maxPaymentAmount` so Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding, while LREP bonuses use creation-time wallet calls. Awards remain open for at least 24 hours after settlement. Base Sepolia currently requires bounty-only x402 or `wallet_calls` for Feedback Bonus staging until strict one-shot readiness passes.
+- optional MCP `feedbackBonus` in USDC for single-question USDC asks where written analysis is valuable; include the bonus in `maxPaymentAmount` so Base mainnet native EIP-3009/x402 asks can one-shot bounty plus bonus funding. Awards remain open for at least 24 hours after settlement.
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
@@ -175,7 +175,7 @@ yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
-Production asks use Base mainnet (`8453`). Local signer examples and `examples/questions/*.json` should continue to default to Base Sepolia (`84532`) so generated test wallets stay on testnet USDC. For Base Sepolia Feedback Bonus staging, use `paymentMode: "wallet_calls"` or bounty-only x402 unless `yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
+Production asks use Base mainnet (`8453`). Local signer examples and `examples/questions/*.json` should continue to default to Base Sepolia (`84532`) so generated test wallets stay on testnet USDC. For Base Sepolia Feedback Bonus staging, use bounty-only x402 unless `yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
 
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.

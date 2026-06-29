@@ -63,8 +63,12 @@ function asJsonObject(value: unknown): JsonObject {
   return value as JsonObject;
 }
 
-function parsePaymentMode(value: unknown): "wallet_calls" | "x402_authorization" {
-  if (value === undefined || value === null || value === "" || value === "wallet_calls" || value === "agent_wallet") {
+function parsePaymentMode(
+  value: unknown,
+  defaultMode: "wallet_calls" | "x402_authorization" = "wallet_calls",
+): "wallet_calls" | "x402_authorization" {
+  if (value === undefined || value === null || value === "") return defaultMode;
+  if (value === "wallet_calls" || value === "agent_wallet") {
     return "wallet_calls";
   }
   if (
@@ -77,6 +81,33 @@ function parsePaymentMode(value: unknown): "wallet_calls" | "x402_authorization"
     return "x402_authorization";
   }
   throw new McpToolError("paymentMode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization.");
+}
+
+function defaultSigningIntentPaymentMode(payload: ReturnType<typeof parseX402QuestionRequest>) {
+  return payload.bounty.asset === "USDC" && payload.questions.length === 1 ? "x402_authorization" : "wallet_calls";
+}
+
+function assertSigningIntentFeedbackBonusMode(params: {
+  payload: ReturnType<typeof parseX402QuestionRequest>;
+  paymentMode: "wallet_calls" | "x402_authorization";
+  requestBody: JsonObject;
+}) {
+  const raw = params.requestBody.feedbackBonus;
+  if (raw === undefined || raw === null || raw === false) return;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new McpToolError("feedbackBonus must be an object when provided.");
+  }
+  const value = raw as JsonObject;
+  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
+  if (asset !== "USDC") {
+    throw new McpToolError("feedbackBonus.asset must be USDC.");
+  }
+  if (params.payload.bounty.asset !== "USDC" || params.payload.questions.length !== 1) {
+    throw new McpToolError("Feedback Bonus funding requires a single-question USDC ask.");
+  }
+  if (params.paymentMode !== "x402_authorization") {
+    throw new McpToolError("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+  }
 }
 
 function parseOptionalAddress(value: unknown, fieldName: string): Address | null {
@@ -276,7 +307,11 @@ export async function createAgentSigningIntent(params: { appBaseUrl: string; req
     throw new McpToolError("maxPaymentAmount is required for browser signing links.");
   }
 
-  const paymentMode = parsePaymentMode(requestBody.paymentMode ?? requestBody.fundingMode);
+  const paymentMode = parsePaymentMode(
+    requestBody.paymentMode ?? requestBody.fundingMode,
+    defaultSigningIntentPaymentMode(payload),
+  );
+  assertSigningIntentFeedbackBonusMode({ payload, paymentMode, requestBody });
   const walletAddress = parseOptionalAddress(
     requestBody.walletAddress ?? requestBody.agentWalletAddress,
     "walletAddress",

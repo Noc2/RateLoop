@@ -355,6 +355,29 @@ function resolveAgentAskHandoffPaymentMode(params: {
   );
 }
 
+function assertAgentAskHandoffFeedbackBonusMode(params: {
+  parsed: ReturnType<typeof parseX402QuestionRequest>;
+  paymentMode: AgentAskHandoffPaymentMode;
+  requestBody: JsonObject;
+}) {
+  const raw = params.requestBody.feedbackBonus;
+  if (raw === undefined || raw === null || raw === false) return;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AgentAskHandoffError("feedbackBonus must be an object when provided.");
+  }
+  const value = raw as JsonObject;
+  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
+  if (asset !== "USDC") {
+    throw new AgentAskHandoffError("feedbackBonus.asset must be USDC.");
+  }
+  if (params.parsed.bounty.asset !== "USDC" || params.parsed.questions.length !== 1) {
+    throw new AgentAskHandoffError("Feedback Bonus funding requires a single-question USDC ask.");
+  }
+  if (params.paymentMode !== "x402_authorization") {
+    throw new AgentAskHandoffError("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+  }
+}
+
 function readRequiredString(value: unknown, fieldName: string) {
   const stringValue = readOptionalString(value);
   if (!stringValue) {
@@ -756,6 +779,7 @@ export function normalizeAgentAskHandoffRequestBody(params: {
   const parsed = parseX402QuestionRequest(validationBody);
   assertHandoffChainSubmitReady(parsed.chainId);
   const paymentMode = resolveAgentAskHandoffPaymentMode({ parsed, requestBody });
+  assertAgentAskHandoffFeedbackBonusMode({ parsed, paymentMode, requestBody });
   const walletAddress = readOptionalAddress(
     requestBody.walletAddress ?? requestBody.agentWalletAddress,
     "walletAddress",

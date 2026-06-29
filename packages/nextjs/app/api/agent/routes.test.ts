@@ -801,6 +801,7 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
       request: {
         ...questionPayload("browser-handoff"),
         maxPaymentAmount: "1500000",
+        paymentMode: "wallet_calls",
         signatureMode: "browser_link",
       },
       ttlMs: 300000,
@@ -974,54 +975,10 @@ test("agent signing intent route fails closed without production app URL", async
   }
 });
 
-test("agent signing intent completion does not create post-creation Feedback Bonus wallet calls", async () => {
-  installAskOverrides({
-    confirmAgentWalletQuestionSubmissionRequest: async params => ({
-      body: {
-        feedbackBonus: {
-          amount: "2000000",
-          asset: "USDC",
-          enabled: true,
-          status: "awaiting_wallet_signature",
-        },
-        operationKey: params.operationKey,
-        publicUrl: "https://rateloop.ai/rate?content=content-123",
-        status: "submitted",
-        transactionHashes: params.transactionHashes,
-      },
-      status: 200,
-    }),
-    preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
-      body: {
-        chainId: params.payload.chainId,
-        clientRequestId: params.payload.clientRequestId,
-        operationKey: OPERATION_KEY,
-        payment: {
-          amount: "1000000",
-          asset: "USDC",
-          bountyAmount: "1000000",
-          decimals: 6,
-          spender: "0x0000000000000000000000000000000000000002",
-          tokenAddress: "0x0000000000000000000000000000000000000001",
-        },
-        status: "awaiting_wallet_signature",
-        transactionPlan: {
-          calls: [{ id: "approve-usdc", to: "0x0000000000000000000000000000000000000001" }],
-          requiresOrderedExecution: true,
-        },
-        wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
-      },
-      status: 202,
-    }),
-    resolveX402QuestionConfig: () =>
-      ({
-        feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000003",
-        questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000002",
-        usdcAddress: "0x0000000000000000000000000000000000000001",
-      }) as never,
-  });
+test("agent signing intent rejects Feedback Bonus wallet-call funding", async () => {
+  installAskOverrides();
 
-  const createResponse = await signingIntentsRoute.POST(
+  const response = await signingIntentsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
       request: {
         ...questionPayload("browser-feedback-bonus"),
@@ -1030,56 +987,16 @@ test("agent signing intent completion does not create post-creation Feedback Bon
           asset: "USDC",
         },
         maxPaymentAmount: "3000000",
+        paymentMode: "wallet_calls",
         signatureMode: "browser_link",
       },
       ttlMs: 300000,
     }),
   );
-  const createBody = (await createResponse.json()) as Record<string, unknown>;
-  const intentId = String(createBody.id);
-  const signingUrl = new URL(String(createBody.signingUrl));
-  const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
-  assert.ok(token);
+  const body = (await response.json()) as Record<string, unknown>;
 
-  const prepareResponse = await signingIntentPrepareRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
-      token,
-      walletAddress: "0x00000000000000000000000000000000000000aa",
-    }),
-    { params: Promise.resolve({ intentId }) },
-  );
-  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
-  assert.equal(prepareResponse.status, 200);
-  assert.equal(prepareBody.status, "prepared");
-  assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
-
-  const askHash = `0x${"4".repeat(64)}` as const;
-  const completeAskResponse = await signingIntentCompleteRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
-      token,
-      transactionHashes: [askHash],
-    }),
-    { params: Promise.resolve({ intentId }) },
-  );
-  const completeAskBody = (await completeAskResponse.json()) as Record<string, unknown>;
-  assert.equal(completeAskResponse.status, 200);
-  assert.equal(completeAskBody.status, "submitted");
-  assert.deepEqual(completeAskBody.transactionHashes, [askHash]);
-  assert.equal(completeAskBody.transactionPlan, null);
-  assert.equal((completeAskBody.feedbackBonus as Record<string, unknown>).status, "creation_time_required");
-  assert.deepEqual(completeAskBody.warnings, ["feedback_bonus_creation_time_required"]);
-
-  const readAfterBonusResponse = await signingIntentRoute.GET(
-    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
-      "x-rateloop-signing-intent-token": token,
-    }),
-    { params: Promise.resolve({ intentId }) },
-  );
-  const readAfterBonusBody = (await readAfterBonusResponse.json()) as Record<string, unknown>;
-  assert.equal(readAfterBonusResponse.status, 200);
-  assert.equal(readAfterBonusBody.status, "submitted");
-  assert.deepEqual(readAfterBonusBody.transactionHashes, [askHash]);
-  assert.equal(readAfterBonusBody.transactionPlan, null);
+  assert.equal(response.status, 400);
+  assert.match(String(body.message), /Feedback Bonus funding requires eip3009_usdc_authorization payment mode/);
 });
 
 test("agent signing intent x402 prepare forwards signed authorizations", async () => {
@@ -1230,6 +1147,7 @@ test("agent signing intent prepare fails when MCP returns an empty transaction p
       request: {
         ...questionPayload("browser-empty-plan"),
         maxPaymentAmount: "1500000",
+        paymentMode: "wallet_calls",
         signatureMode: "browser_link",
       },
       ttlMs: 300000,
@@ -2363,7 +2281,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
       resolvedCategoryIds: [5n],
       submissionKeys: [`0x${"2".repeat(64)}` as const],
     }),
-    preparePermissionlessWalletQuestionSubmissionRequest: async params => {
+    preparePermissionlessNativeX402QuestionSubmissionRequest: async params => {
       preparedPayload = params.payload;
       preparedFeedbackBonus = params.feedbackBonus;
       return {
@@ -2372,30 +2290,26 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
           clientRequestId: params.payload.clientRequestId,
           operationKey: OPERATION_KEY,
           payment: {
-            amount: params.payload.bounty.amount.toString(),
+            amount: (params.payload.bounty.amount + (params.feedbackBonus?.amount ?? 0n)).toString(),
             asset: params.payload.bounty.asset,
             bountyAmount: params.payload.bounty.amount.toString(),
             decimals: 6,
             spender: "0x0000000000000000000000000000000000000002",
-            tokenAddress:
-              params.payload.bounty.asset === "LREP"
-                ? "0x0000000000000000000000000000000000000003"
-                : "0x0000000000000000000000000000000000000001",
+            tokenAddress: "0x0000000000000000000000000000000000000001",
           },
-          status: "awaiting_wallet_signature",
-          transactionPlan: {
-            calls: [
-              {
-                id: params.payload.bounty.asset === "LREP" ? "approve-lrep" : "approve-usdc",
-                to:
-                  params.payload.bounty.asset === "LREP"
-                    ? "0x0000000000000000000000000000000000000003"
-                    : "0x0000000000000000000000000000000000000001",
-              },
-            ],
-            requiresOrderedExecution: true,
+          status: "awaiting_authorization",
+          transactionPlan: null,
+          wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
+          x402AuthorizationRequest: {
+            chainId: params.payload.chainId,
+            from: params.walletAddress,
+            nonce: `0x${"1".repeat(64)}`,
+            to: "0x0000000000000000000000000000000000000009",
+            tokenAddress: "0x0000000000000000000000000000000000000001",
+            validAfter: 1,
+            validBefore: 2,
+            value: (params.payload.bounty.amount + (params.feedbackBonus?.amount ?? 0n)).toString(),
           },
-          wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
         },
         status: 202,
       };
@@ -2405,14 +2319,14 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   const originalRequest = {
     ...handoffQuestionPayload("agent-handoff-editable"),
     maxPaymentAmount: "1000000",
-    paymentMode: "wallet_calls",
+    paymentMode: "eip3009_usdc_authorization",
   };
   const editedRequest = {
     ...originalRequest,
     bounty: {
       ...originalRequest.bounty,
       amount: "2500000",
-      asset: "LREP",
+      asset: "USDC",
       requiredVoters: "4",
     },
     feedbackBonus: {
@@ -2469,7 +2383,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(patchBody.draftRevision, 1);
   assert.equal(patchBody.editedByUser, true);
   assert.equal(patchRequestBody.maxPaymentAmount, "4500000");
-  assert.equal((patchRequestBody.bounty as Record<string, unknown>).asset, "LREP");
+  assert.equal((patchRequestBody.bounty as Record<string, unknown>).asset, "USDC");
   assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).amount, "2000000");
   assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).asset, "USDC");
   assert.equal(patchQuestion.title, "Edited pitch interest");
@@ -2489,18 +2403,20 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
     questions: Array<{ detailsHash: string; detailsUrl: string; tagList: string[]; title: string }>;
     roundConfig: { epochDuration: bigint; maxDuration: bigint; maxVoters: bigint; minVoters: bigint };
   };
-  const feedbackBonus = preparedFeedbackBonus as { amount: bigint; asset: "LREP" | "USDC" };
+  const feedbackBonus = preparedFeedbackBonus as { amount: bigint; asset: "USDC" };
 
   assert.equal(prepareResponse.status, 200);
   assert.equal(prepareBody.status, "prepared");
   assert.equal(prepareBody.draftRevision, 1);
   assert.equal(prepareBody.preparedDraftRevision, 1);
+  assert.equal(((prepareBody.x402AuthorizationRequest as Record<string, unknown>) ?? {}).value, "4500000");
+  assert.equal(prepareBody.transactionPlan, null);
   assert.equal(payload.questions[0]?.title, "Edited pitch interest");
   assert.equal(payload.questions[0]?.detailsUrl, "https://rateloop.ai/api/attachments/details/det_agenthandoffedit");
   assert.equal(payload.questions[0]?.detailsHash, `0x${"a".repeat(64)}`);
   assert.deepEqual(payload.questions[0]?.tagList, ["agents", "running"]);
   assert.equal(payload.bounty.amount, 2_500_000n);
-  assert.equal(payload.bounty.asset, "LREP");
+  assert.equal(payload.bounty.asset, "USDC");
   assert.equal(payload.bounty.requiredVoters, 4n);
   assert.equal(feedbackBonus.amount, 2_000_000n);
   assert.equal(feedbackBonus.asset, "USDC");
@@ -2561,65 +2477,10 @@ test("agent ask handoff route blocks draft edits after prepare", async () => {
   assert.match(String(patchBody.message), /cannot be edited after preparation has started/);
 });
 
-test("agent ask handoff route does not create post-creation Feedback Bonus wallet calls", async () => {
-  mcpToolsModule.__setMcpToolTestOverridesForTests({
-    confirmAgentWalletQuestionSubmissionRequest: async params => ({
-      body: {
-        contentId: "content-123",
-        feedbackBonus: {
-          amount: "2000000",
-          asset: "USDC",
-          enabled: true,
-          status: "awaiting_wallet_signature",
-        },
-        operationKey: params.operationKey,
-        publicUrl: "https://rateloop.ai/rate?content=content-123",
-        status: "submitted",
-        transactionHashes: params.transactionHashes,
-      },
-      status: 200,
-    }),
-    preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
-      body: {
-        chainId: params.payload.chainId,
-        clientRequestId: params.payload.clientRequestId,
-        operationKey: OPERATION_KEY,
-        payment: {
-          amount: "1000000",
-          asset: "USDC",
-          bountyAmount: "1000000",
-          decimals: 6,
-          spender: "0x0000000000000000000000000000000000000002",
-          tokenAddress: "0x0000000000000000000000000000000000000001",
-        },
-        status: "awaiting_wallet_signature",
-        transactionPlan: {
-          calls: [{ id: "approve-usdc", to: "0x0000000000000000000000000000000000000001" }],
-          requiresOrderedExecution: true,
-        },
-        wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
-      },
-      status: 202,
-    }),
-    preflightX402QuestionSubmission: async () => ({
-      operation: {
-        canonicalPayload: {} as never,
-        operationKey: OPERATION_KEY,
-        payloadHash: "payload-hash",
-      },
-      paymentAmount: 1_000_000n,
-      resolvedCategoryIds: [5n],
-      submissionKeys: [`0x${"2".repeat(64)}` as const],
-    }),
-    resolveX402QuestionConfig: () =>
-      ({
-        feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000003",
-        questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000002",
-        usdcAddress: "0x0000000000000000000000000000000000000001",
-      }) as never,
-  });
+test("agent ask handoff route rejects Feedback Bonus wallet-call funding", async () => {
+  installAskOverrides();
 
-  const createResponse = await handoffsRoute.POST(
+  const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
         ...handoffQuestionPayload("agent-handoff-feedback-bonus"),
@@ -2633,57 +2494,10 @@ test("agent ask handoff route does not create post-creation Feedback Bonus walle
       ttlMs: 300000,
     }),
   );
-  const createBody = (await createResponse.json()) as Record<string, unknown>;
-  const handoffId = String(createBody.handoffId);
-  const handoffUrl = new URL(String(createBody.handoffUrl));
-  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+  const body = (await response.json()) as Record<string, unknown>;
 
-  assert.equal(createResponse.status, 200);
-  assert.ok(token);
-  assert.equal(
-    ((createBody.requestBody as Record<string, unknown>).feedbackBonus as Record<string, unknown>).amount,
-    "2000000",
-  );
-
-  const prepareResponse = await handoffPrepareRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: HANDOFF_CHAIN_ID,
-      token,
-      walletAddress: "0x00000000000000000000000000000000000000aa",
-    }),
-    { params: Promise.resolve({ handoffId }) },
-  );
-  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
-
-  assert.equal(prepareResponse.status, 200);
-  assert.equal(prepareBody.status, "prepared");
-  assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
-  assert.equal(
-    ((prepareBody.ask as Record<string, unknown>).feedbackBonus as Record<string, unknown>).status,
-    "pending_question_confirmation",
-  );
-
-  const askHash = `0x${"4".repeat(64)}` as const;
-  const completeAskResponse = await handoffCompleteRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
-      token,
-      transactionHashes: [askHash],
-    }),
-    { params: Promise.resolve({ handoffId }) },
-  );
-  const completeAskBody = (await completeAskResponse.json()) as Record<string, unknown>;
-
-  assert.equal(completeAskResponse.status, 200);
-  assert.equal(completeAskBody.status, "submitted");
-  assert.deepEqual(completeAskBody.transactionHashes, [askHash]);
-  assert.equal(completeAskBody.transactionPlan, null);
-  assert.equal(
-    ((completeAskBody.ask as Record<string, unknown>).feedbackBonus as Record<string, unknown>).status,
-    "creation_time_required",
-  );
-  assert.deepEqual((completeAskBody.ask as Record<string, unknown>).warnings, [
-    "feedback_bonus_creation_time_required",
-  ]);
+  assert.equal(response.status, 400);
+  assert.match(String(body.message), /Feedback Bonus funding requires eip3009_usdc_authorization payment mode/);
 });
 
 test("agent signing intent read requires a private token outside the request URL", async () => {

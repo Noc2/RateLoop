@@ -192,7 +192,6 @@ const LocalX402QuestionSubmitterAbi = [
  * submissions settle within minutes, so 24 hours is generous headroom.
  */
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
-const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
 const X402_SUBMISSION_REWARD_ASSET_LREP = 0;
 const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
@@ -362,13 +361,13 @@ type LocalSignerAgentClient = Pick<
   "askHumans" | "confirmAskTransactions"
 >;
 
-type LocalFeedbackBonusAsset = "USDC" | "LREP";
+type LocalFeedbackBonusAsset = "USDC";
 type LocalSubmissionRewardAsset = X402QuestionPayload["bounty"]["asset"];
 
 type ExpectedLocalSignerFeedbackBonus = {
   amount: bigint;
   asset: LocalFeedbackBonusAsset;
-  assetId: typeof FEEDBACK_BONUS_ASSET_LREP | typeof FEEDBACK_BONUS_ASSET_USDC;
+  assetId: typeof FEEDBACK_BONUS_ASSET_USDC;
   awarder: Address;
 };
 
@@ -726,8 +725,9 @@ function normalizeSubmissionRewardAsset(value: unknown): LocalSubmissionRewardAs
 function feedbackBonusPaymentAmount(request: AskHumansRequest): bigint {
   const bonus = request.feedbackBonus;
   if (!bonus) return 0n;
-  if (normalizeFeedbackBonusAsset(bonus.asset) !== normalizeSubmissionRewardAsset(request.bounty.asset)) {
-    return 0n;
+  normalizeFeedbackBonusAsset(bonus.asset);
+  if (normalizeSubmissionRewardAsset(request.bounty.asset) !== "USDC") {
+    throw new Error("Feedback Bonus funding requires a single-question USDC ask.");
   }
   return normalizeBigInt(bonus.amount, "feedbackBonus.amount");
 }
@@ -735,17 +735,11 @@ function feedbackBonusPaymentAmount(request: AskHumansRequest): bigint {
 function normalizeFeedbackBonusAsset(value: unknown): LocalFeedbackBonusAsset {
   if (value === undefined || value === null || value === "") return "USDC";
   if (typeof value !== "string") {
-    throw new Error("feedbackBonus.asset must be USDC or LREP.");
+    throw new Error("feedbackBonus.asset must be USDC.");
   }
   const asset = value.trim().toUpperCase();
-  if (asset === "USDC" || asset === "LREP") return asset;
-  throw new Error("feedbackBonus.asset must be USDC or LREP.");
-}
-
-function feedbackBonusAssetId(
-  asset: LocalFeedbackBonusAsset,
-): ExpectedLocalSignerFeedbackBonus["assetId"] {
-  return asset === "LREP" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
+  if (asset === "USDC") return asset;
+  throw new Error("feedbackBonus.asset must be USDC.");
 }
 
 function submissionRewardAssetId(
@@ -788,7 +782,7 @@ function normalizeLocalSignerFeedbackBonus(
   return {
     amount,
     asset,
-    assetId: feedbackBonusAssetId(asset),
+    assetId: FEEDBACK_BONUS_ASSET_USDC,
     awarder,
   };
 }
@@ -3471,6 +3465,9 @@ export async function askHumansWithLocalSigner(params: {
   );
   if (params.paymentMode) {
     baseAsk.paymentMode = params.paymentMode;
+  }
+  if (baseAsk.feedbackBonus && baseAsk.paymentMode === "wallet_calls") {
+    throw new Error("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
   }
   assertProductionQuestionMetadataBaseUrlPinned(params.config);
   const maxPaymentCap = assertWithinMaxPaymentAmount(baseAsk);

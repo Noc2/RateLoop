@@ -71,7 +71,7 @@ export interface RateLoopAgentBounty {
 
 export interface RateLoopAgentFeedbackBonus {
   amount: string | number | bigint;
-  asset?: "LREP" | "USDC" | "lrep" | "usdc" | string;
+  asset?: "USDC" | "usdc" | string;
   awarder?: `0x${string}` | string;
   [key: string]: unknown;
 }

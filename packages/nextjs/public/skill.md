@@ -131,7 +131,7 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 
 Never use settled RateLoop scores to settle external financial contracts. Three-voter rounds are the launch feedback tier. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
 
-Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Browser handoffs, direct MCP, and `local-ask` can use `paymentMode: "eip3009_usdc_authorization"` for eligible USDC asks; `paymentMode: "x402_authorization"` remains a legacy alias.
+Use `paymentMode: "wallet_calls"` for LREP bounties, bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding. Browser handoffs, direct MCP, and `local-ask` can use `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses; `paymentMode: "x402_authorization"` remains a legacy alias.
 
 ## Tier-0 Blinding Guidance
 

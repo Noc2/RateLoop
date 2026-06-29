@@ -234,7 +234,7 @@ type DraftForm = {
   bountyAmount: string;
   bountyAsset: SubmissionRewardAsset;
   feedbackBonusAmount: string | null;
-  feedbackBonusAsset: FeedbackBonusAsset | null;
+  feedbackBonusAsset: "usdc" | null;
   questions: DraftQuestionForm[];
   roundBlindSeconds: string;
   roundMaxDurationOverridden: boolean;
@@ -1349,7 +1349,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
     feedbackBonusAmount: feedbackBonusSummary
       ? formatFeedbackBonusInput(feedbackBonusSummary.amount, feedbackBonusSummary.asset)
       : null,
-    feedbackBonusAsset: feedbackBonusSummary?.asset ?? null,
+    feedbackBonusAsset: feedbackBonusSummary ? "usdc" : null,
     questions: questions.length
       ? questions.map(question => ({
           categoryId: question.categoryId,
@@ -1665,13 +1665,10 @@ async function buildDraftRequestBody(
     if (feedbackBonusAmount === null) {
       throw new Error("Feedback Bonus must be a positive amount with up to 6 decimals.");
     }
-    const feedbackBonusAsset =
-      form.feedbackBonusAsset ??
-      (isJsonRecord(requestBody.feedbackBonus) ? readFeedbackBonusAsset(requestBody.feedbackBonus) : "usdc");
     requestBody.feedbackBonus = {
       ...(isJsonRecord(requestBody.feedbackBonus) ? requestBody.feedbackBonus : {}),
       amount: feedbackBonusAmount.toString(),
-      asset: feedbackBonusAsset === "lrep" ? "LREP" : "USDC",
+      asset: "USDC",
     };
     delete (requestBody.feedbackBonus as JsonRecord).feedbackClosesAt;
     feedbackBonusPaymentAmount = feedbackBonusAmount;
@@ -1797,7 +1794,7 @@ function readDraftFeedbackBonusUsdcAmountAtomic(form: DraftForm | null, handoff:
 function readDraftFeedbackBonusLabel(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.feedbackBonusAmount?.trim();
   if (draftAmount && form?.feedbackBonusAsset) {
-    return `${draftAmount} ${form.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}`;
+    return `${draftAmount} USDC`;
   }
 
   return readFeedbackBonusSummary(handoff)?.label ?? "Not included";
@@ -2052,11 +2049,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
   const draftBountyUsdcAmountAtomic = readDraftBountyUsdcAmountAtomic(draftForm, handoff);
   const draftFeedbackBonusUsdcAmountAtomic = readDraftFeedbackBonusUsdcAmountAtomic(draftForm, handoff);
-  const draftFeedbackBonusLrepAmountAtomic =
-    draftForm?.feedbackBonusAmount !== null && draftForm?.feedbackBonusAsset === "lrep"
-      ? (parseFeedbackBonusAmount(draftForm.feedbackBonusAmount.trim()) ?? 0n)
-      : 0n;
-  const requiredHandoffLrepAmount = draftBountyLrepAmountAtomic + draftFeedbackBonusLrepAmountAtomic;
+  const requiredHandoffLrepAmount = draftBountyLrepAmountAtomic;
   const requiredHandoffUsdcAmount = draftBountyUsdcAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
   const hasResolvedHandoffLrepBalance =
     Boolean(fundingWalletAddress && lrepAddress) && !isLrepBalanceLoading && lrepBalanceRaw !== undefined;
@@ -2285,14 +2278,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     },
     [updateDraftField],
   );
-
-  const updateDraftFeedbackBonusAsset = useCallback((asset: FeedbackBonusAsset) => {
-    setDraftForm(current => {
-      if (!current || current.feedbackBonusAmount === null) return current;
-      return { ...current, feedbackBonusAsset: asset };
-    });
-    setDraftError(null);
-  }, []);
 
   const formatDraftBountyAmount = useCallback(() => {
     setDraftForm(current => {
@@ -3427,34 +3412,24 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   ) : null}
                   {draftForm?.feedbackBonusAmount !== null ? (
                     <div>
-                      <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
-                        <label htmlFor="agent-ask-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
-                          Asset
-                        </label>
+                      <div>
                         <label htmlFor="agent-ask-feedback-bonus-amount" className={MONEY_FIELD_LABEL_CLASS}>
-                          Amount
+                          Amount (USDC)
                         </label>
                       </div>
-                      <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
-                        <select
-                          id="agent-ask-feedback-bonus-asset"
-                          className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
-                          disabled={!canEditDraft}
-                          value={draftForm?.feedbackBonusAsset ?? "usdc"}
-                          onChange={event => updateDraftFeedbackBonusAsset(event.target.value as FeedbackBonusAsset)}
-                        >
-                          <option value="lrep">LREP</option>
-                          <option value="usdc">USDC</option>
-                        </select>
+                      <div className="mt-1.5 flex items-start gap-3">
                         <input
                           id="agent-ask-feedback-bonus-amount"
-                          className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                          className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} flex-1 bg-base-100`}
                           disabled={!canEditDraft}
                           inputMode="decimal"
                           value={draftForm?.feedbackBonusAmount ?? ""}
                           onBlur={formatDraftFeedbackBonusAmount}
                           onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
                         />
+                        <div className="flex h-12 items-center rounded-box border border-base-300 bg-base-200 px-4 text-sm font-semibold text-base-content/80">
+                          USDC
+                        </div>
                       </div>
                     </div>
                   ) : null}

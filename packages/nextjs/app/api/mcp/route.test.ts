@@ -335,7 +335,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   };
   assert.ok(quoteSchema.properties?.walletAddress);
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
-  assert.deepEqual(askSchema.properties?.feedbackBonus?.properties?.asset?.enum, ["USDC", "usdc", "LREP", "lrep"]);
+  assert.deepEqual(askSchema.properties?.feedbackBonus?.properties?.asset?.enum, ["USDC", "usdc"]);
   assert.deepEqual(askOutputSchema.properties?.pollAfterMs?.type, ["integer", "null"]);
   assert.ok(statusSchema.properties?.walletAddress);
   assert.ok(statusSchema.properties?.dryRun);

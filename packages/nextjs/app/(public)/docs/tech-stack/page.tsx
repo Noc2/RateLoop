@@ -293,10 +293,10 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>
       <p>
-        Feedback Bonuses are optional LREP or USDC pools for useful rater notes. Written feedback is published on-chain
-        by the rater when it is submitted, while the vote choice and crowd-share prediction stay hidden through the
-        blind voting flow. Awarders get at least 24 hours after settlement to pay selected feedback from revealed
-        independent raters, which gives agents more than a score: they get rationale that can go into an audit trail.
+        Feedback Bonuses are optional USDC pools for useful rater notes. Written feedback is published on-chain by the
+        rater when it is submitted, while the vote choice and crowd-share prediction stay hidden through the blind
+        voting flow. Awarders get at least 24 hours after settlement to pay selected feedback from revealed independent
+        raters, which gives agents more than a score: they get rationale that can go into an audit trail.
       </p>
 
       <h2 id="on-chain-settlement">On-Chain Settlement</h2>
@@ -308,9 +308,9 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="usdc-stablecoins">USDC And Stablecoins</h2>
       <p>
-        RateLoop uses USDC for agent-friendly bounty funding, EIP-3009 authorization, and stablecoin Feedback Bonuses.
-        LREP Feedback Bonuses use the same wallet-call path as LREP bounties. Circle lists USDC on Base as native ERC-20
-        USDC, and Base keeps the payment path EVM-compatible and low-cost for small human-feedback jobs.
+        RateLoop uses USDC for agent-friendly bounty funding, EIP-3009 authorization, and Feedback Bonuses. LREP remains
+        available for bounty funding through wallet-call paths. Circle lists USDC on Base as native ERC-20 USDC, and
+        Base keeps the payment path EVM-compatible and low-cost for small human-feedback jobs.
       </p>
 
       <h2>Research References</h2>

@@ -751,11 +751,8 @@ function parseOptionalFeedbackBonus(
 
   const value = raw as JsonObject;
   const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
-  if (asset !== "USDC" && asset !== "LREP") {
-    throw new McpToolError("feedbackBonus.asset must be USDC or LREP.");
-  }
-  if (asset === "LREP") {
-    throw new McpToolError("Feedback Bonus creation-time funding currently requires USDC x402 authorization.");
+  if (asset !== "USDC") {
+    throw new McpToolError("feedbackBonus.asset must be USDC.");
   }
   const amount = parseAtomicAmount(value.amount, "feedbackBonus.amount");
   if (amount <= 0n) {
@@ -1213,11 +1210,23 @@ function defaultAskHumansPaymentMode(params: {
   feedbackBonus: X402FeedbackBonusRequest | null;
   payload: X402QuestionPayload;
 }): AskHumansPaymentMode {
-  return params.payload.bounty.asset === "USDC" &&
-    params.payload.questions.length === 1 &&
-    params.feedbackBonus?.asset !== "LREP"
+  return params.payload.bounty.asset === "USDC" && params.payload.questions.length === 1
     ? "x402_authorization"
     : "wallet_calls";
+}
+
+function assertFeedbackBonusFundingMode(params: {
+  feedbackBonus: X402FeedbackBonusRequest | null;
+  paymentMode: AskHumansPaymentMode;
+  payload: X402QuestionPayload;
+}) {
+  if (!params.feedbackBonus) return;
+  if (params.payload.bounty.asset !== "USDC" || params.payload.questions.length !== 1) {
+    throw new McpToolError("Feedback Bonus funding requires a single-question USDC ask.");
+  }
+  if (params.paymentMode !== "x402_authorization") {
+    throw new McpToolError("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+  }
 }
 
 function parseAskHumansPaymentMode(
@@ -3332,6 +3341,7 @@ export async function callPublicRateLoopMcpTool(params: {
         args.paymentMode ?? args.fundingMode,
         defaultAskHumansPaymentMode({ feedbackBonus, payload }),
       );
+      assertFeedbackBonusFundingMode({ feedbackBonus, paymentMode, payload });
       const permissionlessPayload = toPermissionlessWalletPayload(payload, walletAddress);
       const config = dependencies.resolveX402QuestionConfig(permissionlessPayload.chainId);
       if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
@@ -3628,6 +3638,7 @@ export async function callRateLoopMcpTool(params: {
         args.paymentMode ?? args.fundingMode,
         defaultAskHumansPaymentMode({ feedbackBonus, payload }),
       );
+      assertFeedbackBonusFundingMode({ feedbackBonus, paymentMode, payload });
       const managedPayload = toManagedMcpPayload(params.agent, payload);
       const config = dependencies.resolveX402QuestionConfig(managedPayload.chainId);
       if (feedbackBonus && !config.feedbackBonusEscrowAddress) {

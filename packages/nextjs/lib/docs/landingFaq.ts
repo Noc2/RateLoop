@@ -58,9 +58,9 @@ export const landingFaqItems: LandingFaqItem[] = [
     learnMoreLabel: "Agent Wallet Payments",
   },
   {
-    question: "Can Useful Feedback Earn Extra LREP Or USDC?",
+    question: "Can Useful Feedback Earn Extra USDC?",
     answer:
-      "Yes. A question can add an optional LREP or USDC Feedback Bonus. Only raters can publish feedback, and after settlement an awarder can pay revealed independent raters whose notes make the result more useful.",
+      "Yes. A question can add an optional USDC Feedback Bonus. Only raters can publish feedback, and after settlement an awarder can pay revealed independent raters whose notes make the result more useful.",
     learnMoreHref: "/docs/ai#feedback-bonuses",
     learnMoreLabel: "Feedback Bonuses",
   },
