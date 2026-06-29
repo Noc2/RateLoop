@@ -26,6 +26,7 @@ type AgentLifecycleDependencies = {
   listCandidates: (params: {
     after?: ManagedLifecycleCursor | null;
     limit: number;
+    targetChainIds?: ReadonlySet<number> | null;
   }) => Promise<ManagedLifecycleCandidate[]>;
   listContentFeedback: typeof listContentFeedback;
 };
@@ -83,6 +84,13 @@ function configuredTargetChainIds() {
   return chainIds.length > 0 ? new Set(chainIds) : null;
 }
 
+function normalizeTargetChainIds(chainIds: ReadonlySet<number> | null | undefined) {
+  if (!chainIds) return null;
+  return Array.from(chainIds)
+    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0)
+    .sort((a, b) => a - b);
+}
+
 function lifecycleEventsForContent(params: {
   feedbackPublicCount: number;
   nowSeconds: number;
@@ -122,11 +130,27 @@ function readOriginalClientRequestIdFromReceipt(value: unknown) {
   }
 }
 
-async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycleCursor | null; limit: number }) {
+async function listManagedLifecycleCandidates(params: {
+  after?: ManagedLifecycleCursor | null;
+  limit: number;
+  targetChainIds?: ReadonlySet<number> | null;
+}) {
   const managedSortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at, reservations.updated_at)";
   const publicSortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at)";
+  const targetChainIds = normalizeTargetChainIds(params.targetChainIds);
+  if (targetChainIds && targetChainIds.length === 0) return [];
+
+  const targetChainPlaceholders = targetChainIds?.map(() => "?").join(", ") ?? "";
+  const managedTargetChainFilter = targetChainPlaceholders
+    ? `AND reservations.chain_id IN (${targetChainPlaceholders})`
+    : "";
+  const publicTargetChainFilter = targetChainPlaceholders
+    ? `AND submissions.chain_id IN (${targetChainPlaceholders})`
+    : "";
   const result = await dbClient.execute({
     args: [
+      ...(targetChainIds ?? []),
+      ...(targetChainIds ?? []),
       params.after?.sortAt ?? null,
       params.after?.sortAt ?? null,
       params.after?.sortAt ?? null,
@@ -149,6 +173,7 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
           ON submissions.operation_key = reservations.operation_key
         WHERE submissions.status = 'submitted'
           AND submissions.content_id IS NOT NULL
+          ${managedTargetChainFilter}
 
         UNION ALL
 
@@ -174,6 +199,7 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
             submissions.payment_receipt IS NULL
             OR submissions.payment_receipt NOT LIKE '%"agentId"%'
           )
+          ${publicTargetChainFilter}
       )
       SELECT *
       FROM lifecycle_candidates
@@ -229,6 +255,7 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
     const candidates = await dependencies.listCandidates({
       after: cursor,
       limit: requestedLimit,
+      targetChainIds,
     });
     if (candidates.length === 0) break;
 
@@ -239,7 +266,6 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
       }
 
       if (targetChainIds && !targetChainIds.has(candidate.chainId)) {
-        scanned += 1;
         continue;
       }
 

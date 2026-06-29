@@ -21,6 +21,10 @@ const CANDIDATE = {
   sortAt: new Date("2023-11-14T22:00:00.000Z"),
 };
 
+function operationKeyFor(value: number) {
+  return `0x${value.toString(16).padStart(64, "0")}` as `0x${string}`;
+}
+
 function contentResponse(overrides: Record<string, unknown> = {}) {
   return {
     audienceContext: null,
@@ -34,6 +38,60 @@ function contentResponse(overrides: Record<string, unknown> = {}) {
     ratings: [],
     rounds: [],
   };
+}
+
+async function insertSubmittedWalletAsk(params: {
+  chainId: number;
+  clientRequestId: string;
+  contentId: string;
+  operationKey: `0x${string}`;
+  submittedAt: Date;
+  walletAddress: string;
+}) {
+  await dbClient.execute({
+    sql: `
+      INSERT INTO x402_question_submissions (
+        operation_key,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        payer_address,
+        payment_asset,
+        payment_amount,
+        bounty_amount,
+        question_count,
+        status,
+        content_id,
+        payment_receipt,
+        created_at,
+        updated_at,
+        submitted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      params.operationKey,
+      params.clientRequestId,
+      `payload-${params.operationKey}`,
+      params.chainId,
+      params.walletAddress,
+      "0x0000000000000000000000000000000000000001",
+      "1000000",
+      "1000000",
+      1,
+      "submitted",
+      params.contentId,
+      JSON.stringify({
+        mode: "permissionless-wallet-plan",
+        operationKey: params.operationKey,
+        originalClientRequestId: params.clientRequestId,
+        walletAddress: params.walletAddress,
+      }),
+      params.submittedAt,
+      params.submittedAt,
+      params.submittedAt,
+    ],
+  });
 }
 
 beforeEach(() => {
@@ -140,6 +198,7 @@ test("sweepAgentLifecycleCallbacks scopes content and feedback reads by candidat
 
 test("sweepAgentLifecycleCallbacks skips candidates outside configured target networks", async () => {
   let contentReads = 0;
+  let candidateTargetChainIds: number[] | null = null;
 
   __setAgentLifecycleTargetChainIdsForTests([8453]);
   __setAgentLifecycleTestOverridesForTests({
@@ -148,7 +207,10 @@ test("sweepAgentLifecycleCallbacks skips candidates outside configured target ne
       contentReads += 1;
       return contentResponse() as never;
     },
-    listCandidates: async () => [{ ...CANDIDATE, chainId: 84532 }],
+    listCandidates: async ({ targetChainIds }) => {
+      candidateTargetChainIds = targetChainIds ? Array.from(targetChainIds) : null;
+      return [{ ...CANDIDATE, chainId: 84532 }];
+    },
     listContentFeedback: async () =>
       ({
         items: [],
@@ -158,7 +220,8 @@ test("sweepAgentLifecycleCallbacks skips candidates outside configured target ne
   const result = await sweepAgentLifecycleCallbacks();
 
   assert.equal(contentReads, 0);
-  assert.equal(result.scanned, 1);
+  assert.deepEqual(candidateTargetChainIds, [8453]);
+  assert.equal(result.scanned, 0);
   assert.deepEqual(result.emitted, {
     bountyLowResponse: 0,
     feedbackUnlocked: 0,
@@ -166,6 +229,64 @@ test("sweepAgentLifecycleCallbacks skips candidates outside configured target ne
     questionSettled: 0,
     questionSettling: 0,
   });
+});
+
+test("sweepAgentLifecycleCallbacks filters target chains before applying sweep limit", async () => {
+  const activeChainId = 480;
+  const inactiveChainId = 84532;
+  const walletAddress = "0x00000000000000000000000000000000000000bb";
+  const submittedAt = new Date("2023-11-14T22:00:00.000Z");
+  const activeContentId = "active-after-inactive";
+  const contentReads: string[] = [];
+  const openedContentIds: string[] = [];
+
+  for (let index = 0; index < 25; index += 1) {
+    await insertSubmittedWalletAsk({
+      chainId: inactiveChainId,
+      clientRequestId: `wallet:inactive-${index}`,
+      contentId: `inactive-${index}`,
+      operationKey: operationKeyFor(index + 1),
+      submittedAt: new Date(submittedAt.getTime() + index * 1000),
+      walletAddress,
+    });
+  }
+  await insertSubmittedWalletAsk({
+    chainId: activeChainId,
+    clientRequestId: "wallet:active",
+    contentId: activeContentId,
+    operationKey: operationKeyFor(100),
+    submittedAt: new Date(submittedAt.getTime() + 25_000),
+    walletAddress,
+  });
+
+  __setAgentLifecycleTargetChainIdsForTests([activeChainId]);
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async params => {
+      if (params.eventType === "question.open") {
+        openedContentIds.push(String((params.payload as { contentId?: string }).contentId));
+      }
+      return [];
+    },
+    getContentById: async contentId => {
+      contentReads.push(String(contentId));
+      return contentResponse() as never;
+    },
+    listContentFeedback: async () =>
+      ({
+        items: [],
+      }) as never,
+  });
+
+  const result = await sweepAgentLifecycleCallbacks({
+    limit: 25,
+    now: new Date("2023-11-14T22:13:40.000Z"),
+  });
+
+  assert.deepEqual(contentReads, [activeContentId]);
+  assert.deepEqual(openedContentIds, [activeContentId]);
+  assert.equal(result.scanned, 1);
+  assert.equal(result.hasMore, false);
+  assert.equal(result.emitted.questionOpen, 1);
 });
 
 test("sweepAgentLifecycleCallbacks emits settled and feedback unlocked for terminal rounds", async () => {
