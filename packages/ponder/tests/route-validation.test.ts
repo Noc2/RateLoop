@@ -631,7 +631,7 @@ describe("shared API helpers", () => {
     expect(item?.feedbackBonusSummary.nextFeedbackAwardDeadline).toBe(220n);
   });
 
-  it("derives unactivated bounty windows from the first commit timestamp", async () => {
+  it("uses indexed creation-anchored bounty windows", async () => {
     const { db } = mockPonderModules(
       [
         {
@@ -655,6 +655,9 @@ describe("shared API helpers", () => {
           totalFrontendClaimedAmount: 0n,
           totalRefundedAmount: 0n,
           qualifiedRoundCount: 0,
+          questionDuration: 600,
+          rewardOpensAt: 1_000n,
+          rewardClosesAt: 1_600n,
           nextBountyStartBy: null,
           nextBountyClosesAt: null,
           lastBountyStartBy: 1_000n,
@@ -681,13 +684,16 @@ describe("shared API helpers", () => {
       rewardPoolSelect?.lastBountyClosesAt,
     );
 
-    expect(activePoolExpression).toContain("select min");
-    expect(activePoolExpression).toContain("vote.committedAt");
-    expect(activePoolExpression).toContain("questionRewardPool.startRoundId");
-    expect(activePoolExpression).toContain("is null");
-    expect(activePoolExpression).toContain("questionRewardPool.bountyStartBy");
-    expect(closeExpression).toContain("vote.committedAt");
+    expect(activePoolExpression).toContain("questionRewardPool.bountyOpensAt");
+    expect(activePoolExpression).toContain("questionRewardPool.bountyClosesAt");
+    expect(activePoolExpression).not.toContain("vote.committedAt");
+    expect(activePoolExpression).not.toContain("questionRewardPool.bountyStartBy");
+    expect(closeExpression).toContain("questionRewardPool.bountyClosesAt");
+    expect(closeExpression).not.toContain("vote.committedAt");
     expect(item?.rewardPoolSummary.hasActiveBounty).toBe(false);
+    expect(item?.rewardPoolSummary.questionDuration).toBe(600);
+    expect(item?.rewardPoolSummary.rewardOpensAt).toBe(1_000n);
+    expect(item?.rewardPoolSummary.rewardClosesAt).toBe(1_600n);
     expect(item?.rewardPoolSummary.activeUnallocatedAmount).toBe(0n);
     expect(item?.rewardPoolSummary.expiredUnallocatedAmount).toBe(1_000_000n);
     expect(item?.rewardPoolSummary.lastBountyClosesAt).toBe(1_600n);

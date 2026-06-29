@@ -561,6 +561,9 @@ export function registerDataRoutes(app: ApiApp) {
           questionBundleReward.totalRecordedQuestionRounds,
         claimedCount: questionBundleReward.claimedCount,
         roundSetClaimedCount: questionBundleRoundSet.claimedCount,
+        questionDuration: questionBundleReward.bountyWindowSeconds,
+        rewardOpensAt: questionBundleReward.bountyOpensAt,
+        rewardClosesAt: questionBundleReward.bountyClosesAt,
         bountyStartBy: questionBundleReward.bountyStartBy,
         bountyOpensAt: questionBundleReward.bountyOpensAt,
         bountyClosesAt: questionBundleReward.bountyClosesAt,
@@ -621,24 +624,12 @@ export function registerDataRoutes(app: ApiApp) {
           eq(questionBundleReward.refunded, false),
           sql`${questionBundleRoundSet.claimedCount} < ${questionBundleReward.requiredCompleters}`,
           sql`${questionBundleClaim.id} is null`,
-          // L-1: the bundle endpoint previously applied no window filter, while the on-chain bundle
-          // claim enforces the per-vote bounty window (committedWithinBountyWindow via BundleLib).
-          // Gate only on the *activated* bundle window (bountyOpensAt/bountyClosesAt). Unlike a pool,
-          // the bundle window is anchored to the earliest staked round across the whole round set
-          // (_firstBundleRoundSetStake), so a single question's round.startTime is not a valid
-          // pre-activation proxy (it would over-include late votes in later-starting questions whose
-          // on-chain claim then reverts -- codex PR #31). claimQuestionBundleReward lazily qualifies
-          // and activates the window, so once a round set is claimable its bountyClosesAt is set and
-          // this predicate matches the on-chain check exactly; before that activation event is indexed
-          // the round set is simply not surfaced yet (a brief, self-healing under-inclusion).
+          // Fresh bundle rewards use the same creation-anchored bounty window as single questions.
           sql`(
-            ${questionBundleReward.bountyWindowSeconds} = 0
-            or (
-              ${questionBundleReward.bountyClosesAt} != 0
-              and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionBundleReward.bountyOpensAt}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionBundleReward.bountyClosesAt}
-            )
+            ${questionBundleReward.bountyClosesAt} != 0
+            and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
+            and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionBundleReward.bountyOpensAt}
+            and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionBundleReward.bountyClosesAt}
           )`,
         ),
       )
@@ -1343,6 +1334,7 @@ export function registerDataRoutes(app: ApiApp) {
         commitLogIndex: vote.commitLogIndex,
         revealedAt: vote.revealedAt,
         roundStartTime: round.startTime,
+        roundQuestionDuration: round.epochDuration,
         roundEpochDuration: round.epochDuration,
         roundMaxDuration: round.maxDuration,
         roundMinVoters: round.minVoters,
@@ -1754,6 +1746,9 @@ export function registerDataRoutes(app: ApiApp) {
         payoutWeightRoot: roundPayoutSnapshot.weightRoot,
         payoutArtifactHash: roundPayoutSnapshot.artifactHash,
         payoutArtifactUri: roundPayoutSnapshot.artifactUri,
+        questionDuration: questionRewardPool.bountyWindowSeconds,
+        rewardOpensAt: questionRewardPool.bountyOpensAt,
+        rewardClosesAt: questionRewardPool.bountyClosesAt,
         bountyStartBy: questionRewardPool.bountyStartBy,
         bountyOpensAt: questionRewardPool.bountyOpensAt,
         bountyClosesAt: questionRewardPool.bountyClosesAt,
@@ -1821,9 +1816,8 @@ export function registerDataRoutes(app: ApiApp) {
           // (committedWithinBountyWindow), so votes whose commit/reveal fell outside the window are
           // not surfaced as candidates (their claim would revert). Same predicate as the
           // correlation round-votes eligibility query.
-          // L-6: before activation the window is anchored on-chain to firstStakedAt. Derive that
-          // from the earliest indexed commit instead of approximating with round.startTime, so
-          // expired unactivated bounties stop appearing as claimable.
+          // Fresh deployments anchor the bounty window to question creation, so the indexed
+          // opens/closes timestamps are the full eligibility boundary.
           questionRewardPoolVoteWithinBountyWindowExpression(
             sql`coalesce(${vote.committedAt}, ${vote.revealedAt}, 0)`,
           ),

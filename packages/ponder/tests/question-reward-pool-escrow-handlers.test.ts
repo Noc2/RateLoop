@@ -121,8 +121,15 @@ afterEach(() => {
 });
 
 describe("QuestionRewardPoolEscrow ponder handlers", () => {
-  it("indexes created bounties with USDC accounting fields", async () => {
-    const { db, inserts, updates } = createDb({ content: { id: 1n } });
+  it("indexes created bounties with creation-anchored reward windows", async () => {
+    const { db, inserts, updates } = createDb({
+      content: {
+        id: 1n,
+        createdAt: 1_000n,
+        roundEpochDuration: 600,
+        roundMaxDuration: 600,
+      },
+    });
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get(
       "QuestionRewardPoolEscrow:RewardPoolCreated",
@@ -139,11 +146,11 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           funderIdentityKey: FUNDER_IDENTITY_KEY,
           amount: 100_000_000n,
           requiredVoters: 5n,
-          requiredSettledRounds: 2n,
-          startRoundId: 3n,
-          bountyStartBy: 86_400n,
-          bountyWindowSeconds: 2_592_000n,
-          feedbackWindowSeconds: 2_592_000n,
+          requiredSettledRounds: 1n,
+          startRoundId: 1n,
+          bountyStartBy: 0n,
+          bountyWindowSeconds: 600n,
+          feedbackWindowSeconds: 600n,
           frontendFeeBps: 300n,
           asset: 1n,
           bountyEligibility: 2n,
@@ -169,15 +176,15 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         challengedRoundId: 0n,
         requiredVoters: 5,
-        requiredSettledRounds: 2,
-        startRoundId: 3n,
-        bountyStartBy: 86_400n,
-        bountyOpensAt: 0n,
-        bountyClosesAt: 0n,
-        feedbackClosesAt: 0n,
-        bountyWindowSeconds: 2_592_000,
-        feedbackWindowSeconds: 2_592_000,
-        expiresAt: 86_400n,
+        requiredSettledRounds: 1,
+        startRoundId: 1n,
+        bountyStartBy: 0n,
+        bountyOpensAt: 1_000n,
+        bountyClosesAt: 1_600n,
+        feedbackClosesAt: 1_600n,
+        bountyWindowSeconds: 600,
+        feedbackWindowSeconds: 600,
+        expiresAt: 1_600n,
       }),
     });
     expect(updates).toContainEqual(
@@ -731,9 +738,9 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           requiredCompleters: 3n,
           questionCount: 2n,
           requiredSettledRounds: 2n,
-          bountyStartBy: 86_400n,
-          bountyWindowSeconds: 2_592_000n,
-          feedbackWindowSeconds: 2_592_000n,
+          bountyStartBy: 0n,
+          bountyWindowSeconds: 600n,
+          feedbackWindowSeconds: 600n,
           frontendFeeBps: 300n,
           asset: 1n,
           bountyEligibility: 2n,
@@ -807,6 +814,13 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
             requiredCompleters: 3,
             requiredSettledRounds: 2,
             questionCount: 2,
+            bountyStartBy: 0n,
+            bountyOpensAt: 1_700n,
+            bountyClosesAt: 2_300n,
+            feedbackClosesAt: 2_300n,
+            bountyWindowSeconds: 600,
+            feedbackWindowSeconds: 600,
+            expiresAt: 2_300n,
           }),
         }),
         expect.objectContaining({

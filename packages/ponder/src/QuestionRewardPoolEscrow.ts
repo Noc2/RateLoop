@@ -56,6 +56,47 @@ type RewardPoolAccountingRow = {
   requiredSettledRounds: number;
 };
 
+function toPositiveBigInt(value: bigint | number | string | null | undefined) {
+  if (typeof value === "bigint") return value > 0n ? value : 0n;
+  if (typeof value === "number") return value > 0 ? BigInt(value) : 0n;
+  if (typeof value === "string" && value.length > 0) {
+    const parsed = BigInt(value);
+    return parsed > 0n ? parsed : 0n;
+  }
+  return 0n;
+}
+
+function resolveCreationAnchoredRewardWindow({
+  bountyWindowSeconds,
+  contentRecord,
+  fallbackCreatedAt,
+  feedbackWindowSeconds,
+}: {
+  bountyWindowSeconds: bigint;
+  contentRecord?: {
+    createdAt?: bigint | null;
+    roundEpochDuration?: number | null;
+    roundMaxDuration?: number | null;
+  } | null;
+  fallbackCreatedAt: bigint;
+  feedbackWindowSeconds: bigint;
+}) {
+  const createdAt = toPositiveBigInt(contentRecord?.createdAt) || fallbackCreatedAt;
+  const contentDuration = toPositiveBigInt(contentRecord?.roundEpochDuration);
+  const duration =
+    contentDuration ||
+    toPositiveBigInt(contentRecord?.roundMaxDuration) ||
+    toPositiveBigInt(bountyWindowSeconds) ||
+    toPositiveBigInt(feedbackWindowSeconds);
+  const closesAt = duration > 0n ? createdAt + duration : 0n;
+
+  return {
+    createdAt,
+    durationSeconds: Number(duration),
+    closesAt,
+  };
+}
+
 // RewardPoolRefunded/Forfeited share one event shape for two on-chain paths:
 // unallocated-only sweeps (pool stays live) vs complete post-grace sweeps (pool closed).
 function isCompleteRewardPoolRefund(
@@ -129,6 +170,13 @@ ponder.on(
       bountyEligibility,
       bountyEligibilityDataHash,
     } = event.args;
+    const existingContent = await context.db.find(content, { id: contentId });
+    const rewardWindow = resolveCreationAnchoredRewardWindow({
+      bountyWindowSeconds,
+      contentRecord: existingContent,
+      fallbackCreatedAt: event.block.timestamp,
+      feedbackWindowSeconds,
+    });
 
     await context.db
       .insert(questionRewardPool)
@@ -157,22 +205,18 @@ ponder.on(
         frontendFeeBps: Number(frontendFeeBps),
         startRoundId,
         bountyStartBy,
-        // Windowless pools (bountyWindowSeconds == 0) never emit RewardPoolWindowActivated; the
-        // contract opens them at creation time (bountyOpensAt = block.timestamp). Mirror that here
-        // instead of leaving bountyOpensAt at 0. Windowed pools stay 0 until activation fills it in.
-        bountyOpensAt: bountyWindowSeconds === 0n ? event.block.timestamp : 0n,
-        bountyClosesAt: 0n,
-        feedbackClosesAt: 0n,
-        bountyWindowSeconds: Number(bountyWindowSeconds),
-        feedbackWindowSeconds: Number(feedbackWindowSeconds),
-        expiresAt: bountyStartBy,
+        bountyOpensAt: rewardWindow.createdAt,
+        bountyClosesAt: rewardWindow.closesAt,
+        feedbackClosesAt: rewardWindow.closesAt,
+        bountyWindowSeconds: rewardWindow.durationSeconds,
+        feedbackWindowSeconds: rewardWindow.durationSeconds,
+        expiresAt: rewardWindow.closesAt,
         refunded: false,
         createdAt: event.block.timestamp,
         updatedAt: event.block.timestamp,
       })
       .onConflictDoNothing();
 
-    const existingContent = await context.db.find(content, { id: contentId });
     if (existingContent) {
       await context.db.update(content, { id: contentId }).set({
         lastActivityAt: event.block.timestamp,
@@ -526,6 +570,11 @@ ponder.on(
       bountyEligibility,
       bountyEligibilityDataHash,
     } = event.args;
+    const rewardWindow = resolveCreationAnchoredRewardWindow({
+      bountyWindowSeconds,
+      fallbackCreatedAt: event.block.timestamp,
+      feedbackWindowSeconds,
+    });
 
     await context.db
       .insert(questionBundleReward)
@@ -551,23 +600,19 @@ ponder.on(
         bountyEligibility: Number(bountyEligibility),
         bountyEligibilityDataHash,
         bountyStartBy,
-        // See RewardPoolCreated: windowless bundles open at creation time and never emit an
-        // activation event, so mirror the contract's bountyOpensAt = block.timestamp here.
-        bountyOpensAt: bountyWindowSeconds === 0n ? event.block.timestamp : 0n,
-        bountyClosesAt: 0n,
-        feedbackClosesAt: 0n,
-        bountyWindowSeconds: Number(bountyWindowSeconds),
-        feedbackWindowSeconds: Number(feedbackWindowSeconds),
-        expiresAt: bountyStartBy,
+        bountyOpensAt: rewardWindow.createdAt,
+        bountyClosesAt: rewardWindow.closesAt,
+        feedbackClosesAt: rewardWindow.closesAt,
+        bountyWindowSeconds: rewardWindow.durationSeconds,
+        feedbackWindowSeconds: rewardWindow.durationSeconds,
+        expiresAt: rewardWindow.closesAt,
         failed: false,
         refunded: false,
         createdAt: event.block.timestamp,
         updatedAt: event.block.timestamp,
       })
-      // Bundles are created once. Use DoNothing (like the RewardPoolCreated sibling) so a
-      // duplicate/replayed create cannot clobber an already-activated window: the previous
-      // onConflictDoUpdate reset expiresAt back to bountyStartBy while leaving the activated
-      // bountyOpensAt/bountyClosesAt set by QuestionBundleWindowActivated, an inconsistent state.
+      // Bundles are created once. Use DoNothing so a duplicate/replayed create cannot clobber
+      // the creation-anchored window or accounting fields.
       .onConflictDoNothing();
   },
 );

@@ -9,7 +9,7 @@ import {
 import type { Context, Hono } from "hono";
 import { and, desc, eq, inArray, replaceBigInts, sql } from "ponder";
 import { db } from "ponder:api";
-import { feedbackBonusPool, questionRewardPool, round, vote } from "ponder:schema";
+import { feedbackBonusPool, questionRewardPool, round } from "ponder:schema";
 import { isValidAddress, safeBigInt } from "./utils.js";
 
 export type ApiApp = Hono;
@@ -202,108 +202,40 @@ export function getDiscoverResolutionOutcome(state: number | null, isUp: boolean
   return "resolved" as const;
 }
 
-export function questionRewardPoolFirstCommitAtExpression() {
-  return sql<bigint | null>`(
-    select min(${vote.committedAt})
-    from ${vote}
-    where ${vote.contentId} = ${questionRewardPool.contentId}
-      and ${vote.roundId} >= ${questionRewardPool.startRoundId}
-      and ${vote.committedAt} > 0
-  )`;
-}
-
-export function questionRewardPoolUnactivatedBountyClosesAtExpression() {
-  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
+export function questionRewardPoolEffectiveBountyClosesAtExpression() {
   return sql<bigint | null>`case
-    when ${firstCommitAt} is not null and ${firstCommitAt} <= ${questionRewardPool.bountyStartBy}
-      then ${firstCommitAt} + ${questionRewardPool.bountyWindowSeconds}
+    when ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt}
     else null
   end`;
 }
 
-export function questionRewardPoolEffectiveBountyClosesAtExpression() {
-  return sql<bigint | null>`case
-    when ${questionRewardPool.bountyWindowSeconds} = 0 then null
-    when ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt}
-    else ${questionRewardPoolUnactivatedBountyClosesAtExpression()}
-  end`;
-}
-
 export function questionRewardPoolPendingOrActiveExpression(nowSeconds: bigint) {
-  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
-  const unactivatedBountyClosesAt = questionRewardPoolUnactivatedBountyClosesAtExpression();
-
   return sql<boolean>`${questionRewardPool.refunded} = false
     and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
-    and (
-      ${questionRewardPool.bountyWindowSeconds} = 0
-      or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds})
-      or (
-        ${questionRewardPool.bountyClosesAt} = 0
-        and (
-          (${firstCommitAt} is null and ${questionRewardPool.bountyStartBy} >= ${nowSeconds})
-          or (${unactivatedBountyClosesAt} is not null and ${unactivatedBountyClosesAt} >= ${nowSeconds})
-        )
-      )
-    )`;
+    and ${questionRewardPool.bountyOpensAt} <= ${nowSeconds}
+    and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds}`;
 }
 
 export function questionRewardPoolExpiredExpression(nowSeconds: bigint) {
-  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
-  const unactivatedBountyClosesAt = questionRewardPoolUnactivatedBountyClosesAtExpression();
-
   return sql<boolean>`${questionRewardPool.refunded} = false
     and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
-    and ${questionRewardPool.bountyWindowSeconds} != 0
-    and (
-      (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} < ${nowSeconds})
-      or (
-        ${questionRewardPool.bountyClosesAt} = 0
-        and (
-          (${firstCommitAt} is null and ${questionRewardPool.bountyStartBy} < ${nowSeconds})
-          or (${firstCommitAt} is not null and ${firstCommitAt} > ${questionRewardPool.bountyStartBy})
-          or (${unactivatedBountyClosesAt} is not null and ${unactivatedBountyClosesAt} < ${nowSeconds})
-        )
-      )
-    )`;
+    and ${questionRewardPool.bountyClosesAt} != 0
+    and ${questionRewardPool.bountyClosesAt} < ${nowSeconds}`;
 }
 
 export function questionRewardPoolHasValidBountyWindowExpression() {
-  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
-
   return sql<boolean>`(
-    ${questionRewardPool.bountyWindowSeconds} = 0
-    or (
-      ${questionRewardPool.bountyClosesAt} != 0
-      and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-    )
-    or (
-      ${questionRewardPool.bountyClosesAt} = 0
-      and ${firstCommitAt} is not null
-      and ${firstCommitAt} <= ${questionRewardPool.bountyStartBy}
-    )
+    ${questionRewardPool.bountyClosesAt} != 0
+    and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
   )`;
 }
 
 export function questionRewardPoolVoteWithinBountyWindowExpression(commitTimestamp: unknown) {
-  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
-  const unactivatedBountyClosesAt = questionRewardPoolUnactivatedBountyClosesAtExpression();
-
   return sql<boolean>`(
-    ${questionRewardPool.bountyWindowSeconds} = 0
-    or (
-      ${questionRewardPool.bountyClosesAt} != 0
-      and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-      and ${commitTimestamp} >= ${questionRewardPool.bountyOpensAt}
-      and ${commitTimestamp} <= ${questionRewardPool.bountyClosesAt}
-    )
-    or (
-      ${questionRewardPool.bountyClosesAt} = 0
-      and ${firstCommitAt} is not null
-      and ${unactivatedBountyClosesAt} is not null
-      and ${commitTimestamp} >= ${firstCommitAt}
-      and ${commitTimestamp} <= ${unactivatedBountyClosesAt}
-    )
+    ${questionRewardPool.bountyClosesAt} != 0
+    and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+    and ${commitTimestamp} >= ${questionRewardPool.bountyOpensAt}
+    and ${commitTimestamp} <= ${questionRewardPool.bountyClosesAt}
   )`;
 }
 
@@ -325,9 +257,8 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
   }
 
   const contentIds = items.map(item => item.id);
-  // I-5: match the contract's strict boundary (WindowLib.rewardPoolExpired treats a pool as
-  // expired only when block.timestamp > the relevant boundary). Activated pools use closesAt;
-  // unactivated pools with commits derive that boundary from the first indexed commit.
+  // Match the contract's strict boundary: fresh pools are active through their creation-anchored
+  // close timestamp and expire only after that timestamp has passed.
   const pendingOrActiveRewardPool = questionRewardPoolPendingOrActiveExpression(nowSeconds);
   const expiredRewardPool = questionRewardPoolExpiredExpression(nowSeconds);
   const effectiveBountyClosesAt = questionRewardPoolEffectiveBountyClosesAtExpression();
@@ -346,7 +277,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
       rewardPoolCount: sql<number>`count(*)`,
       activeRewardPoolCount: sql<number>`sum(case when ${pendingOrActiveRewardPool} then 1 else 0 end)`,
       expiredRewardPoolCount: sql<number>`sum(case when ${expiredRewardPool} then 1 else 0 end)`,
-      openEndedRewardPoolCount: sql<number>`sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.bountyWindowSeconds} = 0 then 1 else 0 end)`,
+      openEndedRewardPoolCount: sql<number>`0`,
       fundedAsset: sql<number | null>`case when min(${questionRewardPool.asset}) = max(${questionRewardPool.asset}) then min(${questionRewardPool.asset}) else null end`,
       totalFundedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.fundedAmount}), 0)`,
       totalUnallocatedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.unallocatedAmount}), 0)`,
@@ -359,9 +290,12 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
       totalFrontendClaimedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.frontendClaimedAmount}), 0)`,
       totalRefundedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.refundedAmount}), 0)`,
       qualifiedRoundCount: sql<number>`coalesce(sum(${questionRewardPool.qualifiedRounds}), 0)`,
-      nextBountyStartBy: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyWindowSeconds} != 0 and ${questionRewardPoolFirstCommitAtExpression()} is null then ${questionRewardPool.bountyStartBy} else null end)`,
+      questionDuration: sql<number | null>`case when min(${questionRewardPool.bountyWindowSeconds}) = max(${questionRewardPool.bountyWindowSeconds}) then min(${questionRewardPool.bountyWindowSeconds}) else null end`,
+      rewardOpensAt: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} then ${questionRewardPool.bountyOpensAt} else null end)`,
+      rewardClosesAt: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} then ${questionRewardPool.bountyClosesAt} else null end)`,
+      nextBountyStartBy: sql<bigint | null>`null`,
       nextBountyClosesAt: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${effectiveBountyClosesAt} is not null then ${effectiveBountyClosesAt} else null end)`,
-      lastBountyStartBy: sql<bigint | null>`max(case when ${questionRewardPool.bountyStartBy} != 0 then ${questionRewardPool.bountyStartBy} else null end)`,
+      lastBountyStartBy: sql<bigint | null>`null`,
       lastBountyClosesAt: sql<bigint | null>`max(case when ${effectiveBountyClosesAt} is not null then ${effectiveBountyClosesAt} else null end)`,
       nextFeedbackClosesAt: sql<bigint | null>`min(case when ${questionRewardPool.feedbackClosesAt} != 0 and ${questionRewardPool.feedbackClosesAt} > ${nowSeconds} then ${questionRewardPool.feedbackClosesAt} else null end)`,
     })
@@ -554,6 +488,7 @@ export function formatRoundSummary(row: {
     losingPool: row.losingPool,
     startTime: row.startTime,
     settledAt: row.settledAt,
+    questionDuration: row.epochDuration,
     epochDuration: row.epochDuration,
     maxDuration: row.maxDuration,
     minVoters: row.minVoters,
@@ -617,6 +552,9 @@ function emptyRewardPoolSummary() {
     qualifiedRoundCount: 0,
     currentRewardPoolAmount: 0n,
     hasActiveBounty: false,
+    questionDuration: null as number | null,
+    rewardOpensAt: null as bigint | null,
+    rewardClosesAt: null as bigint | null,
     nextBountyStartBy: null as bigint | null,
     nextBountyClosesAt: null as bigint | null,
     lastBountyStartBy: null as bigint | null,
@@ -823,6 +761,9 @@ function formatRewardPoolSummary(row: {
   totalFrontendClaimedAmount: bigint | string | number | null;
   totalRefundedAmount: bigint | string | number | null;
   qualifiedRoundCount: number | string | bigint | null;
+  questionDuration?: number | string | bigint | null;
+  rewardOpensAt?: bigint | string | number | null;
+  rewardClosesAt?: bigint | string | number | null;
   nextBountyStartBy: bigint | string | number | null;
   nextBountyClosesAt: bigint | string | number | null;
   lastBountyStartBy: bigint | string | number | null;
@@ -864,6 +805,9 @@ function formatRewardPoolSummary(row: {
     qualifiedRoundCount: toNumberValue(row.qualifiedRoundCount),
     currentRewardPoolAmount: activeUnallocatedAmount + claimableAllocatedAmount,
     hasActiveBounty: activeRewardPoolCount > 0,
+    questionDuration: row.questionDuration === undefined || row.questionDuration === null ? null : toNumberValue(row.questionDuration),
+    rewardOpensAt: row.rewardOpensAt === undefined || row.rewardOpensAt === null ? null : toBigIntValue(row.rewardOpensAt),
+    rewardClosesAt: row.rewardClosesAt === undefined || row.rewardClosesAt === null ? null : toBigIntValue(row.rewardClosesAt),
     nextBountyStartBy: row.nextBountyStartBy === null ? null : toBigIntValue(row.nextBountyStartBy),
     nextBountyClosesAt: row.nextBountyClosesAt === null ? null : toBigIntValue(row.nextBountyClosesAt),
     lastBountyStartBy: row.lastBountyStartBy === null ? null : toBigIntValue(row.lastBountyStartBy),

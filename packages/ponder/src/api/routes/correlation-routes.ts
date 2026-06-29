@@ -606,6 +606,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
         requiredSettledRounds: questionRewardPool.requiredSettledRounds,
         qualifiedRounds: questionRewardPool.qualifiedRounds,
         bountyEligibility: questionRewardPool.bountyEligibility,
+        questionDuration: questionRewardPool.bountyWindowSeconds,
+        rewardOpensAt: questionRewardPool.bountyOpensAt,
+        rewardClosesAt: questionRewardPool.bountyClosesAt,
         bountyStartBy: questionRewardPool.bountyStartBy,
         bountyOpensAt: questionRewardPool.bountyOpensAt,
         bountyClosesAt: questionRewardPool.bountyClosesAt,
@@ -723,6 +726,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
         questionCount: questionBundleReward.questionCount,
         recordedQuestionRounds: sql<number>`count(distinct ${questionBundleRound.bundleIndex})`,
         bountyEligibility: questionBundleReward.bountyEligibility,
+        questionDuration: questionBundleReward.bountyWindowSeconds,
+        rewardOpensAt: questionBundleReward.bountyOpensAt,
+        rewardClosesAt: questionBundleReward.bountyClosesAt,
         bountyStartBy: questionBundleReward.bountyStartBy,
         bountyOpensAt: questionBundleReward.bountyOpensAt,
         bountyClosesAt: questionBundleReward.bountyClosesAt,
@@ -750,11 +756,8 @@ export function registerCorrelationRoutes(app: ApiApp) {
           sql`${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}`,
           sql`${questionBundleRound.roundSetIndex} < ${questionBundleReward.requiredSettledRounds}`,
           sql`(
-            ${questionBundleReward.bountyWindowSeconds} = 0
-            or (
-              ${questionBundleReward.bountyClosesAt} != 0
-              and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
-            )
+            ${questionBundleReward.bountyClosesAt} != 0
+            and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
           )`,
           or(
             sql`${roundPayoutSnapshot.id} is null`,
@@ -1418,13 +1421,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
             sql`${vote.identityKey} != ${bundle.funderIdentityKey}`,
             sql`${vote.identityHolder} != ${content.submitter}`,
             sql`(
-            ${bundle.bountyWindowSeconds} = 0
-            or (
-              ${bundle.bountyClosesAt} != 0
-              and ${bundle.bountyOpensAt} <= ${bundle.bountyClosesAt}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${bundle.bountyOpensAt}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${bundle.bountyClosesAt}
-            )
+            ${bundle.bountyClosesAt} != 0
+            and ${bundle.bountyOpensAt} <= ${bundle.bountyClosesAt}
+            and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${bundle.bountyOpensAt}
+            and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${bundle.bountyClosesAt}
           )`,
             or(
               sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) = 0`,

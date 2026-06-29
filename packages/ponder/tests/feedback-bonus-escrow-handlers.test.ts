@@ -81,7 +81,14 @@ afterEach(() => {
 
 describe("FeedbackBonusEscrow ponder handlers", () => {
   it("indexes created feedback bonus pools", async () => {
-    const { db, inserts, updates } = createDb({ content: { id: 1n } });
+    const { db, inserts, updates } = createDb({
+      content: {
+        id: 1n,
+        createdAt: 1_000n,
+        roundEpochDuration: 600,
+        roundMaxDuration: 600,
+      },
+    });
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get("FeedbackBonusEscrow:FeedbackBonusPoolCreated");
 
@@ -97,7 +104,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
           awarder: "0x0000000000000000000000000000000000000002",
           asset: 0n,
           amount: 100_000_000n,
-          feedbackClosesAt: 2_592_000n,
+          feedbackClosesAt: 9_999n,
           frontendFeeBps: 300n,
         },
         block: { number: 10n, timestamp: 1_700n },
@@ -114,8 +121,8 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
         fundedAmount: 100_000_000n,
         remainingAmount: 100_000_000n,
         asset: 0,
-        feedbackClosesAt: 2_592_000n,
-        awardDeadline: 2_592_000n,
+        feedbackClosesAt: 1_600n,
+        awardDeadline: 1_600n,
         frontendFeeBps: 300,
       }),
     });

@@ -181,11 +181,8 @@ function getRewardAvailableAmount(nowSeconds: bigint) {
     select sum(
       case
         when ${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}
-          and (
-            ${questionBundleReward.bountyWindowSeconds} = 0
-            or (${questionBundleReward.bountyClosesAt} != 0 and ${questionBundleReward.bountyClosesAt} >= ${nowSeconds})
-            or (${questionBundleReward.bountyClosesAt} = 0 and ${questionBundleReward.bountyStartBy} >= ${nowSeconds})
-          )
+          and ${questionBundleReward.bountyOpensAt} <= ${nowSeconds}
+          and ${questionBundleReward.bountyClosesAt} >= ${nowSeconds}
           then ${questionBundleReward.unallocatedAmount}
         else 0
       end
@@ -531,6 +528,10 @@ function formatContentTargetAudience<T extends Record<string, unknown>>(item: T,
 
 function formatContentResponse<T extends Record<string, unknown>>(item: T, includeTargetAudience = false): T {
   const withVoteUi = attachVoteUiToContentResponse({ ...item });
+  const record = withVoteUi as Record<string, unknown>;
+  if (record.questionDuration === undefined) {
+    record.questionDuration = record.roundEpochDuration ?? null;
+  }
   return formatConfidentialContent(formatContentTargetAudience(withVoteUi, includeTargetAudience)) as T;
 }
 
@@ -992,6 +993,9 @@ async function attachQuestionBundleSummaries<
             frontendFeeBps: bundle.frontendFeeBps,
             bountyEligibility: bundle.bountyEligibility,
             bountyEligibilityDataHash: bundle.bountyEligibilityDataHash,
+            questionDuration: bundle.bountyWindowSeconds,
+            rewardOpensAt: bundle.bountyOpensAt,
+            rewardClosesAt: bundle.bountyClosesAt,
             bountyStartBy: bundle.bountyStartBy,
             bountyOpensAt: bundle.bountyOpensAt,
             bountyWindowSeconds: bundle.bountyWindowSeconds,
@@ -1837,6 +1841,7 @@ export function registerContentRoutes(app: ApiApp) {
         commitLogIndex: vote.commitLogIndex,
         revealedAt: vote.revealedAt,
         roundStartTime: round.startTime,
+        roundQuestionDuration: round.epochDuration,
         roundEpochDuration: round.epochDuration,
         roundMaxDuration: round.maxDuration,
         roundMinVoters: round.minVoters,

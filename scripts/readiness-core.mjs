@@ -27,7 +27,9 @@ const EIP1967_IMPLEMENTATION_SLOT =
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
 const SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR = "0xb717bbbd";
 const ROUND_PAYOUT_SNAPSHOT_CONSUMER_SELECTOR = "0x2fc1e72a";
+export const POST_CREATION_FUNDING_DISABLED_SELECTOR = "0xe288a03c";
 const ADDRESS_WORD_RE = /^[a-fA-F0-9]{64}$/;
+const ZERO_WORD = "0".repeat(64);
 export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6773a34f", // validateContextSubmission(string,string[],string,string,string,bool)
   "0x6b974e07", // validateSubmissionDetails(string,bytes32,bool)
@@ -169,6 +171,45 @@ export const REQUIRED_SELECTOR_CHECKS = [
       "0x6a951316", // setRole(bytes32,address,bool)
       "0x706f3d41", // roundConfidentialityEscrowSnapshotWord(uint256,uint256)
     ],
+  },
+];
+
+export const REQUIRED_POST_CREATION_FUNDING_DISABLED_CALLS = [
+  {
+    contractName: "QuestionRewardPoolEscrow",
+    selector: "0x61a66a9d",
+    argumentWords: 7,
+    label: "QuestionRewardPoolEscrow createRewardPool",
+  },
+  {
+    contractName: "QuestionRewardPoolEscrow",
+    selector: "0xac197a0f",
+    argumentWords: 20,
+    label: "QuestionRewardPoolEscrow createRewardPoolWithAuthorization",
+  },
+  {
+    contractName: "QuestionRewardPoolEscrow",
+    selector: "0x211d3e3f",
+    argumentWords: 10,
+    label: "QuestionRewardPoolEscrow createPurposeRewardPool",
+  },
+  {
+    contractName: "FeedbackBonusEscrow",
+    selector: "0x12462f17",
+    argumentWords: 5,
+    label: "FeedbackBonusEscrow createFeedbackBonusPool",
+  },
+  {
+    contractName: "FeedbackBonusEscrow",
+    selector: "0x5714f732",
+    argumentWords: 6,
+    label: "FeedbackBonusEscrow createFeedbackBonusPoolWithAsset",
+  },
+  {
+    contractName: "FeedbackBonusEscrow",
+    selector: "0x948d70e7",
+    argumentWords: 14,
+    label: "FeedbackBonusEscrow createFeedbackBonusPoolWithAuthorization",
   },
 ];
 
@@ -858,7 +899,7 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-async function rpc(rpcUrl, method, params = []) {
+async function rpcRaw(rpcUrl, method, params = []) {
   const response = await fetchWithTimeout(rpcUrl, {
     method: "POST",
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -866,7 +907,11 @@ async function rpc(rpcUrl, method, params = []) {
   });
   if (!response.ok)
     throw new Error(`${method} returned HTTP ${response.status}`);
-  const body = await response.json();
+  return response.json();
+}
+
+async function rpc(rpcUrl, method, params = []) {
+  const body = await rpcRaw(rpcUrl, method, params);
   if (body.error)
     throw new Error(
       `${method} failed: ${body.error.message ?? JSON.stringify(body.error)}`,
@@ -936,6 +981,45 @@ export function bytecodeContainsSelector(code, selector) {
     typeof code === "string" &&
     code.toLowerCase().includes(selector.toLowerCase().slice(2))
   );
+}
+
+function zeroWordArguments(count) {
+  return ZERO_WORD.repeat(count);
+}
+
+function buildZeroArgumentCallData(selector, argumentWords) {
+  return `${selector}${zeroWordArguments(argumentWords)}`;
+}
+
+function extractRpcErrorData(error) {
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (typeof error.data === "string") return error.data;
+  if (typeof error.message === "string") return error.message;
+  if (typeof error.data?.data === "string") return error.data.data;
+  if (typeof error.originalError?.data === "string") {
+    return error.originalError.data;
+  }
+  return JSON.stringify(error);
+}
+
+async function postCreationFundingCallRevertsDisabled({
+  call,
+  deploymentAddresses,
+  rpcUrl,
+}) {
+  const address = deploymentAddresses.get(call.contractName);
+  if (!address) return false;
+  const body = await rpcRaw(rpcUrl, "eth_call", [
+    {
+      to: address,
+      data: buildZeroArgumentCallData(call.selector, call.argumentWords),
+    },
+    "latest",
+  ]);
+  return extractRpcErrorData(body.error)
+    .toLowerCase()
+    .includes(POST_CREATION_FUNDING_DISABLED_SELECTOR.slice(2));
 }
 
 export async function getSelectorProbeCode(rpcUrl, contractName, address) {
@@ -1080,6 +1164,26 @@ async function validateLiveClusterPayoutOracleConsumers({
   }
 }
 
+async function validateLivePostCreationFundingDisabled({
+  checks,
+  deploymentAddresses,
+  failures,
+  rpcUrl,
+}) {
+  for (const call of REQUIRED_POST_CREATION_FUNDING_DISABLED_CALLS) {
+    addCheck(
+      checks,
+      failures,
+      await postCreationFundingCallRevertsDisabled({
+        call,
+        deploymentAddresses,
+        rpcUrl,
+      }),
+      `${call.label} reverts with PostCreationFundingDisabled`,
+    );
+  }
+}
+
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
@@ -1142,6 +1246,12 @@ export async function validateLiveReadiness({
         rpcUrl,
       });
       await validateLiveClusterPayoutOracleConsumers({
+        checks,
+        deploymentAddresses,
+        failures,
+        rpcUrl,
+      });
+      await validateLivePostCreationFundingDisabled({
         checks,
         deploymentAddresses,
         failures,

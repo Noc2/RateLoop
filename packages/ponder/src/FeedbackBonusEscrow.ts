@@ -11,8 +11,46 @@ async function touchContent(context: { db: any }, contentId: bigint, timestamp: 
   }
 }
 
+function toPositiveBigInt(value: bigint | number | string | null | undefined) {
+  if (typeof value === "bigint") return value > 0n ? value : 0n;
+  if (typeof value === "number") return value > 0 ? BigInt(value) : 0n;
+  if (typeof value === "string" && value.length > 0) {
+    const parsed = BigInt(value);
+    return parsed > 0n ? parsed : 0n;
+  }
+  return 0n;
+}
+
+function resolveCreationAnchoredFeedbackClose({
+  contentRecord,
+  fallbackFeedbackClosesAt,
+}: {
+  contentRecord?: {
+    createdAt?: bigint | null;
+    roundEpochDuration?: number | null;
+    roundMaxDuration?: number | null;
+  } | null;
+  fallbackFeedbackClosesAt: bigint;
+}) {
+  const createdAt = toPositiveBigInt(contentRecord?.createdAt);
+  const duration =
+    toPositiveBigInt(contentRecord?.roundEpochDuration) ||
+    toPositiveBigInt(contentRecord?.roundMaxDuration);
+
+  if (createdAt > 0n && duration > 0n) {
+    return createdAt + duration;
+  }
+
+  return fallbackFeedbackClosesAt;
+}
+
 ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, context }) => {
   const { poolId, contentId, roundId, funder, awarder, amount, feedbackClosesAt, frontendFeeBps, asset } = event.args;
+  const contentRecord = await context.db.find(content, { id: contentId });
+  const effectiveFeedbackClosesAt = resolveCreationAnchoredFeedbackClose({
+    contentRecord,
+    fallbackFeedbackClosesAt: feedbackClosesAt,
+  });
 
   // Existing pools can be indexed after their target round is already settled.
   // Apply the same settledAt-aware deadline calculation here because no later
@@ -23,7 +61,7 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, contex
     id: `${contentId}-${roundId}`,
   });
   const awardDeadline = resolveFeedbackBonusAwardDeadline(
-    feedbackClosesAt,
+    effectiveFeedbackClosesAt,
     targetRound?.settledAt ?? null,
   );
 
@@ -43,7 +81,7 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, contex
       frontendAwardedAmount: 0n,
       forfeitedAmount: 0n,
       awardCount: 0,
-      feedbackClosesAt,
+      feedbackClosesAt: effectiveFeedbackClosesAt,
       awardDeadline,
       frontendFeeBps: Number(frontendFeeBps),
       forfeited: false,
@@ -52,7 +90,11 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, contex
     })
     .onConflictDoNothing();
 
-  await touchContent(context, contentId, event.block.timestamp);
+  if (contentRecord) {
+    await context.db.update(content, { id: contentId }).set({
+      lastActivityAt: event.block.timestamp,
+    });
+  }
 });
 
 ponder.on("FeedbackBonusEscrow:FeedbackBonusAwarded", async ({ event, context }) => {
