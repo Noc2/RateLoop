@@ -3138,7 +3138,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             ) : null}
           </section>
 
-          <section className="surface-card rounded-lg p-5">
+          <section className="surface-card rounded-lg p-5" style={{ overflow: "visible" }}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-2">
