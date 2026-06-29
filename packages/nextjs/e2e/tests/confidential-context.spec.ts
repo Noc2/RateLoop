@@ -3,6 +3,7 @@ import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import {
   continueToBountyStep,
   continueToFeedbackBonusStep,
+  expectNoFeedbackBonusSelectedIfVisible,
   selectAskCategory,
   selectAskSubcategory,
 } from "../helpers/ask-form";
@@ -241,7 +242,7 @@ test.describe("Confidential context", () => {
 
     await continueToBountyStep(page);
     await continueToFeedbackBonusStep(page);
-    await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
+    await expectNoFeedbackBonusSelectedIfVisible(page);
 
     await page.getByRole("button", { name: /^Submit/i }).click();
     await expect(page.getByText("Private context bundles are not supported yet")).toBeVisible({ timeout: 5_000 });

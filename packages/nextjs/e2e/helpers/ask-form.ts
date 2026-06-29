@@ -156,6 +156,13 @@ export async function continueToFeedbackBonusStep(page: Page): Promise<void> {
   await continueButton.click();
 }
 
+export async function expectNoFeedbackBonusSelectedIfVisible(page: Page): Promise<void> {
+  const noBonusButton = page.getByRole("button", { name: /^No bonus$/i }).first();
+  if (await noBonusButton.isVisible({ timeout: 500 }).catch(() => false)) {
+    await expect(noBonusButton).toHaveAttribute("aria-pressed", "true");
+  }
+}
+
 export async function selectBountyRewardAsset(page: Page, asset: "lrep" | "usdc"): Promise<void> {
   const assetSelect = page.getByTestId("bounty-asset-select").or(page.locator("#submission-bounty-asset")).first();
 

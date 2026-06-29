@@ -3,6 +3,7 @@ import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import {
   continueToBountyStep,
   continueToFeedbackBonusStep,
+  expectNoFeedbackBonusSelectedIfVisible,
   fillAskContextSource,
   selectAskCategory,
   selectAskSubcategory,
@@ -104,10 +105,9 @@ test.describe("Ask page", () => {
     await expect(page.getByPlaceholder("Write a subjective question voters can rate")).toBeHidden();
     await selectBountyRewardAsset(page, "lrep");
     await continueToFeedbackBonusStep(page);
-    await expect(page.getByRole("heading", { name: "Feedback Bonus" })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText("Submitting content")).toBeHidden();
     await expect(page.getByRole("button", { name: /^Submitting/i })).toBeHidden();
-    await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
+    await expectNoFeedbackBonusSelectedIfVisible(page);
 
     // 6. Wait for the share modal to confirm success
     await expectSuccessfulSubmission(page, title);
@@ -130,8 +130,7 @@ test.describe("Ask page", () => {
     await expect(bountyAssetSelect).toHaveValue("usdc");
 
     await continueToFeedbackBonusStep(page);
-    await expect(page.getByRole("heading", { name: "Feedback Bonus" })).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
+    await expectNoFeedbackBonusSelectedIfVisible(page);
 
     await expectSuccessfulSubmission(page, title);
 
