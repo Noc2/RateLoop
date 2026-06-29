@@ -762,6 +762,7 @@ function formatRewardPoolSummary(row: {
   totalRefundedAmount: bigint | string | number | null;
   qualifiedRoundCount: number | string | bigint | null;
   questionDuration?: number | string | bigint | null;
+  questionDurationSeconds?: number | string | bigint | null;
   rewardOpensAt?: bigint | string | number | null;
   rewardClosesAt?: bigint | string | number | null;
   nextBountyStartBy: bigint | string | number | null;
@@ -805,7 +806,14 @@ function formatRewardPoolSummary(row: {
     qualifiedRoundCount: toNumberValue(row.qualifiedRoundCount),
     currentRewardPoolAmount: activeUnallocatedAmount + claimableAllocatedAmount,
     hasActiveBounty: activeRewardPoolCount > 0,
-    questionDuration: row.questionDuration === undefined || row.questionDuration === null ? null : toNumberValue(row.questionDuration),
+    questionDuration:
+      row.questionDuration === undefined || row.questionDuration === null ? null : toNumberValue(row.questionDuration),
+    questionDurationSeconds:
+      row.questionDurationSeconds === undefined || row.questionDurationSeconds === null
+        ? row.questionDuration === undefined || row.questionDuration === null
+          ? null
+          : toNumberValue(row.questionDuration)
+        : toNumberValue(row.questionDurationSeconds),
     rewardOpensAt: row.rewardOpensAt === undefined || row.rewardOpensAt === null ? null : toBigIntValue(row.rewardOpensAt),
     rewardClosesAt: row.rewardClosesAt === undefined || row.rewardClosesAt === null ? null : toBigIntValue(row.rewardClosesAt),
     nextBountyStartBy: row.nextBountyStartBy === null ? null : toBigIntValue(row.nextBountyStartBy),
