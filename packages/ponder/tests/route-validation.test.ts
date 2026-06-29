@@ -344,6 +344,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       createdAt: "questionRewardPool.createdAt",
       bountyClosesAt: "questionRewardPool.bountyClosesAt",
       bountyEligibility: "questionRewardPool.bountyEligibility",
+      bountyOpensAt: "questionRewardPool.bountyOpensAt",
       bountyStartBy: "questionRewardPool.bountyStartBy",
       bountyWindowSeconds: "questionRewardPool.bountyWindowSeconds",
       feedbackClosesAt: "questionRewardPool.feedbackClosesAt",
@@ -622,6 +623,68 @@ describe("shared API helpers", () => {
     ).toContain("feedbackBonusPool.feedbackClosesAt");
     expect(item?.feedbackBonusSummary.nextFeedbackClosesAt).toBe(150n);
     expect(item?.feedbackBonusSummary.nextFeedbackAwardDeadline).toBe(220n);
+  });
+
+  it("derives unactivated bounty windows from the first commit timestamp", async () => {
+    const { db } = mockPonderModules(
+      [
+        {
+          contentId: 1n,
+          asset: 1,
+          bountyEligibility: 0,
+          bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
+          rewardPoolCount: 1,
+          activeRewardPoolCount: 0,
+          expiredRewardPoolCount: 1,
+          openEndedRewardPoolCount: 0,
+          fundedAsset: 1,
+          totalFundedAmount: 1_000_000n,
+          totalUnallocatedAmount: 1_000_000n,
+          activeUnallocatedAmount: 0n,
+          expiredUnallocatedAmount: 1_000_000n,
+          totalAllocatedAmount: 0n,
+          totalClaimedAmount: 0n,
+          claimableAllocatedAmount: 0n,
+          totalVoterClaimedAmount: 0n,
+          totalFrontendClaimedAmount: 0n,
+          totalRefundedAmount: 0n,
+          qualifiedRoundCount: 0,
+          nextBountyStartBy: null,
+          nextBountyClosesAt: null,
+          lastBountyStartBy: 1_000n,
+          lastBountyClosesAt: 1_600n,
+          nextFeedbackClosesAt: null,
+        },
+      ],
+      [[], [], []],
+    );
+    const { attachOpenRoundSummary } = await import("../src/api/shared.js");
+
+    const [item] = await attachOpenRoundSummary(
+      [{ id: 1n, title: "Windowed bounty", url: "https://example.com" }],
+      2_000n,
+    );
+
+    const rewardPoolSelect = db.select.mock.calls[0]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    const activePoolExpression = serializeExpression(
+      rewardPoolSelect?.activeRewardPoolCount,
+    );
+    const closeExpression = serializeExpression(
+      rewardPoolSelect?.lastBountyClosesAt,
+    );
+
+    expect(activePoolExpression).toContain("select min");
+    expect(activePoolExpression).toContain("vote.committedAt");
+    expect(activePoolExpression).toContain("questionRewardPool.startRoundId");
+    expect(activePoolExpression).toContain("is null");
+    expect(activePoolExpression).toContain("questionRewardPool.bountyStartBy");
+    expect(closeExpression).toContain("vote.committedAt");
+    expect(item?.rewardPoolSummary.hasActiveBounty).toBe(false);
+    expect(item?.rewardPoolSummary.activeUnallocatedAmount).toBe(0n);
+    expect(item?.rewardPoolSummary.expiredUnallocatedAmount).toBe(1_000_000n);
+    expect(item?.rewardPoolSummary.lastBountyClosesAt).toBe(1_600n);
   });
 });
 

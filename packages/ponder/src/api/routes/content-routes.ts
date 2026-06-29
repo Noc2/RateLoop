@@ -49,6 +49,7 @@ import {
   humanVerifiedCommitQuorumMet,
   jsonBig,
   parseBigIntList,
+  questionRewardPoolPendingOrActiveExpression,
   resolveApiNowSeconds,
 } from "../shared.js";
 import {
@@ -169,13 +170,7 @@ function getRewardAvailableAmount(nowSeconds: bigint) {
   return sql<bigint>`coalesce((
     select sum(
       case
-        when ${questionRewardPool.refunded} = false
-          and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
-          and (
-            ${questionRewardPool.bountyWindowSeconds} = 0
-            or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds})
-            or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} >= ${nowSeconds})
-          )
+        when ${questionRewardPoolPendingOrActiveExpression(nowSeconds)}
           then ${questionRewardPool.unallocatedAmount}
         else 0
       end

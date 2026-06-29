@@ -9,7 +9,7 @@ import {
 import type { Context, Hono } from "hono";
 import { and, desc, eq, inArray, replaceBigInts, sql } from "ponder";
 import { db } from "ponder:api";
-import { feedbackBonusPool, questionRewardPool, round } from "ponder:schema";
+import { feedbackBonusPool, questionRewardPool, round, vote } from "ponder:schema";
 import { isValidAddress, safeBigInt } from "./utils.js";
 
 export type ApiApp = Hono;
@@ -202,6 +202,111 @@ export function getDiscoverResolutionOutcome(state: number | null, isUp: boolean
   return "resolved" as const;
 }
 
+export function questionRewardPoolFirstCommitAtExpression() {
+  return sql<bigint | null>`(
+    select min(${vote.committedAt})
+    from ${vote}
+    where ${vote.contentId} = ${questionRewardPool.contentId}
+      and ${vote.roundId} >= ${questionRewardPool.startRoundId}
+      and ${vote.committedAt} > 0
+  )`;
+}
+
+export function questionRewardPoolUnactivatedBountyClosesAtExpression() {
+  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
+  return sql<bigint | null>`case
+    when ${firstCommitAt} is not null and ${firstCommitAt} <= ${questionRewardPool.bountyStartBy}
+      then ${firstCommitAt} + ${questionRewardPool.bountyWindowSeconds}
+    else null
+  end`;
+}
+
+export function questionRewardPoolEffectiveBountyClosesAtExpression() {
+  return sql<bigint | null>`case
+    when ${questionRewardPool.bountyWindowSeconds} = 0 then null
+    when ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt}
+    else ${questionRewardPoolUnactivatedBountyClosesAtExpression()}
+  end`;
+}
+
+export function questionRewardPoolPendingOrActiveExpression(nowSeconds: bigint) {
+  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
+  const unactivatedBountyClosesAt = questionRewardPoolUnactivatedBountyClosesAtExpression();
+
+  return sql<boolean>`${questionRewardPool.refunded} = false
+    and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
+    and (
+      ${questionRewardPool.bountyWindowSeconds} = 0
+      or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds})
+      or (
+        ${questionRewardPool.bountyClosesAt} = 0
+        and (
+          (${firstCommitAt} is null and ${questionRewardPool.bountyStartBy} >= ${nowSeconds})
+          or (${unactivatedBountyClosesAt} is not null and ${unactivatedBountyClosesAt} >= ${nowSeconds})
+        )
+      )
+    )`;
+}
+
+export function questionRewardPoolExpiredExpression(nowSeconds: bigint) {
+  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
+  const unactivatedBountyClosesAt = questionRewardPoolUnactivatedBountyClosesAtExpression();
+
+  return sql<boolean>`${questionRewardPool.refunded} = false
+    and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
+    and ${questionRewardPool.bountyWindowSeconds} != 0
+    and (
+      (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} < ${nowSeconds})
+      or (
+        ${questionRewardPool.bountyClosesAt} = 0
+        and (
+          (${firstCommitAt} is null and ${questionRewardPool.bountyStartBy} < ${nowSeconds})
+          or (${firstCommitAt} is not null and ${firstCommitAt} > ${questionRewardPool.bountyStartBy})
+          or (${unactivatedBountyClosesAt} is not null and ${unactivatedBountyClosesAt} < ${nowSeconds})
+        )
+      )
+    )`;
+}
+
+export function questionRewardPoolHasValidBountyWindowExpression() {
+  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
+
+  return sql<boolean>`(
+    ${questionRewardPool.bountyWindowSeconds} = 0
+    or (
+      ${questionRewardPool.bountyClosesAt} != 0
+      and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+    )
+    or (
+      ${questionRewardPool.bountyClosesAt} = 0
+      and ${firstCommitAt} is not null
+      and ${firstCommitAt} <= ${questionRewardPool.bountyStartBy}
+    )
+  )`;
+}
+
+export function questionRewardPoolVoteWithinBountyWindowExpression(commitTimestamp: unknown) {
+  const firstCommitAt = questionRewardPoolFirstCommitAtExpression();
+  const unactivatedBountyClosesAt = questionRewardPoolUnactivatedBountyClosesAtExpression();
+
+  return sql<boolean>`(
+    ${questionRewardPool.bountyWindowSeconds} = 0
+    or (
+      ${questionRewardPool.bountyClosesAt} != 0
+      and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+      and ${commitTimestamp} >= ${questionRewardPool.bountyOpensAt}
+      and ${commitTimestamp} <= ${questionRewardPool.bountyClosesAt}
+    )
+    or (
+      ${questionRewardPool.bountyClosesAt} = 0
+      and ${firstCommitAt} is not null
+      and ${unactivatedBountyClosesAt} is not null
+      and ${commitTimestamp} >= ${firstCommitAt}
+      and ${commitTimestamp} <= ${unactivatedBountyClosesAt}
+    )
+  )`;
+}
+
 export async function attachOpenRoundSummary<T extends { id: bigint }>(
   items: T[],
   nowSeconds = BigInt(Math.floor(Date.now() / 1000)),
@@ -220,23 +325,12 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
   }
 
   const contentIds = items.map(item => item.id);
-  // I-5: match the contract's strict boundary (WindowLib.rewardPoolExpired treats a pool as expired
-  // only when block.timestamp > closesAt/startBy). So active iff now <= boundary (>=), expired iff
-  // now > boundary (<). Previously the indexer flipped at now == boundary, one second early.
-  const pendingOrActiveRewardPool = sql<boolean>`${questionRewardPool.refunded} = false
-    and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
-    and (
-      ${questionRewardPool.bountyWindowSeconds} = 0
-      or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds})
-      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} >= ${nowSeconds})
-    )`;
-  const expiredRewardPool = sql<boolean>`${questionRewardPool.refunded} = false
-    and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
-    and ${questionRewardPool.bountyWindowSeconds} != 0
-    and (
-      (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} < ${nowSeconds})
-      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} < ${nowSeconds})
-    )`;
+  // I-5: match the contract's strict boundary (WindowLib.rewardPoolExpired treats a pool as
+  // expired only when block.timestamp > the relevant boundary). Activated pools use closesAt;
+  // unactivated pools with commits derive that boundary from the first indexed commit.
+  const pendingOrActiveRewardPool = questionRewardPoolPendingOrActiveExpression(nowSeconds);
+  const expiredRewardPool = questionRewardPoolExpiredExpression(nowSeconds);
+  const effectiveBountyClosesAt = questionRewardPoolEffectiveBountyClosesAtExpression();
   const currentRewardPoolAsset = sql<number | null>`case
     when ${questionRewardPool.allocatedAmount} > ${questionRewardPool.claimedAmount}
       or ${pendingOrActiveRewardPool}
@@ -265,10 +359,10 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
       totalFrontendClaimedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.frontendClaimedAmount}), 0)`,
       totalRefundedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.refundedAmount}), 0)`,
       qualifiedRoundCount: sql<number>`coalesce(sum(${questionRewardPool.qualifiedRounds}), 0)`,
-      nextBountyStartBy: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyWindowSeconds} != 0 then ${questionRewardPool.bountyStartBy} else null end)`,
-      nextBountyClosesAt: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt} else null end)`,
+      nextBountyStartBy: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyWindowSeconds} != 0 and ${questionRewardPoolFirstCommitAtExpression()} is null then ${questionRewardPool.bountyStartBy} else null end)`,
+      nextBountyClosesAt: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${effectiveBountyClosesAt} is not null then ${effectiveBountyClosesAt} else null end)`,
       lastBountyStartBy: sql<bigint | null>`max(case when ${questionRewardPool.bountyStartBy} != 0 then ${questionRewardPool.bountyStartBy} else null end)`,
-      lastBountyClosesAt: sql<bigint | null>`max(case when ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt} else null end)`,
+      lastBountyClosesAt: sql<bigint | null>`max(case when ${effectiveBountyClosesAt} is not null then ${effectiveBountyClosesAt} else null end)`,
       nextFeedbackClosesAt: sql<bigint | null>`min(case when ${questionRewardPool.feedbackClosesAt} != 0 and ${questionRewardPool.feedbackClosesAt} > ${nowSeconds} then ${questionRewardPool.feedbackClosesAt} else null end)`,
     })
     .from(questionRewardPool)

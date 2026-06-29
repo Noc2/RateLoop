@@ -49,6 +49,7 @@ import {
   parseBigIntList,
   parseIdentityKeyList,
   parseOptionalBooleanFlag,
+  questionRewardPoolVoteWithinBountyWindowExpression,
   resolveApiNowSeconds,
 } from "../shared.js";
 import {
@@ -1544,22 +1545,7 @@ export function registerDataRoutes(app: ApiApp) {
       eq(round.state, ROUND_STATE.Settled),
       sql`${vote.roundId} >= ${questionRewardPool.startRoundId}`,
       sql`${questionRewardPoolClaim.id} is null`,
-      sql`(
-        ${questionRewardPool.bountyWindowSeconds} = 0
-        or (
-          ${questionRewardPool.bountyClosesAt} != 0
-          and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionRewardPool.bountyOpensAt}
-          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt}
-        )
-        or (
-          ${questionRewardPool.bountyClosesAt} = 0
-          and ${round.startTime} is not null
-          and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
-          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
-          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionRewardPool.bountyWindowSeconds}
-        )
-      )`,
+      questionRewardPoolVoteWithinBountyWindowExpression(sql`coalesce(${vote.committedAt}, ${vote.revealedAt}, 0)`),
       or(
         sql`${questionRewardPoolRound.rewardPoolId} is not null`,
         and(
@@ -1835,26 +1821,12 @@ export function registerDataRoutes(app: ApiApp) {
           // (committedWithinBountyWindow), so votes whose commit/reveal fell outside the window are
           // not surfaced as candidates (their claim would revert). Same predicate as the
           // correlation round-votes eligibility query.
-          // L-6: before activation the window is anchored on-chain to firstStakedAt; the indexer has
-          // no per-round first-stake column, so it approximates with round.startTime (<= firstStakedAt).
-          // This can transiently over-include a not-yet-activated late bounty until the activation
-          // event lands and fills in the real bountyOpensAt/bountyClosesAt.
-          sql`(
-            ${questionRewardPool.bountyWindowSeconds} = 0
-            or (
-              ${questionRewardPool.bountyClosesAt} != 0
-              and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionRewardPool.bountyOpensAt}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt}
-            )
-            or (
-              ${questionRewardPool.bountyClosesAt} = 0
-              and ${round.startTime} is not null
-              and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionRewardPool.bountyWindowSeconds}
-            )
-          )`,
+          // L-6: before activation the window is anchored on-chain to firstStakedAt. Derive that
+          // from the earliest indexed commit instead of approximating with round.startTime, so
+          // expired unactivated bounties stop appearing as claimable.
+          questionRewardPoolVoteWithinBountyWindowExpression(
+            sql`coalesce(${vote.committedAt}, ${vote.revealedAt}, 0)`,
+          ),
           or(
             sql`${questionRewardPoolRound.rewardPoolId} is not null`,
             and(

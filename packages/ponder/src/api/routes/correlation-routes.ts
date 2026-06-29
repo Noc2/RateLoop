@@ -28,7 +28,12 @@ import {
   voterStats,
 } from "ponder:schema";
 import type { ApiApp } from "../shared.js";
-import { jsonBig, resolveApiNowSeconds } from "../shared.js";
+import {
+  jsonBig,
+  questionRewardPoolHasValidBountyWindowExpression,
+  questionRewardPoolVoteWithinBountyWindowExpression,
+  resolveApiNowSeconds,
+} from "../shared.js";
 import {
   CORRELATION_VOTE_PAGE_SIZE,
   correlationVoteScanPageBudget,
@@ -627,18 +632,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           eq(round.state, ROUND_STATE.Settled),
           sql`${round.roundId} >= ${questionRewardPool.startRoundId}`,
           sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
-          sql`(
-            ${questionRewardPool.bountyWindowSeconds} = 0
-            or (
-              ${questionRewardPool.bountyClosesAt} != 0
-              and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-            )
-            or (
-              ${questionRewardPool.bountyClosesAt} = 0
-              and ${round.startTime} is not null
-              and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
-            )
-          )`,
+          questionRewardPoolHasValidBountyWindowExpression(),
           or(
             sql`${roundPayoutSnapshot.id} is null`,
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
@@ -921,22 +915,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
             sql`${vote.identityHolder} != ${questionRewardPool.funder}`,
             sql`${vote.identityKey} != ${questionRewardPool.funderIdentityKey}`,
             sql`${vote.identityHolder} != ${content.submitter}`,
-            sql`(
-              ${questionRewardPool.bountyWindowSeconds} = 0
-              or (
-                ${questionRewardPool.bountyClosesAt} != 0
-                and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-                and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionRewardPool.bountyOpensAt}
-                and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt}
-              )
-              or (
-                ${questionRewardPool.bountyClosesAt} = 0
-                and ${round.startTime} is not null
-                and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
-                and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
-                and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionRewardPool.bountyWindowSeconds}
-              )
-            )`,
+            questionRewardPoolVoteWithinBountyWindowExpression(
+              sql`coalesce(${vote.committedAt}, ${vote.revealedAt}, 0)`,
+            ),
             or(
               sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) = 0`,
               sql`(
