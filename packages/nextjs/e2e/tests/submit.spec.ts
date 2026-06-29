@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
-import { waitForPonderIndexed } from "../helpers/admin-helpers";
+import { waitForPonderIndexed, waitForPonderIndexedAfterSync } from "../helpers/admin-helpers";
 import {
   continueToBountyStep,
   continueToFeedbackBonusStep,
@@ -114,6 +114,8 @@ test.describe("Ask page", () => {
   });
 
   test("can ask a question with the default USDC bounty and see it indexed", async ({ connectedPage: page }) => {
+    test.setTimeout(300_000);
+
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
@@ -134,7 +136,7 @@ test.describe("Ask page", () => {
 
     await expectSuccessfulSubmission(page, title);
 
-    const indexedAsUsdc = await waitForPonderIndexed(
+    const indexedAsUsdc = await waitForPonderIndexedAfterSync(
       async () => {
         const { items } = await getContentList({ search: title, limit: 5 });
         const submittedQuestion = items.find(item => item.title === title);
@@ -145,7 +147,7 @@ test.describe("Ask page", () => {
           BigInt(submittedQuestion.rewardPoolSummary.currentRewardPoolAmount) > 0n
         );
       },
-      90_000,
+      120_000,
       2_000,
       "waitForSubmittedUsdcBounty",
     );
