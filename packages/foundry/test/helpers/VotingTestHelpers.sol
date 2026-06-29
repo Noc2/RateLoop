@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {Vm, VmSafe} from "forge-std/Vm.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ContentRegistry} from "../../contracts/ContentRegistry.sol";
-import {ProtocolConfig} from "../../contracts/ProtocolConfig.sol";
-import {RaterRegistry} from "../../contracts/RaterRegistry.sol";
-import {RoundVotingEngine} from "../../contracts/RoundVotingEngine.sol";
-import {IConfidentialityEscrow} from "../../contracts/interfaces/IConfidentialityEscrow.sol";
-import {RatingLib} from "../../contracts/libraries/RatingLib.sol";
-import {RoundLib} from "../../contracts/libraries/RoundLib.sol";
-import {MockWorldIDVerifier} from "../../contracts/mocks/MockWorldIDVerifier.sol";
-import {MockQuestionRewardPoolEscrow} from "../mocks/MockQuestionRewardPoolEscrow.sol";
-import {RoundEngineReadHelpers} from "./RoundEngineReadHelpers.sol";
+import { Test } from "forge-std/Test.sol";
+import { Vm, VmSafe } from "forge-std/Vm.sol";
+import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
+import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
+import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
+import { IConfidentialityEscrow } from "../../contracts/interfaces/IConfidentialityEscrow.sol";
+import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
+import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
+import { MockWorldIDVerifier } from "../../contracts/mocks/MockWorldIDVerifier.sol";
+import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
+import { RoundEngineReadHelpers } from "./RoundEngineReadHelpers.sol";
 
 bytes32 constant TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH =
     0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
@@ -88,7 +88,7 @@ abstract contract ContentSubmissionTestBase {
     }
 
     function _emptySubmissionDetails() internal pure returns (ContentRegistry.SubmissionDetails memory) {
-        return ContentRegistry.SubmissionDetails({detailsUrl: "", detailsHash: bytes32(0)});
+        return ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: bytes32(0) });
     }
 
     function _defaultQuestionConfidentialityHash() internal pure returns (bytes32) {
@@ -572,7 +572,7 @@ abstract contract ContentSubmissionTestBase {
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
-    {}
+    { }
 
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
@@ -1177,7 +1177,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _rememberTestReveal(bytes32 commitKey, bool isUp, bytes32 salt) internal {
-        testRevealPayloads[commitKey] = TestRevealPayload({exists: true, isUp: isUp, salt: salt});
+        testRevealPayloads[commitKey] = TestRevealPayload({ exists: true, isUp: isUp, salt: salt });
     }
 
     function _testRevealPayload(bytes32 commitKey) internal view returns (bool isUp, bytes32 salt, bool exists) {

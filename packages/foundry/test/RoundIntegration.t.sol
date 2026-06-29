@@ -759,9 +759,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext = _roundContext(preparedRoundId, referenceRatingBps);
-        votingEngine.commitVote(
-            contentId, cachedRoundContext, targetRound, drandChainHash, ch, ct, STAKE, address(0)
-        );
+        votingEngine.commitVote(contentId, cachedRoundContext, targetRound, drandChainHash, ch, ct, STAKE, address(0));
         vm.stopPrank();
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, preparedRoundId);
@@ -2220,14 +2218,7 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 cachedRoundContext34 = _roundContext(_previewCommitRoundId(votingEngine, contentId), referenceRatingBps);
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         votingEngine.commitVote(
-            contentId,
-            cachedRoundContext34,
-            targetRound2,
-            drandChainHash2,
-            ch2,
-            ct2,
-            STAKE,
-            address(0)
+            contentId, cachedRoundContext34, targetRound2, drandChainHash2, ch2, ct2, STAKE, address(0)
         );
         vm.stopPrank();
     }

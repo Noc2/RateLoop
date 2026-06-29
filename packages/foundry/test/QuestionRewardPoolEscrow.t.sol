@@ -1,40 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
-import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
-import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {MockERC20} from "../contracts/mocks/MockERC20.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
+import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
 import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import {
     BOUNTY_ELIGIBILITY_PASSPORT,
     BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
     BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
     RoundSnapshot
 } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {Eip3009Authorization} from "../contracts/interfaces/IEip3009.sol";
-import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
-import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
+import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
+import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
-contract InvalidFeedbackBonusEscrowForX402 {}
+contract InvalidFeedbackBonusEscrowForX402 { }
 
 contract MismatchedFeedbackBonusEscrowForX402 {
     ContentRegistry public registry;
@@ -964,7 +964,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
         uint256 fundedAmount = 4 * 10_000;
@@ -976,7 +976,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveSettlementVoters() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("impossible-cap", roundConfig);
         uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
 
@@ -995,7 +995,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
+                RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
             )
         );
 
@@ -5419,7 +5419,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         x402QuestionSubmitter.setFeedbackBonusEscrow(address(feedbackEscrow));
 
         X402QuestionSubmitter.FeedbackBonusTerms memory feedbackTerms =
-            X402QuestionSubmitter.FeedbackBonusTerms({amount: 25e6, awarder: agentWallet});
+            X402QuestionSubmitter.FeedbackBonusTerms({ amount: 25e6, awarder: agentWallet });
         Eip3009Authorization memory authorization = _x402OneShotAuthorization(agentWallet, question, feedbackTerms);
 
         usdc.mint(agentWallet, authorization.value);
@@ -7666,7 +7666,7 @@ contract MockBundleFrontendRegistry {
     mapping(address => FrontendInfo) public frontends;
 
     function setFrontend(address frontend, address operator, bool eligible, bool canClaim) external {
-        frontends[frontend] = FrontendInfo({operator: operator, eligible: eligible, canClaim: canClaim});
+        frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
     }
 
     function STAKE_AMOUNT() external pure returns (uint256) {

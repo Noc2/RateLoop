@@ -322,14 +322,12 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     }
 
     function test_SingleDurationMinimumStakeStepFlipsMajority() public {
-        (RoundLib.Round memory below, RoundLib.Round memory belowSettled) =
-            _settleFullWeightStakeScenario(9e6, 0);
+        (RoundLib.Round memory below, RoundLib.Round memory belowSettled) = _settleFullWeightStakeScenario(9e6, 0);
         assertEq(below.weightedUpPool, 20_000_000, "below: weighted UP");
         assertEq(below.weightedDownPool, 19_000_000, "below: weighted DOWN");
         assertTrue(belowSettled.upWins, "below boundary: UP wins by full-weight majority");
 
-        (RoundLib.Round memory above, RoundLib.Round memory aboveSettled) =
-            _settleFullWeightStakeScenario(10e6, 1e6);
+        (RoundLib.Round memory above, RoundLib.Round memory aboveSettled) = _settleFullWeightStakeScenario(10e6, 1e6);
         assertEq(above.weightedUpPool, 20_000_000, "above: weighted UP");
         assertEq(above.weightedDownPool, 21_000_000, "above: weighted DOWN");
         assertFalse(aboveSettled.upWins, "above boundary: one minimum stake step flips to DOWN");

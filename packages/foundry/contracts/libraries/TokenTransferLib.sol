@@ -24,5 +24,4 @@ library TokenTransferLib {
         require(token.balanceOf(recipient) - balanceBefore == amount, "Bad token");
         return true;
     }
-
 }

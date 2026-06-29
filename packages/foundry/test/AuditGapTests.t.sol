@@ -120,7 +120,9 @@ contract AuditGapTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, EPOCH_DURATION, 3, 100);
+        _setTlockRoundConfig(
+            ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, EPOCH_DURATION, 3, 100
+        );
 
         // Mint LREP to test users
         address[10] memory users = [submitter, voter1, voter2, voter3, voter4, frontend, voter5, voter6, voter7, voter8];
@@ -157,14 +159,7 @@ contract AuditGapTests is VotingTestBase {
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
         bytes32 hash = _commitHash(
-            isUp,
-            salt,
-            voter,
-            contentId,
-            _defaultRatingReferenceBps(),
-            targetRound,
-            drandChainHash,
-            ciphertext
+            isUp, salt, voter, contentId, _defaultRatingReferenceBps(), targetRound, drandChainHash, ciphertext
         );
         _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
@@ -172,14 +167,7 @@ contract AuditGapTests is VotingTestBase {
         uint256 cachedRoundContext1 =
             _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
-            contentId,
-            cachedRoundContext1,
-            targetRound,
-            drandChainHash,
-            hash,
-            ciphertext,
-            stakeAmt,
-            fe
+            contentId, cachedRoundContext1, targetRound, drandChainHash, hash, ciphertext, stakeAmt, fe
         );
         vm.stopPrank();
         commitKey = keccak256(abi.encodePacked(voter, hash));

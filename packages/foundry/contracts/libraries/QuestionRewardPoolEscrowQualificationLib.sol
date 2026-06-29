@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {IRaterRegistryStatus} from "../interfaces/IRaterRegistryStatus.sol";
-import {RoundLib} from "./RoundLib.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
-import {QuestionRewardPoolEscrowWindowLib} from "./QuestionRewardPoolEscrowWindowLib.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
+import { RoundLib } from "./RoundLib.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;

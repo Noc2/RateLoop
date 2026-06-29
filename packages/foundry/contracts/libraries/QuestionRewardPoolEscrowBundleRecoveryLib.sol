@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {ContentRegistry} from "../ContentRegistry.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {BundleReward, BundleQuestion, BundleRoundSetSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowBundleActionsLib} from "./QuestionRewardPoolEscrowBundleActionsLib.sol";
-import {QuestionRewardPoolEscrowBundleLib} from "./QuestionRewardPoolEscrowBundleLib.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { ContentRegistry } from "../ContentRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { BundleReward, BundleQuestion, BundleRoundSetSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowBundleActionsLib } from "./QuestionRewardPoolEscrowBundleActionsLib.sol";
+import { QuestionRewardPoolEscrowBundleLib } from "./QuestionRewardPoolEscrowBundleLib.sol";
 
 library QuestionRewardPoolEscrowBundleRecoveryLib {
     event RejectedSnapshotBundleRoundSetRecovered(

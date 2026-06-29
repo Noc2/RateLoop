@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowWindowLib} from "./QuestionRewardPoolEscrowWindowLib.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 
 library QuestionRewardPoolEscrowRecoveryLib {
     using SafeCast for uint256;

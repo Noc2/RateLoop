@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {IRaterRegistryStatus} from "../interfaces/IRaterRegistryStatus.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {RewardPool, RoundSnapshot, BOUNTY_ELIGIBILITY_OPEN} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
-import {QuestionRewardPoolEscrowWindowLib} from "./QuestionRewardPoolEscrowWindowLib.sol";
+import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { RewardPool, RoundSnapshot, BOUNTY_ELIGIBILITY_OPEN } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 
 /// @dev Equal-share inputs shared by `RoundSnapshot` (per-round) and
 ///      `BundleRoundSetSnapshot` (per-bundle) callers. Packed into a single struct so
