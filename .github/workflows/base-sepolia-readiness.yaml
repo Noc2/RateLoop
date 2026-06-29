@@ -88,4 +88,4 @@ jobs:
           METRICS_AUTH_TOKEN: ${{ secrets.METRICS_AUTH_TOKEN }}
           PONDER_METADATA_SYNC_TOKEN: ${{ secrets.PONDER_METADATA_SYNC_TOKEN }}
           PONDER_KEEPER_WORK_TOKEN: ${{ secrets.PONDER_KEEPER_WORK_TOKEN }}
-        run: node scripts/check-base-sepolia-readiness.mjs --live --require-live-targets
+        run: node scripts/check-base-sepolia-readiness.mjs --live --require-live-targets --require-one-shot-feedback-bonus-x402

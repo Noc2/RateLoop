@@ -96,7 +96,10 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
   assert.match(liveJob, /BASE_SEPOLIA_RPC_URL: \$\{\{ secrets\.BASE_SEPOLIA_RPC_URL \}\}/);
   assert.match(liveJob, /KEEPER_DATABASE_URL: \$\{\{ secrets\.KEEPER_DATABASE_URL \}\}/);
   assert.match(liveJob, /METRICS_AUTH_TOKEN: \$\{\{ secrets\.METRICS_AUTH_TOKEN \}\}/);
-  assert.match(liveJob, /node scripts\/check-base-sepolia-readiness\.mjs --live --require-live-targets/);
+  assert.match(
+    liveJob,
+    /node scripts\/check-base-sepolia-readiness\.mjs --live --require-live-targets --require-one-shot-feedback-bonus-x402/,
+  );
   assert.match(workflow, /BASE_SEPOLIA_KEEPER_URL: \$\{\{ vars\.BASE_SEPOLIA_KEEPER_URL \}\}/);
   assert.match(
     offlineJob,
