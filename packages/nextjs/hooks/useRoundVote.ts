@@ -448,6 +448,10 @@ export function useRoundVote() {
     }
 
     try {
+      if (!guardWalletContext()) {
+        return false;
+      }
+
       if (publicClient) {
         try {
           const isContentActive = await publicClient.readContract({
@@ -473,6 +477,9 @@ export function useRoundVote() {
       }
 
       if (publicClient) {
+        if (!guardWalletContext()) {
+          return false;
+        }
         const cooldownRemaining = await readEffectiveOnChainVoteCooldownRemainingSeconds({
           advisoryVoteRecorderAddress: advisoryVoteRecorderInfo?.address as Address | undefined,
           contentId,
@@ -481,7 +488,7 @@ export function useRoundVote() {
           includeAdvisoryCooldown: stakeAmount <= 0,
           nowSeconds: Math.floor(Date.now() / 1000),
           publicClient,
-          voter: address,
+          voter: walletSnapshot.voterAddress,
           votingEngineAddress: votingEngineInfo.address as Address,
         });
         if (cooldownRemaining > 0) {
@@ -510,8 +517,11 @@ export function useRoundVote() {
         }
 
         try {
+          if (!guardWalletContext()) {
+            return false;
+          }
           const rawAvailability = await publicClient.readContract({
-            account: address as Address,
+            account: walletSnapshot.voterAddress,
             address: advisoryVoteRecorderAddress,
             abi: AdvisoryVoteRecorderAbi,
             functionName: "advisoryCommitAvailability",
@@ -567,6 +577,9 @@ export function useRoundVote() {
         }
       } else if (publicClient) {
         try {
+          if (!guardWalletContext()) {
+            return false;
+          }
           runtime = await resolveRoundVoteRuntime({
             publicClient,
             votingEngineAddress: votingEngineInfo.address as `0x${string}`,
@@ -622,8 +635,11 @@ export function useRoundVote() {
               address: lrepAddress,
               abi: LoopReputationAbi,
               functionName: "allowance",
-              args: [address as Address, votingEngineAddress],
+              args: [walletSnapshot.voterAddress, votingEngineAddress],
             })) as bigint);
+      if (!guardWalletContext()) {
+        return false;
+      }
       let currentAllowance = await readCurrentAllowance();
       timingLog.emit("allowance-read", {
         currentAllowance: currentAllowance.toString(),
