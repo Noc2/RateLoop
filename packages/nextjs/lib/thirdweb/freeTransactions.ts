@@ -1875,6 +1875,45 @@ export async function ensureFreeTransactionQuotaTable() {
   await ensureFreeTransactionQuotaTablePromise;
 }
 
+export async function getPendingReservationSessionToken(params: {
+  address: string;
+  chainId: number;
+  operationKey: string;
+}): Promise<string | null> {
+  await ensureFreeTransactionQuotaTable();
+
+  if (!isAddress(params.address) || !isHash(params.operationKey)) {
+    return null;
+  }
+
+  const walletAddress = normalizeAddress(params.address);
+  const [row] = await db
+    .select()
+    .from(freeTransactionReservations)
+    .where(
+      and(
+        eq(freeTransactionReservations.operationKey, params.operationKey),
+        eq(freeTransactionReservations.walletAddress, walletAddress),
+        eq(freeTransactionReservations.chainId, params.chainId),
+        eq(freeTransactionReservations.status, "pending"),
+      ),
+    )
+    .limit(1);
+
+  const normalizedReservation = normalizeReservationRow(row);
+  if (!normalizedReservation) {
+    return null;
+  }
+
+  const expiresAtMs = normalizedReservation.expiresAt ? getTimestampMs(normalizedReservation.expiresAt) : 0;
+  if (!expiresAtMs || expiresAtMs <= Date.now()) {
+    return null;
+  }
+
+  const token = normalizedReservation.reservationSessionToken;
+  return isReservationSessionToken(token) ? token : null;
+}
+
 export async function getFreeTransactionAllowanceSummary(params: { address: string; chainId: number }) {
   await ensureFreeTransactionQuotaTable();
 

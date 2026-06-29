@@ -35,7 +35,10 @@ import {
   hasMissingEip7702DelegationImplementation,
 } from "~~/lib/thirdweb/eip7702Delegation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
-import { readCachedFreeTransactionReservationSession } from "~~/lib/thirdweb/freeTransactionReservationSession";
+import {
+  cacheFreeTransactionReservationSession,
+  readCachedFreeTransactionReservationSession,
+} from "~~/lib/thirdweb/freeTransactionReservationSession";
 import {
   isFreeTransactionExhaustedError,
   isThirdwebBundlerInfrastructureError,
@@ -908,7 +911,27 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           const transactionHashes = (result.receipts ?? [])
             .map(receipt => receipt.transactionHash)
             .filter((hash): hash is Hex => typeof hash === "string" && hash.startsWith("0x"));
-          const reservationSessionToken = readCachedFreeTransactionReservationSession(operationKey);
+          let reservationSessionToken = readCachedFreeTransactionReservationSession(operationKey);
+
+          if (!reservationSessionToken && transactionHashes.length > 0) {
+            const sessionParams = new URLSearchParams({
+              address,
+              chainId: String(chainId),
+              operationKey,
+            });
+            const sessionResponse = await fetch(
+              `/api/transactions/free/reservation-session?${sessionParams.toString()}`,
+            );
+            if (sessionResponse.ok) {
+              const sessionBody = (await sessionResponse.json().catch(() => null)) as {
+                reservationSessionToken?: string;
+              } | null;
+              if (typeof sessionBody?.reservationSessionToken === "string") {
+                reservationSessionToken = sessionBody.reservationSessionToken;
+                cacheFreeTransactionReservationSession(operationKey, reservationSessionToken);
+              }
+            }
+          }
 
           if (transactionHashes.length > 0 && reservationSessionToken) {
             timingLog.emit("free-transaction-confirm-scheduled", {
