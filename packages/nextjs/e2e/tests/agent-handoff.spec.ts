@@ -1,5 +1,7 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
+import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import { newE2EContext } from "../helpers/browser-context";
+import { getContentList } from "../helpers/ponder-api";
 import { setupWallet } from "../helpers/wallet-session";
 import { type APIRequestContext, type Page, expect, test } from "@playwright/test";
 
@@ -313,6 +315,53 @@ test.describe("Agent browser handoffs", () => {
       questionDurationSeconds: "1200",
     });
     expect(saved.requestBody.bounty.requiredVoters).toBe("5");
+
+    await expect(page.getByRole("button", { name: /^Submit$/i })).toBeEnabled({ timeout: 30_000 });
+    await page.getByRole("button", { name: /^Submit$/i }).click();
+
+    await expect(async () => {
+      const statusResponse = await request.get(`/api/agent/handoffs/${created.handoffId}`, {
+        headers: {
+          "x-rateloop-handoff-token": token,
+        },
+      });
+      expect(statusResponse.ok(), await statusResponse.text()).toBe(true);
+      const status = (await statusResponse.json()) as {
+        status?: string;
+        transactionHashes?: string[];
+      };
+      expect(status.status).toBe("submitted");
+      expect(status.transactionHashes?.length ?? 0).toBeGreaterThan(0);
+    }).toPass({ timeout: 120_000, intervals: [1_000, 2_000, 5_000] });
+
+    const indexed = await waitForPonderIndexed(
+      async () => {
+        const { items } = await getContentList({ search: originalTitle, status: "all", limit: 5 });
+        const submittedQuestion = items.find(item => item.title === originalTitle);
+        if (!submittedQuestion) return false;
+
+        const rewardPoolSummary = submittedQuestion.rewardPoolSummary;
+        const feedbackBonusSummary = submittedQuestion.feedbackBonusSummary;
+        return (
+          rewardPoolSummary?.currency === "USDC" &&
+          rewardPoolSummary.asset === 1 &&
+          rewardPoolSummary.activeRewardPoolCount > 0 &&
+          BigInt(rewardPoolSummary.currentRewardPoolAmount) > 0n &&
+          rewardPoolSummary.questionDurationSeconds === 1200 &&
+          submittedQuestion.openRound?.epochDuration === 1200 &&
+          feedbackBonusSummary?.currency === "USDC" &&
+          feedbackBonusSummary.asset === 1 &&
+          feedbackBonusSummary.activePoolCount > 0 &&
+          BigInt(feedbackBonusSummary.totalFundedAmount) >= 750_000n
+        );
+      },
+      120_000,
+      2_000,
+      "waitForFeedbackBonusHandoffSubmission",
+    );
+    expect(indexed, "submitted handoff should index with the shared duration, USDC bounty, and Feedback Bonus").toBe(
+      true,
+    );
 
     await context.close();
   });

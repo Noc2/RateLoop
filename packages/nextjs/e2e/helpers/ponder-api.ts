@@ -39,6 +39,21 @@ export type ContentItem = {
     activeRewardPoolCount: number;
     currentRewardPoolAmount: string;
     hasActiveBounty?: boolean;
+    questionDurationSeconds?: number | null;
+  } | null;
+  feedbackBonusSummary?: {
+    asset: number | null;
+    currency: "LREP" | "USDC" | "MIXED";
+    activePoolCount: number;
+    totalFundedAmount: string;
+    totalRemainingAmount: string;
+    hasActiveFeedbackBonus?: boolean;
+  } | null;
+  openRound?: {
+    epochDuration?: number;
+    maxDuration?: number;
+    minVoters?: number;
+    maxVoters?: number;
   } | null;
 };
 
