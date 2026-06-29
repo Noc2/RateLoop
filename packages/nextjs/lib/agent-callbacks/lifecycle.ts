@@ -26,11 +26,13 @@ type AgentLifecycleDependencies = {
   listCandidates: (params: {
     after?: ManagedLifecycleCursor | null;
     limit: number;
+    targetChainIds?: ReadonlySet<number> | null;
   }) => Promise<ManagedLifecycleCandidate[]>;
   listContentFeedback: typeof listContentFeedback;
 };
 
 let lifecycleTestOverrides: Partial<AgentLifecycleDependencies> | null = null;
+let targetChainIdsTestOverride: Set<number> | null | undefined;
 
 function getLifecycleDependencies(): AgentLifecycleDependencies {
   return {
@@ -43,6 +45,11 @@ function getLifecycleDependencies(): AgentLifecycleDependencies {
 
 export function __setAgentLifecycleTestOverridesForTests(overrides: Partial<AgentLifecycleDependencies> | null) {
   lifecycleTestOverrides = overrides;
+}
+
+export function __setAgentLifecycleTargetChainIdsForTests(chainIds: readonly number[] | null | undefined) {
+  targetChainIdsTestOverride =
+    chainIds === undefined ? undefined : chainIds === null ? null : new Set(chainIds.filter(Number.isSafeInteger));
 }
 
 function toOptionalUnixSeconds(value: unknown): number | null {
@@ -63,6 +70,25 @@ function isTerminalRoundState(state: unknown) {
     state === ROUND_STATE.Tied ||
     state === ROUND_STATE.RevealFailed
   );
+}
+
+function configuredTargetChainIds() {
+  if (targetChainIdsTestOverride !== undefined) return targetChainIdsTestOverride;
+  if (process.env.NODE_ENV !== "production") return null;
+  const raw = process.env.NEXT_PUBLIC_TARGET_NETWORKS?.trim();
+  if (!raw) return null;
+  const chainIds = raw
+    .split(",")
+    .map(value => Number.parseInt(value.trim(), 10))
+    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0);
+  return chainIds.length > 0 ? new Set(chainIds) : null;
+}
+
+function normalizeTargetChainIds(chainIds: ReadonlySet<number> | null | undefined) {
+  if (!chainIds) return null;
+  return Array.from(chainIds)
+    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0)
+    .sort((a, b) => a - b);
 }
 
 function lifecycleEventsForContent(params: {
@@ -104,11 +130,27 @@ function readOriginalClientRequestIdFromReceipt(value: unknown) {
   }
 }
 
-async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycleCursor | null; limit: number }) {
+async function listManagedLifecycleCandidates(params: {
+  after?: ManagedLifecycleCursor | null;
+  limit: number;
+  targetChainIds?: ReadonlySet<number> | null;
+}) {
   const managedSortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at, reservations.updated_at)";
   const publicSortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at)";
+  const targetChainIds = normalizeTargetChainIds(params.targetChainIds);
+  if (targetChainIds && targetChainIds.length === 0) return [];
+
+  const targetChainPlaceholders = targetChainIds?.map(() => "?").join(", ") ?? "";
+  const managedTargetChainFilter = targetChainPlaceholders
+    ? `AND reservations.chain_id IN (${targetChainPlaceholders})`
+    : "";
+  const publicTargetChainFilter = targetChainPlaceholders
+    ? `AND submissions.chain_id IN (${targetChainPlaceholders})`
+    : "";
   const result = await dbClient.execute({
     args: [
+      ...(targetChainIds ?? []),
+      ...(targetChainIds ?? []),
       params.after?.sortAt ?? null,
       params.after?.sortAt ?? null,
       params.after?.sortAt ?? null,
@@ -131,6 +173,7 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
           ON submissions.operation_key = reservations.operation_key
         WHERE submissions.status = 'submitted'
           AND submissions.content_id IS NOT NULL
+          ${managedTargetChainFilter}
 
         UNION ALL
 
@@ -156,6 +199,7 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
             submissions.payment_receipt IS NULL
             OR submissions.payment_receipt NOT LIKE '%"agentId"%'
           )
+          ${publicTargetChainFilter}
       )
       SELECT *
       FROM lifecycle_candidates
@@ -193,6 +237,7 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
   const now = params.now ?? new Date();
   const nowSeconds = Math.floor(now.getTime() / 1000);
   const dependencies = getLifecycleDependencies();
+  const targetChainIds = configuredTargetChainIds();
   const emitted = {
     bountyLowResponse: 0,
     feedbackUnlocked: 0,
@@ -210,6 +255,7 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
     const candidates = await dependencies.listCandidates({
       after: cursor,
       limit: requestedLimit,
+      targetChainIds,
     });
     if (candidates.length === 0) break;
 
@@ -217,6 +263,10 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
       if (scanned >= maxCandidates) {
         hasMore = true;
         break;
+      }
+
+      if (targetChainIds && !targetChainIds.has(candidate.chainId)) {
+        continue;
       }
 
       const deployment = resolveProtocolDeploymentScope(candidate.chainId);
