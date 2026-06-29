@@ -1238,7 +1238,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         lrepToken.approve(address(rewardPoolEscrow), rewardAmount);
         registry.reserveSubmission(revealCommitment);
         vm.warp(block.timestamp + 1);
-        vm.expectRevert();
+        vm.expectRevert(QuestionRewardPoolEscrow.StaleEngine.selector);
         registry.submitQuestionWithRewardAndRoundConfig(
             "https://example.com/context",
             imageUrls,

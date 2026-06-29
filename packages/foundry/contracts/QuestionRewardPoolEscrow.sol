@@ -76,6 +76,7 @@ contract QuestionRewardPoolEscrow is
 
     error RewardPoolCursorNeedsAdvance();
     error StaleEngine();
+    error StaleEscrow();
 
     IERC20 internal lrepToken;
     IERC20 internal usdcToken;
@@ -1375,15 +1376,7 @@ contract QuestionRewardPoolEscrow is
 
     function _requireCurrentRegistryEscrow() internal view {
         _requireRegistryVotingEngine();
-        address registryAddress = address(registry);
-        assembly ("memory-safe") {
-            let ptr := mload(0x40)
-            mstore(ptr, shl(224, 0x3cd4049c))
-            if iszero(staticcall(gas(), registryAddress, ptr, 4, ptr, 32)) { revert(0, 0) }
-            if iszero(eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), address())) {
-                revert(0, 0)
-            }
-        }
+        if (registry.questionRewardPoolEscrow() != address(this)) revert StaleEscrow();
     }
 
     function _getExistingRewardPool(uint256 rewardPoolId) internal view returns (RewardPool storage rewardPool) {
