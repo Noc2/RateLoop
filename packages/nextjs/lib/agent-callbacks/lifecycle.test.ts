@@ -494,7 +494,7 @@ test("sweepAgentLifecycleCallbacks emits bounty.low_response with live ask guida
       "settlement_near_with_quorum_gap",
     ],
     recommendedAction: "retry_later",
-    suggestedTopUpAtomic: "500000",
+    suggestedReplacementBountyAtomic: "1500000",
   });
 });
 

@@ -4,8 +4,8 @@ import type { PonderContentItem } from "~~/services/ponder/client";
 export type AgentLiveAskGuidance = {
   lowResponseRisk: "low" | "medium" | "high";
   reasonCodes: string[];
-  recommendedAction: "wait" | "top_up" | "retry_later";
-  suggestedTopUpAtomic: string | null;
+  recommendedAction: "wait" | "create_replacement_ask" | "retry_later";
+  suggestedReplacementBountyAtomic: string | null;
 };
 
 function toBigIntValue(value: unknown, fallback = 0n) {
@@ -76,7 +76,7 @@ export function buildAgentLiveAskGuidance(params: {
 
   const conservativeStart = toBigIntValue(guidanceTarget.conservativeStartingBountyAtomic);
   const healthyTarget = toBigIntValue(guidanceTarget.suggestedBountyAmountAtomic);
-  const suggestedTopUp = healthyTarget > currentBounty ? healthyTarget - currentBounty : 0n;
+  const suggestedReplacementBounty = healthyTarget > currentBounty ? healthyTarget : 0n;
   const nowSeconds = params.nowSeconds ?? Math.floor(Date.now() / 1000);
   const bountyClosesAt =
     toOptionalUnixSeconds(rewardPoolSummary.nextBountyClosesAt) ??
@@ -108,14 +108,14 @@ export function buildAgentLiveAskGuidance(params: {
   let recommendedAction: AgentLiveAskGuidance["recommendedAction"] = "wait";
   if (lowResponseRisk === "high" && reasonCodes.includes("bounty_closing_soon") && voteGap > 0) {
     recommendedAction = "retry_later";
-  } else if (lowResponseRisk !== "low" && suggestedTopUp > 0n) {
-    recommendedAction = "top_up";
+  } else if (lowResponseRisk !== "low" && suggestedReplacementBounty > 0n) {
+    recommendedAction = "create_replacement_ask";
   }
 
   return {
     lowResponseRisk,
     reasonCodes,
     recommendedAction,
-    suggestedTopUpAtomic: suggestedTopUp > 0n ? suggestedTopUp.toString() : null,
+    suggestedReplacementBountyAtomic: suggestedReplacementBounty > 0n ? suggestedReplacementBounty.toString() : null,
   };
 }

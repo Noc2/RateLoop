@@ -378,8 +378,8 @@ export interface RateLoopAgentFastLaneGuidance {
 export interface RateLoopAgentLiveAskGuidance {
   lowResponseRisk?: "low" | "medium" | "high" | string;
   reasonCodes?: string[];
-  recommendedAction?: "wait" | "top_up" | "retry_later" | string;
-  suggestedTopUpAtomic?: string | null;
+  recommendedAction?: "wait" | "create_replacement_ask" | "retry_later" | string;
+  suggestedReplacementBountyAtomic?: string | null;
   [key: string]: unknown;
 }
 

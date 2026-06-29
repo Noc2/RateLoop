@@ -82,7 +82,7 @@ function content(overrides: Partial<PonderContentItem> = {}): PonderContentItem 
   };
 }
 
-test("buildAgentLiveAskGuidance recommends topping up weak live asks", () => {
+test("buildAgentLiveAskGuidance recommends replacement asks for weak live asks", () => {
   const guidance = buildAgentLiveAskGuidance({
     content: content({
       openRound: {
@@ -97,8 +97,8 @@ test("buildAgentLiveAskGuidance recommends topping up weak live asks", () => {
   assert.deepEqual(guidance, {
     lowResponseRisk: "high",
     reasonCodes: ["quorum_not_reached", "low_response_persisting", "bounty_below_healthy_target"],
-    recommendedAction: "top_up",
-    suggestedTopUpAtomic: "500000",
+    recommendedAction: "create_replacement_ask",
+    suggestedReplacementBountyAtomic: "1500000",
   });
 });
 
@@ -116,8 +116,8 @@ test("buildAgentLiveAskGuidance flags asks below the conservative starting bount
   assert.deepEqual(guidance, {
     lowResponseRisk: "high",
     reasonCodes: ["quorum_not_reached", "bounty_below_conservative_start", "bounty_below_healthy_target"],
-    recommendedAction: "top_up",
-    suggestedTopUpAtomic: "1000000",
+    recommendedAction: "create_replacement_ask",
+    suggestedReplacementBountyAtomic: "1500000",
   });
 });
 
@@ -163,7 +163,7 @@ test("buildAgentLiveAskGuidance returns low-risk guidance for healthy open asks"
     lowResponseRisk: "low",
     reasonCodes: [],
     recommendedAction: "wait",
-    suggestedTopUpAtomic: null,
+    suggestedReplacementBountyAtomic: null,
   });
 });
 
@@ -187,7 +187,7 @@ test("buildAgentLiveAskGuidance ignores zero lowSince sentinels", () => {
     lowResponseRisk: "low",
     reasonCodes: [],
     recommendedAction: "wait",
-    suggestedTopUpAtomic: null,
+    suggestedReplacementBountyAtomic: null,
   });
 });
 
@@ -224,7 +224,7 @@ test("buildAgentLiveAskGuidance scales bundled asks by the bundle question count
   assert.deepEqual(guidance, {
     lowResponseRisk: "high",
     reasonCodes: ["bounty_below_conservative_start", "bounty_below_healthy_target"],
-    recommendedAction: "top_up",
-    suggestedTopUpAtomic: "2500000",
+    recommendedAction: "create_replacement_ask",
+    suggestedReplacementBountyAtomic: "4500000",
   });
 });

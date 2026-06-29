@@ -523,8 +523,8 @@ test("buildAgentResultPackage keeps open rounds pending", () => {
   assert.deepEqual(result.liveAskGuidance, {
     lowResponseRisk: "high",
     reasonCodes: ["quorum_not_reached", "low_response_persisting", "bounty_below_healthy_target"],
-    recommendedAction: "top_up",
-    suggestedTopUpAtomic: "500000",
+    recommendedAction: "create_replacement_ask",
+    suggestedReplacementBountyAtomic: "1500000",
   });
   assert.equal(result.recommendedNextAction, "wait_for_settlement");
   assert.equal(result.confidence.level, "none");

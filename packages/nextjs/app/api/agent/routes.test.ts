@@ -3160,7 +3160,7 @@ test("agent status route includes live ask guidance for underfunded open markets
     liveAskGuidance: {
       lowResponseRisk: string;
       recommendedAction: string;
-      suggestedTopUpAtomic: string | null;
+      suggestedReplacementBountyAtomic: string | null;
     } | null;
     status: string;
   };
@@ -3170,8 +3170,8 @@ test("agent status route includes live ask guidance for underfunded open markets
   assert.deepEqual(body.liveAskGuidance, {
     lowResponseRisk: "high",
     reasonCodes: ["quorum_not_reached", "low_response_persisting", "bounty_below_healthy_target"],
-    recommendedAction: "top_up",
-    suggestedTopUpAtomic: "500000",
+    recommendedAction: "create_replacement_ask",
+    suggestedReplacementBountyAtomic: "1500000",
   });
 });
 
