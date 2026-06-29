@@ -66,7 +66,8 @@ question creation starts the first rewardable round immediately, and the product
    - targeted Playwright submit, browser handoff/social ask, vote, funding-removal, and docs smoke tests
    - `yarn next:build`
    - Base Sepolia fresh deploy plus `yarn base-sepolia:check -- --live`
-   - Base mainnet fresh deploy plus `yarn base-mainnet:check -- --live`
+   - Owner-directed break-glass Base mainnet fresh deploy plus `yarn base-mainnet:check -- --live`; see
+     `packages/foundry/README.md` for production redeploy safeguards
 
 ## Extra checks before mainnet
 

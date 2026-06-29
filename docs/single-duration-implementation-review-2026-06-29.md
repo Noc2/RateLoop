@@ -269,6 +269,6 @@ Suggested fix:
 - No full Playwright suite was run during this review; the focused browser
   coverage was added, but local E2E preflight failed because Anvil, Next.js,
   and Ponder were not all reachable. Full-suite and cutover smoke should still
-  be run before mainnet redeployment.
+  be run before any owner-directed break-glass Base mainnet redeploy.
 - No Ponder migration/index replay was run against a database containing
   gateway/payer/submitter identity divergence.
