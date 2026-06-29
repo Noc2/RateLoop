@@ -7,6 +7,8 @@ import test from "node:test";
 
 const REGISTRY_ADDRESS = "0x1111111111111111111111111111111111111111" as const;
 const IMPLEMENTATION_ADDRESS = "0x2222222222222222222222222222222222222222" as const;
+const SINGLE_QUESTION_SELECTOR = "0xe2f3b89f" as const;
+const BUNDLE_QUESTION_SELECTOR = "0x20fab602" as const;
 
 test("single question selector probe accepts the expected validation revert", async () => {
   const probedData: `0x${string}`[] = [];
@@ -22,7 +24,7 @@ test("single question selector probe accepts the expected validation revert", as
     "single",
   );
 
-  assert.equal(probedData[0]?.slice(0, 10), "0x774922ea");
+  assert.equal(probedData[0]?.slice(0, 10), SINGLE_QUESTION_SELECTOR);
 });
 
 test("bundle selector probe accepts the expected validation revert", async () => {
@@ -39,7 +41,7 @@ test("bundle selector probe accepts the expected validation revert", async () =>
     "bundle",
   );
 
-  assert.equal(probedData[0]?.slice(0, 10), "0x4bef7869");
+  assert.equal(probedData[0]?.slice(0, 10), BUNDLE_QUESTION_SELECTOR);
 });
 
 test("selector probe accepts stripped revert strings when the selector is in registry bytecode", async () => {
@@ -48,7 +50,7 @@ test("selector probe accepts stripped revert strings when the selector is in reg
       call: async () => {
         throw { shortMessage: "execution reverted" };
       },
-      getBytecode: async () => "0x6000774922ea55",
+      getBytecode: async () => `0x6000${SINGLE_QUESTION_SELECTOR.slice(2)}55`,
     },
     REGISTRY_ADDRESS,
     "single",
@@ -65,7 +67,7 @@ test("selector probe accepts stripped revert strings when the selector is in an 
       },
       getBytecode: async ({ address }) => {
         bytecodeAddresses.push(address);
-        return address === IMPLEMENTATION_ADDRESS ? "0x60004bef786955" : "0x6000";
+        return address === IMPLEMENTATION_ADDRESS ? `0x6000${BUNDLE_QUESTION_SELECTOR.slice(2)}55` : "0x6000";
       },
       getStorageAt: async () => `0x${"0".repeat(24)}${IMPLEMENTATION_ADDRESS.slice(2)}`,
     },
