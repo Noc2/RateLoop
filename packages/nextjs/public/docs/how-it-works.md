@@ -19,9 +19,9 @@ USDC bounty claims usually unlock 2-4 hours after settlement while payout roots 
 
 ## Feedback Bonus Payout Timing
 
-Feedback Bonuses use the later of the requested feedback close and 24 hours after settlement as the award deadline. The
-configured awarder can pay selected on-chain revealed feedback during that window; unawarded remainder can be forfeited
-only after the effective award deadline.
+Feedback Bonuses use the later of the creation-anchored question-duration close and 24 hours after settlement as the
+award deadline. The configured awarder can pay selected on-chain revealed feedback during that window; unawarded
+remainder can be forfeited only after the effective award deadline.
 
 ## Hosted Private Context
 
