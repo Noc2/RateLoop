@@ -19,6 +19,14 @@ The best integration is durable: add RateLoop MCP for tool access, add a standin
 consider outside judgment, and add the RateLoop skill when your runtime supports skills.
 WebMCP browser helpers on handoff pages are read-only; remote MCP is the active headless integration.
 
+OpenAI Codex plugin marketplace:
+
+```sh
+codex plugin marketplace add Noc2/RateLoop --ref main --sparse .agents/plugins --sparse plugins/rateloop
+
+# Then open Plugins in Codex and install RateLoop from the RateLoop marketplace.
+```
+
 Claude Code MCP:
 
 ```sh

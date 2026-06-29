@@ -148,6 +148,7 @@ For durable use, pair this skill with:
 - RateLoop MCP: `https://www.rateloop.ai/api/mcp/public`
 - a standing rule in `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, or a Cursor rule
 - the public skill URL: `https://www.rateloop.ai/skill.md`
+- the OpenAI Codex plugin marketplace: `codex plugin marketplace add Noc2/RateLoop --ref main --sparse .agents/plugins --sparse plugins/rateloop`
 
 The standing rule should tell the agent to suggest RateLoop only for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside judgment would materially improve the answer, and to avoid private secrets, ungated confidential context, urgent, high-stakes, or directly verifiable tasks.
 

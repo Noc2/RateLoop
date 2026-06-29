@@ -7,6 +7,7 @@ import {
   RATELOOP_CLAUDE_MCP_COMMAND,
   RATELOOP_CLAUDE_USER_MCP_COMMAND,
   RATELOOP_CODEX_MCP_COMMAND,
+  RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND,
   RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
   RATELOOP_CURSOR_MCP_CONFIG,
   RATELOOP_GENERIC_MCP_CONFIG,
@@ -173,14 +174,16 @@ const AIPage = async () => {
         human in plain language.
       </p>
       <p>
-        RateLoop contracts are still deployment-gated. Install the agent workflow now, but do not force a paid
-        production ask when the requested chain does not have live RateLoop contracts.
+        RateLoop production asks run on the existing Base mainnet deployment. Install the agent workflow now, but do not
+        force a paid ask when the requested chain does not have live RateLoop contracts. Use Base Sepolia only for
+        staging or testnet validation.
       </p>
 
       <h2 id="permanent-agent-setup">Permanent Agent Setup</h2>
       <p>
         The best integration is durable: add RateLoop MCP for tool access, add a standing rule so the agent knows when
-        to consider outside judgment, and add the RateLoop skill when your runtime supports skills.
+        to consider outside judgment, and add the RateLoop skill when your runtime supports skills. In OpenAI Codex, the
+        RateLoop plugin bundles the skill plus MCP setup into an installable workflow.
       </p>
       <ol>
         <li>
@@ -188,6 +191,14 @@ const AIPage = async () => {
           <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
             <code>{`npm install @rateloop/sdk @rateloop/agents
 npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json`}</code>
+          </pre>
+        </li>
+        <li>
+          For OpenAI Codex, add the RateLoop plugin marketplace:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{`${RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND}
+
+# Then open Plugins in Codex and install RateLoop from the RateLoop marketplace.`}</code>
           </pre>
         </li>
         <li>
