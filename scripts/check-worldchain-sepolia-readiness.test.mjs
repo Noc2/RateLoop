@@ -3,11 +3,10 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   PONDER_INDEXED_CONTRACTS,
-  POST_CREATION_FUNDING_DISABLED_SELECTOR,
   REQUIRED_ADDRESS_WIRING_CHECKS,
   REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS,
   REQUIRED_DEPLOYED_CONTRACTS,
-  REQUIRED_POST_CREATION_FUNDING_DISABLED_CALLS,
+  REQUIRED_REMOVED_POST_CREATION_FUNDING_SELECTORS,
   REQUIRED_SELECTOR_CHECKS,
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
   addBasePreconfirmationEnvChecks,
@@ -89,25 +88,6 @@ function selectorBytecode() {
   ]
     .map((selector) => selector.slice(2))
     .join("")}`;
-}
-
-function postCreationFundingDisabledError() {
-  return {
-    error: {
-      code: 3,
-      data: POST_CREATION_FUNDING_DISABLED_SELECTOR,
-      message: "execution reverted",
-    },
-  };
-}
-
-function handleDisabledPostCreationFundingCall(call, deploymentAddresses) {
-  const disabledCall = REQUIRED_POST_CREATION_FUNDING_DISABLED_CALLS.find(
-    (candidate) =>
-      call.to === deploymentAddresses.get(candidate.contractName) &&
-      call.data.toLowerCase().startsWith(candidate.selector.toLowerCase()),
-  );
-  return disabledCall ? postCreationFundingDisabledError() : undefined;
 }
 
 function expectedDeploymentKeyFor(deploymentJson, chainId = 4801) {
@@ -1361,11 +1341,6 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
       }
       const wiringResult = handleWiringCall(params[0], deploymentAddresses);
       if (wiringResult) return wiringResult;
-      const disabledFundingResult = handleDisabledPostCreationFundingCall(
-        params[0],
-        deploymentAddresses,
-      );
-      if (disabledFundingResult) return disabledFundingResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
     }
     if (method === "eth_getStorageAt") {
@@ -1378,7 +1353,7 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
         return encodeStorageAddress(protocolConfigImplementation);
       if (params[0] === roundVotingEngineAddress)
         return encodeStorageAddress(roundVotingEngineImplementation);
-      throw new Error(`Unexpected proxy storage target ${params[0]}`);
+      return encodeStorageAddress(addressFor(0));
     }
     if (method === "eth_getCode") return "0x6000";
     throw new Error(`Unexpected RPC method ${method}`);
@@ -1501,11 +1476,15 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
   }
 });
 
-test("validateLiveReadiness requires post-creation funding calls to revert disabled", async () => {
+test("validateLiveReadiness rejects removed post-creation funding selectors", async () => {
   const deploymentJson = makeDeploymentJson();
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
   const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
   const submissionMediaValidatorAddress = addressFor(102);
+  const removedCreateRewardPoolSelector =
+    REQUIRED_REMOVED_POST_CREATION_FUNDING_SELECTORS.find(
+      (check) => check.label === "QuestionRewardPoolEscrow createRewardPool",
+    ).selector;
   const restoreFetch = mockRpc((method, params) => {
     if (method === "eth_chainId") return "0x12c1";
     if (method === "eth_call") {
@@ -1523,24 +1502,15 @@ test("validateLiveReadiness requires post-creation funding calls to revert disab
       }
       const wiringResult = handleWiringCall(params[0], deploymentAddresses);
       if (wiringResult) return wiringResult;
-      if (
-        params[0].to === deploymentAddresses.get("QuestionRewardPoolEscrow") &&
-        params[0].data.toLowerCase().startsWith("0x61a66a9d")
-      ) {
-        return "0x";
-      }
-      const disabledFundingResult = handleDisabledPostCreationFundingCall(
-        params[0],
-        deploymentAddresses,
-      );
-      if (disabledFundingResult) return disabledFundingResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
     }
     if (method === "eth_getStorageAt") {
       assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
       return encodeStorageAddress(addressFor(0));
     }
-    if (method === "eth_getCode") return selectorBytecode();
+    if (method === "eth_getCode") {
+      return `${selectorBytecode()}${removedCreateRewardPoolSelector.slice(2)}`;
+    }
     throw new Error(`Unexpected RPC method ${method}`);
   });
 
@@ -1554,9 +1524,10 @@ test("validateLiveReadiness requires post-creation funding calls to revert disab
     assert(
       result.failures.some((message) =>
         message.includes(
-          "QuestionRewardPoolEscrow createRewardPool reverts with PostCreationFundingDisabled",
+          "QuestionRewardPoolEscrow bytecode omits removed selector 0x61a66a9d (QuestionRewardPoolEscrow createRewardPool)",
         ),
       ),
+      result.failures.join("\n"),
     );
   } finally {
     restoreFetch();
@@ -1589,11 +1560,6 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
         "X402QuestionSubmitter feedbackBonusEscrow": addressFor(778),
       });
       if (wiringResult) return wiringResult;
-      const disabledFundingResult = handleDisabledPostCreationFundingCall(
-        params[0],
-        deploymentAddresses,
-      );
-      if (disabledFundingResult) return disabledFundingResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
     }
     if (method === "eth_getStorageAt") {
