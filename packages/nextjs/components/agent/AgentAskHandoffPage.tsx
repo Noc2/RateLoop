@@ -29,6 +29,7 @@ import {
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
+import { ContentImageLightbox } from "~~/components/shared/ContentImageLightbox";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
@@ -3508,30 +3509,43 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 <InfoTooltip text={IMAGE_PREVIEW_FIT_HINT} />
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {handoff.assets.map(asset => (
-                  <div key={asset.id} className="overflow-hidden rounded-lg border border-base-300/70 bg-base-100">
-                    {asset.dataUrl || asset.imageUrl ? (
-                      <div className="flex aspect-video w-full items-center justify-center bg-black">
-                        <img
-                          alt={asset.filename ?? "RateLoop handoff image"}
-                          className="h-full w-full object-contain"
-                          src={asset.dataUrl ?? asset.imageUrl ?? ""}
-                        />
+                {handoff.assets.map(asset => {
+                  const imageSrc = asset.dataUrl || asset.imageUrl || "";
+                  const imageAlt = asset.filename ?? "RateLoop handoff image";
+
+                  return (
+                    <div key={asset.id} className="overflow-hidden rounded-lg border border-base-300/70 bg-base-100">
+                      {imageSrc ? (
+                        <div className="flex aspect-video w-full items-center justify-center bg-black">
+                          <ContentImageLightbox
+                            src={imageSrc}
+                            fullSrc={imageSrc}
+                            alt={imageAlt}
+                            imageClassName="h-full w-full object-contain"
+                            triggerLabel={
+                              asset.filename ? `Open ${asset.filename} full size` : "Open handoff image full size"
+                            }
+                            modalLabel={
+                              asset.filename ? `Image preview for ${asset.filename}` : "RateLoop handoff image preview"
+                            }
+                            modalImageClassName="sm:max-w-[92vw]"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex aspect-video items-center justify-center bg-base-200 text-sm text-base-content/50">
+                          Image pending
+                        </div>
+                      )}
+                      <div className="p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-sm font-medium">{asset.filename ?? asset.attachmentId}</p>
+                          <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">{asset.status}</span>
+                        </div>
+                        {asset.error ? <p className="mt-2 text-xs text-error">{asset.error}</p> : null}
                       </div>
-                    ) : (
-                      <div className="flex aspect-video items-center justify-center bg-base-200 text-sm text-base-content/50">
-                        Image pending
-                      </div>
-                    )}
-                    <div className="p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium">{asset.filename ?? asset.attachmentId}</p>
-                        <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">{asset.status}</span>
-                      </div>
-                      {asset.error ? <p className="mt-2 text-xs text-error">{asset.error}</p> : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {imageSignatureSteps.length > 0 ? (
                 <div className="mt-4 space-y-2">
