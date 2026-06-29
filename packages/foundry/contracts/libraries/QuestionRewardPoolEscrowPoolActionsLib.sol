@@ -222,7 +222,12 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         pool.startRoundId = startRoundId.toUint64();
         pool.nextRoundToEvaluate = startRoundId.toUint64();
         pool.bountyStartBy = params.bountyStartBy.toUint64();
-        pool.bountyOpensAt = params.bountyWindowSeconds == 0 ? uint64(block.timestamp) : 0;
+        pool.bountyOpensAt = uint64(block.timestamp);
+        if (params.nonRefundable && params.bountyWindowSeconds != 0) {
+            pool.bountyClosesAt = params.bountyStartBy.toUint64();
+            pool.feedbackClosesAt = params.bountyStartBy.toUint64();
+            pool.claimDeadline = params.bountyStartBy.toUint64();
+        }
         pool.bountyWindowSeconds = params.bountyWindowSeconds.toUint32();
         pool.feedbackWindowSeconds = normalizedFeedbackWindowSeconds.toUint32();
         pool.funder = params.funder;
@@ -261,6 +266,16 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             params.nonRefundable
         );
         emit RewardPoolEligibilitySet(rewardPoolId, params.bountyEligibility);
+        if (params.nonRefundable && params.bountyWindowSeconds != 0) {
+            emit QuestionRewardPoolEscrowWindowLib.RewardPoolWindowActivated(
+                rewardPoolId,
+                params.contentId,
+                startRoundId,
+                block.timestamp,
+                params.bountyStartBy,
+                params.bountyStartBy
+            );
+        }
     }
 
     function _validateStoreInputs(ContentRegistry registry, uint256 fundedAmount, CreateRewardPoolParams memory params)
@@ -271,10 +286,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         require(registry.isContentActive(params.contentId), "Content not active");
+        if (params.nonRefundable) require(params.bountyWindowSeconds != 0, "Bounty window required");
         require(params.requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredVoters >= _requiredParticipantFloorForAmount(fundedAmount), "High-value floor");
-        require(params.requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
-        require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
+        require(params.requiredSettledRounds == MIN_REQUIRED_SETTLED_ROUNDS, "One round only");
         RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(params.contentId);
         require(params.requiredVoters == contentCfg.minVoters, "Voters mismatch");
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
@@ -286,7 +301,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _nextStartRoundId(RoundVotingEngine votingEngine, uint256 contentId) private view returns (uint256) {
         uint256 currentRoundId = votingEngine.currentRoundId(contentId);
-        return currentRoundId == 0 ? votingEngine.nextRoundIdForContent(contentId) : currentRoundId + 1;
+        return currentRoundId == 0 ? votingEngine.nextRoundIdForContent(contentId) : currentRoundId;
     }
 
     function _resolveSubmitterIdentity(ContentRegistry registry, ProtocolConfig protocolConfig, uint256 contentId)

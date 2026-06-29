@@ -145,7 +145,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
         protocolConfig.setTreasury(treasury);
-        _setTlockRoundConfig(protocolConfig, 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(protocolConfig, 1 hours, 1 hours, 3, 100);
 
         advisoryRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
         protocolConfig.setAdvisoryVoteRecorder(address(advisoryRecorder));

@@ -10,7 +10,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { Eip3009Authorization } from "./interfaces/IEip3009.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
@@ -40,7 +39,6 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
-    AuthorizedRewardPoolParams,
     CreateRewardPoolParams,
     CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
@@ -70,9 +68,6 @@ contract QuestionRewardPoolEscrow is
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
-    bytes32 internal constant REWARD_POOL_AUTHORIZATION_TYPEHASH = keccak256(
-        "RateLoopRewardPoolAuthorization(uint256 chainId,address escrow,uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility,uint8 bountyKind,uint256 relatedRoundId,bytes32 reasonHash,address funder,uint256 validAfter,uint256 validBefore)"
-    );
 
     error RewardPoolCursorNeedsAdvance();
     error StaleEngine();
@@ -300,164 +295,13 @@ contract QuestionRewardPoolEscrow is
         }
     }
 
-    /// @notice Create a reward pool with the default open-eligibility policy.
     /// @dev FE-2 (2026-05-20 follow-up audit): the funder's effective refund-eligibility time is
     ///      `max(bountyClosesAt, lastQualifyingRound.settledAt) + 7 days`, NOT
     ///      `bountyClosesAt + 7 days`. Each round qualification advances the per-pool
     ///      `claimDeadline` forward (never backward) so claimants always get a full 7-day grace
-    ///      after the final qualifying round settles. For pools with `requiredSettledRounds > 1`
-    ///      on slow-moving content, the funder's refund window therefore extends past
-    ///      `bountyClosesAt`. The intent is to guarantee a 7-day claim window for the LAST
-    ///      qualifying round, even if the bounty closes earlier on the wall clock.
-    function createRewardPool(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        _requireCurrentRegistryEscrow();
-        rewardPoolId = _createRewardPool(
-            contentId,
-            msg.sender,
-            address(0),
-            REWARD_ASSET_USDC,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            bountyStartBy,
-            bountyWindowSeconds,
-            feedbackWindowSeconds,
-            BOUNTY_ELIGIBILITY_OPEN,
-            false
-        );
-    }
-
-    function createRewardPoolWithAuthorization(
-        AuthorizedRewardPoolParams calldata params,
-        Eip3009Authorization calldata authorization
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        _requireCurrentRegistryEscrow();
-        require(authorization.from != address(0), "Invalid funder");
-        require(authorization.to == address(this), "Bad payee");
-        require(authorization.value == params.amount, "Bad amount");
-        require(
-            authorization.nonce
-                == computeRewardPoolAuthorizationNonce(
-                    params, authorization.from, authorization.validAfter, authorization.validBefore
-                ),
-            "Bad nonce"
-        );
-
-        uint256 fundedAmount = TokenTransferLib.receiveWithAuthorization(usdcToken, authorization);
-        CreateRewardPoolParams memory createParams = CreateRewardPoolParams({
-            contentId: params.contentId,
-            funder: authorization.from,
-            payer: address(0),
-            asset: REWARD_ASSET_USDC,
-            amount: params.amount,
-            requiredVoters: params.requiredVoters,
-            requiredSettledRounds: params.requiredSettledRounds,
-            bountyStartBy: params.bountyStartBy,
-            bountyWindowSeconds: params.bountyWindowSeconds,
-            feedbackWindowSeconds: params.feedbackWindowSeconds,
-            bountyEligibility: params.bountyEligibility,
-            nonRefundable: false,
-            bountyKind: params.bountyKind,
-            relatedRoundId: params.relatedRoundId,
-            reasonHash: params.reasonHash
-        });
-        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createFundedRewardPool(
-            rewardPools,
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            registry,
-            votingEngine,
-            defaultFrontendFeeBps,
-            nextRewardPoolId,
-            fundedAmount,
-            createParams
-        );
-        _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, REWARD_ASSET_USDC);
-    }
-
-    function computeRewardPoolAuthorizationNonce(
-        AuthorizedRewardPoolParams calldata params,
-        address funder,
-        uint256 validAfter,
-        uint256 validBefore
-    ) public view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                REWARD_POOL_AUTHORIZATION_TYPEHASH,
-                block.chainid,
-                address(this),
-                params.contentId,
-                params.amount,
-                params.requiredVoters,
-                params.requiredSettledRounds,
-                params.bountyStartBy,
-                params.bountyWindowSeconds,
-                params.feedbackWindowSeconds,
-                params.bountyEligibility,
-                params.bountyKind,
-                params.relatedRoundId,
-                params.reasonHash,
-                funder,
-                validAfter,
-                validBefore
-            )
-        );
-    }
-
-    function createPurposeRewardPool(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 relatedRoundId,
-        bytes32 reasonHash,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
-        uint8 bountyKind,
-        uint8 bountyEligibility
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        require(bountyKind == 1 || bountyKind == 2, "Bad bounty kind");
-        _requireCurrentRegistryEscrow();
-        CreateRewardPoolParams memory params = CreateRewardPoolParams({
-            contentId: contentId,
-            funder: msg.sender,
-            payer: address(0),
-            asset: REWARD_ASSET_USDC,
-            amount: amount,
-            requiredVoters: requiredVoters,
-            requiredSettledRounds: MIN_REQUIRED_SETTLED_ROUNDS,
-            bountyStartBy: bountyStartBy,
-            bountyWindowSeconds: bountyWindowSeconds,
-            feedbackWindowSeconds: feedbackWindowSeconds,
-            bountyEligibility: bountyEligibility,
-            nonRefundable: false,
-            bountyKind: bountyKind,
-            relatedRoundId: relatedRoundId,
-            reasonHash: reasonHash
-        });
-        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
-            rewardPools,
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            registry,
-            votingEngine,
-            lrepToken,
-            usdcToken,
-            defaultFrontendFeeBps,
-            nextRewardPoolId,
-            params
-        );
-        _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, REWARD_ASSET_USDC);
-    }
-
+    ///      after the qualifying round settles. Fresh deployments only accept one required
+    ///      settled round for new funding, so this claim-grace behavior now applies to that
+    ///      single creation-time rewardable round.
     function createSubmissionRewardPoolFromRegistry(
         uint256 contentId,
         address funder,
@@ -472,7 +316,7 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
-        _requireRegistryVotingEngine();
+        _requireCurrentRegistryEscrow();
         require(funder != address(0), "Invalid funder");
         rewardPoolId = _createRewardPool(
             contentId,
@@ -504,7 +348,7 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
-        _requireRegistryVotingEngine();
+        _requireCurrentRegistryEscrow();
         require(funder != address(0), "Invalid funder");
 
         CreateSubmissionBundleParams memory params = CreateSubmissionBundleParams({

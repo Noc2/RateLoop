@@ -195,11 +195,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "feedbackClosesAt",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "awarder",
             "type": "address",
             "internalType": "address"
@@ -429,11 +424,6 @@ export const X402QuestionSubmitterAbi = [
         "components": [
           {
             "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1140,17 +1130,39 @@ export const X402QuestionSubmitterAbi = [
         ]
       },
       {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
         "name": "feedbackBonusTerms",
         "type": "tuple",
         "internalType": "struct X402QuestionSubmitter.FeedbackBonusTerms",
         "components": [
           {
             "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1376,44 +1388,12 @@ export const X402QuestionSubmitterAbi = [
         ]
       },
       {
-        "name": "confidentiality",
-        "type": "tuple",
-        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
-        "components": [
-          {
-            "name": "gated",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "bondAsset",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "bondAmount",
-            "type": "uint64",
-            "internalType": "uint64"
-          },
-          {
-            "name": "flags",
-            "type": "uint8",
-            "internalType": "uint8"
-          }
-        ]
-      },
-      {
         "name": "feedbackBonusTerms",
         "type": "tuple",
         "internalType": "struct X402QuestionSubmitter.FeedbackBonusTerms",
         "components": [
           {
             "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
           },

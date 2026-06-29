@@ -1114,8 +1114,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         if (maxDuration < bounds.minRoundDuration || maxDuration > bounds.maxRoundDuration) revert InvalidConfig();
         if (epochDuration > type(uint32).max || maxDuration > type(uint32).max) revert InvalidConfig();
-        if (maxDuration < epochDuration) revert InvalidConfig();
-        if (maxDuration / epochDuration > 2016) revert InvalidConfig();
+        if (maxDuration != epochDuration) revert InvalidConfig();
         if (minVoters < bounds.minSettlementVoters || minVoters > bounds.maxSettlementVoters) revert InvalidConfig();
         if (maxVoters < bounds.minVoterCap || maxVoters > bounds.maxVoterCap) revert InvalidConfig();
         if (maxVoters < minVoters) revert InvalidConfig();

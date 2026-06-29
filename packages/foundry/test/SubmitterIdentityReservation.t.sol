@@ -7,14 +7,79 @@ import { Test } from "forge-std/Test.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 import { ContentSubmissionTestBase, deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+
+contract MockInitialRoundVotingEngineForSubmitterIdentity {
+    address public immutable registry;
+    address public immutable lrepToken;
+    address public immutable protocolConfig;
+
+    mapping(uint256 => uint256) internal currentRoundByContent;
+
+    constructor(address registry_, address lrepToken_, address protocolConfig_) {
+        registry = registry_;
+        lrepToken = lrepToken_;
+        protocolConfig = protocolConfig_;
+    }
+
+    function rewardDistributorConfigShape() external view returns (address, address, address) {
+        return (registry, lrepToken, protocolConfig);
+    }
+
+    function openInitialRoundFromRegistry(uint256 contentId, uint256 allocatedRoundId) external {
+        require(msg.sender == registry);
+        currentRoundByContent[contentId] = allocatedRoundId;
+    }
+
+    function hasCommits(uint256) external pure returns (bool) {
+        return false;
+    }
+
+    function currentRoundId(uint256 contentId) external view returns (uint256) {
+        return currentRoundByContent[contentId];
+    }
+
+    function nextRoundIdForContent(uint256 contentId) external view returns (uint256) {
+        return currentRoundByContent[contentId] + 1;
+    }
+
+    function isDormancyBlocked(uint256) external pure returns (bool) {
+        return false;
+    }
+
+    function roundCore(uint256 contentId, uint256)
+        external
+        view
+        returns (uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48, uint8)
+    {
+        RoundLib.RoundState state =
+            currentRoundByContent[contentId] == 0 ? RoundLib.RoundState.Cancelled : RoundLib.RoundState.Open;
+        return (0, state, 0, 0, 0, 0, 0, 0);
+    }
+
+    function roundRatingConfigPacked(uint256, uint256) external pure returns (uint256, uint256) {
+        return (0, 0);
+    }
+
+    function ratingCommitStateCompact(uint256, uint256, bytes32) external pure returns (uint256, bytes32, address) {
+        return (0, bytes32(0), address(0));
+    }
+
+    function roundLifecycleState(uint256, uint256) external pure returns (uint256, uint256, uint256, uint48) {
+        return (0, 0, 0, 0);
+    }
+
+    function transferReward(address, uint256) external pure { }
+}
 
 contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
     ContentRegistry public registry;
     LoopReputation public lrepToken;
     ProtocolConfig public protocolConfig;
+    MockInitialRoundVotingEngineForSubmitterIdentity public votingEngine;
     MockCategoryRegistry public mockCategoryRegistry;
     MockRaterIdentityRegistry public mockRaterIdentityRegistry;
 
@@ -48,6 +113,10 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
         protocolConfig.setRaterRegistry(address(mockRaterIdentityRegistry));
         registry.setProtocolConfig(address(protocolConfig));
+        votingEngine = new MockInitialRoundVotingEngineForSubmitterIdentity(
+            address(registry), address(lrepToken), address(protocolConfig)
+        );
+        registry.setVotingEngine(address(votingEngine));
 
         lrepToken.mint(submitter, 100e6);
         lrepToken.mint(delegate, 100e6);

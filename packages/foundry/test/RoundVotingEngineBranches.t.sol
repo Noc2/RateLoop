@@ -304,8 +304,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             DEFAULT_DRAND_PERIOD
         );
 
-        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=100
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 100);
+        // epochDuration=1h, maxDuration=1h, minVoters=3, maxVoters=100
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 100);
 
         mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
 
@@ -839,8 +839,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _openRoundForTest(engine, contentId, voter);
         }
 
-        uint256 roundId = _previewCommitRoundId(engine, contentId);
-        uint16 referenceRatingBps = _previewCommitReferenceRatingBps(engine, contentId);
+        uint256 currentRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        uint256 roundId = selector == RoundVotingEngine.RoundNotOpen.selector && currentRoundId != 0
+            ? currentRoundId
+            : _previewCommitRoundId(engine, contentId);
+        uint16 referenceRatingBps = roundId == currentRoundId && currentRoundId != 0
+            ? _roundReferenceRatingBpsForRound(engine, contentId, roundId)
+            : _previewCommitReferenceRatingBps(engine, contentId);
         uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 salt = keccak256(abi.encodePacked(voter, isUp, block.timestamp, saltTag));
@@ -863,6 +868,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             address(0)
         );
         vm.stopPrank();
+    }
+
+    function _revealFailedFinalDeadline(uint256 contentId, uint256 roundId) internal view returns (uint256) {
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        RoundLib.RoundConfig memory cfg = RoundEngineReadHelpers.roundConfig(engine, contentId, roundId);
+        uint256 votingWindowEnd = uint256(round.startTime) + uint256(cfg.maxDuration);
+        uint256 lastRevealableAt = _lastCommitRevealableAfter(engine, contentId, roundId);
+        uint256 revealBase = lastRevealableAt > votingWindowEnd ? lastRevealableAt : votingWindowEnd;
+        return revealBase + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24;
     }
 
     function _expectAdvisoryRevert(address voter, uint256 contentId, string memory saltTag, bytes4 selector) internal {
@@ -967,6 +981,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
+        rewardTerms.bountyWindowSeconds = roundConfig.maxDuration;
+        rewardTerms.feedbackWindowSeconds = roundConfig.maxDuration;
 
         vm.startPrank(submitter);
         lrepToken.approve(rewardEscrow, rewardAmount);
@@ -1001,7 +1017,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             roundConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
     }
@@ -1081,17 +1098,17 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     // 1. BASIC ROUND LIFECYCLE: commit -> reveal -> settle (3 voters, epoch 1)
     // =========================================================================
 
-    function test_PreviewCommitAvailability_NoRound_StartsNextRound() public {
+    function test_PreviewCommitAvailability_InitialRound_AcceptsCurrentRound() public {
         uint256 contentId = _submitContent();
 
         (bool canCommit, uint8 status, uint256 roundId, uint16 referenceRatingBps, bool willStartNewRound) =
             _previewCommitAvailability(contentId);
 
         assertTrue(canCommit);
-        assertEq(status, COMMIT_STATUS_STARTS_NEXT_ROUND);
+        assertEq(status, COMMIT_STATUS_OPEN);
         assertEq(roundId, 1);
         assertEq(referenceRatingBps, _defaultRatingReferenceBps());
-        assertTrue(willStartNewRound);
+        assertFalse(willStartNewRound);
     }
 
     function test_CommitVoteWithPermitConsumesPermitAndStake() public {
@@ -1192,7 +1209,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
 
-        vm.warp(uint256(r0.startTime) + 7 days + 1);
+        vm.warp(uint256(r0.startTime) + EPOCH + 1);
 
         (bool canCommit, uint8 status, uint256 nextPreviewRoundId,, bool willStartNewRound) =
             _previewCommitAvailability(contentId);
@@ -1214,7 +1231,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_PreviewCommitAvailability_RoundFull_BlocksCurrentRound() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 3 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 3 });
         uint256 contentId = _submitContentWithRoundConfig("https://example.com/full-round", roundConfig);
 
         _commit(voter1, contentId, true, STAKE);
@@ -1255,7 +1272,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertTrue(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
 
-        vm.warp(uint256(r0.startTime) + 7 days + 1);
+        vm.warp(uint256(r0.startTime) + EPOCH + 1);
 
         (bool canCommit, uint8 status, uint256 previewRoundId,, bool willStartNewRound) =
             _previewCommitAvailability(contentId);
@@ -1676,11 +1693,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
         (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 6_500, STAKE);
         (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_500, STAKE);
+        _commit(voter4, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-        _commit(voter4, contentId, true, STAKE);
+        vm.warp(
+            _lastCommitRevealableAfter(engine, contentId, roundId)
+                + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1
+        );
 
         engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
         engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 6_500, s2);
@@ -1706,9 +1727,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
-        assertEq(lrepToken.balanceOf(voter4) - voter4Before, STAKE, "current-epoch unrevealed stake refunds");
-        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "no cleanup bounty for refund");
-        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "refund is not forfeited");
+        assertEq(lrepToken.balanceOf(voter4), voter4Before, "past-epoch unrevealed stake forfeits");
+        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, STAKE / 100, "cleanup bounty paid");
+        assertEq(lrepToken.balanceOf(treasury) - treasuryBefore, STAKE - (STAKE / 100), "forfeit reaches treasury");
     }
 
     function test_AdvisoryLaunchCreditExpiredRbtsSeedRearmsBeforeClaim() public {
@@ -2241,7 +2262,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         // Warp past 7-day max duration
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
 
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -2256,7 +2277,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(uint256(round.startTime) + 7 days + 1);
+        vm.warp(uint256(round.startTime) + EPOCH + 1);
 
         _commit(voter3, contentId, true, STAKE);
 
@@ -2272,9 +2293,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _commit(voter1, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
-        // Only 1 day elapsed
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(uint256(round.startTime) + EPOCH - 1);
 
         vm.expectRevert(RoundVotingEngine.RoundNotExpired.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -2301,7 +2322,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, false, s3);
 
         // Warp past max duration — but threshold was reached so cancel should fail
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
 
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -2321,7 +2342,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
 
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -2340,7 +2361,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
 
         // No HRC commit -> cancel-lockout does not engage even at commit quorum 3.
         engine.cancelExpiredRound(contentId, roundId);
@@ -2364,7 +2385,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, false, s2);
         _reveal(contentId, roundId, ck3, true, s3);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -2387,7 +2408,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertTrue(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
         assertEq(_roundHumanVerifiedCommitCount(engine, contentId, roundId), 1);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
 
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -2409,7 +2430,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertTrue(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
         assertEq(_roundHumanVerifiedCommitCount(engine, contentId, roundId), 3);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
 
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -2431,7 +2452,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         mockRaterIdentityRegistry.removeHolder(voter3);
 
         assertEq(_roundHumanVerifiedCommitCount(engine, contentId, roundId), 3);
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
 
@@ -2447,7 +2468,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         assertEq(_roundHumanVerifiedCommitCount(engine, nonHrcContentId, nonHrcRoundId), 0);
         RoundLib.Round memory nonHrcOpenRound = RoundEngineReadHelpers.round(engine, nonHrcContentId, nonHrcRoundId);
-        vm.warp(nonHrcOpenRound.startTime + 7 days + 1);
+        vm.warp(nonHrcOpenRound.startTime + EPOCH + 1);
         engine.cancelExpiredRound(nonHrcContentId, nonHrcRoundId);
         RoundLib.Round memory nonHrcRound = RoundEngineReadHelpers.round(engine, nonHrcContentId, nonHrcRoundId);
         assertEq(uint256(nonHrcRound.state), uint256(RoundLib.RoundState.Cancelled));
@@ -2495,11 +2516,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_CommitTwice_AfterCooldown_SameRound_RevertsAlreadyCommitted() public {
+    function test_CommitTwice_AfterCooldown_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        // Warp past 24h cooldown — but round is still open and voter already committed
+        // Warp past the 24h cooldown. In the single-duration model the round is closed,
+        // so direct commits must fail before duplicate-commit checks are reachable.
         vm.warp(block.timestamp + 25 hours);
 
         vm.startPrank(voter1);
@@ -2507,9 +2530,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 commitHash2 = _commitHash(true, salt2, contentId);
         bytes memory ciphertext2 = _testCiphertext(true, salt2, contentId);
         lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext3 =
-            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
-        vm.expectRevert(RoundVotingEngine.AlreadyCommitted.selector);
+        uint256 cachedRoundContext3 = _roundContext(roundId, _defaultRatingReferenceBps());
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext3,
@@ -2523,7 +2545,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_CommitAfterDelegateAddressIdentityChurn_RevertsAlreadyCommitted() public {
+    function test_CommitAfterDelegateAddressIdentityChurn_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         vm.prank(voter1);
         mockRaterIdentityRegistry.setDelegate(delegate1);
@@ -2538,11 +2560,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             false,
             STAKE,
             "direct-after-delegate-identity-churn",
-            RoundVotingEngine.AlreadyCommitted.selector
+            RoundVotingEngine.RoundNotOpen.selector
         );
     }
 
-    function test_DelegateCommitAfterHolderAddressIdentityChurn_RevertsAlreadyCommitted() public {
+    function test_DelegateCommitAfterHolderAddressIdentityChurn_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
 
@@ -2557,11 +2579,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             false,
             STAKE,
             "delegate-after-direct-identity-churn",
-            RoundVotingEngine.AlreadyCommitted.selector
+            RoundVotingEngine.RoundNotOpen.selector
         );
     }
 
-    function test_CommitSameNullifierAfterRemint_SameRound_RevertsAlreadyCommitted() public {
+    function test_CommitSameNullifierAfterRemint_ExpiredRoundRevertsRoundNotOpen() public {
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
 
@@ -2584,9 +2606,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         vm.startPrank(voter2);
         lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext4 =
-            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
-        vm.expectRevert(RoundVotingEngine.AlreadyCommitted.selector);
+        uint256 cachedRoundContext4 = _roundContext(roundId, _defaultRatingReferenceBps());
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext4,
@@ -3075,7 +3096,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
         engine.cancelExpiredRound(contentId, roundId);
 
         uint256 balBefore = lrepToken.balanceOf(voter1);
@@ -3094,7 +3115,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
         engine.cancelExpiredRound(contentId, roundId);
 
         vm.prank(voter1);
@@ -3113,7 +3134,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + EPOCH + 1);
         engine.cancelExpiredRound(contentId, roundId);
 
         vm.prank(voter3);
@@ -3429,51 +3450,57 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
     }
 
-    function test_ProcessUnrevealed_RefundsCurrentEpochVotes() public {
+    function test_ProcessUnrevealed_ForfeitsUnrevealedVotesAfterSharedDuration() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
+        _commit(voter4, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        // Warp past epoch 1 (absolute time) — voter1/2/3 votes become revealable
+        // In the single-duration model every accepted vote's reveal window has ended
+        // by the time settlement can happen.
         RoundLib.Round memory rPU2start = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(rPU2start.startTime) + EPOCH);
-        // Commit voter4 in epoch 2 before threshold is reached. This keeps the
-        // current-epoch unrevealed path without relying on post-threshold commits.
-        _commit(voter4, contentId, true, STAKE);
+        vm.warp(
+            _lastCommitRevealableAfter(engine, contentId, roundId)
+                + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1
+        );
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
-        // settledAt is in epoch 2 while voter4's revealableAfter is epoch 2 end => REFUNDED
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         uint256 voter4BalBefore = lrepToken.balanceOf(voter4);
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        uint256 voter4BalAfter = lrepToken.balanceOf(voter4);
 
-        // voter4 committed in epoch 3; their epoch hadn't ended at settlement => refunded
-        assertEq(voter4BalAfter - voter4BalBefore, STAKE);
+        assertEq(lrepToken.balanceOf(voter4), voter4BalBefore, "voter4 forfeits past-epoch stake");
+        assertEq(lrepToken.balanceOf(treasury) - treasuryBefore, STAKE - (STAKE / 100), "treasury receives forfeit");
+        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, STAKE / 100, "keeper receives cleanup incentive");
     }
 
-    function test_ProcessUnrevealed_RefundOnlyCleanupPaysNoKeeperBounty() public {
+    function test_ProcessUnrevealed_SharedDurationCleanupPaysKeeperBounty() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
+        _commit(voter4, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         RoundLib.Round memory rStart = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(rStart.startTime) + EPOCH);
-        // voter4 commits in epoch 2; their epoch will not have ended at settledAt, so on
-        // processUnrevealedVotes their stake is REFUNDED rather than forfeited.
-        _commit(voter4, contentId, true, STAKE);
+        vm.warp(
+            _lastCommitRevealableAfter(engine, contentId, roundId)
+                + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1
+        );
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
@@ -3486,10 +3513,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
-        // Refund still happens.
-        assertEq(lrepToken.balanceOf(voter4) - voter4Before, STAKE, "voter4 refunded");
-        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "keeper not paid");
-        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "refund-only cleanup must not pay treasury");
+        assertEq(lrepToken.balanceOf(voter4), voter4Before, "voter4 forfeits");
+        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, STAKE / 100, "keeper paid for forfeit cleanup");
+        assertEq(lrepToken.balanceOf(treasury) - treasuryBefore, STAKE - (STAKE / 100), "treasury receives forfeit");
     }
 
     function test_ProcessUnrevealed_SettledCleanupPaysIncentiveOncePerForfeiture() public {
@@ -3592,21 +3618,25 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.processUnrevealedVotes(contentId, roundId, 999, 1);
     }
 
-    function test_ProcessUnrevealed_TiedRound_RefundsCurrentEpochUnrevealed() public {
-        // Set up a tied round with a current-epoch unrevealed vote.
+    function test_ProcessUnrevealed_TiedRound_RefundsUnrevealedStake() public {
+        // Set up a tied round with an unrevealed vote from the single shared epoch.
         uint256 contentId = _submitContent();
 
         // 3-voter tie: up=2e6, down=3e6, up=1e6
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 2e6);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 3e6);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 1e6);
+        _commit(voter4, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        // Warp past epoch 1 and add voter4 in epoch 2 before revealing.
+        // Warp past the single shared duration before revealing.
         RoundLib.Round memory rTied = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(rTied.startTime) + EPOCH);
-        _commit(voter4, contentId, true, STAKE);
+        vm.warp(
+            _lastCommitRevealableAfter(engine, contentId, roundId)
+                + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1
+        );
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, false, s2);
         _reveal(contentId, roundId, ck3, true, s3);
@@ -3618,10 +3648,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Tied));
 
         uint256 voter4Before = lrepToken.balanceOf(voter4);
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        uint256 voter4After = lrepToken.balanceOf(voter4);
 
-        assertEq(voter4After - voter4Before, STAKE, "current-epoch tied-round stake refunds");
+        assertEq(lrepToken.balanceOf(voter4) - voter4Before, STAKE, "tied-round unrevealed stake refunds");
+        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "tied-round cleanup does not forfeit");
+        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "tied-round refund pays no cleanup incentive");
     }
 
     function test_FinalizeRevealFailedRound_SucceedsAfterFinalRevealGrace() public {
@@ -3638,8 +3671,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         uint256 gracePeriod = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
         // Reveal-failed finalization waits out the extended (24x) recovery grace.
-        uint256 baseDeadline = round.startTime + 7 days + gracePeriod;
-        uint256 finalDeadline = round.startTime + 7 days + gracePeriod * 24;
+        uint256 baseDeadline = round.startTime + EPOCH + gracePeriod;
+        uint256 finalDeadline = _revealFailedFinalDeadline(contentId, roundId);
 
         vm.warp(baseDeadline);
         vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
@@ -3681,7 +3714,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
 
         // Simulate a systemic reveal outage that outlasts the ordinary grace period.
-        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1);
+        vm.warp(round.startTime + EPOCH + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1);
 
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, false, s2);
@@ -3704,9 +3737,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        uint256 finalDeadline =
-            round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24;
+        uint256 finalDeadline = _revealFailedFinalDeadline(contentId, roundId);
 
         vm.warp(finalDeadline - 1);
         _reveal(contentId, roundId, ck1, true, s1);
@@ -3731,7 +3762,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        uint256 finalDeadline = round.startTime + EPOCH + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
 
         vm.warp(finalDeadline);
         vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
@@ -3758,8 +3789,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
         _reveal(contentId, roundId, ck1, true, s1);
 
-        uint256 finalDeadline =
-            round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24 + 1;
+        uint256 finalDeadline = _revealFailedFinalDeadline(contentId, roundId) + 1;
         vm.warp(finalDeadline);
         engine.finalizeRevealFailedRound(contentId, roundId);
 
@@ -3803,9 +3833,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         // The extended (24x) reveal-failed recovery grace must elapse first.
-        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24 + 1);
+        vm.warp(_revealFailedFinalDeadline(contentId, roundId) + 1);
 
         _commit(voter4, contentId, true, STAKE);
 
@@ -3815,7 +3844,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(newRoundId, roundId + 1, "new commits roll into a fresh round after reveal failure");
     }
 
-    function test_RoundKeepsAcceptingVotesBeforeMaxDurationEvenIfEarlyRevealGracePassed() public {
+    function test_RoundRollsAfterSharedDurationCancelsSybilQuorum() public {
         uint256 contentId = _submitContent();
 
         _commit(voter1, contentId, true, STAKE);
@@ -3830,10 +3859,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _commit(voter4, contentId, true, STAKE);
 
         uint256 activeRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory sameRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(activeRoundId, roundId, "round should stay open until maxDuration ends");
-        assertEq(uint256(sameRound.state), uint256(RoundLib.RoundState.Open), "round remains open");
-        assertEq(sameRound.voteCount, 4, "late vote should join the existing round");
+        RoundLib.Round memory failedRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        RoundLib.Round memory nextRound = RoundEngineReadHelpers.round(engine, contentId, activeRoundId);
+        assertEq(activeRoundId, roundId + 1, "new commit opens a fresh round after shared duration closes");
+        assertEq(uint256(failedRound.state), uint256(RoundLib.RoundState.Cancelled), "all-sybil round is cancelled");
+        assertEq(nextRound.voteCount, 1, "late vote joins the fresh round");
     }
 
     // =========================================================================
@@ -3876,7 +3906,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.NoStakedRound),
             "fresh content reports missing staked round"
         );
-        assertEq(noStakedAvailability.roundId, 0, "fresh content has no advisory round");
+        assertEq(noStakedAvailability.roundId, 1, "fresh content exposes its creation-time round");
 
         uint64 targetRound = _openStakedRound(voter2, contentId, "advisory-staked-open");
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
@@ -3972,7 +4002,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteAtBlindEpochBoundary_RevertsWhileRoundOpen() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 100);
 
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "advisory-boundary-open");
@@ -3989,8 +4019,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(boundaryAvailability.canCommit, "advisory closes at first epoch boundary");
         assertEq(
             uint256(boundaryAvailability.status),
-            uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.OutsideBlindEpoch),
-            "boundary reports outside blind epoch"
+            uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.RoundNotOpen),
+            "boundary reports the shared duration has closed"
         );
         _expectAdvisoryRevert(voter3, contentId, "advisory-at-boundary", RoundVotingEngine.RoundNotOpen.selector);
         assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "boundary advisory rejected");
@@ -4017,7 +4047,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
         );
 
-        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 0, "no round opened");
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 1, "creation-time round remains tracked");
     }
 
     function test_AdvisoryPreRoundUsesShortCustomRoundConfig() public {
@@ -4219,7 +4249,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_RealCommitAfterDelegateAdvisoryIdentityChurn_RevertsAlreadyCommitted() public {
+    function test_RealCommitAfterDelegateAdvisoryIdentityChurn_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "delegate-advisory-open");
         vm.prank(voter1);
@@ -4235,11 +4265,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             false,
             STAKE,
             "real-after-delegate-advisory-identity-churn",
-            RoundVotingEngine.AlreadyCommitted.selector
+            RoundVotingEngine.RoundNotOpen.selector
         );
     }
 
-    function test_AdvisoryAfterDelegateRealCommitIdentityChurn_RevertsAlreadyCommitted() public {
+    function test_AdvisoryAfterDelegateRealCommitIdentityChurn_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         vm.prank(voter1);
         mockRaterIdentityRegistry.setDelegate(delegate1);
@@ -4249,10 +4279,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.warp(block.timestamp + 25 hours);
 
         _expectAdvisoryRevert(
-            voter1,
-            contentId,
-            "advisory-after-delegate-real-identity-churn",
-            AdvisoryVoteRecorder.AlreadyCommitted.selector
+            voter1, contentId, "advisory-after-delegate-real-identity-churn", AdvisoryVoteRecorder.RoundNotOpen.selector
         );
     }
 
@@ -4336,7 +4363,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteCapsCommitsAtRoundMaxVoters() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 3);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 3);
 
         uint256 contentId = _submitContent();
         _openStakedRound(voter4, contentId, "advisory-cap-open");
@@ -4489,7 +4516,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_AdvisoryAfterDelegateAddressIdentityChurn_RevertsAlreadyCommitted() public {
+    function test_AdvisoryAfterDelegateAddressIdentityChurn_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "delegate-before-human-open");
         vm.prank(voter1);
@@ -4503,11 +4530,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             voter1,
             contentId,
             "direct-after-delegate-advisory-identity-churn",
-            AdvisoryVoteRecorder.AlreadyCommitted.selector
+            AdvisoryVoteRecorder.RoundNotOpen.selector
         );
     }
 
-    function test_DelegateAdvisoryAfterHolderAddressIdentityChurn_RevertsAlreadyCommitted() public {
+    function test_DelegateAdvisoryAfterHolderAddressIdentityChurn_ExpiredRoundRevertsRoundNotOpen() public {
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "holder-before-human-open");
         _recordAdvisory(voter1, contentId, "holder-before-human");
@@ -4521,7 +4548,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             delegate1,
             contentId,
             "delegate-after-holder-advisory-identity-churn",
-            AdvisoryVoteRecorder.AlreadyCommitted.selector
+            AdvisoryVoteRecorder.RoundNotOpen.selector
         );
     }
 
@@ -4990,7 +5017,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_Commit_TargetRoundCannotDelayLongCustomEpoch_Reverts() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 7 days, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), EPOCH, EPOCH, 3, 100);
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "long target drift"));
@@ -5013,7 +5040,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_Commit_MaxVotersReached_Reverts() public {
         vm.prank(owner);
         // maxVoters=3 — after 3 commits the 4th is rejected
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 3);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 3);
 
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
@@ -5042,9 +5069,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_GetActiveRoundId_ReturnsZeroWithNoRound() public {
+    function test_GetActiveRoundId_ReturnsInitialRoundAfterCreation() public {
         uint256 contentId = _submitContent();
-        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 0);
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 1);
     }
 
     function test_GetActiveRoundId_ReturnsCorrectId() public {
@@ -5139,7 +5166,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(round.thresholdReachedAt, beforeThirdReveal);
     }
 
-    function test_CommitVote_RevertsAfterRevealThresholdReached() public {
+    function test_CommitVote_RevertsAfterRevealThresholdReachedAndSharedDurationClosed() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
@@ -5162,7 +5189,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext27 =
             _roundContext(_previewCommitRoundId(engine, contentId), lateCommit.roundReferenceRatingBps);
-        vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext27,
@@ -5176,40 +5203,31 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_EpochWeighting_Epoch2Voters_ReducedWeight() public {
+    function test_EpochWeighting_SingleDurationVotesUseFullWeight() public {
         uint256 contentId = _submitContent();
 
         // voter1 commits in epoch 1
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, false, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        // Warp past first epoch — voter2 commits in epoch 2
-        RoundLib.Round memory rEW0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(rEW0.startTime) + EPOCH);
-
-        uint256 epoch2RevealableAfter = block.timestamp + EPOCH;
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
 
-        // Warp past the epoch-2 commits' ceil tlock target.
-        _warpPastTlockRevealTime(epoch2RevealableAfter);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        // The shared duration is also the blind epoch; all accepted votes are epoch 1 votes.
+        RoundLib.Round memory rEW0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(rEW0.startTime) + EPOCH);
 
         _reveal(contentId, roundId, ck1, false, s1);
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, true, s3);
 
-        // UP gets 2 voters at 25% weight = 2 * STAKE * 0.25 = 0.5 * STAKE weighted
-        // DOWN gets 1 voter at 100% weight = STAKE weighted
-        // => DOWN wins despite fewer voters due to epoch-1 weight advantage
+        // UP gets 2 voters at full weight and DOWN gets 1 voter at full weight.
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        // DOWN should win: weightedDownPool = STAKE * 10000/10000 = STAKE
-        // weightedUpPool = STAKE * 2500/10000 * 2 = STAKE/2
-        assertFalse(round.upWins);
+        assertTrue(round.upWins);
     }
 
     function test_ConsensusSettlement_UnanimousUpWins() public {

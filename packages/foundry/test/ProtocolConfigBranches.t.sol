@@ -1711,10 +1711,10 @@ contract ProtocolConfigBranchesTest is Test {
     function test_ValidateRoundConfig_AcceptsGovernedCreatorChoice() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        RoundLib.RoundConfig memory roundCfg = config.validateRoundConfig(10 minutes, 2 hours, 4, 25);
+        RoundLib.RoundConfig memory roundCfg = config.validateRoundConfig(10 minutes, 10 minutes, 4, 25);
 
         assertEq(roundCfg.epochDuration, 10 minutes);
-        assertEq(roundCfg.maxDuration, 2 hours);
+        assertEq(roundCfg.maxDuration, 10 minutes);
         assertEq(roundCfg.minVoters, 4);
         assertEq(roundCfg.maxVoters, 25);
 
@@ -1726,9 +1726,9 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(roundCfg.epochDuration, 3 days);
         assertEq(roundCfg.maxDuration, 3 days);
 
-        roundCfg = config.validateRoundConfig(30 days, 60 days, 5, 100);
+        roundCfg = config.validateRoundConfig(30 days, 30 days, 5, 100);
         assertEq(roundCfg.epochDuration, 30 days);
-        assertEq(roundCfg.maxDuration, 60 days);
+        assertEq(roundCfg.maxDuration, 30 days);
     }
 
     function test_ValidateRoundConfig_AcceptsTwentySecondFastRound() public {

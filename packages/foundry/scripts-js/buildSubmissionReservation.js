@@ -15,7 +15,7 @@ if (
   (args.length > 17 && args.length < 21)
 ) {
   console.error(
-    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [bountyStartBy] [bountyWindowSeconds] [feedbackWindowSeconds] [epochDuration maxDuration minVoters maxVoters]"
+    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [fixedRequiredSettledRounds=1] [fixedBountyStartBy=0] [questionDurationSeconds] [questionDurationSeconds] [questionDurationSeconds questionDurationSeconds minVoters maxVoters]"
   );
   process.exit(1);
 }
@@ -26,8 +26,9 @@ const DEFAULT_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_REQUIRED_VOTERS = 3n;
 const DEFAULT_REQUIRED_SETTLED_ROUNDS = 1n;
 const DEFAULT_BOUNTY_START_BY = 0n;
-const DEFAULT_BOUNTY_WINDOW_SECONDS = 0n;
-const DEFAULT_FEEDBACK_WINDOW_SECONDS = 0n;
+const DEFAULT_QUESTION_DURATION_SECONDS = 20n * 60n;
+const DEFAULT_BOUNTY_WINDOW_SECONDS = DEFAULT_QUESTION_DURATION_SECONDS;
+const DEFAULT_FEEDBACK_WINDOW_SECONDS = DEFAULT_QUESTION_DURATION_SECONDS;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0n;
 const DEFAULT_QUESTION_METADATA_HASH =
   "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd";
@@ -52,8 +53,8 @@ const DEFAULT_CONFIDENTIALITY_HASH = keccak256(
   )
 );
 const DEFAULT_ROUND_CONFIG = {
-  epochDuration: 20 * 60,
-  maxDuration: 20 * 60,
+  epochDuration: Number(DEFAULT_QUESTION_DURATION_SECONDS),
+  maxDuration: Number(DEFAULT_QUESTION_DURATION_SECONDS),
   minVoters: 3,
   maxVoters: 100,
 };
@@ -273,6 +274,52 @@ function parseArgs(rawArgs) {
     console.error("Choose images or video, not both.");
     process.exit(1);
   }
+  const parsedRoundConfig =
+    epochDuration === undefined
+      ? null
+      : {
+          epochDuration: Number(epochDuration),
+          maxDuration: Number(maxDuration),
+          minVoters: Number(minVoters),
+          maxVoters: Number(maxVoters),
+        };
+  const questionDuration = BigInt(
+    parsedRoundConfig?.maxDuration ?? DEFAULT_ROUND_CONFIG.maxDuration
+  );
+  const parsedRequiredSettledRounds = BigInt(requiredSettledRounds);
+  const parsedBountyStartBy = BigInt(bountyStartBy);
+  const parsedBountyWindowSeconds = BigInt(bountyWindowSeconds);
+  const parsedFeedbackWindowSeconds = BigInt(feedbackWindowSeconds);
+  if (
+    parsedRoundConfig &&
+    parsedRoundConfig.epochDuration !== parsedRoundConfig.maxDuration
+  ) {
+    console.error(
+      "epochDuration and maxDuration must match the single question duration."
+    );
+    process.exit(1);
+  }
+  if (parsedRequiredSettledRounds !== 1n) {
+    console.error(
+      "requiredSettledRounds must be 1 for creation-time submission rewards."
+    );
+    process.exit(1);
+  }
+  if (parsedBountyStartBy !== 0n) {
+    console.error(
+      "bountyStartBy must be 0; bounty timing starts when the question is created."
+    );
+    process.exit(1);
+  }
+  if (
+    parsedBountyWindowSeconds !== questionDuration ||
+    parsedFeedbackWindowSeconds !== questionDuration
+  ) {
+    console.error(
+      "bountyWindowSeconds and feedbackWindowSeconds must match the question duration."
+    );
+    process.exit(1);
+  }
   return {
     rpcUrl,
     registry,
@@ -286,20 +333,12 @@ function parseArgs(rawArgs) {
     rewardAsset: BigInt(rewardAsset),
     rewardAmount: BigInt(rewardAmount),
     requiredVoters: BigInt(requiredVoters),
-    requiredSettledRounds: BigInt(requiredSettledRounds),
-    bountyStartBy: BigInt(bountyStartBy),
-    bountyWindowSeconds: BigInt(bountyWindowSeconds),
-    feedbackWindowSeconds: BigInt(feedbackWindowSeconds),
+    requiredSettledRounds: parsedRequiredSettledRounds,
+    bountyStartBy: parsedBountyStartBy,
+    bountyWindowSeconds: parsedBountyWindowSeconds,
+    feedbackWindowSeconds: parsedFeedbackWindowSeconds,
     bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
-    roundConfig:
-      epochDuration === undefined
-        ? null
-        : {
-            epochDuration: Number(epochDuration),
-            maxDuration: Number(maxDuration),
-            minVoters: Number(minVoters),
-            maxVoters: Number(maxVoters),
-          },
+    roundConfig: parsedRoundConfig,
   };
 }
 

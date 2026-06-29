@@ -18,6 +18,9 @@ interface IRoundVotingEngine {
     /// @notice Get the round ID that would be created next for a content item.
     function nextRoundIdForContent(uint256 contentId) external view returns (uint256);
 
+    /// @notice Open a content item's initial round from the registry during question submission.
+    function openInitialRoundFromRegistry(uint256 contentId, uint256 allocatedRoundId) external;
+
     /// @notice Whether the current round should block dormancy for a content item.
     function isDormancyBlocked(uint256 contentId) external view returns (bool);
 

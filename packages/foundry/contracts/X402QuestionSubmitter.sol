@@ -24,11 +24,10 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     uint8 internal constant REWARD_ASSET_USDC = 1;
     bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v3");
     bytes32 internal constant X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN =
-        keccak256("rateloop-x402-question-one-shot-payment-v4");
+        keccak256("rateloop-x402-question-one-shot-payment-v5");
 
     struct FeedbackBonusTerms {
         uint256 amount;
-        uint256 feedbackClosesAt;
         address awarder;
     }
 
@@ -390,14 +389,15 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         );
 
         if (feedbackBonusTerms.amount != 0) {
-            uint256 roundId = registry.nextVotingRoundId(contentId);
+            uint256 roundId = registry.nextVotingRoundId(contentId) - 1;
+            uint256 feedbackClosesAt = block.timestamp + uint256(roundConfig.maxDuration);
             usdcToken.forceApprove(configuredFeedbackEscrow, feedbackBonusTerms.amount);
             feedbackBonusPoolId = FeedbackBonusEscrow(configuredFeedbackEscrow)
                 .createFeedbackBonusPoolFromGateway(
                     contentId,
                     roundId,
                     feedbackBonusTerms.amount,
-                    feedbackBonusTerms.feedbackClosesAt,
+                    feedbackClosesAt,
                     feedbackBonusTerms.awarder,
                     paymentAuthorization.from
                 );
@@ -406,7 +406,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                 feedbackBonusPoolId,
                 paymentAuthorization.from,
                 feedbackBonusTerms.amount,
-                feedbackBonusTerms.feedbackClosesAt,
+                feedbackClosesAt,
                 feedbackBonusTerms.awarder
             );
         }
@@ -623,9 +623,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     }
 
     function _hashFeedbackBonusTerms(FeedbackBonusTerms memory feedbackBonusTerms) private pure returns (bytes32) {
-        return keccak256(
-            abi.encode(feedbackBonusTerms.amount, feedbackBonusTerms.feedbackClosesAt, feedbackBonusTerms.awarder)
-        );
+        return keccak256(abi.encode(feedbackBonusTerms.amount, feedbackBonusTerms.awarder));
     }
 
     function _hashStringArray(string[] memory values) private pure returns (bytes32) {

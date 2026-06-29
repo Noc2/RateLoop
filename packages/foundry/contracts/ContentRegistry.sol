@@ -16,6 +16,7 @@ import { RatingLib } from "./libraries/RatingLib.sol";
 import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
 import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
 import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import { ContentRegistryRoundGuardLib } from "./libraries/ContentRegistryRoundGuardLib.sol";
 import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
@@ -580,35 +581,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 salt,
         SubmissionRewardTerms memory rewardTerms,
         RoundLib.RoundConfig memory roundConfig,
-        QuestionSpecCommitment memory spec
-    ) public returns (uint256) {
-        return submitQuestionWithRewardAndRoundConfig(
-            contextUrl,
-            imageUrls,
-            videoUrl,
-            title,
-            tags,
-            categoryId,
-            details,
-            salt,
-            rewardTerms,
-            roundConfig,
-            spec,
-            _defaultConfidentialityConfig()
-        );
-    }
-
-    function submitQuestionWithRewardAndRoundConfig(
-        string memory contextUrl,
-        string[] memory imageUrls,
-        string memory videoUrl,
-        string memory title,
-        string memory tags,
-        uint256 categoryId,
-        SubmissionDetails memory details,
-        bytes32 salt,
-        SubmissionRewardTerms memory rewardTerms,
-        RoundLib.RoundConfig memory roundConfig,
         QuestionSpecCommitment memory spec,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) public nonReentrant whenNotPaused returns (uint256) {
@@ -643,8 +615,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         require(validatedRoundConfig.maxVoters <= MAX_QUESTION_BUNDLE_ROUND_VOTERS);
         require(rewardTerms.requiredVoters == validatedRoundConfig.minVoters);
-        _validateSubmissionReward(rewardTerms);
-        require(rewardTerms.bountyWindowSeconds != 0);
+        _validateSubmissionReward(rewardTerms, validatedRoundConfig);
+        (uint256 rewardClosesAt, uint256 rewardWindowSeconds) = _rewardTiming(validatedRoundConfig);
 
         SubmissionMetadata[] memory metadataList = new SubmissionMetadata[](questions.length);
         bytes32[] memory submissionKeys = new bytes32[](questions.length);
@@ -716,6 +688,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             );
             contentIds[i] = contentId;
             questionBundleRoundObserverByContent[contentId] = questionRewardPoolEscrow;
+            _openInitialRoundForSubmission(contentId);
             emit QuestionBundleContentLinked(bundleId, contentId, i);
 
             emit ContentSubmitted(
@@ -740,9 +713,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
+                rewardClosesAt,
+                rewardWindowSeconds,
+                rewardWindowSeconds,
                 rewardTerms.bountyEligibility
             );
         emit QuestionBundleSubmitted(
@@ -752,9 +725,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.asset,
             rewardTerms.amount,
             rewardTerms.requiredVoters,
-            rewardTerms.bountyStartBy,
-            rewardTerms.bountyWindowSeconds,
-            rewardTerms.feedbackWindowSeconds,
+            rewardClosesAt,
+            rewardWindowSeconds,
+            rewardWindowSeconds,
             rewardTerms.bountyEligibility,
             bytes32(0),
             bundleHash,
@@ -790,8 +763,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             requiredVoters: defaultRoundConfig.minVoters,
             requiredSettledRounds: MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyStartBy: 0,
-            bountyWindowSeconds: 0,
-            feedbackWindowSeconds: 0,
+            bountyWindowSeconds: defaultRoundConfig.maxDuration,
+            feedbackWindowSeconds: defaultRoundConfig.maxDuration,
             bountyEligibility: 0
         });
         return submitQuestionWithRewardAndRoundConfig(
@@ -874,10 +847,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         ContentRegistryTypes.Content storage c = contents[contentId];
         require(_isSubmitterIdentity(contentId, msg.sender));
         require(c.status == ContentRegistryTypes.ContentStatus.Active);
-        require(contentRoundTrackingEngine[contentId] == address(0));
-        if (votingEngine != address(0)) {
-            require(!IRoundVotingEngine(votingEngine).hasCommits(contentId));
-        }
+        address trackedEngine = contentRoundTrackingEngine[contentId];
+        ContentRegistryRoundGuardLib.requireNoCommits(trackedEngine, votingEngine, contentId);
         // Cancelling a bundle member would permanently prevent the bundle escrow from
         // completing all configured round sets. Treat bundles as atomic once submitted.
         require(contentBundleId[contentId] == 0);
@@ -975,7 +946,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         // pre-reserve the same (metadata, ..., salt=0) tuple. Force non-zero salt so every
         // reveal hash carries caller-supplied randomness.
         require(salt != bytes32(0));
-        _validateSubmissionReward(rewardTerms);
+        _validateSubmissionReward(rewardTerms, roundConfig);
 
         if (submitter == msg.sender) {
             bytes32 revealCommitment = _computeRevealCommitment(
@@ -1202,7 +1173,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             bundleId
         );
         _configureConfidentiality(contentId, confidentiality);
+        _openInitialRoundForSubmission(contentId);
         require(questionRewardPoolEscrow != address(0));
+        (uint256 rewardClosesAt, uint256 rewardWindowSeconds) = _rewardTiming(roundConfig);
         uint256 rewardPoolId = IQuestionRewardPoolEscrow(questionRewardPoolEscrow)
             .createSubmissionRewardPoolFromRegistry(
                 contentId,
@@ -1212,9 +1185,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
+                rewardClosesAt,
+                rewardWindowSeconds,
+                rewardWindowSeconds,
                 rewardTerms.bountyEligibility
             );
 
@@ -1230,9 +1203,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.amount,
             rewardTerms.requiredVoters,
             rewardTerms.requiredSettledRounds,
-            rewardTerms.bountyStartBy,
-            rewardTerms.bountyWindowSeconds,
-            rewardTerms.feedbackWindowSeconds,
+            rewardClosesAt,
+            rewardWindowSeconds,
+            rewardWindowSeconds,
             rewardTerms.bountyEligibility,
             bytes32(0),
             rewardPoolId
@@ -1396,6 +1369,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             roundId = latestVotingRoundId[contentId] + 1;
         }
         latestVotingRoundId[contentId] = roundId;
+    }
+
+    function _openInitialRoundForSubmission(uint256 contentId) internal {
+        address currentEngine = votingEngine;
+        require(currentEngine != address(0));
+
+        latestVotingRoundId[contentId] = 1;
+        contentRoundTrackingEngine[contentId] = currentEngine;
+        IRoundVotingEngine(currentEngine).openInitialRoundFromRegistry(contentId, 1);
     }
 
     /// @notice Called by VotingEngine when a round settles and its public rating impact must wait for correlation review.
@@ -1641,7 +1623,19 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
-    function _validateSubmissionReward(SubmissionRewardTerms memory rewardTerms) internal view {
+    function _rewardTiming(RoundLib.RoundConfig memory roundConfig)
+        internal
+        view
+        returns (uint256 bountyStartBy, uint256 windowSeconds)
+    {
+        uint256 duration = uint256(roundConfig.maxDuration);
+        return (block.timestamp + duration, duration);
+    }
+
+    function _validateSubmissionReward(
+        SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig
+    ) internal view {
         ContentRegistryRewardLib.validateSubmissionReward(
             rewardTerms.asset,
             rewardTerms.amount,
@@ -1652,7 +1646,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.feedbackWindowSeconds,
             rewardTerms.bountyEligibility,
             _minimumSubmissionReward(rewardTerms.asset),
-            block.timestamp
+            roundConfig.maxDuration
         );
     }
 

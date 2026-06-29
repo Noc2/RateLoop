@@ -25,6 +25,8 @@ const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/[^\s?#]+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp#sha256=0x[a-fA-F0-9]{64}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
+const DEFAULT_REQUIRED_SETTLED_ROUNDS = 1n;
+const DEFAULT_BOUNTY_START_BY = 0n;
 
 const abi = parseAbi([
   "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string tags,uint256 categoryId,(string detailsUrl,bytes32 detailsHash) details,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
@@ -37,7 +39,7 @@ function fail(message) {
 
 function usage() {
   fail(
-    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyStartBy> <bountyWindowSeconds> <feedbackWindowSeconds> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <tags> <categoryId> <salt> [question args...]"
+    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <fixedRequiredSettledRounds=1> <fixedBountyStartBy=0> <questionDurationSeconds> <questionDurationSeconds> <questionDurationSeconds> <questionDurationSeconds> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <tags> <categoryId> <salt> [question args...]"
   );
 }
 
@@ -212,24 +214,52 @@ function parseArgs(rawArgs) {
     fail("Submitter must be an address.");
   }
 
+  const parsedRewardTerms = {
+    asset: Number(rewardAsset),
+    amount: BigInt(rewardAmount),
+    requiredVoters: BigInt(requiredVoters),
+    requiredSettledRounds: BigInt(requiredSettledRounds),
+    bountyStartBy: BigInt(bountyStartBy),
+    bountyWindowSeconds: BigInt(bountyWindowSeconds),
+    feedbackWindowSeconds: BigInt(feedbackWindowSeconds),
+    bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
+  };
+  const parsedRoundConfig = {
+    epochDuration: Number(epochDuration),
+    maxDuration: Number(maxDuration),
+    minVoters: Number(minVoters),
+    maxVoters: Number(maxVoters),
+  };
+  if (parsedRoundConfig.epochDuration !== parsedRoundConfig.maxDuration) {
+    fail(
+      "epochDuration and maxDuration must match the single question duration."
+    );
+  }
+  if (
+    parsedRewardTerms.requiredSettledRounds !== DEFAULT_REQUIRED_SETTLED_ROUNDS
+  ) {
+    fail("requiredSettledRounds must be 1 for creation-time bundle rewards.");
+  }
+  if (parsedRewardTerms.bountyStartBy !== DEFAULT_BOUNTY_START_BY) {
+    fail(
+      "bountyStartBy must be 0; bounty timing starts when the bundle is created."
+    );
+  }
+  if (
+    parsedRewardTerms.bountyWindowSeconds !==
+      BigInt(parsedRoundConfig.maxDuration) ||
+    parsedRewardTerms.feedbackWindowSeconds !==
+      BigInt(parsedRoundConfig.maxDuration)
+  ) {
+    fail(
+      "bountyWindowSeconds and feedbackWindowSeconds must match the question duration."
+    );
+  }
+
   return {
     submitter: normalizedSubmitter,
-    rewardTerms: {
-      asset: Number(rewardAsset),
-      amount: BigInt(rewardAmount),
-      requiredVoters: BigInt(requiredVoters),
-      requiredSettledRounds: BigInt(requiredSettledRounds),
-      bountyStartBy: BigInt(bountyStartBy),
-      bountyWindowSeconds: BigInt(bountyWindowSeconds),
-      feedbackWindowSeconds: BigInt(feedbackWindowSeconds),
-      bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
-    },
-    roundConfig: {
-      epochDuration: Number(epochDuration),
-      maxDuration: Number(maxDuration),
-      minVoters: Number(minVoters),
-      maxVoters: Number(maxVoters),
-    },
+    rewardTerms: parsedRewardTerms,
+    roundConfig: parsedRoundConfig,
     questions: parseQuestionArgs(rawArgs.slice(separatorIndex + 1)),
   };
 }

@@ -5388,7 +5388,7 @@ describe("shared settlement helpers", () => {
     const row = {
       startTime: 1_000n,
       epochDuration: 600,
-      maxDuration: 1_200,
+      maxDuration: 600,
       minVoters: 3,
       voteCount: 4,
       revealedCount: 1,
@@ -5411,7 +5411,7 @@ describe("shared settlement helpers", () => {
         row.lastCommitRevealableAfter,
         row.revealGracePeriod,
       ),
-    ).toBe(3_640n);
-    expect(getOpenRoundEstimatedResolutionTime(row)).toBe(3_640n);
+    ).toBe(3_040n);
+    expect(getOpenRoundEstimatedResolutionTime(row)).toBe(3_040n);
   });
 });

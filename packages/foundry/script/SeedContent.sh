@@ -620,41 +620,8 @@ else
     exit 1
   fi
 
-  CURRENT_BLOCK_TIMESTAMP=$(cast block latest --field timestamp --rpc-url "$RPC" | tr -d '[:space:]')
-  FEEDBACK_BONUS_AWARD_DEADLINE=$((CURRENT_BLOCK_TIMESTAMP + FEEDBACK_BONUS_DEADLINE_SECONDS))
-
-  echo "=== Opening feedback bonus pools for selected questions ==="
-  echo "(Only a subset of seeded questions gets feedback bonuses for local testing)"
-  echo ""
-
-  for ((i = 0; i < FEEDBACK_BONUS_COUNT; i++)); do
-    CONTENT_ID="${FEEDBACK_BONUS_CONTENT_IDS[$i]}"
-    BONUS_AMOUNT="${FEEDBACK_BONUS_AMOUNTS[$i]}"
-    FUNDER_KEY_INDEX="${FEEDBACK_BONUS_FUNDER_KEY_INDEXES[$i]}"
-    FUNDER_KEY="${KEYS[$FUNDER_KEY_INDEX]}"
-    FUNDER_ADDR=$(cast wallet address "$FUNDER_KEY")
-
-    if [ $((i % 2)) -eq 0 ]; then
-      FEEDBACK_BONUS_ASSET="1"
-      FEEDBACK_BONUS_TOKEN="$USDC_TOKEN"
-      FEEDBACK_BONUS_SYMBOL="mock USDC"
-    else
-      FEEDBACK_BONUS_ASSET="0"
-      FEEDBACK_BONUS_TOKEN="$TOKEN"
-      FEEDBACK_BONUS_SYMBOL="LREP"
-    fi
-
-    echo "[$((i+1))/$FEEDBACK_BONUS_COUNT] Content $CONTENT_ID: funding feedback bonus of $BONUS_AMOUNT $FEEDBACK_BONUS_SYMBOL from $FUNDER_ADDR"
-    cast send "$FEEDBACK_BONUS_TOKEN" "approve(address,uint256)" "$FEEDBACK_BONUS_ESCROW" "$BONUS_AMOUNT" \
-      --private-key "$FUNDER_KEY" --rpc-url "$RPC" > /dev/null
-    cast send "$FEEDBACK_BONUS_ESCROW" "createFeedbackBonusPoolWithAsset(uint256,uint256,uint8,uint256,uint256,address)" \
-      "$CONTENT_ID" "$FEEDBACK_BONUS_ROUND_ID" "$FEEDBACK_BONUS_ASSET" "$BONUS_AMOUNT" "$FEEDBACK_BONUS_AWARD_DEADLINE" "$FUNDER_ADDR" \
-      --private-key "$FUNDER_KEY" --rpc-url "$RPC" > /dev/null
-    echo "  Done!"
-    echo ""
-  done
-
-  echo "=== Feedback bonus setup complete: $FEEDBACK_BONUS_COUNT pools opened ==="
+  echo "Skipping standalone feedback bonus pool setup."
+  echo "Feedback Bonuses are now funded only at question creation through the x402 gateway path."
   echo ""
 fi
 

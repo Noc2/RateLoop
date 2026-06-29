@@ -101,7 +101,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
 
         // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=100
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 1 hours, 3, 100);
 
         FrontendRegistry frImpl = new FrontendRegistry();
         frontendRegistry = FrontendRegistry(
@@ -301,7 +301,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(dist));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 1 hours, 3, 100);
 
         token.mint(submitter, 10_000e6);
         token.mint(voter1, 10_000e6);
@@ -390,7 +390,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     function test_Settle_TiedRound_Reverts() public {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, 1 hours, 7 days, 4, 100);
+        _setTlockRoundConfig(protocolConfig, 1 hours, 1 hours, 4, 100);
         vm.stopPrank();
 
         // Create a tied round: equal weighted pools
@@ -880,7 +880,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     function test_Refund_TiedRound_ReturnsStake() public {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, 1 hours, 7 days, 4, 100);
+        _setTlockRoundConfig(protocolConfig, 1 hours, 1 hours, 4, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();

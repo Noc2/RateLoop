@@ -113,7 +113,8 @@ contract GasBudgetTest is RoundIntegrationTest {
             salt,
             rewardTerms,
             roundConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
     }
 

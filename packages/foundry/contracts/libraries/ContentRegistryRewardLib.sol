@@ -12,7 +12,7 @@ library ContentRegistryRewardLib {
     uint8 internal constant SUBMISSION_REWARD_ASSET_USDC = 1;
     uint256 internal constant MIN_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
-    uint256 internal constant MAX_SUBMISSION_REWARD_SETTLED_ROUNDS = 16;
+    uint256 internal constant REQUIRED_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint16 internal constant DEFAULT_MAX_VOTERS = 100;
 
     function validateSubmissionReward(
@@ -25,7 +25,7 @@ library ContentRegistryRewardLib {
         uint256 feedbackWindowSeconds,
         uint8 bountyEligibility,
         uint256 minimumReward,
-        uint256 nowTimestamp
+        uint256 questionDuration
     ) external pure {
         require(asset == SUBMISSION_REWARD_ASSET_LREP || asset == SUBMISSION_REWARD_ASSET_USDC, "Invalid reward asset");
         require(amount >= minimumReward, "Reward below minimum");
@@ -34,19 +34,13 @@ library ContentRegistryRewardLib {
             requiredVoters >= QuestionRewardParticipantFloorLib.requiredParticipantFloorForAmount(amount),
             "High-value floor"
         );
-        require(requiredSettledRounds >= MIN_SUBMISSION_REWARD_SETTLED_ROUNDS, "Too few rounds");
-        require(requiredSettledRounds <= MAX_SUBMISSION_REWARD_SETTLED_ROUNDS, "Too many rounds");
+        require(requiredSettledRounds == REQUIRED_SUBMISSION_REWARD_SETTLED_ROUNDS, "One round only");
         require(amount >= requiredSettledRounds * requiredVoters, "Reward too small");
-        if (bountyWindowSeconds == 0) {
-            require(bountyStartBy == 0, "Bad start-by");
-            require(feedbackWindowSeconds == 0, "Bad feedback window");
-        } else {
-            require(bountyStartBy > nowTimestamp, "Bad start-by");
-            require(bountyWindowSeconds <= type(uint32).max, "Bad bounty window");
-            uint256 feedbackWindow = feedbackWindowSeconds == 0 ? bountyWindowSeconds : feedbackWindowSeconds;
-            require(feedbackWindow <= type(uint32).max, "Bad feedback window");
-            require(feedbackWindow <= bountyWindowSeconds, "Feedback after bounty");
-        }
+        require(questionDuration != 0 && questionDuration <= type(uint32).max, "Bad duration");
+        require(bountyStartBy == 0, "Bad start-by");
+        require(bountyWindowSeconds == questionDuration, "Bad bounty window");
+        uint256 feedbackWindow = feedbackWindowSeconds == 0 ? questionDuration : feedbackWindowSeconds;
+        require(feedbackWindow == questionDuration, "Bad feedback window");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
     }
 

@@ -11,6 +11,7 @@ import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
 import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
+import { IConfidentialityEscrow } from "../../contracts/interfaces/IConfidentialityEscrow.sol";
 import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
 import { MockWorldIDVerifier } from "../../contracts/mocks/MockWorldIDVerifier.sol";
@@ -567,6 +568,12 @@ abstract contract ContentSubmissionTestBase {
         });
     }
 
+    function _defaultConfidentialityConfig()
+        internal
+        pure
+        returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
+    { }
+
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
         uint256 minimum = DEFAULT_SUBMISSION_REWARD_POOL;
@@ -593,8 +600,8 @@ abstract contract ContentSubmissionTestBase {
             requiredVoters: roundConfig.minVoters,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
-            bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,
-            feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS,
+            bountyWindowSeconds: roundConfig.maxDuration,
+            feedbackWindowSeconds: roundConfig.maxDuration,
             bountyEligibility: 0
         });
     }

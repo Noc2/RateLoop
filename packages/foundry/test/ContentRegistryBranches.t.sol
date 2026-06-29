@@ -147,7 +147,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.setTreasury(treasury);
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 1 hours, 3, 100);
 
         raterRegistry = _deployRaterRegistry(owner);
         mockCategoryRegistry = new MockCategoryRegistry();
@@ -415,13 +415,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: rewardAmount,
             requiredVoters: requiredVoters,
             requiredSettledRounds: requiredSettledRounds,
-            bountyStartBy: rewardPoolExpiresAt,
-            bountyWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
-            feedbackWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
+            bountyStartBy: 0,
+            bountyWindowSeconds: _defaultContentRoundConfig().maxDuration,
+            feedbackWindowSeconds: _defaultContentRoundConfig().maxDuration,
             bountyEligibility: 0
         });
         reservation.roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
         return _reserveQuestionSubmission(reservation);
     }
 
@@ -465,19 +465,19 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: rewardAmount,
             requiredVoters: requiredVoters,
             requiredSettledRounds: requiredSettledRounds,
-            bountyStartBy: rewardPoolExpiresAt,
-            bountyWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
-            feedbackWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
+            bountyStartBy: 0,
+            bountyWindowSeconds: _defaultContentRoundConfig().maxDuration,
+            feedbackWindowSeconds: _defaultContentRoundConfig().maxDuration,
             bountyEligibility: 0
         });
     }
 
     function _defaultContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
+        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
     }
 
     function _bundleContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
+        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
     }
 
     function _submitReservedQuestionBundleForDormancyTest() internal returns (uint256[] memory contentIds) {
@@ -680,7 +680,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_SubmitQuestion_UsesGovernanceRatchetDefaultVoters() public {
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.startPrank(owner);
-        config.setConfig(1 hours, 7 days, 5, 100);
+        config.setConfig(1 hours, 1 hours, 5, 100);
         config.setRoundConfigBounds(20 seconds, 30 days, 20 seconds, 60 days, 5, 100, 5, 200);
         vm.stopPrank();
 
@@ -694,12 +694,12 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             requiredVoters: 5,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyStartBy: 0,
-            bountyWindowSeconds: 0,
-            feedbackWindowSeconds: 0,
+            bountyWindowSeconds: 1 hours,
+            feedbackWindowSeconds: 1 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 5, maxVoters: 100 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 100 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), rewardAmount);
@@ -1266,10 +1266,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         string[] memory imageUrls = _emptyImageUrls();
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         uint256 requiredVoters = 5;
-        uint256 requiredSettledRounds = 2;
+        uint256 requiredSettledRounds = 1;
         uint256 rewardPoolExpiresAt = block.timestamp + 14 days;
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 5, maxVoters: 100 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 100 });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             rewardAmount,
@@ -1284,6 +1284,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
+        uint256 submittedAt = block.timestamp;
         uint256 id = registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1295,7 +1296,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             roundConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
 
@@ -1305,7 +1307,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(mockQuestionRewardPoolEscrow.lastAmount(), rewardAmount);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), requiredVoters);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), requiredSettledRounds);
-        assertEq(mockQuestionRewardPoolEscrow.lastBountyStartBy(), rewardTerms.bountyStartBy, "bounty start by");
+        assertEq(
+            mockQuestionRewardPoolEscrow.lastBountyStartBy(), submittedAt + roundConfig.maxDuration, "bounty start by"
+        );
         assertEq(
             mockQuestionRewardPoolEscrow.lastBountyWindowSeconds(), rewardTerms.bountyWindowSeconds, "bounty window"
         );
@@ -1367,7 +1371,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             _defaultContentRoundConfig(),
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
 
@@ -1391,14 +1396,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: _defaultSubmissionRewardAmount(registry),
             requiredVoters: 5,
-            requiredSettledRounds: 2,
-            bountyStartBy: block.timestamp + 14 days,
-            bountyWindowSeconds: 14 days,
-            feedbackWindowSeconds: 14 days,
+            requiredSettledRounds: 1,
+            bountyStartBy: 0,
+            bountyWindowSeconds: 1 hours,
+            feedbackWindowSeconds: 1 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 5 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 5 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1417,7 +1422,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             roundConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
 
@@ -1450,13 +1456,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: 100e6,
             requiredVoters: 5,
             requiredSettledRounds: 1,
-            bountyStartBy: block.timestamp + 14 days,
-            bountyWindowSeconds: 14 days,
-            feedbackWindowSeconds: 14 days,
+            bountyStartBy: 0,
+            bountyWindowSeconds: 2 hours,
+            feedbackWindowSeconds: 2 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 100 });
+            RoundLib.RoundConfig({ epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 100 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1475,7 +1481,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             roundConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
 
@@ -1500,13 +1507,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: 100e6,
             requiredVoters: 3,
             requiredSettledRounds: 1,
-            bountyStartBy: block.timestamp + 14 days,
-            bountyWindowSeconds: 14 days,
-            feedbackWindowSeconds: 14 days,
+            bountyStartBy: 0,
+            bountyWindowSeconds: 2 hours,
+            feedbackWindowSeconds: 2 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 100 });
+            RoundLib.RoundConfig({ epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 100 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1525,7 +1532,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             roundConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
 
@@ -1550,15 +1558,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: _defaultSubmissionRewardAmount(registry),
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-            bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-            feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+            bountyStartBy: 0,
+            bountyWindowSeconds: 2 hours,
+            feedbackWindowSeconds: 2 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory reservedConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({ epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
         RoundLib.RoundConfig memory alteredConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 3 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({ epochDuration: 3 hours, maxDuration: 3 hours, minVoters: 3, maxVoters: 4 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1588,7 +1596,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             alteredConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
 
         uint256 id = registry.submitQuestionWithRewardAndRoundConfig(
@@ -1602,7 +1611,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             rewardTerms,
             reservedConfig,
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
 
@@ -1633,7 +1643,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
             ),
             _defaultContentRoundConfig(),
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
     }
@@ -1643,7 +1654,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
 
         vm.startPrank(submitter);
-        vm.expectRevert("Too few rounds");
+        vm.expectRevert("One round only");
         registry.submitQuestionWithRewardAndRoundConfig(
             "https://example.com/too-few-rounds",
             imageUrls,
@@ -1661,7 +1672,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
             ),
             _defaultContentRoundConfig(),
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
     }
@@ -1689,7 +1701,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
             ),
             _defaultContentRoundConfig(),
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
     }
@@ -1697,6 +1710,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_SubmitQuestionWithReward_RejectsExpiredSubmissionBounty() public {
         string[] memory imageUrls = _emptyImageUrls();
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            amount: rewardAmount,
+            requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            bountyStartBy: block.timestamp,
+            bountyWindowSeconds: _defaultContentRoundConfig().maxDuration,
+            feedbackWindowSeconds: _defaultContentRoundConfig().maxDuration,
+            bountyEligibility: 0
+        });
 
         vm.startPrank(submitter);
         vm.expectRevert("Bad start-by");
@@ -1709,15 +1732,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails(),
             keccak256("expired-bounty"),
-            _submissionRewardTerms(
-                DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-                rewardAmount,
-                DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-                DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-                block.timestamp
-            ),
+            rewardTerms,
             _defaultContentRoundConfig(),
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
     }
@@ -1822,7 +1840,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             block.timestamp + 30 days
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 101 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 101 });
 
         vm.startPrank(submitter);
         vm.expectRevert();
@@ -1862,7 +1880,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             block.timestamp + 30 days
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
 
         vm.startPrank(submitter);
         vm.expectRevert();
@@ -2140,7 +2158,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
             ),
             _defaultContentRoundConfig(),
-            _defaultQuestionSpec()
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
         );
         vm.stopPrank();
     }
@@ -2257,11 +2276,22 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         MockCategoryRegistry mockCategoryRegistry2 = new MockCategoryRegistry();
         mockCategoryRegistry2.seedDefaultTestCategories();
         ProtocolConfig noRaterConfig = _deployProtocolConfig(owner);
-        _setTlockRoundConfig(noRaterConfig, 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(noRaterConfig, 1 hours, 1 hours, 3, 100);
         noRaterConfig.setCategoryRegistry(address(mockCategoryRegistry2));
         noRaterConfig.setTreasury(treasury);
         reg2.setCategoryRegistry(address(mockCategoryRegistry2));
         reg2.setProtocolConfig(address(noRaterConfig));
+        RoundVotingEngine reg2Engine = RoundVotingEngine(
+            address(
+                new ERC1967Proxy(
+                    address(new RoundVotingEngine()),
+                    abi.encodeCall(
+                        RoundVotingEngine.initialize, (owner, address(lrepToken), address(reg2), address(noRaterConfig))
+                    )
+                )
+            )
+        );
+        reg2.setVotingEngine(address(reg2Engine));
         MockQuestionRewardPoolEscrow reg2Escrow = _newMockQuestionRewardPoolEscrow(reg2);
         reg2.setQuestionRewardPoolEscrow(address(reg2Escrow));
         vm.stopPrank();
@@ -3189,7 +3219,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         vm.startPrank(owner);
-        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 1 hours, 3, 100);
         ProtocolConfig(address(replacementEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         registry.pause();
         registry.setVotingEngine(address(replacementEngine));
@@ -3293,7 +3323,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
-    function test_SetVotingEngine_OldEngineRecordMeaningfulActivity_RevertsOnFreshContent_AfterRotation() public {
+    function test_SetVotingEngine_OldEngineRecordMeaningfulActivity_AllowsTrackedInitialRound_AfterRotation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 20e6);
         _submitContentWithReservation(registry, "https://example.com/old-engine-tracked", "g", "g", "t", 0);
@@ -3313,11 +3343,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.recordPendingRatingSettlement(1, 2, 5000, 1, 0);
 
         vm.prank(address(votingEngine));
-        vm.expectRevert();
         registry.recordPendingRatingSettlement(2, 1, 5000, 1, 0);
     }
 
-    function test_CancelContent_VotingEngineNotSet_AllowsCancel() public {
+    function test_CancelContent_VotingEngineNotSet_RevertsOnSubmit() public {
         // Deploy a fresh registry without votingEngine
         vm.startPrank(owner);
         ContentRegistry registryImpl2 = new ContentRegistry();
@@ -3337,12 +3366,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
-        _submitContentWithReservation(reg2, "https://example.com/1", "goal", "goal", "tags", 0);
-        reg2.cancelContent(1);
+        NoMediaQuestionText memory question =
+            NoMediaQuestionText({ url: "https://example.com/1", title: "goal", tags: "tags" });
+        bytes32 salt = _contentSubmissionSalt(question.url, submitter);
+        _reserveNoMediaQuestionSubmission(reg2, question, 1, salt, submitter);
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert();
+        _submitNoMediaQuestion(reg2, question, 1, salt);
         vm.stopPrank();
-
-        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = reg2.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Cancelled));
     }
 
     function test_CancelContent_DoesNotChargeDeprecatedFee() public {
@@ -3408,12 +3439,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     // Engine deauthorization (M-Identity-1) regression
     // =========================================================================
 
-    function test_SetVotingEngine_OldEngine_UpdateRatingState_RevertsOnFreshContent_AfterRotation() public {
-        // Submit content that the old engine has touched (commit), and a second piece of content
-        // the old engine has never settled. Pre-fix the second case is the security hole: the
-        // per-content stale check defaults to "not stale" for unsettled content, so the
-        // deauthorized engine could write rating state. Post-fix the call must revert
-        // immediately because the caller is no longer canonical.
+    function test_SetVotingEngine_OldEngine_UpdateRatingState_AllowsTrackedInitialRound_AfterRotation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/old-engine-fresh", "g", "g", "t", 0);
@@ -3427,18 +3453,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        vm.prank(address(votingEngine));
-        vm.expectRevert();
-        registry.recordPendingRatingSettlement(freshContentId, 1, 5000, 1, 0);
-
-        // Sanity: the canonical (replacement) engine can still record pending settlement.
         vm.expectEmit(true, true, false, true, address(registry));
         emit ContentRegistryRatingSnapshotLib.RatingReviewPending(freshContentId, 1, 5000, 1, 0, block.timestamp);
-        vm.prank(address(replacementEngine));
+        vm.prank(address(votingEngine));
         registry.recordPendingRatingSettlement(freshContentId, 1, 5000, 1, 0);
     }
 
-    function test_SetVotingEngine_OldEngine_UpdateActivity_RevertsAfterRotation() public {
+    function test_SetVotingEngine_OldEngine_UpdateActivity_AllowsTrackedInitialRound_AfterRotation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/old-engine-activity", "g", "g", "t", 0);
@@ -3452,11 +3473,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(address(votingEngine));
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
         registry.updateActivity(1);
 
         vm.prank(address(votingEngine));
-        vm.expectRevert();
         registry.recordPendingRatingSettlement(1, 1, 5000, 1, 0);
     }
 
@@ -3483,7 +3502,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.markDormant(contentIds[0]);
     }
 
-    function test_MarkDormant_VotingEngineNotSet_AllowsDormant() public {
+    function test_MarkDormant_VotingEngineNotSet_RevertsOnSubmit() public {
         vm.startPrank(owner);
         ContentRegistry registryImpl2 = new ContentRegistry();
         ContentRegistry reg2 = ContentRegistry(
@@ -3502,14 +3521,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
-        _submitContentWithReservation(reg2, "https://example.com/1", "goal", "goal", "tags", 0);
+        NoMediaQuestionText memory question =
+            NoMediaQuestionText({ url: "https://example.com/1", title: "goal", tags: "tags" });
+        bytes32 salt = _contentSubmissionSalt(question.url, submitter);
+        _reserveNoMediaQuestionSubmission(reg2, question, 1, salt, submitter);
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert();
+        _submitNoMediaQuestion(reg2, question, 1, salt);
         vm.stopPrank();
-
-        vm.warp(T0 + 31 days);
-        reg2.markDormant(1);
-
-        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = reg2.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_Success() public {
@@ -3624,7 +3643,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         vm.startPrank(owner);
-        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
+        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 1 hours, 3, 100);
         ProtocolConfig(address(replacementEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         registry.pause();
         registry.setVotingEngine(address(replacementEngine));

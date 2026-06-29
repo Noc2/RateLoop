@@ -146,22 +146,6 @@ struct CreateRewardPoolParams {
     bytes32 reasonHash;
 }
 
-/// @dev Public EIP-3009 entry point params. The funder, asset, payer, and non-refundable
-///      fields are derived by the escrow so the authorization nonce binds only user intent.
-struct AuthorizedRewardPoolParams {
-    uint256 contentId;
-    uint256 amount;
-    uint256 requiredVoters;
-    uint256 requiredSettledRounds;
-    uint256 bountyStartBy;
-    uint256 bountyWindowSeconds;
-    uint256 feedbackWindowSeconds;
-    uint8 bountyEligibility;
-    uint8 bountyKind;
-    uint256 relatedRoundId;
-    bytes32 reasonHash;
-}
-
 /// @dev Caller-supplied params for `QuestionRewardPoolEscrowBundleActionsLib.createSubmissionBundleFromRegistry`.
 ///      Packed into a struct so the lib entry point stays under the IR-minimum stack budget
 ///      that `forge coverage --ir-minimum` enforces (the previous 19-arg signature blew the

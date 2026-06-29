@@ -43,7 +43,13 @@ import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol"
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
 ///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
 /// @dev Formally implements {IRoundVotingEngine} for compile-time interface coverage.
-contract RoundVotingEngine is IRoundVotingEngine, IRoundVotingCommitReveal, IRoundVotingSettlement, Initializable, ReentrancyGuardTransient {
+contract RoundVotingEngine is
+    IRoundVotingEngine,
+    IRoundVotingCommitReveal,
+    IRoundVotingSettlement,
+    Initializable,
+    ReentrancyGuardTransient
+{
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -450,6 +456,19 @@ contract RoundVotingEngine is IRoundVotingEngine, IRoundVotingCommitReveal, IRou
         }
     }
 
+    /// @notice Open the first rewardable round from `ContentRegistry` during question submission.
+    /// @dev The registry already reserved `allocatedRoundId`, avoiding a callback into the
+    ///      registry while its submission reentrancy guard is active.
+    function openInitialRoundFromRegistry(uint256 contentId, uint256 allocatedRoundId)
+        external
+        whenNotPaused
+        nonReentrant
+    {
+        if (msg.sender != address(registry)) revert Unauthorized();
+        if (allocatedRoundId == 0 || currentRoundId[contentId] != 0) revert RoundNotOpen();
+        _activateAllocatedRound(contentId, allocatedRoundId);
+    }
+
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.
     /// @param contentId The content being voted on.
     /// @param roundContext Packed expected round ID and reference score: `(roundId << 16) | ratingBps`.
@@ -839,9 +858,11 @@ contract RoundVotingEngine is IRoundVotingEngine, IRoundVotingCommitReveal, IRou
             }
         }
 
-        roundId = RoundCreationLib.activateNewRound(
-            currentRoundId, nextRoundId, rounds, contentId, registry.reserveNextVotingRound(contentId)
-        );
+        return _activateAllocatedRound(contentId, registry.reserveNextVotingRound(contentId));
+    }
+
+    function _activateAllocatedRound(uint256 contentId, uint256 allocatedRoundId) internal returns (uint256 roundId) {
+        roundId = RoundCreationLib.activateNewRound(currentRoundId, nextRoundId, rounds, contentId, allocatedRoundId);
         _snapshotRoundContentLifecycle(contentId, roundId);
         RoundCreationLib.snapshotRoundVotingConfig(
             roundConfigSnapshot,
@@ -865,7 +886,6 @@ contract RoundVotingEngine is IRoundVotingEngine, IRoundVotingCommitReveal, IRou
             contentId,
             roundId
         );
-        return roundId;
     }
 
     function _markRoundRevealFailed(uint256 contentId, uint256 roundId, RoundLib.Round storage round) internal {

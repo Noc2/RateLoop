@@ -630,6 +630,24 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "openInitialRoundFromRegistry",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "allocatedRoundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "openRound",
     "inputs": [
       {

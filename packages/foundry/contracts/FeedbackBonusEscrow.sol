@@ -12,7 +12,6 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IFeedbackRegistry } from "./interfaces/IFeedbackRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
@@ -42,9 +41,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     uint256 public constant MIN_FEEDBACK_AWARD_DECISION_SECONDS = 1 days;
     uint8 public constant REWARD_ASSET_LREP = 0;
     uint8 public constant REWARD_ASSET_USDC = 1;
-    bytes32 internal constant FEEDBACK_BONUS_AUTHORIZATION_TYPEHASH = keccak256(
-        "RateLoopFeedbackBonusAuthorization(uint256 chainId,address escrow,uint256 contentId,uint256 roundId,uint256 amount,uint256 feedbackClosesAt,address awarder,address funder,uint256 validAfter,uint256 validBefore)"
-    );
 
     struct FeedbackBonusPool {
         uint64 id;
@@ -63,14 +59,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         bool forfeited;
         uint16 frontendFeeBps;
         uint8 asset;
-    }
-
-    struct AuthorizedFeedbackBonusParams {
-        uint256 contentId;
-        uint256 roundId;
-        uint256 amount;
-        uint256 feedbackClosesAt;
-        address awarder;
     }
 
     IERC20 public usdcToken;
@@ -166,57 +154,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
-    function createFeedbackBonusPool(
-        uint256 contentId,
-        uint256 roundId,
-        uint256 amount,
-        uint256 feedbackClosesAt,
-        address awarder
-    ) external nonReentrant whenNotPaused returns (uint256 poolId) {
-        return _createFeedbackBonusPool(contentId, roundId, REWARD_ASSET_USDC, amount, feedbackClosesAt, awarder);
-    }
-
-    function createFeedbackBonusPoolWithAsset(
-        uint256 contentId,
-        uint256 roundId,
-        uint8 asset,
-        uint256 amount,
-        uint256 feedbackClosesAt,
-        address awarder
-    ) external nonReentrant whenNotPaused returns (uint256 poolId) {
-        return _createFeedbackBonusPool(contentId, roundId, asset, amount, feedbackClosesAt, awarder);
-    }
-
-    function createFeedbackBonusPoolWithAuthorization(
-        AuthorizedFeedbackBonusParams calldata params,
-        Eip3009Authorization calldata authorization
-    ) external nonReentrant whenNotPaused returns (uint256 poolId) {
-        require(authorization.from != address(0), "Invalid funder");
-        require(authorization.to == address(this), "Bad payee");
-        require(authorization.value == params.amount, "Bad amount");
-        require(
-            authorization.nonce
-                == computeFeedbackBonusAuthorizationNonce(
-                    params, authorization.from, authorization.validAfter, authorization.validBefore
-                ),
-            "Bad nonce"
-        );
-        _validateFeedbackBonusPool(
-            params.contentId, params.roundId, REWARD_ASSET_USDC, params.amount, params.feedbackClosesAt, params.awarder
-        );
-
-        uint256 receivedAmount = _receiveUsdcAuthorization(authorization);
-        poolId = _storeFeedbackBonusPool(
-            params.contentId,
-            params.roundId,
-            REWARD_ASSET_USDC,
-            receivedAmount,
-            params.feedbackClosesAt,
-            params.awarder,
-            authorization.from
-        );
-    }
-
     function createFeedbackBonusPoolFromGateway(
         uint256 contentId,
         uint256 roundId,
@@ -232,29 +169,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         uint256 receivedAmount = _pullExactToken(usdcToken, msg.sender, amount);
         poolId = _storeFeedbackBonusPool(
             contentId, roundId, REWARD_ASSET_USDC, receivedAmount, feedbackClosesAt, awarder, funder
-        );
-    }
-
-    function computeFeedbackBonusAuthorizationNonce(
-        AuthorizedFeedbackBonusParams calldata params,
-        address funder,
-        uint256 validAfter,
-        uint256 validBefore
-    ) public view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                FEEDBACK_BONUS_AUTHORIZATION_TYPEHASH,
-                block.chainid,
-                address(this),
-                params.contentId,
-                params.roundId,
-                params.amount,
-                params.feedbackClosesAt,
-                params.awarder,
-                funder,
-                validAfter,
-                validBefore
-            )
         );
     }
 
@@ -484,28 +398,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         token.safeTransferFrom(funder, address(this), amount);
         receivedAmount = token.balanceOf(address(this)) - balanceBefore;
         require(receivedAmount == amount, "Fee token unsupported");
-    }
-
-    function _receiveUsdcAuthorization(Eip3009Authorization calldata authorization)
-        internal
-        returns (uint256 receivedAmount)
-    {
-        uint256 balanceBefore = usdcToken.balanceOf(address(this));
-        // slither-disable-next-line reentrancy-balance
-        IReceiveWithAuthorizationToken(address(usdcToken))
-            .receiveWithAuthorization(
-                authorization.from,
-                authorization.to,
-                authorization.value,
-                authorization.validAfter,
-                authorization.validBefore,
-                authorization.nonce,
-                authorization.v,
-                authorization.r,
-                authorization.s
-            );
-        receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
-        require(receivedAmount == authorization.value, "Fee token unsupported");
     }
 
     function _bonusToken(uint8 asset) internal view returns (IERC20 token) {

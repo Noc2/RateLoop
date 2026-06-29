@@ -297,7 +297,7 @@ function createContentRegistryReadContract(
     return (
       options.roundConfig ?? {
         epochDuration: 600,
-        maxDuration: 7200,
+        maxDuration: 600,
         minVoters: 5,
         maxVoters: 50,
       }
@@ -380,7 +380,7 @@ describe("ContentRegistry ponder handlers", () => {
             submitterIdentity: SUBMITTER_IDENTITY_ADDRESS,
             submitterIdentityKey: SUBMITTER_IDENTITY_KEY,
             roundEpochDuration: 600,
-            roundMaxDuration: 7200,
+            roundMaxDuration: 600,
             roundMinVoters: 5,
             roundMaxVoters: 50,
           }),
@@ -404,7 +404,7 @@ describe("ContentRegistry ponder handlers", () => {
         args: {
           contentId: 7n,
           epochDuration: 600,
-          maxDuration: 7200,
+          maxDuration: 600,
           minVoters: 5,
           maxVoters: 50,
         },
@@ -422,7 +422,7 @@ describe("ContentRegistry ponder handlers", () => {
           table: "content",
           values: expect.objectContaining({
             roundEpochDuration: 600,
-            roundMaxDuration: 7200,
+            roundMaxDuration: 600,
             roundMinVoters: 5,
             roundMaxVoters: 50,
           }),

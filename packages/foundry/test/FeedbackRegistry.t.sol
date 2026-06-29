@@ -18,17 +18,15 @@ contract FeedbackRegistryTest is Test {
         feedbackRegistry = FeedbackRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl), abi.encodeCall(FeedbackRegistry.initialize, (address(this), address(this), votingEngine))
+                    address(impl),
+                    abi.encodeCall(FeedbackRegistry.initialize, (address(this), address(this), votingEngine))
                 )
             )
         );
     }
 
     function testContentFeedbackHashDomainMatchesCanonicalPreimage() public view {
-        assertEq(
-            feedbackRegistry.CONTENT_FEEDBACK_HASH_DOMAIN(),
-            keccak256("rateloop.content-feedback.v1")
-        );
+        assertEq(feedbackRegistry.CONTENT_FEEDBACK_HASH_DOMAIN(), keccak256("rateloop.content-feedback.v1"));
     }
 
     function testBuildContentFeedbackHashUsesCanonicalStringDomain() public view {

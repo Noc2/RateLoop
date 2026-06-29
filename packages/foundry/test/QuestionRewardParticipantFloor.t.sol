@@ -11,7 +11,7 @@ contract QuestionRewardParticipantFloorHarness {
     }
 
     function validateSubmissionReward(uint256 amount, uint256 requiredVoters) external pure {
-        ContentRegistryRewardLib.validateSubmissionReward(1, amount, requiredVoters, 1, 0, 0, 0, 0, 1, 1_000);
+        ContentRegistryRewardLib.validateSubmissionReward(1, amount, requiredVoters, 1, 0, 1_000, 1_000, 0, 1, 1_000);
     }
 }
 

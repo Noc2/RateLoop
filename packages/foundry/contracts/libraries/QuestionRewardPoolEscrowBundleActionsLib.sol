@@ -147,8 +147,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
         require(params.requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredCompleters >= _requiredParticipantFloorForAmount(params.amount), "High-value floor");
-        require(params.requiredSettledRounds >= 1, "Too few rounds");
-        require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
+        require(params.requiredSettledRounds == 1, "One round only");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         _requireCompletersMatchSettlementVoters(registry, params.contentIds, params.requiredCompleters);
         QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
@@ -251,6 +250,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     ) private {
         bundle.id = params.bundleId.toUint64();
         bundle.bountyStartBy = params.bountyStartBy.toUint64();
+        bundle.bountyOpensAt = uint64(block.timestamp);
+        bundle.bountyClosesAt = params.bountyStartBy.toUint64();
+        bundle.feedbackClosesAt = params.bountyStartBy.toUint64();
+        bundle.claimDeadline = params.bountyStartBy.toUint64();
         bundle.bountyWindowSeconds = params.bountyWindowSeconds.toUint32();
         bundle.feedbackWindowSeconds = normalizedFeedbackWindowSeconds.toUint32();
         bundle.funder = params.funder;
@@ -266,6 +269,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         bundle.unallocatedAmount = fundedAmount;
         bundle.bountyEligibilityDataHash = QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash();
         bundle.nonRefundable = true;
+        emit QuestionRewardPoolEscrowWindowLib.QuestionBundleWindowActivated(
+            params.bundleId, block.timestamp, params.bountyStartBy, params.bountyStartBy
+        );
     }
 
     function _registerBundleQuestions(
@@ -746,6 +752,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint64 refundClock = QuestionRewardPoolEscrowWindowLib.bundleRefundClock(bundle);
         require(refundClock != 0 && block.timestamp > refundClock, "Bundle active");
         require(block.timestamp > uint256(refundClock) + BUNDLE_REFUND_GRACE, "Grace");
+        uint256 completedRoundSetsBefore = bundle.completedRoundSets;
         (, bool syncComplete) = _syncQuestionBundleTerminals(
             bundleRewards,
             bundleQuestions,
@@ -789,6 +796,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             QuestionRewardPoolEscrowBundleLib.requireCleanupComplete(
                 bundleQuestions, bundleRoundIds, params.votingEngine, params.bundleId, bundle.completedRoundSets
             );
+            if (bundle.completedRoundSets > completedRoundSetsBefore) {
+                return 0;
+            }
             if (bundle.claimDeadline == 0) {
                 bundle.claimDeadline = uint64(block.timestamp);
                 return 0;
@@ -1165,6 +1175,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (!recovered) {
             unchecked {
                 bundle.completedRoundSets++;
+            }
+            if (block.timestamp > bundle.claimDeadline) {
+                bundle.claimDeadline = block.timestamp.toUint64();
             }
         } else if (block.timestamp > bundle.claimDeadline) {
             bundle.claimDeadline = block.timestamp.toUint64();

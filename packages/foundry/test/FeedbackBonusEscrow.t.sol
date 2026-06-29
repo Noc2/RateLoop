@@ -8,7 +8,6 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -142,7 +141,6 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     address public owner = address(1);
     address public submitter = address(2);
     uint256 internal constant FUNDER_KEY = 0xF00D;
-    uint256 internal constant WRONG_AUTHORIZATION_SIGNER_KEY = 0xB0B;
     address public funder;
     address public voter1 = address(4);
     address public voter2 = address(5);
@@ -151,10 +149,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     address public delegate1 = address(8);
     address public frontend1 = address(9);
     address public treasury = address(100);
+    address public feedbackGateway = address(0x402);
 
     uint256 public constant STAKE = 5e6;
     uint256 public constant EPOCH_DURATION = 10 minutes;
     uint256 public constant BONUS_AMOUNT = 100e6;
+    bytes32 internal constant X402_GATEWAY_ROLE = keccak256("X402_GATEWAY_ROLE");
     bytes32 public FEEDBACK_HASH;
 
     string internal constant QUESTION = "Would you recommend this hotel?";
@@ -297,6 +297,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
+        registry.grantRole(X402_GATEWAY_ROLE, feedbackGateway);
 
         frontendRegistry.setVotingEngine(address(votingEngine));
 
@@ -306,7 +307,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         protocolConfig.setTreasury(treasury);
         protocolConfig.setRaterRegistry(address(raterRegistry));
         _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 100);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, EPOCH_DURATION, 3, 100);
 
         address[7] memory humans = [submitter, funder, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < humans.length; i++) {
@@ -315,6 +316,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             usdc.mint(humans[i], 1_000e6);
         }
         lrepToken.mint(delegate1, 10_000e6);
+        usdc.mint(feedbackGateway, 10_000e6);
 
         vm.stopPrank();
     }
@@ -329,10 +331,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        vm.startPrank(funder);
+        vm.startPrank(feedbackGateway);
         usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
         vm.expectRevert(FeedbackBonusEscrow.StaleEngine.selector);
-        feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
+        feedbackBonusEscrow.createFeedbackBonusPoolFromGateway(
+            contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder, funder
+        );
         vm.stopPrank();
     }
 
@@ -454,12 +458,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         uint256 contentId = _submitQuestion("replacement-feedback-stack");
-        uint256 replacementRoundId = replacementEngine.nextRoundIdForContent(contentId);
+        uint256 replacementRoundId = RoundEngineReadHelpers.activeRoundId(replacementEngine, contentId);
 
-        vm.startPrank(funder);
+        vm.startPrank(feedbackGateway);
         usdc.approve(address(replacementEscrow), BONUS_AMOUNT);
-        uint256 poolId = replacementEscrow.createFeedbackBonusPool(
-            contentId, replacementRoundId, BONUS_AMOUNT, block.timestamp + 7 days, funder
+        uint256 poolId = replacementEscrow.createFeedbackBonusPoolFromGateway(
+            contentId, replacementRoundId, BONUS_AMOUNT, block.timestamp + 7 days, funder, funder
         );
         vm.stopPrank();
 
@@ -472,70 +476,37 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(address(replacementFeedbackRegistry.votingEngine()), address(replacementEngine));
     }
 
-    function testCreateFeedbackBonusPoolWithAuthorizationFundsUsdcPool() public {
-        uint256 contentId = _submitQuestion("authorized-feedback-bonus");
-        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
-        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
+    function testCreateFeedbackBonusPoolFromGatewayFundsUsdcPool() public {
+        uint256 contentId = _submitQuestion("gateway-feedback-bonus");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
-        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        uint256 gatewayBalanceBefore = usdc.balanceOf(feedbackGateway);
 
-        vm.prank(voter1);
-        uint256 poolId = feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
+        vm.startPrank(feedbackGateway);
+        usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
+        uint256 poolId = feedbackBonusEscrow.createFeedbackBonusPoolFromGateway(
+            contentId, roundId, BONUS_AMOUNT, block.timestamp + EPOCH_DURATION, funder, funder
+        );
+        vm.stopPrank();
 
         (,,,, address storedFunder,,,,,,, uint256 fundedAmount,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
         assertEq(storedFunder, funder);
-        assertEq(fundedAmount, params.amount);
-        assertTrue(usdc.authorizationState(funder, authorization.nonce));
-        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore + params.amount);
-        assertEq(usdc.balanceOf(funder), funderBalanceBefore - params.amount);
+        assertEq(fundedAmount, BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore + BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(feedbackGateway), gatewayBalanceBefore - BONUS_AMOUNT);
     }
 
-    function testCreateFeedbackBonusPoolWithAuthorizationRejectsInvalidSignature() public {
-        uint256 contentId = _submitQuestion("authorized-feedback-bonus-bad-signature");
-        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
-        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
-        _signAuthorization(authorization, WRONG_AUTHORIZATION_SIGNER_KEY);
-        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
-        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+    function testCreateFeedbackBonusPoolFromGatewayRequiresGatewayRole() public {
+        uint256 contentId = _submitQuestion("gateway-feedback-bonus-role");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
 
-        vm.expectRevert("MockERC20: invalid authorization signature");
-        feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
-
-        assertFalse(usdc.authorizationState(funder, authorization.nonce));
-        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore);
-        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
-    }
-
-    function testCreateFeedbackBonusPoolWithAuthorizationRejectsBadNonceBeforeTransfer() public {
-        uint256 contentId = _submitQuestion("authorized-feedback-bonus-bad-nonce");
-        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
-        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
-        authorization.nonce = keccak256("wrong feedback bonus nonce");
-        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
-        uint256 funderBalanceBefore = usdc.balanceOf(funder);
-
-        vm.expectRevert("Bad nonce");
-        feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
-
-        assertFalse(usdc.authorizationState(funder, authorization.nonce));
-        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore);
-        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
-    }
-
-    function testCreateFeedbackBonusPoolWithAuthorizationRejectsShortReceipt() public {
-        uint256 contentId = _submitQuestion("authorized-feedback-bonus-short-receipt");
-        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
-        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
-        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
-        uint256 funderBalanceBefore = usdc.balanceOf(funder);
-        usdc.setAuthorizationTransferShortfall(1);
-
-        vm.expectRevert("Fee token unsupported");
-        feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
-
-        assertFalse(usdc.authorizationState(funder, authorization.nonce));
-        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore);
-        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
+        vm.startPrank(funder);
+        usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
+        vm.expectRevert("Only gateway");
+        feedbackBonusEscrow.createFeedbackBonusPoolFromGateway(
+            contentId, roundId, BONUS_AMOUNT, block.timestamp + EPOCH_DURATION, funder, funder
+        );
+        vm.stopPrank();
     }
 
     function testFeedbackPublishIsImmediatelyAwardableOnChain() public {
@@ -609,7 +580,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
     }
 
-    function testAwardRejectsIdentityBannedInRoundRegistrySnapshotAfterProtocolRotation() public {
+    function testRoundRegistrySnapshotIsAnchoredAtQuestionCreationAfterProtocolRotation() public {
         uint256 contentId = _submitQuestion("round-snapshot-feedback-ban");
         uint256 poolId = _createFeedbackBonusPool(contentId);
 
@@ -620,7 +591,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         (uint256 settledRoundId, bytes32[] memory commitKeys) =
             _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
 
-        assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, settledRoundId), address(replacementRegistry));
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, settledRoundId), address(raterRegistry));
         assertEq(address(feedbackBonusEscrow.raterRegistry()), address(raterRegistry));
         (,,,,,,,,,, address poolSnapshotRegistry,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
         assertEq(poolSnapshotRegistry, address(raterRegistry));
@@ -631,8 +602,8 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 feedbackHash = _feedbackHash(contentId, settledRoundId, voter1);
 
         vm.prank(funder);
-        vm.expectRevert("Identity banned");
-        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
+        assertEq(recipientAmount, 10e6);
     }
 
     function testAwardRejectsCommittedHolderAddressBannedInCurrentRegistry() public {
@@ -831,14 +802,13 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(recipientAmount, 10e6);
     }
 
-    function testUnstartedRoundFeedbackBonusForfeitsAtRequestedDeadline() public {
+    function testOpenUncommittedRoundFeedbackBonusCannotForfeitBeforeTerminal() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
 
         vm.warp(block.timestamp + 2);
-        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
-
-        assertEq(forfeitedAmount, BONUS_AMOUNT);
+        vm.expectRevert("Not expired");
+        feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
     }
 
     function testStartedOpenRoundFeedbackBonusCannotForfeitBeforeTerminalDeadline() public {
@@ -849,56 +819,6 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.warp(block.timestamp + 2);
         vm.expectRevert("Not expired");
         feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
-    }
-
-    function testLrepFeedbackBonusPaysRevealedVoterAndFrontend() public {
-        _registerFrontend(frontend1);
-        uint256 contentId = _submitQuestion("");
-        uint256 poolId = _createLrepFeedbackBonusPool(contentId);
-        _settleRoundWithFrontend(_threeVoters(), contentId, _directions(true, true, false), frontend1);
-
-        uint256 voterBalanceBefore = lrepToken.balanceOf(voter1);
-        uint256 frontendBalanceBefore = lrepToken.balanceOf(frontend1);
-
-        vm.prank(funder);
-        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
-
-        assertEq(recipientAmount, 9_700_000);
-        assertEq(lrepToken.balanceOf(voter1), voterBalanceBefore + 9_700_000);
-        assertEq(lrepToken.balanceOf(frontend1), frontendBalanceBefore + 300_000);
-        (,,,,,,,,,,,, uint256 remainingAmount,,, uint8 asset) = feedbackBonusEscrow.feedbackBonusPools(poolId);
-        assertEq(remainingAmount, 90e6);
-        assertEq(asset, feedbackBonusEscrow.REWARD_ASSET_LREP());
-    }
-
-    function testLrepFeedbackBonusExpiredRemainderForfeitsToTreasury() public {
-        uint256 contentId = _submitQuestion("");
-        uint256 poolId = _createLrepFeedbackBonusPool(contentId);
-        uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-
-        vm.warp(block.timestamp + 8 days);
-
-        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
-
-        assertEq(forfeitedAmount, BONUS_AMOUNT);
-        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore + BONUS_AMOUNT);
-        (,,,,,,,,,,,, uint256 remainingAmount, bool forfeited,, uint8 asset) =
-            feedbackBonusEscrow.feedbackBonusPools(poolId);
-        assertEq(remainingAmount, 0);
-        assertTrue(forfeited);
-        assertEq(asset, feedbackBonusEscrow.REWARD_ASSET_LREP());
-    }
-
-    function testCreateFeedbackBonusPoolRejectsInvalidAsset() public {
-        uint256 contentId = _submitQuestion("");
-
-        vm.startPrank(funder);
-        usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        vm.expectRevert("Invalid asset");
-        feedbackBonusEscrow.createFeedbackBonusPoolWithAsset(
-            contentId, 1, 2, BONUS_AMOUNT, block.timestamp + 7 days, funder
-        );
-        vm.stopPrank();
     }
 
     function testRecoverNonAssetTokenRejectsLrepAndUsdc() public {
@@ -1106,45 +1026,24 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 poolId = _createFeedbackBonusPool(contentId);
         address[] memory voters = _fourVoters();
         bool[] memory directions = _directions(true, true, false, false);
-        bytes32[] memory salts = new bytes32[](voters.length);
-        bytes32[] memory commitKeys = new bytes32[](voters.length);
+        uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
-        for (uint256 i = 0; i < 3; i++) {
-            (salts[i], commitKeys[i]) = _commitFeedbackVote(voters[i], contentId, directions[i], i, address(0));
-        }
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
-        _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
-        (salts[3], commitKeys[3]) = _commitFeedbackVote(voters[3], contentId, directions[3], 3, address(0));
-
-        for (uint256 i = 0; i < voters.length; i++) {
-            vm.prank(voters[i]);
-            feedbackRegistry.publishFeedback(
-                contentId, roundId, commitKeys[i], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
-            );
-        }
-
-        for (uint256 i = 0; i < 3; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
-        }
-        uint256 seedBlock = block.number + 1;
-        vm.roll(seedBlock);
-        votingEngine.settleRound(contentId, roundId);
-        vm.prank(voters[3]);
-        vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[3], directions[3], 5_000, salts[3]);
-        vm.roll(seedBlock + 1);
-        votingEngine.settleRound(contentId, roundId);
+        vm.warp(block.timestamp + 24 hours + 1);
+        (, bytes32 laterCommitKey) = _commitFeedbackVote(voter4, contentId, false, 4, address(0));
+        uint256 laterRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        assertGt(laterRoundId, roundId);
 
         bytes32 voter1FeedbackHash = _feedbackHash(contentId, roundId, voter1);
-        bytes32 voter4FeedbackHash = _feedbackHash(contentId, roundId, voter4);
+        bytes32 voter4FeedbackHash = _feedbackHash(contentId, laterRoundId, voter4);
+        vm.prank(voter4);
+        feedbackRegistry.publishFeedback(
+            contentId, laterRoundId, laterCommitKey, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
 
-        assertEq(_commitRbtsScoringWeight(votingEngine, contentId, roundId, commitKeys[3]), 0);
         vm.prank(funder);
-        vm.expectRevert("Vote not revealed");
+        vm.expectRevert("Feedback not revealed");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter4, voter4FeedbackHash, 10e6);
 
-        assertGt(_commitRbtsScoringWeight(votingEngine, contentId, roundId, commitKeys[0]), 0);
         vm.prank(funder);
         uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, voter1FeedbackHash, 10e6);
         assertEq(recipientAmount, 10e6);
@@ -1255,13 +1154,8 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     function testCreateFeedbackBonusPoolAllowsFunderWithoutHumanCredential() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
-        usdc.mint(unverifiedFunder, BONUS_AMOUNT);
 
-        vm.startPrank(unverifiedFunder);
-        usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        uint256 poolId =
-            feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
-        vm.stopPrank();
+        uint256 poolId = _createFeedbackBonusPoolForFunder(contentId, unverifiedFunder);
 
         assertGt(poolId, 0);
         (,,,,, address funderIdentity,,,,,,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
@@ -1430,68 +1324,27 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         internal
         returns (uint256 poolId)
     {
-        vm.startPrank(funder);
+        poolId = _createFeedbackBonusPoolForFunderWithDeadline(contentId, funder, feedbackClosesAt);
+    }
+
+    function _createFeedbackBonusPoolForFunder(uint256 contentId, address poolFunder)
+        internal
+        returns (uint256 poolId)
+    {
+        poolId = _createFeedbackBonusPoolForFunderWithDeadline(contentId, poolFunder, block.timestamp + 7 days);
+    }
+
+    function _createFeedbackBonusPoolForFunderWithDeadline(
+        uint256 contentId,
+        address poolFunder,
+        uint256 feedbackClosesAt
+    ) internal returns (uint256 poolId) {
+        vm.startPrank(feedbackGateway);
         usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        poolId = feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, feedbackClosesAt, funder);
-        vm.stopPrank();
-    }
-
-    function _createLrepFeedbackBonusPool(uint256 contentId) internal returns (uint256 poolId) {
-        vm.startPrank(funder);
-        lrepToken.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        poolId = feedbackBonusEscrow.createFeedbackBonusPoolWithAsset(
-            contentId, 1, feedbackBonusEscrow.REWARD_ASSET_LREP(), BONUS_AMOUNT, block.timestamp + 7 days, funder
+        poolId = feedbackBonusEscrow.createFeedbackBonusPoolFromGateway(
+            contentId, 1, BONUS_AMOUNT, feedbackClosesAt, funder, poolFunder
         );
         vm.stopPrank();
-    }
-
-    function _authorizedFeedbackBonusParams(uint256 contentId)
-        internal
-        view
-        returns (FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params)
-    {
-        params = FeedbackBonusEscrow.AuthorizedFeedbackBonusParams({
-            contentId: contentId,
-            roundId: 1,
-            amount: BONUS_AMOUNT,
-            feedbackClosesAt: block.timestamp + 7 days,
-            awarder: funder
-        });
-    }
-
-    function _feedbackBonusAuthorization(address payer, FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params)
-        internal
-        view
-        returns (Eip3009Authorization memory authorization)
-    {
-        uint256 validAfter = block.timestamp - 1;
-        uint256 validBefore = block.timestamp + 30 minutes;
-        authorization = Eip3009Authorization({
-            from: payer,
-            to: address(feedbackBonusEscrow),
-            value: params.amount,
-            validAfter: validAfter,
-            validBefore: validBefore,
-            nonce: feedbackBonusEscrow.computeFeedbackBonusAuthorizationNonce(params, payer, validAfter, validBefore),
-            v: 27,
-            r: bytes32(0),
-            s: bytes32(0)
-        });
-        _signAuthorization(authorization, FUNDER_KEY);
-    }
-
-    function _signAuthorization(Eip3009Authorization memory authorization, uint256 signerKey) internal view {
-        (authorization.v, authorization.r, authorization.s) = vm.sign(
-            signerKey,
-            usdc.receiveWithAuthorizationDigest(
-                authorization.from,
-                authorization.to,
-                authorization.value,
-                authorization.validAfter,
-                authorization.validBefore,
-                authorization.nonce
-            )
-        );
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)
