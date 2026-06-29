@@ -2194,10 +2194,12 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
     nextAction: string;
     paymentMode: string;
     paymentScheme: string;
+    questionMetadataBaseUrl?: string;
     transactionPlan: null | { calls: unknown[] };
     x402AuthorizationRequest: {
       authorization: { nonce: string };
       eip712: { domain: { name?: string; version?: string; verifyingContract?: string } };
+      questionMetadataBaseUrl?: string;
       scheme: string;
     };
   };
@@ -2208,6 +2210,7 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   assert.equal(body.nextAction, "sign_x402_authorization");
   assert.equal(body.transactionPlan, null);
   assert.equal(body.x402AuthorizationRequest.authorization.nonce, `0x${"4".repeat(64)}`);
+  assert.equal(body.x402AuthorizationRequest.questionMetadataBaseUrl, body.questionMetadataBaseUrl);
   assert.equal(body.x402AuthorizationRequest.scheme, "eip3009_usdc_authorization");
   assert.equal(body.x402AuthorizationRequest.eip712.domain.name, "USDC");
   assert.equal(body.x402AuthorizationRequest.eip712.domain.version, "2");

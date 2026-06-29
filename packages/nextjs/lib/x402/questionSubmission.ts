@@ -3381,6 +3381,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
   plan: NativeX402QuestionSubmissionPlan;
 }) {
   const signed = Boolean(params.plan.authorization.signature);
+  const questionMetadataBaseUrl = questionMetadataBaseUrlForResponse(params.payload);
   return {
     bounty: {
       amount: params.payload.bounty.amount.toString(),
@@ -3401,7 +3402,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
     paymentScheme: "eip3009_usdc_authorization",
     payloadHash: params.plan.payloadHash,
     questionCount: params.payload.questions.length,
-    questionMetadataBaseUrl: questionMetadataBaseUrlForResponse(params.payload),
+    questionMetadataBaseUrl,
     ready: false,
     roundConfig: params.plan.roundConfig,
     status: "awaiting_wallet_signature",
@@ -3420,6 +3421,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
     x402AuthorizationRequest: {
       authorization: params.plan.authorization,
       scheme: "eip3009_usdc_authorization",
+      ...(questionMetadataBaseUrl ? { questionMetadataBaseUrl } : {}),
       eip712: buildNativeX402TypedData({
         authorization: params.plan.authorization,
         chainId: params.plan.chainId,

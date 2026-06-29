@@ -1,4 +1,5 @@
 import {
+  type X402QuestionParserOptions,
   type X402QuestionPayload,
   type X402QuestionPaymentNonceFeedbackBonus,
   type X402QuestionPaymentNonceQuestion,
@@ -348,13 +349,17 @@ export function buildBrowserSigningExpectedX402Nonce(params: {
   expectedQuestionRewardPoolEscrowAddress: Address;
   expectedSubmitterAddress: Address;
   expectedWalletAddress: Address;
+  questionMetadataBaseUrl?: string | null;
   requestBody: JsonRecord | null | undefined;
   x402Authorization: BrowserX402Authorization;
 }): Hex {
   if (!isRecord(params.requestBody)) {
     throw new Error("Signing intent request body is missing.");
   }
-  const payload = parseX402QuestionRequest(params.requestBody, params.expectedChainId);
+  const parserOptions: X402QuestionParserOptions = {
+    questionMetadataBaseUrl: params.questionMetadataBaseUrl,
+  };
+  const payload = parseX402QuestionRequest(params.requestBody, params.expectedChainId, parserOptions);
   if (payload.chainId !== params.expectedChainId) {
     throw new Error("Signing intent request body chainId does not match the connected chain.");
   }
@@ -365,7 +370,7 @@ export function buildBrowserSigningExpectedX402Nonce(params: {
     throw new Error("LREP bounties require wallet_calls funding mode.");
   }
 
-  const operation = buildX402QuestionOperation(payload);
+  const operation = buildX402QuestionOperation(payload, parserOptions);
   const primaryQuestion = payload.questions[0];
   if (!primaryQuestion) {
     throw new Error("Question payload is empty.");
@@ -423,6 +428,7 @@ export function validateBrowserX402AuthorizationRequest(params: {
   expectedSubmitterAddress: Address;
   expectedUsdcAddress: Address;
   expectedWalletAddress: Address;
+  questionMetadataBaseUrl?: string | null;
   request: JsonRecord | null | undefined;
   requestBody: JsonRecord | null | undefined;
 }): { authorization: BrowserX402Authorization; typedData: BrowserX402TypedData } {
@@ -468,6 +474,11 @@ export function validateBrowserX402AuthorizationRequest(params: {
     expectedQuestionRewardPoolEscrowAddress: params.expectedQuestionRewardPoolEscrowAddress,
     expectedSubmitterAddress: params.expectedSubmitterAddress,
     expectedWalletAddress: params.expectedWalletAddress,
+    questionMetadataBaseUrl:
+      params.questionMetadataBaseUrl ??
+      (typeof params.request?.questionMetadataBaseUrl === "string"
+        ? params.request.questionMetadataBaseUrl
+        : undefined),
     requestBody: params.requestBody,
     x402Authorization: authorization,
   });

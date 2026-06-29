@@ -49,6 +49,7 @@ function authorizationRequest(
     domain?: Record<string, unknown>;
     message?: Record<string, unknown>;
     primaryType?: string;
+    questionMetadataBaseUrl?: string;
     requestBody?: Record<string, unknown>;
     types?: unknown;
   } = {},
@@ -73,6 +74,7 @@ function authorizationRequest(
       expectedQuestionRewardPoolEscrowAddress: rewardEscrow,
       expectedSubmitterAddress: submitter,
       expectedWalletAddress: wallet,
+      questionMetadataBaseUrl: overrides.questionMetadataBaseUrl,
       requestBody,
       x402Authorization: authorization,
     });
@@ -80,6 +82,7 @@ function authorizationRequest(
 
   const request = {
     authorization,
+    ...(overrides.questionMetadataBaseUrl ? { questionMetadataBaseUrl: overrides.questionMetadataBaseUrl } : {}),
     eip712: {
       domain: {
         chainId,
@@ -174,6 +177,26 @@ test("validateBrowserX402AuthorizationRequest accepts Base mainnet USDC's USD Co
 
   assert.equal(result.typedData.domain.name, "USD Coin");
   assert.equal(result.typedData.domain.chainId, 8453);
+});
+
+test("validateBrowserX402AuthorizationRequest uses prepared metadata base URL for nonce validation", () => {
+  const input = authorizationRequest({
+    questionMetadataBaseUrl: "https://www.rateloop.ai",
+    requestBody: askRequestBody({ clientRequestId: "browser-signing-metadata-base-url" }),
+  });
+
+  const result = validate(input);
+  assert.equal(result.authorization.nonce, input.request.authorization.nonce);
+
+  const staleRequest = {
+    ...input.request,
+    questionMetadataBaseUrl: undefined,
+  };
+  delete staleRequest.questionMetadataBaseUrl;
+  assert.throws(
+    () => validate({ ...input, request: staleRequest }),
+    /authorization.nonce does not match the RateLoop ask payload/,
+  );
 });
 
 test("validateBrowserX402AuthorizationRequest rejects non-EIP-3009 typed data", () => {
