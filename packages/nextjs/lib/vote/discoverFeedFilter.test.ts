@@ -446,7 +446,7 @@ test("bundle-only items keep the active bounty status when the bundle bounty is 
   assert.equal(shouldShowBountyExpiredStatus(item, 12_001), true);
 });
 
-test("feedback bonuses stay active without an indexed open round when the award window is still open", () => {
+test("feedback bonuses stay active without an indexed open round when the feedback window is still open", () => {
   const item = makeContentItem({
     id: 1n,
     url: "https://example.com/feedback-active-before-round",
@@ -531,7 +531,7 @@ test("reward opportunity ranking avoids summing different feedback bonus assets"
   assert.equal(getVisibleRewardOpportunityAmount(mixedAsset, 10_000), 12_000_000n);
 });
 
-test("feedback bonuses are closed when the award window has elapsed", () => {
+test("feedback bonuses are closed when the feedback eligibility window has elapsed", () => {
   const item = makeContentItem({
     id: 1n,
     url: "https://example.com/feedback-expired",
@@ -552,6 +552,38 @@ test("feedback bonuses are closed when the award window has elapsed", () => {
       awardCount: 0,
       hasActiveFeedbackBonus: false,
       nextFeedbackClosesAt: null,
+    },
+  });
+
+  assert.equal(hasActiveFeedbackBonus(item, 10_000), false);
+  assert.equal(getActiveFeedbackClosesAt(item, 10_000), null);
+  assert.equal(shouldShowFeedbackClosedStatus(item, 10_000), true);
+  assert.equal(getVisibleRewardPoolAmount(item, 10_000), 0n);
+  assert.equal(getVisibleFeedbackBonusAmount(item, 10_000), 0n);
+});
+
+test("feedback bonuses do not stay visible just because the award deadline is still open", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/feedback-award-still-open",
+    title: "Feedback award still open",
+    rewardPoolSummary: {
+      totalFunded: 12_000_000n,
+      totalAvailable: 12_000_000n,
+      activeRewardPoolCount: 1,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: true,
+    },
+    feedbackBonusSummary: {
+      totalFunded: 100_000_000n,
+      totalRemaining: 100_000_000n,
+      totalAwarded: 0n,
+      activePoolCount: 1,
+      expiredPoolCount: 0,
+      awardCount: 0,
+      hasActiveFeedbackBonus: true,
+      nextFeedbackClosesAt: 9_000n,
+      nextFeedbackAwardDeadline: 12_000n,
     },
   });
 

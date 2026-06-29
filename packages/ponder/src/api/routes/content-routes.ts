@@ -199,7 +199,7 @@ function getRewardAvailableAmount(nowSeconds: bigint) {
     from ${feedbackBonusPool}
     where ${feedbackBonusPool.contentId} = ${content.id}
       and ${feedbackBonusPool.forfeited} = false
-      and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds}
+      and ${feedbackBonusPool.feedbackClosesAt} >= ${nowSeconds}
   ), 0)`;
 }
 

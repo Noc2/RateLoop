@@ -154,9 +154,8 @@ export function getActiveFeedbackClosesAt(item: ContentItem, nowSeconds = Math.f
   const feedbackSummary = item.feedbackBonusSummary;
   if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n) return null;
 
-  const closesAt = feedbackSummary.nextFeedbackAwardDeadline ?? feedbackSummary.nextFeedbackClosesAt ?? 0n;
-  // Active while now <= closesAt, matching the inclusive ponder SQL
-  // (awardDeadline >= now) and the contract (award allowed at block == deadline).
+  const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
+  // This is the rater-facing feedback eligibility close, not the later award deadline.
   if (closesAt <= 0n || closesAt < BigInt(nowSeconds)) return null;
 
   return closesAt;
@@ -166,9 +165,9 @@ export function hasActiveFeedbackBonus(item: ContentItem, nowSeconds = Math.floo
   const feedbackSummary = item.feedbackBonusSummary;
   if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n) return false;
 
-  const closesAt = feedbackSummary.nextFeedbackAwardDeadline ?? feedbackSummary.nextFeedbackClosesAt ?? 0n;
+  const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
   // Inclusive boundary: still active at now == closesAt (see getActiveFeedbackClosesAt).
-  if (closesAt > 0n && closesAt < BigInt(nowSeconds)) return false;
+  if (closesAt <= 0n || closesAt < BigInt(nowSeconds)) return false;
 
   return Boolean(
     feedbackSummary.hasActiveFeedbackBonus ||

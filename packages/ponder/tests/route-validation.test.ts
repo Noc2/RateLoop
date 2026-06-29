@@ -619,6 +619,12 @@ describe("shared API helpers", () => {
       | Record<string, unknown>
       | undefined;
     expect(
+      serializeExpression(feedbackBonusSelect?.activePoolCount),
+    ).toContain("feedbackBonusPool.feedbackClosesAt");
+    expect(
+      serializeExpression(feedbackBonusSelect?.activePoolCount),
+    ).not.toContain("feedbackBonusPool.awardDeadline");
+    expect(
       serializeExpression(feedbackBonusSelect?.nextFeedbackClosesAt),
     ).toContain("feedbackBonusPool.feedbackClosesAt");
     expect(item?.feedbackBonusSummary.nextFeedbackClosesAt).toBe(150n);
@@ -1815,6 +1821,7 @@ describe("registerContentRoutes", () => {
     expect(serializedWhere).toContain("questionRewardPool.allocatedAmount");
     expect(serializedWhere).toContain("questionRewardPool.claimedAmount");
     expect(serializedWhere).toContain("feedbackBonusPool.remainingAmount");
+    expect(serializedWhere).toContain("feedbackBonusPool.feedbackClosesAt");
     expect(serializedWhere).toContain("content.id");
 
     const serializedOrderBy = serializeExpression(
@@ -1824,6 +1831,7 @@ describe("registerContentRoutes", () => {
     expect(serializedOrderBy).toContain("questionRewardPool.allocatedAmount");
     expect(serializedOrderBy).toContain("questionRewardPool.claimedAmount");
     expect(serializedOrderBy).toContain("feedbackBonusPool.remainingAmount");
+    expect(serializedOrderBy).toContain("feedbackBonusPool.feedbackClosesAt");
     expect(serializedOrderBy).toContain("content.createdAt");
   });
 
@@ -1856,6 +1864,7 @@ describe("registerContentRoutes", () => {
     expect(serializedOrderBy).toContain("case when");
     expect(serializedOrderBy).toContain("questionRewardPool.unallocatedAmount");
     expect(serializedOrderBy).toContain("feedbackBonusPool.remainingAmount");
+    expect(serializedOrderBy).toContain("feedbackBonusPool.feedbackClosesAt");
   });
 
   it("adds voteable round lifecycle predicates when requested", async () => {
