@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rateloop": {
+      "type": "http",
+      "url": "https://www.rateloop.ai/api/mcp/public"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+interface:
+  display_name: "RateLoop Ratings"
+  short_description: "Use RateLoop MCP for human and open-rater product judgment."
+  default_prompt: "Use $rateloop-ratings to ask RateLoop raters to review this product decision."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "rateloop"
+      description: "RateLoop public MCP server for quote, handoff, status, rating, and result tools."
+      transport: "streamable_http"
+      url: "https://www.rateloop.ai/api/mcp/public"
+
+policy:
+  allow_implicit_invocation: true

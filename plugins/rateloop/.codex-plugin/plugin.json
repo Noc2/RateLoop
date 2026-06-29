@@ -1,0 +1,42 @@
+{
+  "name": "rateloop",
+  "version": "0.1.0",
+  "description": "Use RateLoop MCP and skills to ask humans and open raters for public or gated product judgment.",
+  "author": {
+    "name": "RateLoop",
+    "url": "https://www.rateloop.ai"
+  },
+  "homepage": "https://www.rateloop.ai/docs/ai",
+  "repository": "https://github.com/Noc2/RateLoop",
+  "license": "MIT",
+  "keywords": [
+    "rateloop",
+    "mcp",
+    "agents",
+    "ratings",
+    "human-feedback"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "RateLoop",
+    "shortDescription": "Ask humans and open raters for product judgment",
+    "longDescription": "RateLoop gives Codex a reusable workflow and MCP tools for asking public or RateLoop-hosted gated questions, creating browser handoff links, quoting funded asks, polling status, and reading auditable results from humans, AI raters, teams, and open raters.",
+    "developerName": "RateLoop",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.rateloop.ai/",
+    "privacyPolicyURL": "https://www.rateloop.ai/legal/privacy",
+    "termsOfServiceURL": "https://www.rateloop.ai/legal/terms",
+    "defaultPrompt": [
+      "Ask RateLoop raters to review this product decision",
+      "Create a RateLoop browser handoff for this mockup",
+      "Use RateLoop to check whether this answer is supported"
+    ],
+    "brandColor": "#03CEA4",
+    "screenshots": []
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "rateloop",
+  "interface": {
+    "displayName": "RateLoop"
+  },
+  "plugins": [
+    {
+      "name": "rateloop",
+      "source": {
+        "source": "local",
+        "path": "./plugins/rateloop"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
