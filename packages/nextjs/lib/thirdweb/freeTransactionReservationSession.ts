@@ -1,6 +1,22 @@
 const reservationSessionTokens = new Map<string, string>();
 const SESSION_STORAGE_PREFIX = "rateloop:free-tx-session:";
 
+export function buildFreeTransactionReservationSessionMessage(params: {
+  address: string;
+  chainId: number;
+  operationKey: string;
+}) {
+  return [
+    "RateLoop free transaction reservation session",
+    "",
+    `Address: ${params.address.toLowerCase()}`,
+    `Chain ID: ${params.chainId}`,
+    `Operation Key: ${params.operationKey.toLowerCase()}`,
+    "",
+    "Only sign this message to confirm a free transaction you just submitted.",
+  ].join("\n");
+}
+
 export function cacheFreeTransactionReservationSession(operationKey: string, reservationSessionToken: string) {
   reservationSessionTokens.set(operationKey.toLowerCase(), reservationSessionToken);
 
