@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { getAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { buildFreeTransactionReservationSessionMessage } from "~~/lib/thirdweb/freeTransactionReservationSession";
 
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
@@ -13,7 +15,8 @@ const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
-const TEST_ADDRESS = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
+const TEST_ACCOUNT = privateKeyToAccount(`0x${"12".repeat(32)}`);
+const TEST_ADDRESS = TEST_ACCOUNT.address;
 const TEST_CHAIN_ID = 4801;
 const TEST_OPERATION_KEY = `0x${"ab".repeat(32)}`;
 const TEST_RESERVATION_SESSION_TOKEN = "c".repeat(64);
@@ -31,12 +34,24 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   }
 }
 
-function makeRequest(query: Record<string, string>) {
-  const params = new URLSearchParams(query);
-  return new NextRequest(`https://rateloop.ai/api/transactions/free/reservation-session?${params}`, {
+function makeRequest(body: Record<string, unknown>) {
+  return new NextRequest("https://rateloop.ai/api/transactions/free/reservation-session", {
+    method: "POST",
     headers: new Headers({
+      "content-type": "application/json",
       "user-agent": "reservation-session-test",
       "x-forwarded-for": "203.0.113.77",
+    }),
+    body: JSON.stringify(body),
+  });
+}
+
+async function signReservationSessionMessage() {
+  return TEST_ACCOUNT.signMessage({
+    message: buildFreeTransactionReservationSessionMessage({
+      address: TEST_ADDRESS,
+      chainId: TEST_CHAIN_ID,
+      operationKey: TEST_OPERATION_KEY,
     }),
   });
 }
@@ -70,7 +85,7 @@ after(() => {
   restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
 });
 
-test("reservation session route returns pending token for matching wallet", async () => {
+test("reservation session route rejects unsigned token lookups", async () => {
   const expiresAt = new Date(Date.now() + 60_000);
   await dbModule.dbClient.execute({
     sql: `
@@ -105,11 +120,73 @@ test("reservation session route returns pending token for matching wallet", asyn
     ],
   });
 
-  const response = await route.GET(
+  const response = await route.POST(
     makeRequest({
       address: TEST_ADDRESS,
-      chainId: String(TEST_CHAIN_ID),
+      chainId: TEST_CHAIN_ID,
       operationKey: TEST_OPERATION_KEY,
+    }),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Invalid reservation session signature" });
+});
+
+test("reservation session route rejects malformed hex signatures", async () => {
+  const response = await route.POST(
+    makeRequest({
+      address: TEST_ADDRESS,
+      chainId: TEST_CHAIN_ID,
+      operationKey: TEST_OPERATION_KEY,
+      signature: "0xdead",
+    }),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Invalid reservation session signature" });
+});
+
+test("reservation session route returns pending token for matching signed wallet", async () => {
+  const expiresAt = new Date(Date.now() + 60_000);
+  await dbModule.dbClient.execute({
+    sql: `
+      INSERT INTO free_transaction_reservations (
+        operation_key,
+        identity_key,
+        rater_identity_key,
+        chain_id,
+        environment,
+        wallet_address,
+        reservation_session_token,
+        status,
+        reserved_at,
+        expires_at,
+        released_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      TEST_OPERATION_KEY,
+      `0x${"11".repeat(32)}`,
+      `0x${"22".repeat(32)}`,
+      TEST_CHAIN_ID,
+      "test",
+      getAddress(TEST_ADDRESS),
+      TEST_RESERVATION_SESSION_TOKEN,
+      "pending",
+      new Date(),
+      expiresAt,
+      null,
+      new Date(),
+    ],
+  });
+
+  const response = await route.POST(
+    makeRequest({
+      address: TEST_ADDRESS,
+      chainId: TEST_CHAIN_ID,
+      operationKey: TEST_OPERATION_KEY,
+      signature: await signReservationSessionMessage(),
     }),
   );
 
@@ -119,11 +196,12 @@ test("reservation session route returns pending token for matching wallet", asyn
 });
 
 test("reservation session route returns 404 when no pending reservation exists", async () => {
-  const response = await route.GET(
+  const response = await route.POST(
     makeRequest({
       address: TEST_ADDRESS,
-      chainId: String(TEST_CHAIN_ID),
+      chainId: TEST_CHAIN_ID,
       operationKey: TEST_OPERATION_KEY,
+      signature: await signReservationSessionMessage(),
     }),
   );
 

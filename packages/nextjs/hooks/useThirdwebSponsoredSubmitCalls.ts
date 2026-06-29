@@ -29,6 +29,7 @@ import {
   resolveWalletExecutionChainId,
   useWalletExecutionCapabilities,
 } from "~~/hooks/useWalletExecutionCapabilities";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getEip7702DelegationTarget,
@@ -36,6 +37,7 @@ import {
 } from "~~/lib/thirdweb/eip7702Delegation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
 import {
+  buildFreeTransactionReservationSessionMessage,
   cacheFreeTransactionReservationSession,
   readCachedFreeTransactionReservationSession,
 } from "~~/lib/thirdweb/freeTransactionReservationSession";
@@ -483,6 +485,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const statusToast = useTransactionStatusToast();
   const { isRestoringWallet } = useWalletRestore();
   const { address, chainId: wagmiChainId, connector } = useAccount();
+  const { signMessageAsync } = useWalletMessageSigner({ address });
   const { sendCallsSyncAsync } = useSendCallsSync();
   const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
   const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
@@ -914,22 +917,41 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           let reservationSessionToken = readCachedFreeTransactionReservationSession(operationKey);
 
           if (!reservationSessionToken && transactionHashes.length > 0) {
-            const sessionParams = new URLSearchParams({
-              address,
-              chainId: String(chainId),
-              operationKey,
-            });
-            const sessionResponse = await fetch(
-              `/api/transactions/free/reservation-session?${sessionParams.toString()}`,
-            );
-            if (sessionResponse.ok) {
-              const sessionBody = (await sessionResponse.json().catch(() => null)) as {
-                reservationSessionToken?: string;
-              } | null;
-              if (typeof sessionBody?.reservationSessionToken === "string") {
-                reservationSessionToken = sessionBody.reservationSessionToken;
-                cacheFreeTransactionReservationSession(operationKey, reservationSessionToken);
+            try {
+              const signature = await signMessageAsync({
+                message: buildFreeTransactionReservationSessionMessage({
+                  address,
+                  chainId,
+                  operationKey,
+                }),
+              });
+              const sessionResponse = await fetch("/api/transactions/free/reservation-session", {
+                body: JSON.stringify({
+                  address,
+                  chainId,
+                  operationKey,
+                  signature,
+                }),
+                headers: { "content-type": "application/json" },
+                method: "POST",
+              });
+              if (sessionResponse.ok) {
+                const sessionBody = (await sessionResponse.json().catch(() => null)) as {
+                  reservationSessionToken?: string;
+                } | null;
+                if (typeof sessionBody?.reservationSessionToken === "string") {
+                  reservationSessionToken = sessionBody.reservationSessionToken;
+                  cacheFreeTransactionReservationSession(operationKey, reservationSessionToken);
+                }
+              } else {
+                timingLog.emit("free-transaction-session-lookup-failed", {
+                  statusCode: sessionResponse.status,
+                });
               }
+            } catch (error) {
+              timingLog.emit("free-transaction-session-lookup-failed", {
+                message: error instanceof Error ? error.message : "Unknown error",
+              });
             }
           }
 
@@ -1069,6 +1091,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       queryClient,
       sendCallsSyncAsync,
       setActiveWallet,
+      signMessageAsync,
       statusToast,
       syncWalletToWagmi,
     ],
