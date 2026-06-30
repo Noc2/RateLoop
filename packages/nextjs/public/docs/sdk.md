@@ -59,7 +59,7 @@ Use the local signer CLI instead when the agent controls a funded encrypted wall
 
 - The agent does not support MCP.
 - You want direct HTTP integration for quote, ask, confirmation, status, and result routes.
-- You are submitting a direct ask, including a same-asset wallet-call Feedback Bonus, or you are creating a browser handoff link for a full human-wallet flow.
+- You are submitting a direct ask, including a wallet-call Feedback Bonus, or you are creating a browser handoff link for a full human-wallet flow.
 
 Core routes:
 
@@ -78,9 +78,9 @@ GET  /api/agent/results/{operationKey}
 ```
 
 The SDK convenience call `askHumans({ transport: "http" })`, raw `POST /api/agent/asks`, MCP, browser handoff, and local
-signer flows can all carry single-question Feedback Bonuses. Wallet-call asks must keep the Feedback Bonus asset the same
-as the bounty asset and confirm the follow-up bonus transaction plan with `confirmFeedbackBonusTransactions`. EIP-3009/x402
-remains a USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus.
+signer flows can all carry single-question Feedback Bonuses. MCP, browser handoff, and direct HTTP wallet-call asks can use
+either LREP or USDC for the bonus, independent of the bounty asset, and confirm the follow-up bonus transaction plan with
+`confirmFeedbackBonusTransactions`. EIP-3009/x402 remains a USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus.
 
 ## Generated Images And Mockups
 
@@ -134,7 +134,7 @@ For confidential written context, use RateLoop-hosted gated details/images only:
 
 ## Minimal MCP/Handoff Ask Shape
 
-Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set one shared `roundConfig.questionDurationSeconds`; the bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that duration from question creation. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For wallet-call Feedback Bonuses, use the same asset as the bounty and include bounty plus bonus in `maxPaymentAmount`.
+Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set one shared `roundConfig.questionDurationSeconds`; the bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that duration from question creation. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For same-asset wallet-call Feedback Bonuses, include bounty plus bonus in `maxPaymentAmount`; mixed-asset wallet-call bonuses are confirmed through a separate wallet plan.
 
 ```json
 {
@@ -185,7 +185,7 @@ before RateLoop prepares the transaction plan.
 
 Three-voter rounds are the launch feedback tier: they can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of stake once active. Settled scores are public feedback signals and must not settle external financial contracts.
 
-`feedbackBonus` is optional on MCP, browser handoff, SDK HTTP, and advanced raw asks. Use a Feedback Bonus when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can be LREP or USDC; wallet-call asks must use the same asset for bounty and bonus, while EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus. The feedback window uses the same question duration as the blind response window; only feedback published on-chain during that window can receive the bonus. The effective award decision deadline is at least 24 hours after settlement. The approved `maxPaymentAmount` should cover the bounty plus any Feedback Bonus.
+`feedbackBonus` is optional on MCP, browser handoff, SDK HTTP, and advanced raw asks. Use a Feedback Bonus when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can be LREP or USDC; wallet-call asks can use either bonus asset, independent of the bounty asset, while EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus. The feedback window uses the same question duration as the blind response window; only feedback published on-chain during that window can receive the bonus. The effective award decision deadline is at least 24 hours after settlement. For same-asset wallet-call bonuses, the approved `maxPaymentAmount` should cover the bounty plus bonus; mixed-asset bonuses are confirmed through a separate wallet plan.
 
 For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.questionDurationSeconds` and at least 8 required voters instead of shortening the blind response window for speed.
 

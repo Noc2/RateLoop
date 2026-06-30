@@ -109,10 +109,6 @@ function assertSigningIntentFeedbackBonusMode(params: {
     if (params.payload.bounty.asset !== "USDC" || asset !== "USDC") {
       throw new McpToolError("EIP-3009 authorization can only fund USDC bounties and USDC Feedback Bonuses.");
     }
-    return;
-  }
-  if (asset !== params.payload.bounty.asset) {
-    throw new McpToolError("Wallet-call Feedback Bonus funding must use the same asset as the bounty.");
   }
 }
 

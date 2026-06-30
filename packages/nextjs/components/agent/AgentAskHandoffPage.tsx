@@ -1676,9 +1676,6 @@ async function buildDraftRequestBody(
     if (draftPaymentMode === "x402_authorization" && feedbackBonusAsset !== "usdc") {
       throw new Error("EIP-3009 authorization can only fund USDC Feedback Bonuses.");
     }
-    if (feedbackBonusAsset !== form.bountyAsset) {
-      throw new Error("Feedback Bonus funding must use the same asset as the bounty.");
-    }
     const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
     if (feedbackBonusAmount === null) {
       throw new Error("Feedback Bonus must be a positive amount with up to 6 decimals.");
@@ -1694,7 +1691,9 @@ async function buildDraftRequestBody(
     delete requestBody.feedbackBonus;
   }
   requestBody.paymentMode = draftPaymentMode;
-  requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusPaymentAmount).toString();
+  const sameAssetFeedbackBonusPaymentAmount =
+    draftFeedbackBonusAsset === form.bountyAsset ? feedbackBonusPaymentAmount : 0n;
+  requestBody.maxPaymentAmount = (bountyAmount + sameAssetFeedbackBonusPaymentAmount).toString();
   requestBody.roundConfig = {
     questionDurationSeconds: questionDurationSeconds.toString(),
     maxVoters: maxVoters.toString(),
@@ -2109,8 +2108,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const canDraftFeedbackBonus = canDraftFeedbackBonusForBounty && canDraftFeedbackBonusForPaymentMode;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
-  const draftFeedbackBonusAssetLabel =
-    (draftForm?.feedbackBonusAsset ?? draftBountyAsset) === "lrep" ? "LREP" : usdcDisplayName;
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
   const draftBountyUsdcAmountAtomic = readDraftBountyUsdcAmountAtomic(draftForm, handoff);
   const draftFeedbackBonusLrepAmountAtomic = readDraftFeedbackBonusLrepAmountAtomic(draftForm, handoff);
@@ -2308,6 +2305,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
         const parsedFeedbackBonusAmount =
           current.feedbackBonusAmount === null ? null : parseFeedbackBonusAmount(current.feedbackBonusAmount);
+        const feedbackBonusAsset = current.feedbackBonusAsset ?? asset;
         return {
           ...current,
           bountyAmount: parsedAmount === null ? current.bountyAmount : formatSubmissionRewardInput(parsedAmount, asset),
@@ -2317,8 +2315,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               ? null
               : parsedFeedbackBonusAmount === null
                 ? current.feedbackBonusAmount
-                : formatFeedbackBonusInput(parsedFeedbackBonusAmount, asset),
-          feedbackBonusAsset: current.feedbackBonusAmount === null ? null : asset,
+                : formatFeedbackBonusInput(parsedFeedbackBonusAmount, feedbackBonusAsset),
+          feedbackBonusAsset: current.feedbackBonusAmount === null ? null : feedbackBonusAsset,
         };
       });
       setDraftError(null);
@@ -2358,6 +2356,23 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       updateDraftField("feedbackBonusAmount", normalizedValue);
     },
     [updateDraftField],
+  );
+
+  const updateDraftFeedbackBonusAsset = useCallback(
+    (asset: FeedbackBonusAsset) => {
+      setDraftForm(current => {
+        if (!current || current.feedbackBonusAmount === null) return current;
+        const parsedAmount = parseFeedbackBonusAmount(current.feedbackBonusAmount);
+        return {
+          ...current,
+          feedbackBonusAmount:
+            parsedAmount === null ? current.feedbackBonusAmount : formatFeedbackBonusInput(parsedAmount, asset),
+          feedbackBonusAsset: asset,
+        };
+      });
+      setDraftError(null);
+    },
+    [setDraftForm],
   );
 
   const formatDraftBountyAmount = useCallback(() => {
@@ -3557,24 +3572,35 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   ) : null}
                   {draftForm?.feedbackBonusAmount !== null ? (
                     <div>
-                      <div>
+                      <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+                        <label htmlFor="agent-ask-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
+                          Asset
+                        </label>
                         <label htmlFor="agent-ask-feedback-bonus-amount" className={MONEY_FIELD_LABEL_CLASS}>
-                          Amount ({draftFeedbackBonusAssetLabel})
+                          Amount
                         </label>
                       </div>
-                      <div className="mt-1.5 flex items-start gap-3">
+                      <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+                        <select
+                          id="agent-ask-feedback-bonus-asset"
+                          aria-label="Feedback Bonus asset"
+                          className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                          disabled={!canEditDraft}
+                          value={draftForm?.feedbackBonusAsset ?? draftBountyAsset}
+                          onChange={event => updateDraftFeedbackBonusAsset(event.target.value as FeedbackBonusAsset)}
+                        >
+                          <option value="lrep">LREP</option>
+                          <option value="usdc">USDC</option>
+                        </select>
                         <input
                           id="agent-ask-feedback-bonus-amount"
-                          className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} flex-1 bg-base-100`}
+                          className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
                           disabled={!canEditDraft}
                           inputMode="decimal"
                           value={draftForm?.feedbackBonusAmount ?? ""}
                           onBlur={formatDraftFeedbackBonusAmount}
                           onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
                         />
-                        <div className="flex h-12 items-center rounded-box border border-base-300 bg-base-200 px-4 text-sm font-semibold text-base-content/80">
-                          {draftFeedbackBonusAssetLabel}
-                        </div>
                       </div>
                     </div>
                   ) : null}

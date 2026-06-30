@@ -13,6 +13,17 @@ test("resolveDraftHandoffPaymentMode switches edited LREP bounty drafts to walle
   );
 });
 
+test("resolveDraftHandoffPaymentMode switches edited LREP Feedback Bonus drafts to wallet calls", () => {
+  assert.equal(
+    resolveDraftHandoffPaymentMode({
+      bountyAsset: "usdc",
+      feedbackBonusAsset: "lrep",
+      persistedPaymentMode: "x402_authorization",
+    }),
+    "wallet_calls",
+  );
+});
+
 test("resolveDraftHandoffPaymentMode preserves x402 for USDC-only drafts", () => {
   assert.equal(
     resolveDraftHandoffPaymentMode({

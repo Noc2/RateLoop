@@ -2528,23 +2528,25 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(payload.roundConfig.maxVoters, 40n);
 });
 
-test("agent ask handoff route accepts edited LREP Feedback Bonus wallet-call drafts", async () => {
+test("agent ask handoff route accepts edited mixed-asset Feedback Bonus wallet-call drafts", async () => {
   let preparedPayload: unknown = null;
   let preparedFeedbackBonus: unknown = null;
   installAskOverrides({
     preparePermissionlessNativeX402QuestionSubmissionRequest: async () => {
-      throw new Error("Edited LREP handoff drafts must not use x402 authorization.");
+      throw new Error("Mixed-asset Feedback Bonus handoff drafts must not use x402 authorization.");
     },
     preparePermissionlessWalletQuestionSubmissionRequest: async params => {
       preparedPayload = params.payload;
       preparedFeedbackBonus = params.feedbackBonus;
+      const sameAssetFeedbackBonusAmount =
+        params.feedbackBonus?.asset === params.payload.bounty.asset ? params.feedbackBonus.amount : 0n;
       return {
         body: {
           chainId: params.payload.chainId,
           clientRequestId: params.payload.clientRequestId,
           operationKey: OPERATION_KEY,
           payment: {
-            amount: (params.payload.bounty.amount + (params.feedbackBonus?.amount ?? 0n)).toString(),
+            amount: (params.payload.bounty.amount + sameAssetFeedbackBonusAmount).toString(),
             asset: params.payload.bounty.asset,
             bountyAmount: params.payload.bounty.amount.toString(),
             decimals: 6,
@@ -2573,14 +2575,14 @@ test("agent ask handoff route accepts edited LREP Feedback Bonus wallet-call dra
     bounty: {
       ...originalRequest.bounty,
       amount: "2500000",
-      asset: "LREP",
+      asset: "USDC",
       requiredVoters: "4",
     },
     feedbackBonus: {
       amount: "2000000",
       asset: "LREP",
     },
-    maxPaymentAmount: "4500000",
+    maxPaymentAmount: "2500000",
     paymentMode: "wallet_calls",
   };
 
@@ -2611,10 +2613,10 @@ test("agent ask handoff route accepts edited LREP Feedback Bonus wallet-call dra
 
   assert.equal(patchResponse.status, 200);
   assert.equal(patchBody.paymentMode, "wallet_calls");
-  assert.equal((patchRequestBody.bounty as Record<string, unknown>).asset, "LREP");
+  assert.equal((patchRequestBody.bounty as Record<string, unknown>).asset, "USDC");
   assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).asset, "LREP");
   assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).amount, "2000000");
-  assert.equal(patchRequestBody.maxPaymentAmount, "4500000");
+  assert.equal(patchRequestBody.maxPaymentAmount, "2500000");
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
@@ -2634,8 +2636,13 @@ test("agent ask handoff route accepts edited LREP Feedback Bonus wallet-call dra
   assert.equal(prepareBody.status, "prepared");
   assert.equal(prepareBody.paymentMode, "wallet_calls");
   assert.ok(prepareBody.transactionPlan);
+  const preparedAsk = prepareBody.ask as Record<string, unknown>;
+  const preparedPayment = preparedAsk.payment as Record<string, unknown>;
+  assert.equal(preparedPayment.feedbackBonusAmount, "2000000");
+  assert.equal(preparedPayment.feedbackBonusAsset, "LREP");
+  assert.equal(preparedPayment.totalAmount, "2500000");
   assert.equal(payload.bounty.amount, 2_500_000n);
-  assert.equal(payload.bounty.asset, "LREP");
+  assert.equal(payload.bounty.asset, "USDC");
   assert.equal(payload.bounty.requiredVoters, 4n);
   assert.equal(feedbackBonus.amount, 2_000_000n);
   assert.equal(feedbackBonus.asset, "LREP");

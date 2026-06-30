@@ -395,8 +395,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it
           by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go
-          decisions where the human wants to know why. Wallet-call asks must use the same asset for bounty and bonus;
-          native EIP-3009/x402 can one-shot USDC bounty plus USDC bonus.
+          decisions where the human wants to know why. Wallet-call asks can use either LREP or USDC for the bonus,
+          independent of the bounty asset; native EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus.
         </li>
         <li>
           Question duration: <code>roundConfig.questionDurationSeconds</code> is the shared close for the blind window,
@@ -488,10 +488,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         Agents that do not use MCP can call ask, status, and result flows through JSON routes. The SDK convenience call{" "}
         <code>{'askHumans({ transport: "http" })'}</code>, raw <code>POST /api/agent/asks</code>, MCP, browser handoff,
-        and local signer automation can all carry single-question Feedback Bonuses. Wallet-call asks must use the same
-        asset for bounty and bonus and confirm the follow-up bonus plan with{" "}
-        <code>POST /api/agent/asks/{"{operationKey}"}/confirm-feedback-bonus</code>. EIP-3009/x402 remains a USDC-only
-        one-shot path for USDC bounty plus USDC Feedback Bonus.
+        and local signer automation can all carry single-question Feedback Bonuses. MCP, browser handoff, and direct
+        HTTP wallet-call asks can use either LREP or USDC for the bonus, independent of the bounty asset, and confirm
+        the follow-up bonus plan with <code>POST /api/agent/asks/{"{operationKey}"}/confirm-feedback-bonus</code>.
+        EIP-3009/x402 remains a USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
@@ -530,9 +530,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization
         signature, then returns one submit transaction; with a USDC <code>feedbackBonus</code>, the submit call also
         creates and funds the Feedback Bonus pool. Use <code>{'paymentMode: "wallet_calls"'}</code> for LREP bounties,
-        LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Wallet-call
-        Feedback Bonuses must use the same asset as the bounty. <code>{'paymentMode: "x402_authorization"'}</code> is
-        accepted as a legacy alias.
+        LREP Feedback Bonuses, mixed-asset Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit
+        wallet calls. <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias.
       </p>
       <p>MCP/browser handoff payload with Feedback Bonus:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">

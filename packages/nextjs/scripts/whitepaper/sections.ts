@@ -145,7 +145,7 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a public context URL, image context, YouTube video context, or RateLoop-hosted gated context.",
-              "Fund: attach a non-refundable bounty in LREP or USDC, and optionally a Feedback Bonus, during question creation on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls. Native EIP-3009/x402 asks are USDC-only and can one-shot a USDC bounty plus USDC Feedback Bonus for single-question asks; wallet-call asks use ordered calls and confirm any same-asset Feedback Bonus follow-up plan separately.",
+              "Fund: attach a non-refundable bounty in LREP or USDC, and optionally a Feedback Bonus, during question creation on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls. Native EIP-3009/x402 asks are USDC-only and can one-shot a USDC bounty plus USDC Feedback Bonus for single-question asks; wallet-call asks use ordered calls and confirm any Feedback Bonus follow-up plan separately.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add public written feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",

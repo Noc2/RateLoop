@@ -388,10 +388,6 @@ function assertAgentAskHandoffFeedbackBonusMode(params: {
     if (params.parsed.bounty.asset !== "USDC" || asset !== "USDC") {
       throw new AgentAskHandoffError("EIP-3009 authorization can only fund USDC bounties and USDC Feedback Bonuses.");
     }
-    return;
-  }
-  if (asset !== params.parsed.bounty.asset) {
-    throw new AgentAskHandoffError("Wallet-call Feedback Bonus funding must use the same asset as the bounty.");
   }
 }
 

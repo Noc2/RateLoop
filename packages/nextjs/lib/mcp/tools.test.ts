@@ -1447,24 +1447,51 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
   assert.equal((reserved[0] as { amount: bigint }).amount, 3_000_000n);
 });
 
-test("rateloop_ask_humans rejects mixed-asset feedback bonuses", async () => {
+test("rateloop_ask_humans supports mixed-asset wallet-call feedback bonuses", async () => {
+  const prepared: unknown[] = [];
+  const reserved: unknown[] = [];
   __setMcpToolTestOverridesForTests({
     ...quoteOverrides(),
     getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+    prepareAgentWalletQuestionSubmissionRequest: async params => {
+      prepared.push(params);
+      return {
+        body: {
+          operationKey: OPERATION_KEY,
+          payment: { amount: "1000000", asset: "USDC", bountyAmount: "1000000" },
+          status: "awaiting_wallet_signature",
+          transactionPlan: { calls: [], requiresOrderedExecution: true },
+        },
+        status: 202,
+      };
+    },
+    reserveMcpAgentBudget: async params => {
+      reserved.push(params);
+      return budgetReservation();
+    },
   });
 
-  await assert.rejects(
-    () =>
-      callRateLoopMcpTool({
-        agent: AGENT,
-        arguments: askArguments({
-          feedbackBonus: { amount: "2000000", asset: "LREP" },
-          maxPaymentAmount: "1000000",
-        }),
-        name: "rateloop_ask_humans",
-      }),
-    /Wallet-call Feedback Bonus funding must use the same asset as the bounty/,
-  );
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: askArguments({
+      feedbackBonus: { amount: "2000000", asset: "LREP" },
+      maxPaymentAmount: "1000000",
+    }),
+    name: "rateloop_ask_humans",
+  });
+  const body = result as {
+    feedbackBonus: { asset: string; status: string };
+    payment: { feedbackBonusAmount: string; feedbackBonusAsset: string; totalAmount: string };
+  };
+
+  assert.equal(prepared.length, 1);
+  assert.equal((prepared[0] as { feedbackBonus?: { asset: string } }).feedbackBonus?.asset, "LREP");
+  assert.equal(body.feedbackBonus.asset, "LREP");
+  assert.equal(body.feedbackBonus.status, "pending_question_confirmation");
+  assert.equal(body.payment.feedbackBonusAmount, "2000000");
+  assert.equal(body.payment.feedbackBonusAsset, "LREP");
+  assert.equal(body.payment.totalAmount, "1000000");
+  assert.equal((reserved[0] as { amount: bigint }).amount, 1_000_000n);
 });
 
 test("rateloop_ask_humans still requires cap room for same-asset feedback bonuses", async () => {
@@ -1487,24 +1514,31 @@ test("rateloop_ask_humans still requires cap room for same-asset feedback bonuse
   );
 });
 
-test("public rateloop_ask_humans dry-run rejects mixed-asset feedback bonuses", async () => {
+test("public rateloop_ask_humans dry-run supports mixed-asset feedback bonuses", async () => {
   __setMcpToolTestOverridesForTests({
     ...quoteOverrides(),
   });
 
-  await assert.rejects(
-    () =>
-      callPublicRateLoopMcpTool({
-        arguments: askArguments({
-          dryRun: true,
-          feedbackBonus: { amount: "2000000", asset: "LREP" },
-          maxPaymentAmount: "1000000",
-          walletAddress: AGENT.walletAddress,
-        }),
-        name: "rateloop_ask_humans",
-      }),
-    /Wallet-call Feedback Bonus funding must use the same asset as the bounty/,
-  );
+  const result = await callPublicRateLoopMcpTool({
+    arguments: askArguments({
+      dryRun: true,
+      feedbackBonus: { amount: "2000000", asset: "LREP" },
+      maxPaymentAmount: "1000000",
+      walletAddress: AGENT.walletAddress,
+    }),
+    name: "rateloop_ask_humans",
+  });
+  const body = result as {
+    feedbackBonus: { asset: string };
+    payment: { feedbackBonusAmount: string; feedbackBonusAsset: string; totalAmount: string };
+    paymentMode: string;
+  };
+
+  assert.equal(body.feedbackBonus.asset, "LREP");
+  assert.equal(body.payment.feedbackBonusAmount, "2000000");
+  assert.equal(body.payment.feedbackBonusAsset, "LREP");
+  assert.equal(body.payment.totalAmount, "1000000");
+  assert.equal(body.paymentMode, "wallet_calls");
 });
 
 test("rateloop_ask_humans supports wallet-call feedback bonus funding", async () => {

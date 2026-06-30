@@ -467,7 +467,7 @@ const agentAskInputBaseProperties = {
   feedbackBonus: {
     ...agentFeedbackBonusInputSchema,
     description:
-      "Optional LREP or USDC pool for useful public feedback from revealed raters on single-question asks. Wallet-call asks must use the same asset for bounty and Feedback Bonus; eip3009_usdc_authorization/x402_authorization can fund USDC bounty plus USDC Feedback Bonus in one submit transaction.",
+      "Optional LREP or USDC pool for useful public feedback from revealed raters on single-question asks. Wallet-call asks can fund LREP or USDC bounties with either LREP or USDC Feedback Bonuses; eip3009_usdc_authorization/x402_authorization can fund only USDC bounty plus USDC Feedback Bonus in one submit transaction.",
   },
   roundConfig: agentRoundConfigInputSchema,
   roundPreset: agentRoundPresetInputSchema,
@@ -521,14 +521,14 @@ export const agentCreateAskHandoffInputSchema = {
     },
     maxPaymentAmount: {
       description:
-        "Maximum total payment spend in atomic units for the selected funding mode, including any Feedback Bonus. EIP-3009/x402 payments are USDC-only; wallet-call bounty and same-asset Feedback Bonus funding may use LREP or USDC.",
+        "Maximum bounty payment spend in atomic units for the selected funding mode. For same-asset Feedback Bonuses, include the bonus amount too; mixed-asset wallet-call Feedback Bonuses are confirmed through a separate wallet plan. EIP-3009/x402 payments are USDC-only.",
       pattern: "^\\d+$",
       type: "string",
     },
     paymentMode: {
       default: "eip3009_usdc_authorization",
       description:
-        "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties, bundled asks, hosts that want raw wallet calls, or same-asset Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus.",
+        "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties, bundled asks, hosts that want raw wallet calls, or any Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus.",
       enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
@@ -643,7 +643,7 @@ export const agentAskHumansInputSchema = {
     ...agentAskInputBaseProperties,
     maxPaymentAmount: {
       description:
-        "Maximum total payment spend in atomic units for the selected funding mode, including any Feedback Bonus. EIP-3009/x402 payments are USDC-only; wallet-call bounty and same-asset Feedback Bonus funding may use LREP or USDC.",
+        "Maximum bounty payment spend in atomic units for the selected funding mode. For same-asset Feedback Bonuses, include the bonus amount too; mixed-asset wallet-call Feedback Bonuses are confirmed through a separate wallet plan. EIP-3009/x402 payments are USDC-only.",
       pattern: "^\\d+$",
       type: "string",
     },
@@ -670,7 +670,7 @@ export const agentAskHumansInputSchema = {
     paymentMode: {
       default: "eip3009_usdc_authorization",
       description:
-        "Eligible single-question USDC asks default to eip3009_usdc_authorization so the wallet signs a USDC authorization and submits one transaction. wallet_calls returns approve/reserve/submit transactions and is required for LREP bounties, bundled asks, hosts that need raw calls, or same-asset Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus. x402_authorization is accepted as a legacy compatibility alias.",
+        "Eligible single-question USDC asks default to eip3009_usdc_authorization so the wallet signs a USDC authorization and submits one transaction. wallet_calls returns approve/reserve/submit transactions and is required for LREP bounties, bundled asks, hosts that need raw calls, or any Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus. x402_authorization is accepted as a legacy compatibility alias.",
       enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
