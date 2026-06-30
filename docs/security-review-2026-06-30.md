@@ -46,9 +46,9 @@ alerts at review time.
 | RL-SEC-5 | Low | Fixed / documented | `PRIVATE_FOREVER` confidentiality keeps context private forever but does not extend bond slashability past release. |
 | RL-SEC-6 | High | Fixed | Agent callback sweep did not drain queued deliveries and could reject Vercel Cron in split-secret deployments. |
 | RL-SEC-7 | Medium | Fixed | Keeper Ponder work discovery reused timeout budget consumed by deployment verification. |
-| RL-SEC-8 | Low | Open | Ponder Railway deployment uses mutable `RAILPACK` builder selection. |
-| RL-SEC-9 | Low | Open | Local dev Postgres uses a tag-pinned Docker image rather than a digest-pinned image. |
-| RL-SEC-10 | Low | Open | Yarn suppresses a broad peer dependency warning pattern. |
+| RL-SEC-8 | Low | Fixed | Ponder Railway deployment uses mutable `RAILPACK` builder selection. |
+| RL-SEC-9 | Low | Fixed | Local dev Postgres uses a tag-pinned Docker image rather than a digest-pinned image. |
+| RL-SEC-10 | Low | Fixed | Yarn suppresses a broad peer dependency warning pattern. |
 
 ### RL-SEC-1: Parent-Rejected Snapshot Skip
 
@@ -130,31 +130,32 @@ deployment check and work request use separate abort signals.
 
 ### RL-SEC-8: Mutable Railway Builder
 
-`packages/ponder/railway.toml` uses `builder = "RAILPACK"`. This delegates build
-image/runtime selection to Railway's current Railpack behavior.
+`packages/ponder/railway.toml` used `builder = "RAILPACK"`. This delegated
+build image/runtime selection to Railway's current Railpack behavior.
 
-Status: open low-priority hardening. Consider moving Ponder to an explicit
-Dockerfile or another Railway-supported pinned build path if reproducible
-production builds become a stronger requirement.
+Status: fixed. Ponder now uses `builder = "DOCKERFILE"` with
+`packages/ponder/Dockerfile`, which pins the Node 24 Alpine base image by digest,
+does an immutable focused workspace install, builds required workspace
+artifacts, and focuses production dependencies. Static analysis also builds the
+Ponder Docker image.
 
 ### RL-SEC-9: Local Dev Postgres Image Pinning
 
-`docker-compose.dev.yml` uses `postgres:16-alpine`. The CI Postgres services are
-already digest-pinned, but the local dev stack still tracks the mutable Alpine
-tag.
+`docker-compose.dev.yml` used `postgres:16-alpine`. The CI Postgres services
+were already digest-pinned, but the local dev stack still tracked the mutable
+Alpine tag.
 
-Status: open low-priority hardening. Pin the local dev image by digest if local
-development reproducibility is more important than automatically receiving
-minor Postgres base-image updates.
+Status: fixed. The local dev Postgres service now uses the same
+`postgres:16@sha256:287eced1f33b59ed265ed13a60d3680dd7646d70c4dc0e785f59a470ebc03eeb`
+image already exercised by CI.
 
 ### RL-SEC-10: Broad Peer Warning Suppression
 
-`.yarnrc.yml` suppresses several known peer warning patterns and also suppresses
+`.yarnrc.yml` suppressed several known peer warning patterns and also suppressed
 `Some peer dependencies are incorrectly met*`, which can hide new peer drift.
 
-Status: open low-priority hardening. Replace the broad filter with narrower
-package-specific filters after confirming the remaining peer warnings are
-expected.
+Status: fixed. The broad peer-warning filter was removed. `yarn install
+--immutable` completed cleanly without replacement filters.
 
 ## Verified Non-Findings
 

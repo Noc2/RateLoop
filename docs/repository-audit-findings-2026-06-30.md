@@ -128,6 +128,8 @@ items as resolved, matching the current `Base mainnet` copy and `music.mp3` asse
 
 Severity: Medium
 
+Status: Fixed in follow-up
+
 Evidence:
 
 - `packages/nextjs/services/ponder/client.ts`
@@ -142,9 +144,21 @@ metadata can still remain unindexed until retry or operator repair. Consider mak
 failure fail-fast for production submission paths, or adding a durable retry/alert queue for
 accepted-but-unsynced metadata.
 
+Follow-up resolution:
+
+- `ponderApi.syncQuestionMetadata` now marks production metadata sync auth/config failures as
+  required service configuration.
+- Direct details attachment returns a `503 metadata_sync_required` response for auth/config
+  failures and a retryable `503 metadata_sync_unavailable` response if verified metadata is
+  skipped or otherwise incomplete.
+- x402 confirmation now fails with an `X402QuestionConfigError` if verified metadata cannot be
+  synced completely, instead of logging and recording a clean submitted status.
+
 ### O-2: Dead-code scan reports unused public exports
 
 Severity: Low
+
+Status: Fixed in follow-up
 
 Evidence:
 
@@ -160,6 +174,11 @@ Evidence:
 `yarn dead-code` currently reports 11 unused exports and 5 unused exported types. No runtime
 bug was confirmed, but the list is useful cleanup debt because these exports widen local API
 surface and can hide stale helper code.
+
+Follow-up resolution:
+
+- The unused exports were converted to module-local declarations or removed where unused.
+- A follow-up `yarn dead-code` run completed with no reported unused exports or types.
 
 ## Verification
 

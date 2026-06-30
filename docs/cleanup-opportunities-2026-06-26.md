@@ -436,38 +436,21 @@ Risk:
 
 ### 19. Triage unused exports reported by Knip
 
-Priority: Low
+Status: Resolved
 
 Evidence:
 
-- `yarn dead-code:scan` reported 26 unused exports and 17 unused exported types.
-- The script intentionally uses `knip --no-progress --no-exit-code`.
-- CI labels the Knip job advisory.
+- As of the 2026-06-30 follow-up pass, the remaining unused exports from
+  `yarn dead-code` were converted to module-local declarations or removed.
+- The follow-up `yarn dead-code` run completed with no reported unused exports or types.
 
-Examples worth checking first:
+Resolution:
 
-- `packages/keeper/src/keeper-state.ts`: `readCachedCorrelationArtifact`
-- `packages/nextjs/lib/agent/handoffRoundConfig.ts`: `secondsToHandoffDurationInput`
-  and `HandoffRoundDurationDraft`
-- `packages/nextjs/lib/agent/walletTransactionPlan.ts`:
-  `WALLET_TRANSACTION_PLAN_REQUEST_TIMEOUT_MS` and
-  `walletTransactionPlanStepTimeoutError`
-- `packages/nextjs/lib/attachments/imageAttachmentVariants.ts`:
-  `isImageAttachmentVariant`
-- `packages/nextjs/lib/headToHeadQuestion.ts`: re-exported upstream helpers that local
-  callers do not use through this wrapper
-- `packages/nextjs/lib/vote/onChainVoteCooldown.ts`: direct read helpers and exported
-  cooldown constant not used through this module
-
-Suggested cleanup:
-
-- Triage in small package-scoped PRs.
-- After the list is small and intentional, consider making Knip stricter for selected
-  non-contract packages.
+- No remaining action for this item.
 
 Risk:
 
-- Low to Medium. Some exports are public-like convenience exports or test-oriented
+- Low.
   seams, so delete only after checking intended external/package boundaries.
 
 ### 20. Dedupe dependency lockfile in a dedicated PR
@@ -513,5 +496,5 @@ These surfaced during the audit, but I would not remove them as routine cleanup:
 3. Keep `@scaffold-ui/hooks` while `@scaffold-ui/components` requires it as a peer.
 4. Add a docs index plus superseded banner for the 2026-06-25 review.
 5. Extract readiness core helpers away from the World Chain Sepolia module name.
-6. Triage Knip unused exports package by package.
+6. Keep Knip clean after the 2026-06-30 unused-export follow-up.
 7. Do dependency dedupe as a separate lockfile-focused PR.
