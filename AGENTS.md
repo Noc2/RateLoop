@@ -7,6 +7,7 @@
 ## Production contract deployment notes
 
 - RateLoop smart contracts are already deployed in production on Base mainnet. Treat the deployed contract stack as durable production infrastructure: do not plan or suggest redeploying contracts for routine configuration, environment, indexing, UI, keeper, or operator issues.
+- Do not change production smart-contract behavior casually. Production contract changes should go through the appropriate governance/admin process, or be reserved for an emergency or significant contract-level issue where off-chain fixes are insufficient.
 - Only consider a production contract redeploy for a significant contract-level defect or larger incident where governance/admin actions, service rewiring, environment updates, or off-chain fixes are insufficient. If redeploy is on the table, spell out why the problem cannot be solved against the existing deployment first.
 - If the project owner explicitly directs a full production redeploy, treat that instruction as intentional and plan the full coordinated stack replacement instead of defaulting back to proxy-only or off-chain workarounds. Include contract deployment, generated metadata, environment rewiring, indexer/API updates, UI compatibility, operational cutover, and rollback checks in the plan.
 
