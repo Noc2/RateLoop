@@ -1,6 +1,5 @@
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "packages/ponder/Dockerfile"
+builder = "RAILPACK"
 watchPatterns = [
   ".yarn/**",
   ".yarnrc.yml",
