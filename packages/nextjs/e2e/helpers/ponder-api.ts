@@ -36,7 +36,11 @@ export type ContentItem = {
   rewardPoolSummary?: {
     asset: number | null;
     currency: "LREP" | "USDC" | "MIXED";
+    fundedAsset?: number | null;
+    fundedCurrency?: "LREP" | "USDC" | "MIXED";
+    rewardPoolCount?: number;
     activeRewardPoolCount: number;
+    totalFundedAmount?: string;
     currentRewardPoolAmount: string;
     hasActiveBounty?: boolean;
     questionDurationSeconds?: number | null;

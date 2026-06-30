@@ -1903,7 +1903,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [draftForm, setDraftForm] = useState<DraftForm | null>(null);
+  const [draftForm, setDraftFormState] = useState<DraftForm | null>(null);
+  const draftFormRef = useRef<DraftForm | null>(null);
+  const setDraftForm = useCallback((next: DraftForm | null | ((current: DraftForm | null) => DraftForm | null)) => {
+    const current = draftFormRef.current;
+    const resolved = typeof next === "function" ? next(current) : next;
+    draftFormRef.current = resolved;
+    setDraftFormState(resolved);
+  }, []);
   const [savedDraftJson, setSavedDraftJson] = useState("");
   const [draftSourceKey, setDraftSourceKey] = useState("");
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
@@ -1984,7 +1991,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setSavedDraftJson(JSON.stringify(nextForm));
     setDraftSourceKey(currentDraftSourceKey);
     setDraftError(null);
-  }, [currentDraftSourceKey, draftSourceKey, handoff]);
+  }, [currentDraftSourceKey, draftSourceKey, handoff, setDraftForm]);
 
   const draftFormJson = useMemo(() => (draftForm ? JSON.stringify(draftForm) : ""), [draftForm]);
   const isDraftDirty = Boolean(draftForm && savedDraftJson && draftFormJson !== savedDraftJson);
@@ -2230,10 +2237,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [address, connectedChainId, handoff?.chainId, handoffId, token],
   );
 
-  const updateDraftField = useCallback((field: keyof Omit<DraftForm, "questions">, value: string) => {
-    setDraftForm(current => (current ? { ...current, [field]: value } : current));
-    setDraftError(null);
-  }, []);
+  const updateDraftField = useCallback(
+    (field: keyof Omit<DraftForm, "questions">, value: string) => {
+      setDraftForm(current => (current ? { ...current, [field]: value } : current));
+      setDraftError(null);
+    },
+    [setDraftForm],
+  );
 
   const updateDraftBountyAmount = useCallback(
     (value: string) => {
@@ -2245,20 +2255,23 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [updateDraftField],
   );
 
-  const updateDraftBountyAsset = useCallback((asset: SubmissionRewardAsset) => {
-    setDraftForm(current => {
-      if (!current) return current;
-      const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
-      return {
-        ...current,
-        bountyAmount: parsedAmount === null ? current.bountyAmount : formatSubmissionRewardInput(parsedAmount, asset),
-        bountyAsset: asset,
-        feedbackBonusAmount: asset === "usdc" ? current.feedbackBonusAmount : null,
-        feedbackBonusAsset: asset === "usdc" ? current.feedbackBonusAsset : null,
-      };
-    });
-    setDraftError(null);
-  }, []);
+  const updateDraftBountyAsset = useCallback(
+    (asset: SubmissionRewardAsset) => {
+      setDraftForm(current => {
+        if (!current) return current;
+        const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
+        return {
+          ...current,
+          bountyAmount: parsedAmount === null ? current.bountyAmount : formatSubmissionRewardInput(parsedAmount, asset),
+          bountyAsset: asset,
+          feedbackBonusAmount: asset === "usdc" ? current.feedbackBonusAmount : null,
+          feedbackBonusAsset: asset === "usdc" ? current.feedbackBonusAsset : null,
+        };
+      });
+      setDraftError(null);
+    },
+    [setDraftForm],
+  );
 
   const enableDraftFeedbackBonus = useCallback(() => {
     setDraftForm(current => {
@@ -2270,7 +2283,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       };
     });
     setDraftError(null);
-  }, []);
+  }, [setDraftForm]);
 
   const disableDraftFeedbackBonus = useCallback(() => {
     setDraftForm(current => {
@@ -2282,7 +2295,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       };
     });
     setDraftError(null);
-  }, []);
+  }, [setDraftForm]);
 
   const updateDraftFeedbackBonusAmount = useCallback(
     (value: string) => {
@@ -2302,7 +2315,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         ? current
         : { ...current, bountyAmount: formatSubmissionRewardInput(parsedAmount, current.bountyAsset) };
     });
-  }, []);
+  }, [setDraftForm]);
 
   const formatDraftFeedbackBonusAmount = useCallback(() => {
     setDraftForm(current => {
@@ -2315,7 +2328,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             feedbackBonusAmount: formatFeedbackBonusInput(parsedAmount, current.feedbackBonusAsset),
           };
     });
-  }, []);
+  }, [setDraftForm]);
 
   const updateDraftWholeNumberField = useCallback(
     (field: "roundBlindSeconds" | "roundMaxVoters" | "roundMinVoters", value: string) => {
@@ -2335,7 +2348,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       });
       setDraftError(null);
     },
-    [],
+    [setDraftForm],
   );
 
   const clampDraftWholeNumberField = useCallback(
@@ -2379,81 +2392,90 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       });
       setDraftError(null);
     },
-    [roundBlindSecondBounds, roundMaxVoterBounds, roundMinVoterBounds],
+    [roundBlindSecondBounds, roundMaxVoterBounds, roundMinVoterBounds, setDraftForm],
   );
 
-  const updateDraftQuestion = useCallback((index: number, patch: Partial<DraftQuestionForm>) => {
-    setDraftForm(current => {
-      if (!current) return current;
-      return {
-        ...current,
-        questions: current.questions.map((question, questionIndex) =>
-          questionIndex === index ? mergeHeadToHeadDraftQuestion(question, patch) : question,
-        ),
-      };
-    });
-    setDraftError(null);
-  }, []);
+  const updateDraftQuestion = useCallback(
+    (index: number, patch: Partial<DraftQuestionForm>) => {
+      setDraftForm(current => {
+        if (!current) return current;
+        return {
+          ...current,
+          questions: current.questions.map((question, questionIndex) =>
+            questionIndex === index ? mergeHeadToHeadDraftQuestion(question, patch) : question,
+          ),
+        };
+      });
+      setDraftError(null);
+    },
+    [setDraftForm],
+  );
 
-  const updateDraftQuestionPrivateContext = useCallback((index: number, enabled: boolean) => {
-    setDraftForm(current => {
-      if (!current) return current;
-      const sharedConfidentiality =
-        current.questions.find(
-          (question, questionIndex) => questionIndex !== index && question.confidentiality.visibility === "gated",
-        )?.confidentiality ?? current.questions[index]?.confidentiality;
+  const updateDraftQuestionPrivateContext = useCallback(
+    (index: number, enabled: boolean) => {
+      setDraftForm(current => {
+        if (!current) return current;
+        const sharedConfidentiality =
+          current.questions.find(
+            (question, questionIndex) => questionIndex !== index && question.confidentiality.visibility === "gated",
+          )?.confidentiality ?? current.questions[index]?.confidentiality;
 
-      return {
-        ...current,
-        questions: current.questions.map((question, questionIndex) => {
-          if (questionIndex !== index) return question;
+        return {
+          ...current,
+          questions: current.questions.map((question, questionIndex) => {
+            if (questionIndex !== index) return question;
 
-          const nextConfidentiality: DraftConfidentiality = enabled
-            ? {
-                ...question.confidentiality,
-                bondAmount: sharedConfidentiality?.bondAmount ?? "0",
-                bondAsset: sharedConfidentiality?.bondAsset ?? "LREP",
-                disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
-                visibility: "gated",
-              }
-            : {
-                ...question.confidentiality,
-                visibility: "public",
-              };
-
-          return {
-            ...question,
-            confidentiality: nextConfidentiality,
-            contextUrl: enabled ? "" : question.contextUrl,
-            videoUrl: enabled ? "" : question.videoUrl,
-          };
-        }),
-      };
-    });
-    setDraftError(null);
-  }, []);
-
-  const updateDraftPrivateConfidentialityBond = useCallback((patch: Partial<DraftConfidentiality>) => {
-    setDraftForm(current => {
-      if (!current) return current;
-
-      return {
-        ...current,
-        questions: current.questions.map(question =>
-          question.confidentiality.visibility === "gated"
-            ? {
-                ...question,
-                confidentiality: {
+            const nextConfidentiality: DraftConfidentiality = enabled
+              ? {
                   ...question.confidentiality,
-                  ...patch,
-                },
-              }
-            : question,
-        ),
-      };
-    });
-    setDraftError(null);
-  }, []);
+                  bondAmount: sharedConfidentiality?.bondAmount ?? "0",
+                  bondAsset: sharedConfidentiality?.bondAsset ?? "LREP",
+                  disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
+                  visibility: "gated",
+                }
+              : {
+                  ...question.confidentiality,
+                  visibility: "public",
+                };
+
+            return {
+              ...question,
+              confidentiality: nextConfidentiality,
+              contextUrl: enabled ? "" : question.contextUrl,
+              videoUrl: enabled ? "" : question.videoUrl,
+            };
+          }),
+        };
+      });
+      setDraftError(null);
+    },
+    [setDraftForm],
+  );
+
+  const updateDraftPrivateConfidentialityBond = useCallback(
+    (patch: Partial<DraftConfidentiality>) => {
+      setDraftForm(current => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          questions: current.questions.map(question =>
+            question.confidentiality.visibility === "gated"
+              ? {
+                  ...question,
+                  confidentiality: {
+                    ...question.confidentiality,
+                    ...patch,
+                  },
+                }
+              : question,
+          ),
+        };
+      });
+      setDraftError(null);
+    },
+    [setDraftForm],
+  );
 
   const updateDraftConfidentialityBondAmount = useCallback(
     (value: string) => {
@@ -2488,17 +2510,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       };
     });
     setDraftError(null);
-  }, []);
+  }, [setDraftForm]);
 
   const saveDraft = useCallback(
     async (options: SaveDraftOptions = {}) => {
-      if (!handoff || !draftForm) return null;
+      const currentDraftForm = draftFormRef.current ?? draftForm;
+      if (!handoff || !currentDraftForm) return null;
       setDraftError(null);
       setIsSavingDraft(true);
       try {
         const requestBody = await buildDraftRequestBody(
           handoff,
-          draftForm,
+          currentDraftForm,
           roundConfigBounds,
           async (description, options) => {
             if (!address) {

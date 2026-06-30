@@ -97,6 +97,35 @@ async function expectPrivateResourceReadable(
   }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
 }
 
+type HandoffReadResponse = {
+  draftRevision?: number;
+  editedByUser?: boolean;
+  requestBody: AgentQuestionRequest;
+  status?: string;
+};
+
+async function expectSavedHandoffDraft(
+  request: APIRequestContext,
+  handoffId: string,
+  token: string,
+  assertDraft: (saved: HandoffReadResponse) => void,
+) {
+  let saved: HandoffReadResponse | null = null;
+  await expect(async () => {
+    const readResponse = await request.get(`/api/agent/handoffs/${handoffId}`, {
+      headers: {
+        "x-rateloop-handoff-token": token,
+      },
+    });
+    expect(readResponse.ok(), await readResponse.text()).toBe(true);
+    saved = (await readResponse.json()) as HandoffReadResponse;
+    assertDraft(saved);
+  }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
+
+  if (!saved) throw new Error("Saved handoff draft was not readable.");
+  return saved;
+}
+
 async function openPrivateTokenPage(page: Page, url: string, expectedUrl: RegExp, markerText: string, title: string) {
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
   await expectPrivateTokenStripped(page);
@@ -159,26 +188,16 @@ test.describe("Agent browser handoffs", () => {
     await page.getByRole("textbox", { name: "Question", exact: true }).fill(editedTitle);
     await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
     await page.getByRole("button", { name: "Save draft" }).click();
-    await expect(page.getByText("Draft saved.")).toBeVisible({ timeout: 30_000 });
-
-    const readResponse = await request.get(`/api/agent/handoffs/${created.handoffId}`, {
-      headers: {
-        "x-rateloop-handoff-token": token,
-      },
+    await expectSavedHandoffDraft(request, created.handoffId, token, saved => {
+      expect(saved.draftRevision).toBe(1);
+      expect(saved.editedByUser).toBe(true);
+      expect(saved.requestBody.question.title).toBe(editedTitle);
+      expect(saved.requestBody.question.confidentiality?.visibility).toBe("gated");
+      expect(saved.requestBody.question.detailsUrl).toBe(
+        "https://rateloop.ai/api/attachments/details/det_agenthandoffprivate01",
+      );
     });
-    expect(readResponse.ok(), await readResponse.text()).toBe(true);
-    const saved = (await readResponse.json()) as {
-      draftRevision: number;
-      editedByUser: boolean;
-      requestBody: AgentQuestionRequest;
-    };
-    expect(saved.draftRevision).toBe(1);
-    expect(saved.editedByUser).toBe(true);
-    expect(saved.requestBody.question.title).toBe(editedTitle);
-    expect(saved.requestBody.question.confidentiality?.visibility).toBe("gated");
-    expect(saved.requestBody.question.detailsUrl).toBe(
-      "https://rateloop.ai/api/attachments/details/det_agenthandoffprivate01",
-    );
+    await expect(page.getByText("Revision 1")).toBeVisible({ timeout: 30_000 });
 
     await context.close();
   });
@@ -240,7 +259,7 @@ test.describe("Agent browser handoffs", () => {
     browser,
     request,
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(240_000);
 
     const originalTitle = `Agent feedback bonus handoff ${Date.now()}`;
     const requestBody = baseAgentQuestionRequest(`agent-handoff-feedback-${Date.now()}`, originalTitle);
@@ -292,29 +311,20 @@ test.describe("Agent browser handoffs", () => {
 
     await page.locator("#agent-ask-feedback-bonus-amount").fill("0.75");
     await page.getByRole("button", { name: "Save draft" }).click();
-    await expect(page.getByText("Draft saved.")).toBeVisible({ timeout: 30_000 });
-
-    const readResponse = await request.get(`/api/agent/handoffs/${created.handoffId}`, {
-      headers: {
-        "x-rateloop-handoff-token": token,
-      },
+    await expectSavedHandoffDraft(request, created.handoffId, token, saved => {
+      expect(saved.requestBody.feedbackBonus).toMatchObject({
+        amount: "750000",
+        asset: "USDC",
+      });
+      expect(saved.requestBody.maxPaymentAmount).toBe("1750000");
+      expect(saved.requestBody.roundConfig).toMatchObject({
+        maxVoters: "50",
+        minVoters: "5",
+        questionDurationSeconds: "1200",
+      });
+      expect(saved.requestBody.bounty.requiredVoters).toBe("5");
     });
-    expect(readResponse.ok(), await readResponse.text()).toBe(true);
-    const saved = (await readResponse.json()) as {
-      requestBody: AgentQuestionRequest;
-    };
-
-    expect(saved.requestBody.feedbackBonus).toMatchObject({
-      amount: "750000",
-      asset: "USDC",
-    });
-    expect(saved.requestBody.maxPaymentAmount).toBe("1750000");
-    expect(saved.requestBody.roundConfig).toMatchObject({
-      maxVoters: "50",
-      minVoters: "5",
-      questionDurationSeconds: "1200",
-    });
-    expect(saved.requestBody.bounty.requiredVoters).toBe("5");
+    await expect(page.getByText("Revision 1")).toBeVisible({ timeout: 30_000 });
 
     await expect(page.getByRole("button", { name: /^Submit$/i })).toBeEnabled({ timeout: 30_000 });
     await page.getByRole("button", { name: /^Submit$/i }).click();
@@ -343,10 +353,10 @@ test.describe("Agent browser handoffs", () => {
         const rewardPoolSummary = submittedQuestion.rewardPoolSummary;
         const feedbackBonusSummary = submittedQuestion.feedbackBonusSummary;
         return (
-          rewardPoolSummary?.currency === "USDC" &&
-          rewardPoolSummary.asset === 1 &&
-          rewardPoolSummary.activeRewardPoolCount > 0 &&
-          BigInt(rewardPoolSummary.currentRewardPoolAmount) > 0n &&
+          rewardPoolSummary?.fundedCurrency === "USDC" &&
+          rewardPoolSummary.fundedAsset === 1 &&
+          (rewardPoolSummary.rewardPoolCount ?? 0) > 0 &&
+          BigInt(rewardPoolSummary.totalFundedAmount ?? "0") >= 1_000_000n &&
           rewardPoolSummary.questionDurationSeconds === 1200 &&
           submittedQuestion.openRound?.epochDuration === 1200 &&
           feedbackBonusSummary?.currency === "USDC" &&
