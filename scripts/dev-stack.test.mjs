@@ -4,6 +4,7 @@ import {
   getDbPushPlan,
   getDevStackServices,
   getDevStackNetworkAlignmentWarning,
+  LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET,
   getPonderDataResetPlan,
   getPonderDeploymentFingerprint,
   getPonderRpcPreflightPlan,
@@ -368,6 +369,31 @@ test("aligns the Next service target network with the dev Ponder network", () =>
       NEXT_PUBLIC_RPC_URL_31337: "http://127.0.0.1:8545",
       RATELOOP_IMAGE_MODERATION_MODE: "disabled",
       RATELOOP_E2E_PRODUCTION_BUILD: "true",
+      RATELOOP_CONFIDENTIALITY_JOB_SECRET: LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET,
+      RATELOOP_QUESTION_DETAILS_MODERATION_MODE: "disabled",
+    },
+  );
+});
+
+test("preserves explicit confidentiality job secrets for the Next service", () => {
+  assert.deepEqual(
+    resolveNextServiceEnv({
+      databaseUrl: localDatabaseConfig.url,
+      ponderEnv: {
+        PONDER_NETWORK: "hardhat",
+        PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+      },
+      baseEnv: {
+        RATELOOP_CONFIDENTIALITY_JOB_SECRET: "real-job-secret",
+      },
+    }),
+    {
+      DATABASE_URL: localDatabaseConfig.url,
+      NEXT_PUBLIC_TARGET_NETWORKS: "31337",
+      NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true",
+      NEXT_PUBLIC_RPC_URL_31337: "http://127.0.0.1:8545",
+      RATELOOP_IMAGE_MODERATION_MODE: "disabled",
+      RATELOOP_E2E_PRODUCTION_BUILD: "true",
       RATELOOP_QUESTION_DETAILS_MODERATION_MODE: "disabled",
     },
   );
@@ -392,6 +418,7 @@ test("preserves explicit Next target network overrides from the shell", () => {
     }),
     {
       DATABASE_URL: localDatabaseConfig.url,
+      RATELOOP_CONFIDENTIALITY_JOB_SECRET: LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET,
     },
   );
 });

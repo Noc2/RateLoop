@@ -53,6 +53,7 @@ const ponderNetworkChainIds = {
 };
 const allowRemoteDbPushFlag = "--allow-remote-db-push";
 const skipDbPushFlag = "--skip-db-push";
+export const LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET = "rateloop-local-e2e-confidentiality-job-secret";
 const ponderLocalDeploymentEnvKeys = [
   "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
   "PONDER_CATEGORY_REGISTRY_ADDRESS",
@@ -444,6 +445,14 @@ export function resolveNextServiceEnv({
 
   if (!baseEnv.RATELOOP_QUESTION_DETAILS_MODERATION_MODE?.trim()) {
     env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE = "disabled";
+  }
+
+  if (
+    ponderChainId === "31337" &&
+    !baseEnv.RATELOOP_CONFIDENTIALITY_JOB_SECRET?.trim() &&
+    !baseEnv.CRON_SECRET?.trim()
+  ) {
+    env.RATELOOP_CONFIDENTIALITY_JOB_SECRET = LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET;
   }
 
   const rpcEnvKey = `NEXT_PUBLIC_RPC_URL_${ponderChainId}`;

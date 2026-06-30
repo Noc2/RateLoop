@@ -42,12 +42,13 @@ import {
   RaterRegistryAbi,
   RaterRegistryConfidentialityAbi,
 } from "@rateloop/contracts/abis";
-import { E2E_RPC_URL } from "./service-urls";
+import { E2E_BASE_URL, E2E_RPC_URL } from "./service-urls";
 
 export const CONFIDENTIALITY_BOND_ASSET_LREP = 0;
 export const CONFIDENTIALITY_BOND_ASSET_USDC = 1;
 export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT = 1_000_000n;
+const LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET = "rateloop-local-e2e-confidentiality-job-secret";
 const E2E_CONTENT_DEPLOYMENT_KEY = `${foundry.id}:${CONTRACT_ADDRESSES.ContentRegistry.toLowerCase()}`;
 const RETRYABLE_API_REQUEST_ERROR_PATTERNS = [
   /ECONNRESET/i,
@@ -62,6 +63,24 @@ const RETRYABLE_API_REQUEST_ERROR_PATTERNS = [
 function isRetryableApiRequestError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return RETRYABLE_API_REQUEST_ERROR_PATTERNS.some(pattern => pattern.test(message));
+}
+
+function isLocalE2EBaseUrl(): boolean {
+  try {
+    const url = new URL(E2E_BASE_URL);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function getDisclosureReconcileSecret(): string | undefined {
+  return (
+    process.env.RATELOOP_CONFIDENTIALITY_JOB_SECRET ??
+    process.env.CRON_SECRET ??
+    process.env.NOTIFICATION_DELIVERY_SECRET ??
+    (isLocalE2EBaseUrl() ? LOCAL_E2E_CONFIDENTIALITY_JOB_SECRET : undefined)
+  );
 }
 
 async function postJsonWithRequestRetry(
@@ -852,10 +871,7 @@ export async function triggerDisclosureReconcile(
   contentIds: Array<string | number | bigint>,
   settledAt?: Date,
 ) {
-  const secret =
-    process.env.RATELOOP_CONFIDENTIALITY_JOB_SECRET ??
-    process.env.CRON_SECRET ??
-    process.env.NOTIFICATION_DELIVERY_SECRET;
+  const secret = getDisclosureReconcileSecret();
   expect(
     secret,
     "RATELOOP_CONFIDENTIALITY_JOB_SECRET or CRON_SECRET must be set for disclosure reconciliation e2e",
