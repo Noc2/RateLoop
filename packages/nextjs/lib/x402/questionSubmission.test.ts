@@ -317,6 +317,7 @@ function buildContentDetailsSubmittedLog(params: {
 
 function buildSubmissionRewardPoolAttachedLog(params: {
   address: Address;
+  bountyStartBy?: bigint;
   contentId: bigint;
   payload: X402QuestionPayload;
   rewardPoolId?: bigint;
@@ -340,7 +341,7 @@ function buildSubmissionRewardPoolAttachedLog(params: {
         params.payload.bounty.amount,
         params.payload.bounty.requiredVoters,
         params.payload.bounty.requiredSettledRounds,
-        params.payload.bounty.bountyStartBy,
+        params.bountyStartBy ?? params.payload.bounty.bountyStartBy,
         params.payload.bounty.bountyWindowSeconds,
         params.payload.bounty.feedbackWindowSeconds,
         params.payload.bounty.bountyEligibility,
@@ -362,6 +363,7 @@ function buildSubmissionRewardPoolAttachedLog(params: {
 
 function buildQuestionBundleSubmittedLog(params: {
   address: Address;
+  bountyStartBy?: bigint;
   bundleId: bigint;
   payload: X402QuestionPayload;
   rewardPoolId?: bigint;
@@ -386,7 +388,7 @@ function buildQuestionBundleSubmittedLog(params: {
         BigInt(params.payload.questions.length),
         params.payload.bounty.amount,
         params.payload.bounty.requiredVoters * params.payload.bounty.requiredSettledRounds,
-        params.payload.bounty.bountyStartBy,
+        params.bountyStartBy ?? params.payload.bounty.bountyStartBy,
         params.payload.bounty.bountyWindowSeconds,
         params.payload.bounty.feedbackWindowSeconds,
         params.payload.bounty.bountyEligibility,
@@ -841,6 +843,59 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
   assert.deepEqual(body.contentIds, ["123"]);
 });
 
+test("confirmAgentWalletQuestionSubmissionRequest accepts creation-anchored reward close timestamps", async () => {
+  const payload = buildPayload("wallet-confirm-creation-anchored-single");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"f".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        buildContentSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 321n,
+          submitter: walletAddress,
+        }),
+        buildContentRoundConfigSetLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentId: 321n,
+          payload,
+        }),
+        buildSubmissionRewardPoolAttachedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bountyStartBy: 1_782_789_200n,
+          contentId: 321n,
+          payload,
+          rewardPoolId: 99n,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  const confirmed = await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [transactionHash],
+  });
+  const body = confirmed.body as { contentId: string; rewardPoolId: string; status: string };
+
+  assert.equal(confirmed.status, 200);
+  assert.equal(body.status, "submitted");
+  assert.equal(body.contentId, "321");
+  assert.equal(body.rewardPoolId, "99");
+});
+
 test("confirmAgentWalletQuestionSubmissionRequest confirms LREP wallet-call reward plans", async () => {
   setDefaultTestOverrides({
     buildAgentWalletQuestionSubmissionPlan: undefined as never,
@@ -969,6 +1024,7 @@ test("confirmAgentWalletQuestionSubmissionRequest accepts creation-anchored bund
         }),
         buildQuestionBundleSubmittedLog({
           address: TEST_CONFIG.contentRegistryAddress,
+          bountyStartBy: 1_782_789_200n,
           bundleId: 55n,
           payload,
           rewardPoolId: 88n,

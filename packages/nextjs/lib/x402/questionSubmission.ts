@@ -726,11 +726,21 @@ function sameRewardTerms(left: StoredQuestionRewardTerms | undefined, right: Sto
     left.amount === right.amount &&
     left.requiredVoters === right.requiredVoters &&
     left.requiredSettledRounds === right.requiredSettledRounds &&
-    left.bountyStartBy === right.bountyStartBy &&
+    sameCreationAnchoredBountyStartBy(left.bountyStartBy, right.bountyStartBy) &&
     left.bountyWindowSeconds === right.bountyWindowSeconds &&
     left.feedbackWindowSeconds === right.feedbackWindowSeconds &&
     left.bountyEligibility === right.bountyEligibility
   );
+}
+
+function sameCreationAnchoredBountyStartBy(submitted: string, expected: string) {
+  if (submitted === expected) return true;
+  if (expected !== "0") return false;
+  try {
+    return BigInt(submitted) > 0n;
+  } catch {
+    return false;
+  }
 }
 
 function sameRoundConfig(left: SubmittedRoundConfig | undefined, right: SubmittedRoundConfig | undefined) {
@@ -2423,7 +2433,7 @@ function sameBundleRewardTerms(
     submitted.contentId === null &&
     submitted.asset === expected.asset &&
     submitted.amount === expected.amount &&
-    submitted.bountyStartBy === expected.bountyStartBy &&
+    sameCreationAnchoredBountyStartBy(submitted.bountyStartBy, expected.bountyStartBy) &&
     submitted.bountyWindowSeconds === expected.bountyWindowSeconds &&
     submitted.feedbackWindowSeconds === expected.feedbackWindowSeconds &&
     submitted.bountyEligibility === expected.bountyEligibility &&
