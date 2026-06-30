@@ -60,7 +60,7 @@ findings were identified.
 | ID | Severity | Status | Title |
 | --- | --- | --- | --- |
 | M-1 | Medium | Fixed | Parent correlation-epoch rejection can leave pre-qualification escrow snapshots unskippable |
-| L-1 | Low | Open | `PRIVATE_FOREVER` does not extend confidentiality bond slashability |
+| L-1 | Low | Fixed | `PRIVATE_FOREVER` does not extend confidentiality bond slashability |
 | L-2 | Low | Open | Advisory recorder rotation can install a recorder that cannot claim advisory launch credits |
 
 ## Findings
@@ -187,7 +187,7 @@ single-pool replacement-before-refund flow.
 
 Severity: Low
 
-Status: Open
+Status: Fixed
 
 Affected code:
 
@@ -253,6 +253,14 @@ Add a regression test either way:
   chosen release authority/condition is satisfied.
 - If accepted as current semantics, add an explicit test proving private-forever
   bonds release under the normal predicate and document the trust model.
+
+#### Resolution
+
+Fixed on 2026-06-30 as an accepted-semantics/documentation and regression-test
+issue. Contract/interface comments now state that private-forever is a
+disclosure-policy flag and does not make bonds slashable forever. Regression
+coverage proves private-forever bonds release under the normal predicate, can
+be slashed before release, and cannot be slashed after release.
 
 ### L-2: Advisory recorder rotation can install a recorder that cannot claim advisory launch credits
 

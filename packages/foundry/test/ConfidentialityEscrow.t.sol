@@ -208,6 +208,54 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertFalse(confidentialityEscrow.hasActiveBond(slashContentId, slashIdentityKey));
     }
 
+    function testPrivateForeverBondReleasesUnderNormalPredicate() public {
+        uint256 contentId = _submitPrivateForeverGatedQuestion("private-forever-release", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+        assertTrue(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+
+        IConfidentialityEscrow.ConfidentialityConfig memory config =
+            confidentialityEscrow.confidentialityConfig(contentId);
+        assertEq(config.flags, confidentialityEscrow.CONFIDENTIALITY_FLAG_PRIVATE_FOREVER());
+
+        vm.prank(submitter);
+        registry.cancelContent(contentId);
+        vm.warp(block.timestamp + confidentialityEscrow.evidenceWindow());
+        uint256 beforeBalance = lrepToken.balanceOf(voter1);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+
+        assertEq(lrepToken.balanceOf(voter1), beforeBalance + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+    }
+
+    function testPrivateForeverBondCanBeSlashedBeforeRelease() public {
+        uint256 contentId = _submitPrivateForeverGatedQuestion("private-forever-slash", 2e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter2);
+
+        uint256 reporterBefore = lrepToken.balanceOf(reporter);
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
+
+        vm.prank(owner);
+        confidentialityEscrow.slashBond(contentId, identityKey, "verified leak", EVIDENCE_HASH, reporter);
+
+        assertEq(lrepToken.balanceOf(reporter), reporterBefore + 1e6);
+        assertEq(lrepToken.balanceOf(treasury), treasuryBefore + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+    }
+
+    function testPrivateForeverBondCannotBeSlashedAfterRelease() public {
+        uint256 contentId = _submitPrivateForeverGatedQuestion("private-forever-release-before-slash", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+
+        vm.prank(submitter);
+        registry.cancelContent(contentId);
+        vm.warp(block.timestamp + confidentialityEscrow.evidenceWindow());
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+
+        vm.prank(owner);
+        vm.expectRevert("No active bond");
+        confidentialityEscrow.slashBond(contentId, identityKey, "late leak", EVIDENCE_HASH, reporter);
+    }
+
     function testGatedQuestionConfiguresEscrowAndRoundSnapshotsEscrow() public {
         uint256 contentId = _submitGatedQuestion("snapshot-shape", 0);
 
@@ -861,6 +909,18 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         return _submitGatedQuestionWithAsset(label, confidentialityEscrow.BOND_ASSET_LREP(), bondAmount);
     }
 
+    function _submitPrivateForeverGatedQuestion(string memory label, uint64 bondAmount)
+        internal
+        returns (uint256 contentId)
+    {
+        return _submitGatedQuestionWithAssetAndFlags(
+            label,
+            confidentialityEscrow.BOND_ASSET_LREP(),
+            bondAmount,
+            confidentialityEscrow.CONFIDENTIALITY_FLAG_PRIVATE_FOREVER()
+        );
+    }
+
     function _ungatedFlaggedQuestionSubmission() internal view returns (FlaggedQuestionSubmission memory submission) {
         submission.contextUrl = "https://example.com/ungated-flags";
         submission.title = "Public question";
@@ -905,6 +965,13 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         internal
         returns (uint256 contentId)
     {
+        return _submitGatedQuestionWithAssetAndFlags(label, bondAsset, bondAmount, 0);
+    }
+
+    function _submitGatedQuestionWithAssetAndFlags(string memory label, uint8 bondAsset, uint64 bondAmount, uint8 flags)
+        internal
+        returns (uint256 contentId)
+    {
         string memory contextUrl = "";
         string memory title = string.concat("Private question ", label);
         ContentRegistry.SubmissionDetails memory details = ContentRegistry.SubmissionDetails({
@@ -913,7 +980,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         bytes32 salt = keccak256(abi.encodePacked(label, block.timestamp, block.number));
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality =
             IConfidentialityEscrow.ConfidentialityConfig({
-                gated: true, bondAsset: bondAsset, bondAmount: bondAmount, flags: 0
+                gated: true, bondAsset: bondAsset, bondAmount: bondAmount, flags: flags
             });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
         RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);

@@ -8,6 +8,9 @@ interface IConfidentialityEscrow {
         bool gated;
         uint8 bondAsset;
         uint64 bondAmount;
+        /// @dev Disclosure-policy flags such as private-forever do not change bond release rules.
+        ///      Bonds remain slashable only while active and release under the escrow's normal
+        ///      evidence-window / max-lock predicate.
         uint8 flags;
     }
 

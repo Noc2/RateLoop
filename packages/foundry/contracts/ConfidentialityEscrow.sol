@@ -57,6 +57,8 @@ contract ConfidentialityEscrow is
 
     uint8 public constant BOND_ASSET_LREP = 0;
     uint8 public constant BOND_ASSET_USDC = 1;
+    /// @dev Disclosure policy only: does not make the confidentiality bond slashable forever.
+    ///      Bonds still release under `_isBondReleasable`.
     uint8 public constant CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
     uint256 public constant MIN_NONZERO_BOND = 1e6;
     uint256 public constant DEFAULT_MAX_BOND = 100e6;
