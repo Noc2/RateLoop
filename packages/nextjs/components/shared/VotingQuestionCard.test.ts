@@ -2,9 +2,11 @@ import React from "react";
 import {
   FeedbackBonusAmountDisplay,
   RewardPoolAmountDisplay,
+  SharedRewardDeadlineDisplay,
   formatCompactRewardTimeLeft,
   getFeedbackBonusDisplay,
   getRewardPoolDisplay,
+  getSharedRewardDeadlineSeconds,
 } from "./VotingQuestionCard";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -42,6 +44,14 @@ test("formatCompactRewardTimeLeft keeps countdown labels short", () => {
   assert.equal(formatCompactRewardTimeLeft(37_000n, 10_000), "7h");
   assert.equal(formatCompactRewardTimeLeft(182_800n, 10_000), "2d");
   assert.equal(formatCompactRewardTimeLeft(3_898_000n, 10_000), "30d+");
+});
+
+test("getSharedRewardDeadlineSeconds only merges matching active deadlines", () => {
+  assert.equal(getSharedRewardDeadlineSeconds(10_060n, 10_060n), 10_060n);
+  assert.equal(getSharedRewardDeadlineSeconds(10_060, 10_060n), 10_060n);
+  assert.equal(getSharedRewardDeadlineSeconds(10_060n, 10_061n), null);
+  assert.equal(getSharedRewardDeadlineSeconds(0n, 0n), null);
+  assert.equal(getSharedRewardDeadlineSeconds(null, 10_060n), null);
 });
 
 test("reward chips render title-cased bounty and feedback bonus labels", () => {
@@ -86,4 +96,17 @@ test("reward chips render title-cased bounty and feedback bonus labels", () => {
   assert.match(lrepBountyHtml, /1 LREP<\/span> Bounty<span[^>]*> · 45m<\/span>/);
   assert.match(lrepFeedbackBonusHtml, /aria-label="1 LREP Feedback Bonus, closes in &lt;1m"/);
   assert.match(lrepFeedbackBonusHtml, /1 LREP<\/span> Feedback Bonus<span[^>]*> · &lt;1m<\/span>/);
+});
+
+test("shared reward deadline chip renders the answer window as a yellow reward chip", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SharedRewardDeadlineDisplay, {
+      deadlineSeconds: 37_000n,
+      nowSeconds: 10_000,
+    }),
+  );
+
+  assert.match(html, /reward-chip reward-chip-label reward-chip-brand-yellow/);
+  assert.match(html, /aria-label="Answer window closes in 7h"/);
+  assert.match(html, /Answer window <span[^>]*> · 7h<\/span>/);
 });

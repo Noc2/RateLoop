@@ -17,7 +17,9 @@ import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import {
   FeedbackBonusAmountDisplay,
   RewardPoolAmountDisplay,
+  SharedRewardDeadlineDisplay,
   VotingQuestionContextDetails,
+  getSharedRewardDeadlineSeconds,
 } from "~~/components/shared/VotingQuestionCard";
 import { WatchContentButton } from "~~/components/shared/WatchContentButton";
 import { ConfidentialContextGate } from "~~/components/vote/ConfidentialContextGate";
@@ -664,6 +666,10 @@ function FeedContentMetaCard({
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item, nowSeconds);
   const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
   const feedbackBonusDeadline = getActiveFeedbackClosesAt(item, nowSeconds);
+  const sharedRewardDeadline =
+    rewardPoolTotal > 0n && feedbackBonusTotal > 0n
+      ? getSharedRewardDeadlineSeconds(rewardPoolDeadline, feedbackBonusDeadline)
+      : null;
   const hasVisibleReward = rewardPoolTotal > 0n || feedbackBonusTotal > 0n;
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
@@ -711,7 +717,7 @@ function FeedContentMetaCard({
         <RewardPoolAmountDisplay
           amount={rewardPoolTotal}
           currency={rewardPoolCurrency}
-          deadlineSeconds={rewardPoolDeadline}
+          deadlineSeconds={sharedRewardDeadline === null ? rewardPoolDeadline : null}
           nowSeconds={nowSeconds}
         />
       ) : null}
@@ -719,9 +725,12 @@ function FeedContentMetaCard({
         <FeedbackBonusAmountDisplay
           amount={feedbackBonusTotal}
           currency={feedbackBonusCurrency}
-          deadlineSeconds={feedbackBonusDeadline}
+          deadlineSeconds={sharedRewardDeadline === null ? feedbackBonusDeadline : null}
           nowSeconds={nowSeconds}
         />
+      ) : null}
+      {sharedRewardDeadline !== null ? (
+        <SharedRewardDeadlineDisplay deadlineSeconds={sharedRewardDeadline} nowSeconds={nowSeconds} />
       ) : null}
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>

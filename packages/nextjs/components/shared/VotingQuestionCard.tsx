@@ -77,6 +77,8 @@ const USDC_FEEDBACK_BONUS_TOOLTIP_TEXT =
   "This Feedback Bonus is funded in USDC. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
 const MIXED_FEEDBACK_BONUS_TOOLTIP_TEXT =
   "This question has Feedback Bonus pools in multiple assets. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
+const SHARED_REWARD_DEADLINE_TOOLTIP_TEXT =
+  "Voting, bounty eligibility, and Feedback Bonus submissions share this deadline.";
 export const VOTING_SURFACE_BACKGROUND = "var(--rateloop-surface-elevated)";
 const STATUS_PILL_CLASS_NAME =
   "reward-chip reward-chip-muted inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2";
@@ -87,6 +89,7 @@ const DOCK_CONTROL_SIZE = `${DOCK_CONTROL_SIZE_PX / 16}rem`;
 const COMPACT_DOCK_ORB_SIZE_PX = 88;
 const DOCK_CONTROL_CIRCLE_CLASS_NAME = "h-11 w-11 box-border";
 const REWARD_CHIP_INFO_ICON_CLASS_NAME = "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]";
+type RewardChipTone = "blue" | "green" | "yellow";
 
 type ActivityTone = "primary" | "warning" | "success" | "neutral";
 
@@ -293,7 +296,7 @@ function RewardAmountDisplay({
   tooltip: string;
   ariaLabel: string;
   deadlineTooltipSubject: string;
-  tone: "blue" | "green";
+  tone: RewardChipTone;
 }) {
   const displayAmountLabel = amountLabel ?? formatUsdAmount(amount);
   const deadlineLabel = formatCompactRewardTimeLeft(deadlineSeconds, nowSeconds);
@@ -309,6 +312,33 @@ function RewardAmountDisplay({
         {deadlineLabel ? <span className="font-mono tabular-nums text-[#050505]/70"> · {deadlineLabel}</span> : null}
       </span>
       <InfoTooltip text={displayTooltip} position="bottom" className={REWARD_CHIP_INFO_ICON_CLASS_NAME} />
+    </div>
+  );
+}
+
+export function SharedRewardDeadlineDisplay({
+  deadlineSeconds,
+  nowSeconds,
+}: {
+  deadlineSeconds?: bigint | null;
+  nowSeconds?: number;
+}) {
+  const deadlineLabel = formatCompactRewardTimeLeft(deadlineSeconds, nowSeconds);
+  if (!deadlineLabel) return null;
+
+  return (
+    <div
+      className="reward-chip reward-chip-label reward-chip-brand-yellow"
+      aria-label={`Answer window closes in ${deadlineLabel}`}
+    >
+      <span>
+        Answer window <span className="font-mono tabular-nums text-[#050505]/70"> · {deadlineLabel}</span>
+      </span>
+      <InfoTooltip
+        text={SHARED_REWARD_DEADLINE_TOOLTIP_TEXT}
+        position="bottom"
+        className={REWARD_CHIP_INFO_ICON_CLASS_NAME}
+      />
     </div>
   );
 }
@@ -331,6 +361,23 @@ export function formatCompactRewardTimeLeft(
 
   const days = remainingSeconds / 86_400n;
   return days < 30n ? `${days}d` : "30d+";
+}
+
+export function getSharedRewardDeadlineSeconds(
+  rewardPoolDeadlineSeconds: bigint | number | null | undefined,
+  feedbackBonusDeadlineSeconds: bigint | number | null | undefined,
+) {
+  const rewardPoolDeadline = normalizeRewardDeadlineSeconds(rewardPoolDeadlineSeconds);
+  const feedbackBonusDeadline = normalizeRewardDeadlineSeconds(feedbackBonusDeadlineSeconds);
+  if (rewardPoolDeadline === null || feedbackBonusDeadline === null) return null;
+  return rewardPoolDeadline === feedbackBonusDeadline ? rewardPoolDeadline : null;
+}
+
+function normalizeRewardDeadlineSeconds(deadlineSeconds: bigint | number | null | undefined) {
+  if (deadlineSeconds === null || deadlineSeconds === undefined) return null;
+  const deadline =
+    typeof deadlineSeconds === "bigint" ? deadlineSeconds : BigInt(Math.max(0, Math.floor(deadlineSeconds)));
+  return deadline > 0n ? deadline : null;
 }
 
 export function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
