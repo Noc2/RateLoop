@@ -159,3 +159,29 @@ test("releasing an old workspace dist lock does not delete a newer owner", async
     await rm(tempDir, { force: true, recursive: true });
   }
 });
+
+test("default workspace dist lock is scoped for Railway deployments", async () => {
+  const command = nodeEval(`
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const lockDirs = fs.readdirSync(os.tmpdir()).filter(name => name.startsWith("rateloop-workspace-dist"));
+    process.stdout.write(JSON.stringify(lockDirs));
+  `);
+  const env = lockEnv(undefined, {
+    RATELOOP_WORKSPACE_DIST_LOCK_DIR: "",
+    RAILWAY_PROJECT_ID: "project-123",
+    RAILWAY_ENVIRONMENT_ID: "environment-123",
+    RAILWAY_SERVICE_ID: "service-123",
+    RAILWAY_DEPLOYMENT_ID: "deployment-123",
+  });
+
+  const result = await runLock(command, env);
+  const lockDirs = JSON.parse(result.stdout);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(
+    lockDirs.some(name => /^rateloop-workspace-dist-railway-[a-f0-9]{16}\.lock$/.test(name)),
+    `expected a Railway-scoped lock directory, saw ${lockDirs.join(", ")}`,
+  );
+  assert.equal(lockDirs.includes("rateloop-workspace-dist.lock"), false);
+});

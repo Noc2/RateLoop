@@ -1,16 +1,42 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const LOCK_HELD_ENV = "RATELOOP_WORKSPACE_DIST_LOCK_HELD";
-const DEFAULT_LOCK_DIR = join(tmpdir(), "rateloop-workspace-dist.lock");
+const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const STALE_LOCK_MS = Number.parseInt(process.env.RATELOOP_WORKSPACE_DIST_LOCK_STALE_MS ?? "", 10) || 10 * 60_000;
 const RETRY_MS = Number.parseInt(process.env.RATELOOP_WORKSPACE_DIST_LOCK_RETRY_MS ?? "", 10) || 250;
 const HEARTBEAT_MS =
   Number.parseInt(process.env.RATELOOP_WORKSPACE_DIST_LOCK_HEARTBEAT_MS ?? "", 10) ||
   Math.max(25, Math.min(30_000, Math.floor(STALE_LOCK_MS / 3)));
+
+function hashScope(value) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
+
+function defaultLockScope() {
+  const railwayParts = [
+    process.env.RAILWAY_PROJECT_ID,
+    process.env.RAILWAY_ENVIRONMENT_ID,
+    process.env.RAILWAY_SERVICE_ID,
+    process.env.RAILWAY_DEPLOYMENT_ID,
+    process.env.RAILWAY_REPLICA_ID,
+  ].filter(Boolean);
+
+  if (railwayParts.length > 0) {
+    if (!process.env.RAILWAY_DEPLOYMENT_ID && !process.env.RAILWAY_REPLICA_ID) {
+      railwayParts.push(`pid:${process.pid}`);
+    }
+    return `railway-${hashScope(railwayParts.join(":"))}`;
+  }
+
+  return `local-${hashScope(REPO_ROOT)}`;
+}
+
+const DEFAULT_LOCK_DIR = join(tmpdir(), `rateloop-workspace-dist-${defaultLockScope()}.lock`);
 
 function usage() {
   console.error('Usage: node scripts/with-workspace-dist-lock.mjs "<command>"');
