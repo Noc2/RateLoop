@@ -3,6 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { readHandoffDetailsUploadError } from "./handoffErrors";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
 import {
   type TargetAudience,
@@ -1151,7 +1152,7 @@ async function uploadQuestionDetailsForHandoff(params: {
     message?: string;
   } | null;
   if (!challengeResponse.ok || !challenge?.challengeId || !challenge.message) {
-    throw new Error(challenge?.error || "Could not prepare description upload.");
+    throw new Error(readHandoffDetailsUploadError(challenge?.error, "Could not prepare description upload."));
   }
 
   const signature = await params.signMessageAsync({ message: challenge.message });
@@ -1180,7 +1181,7 @@ async function uploadQuestionDetailsForHandoff(params: {
     !upload.detailsHash ||
     !/^0x[a-fA-F0-9]{64}$/.test(upload.detailsHash)
   ) {
-    throw new Error(upload?.error || "Could not upload description.");
+    throw new Error(readHandoffDetailsUploadError(upload?.error, "Could not upload description."));
   }
 
   return {
