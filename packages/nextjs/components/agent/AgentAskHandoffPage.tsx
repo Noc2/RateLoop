@@ -1255,8 +1255,10 @@ function readBountyAsset(handoff: Handoff | null): SubmissionRewardAsset {
   return readString(bounty.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
 }
 
-function readFeedbackBonusAsset(feedbackBonus: JsonRecord): FeedbackBonusAsset {
-  return readString(feedbackBonus.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
+function readFeedbackBonusAsset(feedbackBonus: JsonRecord, fallbackAsset: SubmissionRewardAsset): FeedbackBonusAsset {
+  const asset = readString(feedbackBonus.asset).toUpperCase();
+  if (!asset) return fallbackAsset;
+  return asset === "LREP" ? "lrep" : "usdc";
 }
 
 function readFeedbackBonusSummary(handoff: Handoff | null) {
@@ -1264,7 +1266,7 @@ function readFeedbackBonusSummary(handoff: Handoff | null) {
   if (!isJsonRecord(feedbackBonus)) return null;
   const amount = readPositiveBigInt(feedbackBonus.amount);
   if (amount === null) return null;
-  const asset = readFeedbackBonusAsset(feedbackBonus);
+  const asset = readFeedbackBonusAsset(feedbackBonus, readBountyAsset(handoff));
   return {
     amount,
     asset,
@@ -1806,6 +1808,17 @@ function readDraftFeedbackBonusUsdcAmountAtomic(form: DraftForm | null, handoff:
   return draftAmount ? (parseFeedbackBonusAmount(draftAmount) ?? 0n) : 0n;
 }
 
+function readDraftFeedbackBonusLrepAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
+  if (!form) {
+    const summary = readFeedbackBonusSummary(handoff);
+    return summary?.asset === "lrep" ? summary.amount : 0n;
+  }
+  if (form.feedbackBonusAmount === null || form.feedbackBonusAsset !== "lrep") return 0n;
+
+  const draftAmount = form.feedbackBonusAmount.trim();
+  return draftAmount ? (parseFeedbackBonusAmount(draftAmount) ?? 0n) : 0n;
+}
+
 function readDraftFeedbackBonusLabel(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.feedbackBonusAmount?.trim();
   if (draftAmount && form?.feedbackBonusAsset) {
@@ -2085,8 +2098,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     (draftForm?.feedbackBonusAsset ?? draftBountyAsset) === "lrep" ? "LREP" : usdcDisplayName;
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
   const draftBountyUsdcAmountAtomic = readDraftBountyUsdcAmountAtomic(draftForm, handoff);
+  const draftFeedbackBonusLrepAmountAtomic = readDraftFeedbackBonusLrepAmountAtomic(draftForm, handoff);
   const draftFeedbackBonusUsdcAmountAtomic = readDraftFeedbackBonusUsdcAmountAtomic(draftForm, handoff);
-  const requiredHandoffLrepAmount = draftBountyLrepAmountAtomic;
+  const requiredHandoffLrepAmount = draftBountyLrepAmountAtomic + draftFeedbackBonusLrepAmountAtomic;
   const requiredHandoffUsdcAmount = draftBountyUsdcAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
   const hasResolvedHandoffLrepBalance =
     Boolean(fundingWalletAddress && lrepAddress) && !isLrepBalanceLoading && lrepBalanceRaw !== undefined;
