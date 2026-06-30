@@ -7,7 +7,7 @@ import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
 import { dbClient } from "~~/lib/db";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
-import { ponderApi } from "~~/services/ponder/client";
+import { PonderHttpError, ponderApi } from "~~/services/ponder/client";
 
 type ManagedLifecycleCandidate = {
   agentId: string;
@@ -118,6 +118,10 @@ function lifecycleEventsForContent(params: {
   }
 
   return events;
+}
+
+function isMissingPonderContentError(error: unknown) {
+  return error instanceof PonderHttpError && error.status === 404;
 }
 
 function readOriginalClientRequestIdFromReceipt(value: unknown) {
@@ -283,7 +287,22 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
         chainId: candidate.chainId,
         deploymentKey: deployment.deploymentKey,
       };
-      const response = await dependencies.getContentById(candidate.contentId, deploymentOptions);
+      let response: Awaited<ReturnType<typeof ponderApi.getContentById>>;
+      try {
+        response = await dependencies.getContentById(candidate.contentId, deploymentOptions);
+      } catch (error) {
+        if (isMissingPonderContentError(error)) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(
+              `[agent-lifecycle] Skipping candidate ${candidate.contentId}: content not found in deployment ${deployment.deploymentKey}`,
+            );
+          }
+          scanned += 1;
+          continue;
+        }
+
+        throw error;
+      }
       const feedbackContext = buildContentFeedbackRoundContext(
         Array.isArray(response.rounds) ? response.rounds : [],
         response.content.openRound?.roundId ?? null,

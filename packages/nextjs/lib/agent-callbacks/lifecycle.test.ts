@@ -10,6 +10,7 @@ import test, { afterEach, beforeEach } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { PonderHttpError } from "~~/services/ponder/client";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 
 const CANDIDATE = {
@@ -322,6 +323,48 @@ test("sweepAgentLifecycleCallbacks emits settled and feedback unlocked for termi
     enqueued.map(event => event.eventType),
     ["question.settled", "feedback.unlocked"],
   );
+});
+
+test("sweepAgentLifecycleCallbacks skips submitted rows whose content is missing from the active deployment", async () => {
+  let enqueued = 0;
+  let feedbackReads = 0;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async () => {
+      enqueued += 1;
+      return [];
+    },
+    getContentById: async () => {
+      throw new PonderHttpError(new Response(null, { status: 404, statusText: "Not Found" }));
+    },
+    listCandidates: async () => [CANDIDATE],
+    listContentFeedback: async () => {
+      feedbackReads += 1;
+      return {
+        items: [],
+      } as never;
+    },
+  });
+
+  try {
+    const result = await sweepAgentLifecycleCallbacks();
+
+    assert.equal(result.scanned, 1);
+    assert.equal(result.hasMore, false);
+    assert.deepEqual(result.emitted, {
+      bountyLowResponse: 0,
+      feedbackUnlocked: 0,
+      questionOpen: 0,
+      questionSettled: 0,
+      questionSettling: 0,
+    });
+    assert.equal(enqueued, 0);
+    assert.equal(feedbackReads, 0);
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test("sweepAgentLifecycleCallbacks stays idempotent through stable event ids", async () => {
