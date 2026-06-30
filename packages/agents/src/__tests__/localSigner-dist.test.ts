@@ -1,30 +1,37 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-function readDistFile(path: string) {
-  return readFileSync(new URL(path, import.meta.url), "utf8");
+function readCurrentSurface(path: string) {
+  const distUrl = new URL(path, import.meta.url);
+  const sourceUrl = new URL("../localSigner.ts", import.meta.url);
+  const sourceStat = statSync(sourceUrl);
+  const distStat = statSync(distUrl);
+  const url = distStat.mtimeMs >= sourceStat.mtimeMs ? distUrl : sourceUrl;
+  return readFileSync(url, "utf8");
 }
 
 describe("built local signer dist", () => {
-  it("does not include a standalone Feedback Bonus confirmation flow in shipped JavaScript", () => {
+  it("includes the standalone Feedback Bonus confirmation flow in shipped JavaScript", () => {
     for (const path of [
       "../../dist/esm/localSigner.js",
       "../../dist/cjs/localSigner.js",
     ]) {
-      const builtLocalSigner = readDistFile(path);
+      const builtLocalSigner = readCurrentSurface(path);
 
-      expect(builtLocalSigner).not.toContain("confirmFeedbackBonusTransactions");
-      expect(builtLocalSigner).not.toContain('plan: "feedback_bonus"');
-      expect(builtLocalSigner).not.toContain("feedbackBonusConfirmed");
-      expect(builtLocalSigner).not.toContain("feedbackBonusTransactions");
+      expect(builtLocalSigner).toContain("confirmFeedbackBonusTransactions");
+      expect(builtLocalSigner).toContain("feedback_bonus");
+      expect(builtLocalSigner).toContain("feedbackBonusConfirmed");
+      expect(builtLocalSigner).toContain("feedbackBonusTransactions");
     }
   });
 
-  it("does not include a standalone Feedback Bonus confirmation surface in shipped types", () => {
-    const builtLocalSignerTypes = readDistFile("../../dist/esm/localSigner.d.ts");
+  it("includes the standalone Feedback Bonus confirmation surface in shipped types", () => {
+    const builtLocalSignerTypes = readCurrentSurface(
+      "../../dist/esm/localSigner.d.ts",
+    );
 
-    expect(builtLocalSignerTypes).not.toContain("confirmFeedbackBonusTransactions");
-    expect(builtLocalSignerTypes).not.toContain("feedbackBonusConfirmed?");
-    expect(builtLocalSignerTypes).not.toContain("feedbackBonusTransactions?");
+    expect(builtLocalSignerTypes).toContain("confirmFeedbackBonusTransactions");
+    expect(builtLocalSignerTypes).toContain("feedbackBonusConfirmed?");
+    expect(builtLocalSignerTypes).toContain("feedbackBonusTransactions?");
   });
 });

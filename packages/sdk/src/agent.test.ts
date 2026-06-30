@@ -246,8 +246,7 @@ test("image upload SDK helpers call the MCP image tools", async () => {
             }
           : {
               attachmentId: "att_sdkuploadimage01",
-              imageUrl:
-                `https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp#sha256=0x${"a".repeat(64)}`,
+              imageUrl: `https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp#sha256=0x${"a".repeat(64)}`,
               moderationStatus: "approved",
               nextAction: "Use imageUrl in question.imageUrls.",
               status: "approved",
@@ -287,7 +286,7 @@ test("image upload SDK helpers call the MCP image tools", async () => {
   });
 
   assert.deepEqual(
-    calls.map(call => call.name),
+    calls.map((call) => call.name),
     [
       "rateloop_prepare_image_upload",
       "rateloop_upload_image",
@@ -330,19 +329,22 @@ test("rating SDK helpers call the MCP rating tools", async () => {
                 signatureRequired: true,
                 status: "signature_required",
               }
-          : name === "rateloop_prepare_rating_transactions"
-            ? {
-                status: "awaiting_wallet_signature",
-                transactionPlan: { calls: [], requiresOrderedExecution: true },
-              }
-            : {
-                contentId: "42",
-                confirmed: name === "rateloop_confirm_rating_transactions",
-                status:
-                  name === "rateloop_confirm_rating_transactions"
-                    ? "committed"
-                    : "not_found",
-              };
+            : name === "rateloop_prepare_rating_transactions"
+              ? {
+                  status: "awaiting_wallet_signature",
+                  transactionPlan: {
+                    calls: [],
+                    requiresOrderedExecution: true,
+                  },
+                }
+              : {
+                  contentId: "42",
+                  confirmed: name === "rateloop_confirm_rating_transactions",
+                  status:
+                    name === "rateloop_confirm_rating_transactions"
+                      ? "committed"
+                      : "not_found",
+                };
       return jsonResponse({
         id: body.id,
         jsonrpc: "2.0",
@@ -562,10 +564,7 @@ test("agent client preserves a path-prefixed apiBaseUrl for direct HTTP", async 
     },
   });
 
-  assert.equal(
-    requestedUrl,
-    "https://rateloop.example/ponder/api/agent/quote",
-  );
+  assert.equal(requestedUrl, "https://rateloop.example/ponder/api/agent/quote");
 });
 
 test("agent client builds unchanged URLs for the default root-host apiBaseUrl", async () => {
@@ -845,7 +844,10 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
     requestedUrls[1],
     "https://rateloop.example/api/agent/signing-intents/asi_test",
   );
-  assert.equal(requestedHeaders[1].get("x-rateloop-signing-intent-token"), "secret");
+  assert.equal(
+    requestedHeaders[1].get("x-rateloop-signing-intent-token"),
+    "secret",
+  );
   assert.equal(
     requestedUrls[2],
     "https://rateloop.example/api/agent/signing-intents/asi_test/prepare",
@@ -922,10 +924,7 @@ test("ask handoff helpers use direct browser-handoff routes", async () => {
     handoffToken: "secret",
   });
 
-  assert.equal(
-    requestedUrls[0],
-    "https://rateloop.example/api/agent/handoffs",
-  );
+  assert.equal(requestedUrls[0], "https://rateloop.example/api/agent/handoffs");
   assert.equal(
     requestedUrls[1],
     "https://rateloop.example/api/agent/handoffs/ahf_test",
@@ -979,7 +978,58 @@ test("askHumans prefers direct authenticated agent HTTP before MCP framing", asy
   assert.equal(requestedBody.maxPaymentAmount, "1250000");
 });
 
-test("askHumans routes feedback bonus asks through MCP", async () => {
+test("askHumans submits feedback bonus asks through direct agent HTTP", async () => {
+  let requestedUrl = "";
+  let requestedHeaders: Headers | undefined;
+  let requestedBody: any;
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedBody = JSON.parse(String(init?.body));
+      requestedHeaders = new Headers(init?.headers);
+      return jsonResponse({
+        feedbackBonus: {
+          amount: "2000000",
+          status: "pending_question_confirmation",
+        },
+        operationKey: `0x${"69".repeat(32)}`,
+        payment: {
+          amount: "3000000",
+          bountyAmount: "1000000",
+          feedbackBonusAmount: "2000000",
+          totalAmount: "3000000",
+        },
+        status: "awaiting_wallet_signature",
+      });
+    },
+    mcpAccessToken: "agent-token",
+  });
+
+  const response = await agent.askHumans({
+    bounty: { amount: 1_000_000n },
+    chainId: 480,
+    clientRequestId: "ask-feedback-bonus",
+    feedbackBonus: { amount: 2_000_000n },
+    maxPaymentAmount: 3_000_000n,
+    question: {
+      categoryId: 5n,
+      contextUrl: "https://example.com/context",
+      description: "Would this answer be useful?",
+      tags: ["agent", "feedback"],
+      title: "Answer usefulness",
+    },
+  });
+
+  assert.equal(requestedUrl, "https://rateloop.example/api/agent/asks");
+  assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
+  assert.equal(requestedBody.feedbackBonus.amount, "2000000");
+  assert.equal(requestedBody.maxPaymentAmount, "3000000");
+  assert.equal(response.feedbackBonus?.status, "pending_question_confirmation");
+  assert.equal(response.payment?.totalAmount, "3000000");
+});
+
+test("askHumans can still route feedback bonus asks through MCP", async () => {
   let requestedUrl = "";
   let requestedBody: any;
   const agent = createRateLoopAgentClient({
@@ -1015,6 +1065,7 @@ test("askHumans routes feedback bonus asks through MCP", async () => {
     clientRequestId: "ask-feedback-bonus",
     feedbackBonus: { amount: 2_000_000n },
     maxPaymentAmount: 3_000_000n,
+    transport: "mcp",
     question: {
       categoryId: 5n,
       contextUrl: "https://example.com/context",
@@ -1030,6 +1081,40 @@ test("askHumans routes feedback bonus asks through MCP", async () => {
   assert.equal(requestedBody.params.arguments.maxPaymentAmount, "3000000");
   assert.equal(response.feedbackBonus?.status, "pending_question_confirmation");
   assert.equal(response.payment?.totalAmount, "3000000");
+});
+
+test("confirmFeedbackBonusTransactions uses direct authenticated agent HTTP", async () => {
+  let requestedUrl = "";
+  let requestedHeaders: Headers | undefined;
+  let requestedBody: any;
+  const operationKey = `0x${"76".repeat(32)}`;
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedBody = JSON.parse(String(init?.body));
+      requestedHeaders = new Headers(init?.headers);
+      return jsonResponse({
+        feedbackBonus: { amount: "2000000", status: "funded" },
+        operationKey,
+        status: "submitted",
+      });
+    },
+    mcpAccessToken: "agent-token",
+  });
+
+  const response = await agent.confirmFeedbackBonusTransactions({
+    operationKey,
+    transactionHashes: [`0x${"8".repeat(64)}`],
+  });
+
+  assert.equal(
+    requestedUrl,
+    `https://rateloop.example/api/agent/asks/${operationKey}/confirm-feedback-bonus`,
+  );
+  assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
+  assert.deepEqual(requestedBody.transactionHashes, [`0x${"8".repeat(64)}`]);
+  assert.equal(response.feedbackBonus?.status, "funded");
 });
 
 test("confirmAskTransactions uses direct authenticated agent HTTP", async () => {
@@ -1516,8 +1601,7 @@ test("buildWebhookVerifier canonicalizes parsed object bodies", async () => {
     a: { c: 3, b: 2 },
     list: [{ y: 2, x: 1 }],
   };
-  const canonicalBody =
-    '{"a":{"b":2,"c":3},"list":[{"x":1,"y":2}],"z":1}';
+  const canonicalBody = '{"a":{"b":2,"c":3},"list":[{"x":1,"y":2}],"z":1}';
   const eventId = "event-canonical";
   const timestamp = "2026-04-23T12:00:00.000Z";
   const { store } = memoryReplayStore();
@@ -1536,7 +1620,7 @@ test("buildWebhookVerifier canonicalizes parsed object bodies", async () => {
       }),
       now: new Date("2026-04-23T12:01:00.000Z"),
     },
-    async event => event.body,
+    async (event) => event.body,
   );
 
   if (result.status !== "processed") {
@@ -1560,7 +1644,10 @@ test("buildReplayProtectedWebhookVerifier handles each signed callback once", as
     now: new Date("2026-04-23T12:01:00.000Z"),
   };
 
-  const first = await verifier.handleOnce(params, async event => event.eventId);
+  const first = await verifier.handleOnce(
+    params,
+    async (event) => event.eventId,
+  );
   const second = await verifier.handleOnce(params, async () => "duplicate");
 
   assert.equal(first.status, "processed");
@@ -1602,7 +1689,7 @@ test("buildWebhookVerifier handleOnce processes a signed event once", async () =
       headers: signedWebhookHeaders({ body, eventId, timestamp }),
       now: new Date("2026-04-23T12:01:00.000Z"),
     },
-    async event => {
+    async (event) => {
       handled += 1;
       return event.eventId;
     },
@@ -1623,7 +1710,11 @@ test("buildWebhookVerifier handleOnce processes a signed event once", async () =
   assert.equal(first.value, eventId);
   assert.equal(second.status, "duplicate");
   assert.equal(handled, 1);
-  assert.deepEqual(calls, ["claim:test:event-once", "complete:test:event-once", "claim:test:event-once"]);
+  assert.deepEqual(calls, [
+    "claim:test:event-once",
+    "complete:test:event-once",
+    "claim:test:event-once",
+  ]);
 });
 
 test("buildWebhookVerifier handleOnce does not claim invalid callbacks", async () => {

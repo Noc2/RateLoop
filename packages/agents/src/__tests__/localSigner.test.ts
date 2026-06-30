@@ -239,7 +239,10 @@ type TestX402AuthorizationRequest = {
 const BYTES32_ONE = `0x${"1".repeat(64)}` as const;
 type TestSubmissionRewardAsset = "USDC" | "LREP";
 
-function rewardTerms(amount = BigInt(X402_AMOUNT), asset: TestSubmissionRewardAsset = "USDC") {
+function rewardTerms(
+  amount = BigInt(X402_AMOUNT),
+  asset: TestSubmissionRewardAsset = "USDC",
+) {
   return {
     amount,
     asset: asset === "LREP" ? 0 : 1,
@@ -393,7 +396,10 @@ function submissionKeyForPayload(payload: AskHumansRequest) {
         QUESTION_CONTEXT_DOMAIN,
         BigInt(question.categoryId),
         submissionMediaHash(question.imageUrls, question.videoUrl),
-        submissionDetailsHashFor(question.detailsUrl, question.detailsHash as Hex),
+        submissionDetailsHashFor(
+          question.detailsUrl,
+          question.detailsHash as Hex,
+        ),
         question.contextUrl,
         question.title,
         question.tags.join(","),
@@ -580,7 +586,10 @@ function revealCommitmentForPayload(payload: AskHumansRequest) {
             [question.title, question.tags.join(",")],
           ),
         ),
-        submissionDetailsHashFor(question.detailsUrl, question.detailsHash as Hex),
+        submissionDetailsHashFor(
+          question.detailsUrl,
+          question.detailsHash as Hex,
+        ),
         BigInt(question.categoryId),
         saltForPayload(payload),
         account.address,
@@ -673,7 +682,10 @@ function x402PaymentNonce(
   );
 }
 
-function x402PaymentNonceForPayload(payload: AskHumansRequest, from = account.address) {
+function x402PaymentNonceForPayload(
+  payload: AskHumansRequest,
+  from = account.address,
+) {
   const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
@@ -746,7 +758,10 @@ function x402PaymentNonceForPayload(payload: AskHumansRequest, from = account.ad
   );
 }
 
-function x402OneShotPaymentNonceForPayload(payload: AskHumansRequest, from = account.address) {
+function x402OneShotPaymentNonceForPayload(
+  payload: AskHumansRequest,
+  from = account.address,
+) {
   const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
@@ -781,7 +796,10 @@ function x402OneShotPaymentNonceForPayload(payload: AskHumansRequest, from = acc
   const feedbackBonusTermsHash = keccak256(
     encodeAbiParameters(
       [{ type: "uint256" }, { type: "address" }],
-      [BigInt(String(feedbackBonus.amount)), String(feedbackBonus.awarder) as `0x${string}`],
+      [
+        BigInt(String(feedbackBonus.amount)),
+        String(feedbackBonus.awarder) as `0x${string}`,
+      ],
     ),
   );
   return keccak256(
@@ -867,7 +885,9 @@ function submitQuestionDataForPayload(payload: AskHumansRequest) {
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   const asset = canonical.bounty.asset === "LREP" ? "LREP" : "USDC";
-  const questionDurationSeconds = Number(canonical.roundConfig.questionDurationSeconds);
+  const questionDurationSeconds = Number(
+    canonical.roundConfig.questionDurationSeconds,
+  );
   return encodeFunctionData({
     abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
     args: [
@@ -1099,6 +1119,81 @@ function lrepWalletCallsResponse(
   };
 }
 
+function feedbackBonusPlanResponse(
+  payload = feedbackBonusAskPayload(),
+  overrides: Partial<AskHumansResponse> = {},
+): AskHumansResponse {
+  const bonus = payload.feedbackBonus!;
+  const bonusAsset = bonus.asset ?? payload.bounty.asset ?? "USDC";
+  const tokenAddress = bonusAsset === "LREP" ? LREP_ADDRESS : X402_USDC_ADDRESS;
+  const approvePhase =
+    bonusAsset === "LREP"
+      ? "approve_feedback_bonus_lrep"
+      : "approve_feedback_bonus_usdc";
+
+  return {
+    chainId: 480,
+    feedbackBonus: {
+      amount: String(bonus.amount),
+      asset: bonusAsset,
+      status: "awaiting_wallet_signature",
+      transactionPlan: {
+        calls: [
+          {
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              args: [
+                FEEDBACK_BONUS_ESCROW_ADDRESS,
+                BigInt(String(bonus.amount)),
+              ],
+              functionName: "approve",
+            }),
+            phase: approvePhase,
+            to: tokenAddress,
+            value: "0",
+          },
+          {
+            data: encodeFunctionData({
+              abi: [
+                {
+                  inputs: [
+                    { name: "contentId", type: "uint256" },
+                    { name: "roundId", type: "uint256" },
+                    { name: "asset", type: "uint8" },
+                    { name: "amount", type: "uint256" },
+                    { name: "feedbackClosesAt", type: "uint256" },
+                    { name: "awarder", type: "address" },
+                  ],
+                  name: "createFeedbackBonusPoolWithAsset",
+                  outputs: [{ name: "poolId", type: "uint256" }],
+                  stateMutability: "nonpayable",
+                  type: "function",
+                },
+              ] as Abi,
+              args: [
+                123n,
+                1n,
+                bonusAsset === "LREP" ? 0 : 1,
+                BigInt(String(bonus.amount)),
+                BigInt(feedbackBonusClosesAt()),
+                (bonus.awarder ?? account.address) as `0x${string}`,
+              ],
+              functionName: "createFeedbackBonusPoolWithAsset",
+            }),
+            phase: "create_feedback_bonus_pool",
+            to: FEEDBACK_BONUS_ESCROW_ADDRESS,
+            value: "0",
+          },
+        ],
+        requiresOrderedExecution: true,
+      },
+    },
+    operationKey: operationKeyFor(payload),
+    status: "submitted",
+    ...overrides,
+  };
+}
+
 function feedbackBonusClosesAt() {
   return (BOUNTY_START_BY + FEEDBACK_WINDOW_SECONDS).toString();
 }
@@ -1170,7 +1265,9 @@ function x402OneShotCallsResponse(
       feedbackBonusAsset: "USDC",
       spender: X402_SUBMITTER_ADDRESS,
       tokenAddress: X402_USDC_ADDRESS,
-      totalAmount: (BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)).toString(),
+      totalAmount: (
+        BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)
+      ).toString(),
     },
     paymentMode: "x402_authorization",
     payloadHash: payloadHashFor(payload),
@@ -1277,7 +1374,8 @@ function privateForeverAskPayload(): AskHumansRequest {
     },
     contextUrl: "",
     detailsHash: `0x${"4".repeat(64)}`,
-    detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+    detailsUrl:
+      "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
   };
   return payload;
 }
@@ -1323,7 +1421,9 @@ describe("local signer", () => {
         },
         payload,
       }),
-    ).rejects.toThrow(/feedbackBonus\.asset must be USDC/);
+    ).rejects.toThrow(
+      /Feedback Bonus funding must use the same asset as the bounty/,
+    );
   });
 
   it("still requires cap room for same-asset Feedback Bonuses", async () => {
@@ -1357,9 +1457,191 @@ describe("local signer", () => {
     ).rejects.toThrow(/Quoted payment exceeds maxPaymentAmount/);
   });
 
-  it("rejects agent_wallet alias feedback bonus funding before asking the agent", async () => {
+  it("executes the follow-up wallet-call Feedback Bonus plan", async () => {
     const payload = feedbackBonusAskPayload();
     payload.paymentMode = "agent_wallet" as never;
+    const askResponse = walletCallsResponse();
+    const confirmationResponse = feedbackBonusPlanResponse(payload);
+    const transactions = {
+      ask: [`0x${"a".repeat(64)}`],
+      feedback_bonus: [`0x${"b".repeat(64)}`, `0x${"c".repeat(64)}`],
+    } as const;
+    const confirmed: unknown[] = [];
+    const progress: unknown[] = [];
+    const agent = {
+      askHumans: async () => askResponse,
+      confirmAskTransactions: async (request) => {
+        confirmed.push({ plan: "ask", request });
+        return confirmationResponse;
+      },
+      confirmFeedbackBonusTransactions: async (request) => {
+        confirmed.push({ plan: "feedback_bonus", request });
+        return {
+          ...confirmationResponse,
+          feedbackBonus: {
+            ...confirmationResponse.feedbackBonus!,
+            status: "funded",
+            transactionHashes: request.transactionHashes,
+          },
+        };
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    > &
+      Partial<Pick<RateLoopAgentClient, "confirmFeedbackBonusTransactions">>;
+
+    const result = await askHumansWithLocalSigner({
+      account,
+      agent,
+      config: {
+        ...validationConfig(),
+        chainId: 480,
+        chainName: "test",
+        pollingIntervalMs: 1,
+        receiptTimeoutMs: 1,
+      },
+      executeTransactionPlan: async ({ calls, plan }) => {
+        expect(calls).toHaveLength(plan === "feedback_bonus" ? 2 : 3);
+        return { transactionHashes: [...transactions[plan]] };
+      },
+      onProgress: (event) => {
+        progress.push(event);
+      },
+      payload,
+    });
+
+    expect(confirmed).toEqual([
+      {
+        plan: "ask",
+        request: {
+          operationKey: operationKeyFor(payload),
+          transactionHashes: [...transactions.ask],
+        },
+      },
+      {
+        plan: "feedback_bonus",
+        request: {
+          operationKey: operationKeyFor(payload),
+          transactionHashes: [...transactions.feedback_bonus],
+        },
+      },
+    ]);
+    expect(result.feedbackBonusConfirmed?.feedbackBonus?.status).toBe("funded");
+    expect(result.feedbackBonusTransactions?.transactionHashes).toEqual([
+      ...transactions.feedback_bonus,
+    ]);
+    expect(progress).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          plan: "ask",
+          type: "transactions_confirmed",
+        }),
+        expect.objectContaining({
+          plan: "feedback_bonus",
+          type: "transactions_confirmed",
+        }),
+      ]),
+    );
+  });
+
+  it("executes same-asset LREP wallet-call Feedback Bonus plans", async () => {
+    const payload = feedbackBonusAskPayload();
+    payload.bounty.asset = "LREP";
+    delete payload.feedbackBonus!.asset;
+    payload.paymentMode = "wallet_calls";
+    const askResponse = lrepWalletCallsResponse(payload);
+    const confirmationResponse = feedbackBonusPlanResponse(payload);
+    const transactions = {
+      ask: [`0x${"d".repeat(64)}`],
+      feedback_bonus: [`0x${"e".repeat(64)}`, `0x${"f".repeat(64)}`],
+    } as const;
+    const confirmed: unknown[] = [];
+    const progress: unknown[] = [];
+    const agent = {
+      askHumans: async () => askResponse,
+      confirmAskTransactions: async (request) => {
+        confirmed.push({ plan: "ask", request });
+        return confirmationResponse;
+      },
+      confirmFeedbackBonusTransactions: async (request) => {
+        confirmed.push({ plan: "feedback_bonus", request });
+        return {
+          ...confirmationResponse,
+          feedbackBonus: {
+            ...confirmationResponse.feedbackBonus!,
+            status: "funded",
+            transactionHashes: request.transactionHashes,
+          },
+        };
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    > &
+      Partial<Pick<RateLoopAgentClient, "confirmFeedbackBonusTransactions">>;
+
+    const result = await askHumansWithLocalSigner({
+      account,
+      agent,
+      config: {
+        ...validationConfig(),
+        chainId: 480,
+        chainName: "test",
+        pollingIntervalMs: 1,
+        receiptTimeoutMs: 1,
+      },
+      executeTransactionPlan: async ({ calls, plan }) => {
+        expect(calls).toHaveLength(plan === "feedback_bonus" ? 2 : 3);
+        if (plan === "feedback_bonus") {
+          expect(calls[0].phase).toBe("approve_feedback_bonus_lrep");
+        }
+        return { transactionHashes: [...transactions[plan ?? "ask"]] };
+      },
+      onProgress: (event) => {
+        progress.push(event);
+      },
+      payload,
+    });
+
+    expect(confirmed).toEqual([
+      {
+        plan: "ask",
+        request: {
+          operationKey: operationKeyFor(payload),
+          transactionHashes: [...transactions.ask],
+        },
+      },
+      {
+        plan: "feedback_bonus",
+        request: {
+          operationKey: operationKeyFor(payload),
+          transactionHashes: [...transactions.feedback_bonus],
+        },
+      },
+    ]);
+    expect(result.feedbackBonusConfirmed?.feedbackBonus?.asset).toBe("LREP");
+    expect(result.feedbackBonusConfirmed?.feedbackBonus?.status).toBe("funded");
+    expect(result.feedbackBonusTransactions?.transactionHashes).toEqual([
+      ...transactions.feedback_bonus,
+    ]);
+    expect(progress).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          plan: "feedback_bonus",
+          type: "transactions_confirmed",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects bundled Feedback Bonuses before asking the agent", async () => {
+    const payload = feedbackBonusAskPayload();
+    payload.questions = [
+      payload.question!,
+      { ...payload.question!, title: "Should this agent wait instead?" },
+    ];
+    delete payload.question;
     const agent = {
       askHumans: async () => {
         throw new Error("askHumans should not run");
@@ -1385,7 +1667,7 @@ describe("local signer", () => {
         },
         payload,
       }),
-    ).rejects.toThrow(/Feedback Bonus funding requires eip3009_usdc_authorization payment mode/);
+    ).rejects.toThrow(/Feedback Bonus funding requires a single-question ask/);
   });
 
   it("rejects unsafe numeric maxPaymentAmount before asking the agent", async () => {
@@ -1454,7 +1736,9 @@ describe("local signer", () => {
           payloadHash: payloadHashFor(payload),
           paymentMode: "x402_authorization",
           status: "awaiting_wallet_signature",
-          ...(requestPayload.paymentAuthorization ? {} : { x402AuthorizationRequest: request }),
+          ...(requestPayload.paymentAuthorization
+            ? {}
+            : { x402AuthorizationRequest: request }),
         } satisfies AskHumansResponse;
       },
       confirmAskTransactions: async () => {
@@ -2174,7 +2458,9 @@ describe("local signer round config alignment", () => {
         }),
         480,
       ),
-    ).toThrow(/question\.roundConfig\.questionDurationSeconds must be at most 4294967295/);
+    ).toThrow(
+      /question\.roundConfig\.questionDurationSeconds must be at most 4294967295/,
+    );
   });
 
   it("expands the pure-agent fast round preset into a contract-safe round config", () => {
@@ -2392,7 +2678,11 @@ describe("local signer media canonicalization", () => {
         ...askPayload(),
         question: {
           ...askPayload().question,
-          imageUrls: [UPLOADED_IMAGE_URL_B, UPLOADED_IMAGE_URL_A, UPLOADED_IMAGE_URL_A],
+          imageUrls: [
+            UPLOADED_IMAGE_URL_B,
+            UPLOADED_IMAGE_URL_A,
+            UPLOADED_IMAGE_URL_A,
+          ],
         },
       },
       480,
@@ -2418,7 +2708,9 @@ describe("local signer media canonicalization", () => {
       480,
     );
 
-    expect(parsed.questions[0].imageUrls).toEqual([UPLOADED_IMAGE_URL_PREFIXED]);
+    expect(parsed.questions[0].imageUrls).toEqual([
+      UPLOADED_IMAGE_URL_PREFIXED,
+    ]);
   });
 
   it("accepts localhost HTTP RateLoop attachment URLs when localhost attachments are enabled", () => {
@@ -2442,7 +2734,9 @@ describe("local signer media canonicalization", () => {
     );
 
     expect(parsed.questions[0].detailsUrl).toBe(LOCALHOST_DETAILS_URL);
-    expect(parsed.questions[0].imageUrls).toEqual([LOCALHOST_UPLOADED_IMAGE_URL]);
+    expect(parsed.questions[0].imageUrls).toEqual([
+      LOCALHOST_UPLOADED_IMAGE_URL,
+    ]);
   });
 
   it("rejects localhost HTTP RateLoop attachment URLs when localhost attachments are disabled", () => {
