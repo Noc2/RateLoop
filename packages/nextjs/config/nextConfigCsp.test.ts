@@ -46,6 +46,17 @@ test("connect-src allows Vercel Blob browser upload API requests", async () => {
   assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.blob\.vercel-storage\.com(?:\s|$)/);
 });
 
+test("connect-src allows raw GitHub Gist question details", async () => {
+  const csp = await getContentSecurityPolicy();
+  const connectSrc = csp
+    .split(";")
+    .map(directive => directive.trim())
+    .find(directive => directive.startsWith("connect-src "));
+
+  assert.ok(connectSrc);
+  assert.match(connectSrc, /(?:^|\s)https:\/\/gist\.githubusercontent\.com(?:\s|$)/);
+});
+
 test("script-src uses the middleware nonce without unsafe-inline", async () => {
   const csp = await getContentSecurityPolicy();
   const scriptSrc = csp

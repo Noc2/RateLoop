@@ -144,6 +144,8 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
       "https://scripts.simpleanalyticscdn.com",
       "https://queue.simpleanalyticscdn.com",
       ...vercelLiveConnectSources,
+      // Public question details may be hosted as immutable raw GitHub Gist text.
+      "https://gist.githubusercontent.com",
       // Coinbase Wallet SDK
       "https://cca-lite.coinbase.com",
       "https://www.youtube.com",
