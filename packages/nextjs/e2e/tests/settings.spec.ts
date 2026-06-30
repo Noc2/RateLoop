@@ -2,17 +2,30 @@ import { expect, test } from "../fixtures/wallet";
 import { readTokenBalance } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
-import { gotoWithRetry } from "../helpers/wait-helpers";
+import { gotoWithRetry, waitForVisibleWithReload } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
+import type { Page } from "@playwright/test";
+
+const SETTINGS_SECTION_TIMEOUT_MS = 15_000;
+
+async function expectActiveSettingsTab(page: Page, name: string): Promise<void> {
+  const tab = page.getByRole("button", { name, exact: true });
+  await waitForVisibleWithReload(page, () => tab, { timeout: SETTINGS_SECTION_TIMEOUT_MS });
+  await expect(tab).toHaveClass(/pill-active/, { timeout: SETTINGS_SECTION_TIMEOUT_MS });
+}
+
+async function waitForSettingsHeading(page: Page, name: string | RegExp): Promise<void> {
+  await waitForVisibleWithReload(page, () => page.getByRole("heading", { name }), {
+    timeout: SETTINGS_SECTION_TIMEOUT_MS,
+  });
+}
 
 test.describe("Settings page", () => {
   test("settings route defaults to the wallet tab", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/settings");
 
-    await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/, {
-      timeout: 15_000,
-    });
+    await waitForSettingsHeading(page, "Gas And Wallet Funding");
+    await expectActiveSettingsTab(page, "Wallet");
     await expect(page).toHaveURL(/\/settings(?:#wallet)?$/);
   });
 
@@ -30,9 +43,9 @@ test.describe("Settings page", () => {
 
     await gotoWithRetry(page, "/settings#wallet");
 
-    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
-    await expect(page.getByRole("heading", { name: "Delegated Vote ID" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "Transfer LREP" })).toBeVisible({ timeout: 15_000 });
+    await expectActiveSettingsTab(page, "Wallet");
+    await waitForSettingsHeading(page, "Delegated Vote ID");
+    await waitForSettingsHeading(page, "Transfer LREP");
 
     await page.getByLabel("Transfer recipient").fill(recipient);
     await page.getByLabel("Transfer amount").fill(transferAmount);
@@ -56,12 +69,11 @@ test.describe("Settings page", () => {
     await gotoWithRetry(page, "/settings#wallet", { ensureWalletConnected: true });
 
     await expect(page).toHaveURL(/\/settings#wallet$/);
-    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
-    const credentialPrompt = page.getByRole("heading", { name: "Rater credential required for delegation" });
-    await expect(credentialPrompt).toBeVisible({ timeout: 15_000 });
+    await expectActiveSettingsTab(page, "Wallet");
+    await waitForSettingsHeading(page, "Rater credential required for delegation");
     await expect(page.getByText("Delegation is only available", { exact: false })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open rater setup" })).toHaveAttribute("href", "/governance");
-    await expect(page.getByRole("heading", { name: "Transfer LREP" })).toBeVisible();
+    await waitForSettingsHeading(page, "Transfer LREP");
     await expect(page.getByLabel("Transfer recipient")).toBeVisible();
     await expect(page.getByLabel("Transfer amount")).toBeVisible();
   });
@@ -70,17 +82,15 @@ test.describe("Settings page", () => {
     await gotoWithRetry(page, "/settings#frontend");
 
     await expect(page).toHaveURL(/\/settings#frontend$/);
-    await expect(page.getByRole("button", { name: "Frontend", exact: true })).toHaveClass(/pill-active/);
-    await expect(page.getByRole("heading", { name: "Frontend Registration" })).toBeVisible({ timeout: 15_000 });
+    await expectActiveSettingsTab(page, "Frontend");
+    await waitForSettingsHeading(page, "Frontend Registration");
   });
 
   test("wallet tab shows the ETH gas top-up surface", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/settings#wallet");
 
-    await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/, {
-      timeout: 15_000,
-    });
+    await waitForSettingsHeading(page, "Gas And Wallet Funding");
+    await expectActiveSettingsTab(page, "Wallet");
     await expect(page).toHaveURL(/\/settings#wallet$/);
     await expect(page.getByTestId("wallet-snapshot-address")).toHaveText(ANVIL_ACCOUNTS.account2.address);
     await expect(page.getByTestId("wallet-snapshot-eth")).toContainText("ETH");

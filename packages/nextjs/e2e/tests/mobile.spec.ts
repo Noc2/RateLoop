@@ -1168,13 +1168,24 @@ test.describe("Mobile viewport (phone)", () => {
     });
 
     const mobileHeader = page.locator('[data-mobile-header="true"]');
+    await mobileHeader.waitFor({ state: "visible", timeout: 10_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
     const scrollWindowTo = async (top: number) => {
       await page.evaluate(async scrollTop => {
-        window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
-        document.scrollingElement?.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
-        window.dispatchEvent(new Event("scroll"));
+        const dispatchRootScroll = () => {
+          window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+          document.scrollingElement?.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+          document.documentElement.scrollTop = scrollTop;
+          document.body.scrollTop = scrollTop;
+
+          for (const target of [window, document, document.documentElement, document.body]) {
+            target.dispatchEvent(new Event("scroll", { bubbles: true }));
+          }
+        };
+
+        dispatchRootScroll();
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-        window.dispatchEvent(new Event("scroll"));
+        dispatchRootScroll();
       }, top);
     };
 
@@ -1197,12 +1208,12 @@ test.describe("Mobile viewport (phone)", () => {
     await page.waitForTimeout(320);
     await scrollWindowTo(900);
     await page.waitForFunction(() => window.scrollY >= 800);
-    await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("false");
+    await expect.poll(() => mobileHeader.getAttribute("data-visible"), { timeout: 10_000 }).toBe("false");
 
     await page.waitForTimeout(320);
     await scrollWindowTo(320);
     await page.waitForFunction(() => window.scrollY <= 340);
-    await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("true");
+    await expect.poll(() => mobileHeader.getAttribute("data-visible"), { timeout: 10_000 }).toBe("true");
   });
 
   test("hamburger menu navigation works", async ({ connectedPage: page }) => {

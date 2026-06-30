@@ -275,12 +275,13 @@ export async function waitForVisibleWithReload(
   } = {},
 ): Promise<void> {
   const { attempts = 2, timeout = 15_000 } = options;
+  const effectiveTimeout = getEffectiveE2ETimeout(timeout);
 
   let lastError: unknown;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      await target().first().waitFor({ state: "visible", timeout });
+      await target().first().waitFor({ state: "visible", timeout: effectiveTimeout });
       return;
     } catch (error) {
       lastError = error;
@@ -303,7 +304,7 @@ export async function waitForVisibleWithReload(
         throw error;
       }
 
-      await reloadWithRetryableAbort(page, timeout);
+      await reloadWithRetryableAbort(page, effectiveTimeout);
     }
   }
 
