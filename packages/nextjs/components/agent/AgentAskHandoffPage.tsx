@@ -2769,8 +2769,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   );
 
   const executeHandoff = useCallback(
-    async (targetHandoff: Handoff) => {
-      if (!(targetHandoff.transactionPlan?.calls ?? []).length) {
+    async (targetHandoff: Handoff, replayTransactionHashes: string[] = []) => {
+      const hasStoredTransactionHashes = replayTransactionHashes.length > 0;
+      if (!hasStoredTransactionHashes && !(targetHandoff.transactionPlan?.calls ?? []).length) {
         notification.error("This ask could not prepare wallet calls.");
         return;
       }
@@ -2792,18 +2793,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         let submittedContentForShare: SubmittedContentModalState | null = null;
 
         const calls = targetHandoff.transactionPlan?.calls ?? [];
-        if (!calls.length) {
+        if (!hasStoredTransactionHashes && !calls.length) {
           throw new Error("This ask could not prepare wallet calls.");
         }
 
-        if (targetHandoff.chainId && activeChainId !== targetHandoff.chainId) {
+        if (!hasStoredTransactionHashes && targetHandoff.chainId && activeChainId !== targetHandoff.chainId) {
           await switchToChain(targetHandoff.chainId);
           activeChainId = targetHandoff.chainId;
         }
 
         const handoffChainId = targetHandoff.chainId ?? undefined;
         const questionSubmissionCall = findHandoffQuestionSubmissionCall(calls);
-        if (questionSubmissionCall) {
+        if (!hasStoredTransactionHashes && questionSubmissionCall) {
           const publicClient = getPublicClient(
             wagmiConfig,
             handoffChainId === undefined ? undefined : { chainId: handoffChainId },
@@ -2815,14 +2816,16 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           );
         }
 
-        const hashes = await executeWalletTransactionPlan({
-          action: "ask",
-          calls,
-          chainId: handoffChainId,
-          getPostCallDelayMs,
-          requiresAtomicExecution: targetHandoff.transactionPlan?.requiresAtomicExecution,
-          requiresOrderedExecution: targetHandoff.transactionPlan?.requiresOrderedExecution,
-        });
+        const hashes = hasStoredTransactionHashes
+          ? replayTransactionHashes
+          : await executeWalletTransactionPlan({
+              action: "ask",
+              calls,
+              chainId: handoffChainId,
+              getPostCallDelayMs,
+              requiresAtomicExecution: targetHandoff.transactionPlan?.requiresAtomicExecution,
+              requiresOrderedExecution: targetHandoff.transactionPlan?.requiresOrderedExecution,
+            });
 
         const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
           body: JSON.stringify({ token, transactionHashes: hashes }),
@@ -2924,6 +2927,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
     const accepted = await requireAcceptance("submit");
     if (!accepted) return;
+
+    const storedHashes = executableHandoff.transactionHashes ?? [];
+    if (executableHandoff.status === "failed" && storedHashes.length > 0) {
+      await executeHandoff(executableHandoff, storedHashes);
+      return;
+    }
 
     if (!executableHandoff.transactionPlan?.calls?.length) {
       const prepared = await prepareHandoff({ skipUnsavedDraftCheck: shouldAutoSaveDraft });

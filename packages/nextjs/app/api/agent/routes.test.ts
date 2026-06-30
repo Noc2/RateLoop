@@ -2154,6 +2154,91 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
 });
 
+test("agent ask handoff route retries completion with stored transaction hashes", async () => {
+  let confirmCalls = 0;
+  const transactionHash = `0x${"4".repeat(64)}` as const;
+  installAskOverrides({
+    confirmAgentWalletQuestionSubmissionRequest: async params => {
+      confirmCalls += 1;
+      if (confirmCalls === 1) {
+        throw new Error("transient handoff confirm failure");
+      }
+      return {
+        body: {
+          contentId: "content-123",
+          operationKey: params.operationKey,
+          status: "submitted",
+          transactionHashes: params.transactionHashes,
+        },
+        status: 200,
+      };
+    },
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-complete-retry"),
+        maxPaymentAmount: "1500000",
+        paymentMode: "wallet_calls",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  const failedCompleteResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [transactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const failedCompleteBody = (await failedCompleteResponse.json()) as Record<string, unknown>;
+  assert.equal(failedCompleteResponse.status, 500);
+  assert.match(String(failedCompleteBody.message), /transient handoff confirm failure/);
+  assert.equal(confirmCalls, 1);
+
+  const readAfterFailedComplete = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readAfterFailedCompleteBody = (await readAfterFailedComplete.json()) as Record<string, unknown>;
+  assert.equal(readAfterFailedCompleteBody.status, "failed");
+  assert.deepEqual(readAfterFailedCompleteBody.transactionHashes, [transactionHash]);
+  assert.match(String(readAfterFailedCompleteBody.nextAction), /stored transaction hashes/);
+
+  const retriedCompleteResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [transactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const retriedCompleteBody = (await retriedCompleteResponse.json()) as Record<string, unknown>;
+  assert.equal(retriedCompleteResponse.status, 200);
+  assert.equal(retriedCompleteBody.status, "submitted");
+  assert.deepEqual(retriedCompleteBody.transactionHashes, [transactionHash]);
+  assert.equal(confirmCalls, 2);
+});
+
 test("agent ask handoff route defaults eligible USDC asks to EIP-3009 authorization", async () => {
   let prepareCalls = 0;
   let forwardedAuthorization: unknown;

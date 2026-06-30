@@ -889,6 +889,9 @@ export function buildAgentAskHandoffResponse(params: {
     if (uploadingAsset) {
       return "Image upload is still staging. Poll rateloop_get_handoff_status before sharing or preparing the handoff.";
     }
+    if (params.handoff.status === "failed" && params.handoff.transactionHashes.length > 0) {
+      return "Confirmation failed after wallet transactions were submitted. Retry handoff completion with the stored transaction hashes; do not rebroadcast the wallet calls.";
+    }
     if (params.handoff.status === "failed") {
       return "Review the handoff error, save any needed draft changes, then retry preparation or ask the agent for a fresh link.";
     }

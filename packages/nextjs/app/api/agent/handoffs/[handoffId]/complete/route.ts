@@ -45,20 +45,32 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         const assets = await listAgentAskHandoffAssets(handoff.id);
         return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
       }
-      if (!handoff.operationKey || handoff.status !== "prepared") {
+      if (!handoff.operationKey || (handoff.status !== "prepared" && handoff.status !== "failed")) {
         throw new AgentAskHandoffError("Prepare this handoff before completing it.");
       }
 
-      const result = (await callPublicRateLoopMcpTool({
-        arguments: {
-          operationKey: handoff.operationKey,
+      let result: JsonObject;
+      try {
+        result = (await callPublicRateLoopMcpTool({
+          arguments: {
+            operationKey: handoff.operationKey,
+            transactionHashes,
+          },
+          name: "rateloop_confirm_ask_transactions",
+          requestUrl: request.url,
+        })) as JsonObject;
+      } catch (error) {
+        await updateAgentAskHandoffStatus({
+          error: error instanceof Error ? error.message : String(error),
+          handoffId,
+          status: "failed",
           transactionHashes,
-        },
-        name: "rateloop_confirm_ask_transactions",
-        requestUrl: request.url,
-      })) as JsonObject;
+        });
+        throw error;
+      }
       const nextStatus = result.status === "submitted" ? "submitted" : "prepared";
       await updateAgentAskHandoffStatus({
+        error: null,
         handoffId,
         status: nextStatus,
         transactionHashes,

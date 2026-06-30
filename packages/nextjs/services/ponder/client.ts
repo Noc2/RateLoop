@@ -103,7 +103,10 @@ const PONDER_REQUEST_TIMEOUT = 10_000;
 const CACHE_DURATION = 30_000;
 const AVAILABILITY_CACHE_MAX_ENTRIES = 32;
 const PONDER_MAX_REQUEST_ATTEMPTS = 3;
-const PONDER_METADATA_SYNC_MAX_ATTEMPTS = 5;
+// Freshly submitted on-chain content can take more than a few seconds to appear
+// in the hosted indexer. Keep metadata sync retryable long enough for that lag
+// without masking persistent schema/auth failures.
+const PONDER_METADATA_SYNC_MAX_ATTEMPTS = 8;
 const PONDER_METADATA_SYNC_RETRY_BASE_DELAY_MS = 250;
 const PONDER_RETRY_BASE_DELAY_MS = 600;
 const PONDER_DEPLOYMENT_RETRY_BASE_DELAY_MS = 100;
