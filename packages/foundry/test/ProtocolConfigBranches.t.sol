@@ -887,6 +887,39 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.advisoryVoteRecorder(), advisoryVoteRecorder);
     }
 
+    function test_SetAdvisoryVoteRecorder_RequiresLaunchPoolAuthorization() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
+
+        config.setLaunchDistributionPool(address(launchPool));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+
+        launchPool.setAuthorizedCaller(advisoryVoteRecorder, true);
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+
+        assertEq(config.advisoryVoteRecorder(), advisoryVoteRecorder);
+        assertTrue(config.advisoryVoteRecorderAuthorized(advisoryVoteRecorder));
+    }
+
+    function test_SetLaunchDistributionPool_RequiresExistingAdvisoryRecorderAuthorization() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
+
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        launchPool.setAuthorizedCaller(advisoryVoteRecorder, true);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        assertEq(config.launchDistributionPool(), address(launchPool));
+    }
+
     function test_SetAdvisoryVoteRecorder_AllowsEmergencyDisable() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));

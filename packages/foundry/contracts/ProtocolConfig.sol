@@ -327,6 +327,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _validateConfiguredClusterPayoutOracleLaunchConsumer(value);
         _validateConfiguredClusterPayoutOracleLaunchPool(value);
         _validateLaunchDistributionPoolRewardDistributor(value, rewardDistributor);
+        _validateLaunchDistributionPoolAdvisoryVoteRecorder(value, advisoryVoteRecorder);
         launchDistributionPool = value;
         emit LaunchDistributionPoolUpdated(value);
     }
@@ -348,6 +349,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         if (value != address(0)) {
             _validateAdvisoryVoteRecorder(value);
+            _validateLaunchDistributionPoolAdvisoryVoteRecorder(launchDistributionPool, value);
             advisoryVoteRecorderAuthorized[value] = true;
         }
         advisoryVoteRecorder = value;
@@ -605,6 +607,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             IRoundClusterReadyAtSource source
         ) {
             if (address(source) != engine) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateLaunchDistributionPoolAdvisoryVoteRecorder(address launchPool, address recorder) internal view {
+        if (launchPool == address(0) || recorder == address(0)) return;
+        try ILaunchDistributionPool(launchPool).authorizedCallers(recorder) returns (bool authorized) {
+            if (!authorized) revert InvalidConfig();
         } catch {
             revert InvalidConfig();
         }

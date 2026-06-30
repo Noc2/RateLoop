@@ -392,8 +392,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         launchDistributionPool.setAuthorizedCaller(address(rewardDistributor), true);
         AdvisoryVoteRecorder advisoryVoteRecorder =
             new AdvisoryVoteRecorder(address(votingEngine), address(registry), governance);
-        protocolConfig.setAdvisoryVoteRecorder(address(advisoryVoteRecorder));
         launchDistributionPool.setAuthorizedCaller(address(advisoryVoteRecorder), true);
+        protocolConfig.setAdvisoryVoteRecorder(address(advisoryVoteRecorder));
 
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(

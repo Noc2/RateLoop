@@ -647,13 +647,6 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
     [rewardDistributor, "true"],
     launchPool
   );
-  pushProtocolConfigProxyCall(
-    transactions,
-    receipts,
-    protocolConfig,
-    "setAdvisoryVoteRecorder",
-    [advisoryRecorder]
-  );
   pushCall(
     transactions,
     receipts,
@@ -661,6 +654,13 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
     "setAuthorizedCaller(address,bool)",
     [advisoryRecorder, "true"],
     launchPool
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setAdvisoryVoteRecorder",
+    [advisoryRecorder]
   );
   pushCall(
     transactions,

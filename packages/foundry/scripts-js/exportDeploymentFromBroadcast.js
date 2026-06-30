@@ -504,15 +504,6 @@ const REQUIRED_COMPLETION_CALLS = [
     keyArgCount: 1,
   },
   {
-    label: "ProtocolConfig.setAdvisoryVoteRecorder",
-    contractName: "TransparentUpgradeableProxy",
-    target: "ProtocolConfig",
-    functionName: "setAdvisoryVoteRecorder",
-    abi: PROTOCOL_CONFIG_COMPLETION_ABI,
-    args: (ctx) => [ctx.advisoryVoteRecorder],
-    final: true,
-  },
-  {
     label: "LaunchDistributionPool.setAuthorizedCaller(AdvisoryVoteRecorder)",
     contractName: "LaunchDistributionPool",
     target: "LaunchDistributionPool",
@@ -520,6 +511,15 @@ const REQUIRED_COMPLETION_CALLS = [
     args: (ctx) => [ctx.advisoryVoteRecorder, true],
     final: true,
     keyArgCount: 1,
+  },
+  {
+    label: "ProtocolConfig.setAdvisoryVoteRecorder",
+    contractName: "TransparentUpgradeableProxy",
+    target: "ProtocolConfig",
+    functionName: "setAdvisoryVoteRecorder",
+    abi: PROTOCOL_CONFIG_COMPLETION_ABI,
+    args: (ctx) => [ctx.advisoryVoteRecorder],
+    final: true,
   },
   {
     label: "LoopReputation.mint(Treasury)",

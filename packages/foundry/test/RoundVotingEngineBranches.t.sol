@@ -344,6 +344,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function _setMockAdvisoryLaunchPool(uint16 cap) internal returns (MockAdvisoryLaunchDistributionPool launchPool) {
         launchPool = new MockAdvisoryLaunchDistributionPool(cap, address(mockRaterIdentityRegistry));
         launchPool.setAuthorizedCaller(address(rewardDistributor), true);
+        launchPool.setAuthorizedCaller(address(advisoryRecorder), true);
         launchPool.setRoundClusterReadyAtSource(address(engine));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));

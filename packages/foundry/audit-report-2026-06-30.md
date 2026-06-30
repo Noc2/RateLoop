@@ -61,7 +61,7 @@ findings were identified.
 | --- | --- | --- | --- |
 | M-1 | Medium | Fixed | Parent correlation-epoch rejection can leave pre-qualification escrow snapshots unskippable |
 | L-1 | Low | Fixed | `PRIVATE_FOREVER` does not extend confidentiality bond slashability |
-| L-2 | Low | Open | Advisory recorder rotation can install a recorder that cannot claim advisory launch credits |
+| L-2 | Low | Fixed | Advisory recorder rotation can install a recorder that cannot claim advisory launch credits |
 
 ## Findings
 
@@ -266,7 +266,7 @@ be slashed before release, and cannot be slashed after release.
 
 Severity: Low
 
-Status: Open
+Status: Fixed
 
 Affected code:
 
@@ -328,6 +328,16 @@ Add tests that prove:
 
 - A recorder lacking launch-pool authorization cannot be installed, or
 - The governance action composer/runbook emits both calls in the same batch.
+
+#### Resolution
+
+Fixed on 2026-06-30. `ProtocolConfig` now preflights launch-pool
+authorization for the active advisory recorder in both configuration orders:
+installing a nonzero recorder after a launch pool exists, and installing a
+launch pool after a recorder already exists. The deploy script and broadcast
+export completion model now authorize the advisory recorder in
+`LaunchDistributionPool` before recording it in `ProtocolConfig`, and branch
+tests cover both rejected misconfiguration paths.
 
 ## Reviewed Non-Findings
 
