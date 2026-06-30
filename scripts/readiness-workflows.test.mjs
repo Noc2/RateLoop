@@ -196,9 +196,22 @@ test("Railway service start commands pin production mode", () => {
     ponder,
     /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-workspace-deps"/,
   );
-  assert.match(ponder, /builder = "RAILPACK"/);
+  assert.match(ponder, /builder = "DOCKERFILE"/);
+  assert.match(ponder, /dockerfilePath = "packages\/ponder\/Dockerfile"/);
   assert.match(ponder, /healthcheckPath = "\/health"/);
   assert.match(ponder, /healthcheckTimeout = 900/);
+});
+
+test("Ponder Docker runtime uses pinned base and production dependencies", () => {
+  const dockerfile = readWorkflow("packages/ponder/Dockerfile");
+
+  assert.match(dockerfile, /FROM node:24-alpine@sha256:[a-f0-9]{64}/);
+  assert.match(dockerfile, /RUN yarn build:workspace-deps/);
+  assert.match(
+    dockerfile,
+    /yarn workspaces focus @rateloop\/ponder --production/,
+  );
+  assert.match(dockerfile, /CMD \["yarn", "start:built-workspace-deps"\]/);
 });
 
 test("Keeper Docker runtime uses built output and production dependencies", () => {

@@ -1,5 +1,19 @@
 [build]
-builder = "RAILPACK"
+builder = "DOCKERFILE"
+dockerfilePath = "packages/ponder/Dockerfile"
+watchPatterns = [
+  ".yarn/**",
+  ".yarnrc.yml",
+  "package.json",
+  "yarn.lock",
+  "scripts/clean-package-dist.mjs",
+  "scripts/fix-esm-extensions.mjs",
+  "scripts/with-workspace-dist-lock.mjs",
+  "scripts/write-cjs-package-json.mjs",
+  "packages/contracts/**",
+  "packages/node-utils/**",
+  "packages/ponder/**",
+]
 
 [deploy]
 startCommand = "NODE_ENV=production yarn workspace @rateloop/ponder start:built-workspace-deps"

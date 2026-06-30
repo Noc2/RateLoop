@@ -62,6 +62,8 @@ jobs:
       - run: yarn install --immutable
       - run: yarn build:workspace-deps
       - run: yarn workspace @rateloop/ponder check-types
+      - name: Build Ponder Docker image
+        run: docker build -f packages/ponder/Dockerfile -t rateloop-ponder:test .
 
   slither:
     runs-on: ubuntu-latest
