@@ -38,6 +38,16 @@ function makeRequest(token: string): NextRequest {
   });
 }
 
+async function withFixedRateLimitWindow<T>(run: () => Promise<T>) {
+  const originalDateNow = Date.now;
+  Date.now = () => new Date("2026-06-11T12:10:00.000Z").getTime();
+  try {
+    return await run();
+  } finally {
+    Date.now = originalDateNow;
+  }
+}
+
 before(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
@@ -81,15 +91,17 @@ after(() => {
 });
 
 test("email verification route throttles varied tokens before token lookup", async () => {
-  for (let index = 0; index < 61; index += 1) {
-    const response = await route.GET(makeRequest(`vf-${String(index).padStart(3, "0")}-flood-token`));
+  await withFixedRateLimitWindow(async () => {
+    for (let index = 0; index < 61; index += 1) {
+      const response = await route.GET(makeRequest(`vf-${String(index).padStart(3, "0")}-flood-token`));
 
-    if (index < 60) {
-      assert.equal(response.status, 400);
-      assert.deepEqual(await response.json(), { ok: false, status: "invalid" });
-    } else {
-      assert.equal(response.status, 429);
-      assert.equal((await response.json()).code, "rate_limit_exceeded");
+      if (index < 60) {
+        assert.equal(response.status, 400);
+        assert.deepEqual(await response.json(), { ok: false, status: "invalid" });
+      } else {
+        assert.equal(response.status, 429);
+        assert.equal((await response.json()).code, "rate_limit_exceeded");
+      }
     }
-  }
+  });
 });
