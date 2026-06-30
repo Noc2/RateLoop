@@ -62,12 +62,13 @@ readiness probe verifies the deployed `ContentRegistry.submissionMediaValidator(
 validator selectors before staging is treated as ready. For production wiring or environment changes, run
 `base:check -- --live` or `base-mainnet:check -- --live` against the existing Base mainnet deployment.
 
-The deploy wrapper refuses routine Base or World Chain mainnet redeploys when a checked-in production artifact exists.
-If an incident or governance process genuinely requires a fresh production stack, compute the break-glass token from the
-current artifact as `<chainId>:<deploymentBlockNumber>` and pass
-`--confirm-production-redeploy <token>` or set `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY=<token>`. Prefer governance/admin
-rewiring, service configuration, indexing fixes, or app/keeper changes against the existing Base mainnet deployment
-whenever those are sufficient.
+The deploy wrapper verifies the live RPC chain and stamps Base or World Chain mainnet deploys with the `production`
+deployment profile, but checked-in production artifacts no longer block a fresh deployment. Running
+`yarn deploy --network base` intentionally broadcasts a replacement production stack and rewrites deployment metadata
+from the successful broadcast. Prefer governance/admin rewiring, service configuration, indexing fixes, or app/keeper
+changes against the existing Base mainnet deployment whenever those are sufficient. The legacy
+`--confirm-production-redeploy <token>` option and `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY=<token>` environment variable
+remain accepted for old runbooks, but they are no longer required.
 
 Base and World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
 World ID router for chain `8453`, `84532`, `480`, or `4801`, derives the external nullifier from
@@ -91,7 +92,7 @@ Create a `.env` file (see `.env.example`):
 | `WORLD_ID_ROUTER_ADDRESS`                | Optional explicit World ID v3 router override; nonzero live-network overrides must have code                                 |
 | `WORLD_ID_EXTERNAL_NULLIFIER_HASH`       | Optional explicit v3 external nullifier hash override; leave unset to derive from app ID and action                          |
 | `RATELOOP_DEPLOYMENT_PROFILE`            | Deployment artifact profile stamp; the deploy wrapper sets `production` for Base/World Chain mainnet and `default` elsewhere |
-| `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY`   | Break-glass token `<chainId>:<deploymentBlockNumber>` required to intentionally redeploy an existing production stack        |
+| `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY`   | Legacy compatibility token accepted by the deploy wrapper; production redeploys no longer require it                         |
 | `ETHERSCAN_API_KEY`                      | Optional explorer API key for Etherscan-compatible networks                                                                  |
 | `BASESCAN_API_KEY`                       | Optional Basescan API key for Base and Base Sepolia verification                                                             |
 

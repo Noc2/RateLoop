@@ -9,7 +9,7 @@ Options:
   --keystore <name>     Specify the live-network keystore account to use (bypasses selection prompt)
   --resume              Resume a partial broadcast for the current network + account
   --confirm-production-redeploy <chainId:block>
-                        Break-glass confirmation for redeploying an existing production stack
+                        Legacy compatibility no-op; production artifacts no longer block redeploys
   --help, -h           Show this help message
 Examples:
   yarn deploy --network baseSepolia --keystore my-account --resume
@@ -413,7 +413,6 @@ export function buildProductionRedeployConfirmationToken({
 export function validateProductionRedeployConfirmation({
   network,
   deploymentJson,
-  confirmation,
 }) {
   if (!isProductionDeployNetwork(network)) {
     return {
@@ -428,9 +427,10 @@ export function validateProductionRedeployConfirmation({
   }
 
   if (!deploymentJson || typeof deploymentJson !== "object") {
-    throw new Error(
-      `Refusing to deploy to ${network}: missing existing production deployment artifact for chain ${chainId}. Restore the artifact or use a dedicated incident runbook before redeploying.`
-    );
+    return {
+      required: false,
+      expectedToken: null,
+    };
   }
 
   if (deploymentJson.networkName !== network) {
@@ -451,20 +451,10 @@ export function validateProductionRedeployConfirmation({
     chainId,
     deploymentBlockNumber: deploymentJson.deploymentBlockNumber,
   });
-  const providedToken = confirmation?.trim() ?? "";
 
-  if (providedToken !== expectedToken) {
-    throw new Error(
-      [
-        `Refusing to deploy to ${network}: production contracts are already deployed.`,
-        "For routine configuration, indexing, UI, keeper, or operator changes, use the existing deployment.",
-        `If this is a deliberate incident/governance redeploy, pass --confirm-production-redeploy ${expectedToken} or set ${PRODUCTION_REDEPLOY_CONFIRMATION_ENV}=${expectedToken}.`,
-      ].join(" ")
-    );
-  }
-
+  // Keep the old token discoverable for compatibility, but do not require it.
   return {
-    required: true,
+    required: false,
     expectedToken,
   };
 }

@@ -9,7 +9,7 @@ aligned across the RateLoop app, agents, Ponder, and Keeper.
 | --- | ---: | --- | --- |
 | Local Hardhat/Anvil | `31337` | Local development | Default for `yarn dev:stack` and local fixtures. |
 | Base Sepolia | `84532` | Staging/testnet | First live target for fresh deployment validation. |
-| Base mainnet | `8453` | Production | Production boundary; use break-glass guidance for any fresh redeploy. |
+| Base mainnet | `8453` | Production | Production boundary; use owner-directed fresh deploy guidance for any replacement stack. |
 | World Chain Sepolia | `4801` | Legacy | Kept for historical deployment artifacts and legacy checks. |
 | World Chain mainnet | `480` | Legacy | Kept for historical deployment artifacts and legacy checks. |
 
@@ -127,4 +127,4 @@ Local signer contract address overrides:
 - Base Sepolia readiness should fail until the deployment artifact, generated
   metadata, app env, Ponder env, and Keeper env all point at the same stack.
 - Base mainnet contract changes are not routine configuration updates; follow
-  the owner-directed break-glass deploy guidance in `packages/foundry/README.md`.
+  the owner-directed fresh deploy guidance in `packages/foundry/README.md`.

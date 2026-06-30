@@ -8,7 +8,6 @@ import {
   DEFAULT_DEPLOYMENT_PROFILE,
   DEPLOY_HELP_TEXT,
   PRODUCTION_DEPLOYMENT_PROFILE,
-  PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
   RATELOOP_DEPLOYMENT_PROFILE_ENV,
   assertDeployKeystoreAccountName,
   buildDeploymentProfileEnv,
@@ -286,12 +285,9 @@ test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", ()
   );
 });
 
-test("production deploy help avoids ordinary mainnet redeploy examples", () => {
+test("production deploy help documents the legacy confirmation no-op", () => {
   assert.match(DEPLOY_HELP_TEXT, /--confirm-production-redeploy/);
-  assert.doesNotMatch(
-    DEPLOY_HELP_TEXT,
-    /yarn deploy --network base --keystore/
-  );
+  assert.match(DEPLOY_HELP_TEXT, /Legacy compatibility no-op/);
 });
 
 test("buildProductionRedeployConfirmationToken uses chain and deployment block", () => {
@@ -318,23 +314,39 @@ test("validateProductionRedeployConfirmation ignores non-production networks", (
   );
 });
 
-test("validateProductionRedeployConfirmation rejects existing production artifacts without confirmation", () => {
-  assert.throws(
-    () =>
-      validateProductionRedeployConfirmation({
-        network: "base",
-        deploymentJson: {
-          deploymentBlockNumber: 47542128,
-          deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
-          networkName: "base",
-        },
-        confirmation: null,
-      }),
-    /production contracts are already deployed/
+test("validateProductionRedeployConfirmation allows missing production artifacts", () => {
+  assert.deepEqual(
+    validateProductionRedeployConfirmation({
+      network: "base",
+      deploymentJson: null,
+      confirmation: null,
+    }),
+    {
+      required: false,
+      expectedToken: null,
+    }
   );
 });
 
-test("validateProductionRedeployConfirmation accepts the current artifact token", () => {
+test("validateProductionRedeployConfirmation allows existing production artifacts without confirmation", () => {
+  assert.deepEqual(
+    validateProductionRedeployConfirmation({
+      network: "base",
+      deploymentJson: {
+        deploymentBlockNumber: 47542128,
+        deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
+        networkName: "base",
+      },
+      confirmation: null,
+    }),
+    {
+      required: false,
+      expectedToken: "8453:47542128",
+    }
+  );
+});
+
+test("validateProductionRedeployConfirmation accepts the legacy current artifact token", () => {
   assert.deepEqual(
     validateProductionRedeployConfirmation({
       network: "base",
@@ -346,25 +358,27 @@ test("validateProductionRedeployConfirmation accepts the current artifact token"
       confirmation: "8453:47542128",
     }),
     {
-      required: true,
+      required: false,
       expectedToken: "8453:47542128",
     }
   );
 });
 
-test("validateProductionRedeployConfirmation message names the env break-glass token", () => {
-  assert.throws(
-    () =>
-      validateProductionRedeployConfirmation({
-        network: "base",
-        deploymentJson: {
-          deploymentBlockNumber: 47542128,
-          deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
-          networkName: "base",
-        },
-        confirmation: "8453:1",
-      }),
-    new RegExp(`${PRODUCTION_REDEPLOY_CONFIRMATION_ENV}=8453:47542128`)
+test("validateProductionRedeployConfirmation ignores stale legacy confirmation tokens", () => {
+  assert.deepEqual(
+    validateProductionRedeployConfirmation({
+      network: "base",
+      deploymentJson: {
+        deploymentBlockNumber: 47542128,
+        deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
+        networkName: "base",
+      },
+      confirmation: "8453:1",
+    }),
+    {
+      required: false,
+      expectedToken: "8453:47542128",
+    }
   );
 });
 
@@ -465,7 +479,7 @@ test("readRpcChainId times out stalled probes", async () => {
   );
 });
 
-test("deploy wrapper rejects production redeploys before keystore selection", async () => {
+test("deploy wrapper allows production redeploys before keystore selection", async () => {
   const result = await withMockRpcChain(8453, (rpcUrl) =>
     runNodeScript(
       parseArgsScript,
@@ -478,11 +492,14 @@ test("deploy wrapper rejects production redeploys before keystore selection", as
   );
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /production contracts are already deployed/);
-  assert.doesNotMatch(result.stdout, /Keystore/);
+  assert.doesNotMatch(
+    result.stderr,
+    /production contracts are already deployed/
+  );
+  assert.match(result.stdout, /Keystore 'does-not-matter' not found/);
 });
 
-test("direct make deploy guard rejects production redeploys without confirmation", async () => {
+test("direct make deploy guard allows production redeploys without confirmation", async () => {
   const result = await withMockRpcChain(8453, (rpcUrl) =>
     runNodeScript(checkProductionDeployGuardScript, [], {
       DEPLOY_TARGET_NETWORK: "base",
@@ -490,11 +507,10 @@ test("direct make deploy guard rejects production redeploys without confirmation
     })
   );
 
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /production contracts are already deployed/);
+  assert.equal(result.status, 0);
 });
 
-test("direct make deploy guard accepts the current production artifact token", async () => {
+test("direct make deploy guard accepts the legacy current production artifact token", async () => {
   const deployment = readProductionDeploymentArtifact("base");
   const token = buildProductionRedeployConfirmationToken({
     chainId: 8453,
