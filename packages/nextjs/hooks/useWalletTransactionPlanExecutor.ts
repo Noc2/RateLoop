@@ -6,6 +6,7 @@ import type { GetCallsStatusReturnType, Hex, TransactionReceipt } from "viem";
 import { useAccount, useConfig, useSendCallsSync } from "wagmi";
 import { getPublicClient, sendTransaction } from "wagmi/actions";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
+import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
@@ -73,7 +74,8 @@ function canTransportWalletPlanSegmentWithThirdweb<TCall extends WalletTransacti
 export function useWalletTransactionPlanExecutor() {
   const wagmiConfig = useConfig();
   const queryClient = useQueryClient();
-  const { address, connector } = useAccount();
+  const { address, chainId: accountChainId, connector } = useAccount();
+  const localE2ETestWalletClient = useLocalE2ETestWalletClient(address, accountChainId);
   const { sendCallsSyncAsync } = useSendCallsSync();
   const { hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const {
@@ -106,13 +108,22 @@ export function useWalletTransactionPlanExecutor() {
       },
     ): Promise<TransactionReceipt> => {
       options.onTiming?.("sequential-wallet-request-start");
+      const localE2EAccount = localE2ETestWalletClient?.account;
       const hash = await withWalletTransactionPlanStepTimeout(
-        sendTransaction(wagmiConfig, {
-          chainId: options.chainId,
-          data: call.data,
-          to: call.to,
-          value: call.value,
-        }),
+        localE2ETestWalletClient && localE2EAccount
+          ? localE2ETestWalletClient.sendTransaction({
+              account: localE2EAccount,
+              chain: localE2ETestWalletClient.chain,
+              data: call.data,
+              to: call.to,
+              value: call.value,
+            })
+          : sendTransaction(wagmiConfig, {
+              chainId: options.chainId,
+              data: call.data,
+              to: call.to,
+              value: call.value,
+            }),
       );
       options.onTiming?.("sequential-wallet-request-complete", { transactionHashCount: 1 });
       pushUniqueHash(options.hashes, hash);
@@ -134,7 +145,7 @@ export function useWalletTransactionPlanExecutor() {
       }
       return receipt;
     },
-    [wagmiConfig],
+    [localE2ETestWalletClient, wagmiConfig],
   );
 
   const executeWalletTransactionPlan = useCallback(

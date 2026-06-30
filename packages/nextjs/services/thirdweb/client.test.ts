@@ -10,6 +10,8 @@ import {
   isThirdwebInAppWalletCurrentForAddress,
   isThirdwebInAppWalletId,
   shouldIncludeThirdwebWalletAuthOption,
+  supportsThirdwebExecutionCapabilities,
+  supportsThirdwebInAppExecutionCapabilities,
   thirdwebWalletAddressMatchesWagmiAddress,
 } from "~~/services/thirdweb/client";
 
@@ -36,6 +38,13 @@ test("isThirdwebInAppWalletId accepts thirdweb and wagmi in-app ids", () => {
   assert.equal(isThirdwebInAppWalletId("in-app-wallet"), true);
   assert.equal(isThirdwebInAppWalletId("io.metamask"), false);
   assert.equal(isThirdwebInAppWalletId(undefined), false);
+});
+
+test("local chain can connect through thirdweb without using hosted execution", () => {
+  assert.equal(supportsThirdwebExecutionCapabilities(31337), false);
+  assert.equal(supportsThirdwebInAppExecutionCapabilities(31337), false);
+  assert.equal(supportsThirdwebExecutionCapabilities(8453), true);
+  assert.equal(supportsThirdwebInAppExecutionCapabilities(8453), true);
 });
 
 test("thirdwebWalletAddressMatchesWagmiAddress compares addresses case-insensitively", () => {
