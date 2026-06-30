@@ -1,4 +1,5 @@
 import {
+  canRetryWithoutPgliteReset,
   getRecoveryReason,
   outputIndicatesClosedPglite,
   outputIndicatesConfiguredPortFallback,
@@ -80,6 +81,9 @@ describe("devWithRecovery", () => {
       "stuck Ponder database shutdown state",
     );
     expect(shouldResetPglite(output)).toBe(true);
+    expect(
+      canRetryWithoutPgliteReset("stuck Ponder database shutdown state"),
+    ).toBe(true);
   });
 
   test("resets PGlite after the database handle is closed", () => {
@@ -89,6 +93,9 @@ describe("devWithRecovery", () => {
     expect(shouldRecover(output)).toBe(true);
     expect(getRecoveryReason(output)).toBe("closed PGlite database handle");
     expect(shouldResetPglite(output)).toBe(true);
+    expect(canRetryWithoutPgliteReset("closed PGlite database handle")).toBe(
+      false,
+    );
   });
 
   test("retries without resetting PGlite after Ponder hot-reload closes the pool", () => {
@@ -149,6 +156,9 @@ describe("devWithRecovery", () => {
       "Ponder moved off the configured port",
     );
     expect(shouldResetPglite(output)).toBe(true);
+    expect(canRetryWithoutPgliteReset("Ponder moved off the configured port")).toBe(
+      true,
+    );
   });
 
   test("treats hot reload and port fallback logs as server transitions", () => {

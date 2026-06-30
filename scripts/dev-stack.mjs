@@ -397,11 +397,21 @@ function getPonderChainIdFromEnv(env = {}) {
 
 export function resolvePonderServiceEnv(env = {}) {
   const schemaInfo = resolvePonderDatabaseSchema(env);
-
-  return {
+  const serviceEnv = {
     ...env,
     DATABASE_SCHEMA: schemaInfo.schema,
   };
+
+  if (
+    getPonderNetworkFromEnv(serviceEnv) === "hardhat" &&
+    isLocalPonderRpcUrl(getPonderRpcUrlFromEnv(serviceEnv)) &&
+    !serviceEnv.PONDER_METADATA_SYNC_TOKEN?.trim() &&
+    !serviceEnv.PONDER_METADATA_SYNC_ALLOW_OPEN?.trim()
+  ) {
+    serviceEnv.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
+  }
+
+  return serviceEnv;
 }
 
 export function resolveNextServiceEnv({
@@ -426,6 +436,14 @@ export function resolveNextServiceEnv({
 
   if (!baseEnv.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
     env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
+  }
+
+  if (!baseEnv.RATELOOP_IMAGE_MODERATION_MODE?.trim()) {
+    env.RATELOOP_IMAGE_MODERATION_MODE = "disabled";
+  }
+
+  if (!baseEnv.RATELOOP_QUESTION_DETAILS_MODERATION_MODE?.trim()) {
+    env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE = "disabled";
   }
 
   const rpcEnvKey = `NEXT_PUBLIC_RPC_URL_${ponderChainId}`;

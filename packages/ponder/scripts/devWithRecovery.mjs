@@ -88,6 +88,13 @@ export function shouldResetPglite(output, env = process.env) {
   );
 }
 
+export function canRetryWithoutPgliteReset(recoveryReason) {
+  return (
+    recoveryReason === "stuck Ponder database shutdown state" ||
+    recoveryReason === "Ponder moved off the configured port"
+  );
+}
+
 export function shouldRecover(output, env = process.env) {
   return getRecoveryReason(output, env) !== null;
 }
@@ -390,12 +397,18 @@ async function main() {
   if (shouldResetPglite(firstRun.output, process.env)) {
     const removed = resetPgliteIfPresent();
     if (!removed) {
-      process.exit(firstRun.code);
-    }
+      if (!canRetryWithoutPgliteReset(recoveryReason)) {
+        process.exit(firstRun.code);
+      }
 
-    console.warn(
-      `\nWarning: Detected ${recoveryReason}. Resetting packages/ponder/.ponder/pglite and retrying once...\n`,
-    );
+      console.warn(
+        `\nWarning: Detected ${recoveryReason}. No local PGlite state exists; retrying Ponder once...\n`,
+      );
+    } else {
+      console.warn(
+        `\nWarning: Detected ${recoveryReason}. Resetting packages/ponder/.ponder/pglite and retrying once...\n`,
+      );
+    }
   } else {
     console.warn(
       `\nWarning: Detected ${recoveryReason}. Retrying Ponder once...\n`,

@@ -319,12 +319,35 @@ test("does not warn when Keeper uses a remote Ponder API", () => {
 });
 
 test("passes an isolated Ponder schema to the dev Ponder service", () => {
-  assert.equal(
+  assert.deepEqual(
     resolvePonderServiceEnv({
       DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
       PONDER_NETWORK: "hardhat",
-    }).DATABASE_SCHEMA,
-    "rateloop_ponder_hardhat",
+    }),
+    {
+      DATABASE_SCHEMA: "rateloop_ponder_hardhat",
+      DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
+      PONDER_METADATA_SYNC_ALLOW_OPEN: "true",
+      PONDER_NETWORK: "hardhat",
+    },
+  );
+});
+
+test("preserves explicit Ponder metadata sync settings", () => {
+  assert.deepEqual(
+    resolvePonderServiceEnv({
+      DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
+      PONDER_METADATA_SYNC_ALLOW_OPEN: "false",
+      PONDER_METADATA_SYNC_TOKEN: "local-secret",
+      PONDER_NETWORK: "hardhat",
+    }),
+    {
+      DATABASE_SCHEMA: "rateloop_ponder_hardhat",
+      DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
+      PONDER_METADATA_SYNC_ALLOW_OPEN: "false",
+      PONDER_METADATA_SYNC_TOKEN: "local-secret",
+      PONDER_NETWORK: "hardhat",
+    },
   );
 });
 
@@ -343,7 +366,9 @@ test("aligns the Next service target network with the dev Ponder network", () =>
       NEXT_PUBLIC_TARGET_NETWORKS: "31337",
       NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true",
       NEXT_PUBLIC_RPC_URL_31337: "http://127.0.0.1:8545",
+      RATELOOP_IMAGE_MODERATION_MODE: "disabled",
       RATELOOP_E2E_PRODUCTION_BUILD: "true",
+      RATELOOP_QUESTION_DETAILS_MODERATION_MODE: "disabled",
     },
   );
 });
@@ -360,7 +385,9 @@ test("preserves explicit Next target network overrides from the shell", () => {
         NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "false",
         NEXT_PUBLIC_TARGET_NETWORKS: "4801",
         NEXT_PUBLIC_RPC_URL_31337: "http://localhost:9545",
+        RATELOOP_IMAGE_MODERATION_MODE: "openai",
         RATELOOP_E2E_PRODUCTION_BUILD: "false",
+        RATELOOP_QUESTION_DETAILS_MODERATION_MODE: "openai",
       },
     }),
     {
