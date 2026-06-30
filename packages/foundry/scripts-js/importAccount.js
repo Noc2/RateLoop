@@ -2,6 +2,8 @@ import { spawn } from "child_process";
 import { createInterface } from "readline";
 import { config } from "dotenv";
 import { stdin as input, stdout as output } from "process";
+import { fileURLToPath } from "url";
+import { assertDeployKeystoreAccountName } from "./deployArgs.js";
 config();
 
 /**
@@ -23,6 +25,21 @@ function prompt(question) {
   });
 }
 
+function normalizeImportAccountName(rawAccountName) {
+  const accountName = assertDeployKeystoreAccountName(
+    rawAccountName.trim(),
+    "account name"
+  );
+
+  if (accountName === "scaffold-eth-default") {
+    throw new Error(
+      "Cannot use 'scaffold-eth-default' as account name. This is reserved for local development."
+    );
+  }
+
+  return accountName;
+}
+
 /**
  * Main function to import an account
  */
@@ -39,20 +56,13 @@ async function importAccount() {
       }
     }
 
-    // Check if account name is scaffold-eth-default
-    if (accountName === "scaffold-eth-default") {
-      console.error(
-        "\n❌ Cannot use 'scaffold-eth-default' as account name. This is reserved for local development."
-      );
-      process.exit(1);
-    }
+    accountName = normalizeImportAccountName(accountName);
 
     const importProcess = spawn(
       "cast",
       ["wallet", "import", accountName, "--interactive"],
       {
         stdio: "inherit",
-        shell: true,
         cwd: process.cwd(),
       }
     );
@@ -73,7 +83,11 @@ async function importAccount() {
 }
 
 // Run the import function
-importAccount().catch((error) => {
-  console.error("\n❌ Unexpected error:", error);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  importAccount().catch((error) => {
+    console.error("\n❌ Unexpected error:", error);
+    process.exit(1);
+  });
+}
+
+export { importAccount, normalizeImportAccountName };

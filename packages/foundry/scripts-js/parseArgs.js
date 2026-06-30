@@ -271,7 +271,6 @@ process.env.DEPLOY_TARGET_NETWORK = network;
 
 const result = spawnSync("make", ["deploy-and-generate-abis"], {
   stdio: "inherit",
-  shell: true,
   cwd: join(__dirname, ".."),
 });
 
@@ -294,7 +293,6 @@ if (network === "localhost") {
   );
   const fundKeeperResult = spawnSync("node", [fundKeeperScript], {
     stdio: "inherit",
-    shell: true,
     cwd: join(__dirname, ".."),
   });
   if (fundKeeperResult.status !== 0) {
@@ -304,7 +302,6 @@ if (network === "localhost") {
   const seedScript = join(__dirname, "..", "script", "SeedContent.sh");
   const seedResult = spawnSync("bash", [seedScript], {
     stdio: "inherit",
-    shell: true,
     cwd: join(__dirname, ".."),
   });
   process.exit(seedResult.status);

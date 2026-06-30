@@ -1,5 +1,6 @@
 import { listKeystores } from "./listKeystores.js";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
+import { fileURLToPath } from "url";
 
 async function revealPk() {
   try {
@@ -15,9 +16,11 @@ async function revealPk() {
     }
 
     try {
-      const revealPKCommand = `cast wallet decrypt-keystore ${selectedKeystore}`;
-
-      const revealPKResult = execSync(revealPKCommand).toString().trim();
+      const revealPKResult = execFileSync(
+        "cast",
+        ["wallet", "decrypt-keystore", selectedKeystore],
+        { encoding: "utf8" }
+      ).trim();
 
       console.log(`\n🔑 ${revealPKResult}`);
     } catch (error) {
@@ -31,7 +34,11 @@ async function revealPk() {
   }
 }
 
-revealPk().catch((error) => {
-  console.error("\n❌ Unexpected error:", error);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  revealPk().catch((error) => {
+    console.error("\n❌ Unexpected error:", error);
+    process.exit(1);
+  });
+}
+
+export { revealPk };

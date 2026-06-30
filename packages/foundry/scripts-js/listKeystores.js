@@ -1,7 +1,20 @@
-import { readdirSync } from "fs";
+import { existsSync, readdirSync } from "fs";
 import { join } from "path";
 import readline from "readline";
 import { fileURLToPath } from "url";
+import { isDeployKeystoreAccountName } from "./deployArgs.js";
+
+function getSafeKeystoreNames(keystorePath) {
+  if (!keystorePath || !existsSync(keystorePath)) {
+    return [];
+  }
+
+  return readdirSync(keystorePath).filter(
+    (keystore) =>
+      keystore !== "scaffold-eth-default" &&
+      isDeployKeystoreAccountName(keystore)
+  );
+}
 
 async function listKeystores(
   selectMessage = "Select a keystore (enter the number, e.g., 1):"
@@ -14,9 +27,7 @@ async function listKeystores(
   const keystorePath = join(process.env.HOME, ".foundry", "keystores");
 
   try {
-    const keystores = readdirSync(keystorePath).filter(
-      (keystore) => keystore !== "scaffold-eth-default"
-    );
+    const keystores = getSafeKeystoreNames(keystorePath);
 
     if (keystores.length === 0) {
       console.error(
@@ -68,4 +79,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     });
 }
 
-export { listKeystores };
+export { getSafeKeystoreNames, listKeystores };
