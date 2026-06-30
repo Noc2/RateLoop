@@ -50,6 +50,8 @@ const QUESTION_REWARD_ESCROW_ADDRESS =
 const FEEDBACK_BONUS_ESCROW_ADDRESS =
   "0x00000000000000000000000000000000000000fb" as const;
 const LREP_ADDRESS = "0x00000000000000000000000000000000000000aa" as const;
+const FEEDBACK_BONUS_CONTENT_ID = 123n;
+const FEEDBACK_BONUS_ROUND_ID = 1n;
 const X402_AMOUNT = "1500000";
 const FEEDBACK_BONUS_AMOUNT = "2000000";
 const CLIENT_REQUEST_ID = "local-signer-test";
@@ -1119,6 +1121,45 @@ function lrepWalletCallsResponse(
   };
 }
 
+function feedbackBonusCreatePoolData(
+  payload = feedbackBonusAskPayload(),
+  overrides: {
+    contentId?: bigint;
+    feedbackClosesAt?: bigint;
+    roundId?: bigint;
+  } = {},
+): Hex {
+  const bonus = payload.feedbackBonus!;
+  const bonusAsset = bonus.asset ?? payload.bounty.asset ?? "USDC";
+  return encodeFunctionData({
+    abi: [
+      {
+        inputs: [
+          { name: "contentId", type: "uint256" },
+          { name: "roundId", type: "uint256" },
+          { name: "asset", type: "uint8" },
+          { name: "amount", type: "uint256" },
+          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "awarder", type: "address" },
+        ],
+        name: "createFeedbackBonusPoolWithAsset",
+        outputs: [{ name: "poolId", type: "uint256" }],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+    ] as Abi,
+    args: [
+      overrides.contentId ?? FEEDBACK_BONUS_CONTENT_ID,
+      overrides.roundId ?? FEEDBACK_BONUS_ROUND_ID,
+      bonusAsset === "LREP" ? 0 : 1,
+      BigInt(String(bonus.amount)),
+      overrides.feedbackClosesAt ?? BigInt(feedbackBonusClosesAt()),
+      (bonus.awarder ?? account.address) as `0x${string}`,
+    ],
+    functionName: "createFeedbackBonusPoolWithAsset",
+  });
+}
+
 function feedbackBonusPlanResponse(
   payload = feedbackBonusAskPayload(),
   overrides: Partial<AskHumansResponse> = {},
@@ -1137,6 +1178,9 @@ function feedbackBonusPlanResponse(
       amount: String(bonus.amount),
       asset: bonusAsset,
       status: "awaiting_wallet_signature",
+      contentId: FEEDBACK_BONUS_CONTENT_ID.toString(),
+      feedbackClosesAt: feedbackBonusClosesAt(),
+      roundId: FEEDBACK_BONUS_ROUND_ID.toString(),
       transactionPlan: {
         calls: [
           {
@@ -1153,33 +1197,7 @@ function feedbackBonusPlanResponse(
             value: "0",
           },
           {
-            data: encodeFunctionData({
-              abi: [
-                {
-                  inputs: [
-                    { name: "contentId", type: "uint256" },
-                    { name: "roundId", type: "uint256" },
-                    { name: "asset", type: "uint8" },
-                    { name: "amount", type: "uint256" },
-                    { name: "feedbackClosesAt", type: "uint256" },
-                    { name: "awarder", type: "address" },
-                  ],
-                  name: "createFeedbackBonusPoolWithAsset",
-                  outputs: [{ name: "poolId", type: "uint256" }],
-                  stateMutability: "nonpayable",
-                  type: "function",
-                },
-              ] as Abi,
-              args: [
-                123n,
-                1n,
-                bonusAsset === "LREP" ? 0 : 1,
-                BigInt(String(bonus.amount)),
-                BigInt(feedbackBonusClosesAt()),
-                (bonus.awarder ?? account.address) as `0x${string}`,
-              ],
-              functionName: "createFeedbackBonusPoolWithAsset",
-            }),
+            data: feedbackBonusCreatePoolData(payload),
             phase: "create_feedback_bonus_pool",
             to: FEEDBACK_BONUS_ESCROW_ADDRESS,
             value: "0",
@@ -1633,6 +1651,87 @@ describe("local signer", () => {
         }),
       ]),
     );
+  });
+
+  it("rejects follow-up Feedback Bonus plans with mismatched pool targets", async () => {
+    const payload = feedbackBonusAskPayload();
+    payload.paymentMode = "agent_wallet" as never;
+    const askResponse = walletCallsResponse();
+
+    for (const scenario of [
+      {
+        data: feedbackBonusCreatePoolData(payload, {
+          contentId: FEEDBACK_BONUS_CONTENT_ID + 1n,
+        }),
+        expectedError: /contentId must match/,
+      },
+      {
+        data: feedbackBonusCreatePoolData(payload, {
+          roundId: FEEDBACK_BONUS_ROUND_ID + 1n,
+        }),
+        expectedError: /roundId must match/,
+      },
+      {
+        data: feedbackBonusCreatePoolData(payload, {
+          feedbackClosesAt: BigInt(feedbackBonusClosesAt()) + 1n,
+        }),
+        expectedError: /feedbackClosesAt must match/,
+      },
+    ]) {
+      const confirmationResponse = feedbackBonusPlanResponse(payload);
+      const feedbackBonusPlan = confirmationResponse.feedbackBonus!
+        .transactionPlan as {
+        calls: RateLoopAgentWalletTransactionCall[];
+        requiresOrderedExecution?: boolean;
+      };
+      const agent = {
+        askHumans: async () => askResponse,
+        confirmAskTransactions: async () => ({
+          ...confirmationResponse,
+          feedbackBonus: {
+            ...confirmationResponse.feedbackBonus!,
+            transactionPlan: {
+              ...feedbackBonusPlan,
+              calls: [
+                feedbackBonusPlan.calls[0]!,
+                {
+                  ...feedbackBonusPlan.calls[1]!,
+                  data: scenario.data,
+                },
+              ],
+            },
+          },
+        }),
+        confirmFeedbackBonusTransactions: async () => {
+          throw new Error("Feedback Bonus plan should not execute.");
+        },
+      } satisfies Pick<
+        RateLoopAgentClient,
+        "askHumans" | "confirmAskTransactions"
+      > &
+        Partial<Pick<RateLoopAgentClient, "confirmFeedbackBonusTransactions">>;
+
+      await expect(
+        askHumansWithLocalSigner({
+          account,
+          agent,
+          config: {
+            ...validationConfig(),
+            chainId: 480,
+            chainName: "test",
+            pollingIntervalMs: 1,
+            receiptTimeoutMs: 1,
+          },
+          executeTransactionPlan: async ({ plan }) => {
+            if (plan === "feedback_bonus") {
+              throw new Error("Feedback Bonus plan should not execute.");
+            }
+            return { transactionHashes: [`0x${"a".repeat(64)}`] };
+          },
+          payload,
+        }),
+      ).rejects.toThrow(scenario.expectedError);
+    }
   });
 
   it("rejects bundled Feedback Bonuses before asking the agent", async () => {

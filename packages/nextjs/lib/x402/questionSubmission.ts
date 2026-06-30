@@ -3013,6 +3013,7 @@ function buildFeedbackBonusStatusBody(record: X402QuestionSubmissionRecord | nul
     amount: feedbackBonus.amount,
     asset: feedbackBonus.asset,
     awarder: feedbackBonus.awarder,
+    contentId: record?.contentId ?? null,
     enabled: true,
     error: feedbackBonus.error ?? null,
     feedbackClosesAt: feedbackBonus.feedbackClosesAt ?? null,

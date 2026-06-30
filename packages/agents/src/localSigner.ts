@@ -389,6 +389,12 @@ type ExpectedLocalSignerFeedbackBonus = {
   awarder: Address;
 };
 
+type ExpectedLocalSignerFeedbackBonusPoolTarget = {
+  contentId: bigint;
+  feedbackClosesAt: bigint;
+  roundId: bigint;
+};
+
 type LocalQuestionRoundConfig = X402QuestionRoundConfig;
 type LocalQuestionConfidentiality = X402QuestionItemPayload["confidentiality"];
 type LocalQuestionItemPayload = Omit<
@@ -930,6 +936,17 @@ function normalizeBigInt(value: unknown, name: string): bigint {
     return BigInt(value);
   if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
   throw new Error(`${name} must be an unsigned integer.`);
+}
+
+function normalizeRequiredPositiveBigInt(value: unknown, name: string): bigint {
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${name} is required.`);
+  }
+  const parsed = normalizeBigInt(value, name);
+  if (parsed <= 0n) {
+    throw new Error(`${name} must be greater than zero.`);
+  }
+  return parsed;
 }
 
 function normalizeOptionalBigInt(
@@ -2996,6 +3013,7 @@ export function validateLocalSignerTransactionPlan(params: {
 function validateCreateFeedbackBonusPoolCall(params: {
   call: RateLoopAgentWalletTransactionCall;
   expectedFeedbackBonus: ExpectedLocalSignerFeedbackBonus;
+  expectedPoolTarget: ExpectedLocalSignerFeedbackBonusPoolTarget;
   expectedTo: Address;
   index: number;
 }) {
@@ -3016,6 +3034,16 @@ function validateCreateFeedbackBonusPoolCall(params: {
     );
   }
   const args = decoded.args ?? [];
+  assertEqualBigInt(
+    args[0],
+    params.expectedPoolTarget.contentId,
+    `transactionPlan.calls[${params.index}].contentId`,
+  );
+  assertEqualBigInt(
+    args[1],
+    params.expectedPoolTarget.roundId,
+    `transactionPlan.calls[${params.index}].roundId`,
+  );
   assertEqualNumber(
     args[2],
     params.expectedFeedbackBonus.assetId,
@@ -3026,11 +3054,36 @@ function validateCreateFeedbackBonusPoolCall(params: {
     params.expectedFeedbackBonus.amount,
     `transactionPlan.calls[${params.index}].amount`,
   );
+  assertEqualBigInt(
+    args[4],
+    params.expectedPoolTarget.feedbackClosesAt,
+    `transactionPlan.calls[${params.index}].feedbackClosesAt`,
+  );
   assertEqualAddress(
     args[5],
     params.expectedFeedbackBonus.awarder,
     `transactionPlan.calls[${params.index}].awarder`,
   );
+}
+
+function readExpectedFeedbackBonusPoolTarget(
+  feedbackBonus: QuestionStatusResponse["feedbackBonus"],
+): ExpectedLocalSignerFeedbackBonusPoolTarget {
+  const record = assertRecord(feedbackBonus, "feedbackBonus");
+  return {
+    contentId: normalizeRequiredPositiveBigInt(
+      record.contentId,
+      "feedbackBonus.contentId",
+    ),
+    feedbackClosesAt: normalizeRequiredPositiveBigInt(
+      record.feedbackClosesAt,
+      "feedbackBonus.feedbackClosesAt",
+    ),
+    roundId: normalizeRequiredPositiveBigInt(
+      record.roundId,
+      "feedbackBonus.roundId",
+    ),
+  };
 }
 
 function validateLocalSignerFeedbackBonusTransactionPlan(params: {
@@ -3039,6 +3092,8 @@ function validateLocalSignerFeedbackBonusTransactionPlan(params: {
   expectedFeedbackBonus: ExpectedLocalSignerFeedbackBonus;
 }): RateLoopAgentWalletTransactionCall[] {
   const feedbackBonus = params.ask.feedbackBonus;
+  const expectedPoolTarget =
+    readExpectedFeedbackBonusPoolTarget(feedbackBonus);
   const plan = feedbackBonus?.transactionPlan as
     | {
         calls?: RateLoopAgentWalletTransactionCall[];
@@ -3088,6 +3143,7 @@ function validateLocalSignerFeedbackBonusTransactionPlan(params: {
   validateCreateFeedbackBonusPoolCall({
     call: calls[1]!,
     expectedFeedbackBonus: params.expectedFeedbackBonus,
+    expectedPoolTarget,
     expectedTo: escrowAddress,
     index: 1,
   });
