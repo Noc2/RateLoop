@@ -621,7 +621,11 @@ test("Make live deploys run the production guard before Forge work", () => {
   );
   assert.match(
     makefile,
-    /DEPLOY_TARGET_NETWORK" = "localhost".*validateLocalDeploymentSync\.js deployments\/31337\.json \.\.\/contracts\/src\/deployedContracts\.ts 31337 FeedbackRegistry FeedbackBonusEscrow X402QuestionSubmitter/s
+    /LOCAL_DEPLOYMENT_SYNC_CONTRACTS := .*LoopReputation.*ContentRegistry.*RoundVotingEngine.*QuestionRewardPoolEscrow.*MockWorldIDRouter/
+  );
+  assert.match(
+    makefile,
+    /DEPLOY_TARGET_NETWORK" = "localhost".*validateLocalDeploymentSync\.js deployments\/31337\.json \.\.\/contracts\/src\/deployedContracts\.ts 31337 \$\(LOCAL_DEPLOYMENT_SYNC_CONTRACTS\)/s
   );
   assert.match(
     makefile,
@@ -630,6 +634,23 @@ test("Make live deploys run the production guard before Forge work", () => {
   assert.match(makefile, /--rpc-url "\$\(RPC_URL\)"/);
   assert.match(makefile, /--account "\$\(ETH_KEYSTORE_ACCOUNT\)"/);
   assert.match(makefile, /cast wallet address --account "\$\(ACCOUNT_NAME\)"/);
+});
+
+test("deploy wrapper validates local deployment sync before seeding", () => {
+  const source = readFileSync(parseArgsScript, "utf8");
+
+  assert.match(
+    source,
+    /const LOCAL_DEPLOYMENT_SYNC_CONTRACTS = \[[\s\S]*"LoopReputation"[\s\S]*"ContentRegistry"[\s\S]*"RoundVotingEngine"[\s\S]*"MockWorldIDRouter"[\s\S]*\]/
+  );
+  assert.match(
+    source,
+    /validateLocalDeploymentSync\.js"[\s\S]*"deployments",\s*"31337\.json"[\s\S]*"deployedContracts\.ts"[\s\S]*\.\.\.LOCAL_DEPLOYMENT_SYNC_CONTRACTS/
+  );
+  assert.match(
+    source,
+    /if \(localDeploymentSyncResult\.status !== 0\) \{[\s\S]*process\.exit\(localDeploymentSyncResult\.status\);[\s\S]*\}[\s\S]*const fundKeeperScript/
+  );
 });
 
 test("resolveEtherscanVerification skips when the required API key env is missing", () => {

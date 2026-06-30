@@ -9,6 +9,7 @@ DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS ?= --ignored-error-codes 2394 --ignored-e
 LOCALHOST_EVM_SIZE_FLAGS ?=
 LOCALHOST_DEPLOYER_PRIVATE_KEY ?= 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
 DEPLOYED_DEPENDENCY_SIZE_SOURCES := lib/openzeppelin-contracts/contracts/governance/TimelockController.sol lib/openzeppelin-contracts/contracts/proxy/transparent/ProxyAdmin.sol lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol
+LOCAL_DEPLOYMENT_SYNC_CONTRACTS := LoopReputation ContentRegistry RoundVotingEngine RoundRewardDistributor QuestionRewardPoolEscrow ConfidentialityEscrow FeedbackRegistry FeedbackBonusEscrow CategoryRegistry RaterRegistry ClusterPayoutOracle LaunchDistributionPool AdvisoryVoteRecorder X402QuestionSubmitter FrontendRegistry ProfileRegistry ProtocolConfig MockERC20 MockWorldIDRouter
 
 # setup wallet for anvil
 setup-anvil-wallet:
@@ -52,7 +53,7 @@ deploy-and-generate-abis: guard-production-deploy check-contract-sizes
 	node scripts-js/exportDeploymentFromBroadcast.js
 	$(MAKE) generate-abis
 	@if [ "$$DEPLOY_TARGET_NETWORK" = "localhost" ]; then \
-		node scripts-js/validateLocalDeploymentSync.js deployments/31337.json ../contracts/src/deployedContracts.ts 31337 FeedbackRegistry FeedbackBonusEscrow X402QuestionSubmitter; \
+		node scripts-js/validateLocalDeploymentSync.js deployments/31337.json ../contracts/src/deployedContracts.ts 31337 $(LOCAL_DEPLOYMENT_SYNC_CONTRACTS); \
 	fi
 	cd ../.. && yarn workspace @rateloop/contracts build
 

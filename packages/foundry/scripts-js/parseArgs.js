@@ -27,6 +27,27 @@ const NETWORK_RPC_OVERRIDE_ENV = {
   worldchainSepolia: "WORLDCHAIN_SEPOLIA_RPC_URL",
   worldchain: "WORLDCHAIN_RPC_URL",
 };
+const LOCAL_DEPLOYMENT_SYNC_CONTRACTS = [
+  "LoopReputation",
+  "ContentRegistry",
+  "RoundVotingEngine",
+  "RoundRewardDistributor",
+  "QuestionRewardPoolEscrow",
+  "ConfidentialityEscrow",
+  "FeedbackRegistry",
+  "FeedbackBonusEscrow",
+  "CategoryRegistry",
+  "RaterRegistry",
+  "ClusterPayoutOracle",
+  "LaunchDistributionPool",
+  "AdvisoryVoteRecorder",
+  "X402QuestionSubmitter",
+  "FrontendRegistry",
+  "ProfileRegistry",
+  "ProtocolConfig",
+  "MockERC20",
+  "MockWorldIDRouter",
+];
 let foundryRpcEndpoints = {};
 
 function formatBlockscoutVerifyCommand(networkName) {
@@ -285,6 +306,24 @@ if (result.status !== 0) {
 
 // Run seed script for localhost deployments
 if (network === "localhost") {
+  const localDeploymentSyncResult = spawnSync(
+    "node",
+    [
+      join(__dirname, "validateLocalDeploymentSync.js"),
+      join(__dirname, "..", "deployments", "31337.json"),
+      join(__dirname, "..", "..", "contracts", "src", "deployedContracts.ts"),
+      "31337",
+      ...LOCAL_DEPLOYMENT_SYNC_CONTRACTS,
+    ],
+    {
+      stdio: "inherit",
+      cwd: join(__dirname, ".."),
+    }
+  );
+  if (localDeploymentSyncResult.status !== 0) {
+    process.exit(localDeploymentSyncResult.status);
+  }
+
   const fundKeeperScript = join(
     __dirname,
     "..",
