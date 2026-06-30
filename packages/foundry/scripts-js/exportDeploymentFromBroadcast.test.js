@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { encodeFunctionData, parseAbi } from "viem";
 
 import {
   reconstructDeploymentExportFromBroadcast,
   resolveDeploymentProfile,
 } from "./exportDeploymentFromBroadcast.js";
+
+const exportDeploymentScript = fileURLToPath(
+  new URL("./exportDeploymentFromBroadcast.js", import.meta.url)
+);
 
 const directNames = [
   "TimelockController",
@@ -770,6 +776,20 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
 
   return { transactions, receipts };
 }
+
+test("exportDeploymentFromBroadcast rejects non-local exports without target network", () => {
+  const result = spawnSync(process.execPath, [exportDeploymentScript], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      DEPLOY_TARGET_NETWORK: "",
+      RPC_URL: "base",
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /DEPLOY_TARGET_NETWORK is required/);
+});
 
 test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", () => {
   const { transactions, receipts } = completeBroadcast();

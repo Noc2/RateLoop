@@ -6,6 +6,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTRACTS_DIR="$ROOT_DIR/contracts"
 OUT_DIR="$ROOT_DIR/out"
 LIMIT_BYTES="${CONTRACT_SIZE_LIMIT:-24576}"
+DEPLOYED_DEPENDENCY_SOURCES=(
+    "$ROOT_DIR/lib/openzeppelin-contracts/contracts/governance/TimelockController.sol"
+    "$ROOT_DIR/lib/openzeppelin-contracts/contracts/proxy/transparent/ProxyAdmin.sol"
+    "$ROOT_DIR/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol"
+)
 
 if ! command -v jq >/dev/null 2>&1; then
     echo "jq is required to check contract sizes" >&2
@@ -17,13 +22,24 @@ if [ ! -d "$OUT_DIR" ]; then
     exit 1
 fi
 
-echo "Checking deployed bytecode sizes, including linked libraries, against the EIP-170 limit (${LIMIT_BYTES} bytes)..."
+echo "Checking deployed bytecode sizes, including linked libraries and deploy-only dependencies, against the EIP-170 limit (${LIMIT_BYTES} bytes)..."
 
 checked=0
 oversized=0
 
-while IFS= read -r source; do
-    rel_source="${source#"$CONTRACTS_DIR"/}"
+relative_source_path() {
+    local source="$1"
+    if [[ "$source" == "$ROOT_DIR/"* ]]; then
+        printf "%s" "${source#"$ROOT_DIR"/}"
+    else
+        printf "%s" "$source"
+    fi
+}
+
+check_source_artifacts() {
+    local source="$1"
+    local rel_source
+    rel_source="$(relative_source_path "$source")"
     artifact_dir="$OUT_DIR/$rel_source"
     if [ ! -d "$artifact_dir" ]; then
         artifact_dir="$OUT_DIR/$(basename "$rel_source")"
@@ -58,12 +74,24 @@ while IFS= read -r source; do
             oversized=$((oversized + 1))
         fi
     done
+}
+
+while IFS= read -r source; do
+    check_source_artifacts "$source"
 done < <(
     find "$CONTRACTS_DIR" -type f -name "*.sol" \
         ! -path "$CONTRACTS_DIR/interfaces/*" \
         ! -path "$CONTRACTS_DIR/mocks/*" \
         | sort
 )
+
+for source in "${DEPLOYED_DEPENDENCY_SOURCES[@]}"; do
+    if [ ! -f "$source" ]; then
+        echo "::error file=$source,title=Missing deploy-only dependency source::Expected deployed dependency source at $source"
+        exit 1
+    fi
+    check_source_artifacts "$source"
+done
 
 if [ "$checked" -eq 0 ]; then
     echo "::error::No deployable contract artifacts were checked."

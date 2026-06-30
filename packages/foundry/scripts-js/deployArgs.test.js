@@ -548,6 +548,27 @@ test("direct make deploy guard rejects raw live RPC URLs without target network"
   );
 });
 
+test("direct make deploy guard rejects live network aliases without target network", () => {
+  const result = spawnSync(
+    process.execPath,
+    [checkProductionDeployGuardScript],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DEPLOY_TARGET_NETWORK: "",
+        RPC_URL: "base",
+      },
+    }
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /Refusing live make deploy without DEPLOY_TARGET_NETWORK/
+  );
+});
+
 test("direct make deploy guard allows explicit staging targets", async () => {
   const result = await withMockRpcChain(84532, (rpcUrl) =>
     runNodeScript(checkProductionDeployGuardScript, [], {
@@ -604,7 +625,7 @@ test("Make live deploys run the production guard before Forge work", () => {
   );
   assert.match(
     makefile,
-    /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s
+    /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\t\$\(MAKE\) check-contract-sizes \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s
   );
   assert.match(makefile, /--rpc-url "\$\(RPC_URL\)"/);
   assert.match(makefile, /--account "\$\(ETH_KEYSTORE_ACCOUNT\)"/);

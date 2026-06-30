@@ -19,17 +19,9 @@ function readDeployTargetNetwork(env = process.env) {
 
   const rpcUrl = env.RPC_URL?.trim();
   if (!rpcUrl || rpcUrl === "localhost") return "localhost";
-
-  try {
-    const parsed = parseDeployArgs(["--network", rpcUrl]);
-    if (parsed.network === rpcUrl) return parsed.network;
-  } catch {
-    throw new Error(
-      "Refusing live make deploy without DEPLOY_TARGET_NETWORK. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network."
-    );
-  }
-
-  throw new Error("Unexpected deploy target resolution failure.");
+  throw new Error(
+    "Refusing live make deploy without DEPLOY_TARGET_NETWORK. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network."
+  );
 }
 
 function readFoundryRpcEndpoints() {

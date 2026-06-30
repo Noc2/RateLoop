@@ -1279,7 +1279,14 @@ export function refreshDeploymentExportFromLatestBroadcast({
 
 function main() {
   const deployTarget = process.env.DEPLOY_TARGET_NETWORK;
-  if (!deployTarget || deployTarget === "localhost") return;
+  if (!deployTarget) {
+    const rpcUrl = process.env.RPC_URL?.trim();
+    if (!rpcUrl || rpcUrl === "localhost") return;
+    throw new Error(
+      "DEPLOY_TARGET_NETWORK is required to export non-local deployment broadcasts. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network."
+    );
+  }
+  if (deployTarget === "localhost") return;
 
   const refreshed = refreshDeploymentExportFromLatestBroadcast({
     projectRoot: join(__dirname, ".."),

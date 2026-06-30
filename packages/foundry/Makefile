@@ -8,6 +8,7 @@ DEPLOY_PROFILE ?= deploy
 DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS ?= --ignored-error-codes 2394 --ignored-error-codes 3860 --ignored-error-codes 5574 --ignored-error-codes 6335
 LOCALHOST_EVM_SIZE_FLAGS ?=
 LOCALHOST_DEPLOYER_PRIVATE_KEY ?= 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
+DEPLOYED_DEPENDENCY_SIZE_SOURCES := lib/openzeppelin-contracts/contracts/governance/TimelockController.sol lib/openzeppelin-contracts/contracts/proxy/transparent/ProxyAdmin.sol lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol
 
 # setup wallet for anvil
 setup-anvil-wallet:
@@ -36,6 +37,7 @@ deploy:
 			FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url localhost --private-key $(LOCALHOST_DEPLOYER_PRIVATE_KEY) --broadcast --ffi --slow --non-interactive $(LOCALHOST_EVM_SIZE_FLAGS) $(RESUME_FLAG); \
 	else \
 		$(MAKE) guard-production-deploy || exit 1; \
+		$(MAKE) check-contract-sizes || exit 1; \
 		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url "$(RPC_URL)" --account "$(ETH_KEYSTORE_ACCOUNT)" --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
 	fi
 
@@ -158,6 +160,7 @@ coverage:
 
 check-contract-sizes:
 	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --skip script --skip test
+	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build $(DEPLOYED_DEPENDENCY_SIZE_SOURCES)
 	bash scripts/check-contract-sizes.sh
 
 # M-Crosscutting-1: snapshot-test the storage layout of every upgradeable contract.
