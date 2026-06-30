@@ -531,6 +531,106 @@ test("ponderApi.syncQuestionMetadata preflights deployment and sends the expecte
   assert.equal(postedDeploymentKey, expectedDeploymentKey);
 });
 
+test("ponderApi.syncQuestionMetadata retries transient POST failures", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  let metadataAttempts = 0;
+
+  globalThis.fetch = (async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
+
+    metadataAttempts += 1;
+    assert.ok(init?.body);
+    if (metadataAttempts === 1) {
+      return new Response(JSON.stringify({ error: "metadata sync temporarily unavailable" }), {
+        status: 503,
+        headers: {
+          "content-type": "application/json",
+          "retry-after": "0",
+        },
+      });
+    }
+
+    return new Response(JSON.stringify({ updated: 1, skipped: 0, errors: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache();
+
+    const result = await ponderApi.syncQuestionMetadata([
+      {
+        contentId: "42",
+        questionMetadata: { schemaVersion: "rateloop.question.v3", title: "Question" },
+        questionMetadataHash: `0x${"2".repeat(64)}`,
+        questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience: null,
+      },
+    ]);
+
+    assert.equal(result.updated, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache();
+  }
+
+  assert.equal(requestedUrls.filter(url => /\/question-metadata$/.test(url)).length, 2);
+});
+
+test("ponderApi.syncQuestionMetadata retries rows skipped before indexing catches up", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  let metadataAttempts = 0;
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
+
+    metadataAttempts += 1;
+    return new Response(
+      JSON.stringify(
+        metadataAttempts === 1
+          ? { requested: 1, updated: 0, skipped: 1, errors: [] }
+          : { requested: 1, updated: 1, skipped: 0, errors: [] },
+      ),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache();
+
+    const result = await ponderApi.syncQuestionMetadata([
+      {
+        contentId: "42",
+        questionMetadata: { schemaVersion: "rateloop.question.v3", title: "Question" },
+        questionMetadataHash: `0x${"2".repeat(64)}`,
+        questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience: null,
+      },
+    ]);
+
+    assert.equal(result.updated, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache();
+  }
+
+  assert.equal(requestedUrls.filter(url => /\/question-metadata$/.test(url)).length, 2);
+});
+
 test("ponderApi.syncQuestionMetadata marks production auth failures as required config", async () => {
   const originalFetch = globalThis.fetch;
   const mutableEnv = process.env as Record<string, string | undefined>;

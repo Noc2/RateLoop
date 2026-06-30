@@ -103,6 +103,8 @@ const PONDER_REQUEST_TIMEOUT = 10_000;
 const CACHE_DURATION = 30_000;
 const AVAILABILITY_CACHE_MAX_ENTRIES = 32;
 const PONDER_MAX_REQUEST_ATTEMPTS = 3;
+const PONDER_METADATA_SYNC_MAX_ATTEMPTS = 5;
+const PONDER_METADATA_SYNC_RETRY_BASE_DELAY_MS = 250;
 const PONDER_RETRY_BASE_DELAY_MS = 600;
 const PONDER_DEPLOYMENT_RETRY_BASE_DELAY_MS = 100;
 const PONDER_RETRY_MAX_DELAY_MS = 5_000;
@@ -218,9 +220,11 @@ async function fetchPonderResponse(
   timeoutMs: number,
   fetchImpl: typeof fetch,
   options: FetchPonderJsonOptions,
+  init?: RequestInit,
 ) {
   const fetchWithTimeout = () =>
     fetchImpl(url, {
+      ...init,
       signal: AbortSignal.timeout(timeoutMs),
     });
 
@@ -248,19 +252,20 @@ function getPonderRetryDelayMs(error: unknown, attempt: number, options: FetchPo
   return Math.min(PONDER_RETRY_MAX_DELAY_MS, Math.round(baseDelay * 2 ** (attempt - 1) * jitter));
 }
 
-async function fetchPonderJsonWithRetry<T>(
+async function fetchPonderResponseWithRetry(
   url: string,
   timeoutMs: number,
   fetchImpl: typeof fetch,
   options: FetchPonderJsonOptions,
-): Promise<T> {
+  init?: RequestInit,
+): Promise<Response> {
   const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? PONDER_MAX_REQUEST_ATTEMPTS));
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let response: Response;
 
     try {
-      response = await fetchPonderResponse(url, timeoutMs, fetchImpl, options);
+      response = await fetchPonderResponse(url, timeoutMs, fetchImpl, options, init);
     } catch (error) {
       if (isAbortError(error)) {
         throw new Error(`Ponder request timed out after ${timeoutMs}ms`);
@@ -271,7 +276,7 @@ async function fetchPonderJsonWithRetry<T>(
     }
 
     if (response.ok) {
-      return response.json();
+      return response;
     }
 
     const error = new PonderHttpError(response);
@@ -303,9 +308,11 @@ export async function fetchPonderJson<T>(
     }
   }
 
-  const request = fetchPonderJsonWithRetry<T>(requestUrl, timeoutMs, fetchImpl, options).finally(() => {
-    inFlightPonderJsonRequests.delete(requestUrl);
-  });
+  const request = fetchPonderResponseWithRetry(requestUrl, timeoutMs, fetchImpl, options)
+    .then(response => response.json() as Promise<T>)
+    .finally(() => {
+      inFlightPonderJsonRequests.delete(requestUrl);
+    });
 
   if (options.dedupe !== false) {
     inFlightPonderJsonRequests.set(requestUrl, request);
@@ -684,18 +691,22 @@ async function ponderPost<T>(
   await assertPonderAvailableForDeployment(options?.expectedDeploymentKey);
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
   const metadataSyncToken = getPonderMetadataSyncToken();
-  const response = await fetch(url, {
-    body: JSON.stringify(body),
-    headers: {
-      "Content-Type": "application/json",
-      ...(metadataSyncToken ? { Authorization: `Bearer ${metadataSyncToken}` } : {}),
+  const response = await fetchPonderResponseWithRetry(
+    url.toString(),
+    PONDER_REQUEST_TIMEOUT,
+    fetch,
+    {
+      dedupe: false,
     },
-    method: "POST",
-    signal: AbortSignal.timeout(PONDER_REQUEST_TIMEOUT),
-  });
-  if (!response.ok) {
-    throw new PonderHttpError(response);
-  }
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+        ...(metadataSyncToken ? { Authorization: `Bearer ${metadataSyncToken}` } : {}),
+      },
+      method: "POST",
+    },
+  );
   return response.json();
 }
 
@@ -1044,6 +1055,10 @@ export function assertPonderQuestionMetadataSyncComplete(result: PonderQuestionM
     `Question metadata sync to Ponder did not complete (${formatQuestionMetadataSyncResult(result)}).`,
     result,
   );
+}
+
+function shouldRetryPonderQuestionMetadataSync(result: PonderQuestionMetadataSyncResponse) {
+  return result.errors.length === 0 && result.skipped > 0 && result.updated < result.requested;
 }
 
 export function toPonderQuestionMetadataSyncError(error: unknown) {
@@ -1802,14 +1817,29 @@ export const ponderApi = {
 
     const deployment = getExpectedPonderDeploymentScope({ deploymentKey: options?.deploymentKey });
     try {
-      return await ponderPost<PonderQuestionMetadataSyncResponse>(
-        "/question-metadata",
-        {
-          deploymentKey: deployment?.deploymentKey ?? null,
-          metadata,
-        },
-        { expectedDeploymentKey: deployment?.deploymentKey },
-      );
+      for (let attempt = 1; attempt <= PONDER_METADATA_SYNC_MAX_ATTEMPTS; attempt++) {
+        const result = await ponderPost<PonderQuestionMetadataSyncResponse>(
+          "/question-metadata",
+          {
+            deploymentKey: deployment?.deploymentKey ?? null,
+            metadata,
+          },
+          { expectedDeploymentKey: deployment?.deploymentKey },
+        );
+        if (!shouldRetryPonderQuestionMetadataSync(result) || attempt >= PONDER_METADATA_SYNC_MAX_ATTEMPTS) {
+          return result;
+        }
+
+        await sleep(
+          getPonderRetryDelayMs(
+            new PonderQuestionMetadataSyncError("Question metadata row was not indexed yet.", result),
+            attempt,
+            { retryBaseDelayMs: PONDER_METADATA_SYNC_RETRY_BASE_DELAY_MS },
+          ),
+        );
+      }
+
+      throw new Error("Ponder question metadata sync failed.");
     } catch (error) {
       if (process.env.NODE_ENV === "production" && isPonderMetadataSyncAuthFailure(error)) {
         throw new PonderMetadataSyncRequiredError(
