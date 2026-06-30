@@ -97,7 +97,10 @@ library QuestionRewardPoolEscrowRecoveryLib {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
         bytes32 snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         bool rejected = oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshotDigest)
-            || oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, oracleSnapshot.weightRoot);
+            || oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, oracleSnapshot.weightRoot)
+            || _isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+                oracle, payoutDomain, rewardPoolId, rewardPool.contentId, roundId
+            );
         require(rejected, "Snapshot rejection missing");
 
         preQualificationRejectedRound[rewardPoolId][roundId] = true;
@@ -217,5 +220,23 @@ library QuestionRewardPoolEscrowRecoveryLib {
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle
     ) private view returns (bool) {
         return rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
+    }
+
+    function _isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+        IClusterPayoutOracle oracle,
+        uint8 payoutDomain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) private view returns (bool) {
+        try oracle.isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+            payoutDomain, rewardPoolId, contentId, roundId
+        ) returns (
+            bool rejected
+        ) {
+            return rejected;
+        } catch {
+            return false;
+        }
     }
 }

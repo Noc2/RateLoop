@@ -59,7 +59,7 @@ findings were identified.
 
 | ID | Severity | Status | Title |
 | --- | --- | --- | --- |
-| M-1 | Medium | Open | Parent correlation-epoch rejection can leave pre-qualification escrow snapshots unskippable |
+| M-1 | Medium | Fixed | Parent correlation-epoch rejection can leave pre-qualification escrow snapshots unskippable |
 | L-1 | Low | Open | `PRIVATE_FOREVER` does not extend confidentiality bond slashability |
 | L-2 | Low | Open | Advisory recorder rotation can install a recorder that cannot claim advisory launch credits |
 
@@ -69,7 +69,7 @@ findings were identified.
 
 Severity: Medium
 
-Status: Open
+Status: Fixed
 
 Affected code:
 
@@ -173,6 +173,15 @@ Add regression tests for:
   skip/refund.
 - A replacement finalized child snapshot still taking precedence when it is
   available before refund.
+
+#### Resolution
+
+Fixed on 2026-06-30 by exposing an oracle view that identifies child round
+payout snapshots rejected through their parent correlation epoch and allowing
+both pre-qualification escrow skip paths to accept that proof alongside direct
+child digest/root rejection markers. Regression coverage was added for
+single-pool and bundle parent-rejection skip/refund flows, plus a
+single-pool replacement-before-refund flow.
 
 ### L-1: `PRIVATE_FOREVER` does not extend confidentiality bond slashability
 

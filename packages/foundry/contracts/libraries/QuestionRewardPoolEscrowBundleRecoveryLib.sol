@@ -349,7 +349,10 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         weightRoot = oracleSnapshot.weightRoot;
         bool rejected = oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshotDigest)
-            || oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, weightRoot);
+            || oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, weightRoot)
+            || _isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+                oracle, payoutDomain, bundleId, bundleId, snapshotRoundId
+            );
         require(rejected, "Snapshot rejection missing");
     }
 
@@ -386,6 +389,24 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             unchecked {
                 ++i;
             }
+        }
+    }
+
+    function _isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+        IClusterPayoutOracle oracle,
+        uint8 payoutDomain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) private view returns (bool) {
+        try oracle.isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+            payoutDomain, rewardPoolId, contentId, roundId
+        ) returns (
+            bool rejected
+        ) {
+            return rejected;
+        } catch {
+            return false;
         }
     }
 }

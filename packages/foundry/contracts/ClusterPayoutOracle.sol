@@ -796,6 +796,20 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return snapshot;
     }
 
+    function isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (bool) {
+        bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        RoundPayoutSnapshot storage snapshot = proposal.snapshot;
+        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        return _isLiveRoundPayoutStatus(snapshot.status)
+            && !_isLiveCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId);
+    }
+
     function roundPayoutSnapshotConsumerFor(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view
