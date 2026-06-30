@@ -235,8 +235,8 @@ test("does not publish details from localhost because on-chain details URLs must
   assert.equal(stored?.status, "failed");
 });
 
-test("allows localhost details in the e2e production-build harness", async () => {
-  delete process.env.APP_URL;
+test("publishes public details URLs in the e2e production-build harness", async () => {
+  process.env.APP_URL = "http://localhost:3000";
   delete process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;
   process.env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
   const normalizedText = "Local e2e hosted details";
@@ -253,7 +253,7 @@ test("allows localhost details in the e2e production-build harness", async () =>
   });
 
   assert.equal(result.status, "approved");
-  assert.equal(result.detailsUrl, "http://localhost:3000/api/attachments/details/det_locale2edetails01");
+  assert.equal(result.detailsUrl, "https://www.rateloop.ai/api/attachments/details/det_locale2edetails01");
   const stored = await getQuestionDetails("det_locale2edetails01");
   assert.equal(stored?.normalizedText, normalizedText);
 });

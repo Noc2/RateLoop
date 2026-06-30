@@ -120,7 +120,15 @@ function getQuestionDetailsPath(detailsId: string) {
 }
 
 function getConfiguredQuestionDetailsBaseUrl() {
-  return getTrustedRateLoopAppUrl() ?? (process.env.NODE_ENV === "production" ? "https://www.rateloop.ai" : null);
+  const configuredAppUrl = getTrustedRateLoopAppUrl();
+  if (
+    configuredAppUrl &&
+    isPublicHttpsQuestionDetailsUrl(new URL(QUESTION_DETAILS_ROUTE_PREFIX, configuredAppUrl).toString())
+  ) {
+    return configuredAppUrl;
+  }
+
+  return process.env.NODE_ENV === "production" || isLocalE2EProductionBuildEnabled() ? "https://www.rateloop.ai" : null;
 }
 
 export function getQuestionDetailsUrl(requestUrl: string, detailsId: string) {
@@ -168,21 +176,7 @@ function isPublicHttpsQuestionDetailsUrl(value: string) {
 }
 
 function isPublishableQuestionDetailsUrl(value: string) {
-  if (isPublicHttpsQuestionDetailsUrl(value)) return true;
-  if (!isLocalE2EProductionBuildEnabled()) return false;
-
-  try {
-    const parsed = new URL(value);
-    return (
-      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-      !parsed.username &&
-      !parsed.password &&
-      isLocalhostDetailsHostname(parsed.hostname.toLowerCase()) &&
-      /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/.test(parsed.pathname)
-    );
-  } catch {
-    return false;
-  }
+  return isPublicHttpsQuestionDetailsUrl(value);
 }
 
 function getAllowedQuestionDetailsOrigins() {
