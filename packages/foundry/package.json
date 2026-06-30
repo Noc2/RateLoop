@@ -20,7 +20,7 @@
     "lint": "make lint",
     "test": "forge test --offline",
     "test:world-id": "forge test --offline --match-contract 'RaterRegistryTest|DeployRateLoopAllocationsTest'",
-    "check:sizes": "FOUNDRY_PROFILE=deploy forge build --skip script --skip test && bash scripts/check-contract-sizes.sh",
+    "check:sizes": "make check-contract-sizes",
     "verify": "make verify RPC_URL=${1:-localhost}",
     "slither": "make slither",
     "aderyn": "make aderyn",

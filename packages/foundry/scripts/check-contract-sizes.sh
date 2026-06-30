@@ -27,6 +27,24 @@ echo "Checking deployed bytecode sizes, including linked libraries and deploy-on
 checked=0
 oversized=0
 
+validate_deploy_profile_artifact() {
+    local artifact="$1"
+    local source="$2"
+    local contract_name="$3"
+    local optimizer_runs
+    local bytecode_hash
+    local append_cbor
+
+    optimizer_runs="$(jq -r '.metadata.settings.optimizer.runs // ""' "$artifact")"
+    bytecode_hash="$(jq -r '.metadata.settings.metadata.bytecodeHash // ""' "$artifact")"
+    append_cbor="$(jq -r 'if (.metadata.settings.metadata | type == "object" and has("appendCBOR")) then .metadata.settings.metadata.appendCBOR else "" end' "$artifact")"
+
+    if [ "$optimizer_runs" != "0" ] || [ "$bytecode_hash" != "none" ] || { [ -n "$append_cbor" ] && [ "$append_cbor" != "false" ]; }; then
+        echo "::error file=$source,title=Non-deploy-profile artifact::$contract_name was not built with the deploy profile (optimizer_runs=$optimizer_runs, bytecodeHash=$bytecode_hash, appendCBOR=$append_cbor). Run 'make check-contract-sizes' so artifacts are rebuilt with FOUNDRY_PROFILE=deploy before size checks."
+        exit 1
+    fi
+}
+
 relative_source_path() {
     local source="$1"
     if [[ "$source" == "$ROOT_DIR/"* ]]; then
@@ -64,6 +82,8 @@ check_source_artifacts() {
         if [ "$size_bytes" -eq 0 ]; then
             continue
         fi
+
+        validate_deploy_profile_artifact "$artifact" "$source" "$(basename "$artifact" .json)"
 
         checked=$((checked + 1))
         contract_name="$(basename "$artifact" .json)"

@@ -160,7 +160,7 @@ coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)
 
 check-contract-sizes:
-	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --skip script --skip test
+	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --force --skip script --skip test
 	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build $(DEPLOYED_DEPENDENCY_SIZE_SOURCES)
 	bash scripts/check-contract-sizes.sh
 
