@@ -24,7 +24,7 @@ const { resolvePonderDatabaseSchema, schemaFromProtocolDeploymentKey } = require
 };
 
 const KEEPER_WORK_PATH = "/keeper/work";
-const DEPLOYMENT_PROBE_PATHS = new Set(["/deployment", "/ready"]);
+const DEPLOYMENT_PROBE_PATHS = new Set(["/deployment"]);
 
 function isKeeperWorkPath(pathname: string) {
   return pathname === KEEPER_WORK_PATH;
@@ -164,8 +164,6 @@ app.use(
 );
 
 // Ponder provides /health and /status natively. /health/indexer adds indexer-specific signals.
-app.get("/ready", (c) => c.json({ status: "ok" }));
-
 app.get("/health/indexer", async (c) => {
   const humanVerifiedCommitCount = await inspectHumanVerifiedCommitCountHealth();
 
