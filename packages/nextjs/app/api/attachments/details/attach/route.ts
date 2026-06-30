@@ -21,7 +21,12 @@ import { getServerRpcOverrides, getServerTargetNetworkById, getTrustedRateLoopAp
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
-import { ponderApi } from "~~/services/ponder/client";
+import {
+  assertPonderQuestionMetadataSyncComplete,
+  isPonderMetadataSyncRequiredError,
+  ponderApi,
+  toPonderQuestionMetadataSyncError,
+} from "~~/services/ponder/client";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -528,14 +533,29 @@ export async function POST(request: NextRequest) {
     try {
       const ponderDeploymentKey = resolveProtocolDeploymentScope(context.chainId)?.deploymentKey ?? null;
       const result = await ponderApi.syncQuestionMetadata(verifiedMetadata, { deploymentKey: ponderDeploymentKey });
+      assertPonderQuestionMetadataSyncComplete(result);
       metadataIndexed = result.updated;
       metadataSkipped += result.skipped;
-      if (result.errors.length > 0) {
-        warnings.push(...result.errors.map(error => `metadata_sync_error:${error}`));
-      }
     } catch (error) {
+      if (isPonderMetadataSyncRequiredError(error)) {
+        return NextResponse.json(
+          {
+            error: "metadata_sync_required",
+            message: error.message,
+          },
+          { status: error.status },
+        );
+      }
+      const syncError = toPonderQuestionMetadataSyncError(error);
       console.warn("Unable to sync question metadata to Ponder.", error);
-      warnings.push("metadata_sync_unavailable");
+      return NextResponse.json(
+        {
+          error: "metadata_sync_unavailable",
+          message: syncError.message,
+          retryable: true,
+        },
+        { status: syncError.status },
+      );
     }
   }
 

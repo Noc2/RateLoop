@@ -9,7 +9,7 @@ import { setDetailsAttachRouteTestOverrides } from "~~/lib/attachments/detailsAt
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
-import { ponderApi } from "~~/services/ponder/client";
+import { PonderMetadataSyncRequiredError, ponderApi } from "~~/services/ponder/client";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 const CHAIN_ID = 31337;
@@ -367,6 +367,105 @@ test("syncs verified question metadata with the protocol deployment key", async 
 
   assert.equal(syncCalls.length, 1);
   assert.equal(syncCalls[0]?.[1]?.deploymentKey, protocolDeployment.deploymentKey);
+});
+
+test("fails accepted metadata attachments when production sync auth is misconfigured", async () => {
+  const contentRegistryAddress = getSharedDeploymentAddress(CHAIN_ID, "ContentRegistry");
+  assert.ok(contentRegistryAddress);
+
+  const questionMetadataHash = `0x${"8".repeat(64)}` as const;
+  const resultSpecHash = `0x${"9".repeat(64)}` as const;
+  installReceipt([
+    buildContentSubmittedLog({
+      address: contentRegistryAddress,
+      contentId: 123n,
+      submitter: SUBMITTER,
+    }),
+    buildQuestionContentAnchoredLog({
+      address: MEDIA_VALIDATOR,
+      contentId: 123n,
+      questionMetadataHash,
+      resultSpecHash,
+    }),
+  ]);
+
+  const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
+  ponderApi.syncQuestionMetadata = async () => {
+    throw new PonderMetadataSyncRequiredError("metadata sync token required");
+  };
+
+  try {
+    const response = await POST(
+      makeRequest({
+        chainId: CHAIN_ID,
+        metadata: [
+          {
+            contentId: "123",
+            questionMetadata: null,
+            questionMetadataHash,
+            resultSpecHash,
+            targetAudience: null,
+          },
+        ],
+        transactionHashes: [TRANSACTION_HASH],
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(body.error, "metadata_sync_required");
+  } finally {
+    ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
+  }
+});
+
+test("fails accepted metadata attachments when Ponder skips verified metadata", async () => {
+  const contentRegistryAddress = getSharedDeploymentAddress(CHAIN_ID, "ContentRegistry");
+  assert.ok(contentRegistryAddress);
+
+  const questionMetadataHash = `0x${"8".repeat(64)}` as const;
+  const resultSpecHash = `0x${"9".repeat(64)}` as const;
+  installReceipt([
+    buildContentSubmittedLog({
+      address: contentRegistryAddress,
+      contentId: 123n,
+      submitter: SUBMITTER,
+    }),
+    buildQuestionContentAnchoredLog({
+      address: MEDIA_VALIDATOR,
+      contentId: 123n,
+      questionMetadataHash,
+      resultSpecHash,
+    }),
+  ]);
+
+  const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
+  ponderApi.syncQuestionMetadata = async () => ({ errors: [], requested: 1, skipped: 1, updated: 0 });
+
+  try {
+    const response = await POST(
+      makeRequest({
+        chainId: CHAIN_ID,
+        metadata: [
+          {
+            contentId: "123",
+            questionMetadata: null,
+            questionMetadataHash,
+            resultSpecHash,
+            targetAudience: null,
+          },
+        ],
+        transactionHashes: [TRANSACTION_HASH],
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(body.error, "metadata_sync_unavailable");
+    assert.equal(body.retryable, true);
+  } finally {
+    ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
+  }
 });
 
 test("does not attach public details from content submission proof alone", async () => {

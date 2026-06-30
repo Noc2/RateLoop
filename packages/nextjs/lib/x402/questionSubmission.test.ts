@@ -15,6 +15,7 @@ import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER } from "~~/lib/questionSubmissionCommitment";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";
 import {
+  X402QuestionConfigError,
   __setX402QuestionSubmissionTestOverridesForTests,
   buildPermissionlessWalletClientRequestId,
   confirmAgentWalletQuestionSubmissionRequest,
@@ -25,10 +26,11 @@ import {
   preparePermissionlessWalletQuestionSubmissionRequest,
   x402QuestionSubmissionRecordBody,
 } from "~~/lib/x402/questionSubmission";
-import { ponderApi } from "~~/services/ponder/client";
+import { PonderMetadataSyncRequiredError, ponderApi } from "~~/services/ponder/client";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
 const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = `0x${"0".repeat(64)}` as const;
 
 function submissionRewardAssetIdForTest(asset: X402QuestionPayload["bounty"]["asset"]) {
@@ -495,6 +497,12 @@ before(() => {
 
 beforeEach(async () => {
   setDefaultTestOverrides();
+  ponderApi.syncQuestionMetadata = async metadata => ({
+    errors: [],
+    requested: metadata.length,
+    skipped: 0,
+    updated: metadata.length,
+  });
   await dbClient.execute("DELETE FROM question_details");
   await dbClient.execute("DELETE FROM question_image_attachments");
   await dbClient.execute("DELETE FROM x402_question_submissions");
@@ -502,6 +510,7 @@ beforeEach(async () => {
 
 after(() => {
   __setX402QuestionSubmissionTestOverridesForTests(null);
+  ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
   __setDatabaseResourcesForTests(null);
   if (originalDatabaseUrl === undefined) {
     delete env.DATABASE_URL;
@@ -1253,6 +1262,109 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
   assert.equal(imageResult.rows[0]?.content_id, "123");
   assert.equal(syncCalls.length, 1);
   assert.equal(syncCalls[0]?.[1]?.deploymentKey, protocolDeployment.deploymentKey);
+});
+
+test("confirmAgentWalletQuestionSubmissionRequest fails when production metadata sync auth is misconfigured", async () => {
+  const payload = buildPayload("native-x402-confirm-metadata-sync-required");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"7".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
+  ponderApi.syncQuestionMetadata = async () => {
+    throw new PonderMetadataSyncRequiredError("metadata sync token required");
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        confirmAgentWalletQuestionSubmissionRequest({
+          operationKey: record.operationKey,
+          transactionHashes: [transactionHash],
+        }),
+      (error: unknown) =>
+        error instanceof X402QuestionConfigError && /metadata sync token required/.test(error.message),
+    );
+  } finally {
+    ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
+  }
+});
+
+test("confirmAgentWalletQuestionSubmissionRequest stays retryable when Ponder skips metadata", async () => {
+  const payload = buildPayload("native-x402-confirm-metadata-sync-skipped");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"7".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
+  ponderApi.syncQuestionMetadata = async () => ({ errors: [], requested: 1, skipped: 1, updated: 0 });
+
+  try {
+    await assert.rejects(
+      () =>
+        confirmAgentWalletQuestionSubmissionRequest({
+          operationKey: record.operationKey,
+          transactionHashes: [transactionHash],
+        }),
+      (error: unknown) =>
+        error instanceof X402QuestionConfigError &&
+        /Question metadata sync to Ponder did not complete/.test(error.message),
+    );
+  } finally {
+    ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
+  }
+
+  const retryableRecord = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.equal(retryableRecord?.status, "awaiting_wallet_signature");
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest links gated native x402 attachments from stored receipt", async () => {

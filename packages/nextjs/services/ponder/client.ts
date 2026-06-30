@@ -12,8 +12,11 @@ import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 const isProduction = process.env.NODE_ENV === "production";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
 const NEXT_PUBLIC_PONDER_URL = process.env.NEXT_PUBLIC_PONDER_URL?.trim() || undefined;
-const PONDER_METADATA_SYNC_TOKEN = process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || undefined;
 const LOOPBACK_PONDER_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+function getPonderMetadataSyncToken(): string | undefined {
+  return process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || undefined;
+}
 
 export function resolvePonderUrl(
   rawValue: string | undefined,
@@ -128,6 +131,23 @@ export class PonderHttpError extends Error {
     this.statusText = statusText;
     this.retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
   }
+}
+
+export class PonderMetadataSyncRequiredError extends Error {
+  readonly status = 503;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PonderMetadataSyncRequiredError";
+  }
+}
+
+export function isPonderMetadataSyncRequiredError(error: unknown): error is PonderMetadataSyncRequiredError {
+  return error instanceof PonderMetadataSyncRequiredError;
+}
+
+function isPonderMetadataSyncAuthFailure(error: unknown) {
+  return error instanceof PonderHttpError && (error.status === 401 || error.status === 403 || error.status === 503);
 }
 
 const inFlightPonderJsonRequests = new Map<string, Promise<unknown>>();
@@ -663,11 +683,12 @@ async function ponderPost<T>(
 ): Promise<T> {
   await assertPonderAvailableForDeployment(options?.expectedDeploymentKey);
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
+  const metadataSyncToken = getPonderMetadataSyncToken();
   const response = await fetch(url, {
     body: JSON.stringify(body),
     headers: {
       "Content-Type": "application/json",
-      ...(PONDER_METADATA_SYNC_TOKEN ? { Authorization: `Bearer ${PONDER_METADATA_SYNC_TOKEN}` } : {}),
+      ...(metadataSyncToken ? { Authorization: `Bearer ${metadataSyncToken}` } : {}),
     },
     method: "POST",
     signal: AbortSignal.timeout(PONDER_REQUEST_TIMEOUT),
@@ -997,6 +1018,40 @@ export interface PonderQuestionMetadataSyncResponse {
   requested: number;
   skipped: number;
   updated: number;
+}
+
+export class PonderQuestionMetadataSyncError extends Error {
+  readonly status = 503;
+  readonly result: PonderQuestionMetadataSyncResponse | null;
+
+  constructor(message: string, result?: PonderQuestionMetadataSyncResponse | null) {
+    super(message);
+    this.name = "PonderQuestionMetadataSyncError";
+    this.result = result ?? null;
+  }
+}
+
+function formatQuestionMetadataSyncResult(result: PonderQuestionMetadataSyncResponse) {
+  return `requested=${result.requested}, updated=${result.updated}, skipped=${result.skipped}, errors=${result.errors.length}`;
+}
+
+export function assertPonderQuestionMetadataSyncComplete(result: PonderQuestionMetadataSyncResponse) {
+  if (result.errors.length === 0 && result.skipped === 0 && result.updated >= result.requested) {
+    return;
+  }
+
+  throw new PonderQuestionMetadataSyncError(
+    `Question metadata sync to Ponder did not complete (${formatQuestionMetadataSyncResult(result)}).`,
+    result,
+  );
+}
+
+export function toPonderQuestionMetadataSyncError(error: unknown) {
+  if (error instanceof PonderQuestionMetadataSyncError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return new PonderQuestionMetadataSyncError(
+    `Question metadata sync to Ponder is unavailable. Retry after Ponder metadata sync is healthy. ${message}`,
+  );
 }
 
 export interface PonderContentOpenRoundSummary {
@@ -1738,16 +1793,31 @@ export const ponderApi = {
     };
   },
 
-  syncQuestionMetadata(metadata: PonderQuestionMetadataItem[], options?: { deploymentKey?: string | null }) {
+  async syncQuestionMetadata(metadata: PonderQuestionMetadataItem[], options?: { deploymentKey?: string | null }) {
+    if (process.env.NODE_ENV === "production" && !getPonderMetadataSyncToken()) {
+      throw new PonderMetadataSyncRequiredError(
+        "PONDER_METADATA_SYNC_TOKEN is required for production question metadata sync.",
+      );
+    }
+
     const deployment = getExpectedPonderDeploymentScope({ deploymentKey: options?.deploymentKey });
-    return ponderPost<PonderQuestionMetadataSyncResponse>(
-      "/question-metadata",
-      {
-        deploymentKey: deployment?.deploymentKey ?? null,
-        metadata,
-      },
-      { expectedDeploymentKey: deployment?.deploymentKey },
-    );
+    try {
+      return await ponderPost<PonderQuestionMetadataSyncResponse>(
+        "/question-metadata",
+        {
+          deploymentKey: deployment?.deploymentKey ?? null,
+          metadata,
+        },
+        { expectedDeploymentKey: deployment?.deploymentKey },
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV === "production" && isPonderMetadataSyncAuthFailure(error)) {
+        throw new PonderMetadataSyncRequiredError(
+          "Ponder question metadata sync authorization is not configured correctly.",
+        );
+      }
+      throw error;
+    }
   },
 
   getQuestionMetadata(questionMetadataHash: string) {

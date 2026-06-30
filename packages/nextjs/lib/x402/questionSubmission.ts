@@ -68,7 +68,12 @@ import {
   assertSupportedX402BundleBounty,
   buildX402QuestionOperation,
 } from "~~/lib/x402/questionPayload";
-import { ponderApi } from "~~/services/ponder/client";
+import {
+  assertPonderQuestionMetadataSyncComplete,
+  isPonderMetadataSyncRequiredError,
+  ponderApi,
+  toPonderQuestionMetadataSyncError,
+} from "~~/services/ponder/client";
 import { isBasePreconfRpcChain } from "~~/utils/rpcUrls";
 
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
@@ -2682,11 +2687,15 @@ async function syncSubmittedQuestionMetadata(params: {
   );
   try {
     const ponderDeploymentKey = resolveProtocolDeploymentScope(params.chainId)?.deploymentKey ?? null;
-    await ponderApi.syncQuestionMetadata(entries, { deploymentKey: ponderDeploymentKey });
+    const result = await ponderApi.syncQuestionMetadata(entries, { deploymentKey: ponderDeploymentKey });
+    assertPonderQuestionMetadataSyncComplete(result);
   } catch (error) {
-    if (process.env.NODE_ENV === "production") {
-      console.warn("Unable to sync x402 question metadata to Ponder.", error);
+    if (isPonderMetadataSyncRequiredError(error)) {
+      throw new X402QuestionConfigError(error.message);
     }
+    const syncError = toPonderQuestionMetadataSyncError(error);
+    console.warn("Unable to sync x402 question metadata to Ponder.", error);
+    throw new X402QuestionConfigError(syncError.message);
   }
 }
 

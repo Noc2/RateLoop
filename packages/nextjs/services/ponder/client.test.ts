@@ -1,10 +1,14 @@
 import {
+  PonderMetadataSyncRequiredError,
+  PonderQuestionMetadataSyncError,
   __getPonderAvailabilityCacheSizeForTests,
   __setSupportedPonderDeploymentKeysForTests,
+  assertPonderQuestionMetadataSyncComplete,
   fetchPonderJson,
   getPonderAvailabilityStatus,
   invalidatePonderCache,
   isPonderAvailable,
+  isPonderMetadataSyncRequiredError,
   normalizeSupportedPonderDeploymentKey,
   ponderApi,
   resolvePonderUrl,
@@ -525,6 +529,81 @@ test("ponderApi.syncQuestionMetadata preflights deployment and sends the expecte
   assert.match(requestedUrls[2] ?? "", /\/question-metadata$/);
   const postedDeploymentKey = (postedBody as Record<string, unknown> | null)?.deploymentKey;
   assert.equal(postedDeploymentKey, expectedDeploymentKey);
+});
+
+test("ponderApi.syncQuestionMetadata marks production auth failures as required config", async () => {
+  const originalFetch = globalThis.fetch;
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = mutableEnv.NODE_ENV;
+  const originalMetadataSyncToken = mutableEnv.PONDER_METADATA_SYNC_TOKEN;
+  const requestedUrls: string[] = [];
+  let authorizationHeader: string | undefined;
+
+  globalThis.fetch = (async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
+    authorizationHeader =
+      init?.headers && !Array.isArray(init.headers)
+        ? (init.headers as Record<string, string | undefined>).Authorization
+        : undefined;
+    return new Response(JSON.stringify({ error: "Invalid metadata sync token." }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  mutableEnv.NODE_ENV = "production";
+  mutableEnv.PONDER_METADATA_SYNC_TOKEN = "test-token";
+
+  try {
+    invalidatePonderCache();
+
+    await assert.rejects(
+      () =>
+        ponderApi.syncQuestionMetadata([
+          {
+            contentId: "42",
+            questionMetadata: { schemaVersion: "rateloop.question.v3", title: "Question" },
+            questionMetadataHash: `0x${"2".repeat(64)}`,
+            questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+            resultSpecHash: `0x${"3".repeat(64)}`,
+            targetAudience: null,
+          },
+        ]),
+      isPonderMetadataSyncRequiredError,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalNodeEnv === undefined) {
+      delete mutableEnv.NODE_ENV;
+    } else {
+      mutableEnv.NODE_ENV = originalNodeEnv;
+    }
+    if (originalMetadataSyncToken === undefined) {
+      delete mutableEnv.PONDER_METADATA_SYNC_TOKEN;
+    } else {
+      mutableEnv.PONDER_METADATA_SYNC_TOKEN = originalMetadataSyncToken;
+    }
+    invalidatePonderCache();
+  }
+
+  assert.ok(requestedUrls.some(url => /\/question-metadata$/.test(url)));
+  assert.equal(authorizationHeader, "Bearer test-token");
+  assert.equal(isPonderMetadataSyncRequiredError(new PonderMetadataSyncRequiredError("required")), true);
+});
+
+test("assertPonderQuestionMetadataSyncComplete rejects skipped metadata rows", () => {
+  assert.doesNotThrow(() =>
+    assertPonderQuestionMetadataSyncComplete({ errors: [], requested: 1, skipped: 0, updated: 1 }),
+  );
+
+  assert.throws(
+    () => assertPonderQuestionMetadataSyncComplete({ errors: [], requested: 1, skipped: 1, updated: 0 }),
+    (error: unknown) =>
+      error instanceof PonderQuestionMetadataSyncError &&
+      /requested=1, updated=0, skipped=1, errors=0/.test(error.message),
+  );
 });
 
 test("ponderApi.syncQuestionMetadata can preflight an explicit deployment key", async () => {
