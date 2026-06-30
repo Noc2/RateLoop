@@ -6,6 +6,7 @@ import {
   USDC_BY_CHAIN_ID,
   WORLD_CHAIN_USDC_BY_CHAIN_ID,
   WORLD_ID_V3_ROUTER_BY_CHAIN_ID,
+  getUsdcEip712DomainName,
   requiredQuestionRewardParticipants,
 } from "./protocol";
 
@@ -18,6 +19,12 @@ test("USDC defaults include Base, Base Sepolia, and the legacy World Chain alias
   assert.equal(USDC_BY_CHAIN_ID[8453], "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
   assert.equal(USDC_BY_CHAIN_ID[84532], "0x036CbD53842c5426634e7929541eC2318f3dCF7e");
   assert.equal(WORLD_CHAIN_USDC_BY_CHAIN_ID, USDC_BY_CHAIN_ID);
+});
+
+test("USDC EIP-712 domain names match live and local token deployments", () => {
+  assert.equal(getUsdcEip712DomainName(31337), "USD Coin");
+  assert.equal(getUsdcEip712DomainName(8453), "USD Coin");
+  assert.equal(getUsdcEip712DomainName(84532), "USDC");
 });
 
 test("World ID v3 router defaults include Base networks", () => {

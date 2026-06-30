@@ -93,6 +93,7 @@ export const USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
 };
 
 export const USDC_EIP712_DOMAIN_NAME_BY_CHAIN_ID: Record<number, string> = {
+  31337: "USD Coin",
   8453: "USD Coin",
   84532: "USDC",
   480: "USDC",
