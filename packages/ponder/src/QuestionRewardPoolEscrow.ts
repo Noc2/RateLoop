@@ -631,6 +631,10 @@ ponder.on(
   async ({ event, context }) => {
     const { bundleId, bountyOpensAt, bountyClosesAt, feedbackClosesAt } =
       event.args;
+    const existingBundleReward = await context.db.find(questionBundleReward, {
+      id: bundleId,
+    });
+    if (!existingBundleReward) return;
 
     await context.db.update(questionBundleReward, { id: bundleId }).set({
       bountyOpensAt,

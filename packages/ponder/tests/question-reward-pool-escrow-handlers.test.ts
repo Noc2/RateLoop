@@ -206,7 +206,9 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
   });
 
   it("indexes challenge and rerate bounty purpose metadata", async () => {
-    const { db, updates } = createDb();
+    const { db, updates } = createDb({
+      'questionBundleReward:{"id":"9"}': { id: 9n },
+    });
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get(
       "QuestionRewardPoolEscrow:RewardPoolPurposeSet",
@@ -294,8 +296,37 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     });
   });
 
-  it("indexes activated bounty windows", async () => {
+  it("skips bundle window activation before the bundle reward row is visible", async () => {
     const { db, updates } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:QuestionBundleWindowActivated",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          bountyOpensAt: 1_800n,
+          bountyClosesAt: 3_400n,
+          feedbackClosesAt: 3_200n,
+        },
+        block: { number: 15n, timestamp: 1_810n },
+      },
+      context: { db },
+    });
+
+    expect(updates).not.toContainEqual(
+      expect.objectContaining({
+        table: "questionBundleReward",
+        key: { id: 9n },
+      }),
+    );
+  });
+
+  it("indexes activated bounty windows", async () => {
+    const { db, updates } = createDb({
+      'questionBundleReward:{"id":"9"}': { id: 9n },
+    });
     const registeredHandlers = await loadHandlers();
 
     await registeredHandlers.get(
