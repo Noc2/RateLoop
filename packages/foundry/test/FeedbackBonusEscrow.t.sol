@@ -509,6 +509,51 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function testCreateFeedbackBonusPoolFundsDefaultUsdcPoolFromFunder() public {
+        uint256 contentId = _submitQuestion("wallet-feedback-bonus-usdc");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.startPrank(funder);
+        usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
+        uint256 poolId = feedbackBonusEscrow.createFeedbackBonusPool(
+            contentId, roundId, BONUS_AMOUNT, block.timestamp + EPOCH_DURATION, funder
+        );
+        vm.stopPrank();
+
+        (,,,, address storedFunder,,,,,,, uint256 fundedAmount,,,, uint8 asset) =
+            feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(storedFunder, funder);
+        assertEq(fundedAmount, BONUS_AMOUNT);
+        assertEq(asset, feedbackBonusEscrow.REWARD_ASSET_USDC());
+        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore + BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore - BONUS_AMOUNT);
+    }
+
+    function testCreateFeedbackBonusPoolWithAssetFundsLrepPoolFromFunder() public {
+        uint256 contentId = _submitQuestion("wallet-feedback-bonus-lrep");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        uint256 escrowBalanceBefore = lrepToken.balanceOf(address(feedbackBonusEscrow));
+        uint256 funderBalanceBefore = lrepToken.balanceOf(funder);
+        uint8 lrepAsset = feedbackBonusEscrow.REWARD_ASSET_LREP();
+
+        vm.startPrank(funder);
+        lrepToken.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
+        uint256 poolId = feedbackBonusEscrow.createFeedbackBonusPoolWithAsset(
+            contentId, roundId, lrepAsset, BONUS_AMOUNT, block.timestamp + EPOCH_DURATION, funder
+        );
+        vm.stopPrank();
+
+        (,,,, address storedFunder,,,,,,, uint256 fundedAmount,,,, uint8 asset) =
+            feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(storedFunder, funder);
+        assertEq(fundedAmount, BONUS_AMOUNT);
+        assertEq(asset, lrepAsset);
+        assertEq(lrepToken.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore + BONUS_AMOUNT);
+        assertEq(lrepToken.balanceOf(funder), funderBalanceBefore - BONUS_AMOUNT);
+    }
+
     function testFeedbackPublishIsImmediatelyAwardableOnChain() public {
         uint256 contentId = _submitQuestion("");
         (, bytes32 commitKey) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));

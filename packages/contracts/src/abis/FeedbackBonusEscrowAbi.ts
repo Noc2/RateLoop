@@ -157,6 +157,45 @@ export const FeedbackBonusEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "createFeedbackBonusPool",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feedbackClosesAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "awarder",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "createFeedbackBonusPoolFromGateway",
     "inputs": [
       {
@@ -186,6 +225,50 @@ export const FeedbackBonusEscrowAbi = [
       },
       {
         "name": "funder",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createFeedbackBonusPoolWithAsset",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "asset",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feedbackClosesAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "awarder",
         "type": "address",
         "internalType": "address"
       }

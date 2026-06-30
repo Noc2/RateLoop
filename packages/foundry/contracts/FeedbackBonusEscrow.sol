@@ -172,6 +172,27 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         );
     }
 
+    function createFeedbackBonusPool(
+        uint256 contentId,
+        uint256 roundId,
+        uint256 amount,
+        uint256 feedbackClosesAt,
+        address awarder
+    ) external nonReentrant whenNotPaused returns (uint256 poolId) {
+        return _createFeedbackBonusPool(contentId, roundId, REWARD_ASSET_USDC, amount, feedbackClosesAt, awarder);
+    }
+
+    function createFeedbackBonusPoolWithAsset(
+        uint256 contentId,
+        uint256 roundId,
+        uint8 asset,
+        uint256 amount,
+        uint256 feedbackClosesAt,
+        address awarder
+    ) external nonReentrant whenNotPaused returns (uint256 poolId) {
+        return _createFeedbackBonusPool(contentId, roundId, asset, amount, feedbackClosesAt, awarder);
+    }
+
     function _createFeedbackBonusPool(
         uint256 contentId,
         uint256 roundId,
