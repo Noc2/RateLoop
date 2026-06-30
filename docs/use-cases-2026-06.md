@@ -18,7 +18,7 @@ demand evidence) are retained where still valid.
 
 The product changed under the analysis. Three of the original governing constraints moved:
 
-1. **Private context is live** (Tiers 0–2 of `archive/2026-06/private-context-plan-2026-06.md`): gated
+1. **Private context is live**: gated
    RateLoop-hosted context behind wallet-signed confidentiality terms, watermarked and
    access-logged serving, optional asker-defined rater bond (LREP or USDC, 0 allowed), breach
    reporting with governance slash and a protocol-wide World ID identity earning ban. The
