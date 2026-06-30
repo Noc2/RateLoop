@@ -38,6 +38,12 @@ function defaultLockScope() {
     return `railway-${hashScope(railwayParts.join(":"))}`;
   }
 
+  // Railpack builds unpack the repo under /app on shared builders. Without
+  // Railway metadata in the build env, keep those ephemeral builds isolated.
+  if (process.env.RATELOOP_WORKSPACE_DIST_LOCK_EPHEMERAL === "1" || REPO_ROOT === "/app") {
+    return `ephemeral-${hashScope(`${REPO_ROOT}:${process.pid}`)}`;
+  }
+
   return `local-${hashScope(REPO_ROOT)}`;
 }
 
