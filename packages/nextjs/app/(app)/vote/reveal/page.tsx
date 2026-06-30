@@ -2,6 +2,8 @@ import type { Metadata, NextPage } from "next";
 import { ManualRevealPage } from "~~/components/vote/ManualRevealPage";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   ...getMetadata({
     title: "Reveal My Vote",
