@@ -118,13 +118,15 @@ test.describe("Confidential disclosure after settlement", () => {
     );
     expect(foreverStayedPrivate, "Ponder should keep private-forever context redacted after settlement").toBe(true);
 
-    const publicAfterDetails = await request.get(afterQuestion.detailsUrl!);
+    const afterDetailsPath = new URL(afterQuestion.detailsUrl!).pathname;
+    const publicAfterDetails = await request.get(afterDetailsPath);
     expect(publicAfterDetails.status()).toBe(200);
     expect(publicAfterDetails.headers()["cache-control"]).toBe("public, max-age=31536000, immutable");
     expect(publicAfterDetails.headers()["x-rateloop-view-token"]).toBeUndefined();
     expect(await publicAfterDetails.text()).toBe(afterText);
 
-    const privateForeverDetails = await request.get(foreverQuestion.detailsUrl!);
+    const foreverDetailsPath = new URL(foreverQuestion.detailsUrl!).pathname;
+    const privateForeverDetails = await request.get(foreverDetailsPath);
     expect(privateForeverDetails.status()).toBe(401);
     expect(privateForeverDetails.headers()["cache-control"]).toBe("private, no-store");
     await expect(privateForeverDetails.json()).resolves.toEqual({ error: "Signed wallet session required" });
