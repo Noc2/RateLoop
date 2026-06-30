@@ -23,16 +23,13 @@ const BLOB_MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
 const HANDOFF_JSON_REQUEST_TIMEOUT_MS = 10_000;
 const STAGED_UPLOAD_POLL_INTERVAL_MS = 1_000;
 const STAGED_UPLOAD_POLL_TIMEOUT_MS = 90_000;
+export const DEFAULT_HANDOFF_API_BASE_URL = "https://www.rateloop.ai";
 
 function apiUrl(config: AgentsRuntimeConfig, pathname: string) {
-  if (!config.apiBaseUrl) {
-    throw new Error(
-      "RATELOOP_API_BASE_URL is required for large file-backed handoff image uploads.",
-    );
-  }
+  const apiBaseUrl = config.apiBaseUrl ?? DEFAULT_HANDOFF_API_BASE_URL;
   return new URL(
     pathname.replace(/^\/+/, ""),
-    `${config.apiBaseUrl.replace(/\/+$/, "")}/`,
+    `${apiBaseUrl.replace(/\/+$/, "")}/`,
   ).toString();
 }
 
@@ -296,12 +293,6 @@ export async function createAskHandoffWithStagedImageUploads(params: {
   request: unknown;
   ttlMs?: number;
 }) {
-  if (!params.config.apiBaseUrl) {
-    throw new Error(
-      "RATELOOP_API_BASE_URL is required for large file-backed handoff image uploads.",
-    );
-  }
-
   const created = await requestJson<AskHandoffResponse>(
     apiUrl(params.config, "/api/agent/handoffs"),
     {

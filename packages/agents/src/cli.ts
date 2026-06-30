@@ -11,10 +11,15 @@ import {
   type HandoffGeneratedImageFile,
 } from "./handoffImages";
 import {
+  DEFAULT_HANDOFF_API_BASE_URL,
   createAskHandoffWithStagedImageUploads,
   inlineHandoffGeneratedImage,
   shouldStageHandoffImageUploads,
 } from "./handoffUpload";
+import {
+  inputPathCandidates,
+  resolveExistingInputPath,
+} from "./inputPaths";
 import {
   askHumansWithLocalSigner,
   generateLocalSignerWallet,
@@ -31,6 +36,8 @@ import { normalizeInferredHeadToHeadAbRequestBody } from "./voteUi";
 type CliOptionValue = string | boolean | string[];
 type CliOptions = Record<string, CliOptionValue>;
 const DRY_RUN_WALLET_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+const AGENTS_PACKAGE_PATH_PREFIX = "packages/agents/";
+type AgentsRuntimeConfig = ReturnType<typeof loadAgentsRuntimeConfig>;
 
 function findPackageRoot(startDir: string) {
   let current = resolve(startDir);
@@ -217,23 +224,31 @@ function printLocalAskProgress(event: LocalAskProgress) {
 }
 
 async function readJsonFile(path: string) {
-  const candidates = [
-    resolve(path),
-    path.startsWith("packages/agents/")
-      ? resolve(packageRoot, path.replace(/^packages\/agents\//, ""))
-      : null,
-  ].filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = inputPathCandidates(path, {
+    packagePrefix: AGENTS_PACKAGE_PATH_PREFIX,
+    packageRoot,
+  });
 
   let lastError: unknown;
   for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
     try {
       return JSON.parse(await readFile(candidate, "utf8")) as unknown;
     } catch (error) {
       lastError = error;
+      break;
     }
   }
 
-  throw lastError;
+  throw lastError ?? new Error(`JSON file not found: ${path}`);
+}
+
+function resolveCliInputPath(path: string, label: string) {
+  return resolveExistingInputPath(path, {
+    label,
+    packagePrefix: AGENTS_PACKAGE_PATH_PREFIX,
+    packageRoot,
+  });
 }
 
 async function listExampleQuestionFiles() {
@@ -274,14 +289,23 @@ Environment:
   RATELOOP_LOCAL_SIGNER_PRIVATE_KEY        Escape hatch for ephemeral CI only`;
 }
 
-function createAgentClient() {
-  const config = loadAgentsRuntimeConfig();
+function createAgentClient(
+  config: AgentsRuntimeConfig = loadAgentsRuntimeConfig(),
+) {
   return createRateLoopAgentClient({
     apiBaseUrl: config.apiBaseUrl,
     mcpAccessToken: config.mcpAccessToken,
     mcpApiUrl: config.mcpApiUrl,
     mcpProtocolVersion: config.mcpProtocolVersion,
   });
+}
+
+function withDefaultHandoffApiBaseUrl(
+  config: AgentsRuntimeConfig,
+): AgentsRuntimeConfig {
+  return config.apiBaseUrl
+    ? config
+    : { ...config, apiBaseUrl: DEFAULT_HANDOFF_API_BASE_URL };
 }
 
 function withConfiguredWalletAddress(
@@ -437,8 +461,8 @@ async function main() {
     }
 
     case "handoff": {
-      const config = loadAgentsRuntimeConfig();
-      const agent = createAgentClient();
+      const config = withDefaultHandoffApiBaseUrl(loadAgentsRuntimeConfig());
+      const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
       const payloadWithWallet = withConfiguredWalletAddress(
         rawPayload,
@@ -446,7 +470,9 @@ async function main() {
       );
       const { payload, warnings } = normalizeHandoffPayload(payloadWithWallet);
       const generatedImages = await readHandoffGeneratedImageFiles(
-        readStringList(options, "image", "generated-image"),
+        readStringList(options, "image", "generated-image").map((path) =>
+          resolveCliInputPath(path, "Handoff image"),
+        ),
       );
       const findings = lintAgentAskRequest(payload).filter((finding) =>
         shouldKeepHandoffFinding(finding, generatedImages.length > 0),
