@@ -24,9 +24,14 @@ const { resolvePonderDatabaseSchema, schemaFromProtocolDeploymentKey } = require
 };
 
 const KEEPER_WORK_PATH = "/keeper/work";
+const DEPLOYMENT_PROBE_PATHS = new Set(["/deployment", "/ready"]);
 
 function isKeeperWorkPath(pathname: string) {
   return pathname === KEEPER_WORK_PATH;
+}
+
+function isDeploymentProbePath(pathname: string) {
+  return DEPLOYMENT_PROBE_PATHS.has(pathname);
 }
 
 function hasValidKeeperWorkAuthorization(c: { req: { header: (name: string) => string | undefined } }) {
@@ -83,7 +88,7 @@ if (rateLimitMisconfigured) {
 
 app.use("/*", async (c, next) => {
   const requestPath = new URL(c.req.url).pathname;
-  const isDeploymentProbe = requestPath === "/deployment";
+  const isDeploymentProbe = isDeploymentProbePath(requestPath);
   const isAuthorizedKeeperRequest = isKeeperWorkPath(requestPath) && hasValidKeeperWorkAuthorization(c);
 
   if (rateLimitMisconfigured && !isDeploymentProbe && !isAuthorizedKeeperRequest) {
@@ -139,7 +144,7 @@ if (!isProduction && !corsOrigin) {
 if (corsMisconfigured) {
   app.use("/*", async (c, next) => {
     const requestPath = new URL(c.req.url).pathname;
-    if (requestPath === "/deployment") {
+    if (isDeploymentProbePath(requestPath)) {
       await next();
       return;
     }
@@ -159,6 +164,8 @@ app.use(
 );
 
 // Ponder provides /health and /status natively. /health/indexer adds indexer-specific signals.
+app.get("/ready", (c) => c.json({ status: "ok" }));
+
 app.get("/health/indexer", async (c) => {
   const humanVerifiedCommitCount = await inspectHumanVerifiedCommitCountHealth();
 

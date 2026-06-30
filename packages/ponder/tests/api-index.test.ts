@@ -103,6 +103,20 @@ describe("ponder api bootstrap", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("CORS_ORIGIN is required"));
   });
 
+  it("keeps readiness probes outside production request guards", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: app } = await loadApp({
+      NODE_ENV: "production",
+      CORS_ORIGIN: undefined,
+      RATE_LIMIT_TRUSTED_IP_HEADERS: undefined,
+    });
+
+    const response = await app.request("https://ponder.rateloop.ai/ready");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
+  });
+
   it("limits bearer-token bypass to GET /keeper/work only", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { default: app } = await loadApp({
