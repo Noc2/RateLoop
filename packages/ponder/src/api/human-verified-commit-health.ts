@@ -2,9 +2,9 @@ import { and, eq, sql } from "ponder";
 import { db } from "ponder:api";
 import { round, vote } from "ponder:schema";
 
-export const HUMAN_CREDENTIAL_MASK = 1 << 3;
+const HUMAN_CREDENTIAL_MASK = 1 << 3;
 
-export type HumanVerifiedCommitCountHealth = {
+type HumanVerifiedCommitCountHealth = {
   status: "ok" | "warning";
   staleRoundCount: number;
   message?: string;

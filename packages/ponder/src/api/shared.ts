@@ -202,7 +202,7 @@ export function getDiscoverResolutionOutcome(state: number | null, isUp: boolean
   return "resolved" as const;
 }
 
-export function questionRewardPoolEffectiveBountyClosesAtExpression() {
+function questionRewardPoolEffectiveBountyClosesAtExpression() {
   return sql<bigint | null>`case
     when ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt}
     else null
@@ -216,7 +216,7 @@ export function questionRewardPoolPendingOrActiveExpression(nowSeconds: bigint) 
     and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds}`;
 }
 
-export function questionRewardPoolExpiredExpression(nowSeconds: bigint) {
+function questionRewardPoolExpiredExpression(nowSeconds: bigint) {
   return sql<boolean>`${questionRewardPool.refunded} = false
     and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
     and ${questionRewardPool.bountyClosesAt} != 0

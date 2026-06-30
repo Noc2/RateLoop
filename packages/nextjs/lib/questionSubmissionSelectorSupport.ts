@@ -26,7 +26,7 @@ const ContentRegistrySubmitQuestionWithConfidentialityAbi = ContentRegistryAbi.f
     item.type === "function" && item.name === "submitQuestionWithRewardAndRoundConfig" && item.inputs.length === 12,
 ) as Abi;
 
-export function getSubmissionErrorMessage(error: unknown): string {
+function getSubmissionErrorMessage(error: unknown): string {
   return (
     (error as { shortMessage?: string; message?: string } | undefined)?.shortMessage ??
     (error as { shortMessage?: string; message?: string } | undefined)?.message ??

@@ -1,4 +1,4 @@
-export type SignedCollectionWalletContextResult = { ok: true } | { ok: false; reason: "wallet_changed" };
+type SignedCollectionWalletContextResult = { ok: true } | { ok: false; reason: "wallet_changed" };
 
 export function assertSignedCollectionWalletContext(
   snapshottedAddress: string,

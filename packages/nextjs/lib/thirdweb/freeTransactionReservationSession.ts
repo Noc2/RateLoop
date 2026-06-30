@@ -46,22 +46,3 @@ export function readCachedFreeTransactionReservationSession(operationKey: string
     return null;
   }
 }
-
-export function clearCachedFreeTransactionReservationSession(operationKey: string) {
-  const normalizedOperationKey = operationKey.toLowerCase();
-  reservationSessionTokens.delete(normalizedOperationKey);
-
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.sessionStorage.removeItem(`${SESSION_STORAGE_PREFIX}${normalizedOperationKey}`);
-  } catch {
-    // Ignore storage failures in private browsing / restricted environments.
-  }
-}
-
-export function __clearFreeTransactionReservationSessionCacheForTests() {
-  reservationSessionTokens.clear();
-}

@@ -19,7 +19,7 @@ function readEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
-export { resolveAppUrl, resolveOptionalAppUrl, resolveTrustedRateLoopAppUrl } from "~~/lib/env/appUrl";
+export { resolveAppUrl, resolveOptionalAppUrl } from "~~/lib/env/appUrl";
 
 function normalizeDatabaseUrl(rawUrl: string): string {
   try {

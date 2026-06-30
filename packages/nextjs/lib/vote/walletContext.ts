@@ -1,17 +1,17 @@
 import type { Address } from "viem";
 
-export interface VoteWalletContextSnapshot {
+interface VoteWalletContextSnapshot {
   voterAddress: Address;
   chainId: number;
 }
 
-export interface VoteWalletContextCurrent {
+interface VoteWalletContextCurrent {
   address?: string;
   chainId?: number;
   targetChainId: number;
 }
 
-export type VoteWalletContextResult = { ok: true } | { ok: false; message: string };
+type VoteWalletContextResult = { ok: true } | { ok: false; message: string };
 
 export function assertVoteWalletContext(
   snapshot: VoteWalletContextSnapshot,
