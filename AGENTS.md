@@ -6,6 +6,10 @@
 
 ## Governance rotation notes
 
+- The RateLoop smart contracts are deployed in production. Do not change Solidity contracts,
+  contract deployment wiring, or generated contract artifacts/ABIs as routine product work.
+  Contract changes should happen only through the appropriate governance process, or for an
+  urgent production/security issue that justifies emergency handling.
 - Rotating `ContentRegistry.setVotingEngine` alone is insufficient: escrows pin the engine at initialization and reject new work with `"Stale engine"` until a full replacement stack is deployed and rewired (`QuestionRewardPoolEscrow`, `FeedbackBonusEscrow`, `FeedbackRegistry`, fee creditor on `FrontendRegistry`, and X402 submitter escrow pointers as applicable). Those contracts expose no governed `setVotingEngine`; plan a coordinated redeploy and rewire, not a registry-only timelock action.
 - Treat engine migration as a coordinated governance runbook, not a single-timelock action.
 
