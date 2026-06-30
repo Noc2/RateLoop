@@ -2058,6 +2058,46 @@ export async function advanceToRevealFailedFinalizationWindow(
   await evmIncreaseTime(Number(secondsToIncrease));
 }
 
+export async function advancePastSettlementRevealGraceWindow(
+  contentId: number | bigint,
+  roundId: number | bigint,
+  contractAddress: string,
+  fallbackRevealGracePeriodSeconds = 3600,
+): Promise<void> {
+  const contentIdBigInt = BigInt(contentId);
+  const roundIdBigInt = BigInt(roundId);
+  const snapshot = await readLatestBlockSnapshot();
+  const round = await readRoundAtBlock(contractAddress, contentIdBigInt, roundIdBigInt, snapshot.blockTag);
+  const parsedRound = parseRound(round);
+  if (!parsedRound?.startTime) {
+    throw new Error(
+      `Unable to read round start time for content=${contentIdBigInt.toString()} round=${roundIdBigInt.toString()}`,
+    );
+  }
+
+  const [roundConfig, lifecycleState] = await Promise.all([
+    readRoundConfig(contractAddress),
+    readRoundLifecycleStateLatest(contractAddress, contentIdBigInt, roundIdBigInt),
+  ]);
+  const revealGracePeriod =
+    lifecycleState.revealGracePeriod > 0n
+      ? lifecycleState.revealGracePeriod
+      : BigInt(Math.max(1, Math.floor(fallbackRevealGracePeriodSeconds)));
+  const votingWindowEnd = parsedRound.startTime + roundConfig.maxDuration;
+  const revealBase =
+    lifecycleState.lastRevealableAfter > votingWindowEnd ? lifecycleState.lastRevealableAfter : votingWindowEnd;
+  const readyAt = revealBase + revealGracePeriod;
+  const latest = await readLatestBlockSnapshot();
+  const latestTimestamp = BigInt(latest.timestampSeconds);
+  if (latestTimestamp >= readyAt) return;
+
+  const secondsToIncrease = readyAt - latestTimestamp + 1n;
+  if (secondsToIncrease > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`Settlement reveal-grace jump is too large: ${secondsToIncrease.toString()}s`);
+  }
+  await evmIncreaseTime(Number(secondsToIncrease));
+}
+
 /**
  * Process unrevealed votes after settlement.
  * Calls processUnrevealedVotes(contentId, roundId, startIndex, count).

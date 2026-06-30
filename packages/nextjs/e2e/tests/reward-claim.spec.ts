@@ -1,5 +1,6 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
+  advancePastSettlementRevealGraceWindow,
   approveLREP,
   claimVoterReward,
   commitVoteDirect,
@@ -245,12 +246,12 @@ test.describe("Reward claim lifecycle", () => {
     expect(result, "processUnrevealedVotes should revert with NothingProcessed when all votes revealed").toBe(false);
   });
 
-  test("processUnrevealedVotes refunds current-epoch settled stakes once", async () => {
+  test("processUnrevealedVotes forfeits stale settled stakes once after grace", async () => {
     test.setTimeout(180_000);
 
-    // Settlement is intentionally blocked while past-epoch votes remain
-    // unrevealed. This test keeps the unrevealed commits in the current
-    // settlement epoch so the round can settle and cleanup can refund them.
+    // Settlement is intentionally blocked while stale unrevealed votes remain
+    // inside reveal grace. Once grace elapses, settlement can proceed and
+    // cleanup should forfeit the unrevealed stake exactly once.
     const submitter = ANVIL_ACCOUNTS.account10;
     const keeper = ANVIL_ACCOUNTS.account1;
     const unrevealed = ANVIL_ACCOUNTS.account5;
@@ -359,6 +360,7 @@ test.describe("Reward claim lifecycle", () => {
 
     const unrevealedBefore = await readTokenBalance(unrevealed.address, LREP_TOKEN);
 
+    await advancePastSettlementRevealGraceWindow(BigInt(cleanupContentId!), cleanupRoundId, VOTING_ENGINE);
     await waitForPonderSync();
 
     const settled = await settleRoundDirect(BigInt(cleanupContentId!), cleanupRoundId, keeper.address, VOTING_ENGINE);
@@ -375,11 +377,8 @@ test.describe("Reward claim lifecycle", () => {
 
     const unrevealedAfter = await readTokenBalance(unrevealed.address, LREP_TOKEN);
     const unrevealedRefund = unrevealedAfter - unrevealedBefore;
-    const cleanupRefunded = unrevealedRefund === STAKE;
-
-    // Current-epoch unrevealed stakes had no chance to reveal before settlement, so they are refunded.
-    expect(cleanupSuccess || cleanupRefunded, "Cleanup should process or observe unrevealed refunds").toBe(true);
-    expect(unrevealedRefund).toBe(STAKE);
+    expect(cleanupSuccess, "Cleanup should process stale unrevealed stake").toBe(true);
+    expect(unrevealedRefund, "Stale unrevealed stake should be forfeited instead of refunded").toBe(0n);
 
     const secondCleanup = await processUnrevealedVotes(
       BigInt(cleanupContentId!),
