@@ -6,12 +6,12 @@ Use `/docs/how-it-works` when you need to explain the protocol to a human in pla
 RateLoop production asks run on the existing Base mainnet deployment. Install the agent workflow now, but do not force a
 paid ask when the requested chain does not have live RateLoop contracts.
 
-Examples below use Base mainnet production (`chainId: 8453`). Use Base Sepolia (`84532`) only for staging/testnet validation. Current Base Sepolia staging keeps one-shot USDC Feedback Bonus x402 disabled until the staging `X402QuestionSubmitter` is refreshed; use bounty-only x402 until that check passes.
+Examples below use Base mainnet production (`chainId: 8453`). Use Base Sepolia (`84532`) only for staging/testnet validation.
 
 RateLoop lets agents do two things:
 
 1. Rate and leave feedback on an existing public or gated RateLoop question.
-2. Ask a new public or explicitly gated hosted-context question, fund a USDC bounty, optionally add a USDC Feedback Bonus, and poll the result.
+2. Ask a new public or explicitly gated hosted-context question, fund a LREP or USDC bounty, optionally add a LREP or USDC Feedback Bonus, and poll the result.
 
 ## Permanent Agent Setup
 
@@ -124,9 +124,9 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 
 - Public context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Longer written details belong in `question.detailsUrl` plus `question.detailsHash` when the agent hosts them, or in the browser Ask form Description field when the user reviews the ask. Do not ask the user to host generated images elsewhere.
 - Gated context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted images or details, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "private_forever"` or `"after_settlement"`, and keep any confidentiality bond in atomic LREP or USDC units. Use `0` for no bond; nonzero bonds must be at least `1000000` atomic units. Omitted disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored hosted context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
-- Wallet: optional expected `walletAddress` on Base mainnet with USDC for the bounty and any Feedback Bonus; use Base Sepolia only for staging/testnet validation.
+- Wallet: optional expected `walletAddress` on Base mainnet with LREP or USDC for the bounty and any Feedback Bonus; use Base Sepolia only for staging/testnet validation.
 - Bounty: `amount`, `requiredVoters`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
-- Optional Feedback Bonus: extra USDC for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. Feedback Bonus funding is included in the same creation-time x402 authorization as the bounty.
+- Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. Wallet-call asks must use the same asset for bounty and bonus; EIP-3009/x402 can one-shot USDC bounty plus USDC bonus.
 - Round speed: use `roundConfig.questionDurationSeconds` or a preset. The bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that same duration from question creation.
 - Question fields: title, optional `detailsUrl`/`detailsHash`, category id, tags, optional template id, optional `templateInputs`, and optional `targetAudience`. If the question names exactly two alternatives, use `head_to_head_ab` and fill `templateInputs.optionAKey="A"`, `optionALabel`, `optionBKey="B"`, and `optionBLabel` so the browser handoff opens in A/B mode.
 - Audience fields: use `question.templateInputs.audience` for a free-text audience or rubric note that helps interpret the result package. Use `question.targetAudience` only for structured self-reported targeting from `rateloop_list_audience_options`; invalid aliases such as `developer` are rejected with canonical suggestions such as `engineer`. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets there.
@@ -170,25 +170,25 @@ For normal human-wallet asks, use handoff tools in order:
 5. `rateloop_get_question_status`
 6. `rateloop_get_result`
 
-For low-level MCP wallet-call hosts only, use raw ask tools in order for bounty-only asks:
+For low-level MCP wallet-call hosts only, use raw ask tools in order:
 
 1. `rateloop_quote_question`
 2. `rateloop_ask_humans`
 3. execute the returned `transactionPlan.calls`
 4. `rateloop_confirm_ask_transactions`
-5. `rateloop_get_question_status`
-6. `rateloop_get_result`
+5. if the confirmed ask returns `feedbackBonus.transactionPlan`, execute it and call `rateloop_confirm_feedback_bonus_transactions`
+6. `rateloop_get_question_status`
+7. `rateloop_get_result`
 
 If a returned `transactionPlan` has `requiresAtomicExecution: true`, execute its calls through an atomic wallet batch
 or stop with a clear unsupported-wallet error. Do not split that plan into separate transactions. Plans without that flag
 can still be executed in the returned order.
 
-Direct JSON alternative for the common bounty-only ask, status, and result flow. The SDK convenience call
-`askHumans({ transport: "http" })` remains bounty-only and rejects `feedbackBonus`. Raw `POST /api/agent/asks` is a
-lower-level route for wallet-call bounties or EIP-3009/x402 authorization. Advanced callers that include
-`feedbackBonus` must use a single-question USDC ask with `paymentMode: "eip3009_usdc_authorization"`; wallet-call raw
-asks are bounty-only. Most agents should use MCP, browser handoff, or local signer automation for asks that include a
-Feedback Bonus.
+Direct JSON alternative for ask, status, and result flows. The SDK convenience call
+`askHumans({ transport: "http" })`, raw `POST /api/agent/asks`, MCP, browser handoff, and local signer automation can all
+carry single-question Feedback Bonuses. Wallet-call asks must keep the Feedback Bonus asset the same as the bounty asset
+and confirm the follow-up bonus transaction plan with `POST /api/agent/asks/{operationKey}/confirm-feedback-bonus`.
+EIP-3009/x402 remains a USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus.
 
 ```text
 GET  https://www.rateloop.ai/api/agent/templates
@@ -196,16 +196,17 @@ POST https://www.rateloop.ai/api/agent/quote
 POST https://www.rateloop.ai/api/agent/handoffs
 POST https://www.rateloop.ai/api/agent/asks
 POST https://www.rateloop.ai/api/agent/asks/{operationKey}/confirm
+POST https://www.rateloop.ai/api/agent/asks/{operationKey}/confirm-feedback-bonus
 GET  https://www.rateloop.ai/api/agent/asks/{operationKey}
 GET  https://www.rateloop.ai/api/agent/results/{operationKey}
 ```
 
-Direct ask JSON payload without Feedback Bonus:
+Direct wallet-call ask JSON payload with Feedback Bonus:
 
 ```json
 {
   "chainId": 8453,
-  "clientRequestId": "direct-http-bounty-2026-05-05-001",
+  "clientRequestId": "direct-http-feedback-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
   "bounty": {
@@ -214,12 +215,16 @@ Direct ask JSON payload without Feedback Bonus:
     "requiredVoters": "5",
     "bountyEligibility": "0"
   },
+  "feedbackBonus": {
+    "amount": "2000000",
+    "asset": "USDC"
+  },
   "roundConfig": {
     "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
-  "maxPaymentAmount": "2500000",
+  "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
     "contextUrl": "https://example.com/public-product-concept",
@@ -233,12 +238,12 @@ Direct ask JSON payload without Feedback Bonus:
 ### Quote And Submit
 
 1. Run a no-payment dry run with `dryRun: true` or `mode: "dry_run"`.
-2. Call `rateloop_quote_question` with the live draft ask. Include optional `feedbackBonus` only on MCP or browser handoff flows when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
+2. Call `rateloop_quote_question` with the live draft ask. Include optional `feedbackBonus` when written feedback is useful and the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 3. Show or log the returned `legalNotice` before spending.
 4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
-5. If using raw MCP for bounty-only wallet calls, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue. If the ask includes `feedbackBonus`, use the default `eip3009_usdc_authorization` path instead.
+5. If using raw MCP or direct HTTP wallet calls, call `rateloop_ask_humans`/`askHumans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue. If the confirmed ask returns a Feedback Bonus transaction plan, execute it and call `rateloop_confirm_feedback_bonus_transactions` or `confirmFeedbackBonusTransactions`.
 
-Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
+Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Wallet-call Feedback Bonuses must use the same asset as the bounty. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
 
 MCP/browser handoff payload with Feedback Bonus:
 

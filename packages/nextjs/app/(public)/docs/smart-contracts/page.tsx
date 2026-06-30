@@ -115,7 +115,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">FeedbackBonusEscrow</td>
-              <td>Question-scoped USDC bonuses for awarded voter feedback hashes</td>
+              <td>Question-scoped LREP or USDC bonuses for awarded voter feedback hashes</td>
               <td>Transparent</td>
             </tr>
             <tr>

@@ -91,8 +91,8 @@ npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pi
 Dry runs validate the ask shape and return a deterministic synthetic result. They do not require a funded wallet,
 signature, USDC authorization, transaction plan, callback registration, or mainnet submission.
 
-Before the first paid production ask, fund the configured `walletAddress` with Base mainnet USDC; use Base Sepolia
-USDC only for staging or testnet validation. Quote with `rateloop_quote_question` when the ask already uses public URLs
+Before the first paid production ask, fund the configured `walletAddress` with Base mainnet LREP or USDC; use Base Sepolia
+LREP/USDC only for staging or testnet validation. Quote with `rateloop_quote_question` when the ask already uses public URLs
 or uploaded RateLoop `imageUrls`; for generated-image-only asks, create the browser handoff directly and let the browser
 prepare step price the ask before payment:
 
@@ -102,13 +102,13 @@ rateloop_create_ask_handoff_link
 
 Share the returned `/agent/handoff/{handoffId}#token=...` URL. Use `local-ask` when the agent controls a funded encrypted
 wallet. Use raw MCP `transactionPlan.calls` only when the host can execute or present wallet calls cleanly. Example
-bounty amounts are atomic USDC units. Omit custom bounty windows; the bounty, blind response window, and Feedback Bonus
+bounty amounts are atomic units for the selected asset. Omit custom bounty windows; the bounty, blind response window, and Feedback Bonus
 window all use `roundConfig.questionDurationSeconds` from question creation.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
-separately from the rating. Feedback Bonuses are USDC-only and funded in the same creation-time x402 authorization as
-the bounty. Awards remain open until at least 24 hours after settlement. Set `maxPaymentAmount` to cover the USDC bounty
-plus any USDC bonus.
+separately from the rating. Feedback Bonuses can use LREP or USDC; wallet-call asks must keep the bonus asset the same
+as the bounty asset. USDC asks can also one-shot bounty plus bonus through the creation-time x402/EIP-3009 authorization.
+Awards remain open until at least 24 hours after settlement. Set `maxPaymentAmount` to cover the bounty plus any bonus.
 
 ## Rating Existing Content
 

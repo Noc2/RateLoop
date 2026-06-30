@@ -20,6 +20,7 @@ const directHttpEndpoints = [
   { method: "POST", path: "/api/agent/handoffs" },
   { method: "POST", path: "/api/agent/asks" },
   { method: "POST", path: "/api/agent/asks/{operationKey}/confirm" },
+  { method: "POST", path: "/api/agent/asks/{operationKey}/confirm-feedback-bonus" },
   { method: "GET", path: "/api/agent/asks/{operationKey}" },
   { method: "GET", path: "/api/agent/results/{operationKey}" },
 ] as const;
@@ -61,7 +62,7 @@ const askPayloadExample = `{
 
 const directHttpAskPayloadExample = `{
   "chainId": 8453,
-  "clientRequestId": "direct-http-bounty-2026-05-05-001",
+  "clientRequestId": "direct-http-feedback-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
   "bounty": {
@@ -70,12 +71,16 @@ const directHttpAskPayloadExample = `{
     "requiredVoters": "5",
     "bountyEligibility": "0"
   },
+  "feedbackBonus": {
+    "amount": "2000000",
+    "asset": "USDC"
+  },
   "roundConfig": {
     "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
-  "maxPaymentAmount": "2500000",
+  "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
     "contextUrl": "https://example.com/public-product-concept",
@@ -144,7 +149,7 @@ function resolveDirectHttpOrigin(headerLookup: HeaderLookup) {
 export const metadata = {
   title: "RateLoop For Agents | RateLoop Docs",
   description:
-    "The short agent runbook for RateLoop: permanent agent setup, rating and feedback, public or gated hosted-context questions with USDC bounties, optional USDC feedback bonuses, and result polling.",
+    "The short agent runbook for RateLoop: permanent agent setup, rating and feedback, public or gated hosted-context questions with LREP or USDC bounties, optional feedback bonuses, and result polling.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -376,8 +381,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           bytes, and eligible raters can still absorb what they see.
         </li>
         <li>
-          Wallet: optional expected <code>walletAddress</code> on Base mainnet with USDC for the bounty and any Feedback
-          Bonus. Use Base Sepolia only for staging/testnet validation.
+          Wallet: optional expected <code>walletAddress</code> on Base mainnet with LREP or USDC for the bounty and any
+          Feedback Bonus. Use Base Sepolia only for staging/testnet validation.
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, and optional <code>bountyEligibility</code> (
@@ -388,10 +393,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
         </li>
         <li>
-          Optional Feedback Bonus: extra USDC for useful public rater feedback on single-question asks. Use it by
-          default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go
-          decisions where the human wants to know why. Feedback Bonus funding is included in native EIP-3009/x402
-          authorization so bounty and bonus funding land in one submit transaction.
+          Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it
+          by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go
+          decisions where the human wants to know why. Wallet-call asks must use the same asset for bounty and bonus;
+          native EIP-3009/x402 can one-shot USDC bounty plus USDC bonus.
         </li>
         <li>
           Question duration: <code>roundConfig.questionDurationSeconds</code> is the shared close for the blind window,
@@ -481,18 +486,17 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>x-rateloop-callback-signature</code>, and status responses include <code>callbackDeliveries</code>.
       </p>
       <p>
-        Agents that do not use MCP can call the common bounty-only ask, status, and result flow through JSON routes. The
-        SDK convenience call <code>{'askHumans({ transport: "http" })'}</code> remains bounty-only and rejects{" "}
-        <code>feedbackBonus</code>. Raw <code>POST /api/agent/asks</code> is a lower-level route for wallet-call
-        bounties or EIP-3009/x402 authorization. Advanced callers that include <code>feedbackBonus</code> must use a
-        single-question USDC ask with <code>{'paymentMode: "eip3009_usdc_authorization"'}</code>; wallet-call raw asks
-        are bounty-only. Most agents should use MCP, browser handoff, or local signer automation for asks that include a
-        Feedback Bonus.
+        Agents that do not use MCP can call ask, status, and result flows through JSON routes. The SDK convenience call{" "}
+        <code>{'askHumans({ transport: "http" })'}</code>, raw <code>POST /api/agent/asks</code>, MCP, browser handoff,
+        and local signer automation can all carry single-question Feedback Bonuses. Wallet-call asks must use the same
+        asset for bounty and bonus and confirm the follow-up bonus plan with{" "}
+        <code>POST /api/agent/asks/{"{operationKey}"}/confirm-feedback-bonus</code>. EIP-3009/x402 remains a USDC-only
+        one-shot path for USDC bounty plus USDC Feedback Bonus.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
       </pre>
-      <p>Direct ask JSON payload without Feedback Bonus:</p>
+      <p>Direct wallet-call ask JSON payload with Feedback Bonus:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpAskPayloadExample}</code>
       </pre>
@@ -504,7 +508,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Call <code>rateloop_quote_question</code> with the live draft ask. Include optional <code>feedbackBonus</code>{" "}
-          only on MCP or browser handoff flows when the ask already uses public URLs or uploaded RateLoop{" "}
+          when written feedback is useful and the ask already uses public URLs or uploaded RateLoop{" "}
           <code>imageUrls</code>.
         </li>
         <li>
@@ -515,8 +519,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>handoffUrl</code>.
         </li>
         <li>
-          If using raw MCP instead, execute each returned wallet plan, then confirm the transaction hashes. Honor{" "}
-          <code>requiresAtomicExecution: true</code> by batching the whole plan atomically or refusing to continue.
+          If using raw MCP or direct HTTP wallet calls, execute each returned wallet plan, then confirm the transaction
+          hashes. Honor <code>requiresAtomicExecution: true</code> by batching the whole plan atomically or refusing to
+          continue. If the confirmed ask returns a Feedback Bonus transaction plan, execute it and call{" "}
+          <code>rateloop_confirm_feedback_bonus_transactions</code> or <code>confirmFeedbackBonusTransactions</code>.
         </li>
       </ol>
       <p>
@@ -524,8 +530,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization
         signature, then returns one submit transaction; with a USDC <code>feedbackBonus</code>, the submit call also
         creates and funds the Feedback Bonus pool. Use <code>{'paymentMode: "wallet_calls"'}</code> for LREP bounties,
-        bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding.{" "}
-        <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias.
+        LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Wallet-call
+        Feedback Bonuses must use the same asset as the bounty. <code>{'paymentMode: "x402_authorization"'}</code> is
+        accepted as a legacy alias.
       </p>
       <p>MCP/browser handoff payload with Feedback Bonus:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">

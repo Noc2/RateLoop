@@ -22,39 +22,47 @@ question creation starts the first rewardable round immediately, and the product
 ## Commit sequence
 
 1. Contract timing and round anchoring
+
    - Enforce equal epoch/max duration in `ProtocolConfig`.
    - Add a registry-to-engine initial-round opening path that avoids `nonReentrant` callback deadlocks.
    - Make submission reserve and open the first round in the same transaction.
 
 2. Creation-time-only reward pools
+
    - Derive reward pool windows from content creation time and `questionDuration`.
    - Store submission reward pools as already open with fixed close timestamps.
    - Apply the same model to question bundle rewards.
    - Remove or hard-disable public post-creation bounty funding entrypoints and their authorization typehashes.
 
 3. Creation-time-only feedback bonuses
+
    - Derive feedback close from the initial round/question duration.
    - Keep only submission/gateway-attached feedback bonus creation.
-   - Remove or hard-disable public post-creation feedback bonus funding entrypoints and arbitrary `feedbackClosesAt`.
+   - Keep arbitrary standalone post-creation bonus funding disabled, but allow the bounded follow-up create-pool entrypoint used after confirmed single-question wallet-call asks.
+   - Continue rejecting arbitrary `feedbackClosesAt`.
 
 4. x402, reservations, generated ABIs, and scripts
+
    - Replace old typed data with `questionDuration`.
    - Update x402 submitter, reservation builders, tlock helpers, local seed scripts, and generated contract exports.
    - Bump typed-data/domain versions so old signatures cannot be replayed against the fresh stack.
 
 5. Ponder and keeper
+
    - Update indexed schema/handlers/API routes to expose `questionDuration`, `rewardOpensAt`, `rewardClosesAt`, and
      derived feedback close.
    - Remove discovery or API affordances for post-creation funding.
    - Keep keeper reveal, settle, cleanup, claim, and feedback forfeiture paths.
 
 6. Next.js, SDK, and agents
+
    - Replace round/bounty/feedback timing inputs with one `Question duration` control.
    - Remove add-bounty and add-feedback-bonus UI from existing questions.
    - Update browser signing, handoff, MCP, SDK, agents CLI, linting, examples, and postcondition checks.
    - Make copy clear that the clock starts when the question is created.
 
 7. Documentation and whitepaper
+
    - Update root README, package READMEs, public docs, `packages/nextjs/public/skill.md`, generated examples, and
      whitepaper content/tests.
    - Remove stale references to `bountyStartBy`, separate `epochDuration` / `maxDuration`, and post-creation funding.
@@ -75,7 +83,7 @@ question creation starts the first rewardable round immediately, and the product
 - Round start, reward open, reward close, and feedback close share the expected timestamps.
 - Old post-creation bounty/bonus calls are absent or revert.
 - USDC one-shot bounty plus feedback bonus works.
-- LREP wallet-call submission works without a later bonus-create transaction.
+- LREP/USDC wallet-call submission works, and asks with Feedback Bonuses return and execute the follow-up approve/create-pool transaction plan.
 - Ponder and the app display the same duration and close timestamps.
 - The keeper can reveal, settle, forfeit expired feedback bonus residue, and process cleanup.
 - Whitepaper and public docs describe the single-duration model.

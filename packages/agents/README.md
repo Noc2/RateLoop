@@ -14,7 +14,7 @@ This package is for the moment an agent should ask instead of guess. The default
 ## Accountless Public Flow
 
 Agents do not need the operator to create a RateLoop account for the default public path. A chat-hosted agent should start
-from the For Agents docs at `/docs/ai`, connect to the public MCP endpoint or direct bounty-only HTTP routes, and ask the
+from the For Agents docs at `/docs/ai`, connect to the public MCP endpoint or direct HTTP routes, and ask the
 user for the few runtime values that are intentionally not hard-coded. Browser handoff WebMCP helpers are read-only;
 remote MCP is the default headless path:
 
@@ -23,7 +23,7 @@ remote MCP is the default headless path:
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility`, and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
-- optional MCP `feedbackBonus` in USDC for single-question USDC asks where written analysis is valuable; include the bonus in `maxPaymentAmount` so Base mainnet native EIP-3009/x402 asks can one-shot bounty plus bonus funding. Awards remain open for at least 24 hours after settlement.
+- optional MCP `feedbackBonus` in LREP or USDC for single-question asks where written analysis is valuable; wallet-call asks must keep the bonus asset the same as the bounty asset. Include the bonus in `maxPaymentAmount`; Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding. Awards remain open for at least 24 hours after settlement.
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
@@ -97,7 +97,7 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 
 ## First Funded Ask
 
-1. Fund the user wallet with Base mainnet USDC for production asks, or fund a staging/local signer wallet with Base Sepolia USDC for testnet asks.
+1. Fund the user wallet with Base mainnet LREP or USDC for production asks, or fund a staging/local signer wallet with Base Sepolia LREP or USDC for testnet asks.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
 3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
@@ -152,14 +152,13 @@ must come from the RateLoop upload flow. Do not put direct image file links such
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
-and confirms the hashes with RateLoop. Wallet-call bounty plans may approve either LREP or USDC. Feedback Bonuses are
-funded only in the creation-time USDC x402 one-shot submit transaction; separate post-creation Feedback Bonus plans are
-legacy responses and `local-ask` rejects them for the fresh redeploy flow.
+and confirms the hashes with RateLoop. Wallet-call bounty plans may approve either LREP or USDC. If a wallet-call
+Feedback Bonus is returned after ask confirmation, `local-ask` validates and executes the follow-up approve/create-pool
+plan, then confirms those hashes separately with RateLoop.
 
 `local-ask` is a trusted automation exception to the browser wallet rule: browser and low-level wallet hosts must honor
 `requiresAtomicExecution: true` with an atomic batch or stop. The local signer may submit validated calls sequentially
-because it controls the wallet and recovery loop. Feedback Bonus funding no longer has a separate approve/create retry
-loop.
+because it controls the wallet and recovery loop. Feedback Bonus funding can use the same sequential recovery path.
 
 Use an encrypted keystore for persistent wallets:
 
@@ -175,7 +174,7 @@ yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
-Production asks use Base mainnet (`8453`). Local signer examples and `examples/questions/*.json` should continue to default to Base Sepolia (`84532`) so generated test wallets stay on testnet USDC. For Base Sepolia Feedback Bonus staging, use bounty-only x402 unless `yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
+Production asks use Base mainnet (`8453`). Local signer examples and `examples/questions/*.json` should continue to default to Base Sepolia (`84532`) so generated test wallets stay on testnet assets. For Base Sepolia Feedback Bonus staging, use same-asset wallet calls for LREP or USDC bonuses; use USDC x402 one-shot bounty plus bonus only after `yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
 
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.

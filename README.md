@@ -26,7 +26,7 @@ AI agents are increasingly good at drafting, searching, and planning, but they s
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
-2. **Fund** — attach a non-refundable LREP or USDC bounty, and optionally add a USDC Feedback Bonus at question creation; everyone can answer, while the bounty can optionally pay either everyone or verified humans.
+2. **Fund** — attach a non-refundable LREP or USDC bounty, and optionally add a LREP or USDC Feedback Bonus at question creation; everyone can answer, while the bounty can optionally pay either everyone or verified humans.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
 5. **Finalize payouts** — USDC bounties and launch LREP credits wait for challengeable correlation epoch snapshots, while the public result is already readable.
@@ -40,7 +40,7 @@ Key pieces:
 - **LREP Locks** — useful staked reports score above the stake-weighted mean, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
-- **LREP and USDC Bounties and USDC Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses add USDC for useful notes with at least 24 hours of post-settlement award time, and the fresh redeploy uses one question duration for the blind window, bounty eligibility, and Feedback Bonus close; USDC remains the x402-compatible public agent payment lane with one-shot bounty plus bonus funding
+- **LREP and USDC Bounties and Feedback Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and the fresh redeploy uses one question duration for the blind window, bounty eligibility, and Feedback Bonus close; wallet-call asks keep bounty and bonus in the same asset, while USDC remains the x402-compatible public agent payment lane with one-shot bounty plus bonus funding
 - **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds, and the same roots now carry surprise-weighted (accuracy-linked) bounty claim weights for USDC rounds in addition to cluster caps
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
@@ -60,17 +60,17 @@ Live protocol and product documentation is maintained in the Next.js docs routes
 
 RateLoop is a monorepo with nine packages:
 
-| Package               | Description                                                                              |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `packages/contracts`  | Shared ABIs and deployed-address metadata consumed by the app and services               |
-| `packages/foundry`    | Solidity smart contracts, tests, and deployment scripts                                  |
-| `packages/nextjs`     | Next.js frontend with in-app documentation at `/docs`                                    |
-| `packages/sdk`        | Framework-agnostic frontend SDK for hosted reads, vote helpers, and frontend attribution |
-| `packages/ponder`     | Ponder indexer for on-chain event processing and API                                     |
-| `packages/keeper`     | Standalone keeper service for keeper-assisted round settlement                           |
-| `packages/agents`     | Agent integration hub with runtime examples, question guidance, and operator utilities   |
-| `packages/node-utils` | Shared Node.js utilities used by services and scripts                                    |
-| `packages/promo-video` | Private Remotion package for promo renders (non-production)                             |
+| Package                | Description                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `packages/contracts`   | Shared ABIs and deployed-address metadata consumed by the app and services               |
+| `packages/foundry`     | Solidity smart contracts, tests, and deployment scripts                                  |
+| `packages/nextjs`      | Next.js frontend with in-app documentation at `/docs`                                    |
+| `packages/sdk`         | Framework-agnostic frontend SDK for hosted reads, vote helpers, and frontend attribution |
+| `packages/ponder`      | Ponder indexer for on-chain event processing and API                                     |
+| `packages/keeper`      | Standalone keeper service for keeper-assisted round settlement                           |
+| `packages/agents`      | Agent integration hub with runtime examples, question guidance, and operator utilities   |
+| `packages/node-utils`  | Shared Node.js utilities used by services and scripts                                    |
+| `packages/promo-video` | Private Remotion package for promo renders (non-production)                              |
 
 ```
 foundry    (compile) → deployments + artifacts
@@ -161,7 +161,7 @@ Visit [http://localhost:3000](http://localhost:3000).
 If you only want the database helper, use `yarn dev:db`. It starts the local Postgres container without the other services.
 
 The local content seed script no longer creates standalone Feedback Bonus pools. Feedback Bonus smoke tests should create a
-single-question USDC ask through the x402/EIP-3009 creation path so the bounty, bonus, and shared question duration follow
+single-question LREP or USDC ask through the wallet-call path, or a USDC ask through the x402/EIP-3009 creation path, so the bounty, bonus, and shared question duration follow
 the same production flow.
 
 ### Run the Keeper

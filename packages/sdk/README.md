@@ -38,7 +38,8 @@ import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const rateloop = createRateLoopClient({
-  apiBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? "https://ponder.rateloop.ai",
+  apiBaseUrl:
+    process.env.NEXT_PUBLIC_PONDER_URL ?? "https://ponder.rateloop.ai",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
@@ -286,12 +287,12 @@ transactions directly. For rating existing content, use
 `getRatingContext -> acceptConfidentialityTerms when contextAccess is gated -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
 A hosted direct HTTP client only needs the Next.js app's `apiBaseUrl` plus a funded
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
-Direct `askHumans({ transport: "http" })` is bounty-only today and rejects `feedbackBonus`. Raw `POST /api/agent/asks`
-is a lower-level route for wallet-call bounties or EIP-3009/x402 authorization. Advanced callers that include
-`feedbackBonus` must use a single-question USDC ask with `paymentMode: "eip3009_usdc_authorization"`; wallet-call raw
-asks are bounty-only. SDK users should prefer MCP or browser handoff for asks that include a Feedback Bonus. Direct
-`createAskHandoff` can still carry the full handoff payload because the browser completes the funded flow. Paid
-bounty-only asks and prepared ratings return wallet-call plans from a
+Direct `askHumans({ transport: "http" })`, raw `POST /api/agent/asks`, MCP, browser handoff, and local signer flows can
+all carry single-question Feedback Bonuses. Wallet-call asks must keep the Feedback Bonus asset the same as the bounty
+asset and confirm the follow-up bonus transaction plan with `confirmFeedbackBonusTransactions`. EIP-3009/x402 remains a
+USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus. Direct `createAskHandoff` can carry the full handoff
+payload because the browser completes the funded flow. Paid
+wallet-call asks and prepared ratings return wallet-call plans from a
 user-controlled smart wallet or scoped agent wallet. If a returned plan has `requiresAtomicExecution: true`, execute the
 whole plan as an atomic wallet batch or refuse to continue; do not degrade it into separate transactions. Plans without
 that flag can be executed in the returned order.
@@ -319,9 +320,11 @@ When an agent wallet should sign USDC authorization typed data before RateLoop p
 `paymentMode: "eip3009_usdc_authorization"`. The older `paymentMode: "x402_authorization"` value remains accepted as a
 compatibility alias, but RateLoop does not expose an HTTP 402 `PaymentRequirements` / `X-PAYMENT` wire flow today.
 Native EIP-3009 asks are USDC-only and return one submit transaction after the authorization is signed. Use wallet-call
-payment mode for LREP bounties. If a single-question USDC ask includes a
-USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submit transaction one-shots both protocol
-escrow funding and Feedback Bonus pool creation. Feedback Bonus funding is not available on wallet-call asks.
+payment mode for LREP bounties, LREP Feedback Bonuses, bundled asks, or raw transaction hosts. If a single-question USDC
+ask includes a USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submit transaction one-shots
+both protocol escrow funding and Feedback Bonus pool creation. Wallet-call Feedback Bonuses return a second
+approve/create-pool transaction plan after the ask is confirmed; execute it in order and call
+`confirmFeedbackBonusTransactions`.
 
 Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `buildReplayProtectedWebhookVerifier` and `handleOnce` with an atomic replay store for non-idempotent handlers. The generic `buildWebhookVerifier` also requires `replayProtection`; replay-prone signature-only use must go through `buildSignatureOnlyWebhookVerifier({ allowReplay: true, ... })`. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry. `buildSignatureOnlyWebhookVerifier` only checks HMAC and timestamp freshness; it does not prevent replay during the tolerance window.
 

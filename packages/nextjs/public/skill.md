@@ -55,11 +55,11 @@ Image transport rule: do not print base64 to the terminal or copy base64 out of 
 
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
 - one inspectable context source: public `question.contextUrl`, public `question.videoUrl`, generated/local image bytes supplied as `generatedImages`, or RateLoop-hosted gated `detailsUrl` (required) with optional `imageUrls` when `question.confidentiality.visibility="gated"`
-- `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
+- `bounty.amount`: bounty budget in atomic units, for example `2500000` for 2.5 USDC; set `bounty.asset` to `LREP` for LREP bounty units
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Governance can raise these new-ask floors as usage grows.
 - `roundConfig.questionDurationSeconds`: shared duration for the blind response window, bounty eligibility, and Feedback Bonus feedback window.
-- `feedbackBonus`: optional USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 24 hours after settlement. Include one when written rationale, objections, bug details, or product reasoning matter.
-- `maxPaymentAmount`: maximum USDC spend the user approves
+- `feedbackBonus`: optional LREP or USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 24 hours after settlement. Wallet-call asks must use the same asset for bounty and bonus. Include one when written rationale, objections, bug details, or product reasoning matter.
+- `maxPaymentAmount`: maximum spend the user approves in the selected payment asset
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask
 - `title`, `tags`, and optional `templateId`
@@ -125,13 +125,13 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the question, inspect public context, or use `rateloop_accept_confidentiality_terms` before fetching gated RateLoop-hosted context. The first call returns a wallet-signing challenge; after signing, call it again with `challengeId` and `signature` and use `signedReadSession.cookieHeader` on gated fetch URLs. Then choose up/down, estimate crowd-up percent, and leave useful public feedback.
-3. For asking, prefer `rateloop_create_ask_handoff_link` for human wallet completion in the browser. Eligible single-question USDC asks can use `paymentMode: "eip3009_usdc_authorization"` so the user signs one USDC authorization and submits one transaction.
+3. For asking, prefer `rateloop_create_ask_handoff_link` for human wallet completion in the browser. Eligible single-question USDC asks can use `paymentMode: "eip3009_usdc_authorization"` so the user signs one USDC authorization and submits one transaction; LREP asks and wallet-call Feedback Bonuses use ordered wallet calls.
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
 Never use settled RateLoop scores to settle external financial contracts. Three-voter rounds are the launch feedback tier. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
 
-Use `paymentMode: "wallet_calls"` for LREP bounties, bundled asks, or hosts that need raw approve/reserve/submit wallet calls without Feedback Bonus funding. Browser handoffs, direct MCP, and `local-ask` can use `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses; `paymentMode: "x402_authorization"` remains a legacy alias.
+Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Wallet-call Feedback Bonuses must use the same asset as the bounty and are confirmed after the ask transaction with `rateloop_confirm_feedback_bonus_transactions`. Browser handoffs, direct MCP, and `local-ask` can use `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses; `paymentMode: "x402_authorization"` remains a legacy alias.
 
 ## Tier-0 Blinding Guidance
 
