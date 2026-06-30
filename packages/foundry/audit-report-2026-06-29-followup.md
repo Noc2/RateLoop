@@ -55,8 +55,22 @@ No new critical or high severity findings were identified.
 
 | ID | Severity | Status | Title |
 | --- | --- | --- | --- |
-| M-1 | Medium | Open | Bundle rejected-snapshot skip abandons same-source replacement claims |
-| L-1 | Low | Open | Launch pool deposits trust the requested amount instead of exact received tokens |
+| M-1 | Medium | Fixed | Bundle rejected-snapshot skip abandons same-source replacement claims |
+| L-1 | Low | Fixed | Launch pool deposits trust the requested amount instead of exact received tokens |
+
+## Remediation Update
+
+2026-06-30:
+
+- M-1 fixed by preserving the completed bundle round-set source when skipping a
+  rejected pre-qualification snapshot. The rejected snapshot digest/root now
+  marks the unqualified snapshot slot, allowing refunds while the slot remains
+  rejected and allowing a corrected replacement snapshot to qualify before
+  refund.
+- L-1 fixed by requiring `LaunchDistributionPool.depositPool` to receive exactly
+  the requested token amount before increasing tracked `poolBalance`.
+- Regression coverage added for replacement qualification after a skipped bundle
+  snapshot and for short-transfer launch pool deposits.
 
 ## Findings
 
@@ -318,8 +332,8 @@ suite returns to green before relying on it as a release gate.
 
 ## Follow-up Checklist
 
-- Fix or explicitly accept M-1's bundle skip semantics.
-- Harden `LaunchDistributionPool.depositPool` with exact-receipt accounting.
-- Add regression tests for the chosen M-1 behavior and for short-transfer launch
+- [x] Fix or explicitly accept M-1's bundle skip semantics.
+- [x] Harden `LaunchDistributionPool.depositPool` with exact-receipt accounting.
+- [x] Add regression tests for the chosen M-1 behavior and for short-transfer launch
   pool deposits.
 - Clean up the stale full-suite Foundry failures.
