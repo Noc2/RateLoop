@@ -675,7 +675,9 @@ describe("resolveRounds", () => {
       dormancyEligible: true,
       now: 3_000_000n,
     });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const requestSignals: Array<AbortSignal | null | undefined> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignals.push(init?.signal);
       const url = new URL(input.toString());
       if (url.pathname === "/deployment") {
         return {
@@ -712,6 +714,10 @@ describe("resolveRounds", () => {
       expect.objectContaining({ functionName: "nextContentId" }),
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestSignals).toHaveLength(2);
+    expect(requestSignals[0]).toBeInstanceOf(AbortSignal);
+    expect(requestSignals[1]).toBeInstanceOf(AbortSignal);
+    expect(requestSignals[1]).not.toBe(requestSignals[0]);
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "markDormant",

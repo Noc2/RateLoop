@@ -707,13 +707,13 @@ async function fetchKeeperWorkFromPonder(
     url.searchParams.set("roundOpenRecentSeconds", proactiveRoundOpening.recentSeconds.toString());
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
-
   try {
     const headers = buildPonderRequestHeaders();
     await assertPonderDeploymentMatchesKeeper(baseUrl, headers);
-    const response = await fetch(url, { headers, signal: controller.signal });
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) {
       throw new Error(`Ponder keeper work request failed: ${response.status}`);
     }
@@ -735,8 +735,6 @@ async function fetchKeeperWorkFromPonder(
       error: getRevertReason(err),
     });
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
