@@ -52,6 +52,7 @@ import {
   readBrowserSigningExpectedX402Amount,
   validateBrowserX402AuthorizationRequest,
 } from "~~/lib/agent/browserSigningValidation";
+import { resolveDraftHandoffPaymentMode } from "~~/lib/agent/handoffDraftPaymentMode";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
 import { readHandoffRoundDurationDraft } from "~~/lib/agent/handoffRoundConfig";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
@@ -1663,9 +1664,16 @@ async function buildDraftRequestBody(
   delete draftBounty.bountyWindowSeconds;
   delete draftBounty.feedbackWindowSeconds;
   let feedbackBonusPaymentAmount = 0n;
+  const draftFeedbackBonusAsset =
+    form.feedbackBonusAmount === null ? null : (form.feedbackBonusAsset ?? form.bountyAsset);
+  const draftPaymentMode = resolveDraftHandoffPaymentMode({
+    bountyAsset: form.bountyAsset,
+    feedbackBonusAsset: draftFeedbackBonusAsset,
+    persistedPaymentMode: handoff.paymentMode,
+  });
   if (form.feedbackBonusAmount !== null) {
-    const feedbackBonusAsset = form.feedbackBonusAsset ?? form.bountyAsset;
-    if (handoff.paymentMode === "x402_authorization" && feedbackBonusAsset !== "usdc") {
+    const feedbackBonusAsset = draftFeedbackBonusAsset ?? form.bountyAsset;
+    if (draftPaymentMode === "x402_authorization" && feedbackBonusAsset !== "usdc") {
       throw new Error("EIP-3009 authorization can only fund USDC Feedback Bonuses.");
     }
     if (feedbackBonusAsset !== form.bountyAsset) {
@@ -1685,6 +1693,7 @@ async function buildDraftRequestBody(
   } else {
     delete requestBody.feedbackBonus;
   }
+  requestBody.paymentMode = draftPaymentMode;
   requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusPaymentAmount).toString();
   requestBody.roundConfig = {
     questionDurationSeconds: questionDurationSeconds.toString(),
@@ -2087,9 +2096,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
   const draftBountyAsset = draftForm?.bountyAsset ?? readBountyAsset(handoff);
+  const draftFeedbackBonusAsset =
+    draftForm?.feedbackBonusAsset ?? (draftForm?.feedbackBonusAmount === null ? null : draftBountyAsset);
+  const draftPaymentMode = resolveDraftHandoffPaymentMode({
+    bountyAsset: draftBountyAsset,
+    feedbackBonusAsset: draftFeedbackBonusAsset,
+    persistedPaymentMode: handoff?.paymentMode,
+  });
   const canDraftFeedbackBonusForPaymentMode =
-    handoff?.paymentMode === "wallet_calls" ||
-    (handoff?.paymentMode === "x402_authorization" && draftBountyAsset === "usdc");
+    draftPaymentMode === "wallet_calls" || (draftPaymentMode === "x402_authorization" && draftBountyAsset === "usdc");
   const canDraftFeedbackBonusForBounty = draftBountyAsset === "usdc" || draftBountyAsset === "lrep";
   const canDraftFeedbackBonus = canDraftFeedbackBonusForBounty && canDraftFeedbackBonusForPaymentMode;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
