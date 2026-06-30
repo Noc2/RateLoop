@@ -1058,7 +1058,7 @@ test("agent signing intent route fails closed without production app URL", async
   }
 });
 
-test("agent signing intent rejects Feedback Bonus wallet-call funding", async () => {
+test("agent signing intent accepts Feedback Bonus wallet-call funding", async () => {
   installAskOverrides();
 
   const response = await signingIntentsRoute.POST(
@@ -1077,9 +1077,12 @@ test("agent signing intent rejects Feedback Bonus wallet-call funding", async ()
     }),
   );
   const body = (await response.json()) as Record<string, unknown>;
+  const signingUrl = new URL(String(body.signingUrl));
 
-  assert.equal(response.status, 400);
-  assert.match(String(body.message), /Feedback Bonus funding requires eip3009_usdc_authorization payment mode/);
+  assert.equal(response.status, 200);
+  assert.match(String(body.id), /^asi_/);
+  assert.match(signingUrl.pathname, /^\/agent\/sign\/asi_/);
+  assert.ok(new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token"));
 });
 
 test("agent signing intent x402 prepare forwards signed authorizations", async () => {
@@ -2576,7 +2579,7 @@ test("agent ask handoff route blocks draft edits after prepare", async () => {
   assert.match(String(patchBody.message), /cannot be edited after preparation has started/);
 });
 
-test("agent ask handoff route rejects Feedback Bonus wallet-call funding", async () => {
+test("agent ask handoff route accepts Feedback Bonus wallet-call funding", async () => {
   installAskOverrides();
 
   const response = await handoffsRoute.POST(
@@ -2594,9 +2597,12 @@ test("agent ask handoff route rejects Feedback Bonus wallet-call funding", async
     }),
   );
   const body = (await response.json()) as Record<string, unknown>;
+  const handoffUrl = new URL(String(body.handoffUrl));
 
-  assert.equal(response.status, 400);
-  assert.match(String(body.message), /Feedback Bonus funding requires eip3009_usdc_authorization payment mode/);
+  assert.equal(response.status, 200);
+  assert.match(String(body.handoffId), /^ahf_/);
+  assert.match(handoffUrl.pathname, /^\/agent\/handoff\/ahf_/);
+  assert.ok(new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token"));
 });
 
 test("agent signing intent read requires a private token outside the request URL", async () => {

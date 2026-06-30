@@ -98,15 +98,21 @@ function assertSigningIntentFeedbackBonusMode(params: {
     throw new McpToolError("feedbackBonus must be an object when provided.");
   }
   const value = raw as JsonObject;
-  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
-  if (asset !== "USDC") {
-    throw new McpToolError("feedbackBonus.asset must be USDC.");
+  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : params.payload.bounty.asset;
+  if (asset !== "USDC" && asset !== "LREP") {
+    throw new McpToolError("feedbackBonus.asset must be USDC or LREP.");
   }
-  if (params.payload.bounty.asset !== "USDC" || params.payload.questions.length !== 1) {
-    throw new McpToolError("Feedback Bonus funding requires a single-question USDC ask.");
+  if (params.payload.questions.length !== 1) {
+    throw new McpToolError("Feedback Bonus funding requires a single-question ask.");
   }
-  if (params.paymentMode !== "x402_authorization") {
-    throw new McpToolError("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+  if (params.paymentMode === "x402_authorization") {
+    if (params.payload.bounty.asset !== "USDC" || asset !== "USDC") {
+      throw new McpToolError("EIP-3009 authorization can only fund USDC bounties and USDC Feedback Bonuses.");
+    }
+    return;
+  }
+  if (asset !== params.payload.bounty.asset) {
+    throw new McpToolError("Wallet-call Feedback Bonus funding must use the same asset as the bounty.");
   }
 }
 

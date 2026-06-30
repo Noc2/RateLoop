@@ -223,7 +223,9 @@ export function readBrowserSigningExpectedX402Amount(requestBody: JsonRecord | n
 
   const rawAsset = typeof feedbackBonus.asset === "string" ? feedbackBonus.asset.trim().toUpperCase() : "USDC";
   if (rawAsset === "LREP") {
-    throw new Error("Feedback Bonus funding currently supports USDC x402 authorization only.");
+    throw new Error(
+      "EIP-3009/x402 authorization can only fund USDC Feedback Bonuses; use wallet_calls for LREP Feedback Bonuses.",
+    );
   }
   if (rawAsset !== "USDC") {
     throw new Error("feedbackBonus.asset must be USDC for x402 authorization.");

@@ -253,7 +253,7 @@ const agentFeedbackBonusInputSchema = {
     amount: atomicAmountSchema,
     asset: {
       default: "USDC",
-      enum: ["USDC", "usdc"],
+      enum: ["USDC", "usdc", "LREP", "lrep"],
       type: "string",
     },
     awarder: {
@@ -467,7 +467,7 @@ const agentAskInputBaseProperties = {
   feedbackBonus: {
     ...agentFeedbackBonusInputSchema,
     description:
-      "Optional USDC pool for useful public feedback from revealed raters. Currently supported only for single-question USDC asks funded through eip3009_usdc_authorization or x402_authorization.",
+      "Optional LREP or USDC pool for useful public feedback from revealed raters on single-question asks. Wallet-call asks must use the same asset for bounty and Feedback Bonus; eip3009_usdc_authorization/x402_authorization can fund USDC bounty plus USDC Feedback Bonus in one submit transaction.",
   },
   roundConfig: agentRoundConfigInputSchema,
   roundPreset: agentRoundPresetInputSchema,
@@ -521,14 +521,14 @@ export const agentCreateAskHandoffInputSchema = {
     },
     maxPaymentAmount: {
       description:
-        "Maximum total payment spend in atomic units for the selected funding mode. Native x402 payments are USDC-only; wallet-call bounties may use LREP or USDC.",
+        "Maximum total payment spend in atomic units for the selected funding mode, including any Feedback Bonus. EIP-3009/x402 payments are USDC-only; wallet-call bounty and same-asset Feedback Bonus funding may use LREP or USDC.",
       pattern: "^\\d+$",
       type: "string",
     },
     paymentMode: {
       default: "eip3009_usdc_authorization",
       description:
-        "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties or bundled asks. Feedback Bonuses require the USDC authorization path.",
+        "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties, bundled asks, hosts that want raw wallet calls, or same-asset Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus.",
       enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
@@ -643,7 +643,7 @@ export const agentAskHumansInputSchema = {
     ...agentAskInputBaseProperties,
     maxPaymentAmount: {
       description:
-        "Maximum total payment spend in atomic units for the selected funding mode. Native x402 payments are USDC-only; wallet-call bounties may use LREP or USDC.",
+        "Maximum total payment spend in atomic units for the selected funding mode, including any Feedback Bonus. EIP-3009/x402 payments are USDC-only; wallet-call bounty and same-asset Feedback Bonus funding may use LREP or USDC.",
       pattern: "^\\d+$",
       type: "string",
     },
@@ -670,7 +670,7 @@ export const agentAskHumansInputSchema = {
     paymentMode: {
       default: "eip3009_usdc_authorization",
       description:
-        "Eligible single-question USDC asks default to eip3009_usdc_authorization so the wallet signs a USDC authorization and submits one transaction. wallet_calls returns approve/reserve/submit transactions and is required for LREP bounties and bundled asks. Feedback Bonuses require the USDC authorization path. x402_authorization is accepted as a legacy compatibility alias.",
+        "Eligible single-question USDC asks default to eip3009_usdc_authorization so the wallet signs a USDC authorization and submits one transaction. wallet_calls returns approve/reserve/submit transactions and is required for LREP bounties, bundled asks, hosts that need raw calls, or same-asset Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus. x402_authorization is accepted as a legacy compatibility alias.",
       enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
@@ -710,6 +710,22 @@ export const agentConfirmAskTransactionsInputSchema = {
       description: "Transaction hashes produced by executing the wallet transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
       maxItems: 32,
+      minItems: 1,
+      type: "array",
+    },
+  },
+  required: ["operationKey", "transactionHashes"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentConfirmFeedbackBonusTransactionsInputSchema = {
+  additionalProperties: false,
+  properties: {
+    operationKey: { description: "RateLoop operation key returned by rateloop_ask_humans.", type: "string" },
+    transactionHashes: {
+      description: "Transaction hashes produced by executing the Feedback Bonus wallet transaction plan.",
+      items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
+      maxItems: 8,
       minItems: 1,
       type: "array",
     },

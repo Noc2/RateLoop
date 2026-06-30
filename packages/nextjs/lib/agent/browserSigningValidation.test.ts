@@ -154,7 +154,7 @@ test("validateBrowserX402AuthorizationRequest accepts exact RateLoop EIP-3009 ty
         bounty: { amount },
         feedbackBonus: { amount: "500000", asset: "LREP" },
       }),
-    /Feedback Bonus funding currently supports USDC x402 authorization only/,
+    /EIP-3009\/x402 authorization can only fund USDC Feedback Bonuses/,
   );
 });
 

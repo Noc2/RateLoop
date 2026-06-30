@@ -343,7 +343,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.equal(handoffSchema.properties?.ttlMs?.maximum, 1_800_000);
   assert.match(handoffSchema.properties?.ttlMs?.description ?? "", /maximum 1800000/);
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
-  assert.deepEqual(askSchema.properties?.feedbackBonus?.properties?.asset?.enum, ["USDC", "usdc"]);
+  assert.deepEqual(askSchema.properties?.feedbackBonus?.properties?.asset?.enum, ["USDC", "usdc", "LREP", "lrep"]);
   assert.deepEqual(askOutputSchema.properties?.pollAfterMs?.type, ["integer", "null"]);
   assert.ok(statusSchema.properties?.walletAddress);
   assert.ok(statusSchema.properties?.dryRun);

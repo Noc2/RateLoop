@@ -663,24 +663,35 @@ test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls
   assert.equal(repeatedBody.payment.asset, TEST_CONFIG.lrepAddress);
 });
 
-test("prepareAgentWalletQuestionSubmissionRequest rejects wallet-call feedback bonuses", async () => {
+test("prepareAgentWalletQuestionSubmissionRequest stores wallet-call feedback bonus requests", async () => {
   const payload = buildPayload("wallet-plan-feedback-bonus");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
 
-  await assert.rejects(
-    () =>
-      prepareAgentWalletQuestionSubmissionRequest({
-        agentId: "agent-wallet",
-        feedbackBonus: {
-          amount: 2_000_000n,
-          asset: "USDC",
-          awarder: walletAddress,
-        },
-        payload,
-        walletAddress,
-      }),
-    /Feedback Bonus funding requires USDC x402 authorization for creation-time asks/,
-  );
+  const result = await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    feedbackBonus: {
+      amount: 2_000_000n,
+      asset: "USDC",
+      awarder: walletAddress,
+    },
+    payload,
+    walletAddress,
+  });
+  const body = result.body as { status: string; transactionPlan: { calls: unknown[] } };
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  const receipt = JSON.parse(record?.paymentReceipt ?? "{}") as {
+    feedbackBonus?: { amount: string; asset: string; status: string };
+  };
+
+  assert.equal(result.status, 202);
+  assert.equal(body.status, "awaiting_wallet_signature");
+  assert.equal(body.transactionPlan.calls.length, 1);
+  assert.equal(receipt.feedbackBonus?.amount, "2000000");
+  assert.equal(receipt.feedbackBonus?.asset, "USDC");
+  assert.equal(receipt.feedbackBonus?.status, "pending_question_confirmation");
 });
 
 test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments before confirm", async () => {

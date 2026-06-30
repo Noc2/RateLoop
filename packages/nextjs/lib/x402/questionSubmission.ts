@@ -1,6 +1,11 @@
-import { ContentRegistryAbi, FeedbackBonusEscrowAbi, ProtocolConfigAbi } from "@rateloop/contracts/abis";
+import {
+  ContentRegistryAbi,
+  FeedbackBonusEscrowAbi,
+  ProtocolConfigAbi,
+  RoundVotingEngineAbi,
+} from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
-import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
+import { ROUND_STATE, getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
@@ -79,6 +84,7 @@ import { isBasePreconfRpcChain } from "~~/utils/rpcUrls";
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
+const FEEDBACK_BONUS_ASSET_USDC = 1;
 const SUBMISSION_REWARD_DECIMALS = 6;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
@@ -225,6 +231,9 @@ type SubmittedRewardAttachment = StoredQuestionRewardTerms & {
 type AgentWalletTransactionPhase =
   | "approve_lrep"
   | "approve_usdc"
+  | "approve_feedback_bonus_lrep"
+  | "approve_feedback_bonus_usdc"
+  | "create_feedback_bonus_pool"
   | "reserve_submission"
   | "submit_question"
   | "submit_x402_question";
@@ -272,7 +281,12 @@ type X402FeedbackBonusTerms = {
   awarder: Address;
 };
 
-type StoredFeedbackBonusStatus = "requested" | "pending_question_confirmation" | "funded" | "failed";
+type StoredFeedbackBonusStatus =
+  | "requested"
+  | "pending_question_confirmation"
+  | "awaiting_wallet_signature"
+  | "funded"
+  | "failed";
 
 type StoredFeedbackBonusRequest = {
   amount: string;
@@ -286,6 +300,27 @@ type StoredFeedbackBonusRequest = {
   roundId?: string;
   status?: StoredFeedbackBonusStatus;
   transactionHashes?: Hex[];
+};
+
+type AgentFeedbackBonusTransactionPlan = {
+  amount: string;
+  asset: FeedbackBonusAsset;
+  awarder: Address;
+  calls: AgentWalletTransactionCall[];
+  contentId: string;
+  feedbackBonusEscrowAddress: Address;
+  feedbackClosesAt: string;
+  operationKey: `0x${string}`;
+  payment: {
+    amount: string;
+    asset: FeedbackBonusAsset;
+    decimals: number;
+    spender: Address;
+    tokenAddress: Address;
+  };
+  requiresOrderedExecution: true;
+  roundId: string;
+  walletAddress: Address;
 };
 
 type NativeX402PaymentAuthorization = {
@@ -364,6 +399,14 @@ function submissionRewardTokenAddress(
   config: X402QuestionSubmissionConfig,
   asset: SubmissionRewardAsset,
 ): Address | null {
+  return asset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
+}
+
+function feedbackBonusAssetId(asset: FeedbackBonusAsset) {
+  return asset === "LREP" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
+}
+
+function feedbackBonusTokenAddress(config: X402QuestionSubmissionConfig, asset: FeedbackBonusAsset): Address | null {
   return asset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
 }
 
@@ -606,6 +649,7 @@ function parseStoredFeedbackBonusRequest(value: unknown): StoredFeedbackBonusReq
   const status: StoredFeedbackBonusStatus =
     rawStatus === "requested" ||
     rawStatus === "pending_question_confirmation" ||
+    rawStatus === "awaiting_wallet_signature" ||
     rawStatus === "funded" ||
     rawStatus === "failed"
       ? rawStatus
@@ -2957,10 +3001,13 @@ function buildFeedbackBonusStatusBody(record: X402QuestionSubmissionRecord | nul
     };
   }
 
+  const submitted = record?.status === "submitted" && Boolean(record.contentId);
   const status =
     feedbackBonus.status === "funded" || feedbackBonus.status === "failed"
       ? feedbackBonus.status
-      : "pending_question_confirmation";
+      : feedbackBonus.status === "awaiting_wallet_signature" || submitted
+        ? "awaiting_wallet_signature"
+        : "pending_question_confirmation";
 
   return {
     amount: feedbackBonus.amount,
@@ -3031,6 +3078,264 @@ function readOriginalClientRequestId(record: X402QuestionSubmissionRecord | null
   } catch {
     return null;
   }
+}
+
+function readStoredQuestionDurationSeconds(receipt: StoredWalletSubmissionPlanReceipt | null): bigint {
+  const rawDuration = receipt?.expectedRoundConfig?.questionDurationSeconds;
+  if (typeof rawDuration !== "string" || !/^\d+$/.test(rawDuration) || BigInt(rawDuration) === 0n) {
+    throw new X402QuestionConflictError("Feedback Bonus plan is missing the submitted question duration.");
+  }
+  return BigInt(rawDuration);
+}
+
+async function resolveFeedbackBonusRoundTarget(params: {
+  config: X402QuestionSubmissionConfig;
+  contentId: string;
+  durationSeconds: bigint;
+  publicClient: X402PublicClient;
+}): Promise<{ feedbackClosesAt: bigint; roundId: bigint }> {
+  const votingEngineAddress = (await params.publicClient.readContract({
+    address: params.config.contentRegistryAddress,
+    abi: ContentRegistryAbi,
+    functionName: "votingEngine",
+  })) as Address;
+  const currentRoundId = (await params.publicClient.readContract({
+    address: votingEngineAddress,
+    abi: RoundVotingEngineAbi,
+    functionName: "currentRoundId",
+    args: [BigInt(params.contentId)],
+  })) as bigint;
+  const roundId = currentRoundId > 0n ? currentRoundId : 1n;
+  const roundCore = (await params.publicClient.readContract({
+    address: votingEngineAddress,
+    abi: RoundVotingEngineAbi,
+    functionName: "roundCore",
+    args: [BigInt(params.contentId), roundId],
+  })) as any;
+  const startTime = BigInt(roundCore?.startTime ?? roundCore?.[0] ?? 0);
+  const state = Number(roundCore?.state ?? roundCore?.[1] ?? -1);
+  if (startTime === 0n || state !== ROUND_STATE.Open) {
+    throw new X402QuestionConflictError(
+      "Feedback Bonus can only be funded while the submitted question round is open.",
+    );
+  }
+  const feedbackClosesAt = startTime + params.durationSeconds;
+  const latestBlock = await params.publicClient.getBlock({ blockTag: "latest" });
+  if (feedbackClosesAt <= latestBlock.timestamp) {
+    throw new X402QuestionConflictError("Feedback Bonus close time is in the past.");
+  }
+  return { feedbackClosesAt, roundId };
+}
+
+export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
+  operationKey: `0x${string}`;
+}): Promise<{ body: unknown; status: number }> {
+  const dependencies = getQuestionSubmissionDependencies();
+  const record = await getX402QuestionSubmissionByOperationKey(params.operationKey);
+  if (!record) {
+    throw new X402QuestionConflictError("Agent wallet submission plan was not found.");
+  }
+  const planReceipt = parseStoredSubmissionPlanReceipt(record.paymentReceipt);
+  const feedbackBonus = planReceipt?.feedbackBonus;
+  if (!feedbackBonus) {
+    throw new X402QuestionConflictError("Feedback Bonus was not requested for this ask.");
+  }
+  if (feedbackBonus.status === "funded" && feedbackBonus.poolId) {
+    return {
+      body: {
+        feedbackBonus: buildFeedbackBonusStatusBody(record),
+        operationKey: params.operationKey,
+        status: "submitted",
+      },
+      status: 200,
+    };
+  }
+  if (record.status !== "submitted" || !record.contentId) {
+    throw new X402QuestionConflictError("Confirm the question submission before funding the Feedback Bonus.");
+  }
+  if (record.bundleId || record.questionCount !== 1) {
+    throw new X402QuestionConflictError("Feedback Bonuses are currently supported for single-question asks only.");
+  }
+  if (!record.payerAddress || !isAddress(record.payerAddress)) {
+    throw new X402QuestionConflictError("Feedback Bonus plan is missing a wallet address.");
+  }
+
+  const config = dependencies.resolveX402QuestionConfig(record.chainId);
+  if (!config.feedbackBonusEscrowAddress) {
+    throw new X402QuestionConfigError("Feedback Bonus escrow is not deployed for the requested chain.");
+  }
+  const publicClient = dependencies.createPublicQuestionClient(config);
+  const { feedbackClosesAt, roundId } = await resolveFeedbackBonusRoundTarget({
+    config,
+    contentId: record.contentId,
+    durationSeconds: readStoredQuestionDurationSeconds(planReceipt),
+    publicClient,
+  });
+
+  const amount = BigInt(feedbackBonus.amount);
+  const walletAddress = record.payerAddress as Address;
+  const tokenAddress = feedbackBonusTokenAddress(config, feedbackBonus.asset);
+  if (!tokenAddress) {
+    throw new X402QuestionConfigError(`${feedbackBonus.asset} is not deployed for Feedback Bonus funding.`);
+  }
+  const assetId = feedbackBonusAssetId(feedbackBonus.asset);
+  const plan: AgentFeedbackBonusTransactionPlan = {
+    amount: feedbackBonus.amount,
+    asset: feedbackBonus.asset,
+    awarder: feedbackBonus.awarder,
+    calls: [
+      {
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [config.feedbackBonusEscrowAddress, amount],
+        }),
+        description: `Approve Feedback Bonus escrow to pull the exact ${feedbackBonus.asset} bonus amount`,
+        functionName: "approve",
+        id: `approve-feedback-bonus-${feedbackBonus.asset.toLowerCase()}`,
+        phase: feedbackBonus.asset === "LREP" ? "approve_feedback_bonus_lrep" : "approve_feedback_bonus_usdc",
+        to: tokenAddress,
+        value: "0",
+      },
+      {
+        data: encodeFunctionData({
+          abi: FeedbackBonusEscrowAbi,
+          functionName: "createFeedbackBonusPoolWithAsset",
+          args: [BigInt(record.contentId), roundId, assetId, amount, feedbackClosesAt, feedbackBonus.awarder],
+        }),
+        description: "Create the optional Feedback Bonus pool for useful rater feedback",
+        functionName: "createFeedbackBonusPoolWithAsset",
+        id: "create-feedback-bonus-pool",
+        phase: "create_feedback_bonus_pool",
+        to: config.feedbackBonusEscrowAddress,
+        value: "0",
+      },
+    ],
+    contentId: record.contentId,
+    feedbackBonusEscrowAddress: config.feedbackBonusEscrowAddress,
+    feedbackClosesAt: feedbackClosesAt.toString(),
+    operationKey: params.operationKey,
+    payment: {
+      amount: feedbackBonus.amount,
+      asset: feedbackBonus.asset,
+      decimals: SUBMISSION_REWARD_DECIMALS,
+      spender: config.feedbackBonusEscrowAddress,
+      tokenAddress,
+    },
+    requiresOrderedExecution: true,
+    roundId: roundId.toString(),
+    walletAddress,
+  };
+
+  await updateStoredFeedbackBonusReceipt({
+    feedbackClosesAt: plan.feedbackClosesAt,
+    operationKey: params.operationKey,
+    preparedAt: new Date(),
+    roundId: plan.roundId,
+    status: "awaiting_wallet_signature",
+  });
+
+  return {
+    body: {
+      feedbackBonus: {
+        amount: feedbackBonus.amount,
+        asset: feedbackBonus.asset,
+        awarder: feedbackBonus.awarder,
+        contentId: record.contentId,
+        feedbackClosesAt: plan.feedbackClosesAt,
+        payment: plan.payment,
+        roundId: plan.roundId,
+        status: "awaiting_wallet_signature",
+        transactionPlan: {
+          calls: plan.calls,
+          requiresOrderedExecution: plan.requiresOrderedExecution,
+        },
+      },
+      operationKey: params.operationKey,
+      status: "awaiting_wallet_signature",
+      transactionPlan: {
+        calls: plan.calls,
+        requiresOrderedExecution: plan.requiresOrderedExecution,
+      },
+      wallet: {
+        address: walletAddress,
+        fundingMode: "agent_wallet",
+        note: "The wallet signer must execute every Feedback Bonus call; RateLoop does not receive funds.",
+      },
+    },
+    status: 202,
+  };
+}
+
+export async function confirmFeedbackBonusQuestionSubmissionRequest(params: {
+  operationKey: `0x${string}`;
+  transactionHashes: Hex[];
+}): Promise<{ body: unknown; status: number }> {
+  assertTransactionHashes(params.transactionHashes);
+  const dependencies = getQuestionSubmissionDependencies();
+  const record = await getX402QuestionSubmissionByOperationKey(params.operationKey);
+  if (!record) {
+    throw new X402QuestionConflictError("Agent wallet submission plan was not found.");
+  }
+  const feedbackBonus = parseStoredSubmissionPlanReceipt(record.paymentReceipt)?.feedbackBonus;
+  if (!feedbackBonus) {
+    throw new X402QuestionConflictError("Feedback Bonus was not requested for this ask.");
+  }
+  if (feedbackBonus.status === "funded" && feedbackBonus.poolId) {
+    return {
+      body: {
+        feedbackBonus: buildFeedbackBonusStatusBody(record),
+        operationKey: params.operationKey,
+        status: "submitted",
+      },
+      status: 200,
+    };
+  }
+  if (!record.contentId) {
+    throw new X402QuestionConflictError("Question content id is required before confirming the Feedback Bonus.");
+  }
+  if (!record.payerAddress || !isAddress(record.payerAddress)) {
+    throw new X402QuestionConflictError("Feedback Bonus plan is missing a wallet address.");
+  }
+
+  const config = dependencies.resolveX402QuestionConfig(record.chainId);
+  if (!config.feedbackBonusEscrowAddress) {
+    throw new X402QuestionConfigError("Feedback Bonus escrow is not deployed for the requested chain.");
+  }
+
+  const publicClient = dependencies.createPublicQuestionClient(config);
+  let createdPool: ReturnType<typeof readFeedbackBonusPoolCreated> | null = null;
+  const receipts = await Promise.all(
+    params.transactionHashes.map(hash => dependencies.waitForSuccessfulReceipt(publicClient, hash)),
+  );
+  for (const receipt of receipts) {
+    createdPool = readFeedbackBonusPoolCreated(receipt, config.feedbackBonusEscrowAddress) ?? createdPool;
+  }
+  if (!createdPool) {
+    throw new X402QuestionConflictError("Confirmed transactions did not create a Feedback Bonus pool.");
+  }
+  assertConfirmedFeedbackBonusPool({
+    contentIds: submittedRecordContentIds(record),
+    createdPool,
+    expectedRoundId: feedbackBonus.roundId,
+    feedbackBonus,
+    funderAddress: record.payerAddress as Address,
+  });
+  await storeConfirmedFeedbackBonusPool({
+    createdPool,
+    operationKey: params.operationKey,
+    transactionHashes: params.transactionHashes,
+  });
+  const updatedRecord = await getX402QuestionSubmissionByOperationKey(params.operationKey);
+
+  return {
+    body: {
+      feedbackBonus: buildFeedbackBonusStatusBody(updatedRecord ?? record),
+      operationKey: params.operationKey,
+      status: "submitted",
+    },
+    status: 200,
+  };
 }
 
 function serializeQuestionBountyForResponse(bounty: X402QuestionPayload["bounty"]) {
@@ -3204,10 +3509,6 @@ async function prepareWalletQuestionSubmissionRequest(params: {
     agentId: params.agentId,
     ownerWalletAddress: params.walletAddress,
   });
-
-  if (params.feedbackBonus) {
-    throw new X402QuestionInputError("Feedback Bonus funding requires USDC x402 authorization for creation-time asks.");
-  }
 
   const plan = await dependencies.buildAgentWalletQuestionSubmissionPlan({
     agentId: params.agentId,

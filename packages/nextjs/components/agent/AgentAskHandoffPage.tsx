@@ -235,7 +235,7 @@ type DraftForm = {
   bountyAmount: string;
   bountyAsset: SubmissionRewardAsset;
   feedbackBonusAmount: string | null;
-  feedbackBonusAsset: "usdc" | null;
+  feedbackBonusAsset: FeedbackBonusAsset | null;
   questions: DraftQuestionForm[];
   roundBlindSeconds: string;
   roundMaxDurationOverridden: boolean;
@@ -1350,7 +1350,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
     feedbackBonusAmount: feedbackBonusSummary
       ? formatFeedbackBonusInput(feedbackBonusSummary.amount, feedbackBonusSummary.asset)
       : null,
-    feedbackBonusAsset: feedbackBonusSummary ? "usdc" : null,
+    feedbackBonusAsset: feedbackBonusSummary ? feedbackBonusSummary.asset : null,
     questions: questions.length
       ? questions.map(question => ({
           categoryId: question.categoryId,
@@ -1662,11 +1662,12 @@ async function buildDraftRequestBody(
   delete draftBounty.feedbackWindowSeconds;
   let feedbackBonusPaymentAmount = 0n;
   if (form.feedbackBonusAmount !== null) {
-    if (form.bountyAsset !== "usdc") {
-      throw new Error("Feedback Bonuses require a single-question USDC ask.");
+    const feedbackBonusAsset = form.feedbackBonusAsset ?? form.bountyAsset;
+    if (handoff.paymentMode === "x402_authorization" && feedbackBonusAsset !== "usdc") {
+      throw new Error("EIP-3009 authorization can only fund USDC Feedback Bonuses.");
     }
-    if (handoff.paymentMode !== "x402_authorization") {
-      throw new Error("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+    if (feedbackBonusAsset !== form.bountyAsset) {
+      throw new Error("Feedback Bonus funding must use the same asset as the bounty.");
     }
     const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
     if (feedbackBonusAmount === null) {
@@ -1675,7 +1676,7 @@ async function buildDraftRequestBody(
     requestBody.feedbackBonus = {
       ...(isJsonRecord(requestBody.feedbackBonus) ? requestBody.feedbackBonus : {}),
       amount: feedbackBonusAmount.toString(),
-      asset: "USDC",
+      asset: feedbackBonusAsset === "lrep" ? "LREP" : "USDC",
     };
     delete (requestBody.feedbackBonus as JsonRecord).feedbackClosesAt;
     feedbackBonusPaymentAmount = feedbackBonusAmount;
@@ -1754,6 +1755,13 @@ function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): Su
   };
 }
 
+function readFeedbackBonusTransactionPlan(ask: unknown): HandoffTransactionPlan | null {
+  if (!isJsonRecord(ask) || !isJsonRecord(ask.feedbackBonus)) return null;
+  const plan = ask.feedbackBonus.transactionPlan;
+  if (!isJsonRecord(plan) || !Array.isArray(plan.calls) || plan.calls.length === 0) return null;
+  return plan as HandoffTransactionPlan;
+}
+
 function readBounty(handoff: Handoff | null) {
   const amount = readBountyAmountAtomic(handoff);
   return amount === null ? "Unknown bounty" : formatSubmissionRewardAmount(amount, readBountyAsset(handoff));
@@ -1801,7 +1809,10 @@ function readDraftFeedbackBonusUsdcAmountAtomic(form: DraftForm | null, handoff:
 function readDraftFeedbackBonusLabel(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.feedbackBonusAmount?.trim();
   if (draftAmount && form?.feedbackBonusAsset) {
-    return `${draftAmount} USDC`;
+    const parsed = parseFeedbackBonusAmount(draftAmount);
+    return parsed === null
+      ? `${draftAmount} ${form.feedbackBonusAsset.toUpperCase()}`
+      : formatFeedbackBonusAmount(parsed, form.feedbackBonusAsset);
   }
 
   return readFeedbackBonusSummary(handoff)?.label ?? "Not included";
@@ -2062,11 +2073,16 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   );
   const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
-  const canDraftFeedbackBonusForBounty = (draftForm?.bountyAsset ?? readBountyAsset(handoff)) === "usdc";
-  const canDraftFeedbackBonusForPaymentMode = handoff?.paymentMode === "x402_authorization";
+  const draftBountyAsset = draftForm?.bountyAsset ?? readBountyAsset(handoff);
+  const canDraftFeedbackBonusForPaymentMode =
+    handoff?.paymentMode === "wallet_calls" ||
+    (handoff?.paymentMode === "x402_authorization" && draftBountyAsset === "usdc");
+  const canDraftFeedbackBonusForBounty = draftBountyAsset === "usdc" || draftBountyAsset === "lrep";
   const canDraftFeedbackBonus = canDraftFeedbackBonusForBounty && canDraftFeedbackBonusForPaymentMode;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
+  const draftFeedbackBonusAssetLabel =
+    (draftForm?.feedbackBonusAsset ?? draftBountyAsset) === "lrep" ? "LREP" : usdcDisplayName;
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
   const draftBountyUsdcAmountAtomic = readDraftBountyUsdcAmountAtomic(draftForm, handoff);
   const draftFeedbackBonusUsdcAmountAtomic = readDraftFeedbackBonusUsdcAmountAtomic(draftForm, handoff);
@@ -2261,12 +2277,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       setDraftForm(current => {
         if (!current) return current;
         const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
+        const parsedFeedbackBonusAmount =
+          current.feedbackBonusAmount === null ? null : parseFeedbackBonusAmount(current.feedbackBonusAmount);
         return {
           ...current,
           bountyAmount: parsedAmount === null ? current.bountyAmount : formatSubmissionRewardInput(parsedAmount, asset),
           bountyAsset: asset,
-          feedbackBonusAmount: asset === "usdc" ? current.feedbackBonusAmount : null,
-          feedbackBonusAsset: asset === "usdc" ? current.feedbackBonusAsset : null,
+          feedbackBonusAmount:
+            current.feedbackBonusAmount === null
+              ? null
+              : parsedFeedbackBonusAmount === null
+                ? current.feedbackBonusAmount
+                : formatFeedbackBonusInput(parsedFeedbackBonusAmount, asset),
+          feedbackBonusAsset: current.feedbackBonusAmount === null ? null : asset,
         };
       });
       setDraftError(null);
@@ -2280,7 +2303,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       return {
         ...current,
         feedbackBonusAmount: DEFAULT_FEEDBACK_BONUS_AMOUNT,
-        feedbackBonusAsset: "usdc",
+        feedbackBonusAsset: current.bountyAsset,
       };
     });
     setDraftError(null);
@@ -2772,6 +2795,41 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
         submittedContentForShare =
           readSubmittedContentForShare(targetHandoff, nextHandoff.ask) ?? submittedContentForShare;
+
+        const feedbackBonusPlan = readFeedbackBonusTransactionPlan(nextHandoff.ask);
+        if (feedbackBonusPlan) {
+          try {
+            const feedbackBonusHashes = await executeWalletTransactionPlan({
+              action: "ask",
+              calls: feedbackBonusPlan.calls ?? [],
+              chainId: handoffChainId,
+              getPostCallDelayMs,
+              requiresAtomicExecution: feedbackBonusPlan.requiresAtomicExecution,
+              requiresOrderedExecution: feedbackBonusPlan.requiresOrderedExecution,
+            });
+            const bonusResponse = await fetch(`/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+              body: JSON.stringify({ token, transactionHashes: feedbackBonusHashes }),
+              headers: { "content-type": "application/json" },
+              method: "POST",
+            });
+            const bonusBody = (await bonusResponse.json()) as CompleteResponse | { error?: string; message?: string };
+            if (!bonusResponse.ok) throw new Error(readResponseError(bonusBody, "Failed to confirm Feedback Bonus."));
+            const bonusHandoff = bonusBody as CompleteResponse;
+            setHandoff(current => ({
+              ...nextHandoff,
+              ask: {
+                ...(isJsonRecord(nextHandoff.ask) ? nextHandoff.ask : {}),
+                ...(isJsonRecord(bonusHandoff.ask) ? { feedbackBonus: bonusHandoff.ask.feedbackBonus } : {}),
+              },
+              publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? targetHandoff.publicUrl ?? null,
+            }));
+            notification.success("Feedback Bonus funded.");
+          } catch (feedbackBonusError) {
+            const message = readHandoffActionError(feedbackBonusError, "Failed to fund Feedback Bonus.");
+            setError(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
+            notification.error(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
+          }
+        }
 
         dismissTransactionStatusToast();
         notification.success("Ask submitted to RateLoop.");
@@ -3439,11 +3497,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           return;
                         }
                         if (!canDraftFeedbackBonusForBounty) {
-                          notification.info("Feedback Bonuses require a USDC bounty.");
+                          notification.info("Feedback Bonuses require an LREP or USDC bounty.");
                           return;
                         }
                         if (!canDraftFeedbackBonusForPaymentMode) {
-                          notification.info("Feedback Bonuses require an x402 USDC authorization handoff.");
+                          notification.info(
+                            "Use wallet calls for LREP bonuses or x402 authorization for USDC bonuses.",
+                          );
                           return;
                         }
                         enableDraftFeedbackBonus();
@@ -3459,19 +3519,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     </p>
                   ) : !canDraftFeedbackBonusForBounty ? (
                     <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
-                      Feedback Bonuses require a single-question USDC ask. Switch the bounty asset to USDC before adding
-                      one.
+                      Feedback Bonuses require a single-question LREP or USDC ask.
                     </p>
                   ) : !canDraftFeedbackBonusForPaymentMode ? (
                     <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
-                      Feedback Bonuses require an x402 USDC authorization handoff.
+                      Use wallet calls for LREP bonuses or x402 authorization for USDC bonuses.
                     </p>
                   ) : null}
                   {draftForm?.feedbackBonusAmount !== null ? (
                     <div>
                       <div>
                         <label htmlFor="agent-ask-feedback-bonus-amount" className={MONEY_FIELD_LABEL_CLASS}>
-                          Amount (USDC)
+                          Amount ({draftFeedbackBonusAssetLabel})
                         </label>
                       </div>
                       <div className="mt-1.5 flex items-start gap-3">
@@ -3485,7 +3544,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
                         />
                         <div className="flex h-12 items-center rounded-box border border-base-300 bg-base-200 px-4 text-sm font-semibold text-base-content/80">
-                          USDC
+                          {draftFeedbackBonusAssetLabel}
                         </div>
                       </div>
                     </div>

@@ -339,7 +339,18 @@ export function parseAgentAskHandoffPaymentMode(
 
 function defaultAgentAskHandoffPaymentMode(params: {
   parsed: ReturnType<typeof parseX402QuestionRequest>;
+  requestBody?: JsonObject;
 }): AgentAskHandoffPaymentMode {
+  const feedbackBonus =
+    params.requestBody?.feedbackBonus &&
+    typeof params.requestBody.feedbackBonus === "object" &&
+    !Array.isArray(params.requestBody.feedbackBonus)
+      ? (params.requestBody.feedbackBonus as JsonObject)
+      : null;
+  const feedbackAsset = typeof feedbackBonus?.asset === "string" ? feedbackBonus.asset.trim().toUpperCase() : null;
+  if (feedbackAsset && (feedbackAsset !== "USDC" || params.parsed.bounty.asset !== "USDC")) {
+    return "wallet_calls";
+  }
   return params.parsed.bounty.asset === "USDC" && params.parsed.questions.length === 1
     ? "x402_authorization"
     : "wallet_calls";
@@ -351,7 +362,7 @@ function resolveAgentAskHandoffPaymentMode(params: {
 }) {
   return parseAgentAskHandoffPaymentMode(
     params.requestBody.paymentMode ?? params.requestBody.fundingMode,
-    defaultAgentAskHandoffPaymentMode({ parsed: params.parsed }),
+    defaultAgentAskHandoffPaymentMode({ parsed: params.parsed, requestBody: params.requestBody }),
   );
 }
 
@@ -366,15 +377,21 @@ function assertAgentAskHandoffFeedbackBonusMode(params: {
     throw new AgentAskHandoffError("feedbackBonus must be an object when provided.");
   }
   const value = raw as JsonObject;
-  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
-  if (asset !== "USDC") {
-    throw new AgentAskHandoffError("feedbackBonus.asset must be USDC.");
+  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : params.parsed.bounty.asset;
+  if (asset !== "USDC" && asset !== "LREP") {
+    throw new AgentAskHandoffError("feedbackBonus.asset must be USDC or LREP.");
   }
-  if (params.parsed.bounty.asset !== "USDC" || params.parsed.questions.length !== 1) {
-    throw new AgentAskHandoffError("Feedback Bonus funding requires a single-question USDC ask.");
+  if (params.parsed.questions.length !== 1) {
+    throw new AgentAskHandoffError("Feedback Bonus funding requires a single-question ask.");
   }
-  if (params.paymentMode !== "x402_authorization") {
-    throw new AgentAskHandoffError("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+  if (params.paymentMode === "x402_authorization") {
+    if (params.parsed.bounty.asset !== "USDC" || asset !== "USDC") {
+      throw new AgentAskHandoffError("EIP-3009 authorization can only fund USDC bounties and USDC Feedback Bonuses.");
+    }
+    return;
+  }
+  if (asset !== params.parsed.bounty.asset) {
+    throw new AgentAskHandoffError("Wallet-call Feedback Bonus funding must use the same asset as the bounty.");
   }
 }
 

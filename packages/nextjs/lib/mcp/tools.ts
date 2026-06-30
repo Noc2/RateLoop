@@ -58,6 +58,7 @@ import {
   agentAskHumansOutputSchema,
   agentBalanceOutputSchema,
   agentConfirmAskTransactionsInputSchema,
+  agentConfirmFeedbackBonusTransactionsInputSchema,
   agentConfirmRatingTransactionsInputSchema,
   agentCreateAskHandoffInputSchema,
   agentHandoffStatusInputSchema,
@@ -163,11 +164,13 @@ import {
   X402QuestionConflictError,
   buildPermissionlessWalletClientRequestId,
   confirmAgentWalletQuestionSubmissionRequest,
+  confirmFeedbackBonusQuestionSubmissionRequest,
   getX402QuestionSubmissionByClientRequest,
   getX402QuestionSubmissionByOperationKey,
   isPublicPermissionlessQuestionSubmissionRecord,
   preflightX402QuestionSubmission,
   prepareAgentWalletQuestionSubmissionRequest,
+  prepareFeedbackBonusQuestionSubmissionRequest,
   prepareNativeX402QuestionSubmissionRequest,
   preparePermissionlessNativeX402QuestionSubmissionRequest,
   preparePermissionlessWalletQuestionSubmissionRequest,
@@ -211,6 +214,7 @@ const IMAGE_BASE64_TRANSPORT_HINT =
 
 type McpToolDependencies = {
   confirmAgentWalletQuestionSubmissionRequest: typeof confirmAgentWalletQuestionSubmissionRequest;
+  confirmFeedbackBonusQuestionSubmissionRequest: typeof confirmFeedbackBonusQuestionSubmissionRequest;
   enqueueAgentCallbackEvent: typeof enqueueAgentCallbackEvent;
   getAllVotes: typeof ponderApi.getAllVotes;
   getContentById: typeof ponderApi.getContentById;
@@ -218,6 +222,7 @@ type McpToolDependencies = {
   getRatingTransactionReceipt: typeof getRatingTransactionReceipt;
   getMcpAgentBudgetSummary: typeof getMcpAgentBudgetSummary;
   prepareAgentWalletQuestionSubmissionRequest: typeof prepareAgentWalletQuestionSubmissionRequest;
+  prepareFeedbackBonusQuestionSubmissionRequest: typeof prepareFeedbackBonusQuestionSubmissionRequest;
   prepareNativeX402QuestionSubmissionRequest: typeof prepareNativeX402QuestionSubmissionRequest;
   preparePermissionlessNativeX402QuestionSubmissionRequest: typeof preparePermissionlessNativeX402QuestionSubmissionRequest;
   preparePermissionlessWalletQuestionSubmissionRequest: typeof preparePermissionlessWalletQuestionSubmissionRequest;
@@ -236,6 +241,9 @@ function getMcpToolDependencies(): McpToolDependencies {
   return {
     confirmAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.confirmAgentWalletQuestionSubmissionRequest ?? confirmAgentWalletQuestionSubmissionRequest,
+    confirmFeedbackBonusQuestionSubmissionRequest:
+      mcpToolTestOverrides?.confirmFeedbackBonusQuestionSubmissionRequest ??
+      confirmFeedbackBonusQuestionSubmissionRequest,
     enqueueAgentCallbackEvent: mcpToolTestOverrides?.enqueueAgentCallbackEvent ?? enqueueAgentCallbackEvent,
     getAllVotes: mcpToolTestOverrides?.getAllVotes ?? ((params, options) => ponderApi.getAllVotes(params, options)),
     getContentById: mcpToolTestOverrides?.getContentById ?? ponderApi.getContentById,
@@ -245,6 +253,9 @@ function getMcpToolDependencies(): McpToolDependencies {
     getMcpAgentBudgetSummary: mcpToolTestOverrides?.getMcpAgentBudgetSummary ?? getMcpAgentBudgetSummary,
     prepareAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.prepareAgentWalletQuestionSubmissionRequest ?? prepareAgentWalletQuestionSubmissionRequest,
+    prepareFeedbackBonusQuestionSubmissionRequest:
+      mcpToolTestOverrides?.prepareFeedbackBonusQuestionSubmissionRequest ??
+      prepareFeedbackBonusQuestionSubmissionRequest,
     prepareNativeX402QuestionSubmissionRequest:
       mcpToolTestOverrides?.prepareNativeX402QuestionSubmissionRequest ?? prepareNativeX402QuestionSubmissionRequest,
     preparePermissionlessNativeX402QuestionSubmissionRequest:
@@ -470,6 +481,22 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     annotations: {
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description: "Confirm wallet-executed Feedback Bonus transactions and attach the funded bonus pool to the ask.",
+    inputSchema: agentConfirmFeedbackBonusTransactionsInputSchema,
+    name: "rateloop_confirm_feedback_bonus_transactions",
+    outputSchema: agentQuestionStatusOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
+    requiredScope: MCP_SCOPES.ask,
+    title: "Confirm Feedback Bonus Transactions",
+  },
+  {
+    annotations: {
       idempotentHint: true,
       openWorldHint: true,
       readOnlyHint: true,
@@ -645,6 +672,7 @@ const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_quote_question",
   "rateloop_ask_humans",
   "rateloop_confirm_ask_transactions",
+  "rateloop_confirm_feedback_bonus_transactions",
   "rateloop_get_question_status",
   "rateloop_get_result",
   "rateloop_get_rating_context",
@@ -750,9 +778,9 @@ function parseOptionalFeedbackBonus(
   }
 
   const value = raw as JsonObject;
-  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
-  if (asset !== "USDC") {
-    throw new McpToolError("feedbackBonus.asset must be USDC.");
+  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : payload.bounty.asset;
+  if (asset !== "USDC" && asset !== "LREP") {
+    throw new McpToolError("feedbackBonus.asset must be USDC or LREP.");
   }
   const amount = parseAtomicAmount(value.amount, "feedbackBonus.amount");
   if (amount <= 0n) {
@@ -1210,6 +1238,9 @@ function defaultAskHumansPaymentMode(params: {
   feedbackBonus: X402FeedbackBonusRequest | null;
   payload: X402QuestionPayload;
 }): AskHumansPaymentMode {
+  if (params.feedbackBonus && (params.feedbackBonus.asset !== "USDC" || params.payload.bounty.asset !== "USDC")) {
+    return "wallet_calls";
+  }
   return params.payload.bounty.asset === "USDC" && params.payload.questions.length === 1
     ? "x402_authorization"
     : "wallet_calls";
@@ -1221,11 +1252,17 @@ function assertFeedbackBonusFundingMode(params: {
   payload: X402QuestionPayload;
 }) {
   if (!params.feedbackBonus) return;
-  if (params.payload.bounty.asset !== "USDC" || params.payload.questions.length !== 1) {
-    throw new McpToolError("Feedback Bonus funding requires a single-question USDC ask.");
+  if (params.payload.questions.length !== 1) {
+    throw new McpToolError("Feedback Bonus funding requires a single-question ask.");
   }
-  if (params.paymentMode !== "x402_authorization") {
-    throw new McpToolError("Feedback Bonus funding requires eip3009_usdc_authorization payment mode.");
+  if (params.paymentMode === "x402_authorization") {
+    if (params.payload.bounty.asset !== "USDC" || params.feedbackBonus.asset !== "USDC") {
+      throw new McpToolError("EIP-3009 authorization can only fund USDC bounties and USDC Feedback Bonuses.");
+    }
+    return;
+  }
+  if (params.feedbackBonus.asset !== params.payload.bounty.asset) {
+    throw new McpToolError("Wallet-call Feedback Bonus funding must use the same asset as the bounty.");
   }
 }
 
@@ -2502,15 +2539,28 @@ async function attachFeedbackBonusPlan(
     return body;
   }
 
-  void dependencies;
-  warnings.push("feedback_bonus_creation_time_required");
-  return {
-    ...body,
-    feedbackBonus: {
-      ...(feedbackBonus as JsonObject),
-      status: "creation_time_required",
-    },
-  };
+  try {
+    const result = await dependencies.prepareFeedbackBonusQuestionSubmissionRequest({
+      operationKey: operationKey as `0x${string}`,
+    });
+    const planBody = normalizeMcpQuestionBody(result.body) as JsonObject;
+    const planFeedbackBonus =
+      planBody.feedbackBonus && typeof planBody.feedbackBonus === "object" && !Array.isArray(planBody.feedbackBonus)
+        ? (planBody.feedbackBonus as JsonObject)
+        : {};
+    return {
+      ...body,
+      feedbackBonus: {
+        ...(feedbackBonus as JsonObject),
+        ...planFeedbackBonus,
+        confirmTool: "rateloop_confirm_feedback_bonus_transactions",
+      },
+    };
+  } catch (error) {
+    console.error("[mcp] feedback bonus plan unavailable", error);
+    warnings.push("feedback_bonus_plan_unavailable");
+    return body;
+  }
 }
 
 function sha256(value: string) {
@@ -3521,6 +3571,25 @@ export async function callPublicRateLoopMcpTool(params: {
       };
     }
 
+    case "rateloop_confirm_feedback_bonus_transactions": {
+      const operationKey = await resolvePublicOperationKey(args);
+      if (!operationKey) {
+        throw new McpToolError("Provide operationKey for the Feedback Bonus to confirm.");
+      }
+      const transactionHashes = readAgentTransactionHashes(
+        args.transactionHashes,
+        message => new McpToolError(message),
+      );
+      const result = await dependencies.confirmFeedbackBonusQuestionSubmissionRequest({
+        operationKey,
+        transactionHashes,
+      });
+      return {
+        ...(normalizeMcpQuestionBody(result.body) as JsonObject),
+        warnings: [],
+      };
+    }
+
     case "rateloop_get_question_status": {
       if (isDryRunRequest(args)) {
         return buildDryRunQuestionStatus(args);
@@ -3843,6 +3912,25 @@ export async function callRateLoopMcpTool(params: {
         publicUrl: getAgentPublicQuestionUrl(typeof body.contentId === "string" ? body.contentId : null),
         warnings,
         ...agentStatusHints(body),
+      };
+    }
+
+    case "rateloop_confirm_feedback_bonus_transactions": {
+      const operationKey = await resolveManagedOperationKey(args, params.agent);
+      if (!operationKey) {
+        throw new McpToolError("Provide operationKey for the Feedback Bonus to confirm.");
+      }
+      const transactionHashes = readAgentTransactionHashes(
+        args.transactionHashes,
+        message => new McpToolError(message),
+      );
+      const result = await dependencies.confirmFeedbackBonusQuestionSubmissionRequest({
+        operationKey,
+        transactionHashes,
+      });
+      return {
+        ...(normalizeMcpQuestionBody(result.body) as JsonObject),
+        warnings: [],
       };
     }
 
