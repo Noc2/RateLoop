@@ -10,6 +10,7 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 function _launchEpochSources(uint256 toRoundId)
@@ -193,6 +194,23 @@ contract LaunchDistributionPoolTest is Test {
 
         assertEq(directPool.poolBalance(), amount);
         assertEq(directLrep.balanceOf(address(directPool)), amount);
+    }
+
+    function test_DepositPoolRejectsShortTransferToken() public {
+        MockERC20 shortLrep = new MockERC20("Loop Reputation", "LREP", 6);
+        LaunchDistributionPool shortPool =
+            new LaunchDistributionPool(address(shortLrep), address(registry), address(this));
+        uint256 amount = 1_000e6;
+
+        shortLrep.mint(address(this), amount);
+        shortLrep.approve(address(shortPool), amount);
+        shortLrep.setTransferShortfall(1);
+
+        vm.expectRevert();
+        shortPool.depositPool(amount);
+
+        assertEq(shortPool.poolBalance(), 0);
+        assertEq(shortLrep.balanceOf(address(shortPool)), 0);
     }
 
     function test_AccountPrefundedPoolDepositOnlyOwnerAndCannotOverAccount() public {

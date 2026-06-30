@@ -3,7 +3,6 @@ pragma solidity ^0.8.34;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
@@ -23,7 +22,6 @@ interface ILaunchReadySourceProtocolConfig {
 /// @title LaunchDistributionPool
 /// @notice Holds the 75M LREP launch allocation and releases it through verified/referral, earned, and legacy paths.
 contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyGuardTransient {
-    using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
     error InvalidAddress();
@@ -354,8 +352,31 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function depositPool(uint256 amount) external {
         if (amount == 0) revert InvalidAmount();
-        lrepToken.safeTransferFrom(msg.sender, address(this), amount);
-        poolBalance += amount;
+        IERC20 token = lrepToken;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x70a0823100000000000000000000000000000000000000000000000000000000)
+            mstore(add(ptr, 0x04), address())
+            if iszero(staticcall(gas(), token, ptr, 0x24, ptr, 0x20)) { revert(0, 0) }
+            let expectedBalance := add(mload(ptr), amount)
+
+            mstore(ptr, 0x23b872dd00000000000000000000000000000000000000000000000000000000)
+            mstore(add(ptr, 0x04), caller())
+            mstore(add(ptr, 0x24), address())
+            mstore(add(ptr, 0x44), amount)
+            if iszero(call(gas(), token, 0, ptr, 0x64, 0, 0x20)) { revert(0, 0) }
+            if iszero(eq(returndatasize(), 0x20)) { revert(0, 0) }
+            returndatacopy(0, 0, 0x20)
+            if iszero(mload(0)) { revert(0, 0) }
+
+            mstore(ptr, 0x70a0823100000000000000000000000000000000000000000000000000000000)
+            mstore(add(ptr, 0x04), address())
+            if iszero(staticcall(gas(), token, ptr, 0x24, ptr, 0x20)) { revert(0, 0) }
+            if iszero(eq(mload(ptr), expectedBalance)) { revert(0, 0) }
+        }
+        unchecked {
+            poolBalance += amount;
+        }
         emit PoolDeposit(amount);
     }
 
@@ -364,7 +385,9 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint256 actualBalance = lrepToken.balanceOf(address(this));
         uint256 untracked = actualBalance > poolBalance ? actualBalance - poolBalance : 0;
         if (amount > untracked) revert InvalidAmount();
-        poolBalance += amount;
+        unchecked {
+            poolBalance += amount;
+        }
         emit PoolDeposit(amount);
     }
 
@@ -375,8 +398,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint256 withdrawable = poolBalance;
         withdrawn = amount > withdrawable ? withdrawable : amount;
         if (withdrawn == 0) revert InvalidAmount();
-        poolBalance -= withdrawn;
-        lrepToken.safeTransfer(to, withdrawn);
+        unchecked {
+            poolBalance -= withdrawn;
+        }
+        _transferLrep(to, withdrawn);
         emit PoolWithdrawal(to, withdrawn);
     }
 
@@ -386,7 +411,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint256 surplus = actualBalance > poolBalance ? actualBalance - poolBalance : 0;
         recovered = amount > surplus ? surplus : amount;
         if (recovered == 0) revert InvalidAmount();
-        lrepToken.safeTransfer(to, recovered);
+        _transferLrep(to, recovered);
         emit SurplusRecovered(to, recovered);
     }
 
@@ -424,12 +449,16 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         verifiedCredentialClaimed[credentialKey] = true;
         verifiedBonusClaimedByAccount[msg.sender] = true;
         verifiedClaimCount += 1;
-        verifiedReferralDistributed += baseBonus;
+        unchecked {
+            verifiedReferralDistributed += baseBonus;
+        }
         paidAmount = _pay(msg.sender, baseBonus);
         emit VerifiedBonusClaimed(msg.sender, paidAmount, nullifierHash);
 
         uint256 referralBonus = _claimReferralBonus(referrer, msg.sender, baseBonus);
-        paidAmount += referralBonus;
+        unchecked {
+            paidAmount += referralBonus;
+        }
     }
 
     function claimLegacyContributorAllocation(uint256 allocation, bytes32[] calldata proof)
@@ -464,7 +493,9 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
         uint256 totalClaimed = legacyContributorClaimed[account] + paidAmount;
         legacyContributorClaimed[account] = totalClaimed;
-        legacyContributorDistributed += paidAmount;
+        unchecked {
+            legacyContributorDistributed += paidAmount;
+        }
         _pay(recipient, paidAmount);
         emit LegacyContributorClaimed(account, recipient, paidAmount, allocation, totalClaimed);
     }
@@ -800,8 +831,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         _setRewardedCountAfterPaidAmount(
             rater, cap, rewardedCount, targetRewardedCount, paidAmount, poolDepleted, policy
         );
-        raterLaunchPaid[rater] += paidAmount;
-        earnedRaterDistributed += paidAmount;
+        unchecked {
+            raterLaunchPaid[rater] += paidAmount;
+            earnedRaterDistributed += paidAmount;
+        }
         _pay(rater, paidAmount);
         emit EarnedRaterRewardPaid(
             rater,
@@ -1117,8 +1150,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         _setRewardedCountAfterPaidAmount(
             rater, fullCap, currentRewardedCount, targetRewardedCount, catchUpPaid, poolDepleted, policy
         );
-        raterLaunchPaid[rater] += catchUpPaid;
-        earnedRaterDistributed += catchUpPaid;
+        unchecked {
+            raterLaunchPaid[rater] += catchUpPaid;
+            earnedRaterDistributed += catchUpPaid;
+        }
         _pay(rater, catchUpPaid);
     }
 
@@ -1190,8 +1225,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (referralBonus > remainingPool) referralBonus = remainingPool;
         if (referralBonus == 0) return 0;
 
-        referralEarnings[referrer] += referralBonus;
-        verifiedReferralDistributed += referralBonus;
+        unchecked {
+            referralEarnings[referrer] += referralBonus;
+            verifiedReferralDistributed += referralBonus;
+        }
         _pay(referrer, referralBonus);
         emit ReferralBonusPaid(referrer, referee, referralBonus);
     }
@@ -1627,8 +1664,22 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function _pay(address to, uint256 amount) internal returns (uint256 paidAmount) {
         if (amount > poolBalance) revert PoolDepleted();
-        poolBalance -= amount;
-        lrepToken.safeTransfer(to, amount);
+        unchecked {
+            poolBalance -= amount;
+        }
+        _transferLrep(to, amount);
         return amount;
+    }
+
+    function _transferLrep(address to, uint256 amount) private {
+        IERC20 token = lrepToken;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, 0xa9059cbb00000000000000000000000000000000000000000000000000000000)
+            mstore(add(ptr, 0x04), to)
+            mstore(add(ptr, 0x24), amount)
+            if iszero(call(gas(), token, 0, ptr, 0x44, ptr, 0x20)) { revert(0, 0) }
+            if iszero(and(eq(returndatasize(), 0x20), mload(ptr))) { revert(0, 0) }
+        }
     }
 }
