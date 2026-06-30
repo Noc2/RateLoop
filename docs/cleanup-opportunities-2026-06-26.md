@@ -397,40 +397,36 @@ Risk:
 
 ### 17. Update stale promo video copy that still says World Chain
 
-Priority: Medium
+Status: Resolved
 
 Evidence:
 
-- `packages/promo-video/src/scenes/Settle.tsx` renders `World Chain` in the settle
-  scene, while current production/staging materials are Base/Base Sepolia.
+- As of the 2026-06-30 repository audit, `packages/promo-video/src/scenes/Settle.tsx`
+  renders `Base mainnet` in the settle scene.
 
-Suggested cleanup:
+Resolution:
 
-- Change the displayed chain copy to Base or chain-neutral wording.
-- Regenerate the promo poster/video and update `packages/nextjs/public/videos/*` if the
-  rendered media changes.
+- No further copy change is needed for this item. Regenerate the promo poster/video only
+  when intentionally refreshing the rendered media.
 
 Risk:
 
-- Medium because the video artifact is user-facing.
+- Low.
 
 ### 18. Remove legacy promo music fallback if no longer intentional
 
-Priority: Low
+Status: Resolved
 
 Evidence:
 
 - `packages/promo-video/src/RateLoopPromo.tsx` uses `audio/music.mp3`.
-- `packages/promo-video/public/audio/README.md` describes `music.m4a` as a legacy
-  procedural fallback.
-- `packages/promo-video/scripts/generate-music.mjs` generates `music.m4a`.
+- As of the 2026-06-30 repository audit, `packages/promo-video/public/audio/README.md`
+  documents `music.mp3`, and the legacy `music.m4a` / `generate-music.mjs` files are no
+  longer present.
 
-Suggested cleanup:
+Resolution:
 
-- If the fallback is no longer useful, remove:
-  - `packages/promo-video/public/audio/music.m4a`
-  - `packages/promo-video/scripts/generate-music.mjs`
-  - `generate:music` from `packages/promo-video/package.json`
+- No further cleanup is needed for this item.
 
 Risk:
 
