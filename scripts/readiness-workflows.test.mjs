@@ -197,8 +197,16 @@ test("Railway service start commands pin production mode", () => {
     /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-workspace-deps"/,
   );
   assert.match(keeper, /builder = "RAILPACK"/);
+  assert.match(
+    keeper,
+    /buildCommand = "yarn workspace @rateloop\/keeper build:workspace-deps && yarn workspace @rateloop\/keeper build"/,
+  );
   assert.doesNotMatch(keeper, /dockerfilePath/);
   assert.match(ponder, /builder = "RAILPACK"/);
+  assert.match(
+    ponder,
+    /buildCommand = "yarn workspace @rateloop\/ponder build:workspace-deps"/,
+  );
   assert.doesNotMatch(ponder, /dockerfilePath/);
   assert.match(ponder, /healthcheckPath = "\/health"/);
   assert.match(ponder, /healthcheckTimeout = 900/);

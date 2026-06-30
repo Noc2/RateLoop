@@ -906,6 +906,89 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.deepEqual(readAfterRejectedCompleteBody.transactionHashes, []);
 });
 
+test("agent signing intent complete retries confirmation after a transient failure", async () => {
+  let confirmCalls = 0;
+  const transactionHash = `0x${"4".repeat(64)}` as const;
+  installAskOverrides({
+    confirmAgentWalletQuestionSubmissionRequest: async params => {
+      confirmCalls += 1;
+      if (confirmCalls === 1) {
+        throw new Error("transient confirm failure");
+      }
+      return {
+        body: {
+          contentId: "content-123",
+          operationKey: params.operationKey,
+          status: "submitted",
+          transactionHashes: params.transactionHashes,
+        },
+        status: 200,
+      };
+    },
+  });
+
+  const createResponse = await signingIntentsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
+      request: {
+        ...questionPayload("browser-handoff-confirm-retry"),
+        maxPaymentAmount: "1500000",
+        paymentMode: "wallet_calls",
+        signatureMode: "browser_link",
+      },
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const intentId = String(createBody.id);
+  const signingUrl = new URL(String(createBody.signingUrl));
+  const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await signingIntentPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  const failedCompleteResponse = await signingIntentCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
+      token,
+      transactionHashes: [transactionHash],
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const failedCompleteBody = (await failedCompleteResponse.json()) as Record<string, unknown>;
+  assert.equal(failedCompleteResponse.status, 500);
+  assert.match(String(failedCompleteBody.message), /transient confirm failure/);
+  assert.equal(confirmCalls, 1);
+
+  const readAfterFailedComplete = await signingIntentRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
+      "x-rateloop-signing-intent-token": token,
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const readAfterFailedCompleteBody = (await readAfterFailedComplete.json()) as Record<string, unknown>;
+  assert.equal(readAfterFailedCompleteBody.status, "failed");
+  assert.deepEqual(readAfterFailedCompleteBody.transactionHashes, [transactionHash]);
+
+  const retriedCompleteResponse = await signingIntentCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
+      token,
+      transactionHashes: [transactionHash],
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const retriedCompleteBody = (await retriedCompleteResponse.json()) as Record<string, unknown>;
+  assert.equal(retriedCompleteResponse.status, 200);
+  assert.equal(retriedCompleteBody.status, "submitted");
+  assert.deepEqual(retriedCompleteBody.transactionHashes, [transactionHash]);
+  assert.equal(confirmCalls, 2);
+});
+
 test("agent signing intent route uses configured production app URL for token links", async () => {
   configureProductionAgentLinks("https://canonical.rateloop.ai/app");
   installAskOverrides();

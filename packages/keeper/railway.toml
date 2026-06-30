@@ -1,5 +1,6 @@
 [build]
 builder = "RAILPACK"
+buildCommand = "yarn workspace @rateloop/keeper build:workspace-deps && yarn workspace @rateloop/keeper build"
 watchPatterns = [
   ".yarn/**",
   ".yarnrc.yml",

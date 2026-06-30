@@ -247,11 +247,6 @@ function readX402AuthorizationRequest(body: JsonObject): JsonObject | null {
   return request && typeof request === "object" && !Array.isArray(request) ? (request as JsonObject) : null;
 }
 
-function isAlreadyStoredHashRepeat(storedHashes: readonly Hex[], transactionHashes: readonly Hex[]) {
-  const stored = new Set(storedHashes.map(hash => hash.toLowerCase()));
-  return transactionHashes.every(hash => stored.has(hash.toLowerCase()));
-}
-
 function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObject = {}) {
   const requestBody = redactSensitiveAgentRequestFields(intent.requestBody);
   return {
@@ -524,8 +519,6 @@ export async function completeAgentSigningIntent(params: {
     throw new McpToolError("Prepare this signing intent before completing it.");
   }
   const transactionHashes = readAgentTransactionHashes(params.transactionHashes, message => new McpToolError(message));
-
-  if (isAlreadyStoredHashRepeat(intent.transactionHashes, transactionHashes)) return signingIntentResponse(intent);
 
   try {
     const body = (await callPublicRateLoopMcpTool({
