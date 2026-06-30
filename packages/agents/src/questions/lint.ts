@@ -20,6 +20,7 @@ const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
 const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "acceptanceCriteria"] as const;
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
+const MAX_PUBLIC_TAGS = 3;
 import { MIN_NONZERO_CONFIDENTIALITY_BOND, requiredQuestionRewardParticipants } from "@rateloop/contracts/protocol";
 import {
   findBlockedContentTags,
@@ -498,6 +499,14 @@ export function lintAgentQuestion(
           .map((tag) => tag.trim())
           .filter(Boolean);
     const blockedTags = findBlockedContentTags(tagList);
+    if (tagList.length > MAX_PUBLIC_TAGS) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.tags`,
+        `At most ${MAX_PUBLIC_TAGS} tags are supported.`,
+      );
+    }
     if (blockedTags.length > 0) {
       pushFinding(
         findings,

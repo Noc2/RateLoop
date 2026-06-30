@@ -431,6 +431,26 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects asks with more than three public tags", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        tags: "sports, world-cup-2026, public-opinion, debate",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "At most 3 tags are supported.",
+          path: "question.tags",
+        }),
+      ]),
+    );
+  });
+
   it("warns when ranked option questions imply hidden selectable answers", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
