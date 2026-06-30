@@ -185,3 +185,30 @@ test("default workspace dist lock is scoped for Railway deployments", async () =
   );
   assert.equal(lockDirs.includes("rateloop-workspace-dist.lock"), false);
 });
+
+test("default workspace dist lock detects Railway name and git metadata", async () => {
+  const command = nodeEval(`
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const lockDirs = fs.readdirSync(os.tmpdir()).filter(name => name.startsWith("rateloop-workspace-dist"));
+    process.stdout.write(JSON.stringify(lockDirs));
+  `);
+  const env = lockEnv(undefined, {
+    RATELOOP_WORKSPACE_DIST_LOCK_DIR: "",
+    RAILWAY_PROJECT_NAME: "RateLoop",
+    RAILWAY_ENVIRONMENT_NAME: "production",
+    RAILWAY_SERVICE_NAME: "Keeper",
+    RAILWAY_GIT_COMMIT_SHA: "873f672098cc8a2236e6e0fc7cb44c574fb6d310",
+    RAILWAY_GIT_BRANCH: "main",
+  });
+
+  const result = await runLock(command, env);
+  const lockDirs = JSON.parse(result.stdout);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(
+    lockDirs.some(name => /^rateloop-workspace-dist-railway-[a-f0-9]{16}\.lock$/.test(name)),
+    `expected a Railway-scoped lock directory, saw ${lockDirs.join(", ")}`,
+  );
+  assert.equal(lockDirs.includes("rateloop-workspace-dist.lock"), false);
+});

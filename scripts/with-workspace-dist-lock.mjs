@@ -20,10 +20,15 @@ function hashScope(value) {
 function defaultLockScope() {
   const railwayParts = [
     process.env.RAILWAY_PROJECT_ID,
+    process.env.RAILWAY_PROJECT_NAME,
     process.env.RAILWAY_ENVIRONMENT_ID,
+    process.env.RAILWAY_ENVIRONMENT_NAME,
     process.env.RAILWAY_SERVICE_ID,
+    process.env.RAILWAY_SERVICE_NAME,
     process.env.RAILWAY_DEPLOYMENT_ID,
     process.env.RAILWAY_REPLICA_ID,
+    process.env.RAILWAY_GIT_COMMIT_SHA,
+    process.env.RAILWAY_GIT_BRANCH,
   ].filter(Boolean);
 
   if (railwayParts.length > 0) {
