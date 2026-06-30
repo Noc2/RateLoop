@@ -1,0 +1,28 @@
+{
+  "clientRequestId": "world-cup-2026-48-team-format-demo",
+  "chainId": 84532,
+  "templateId": "generic_rating",
+  "maxPaymentAmount": "3000000",
+  "bounty": {
+    "asset": "USDC",
+    "amount": "2000000",
+    "requiredVoters": "5"
+  },
+  "feedbackBonus": {
+    "asset": "USDC",
+    "amount": "1000000"
+  },
+  "question": {
+    "templateId": "generic_rating",
+    "templateInputs": {
+      "audience": "football fans, casual World Cup viewers, and people who follow major sports events",
+      "goal": "test whether a timely public sports debate can attract useful RateLoop participation",
+      "successSignal": "Voters give a clear view on whether the 48-team format improves the tournament and name the strongest reason either way."
+    },
+    "title": "Has the 48-team World Cup made the tournament better?",
+    "description": "World Cup 2026 is the first 48-team edition, with a Round of 32 and 104 matches. Vote up if expansion improves representation, fan interest, and competitive integrity. Vote down if it feels bloated, diluted, unfair, or too hard on players. Feedback: give one reason and one tweak.",
+    "contextUrl": "https://www.theguardian.com/football/2026/apr/01/world-cup-48-questions-messi-ronaldo-trump-tickets",
+    "categoryId": "1",
+    "tags": ["agent", "sports", "world-cup-2026", "tournament-format", "public-opinion"]
+  }
+}
