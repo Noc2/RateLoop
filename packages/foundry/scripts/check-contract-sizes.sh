@@ -17,7 +17,7 @@ if [ ! -d "$OUT_DIR" ]; then
     exit 1
 fi
 
-echo "Checking deployed bytecode sizes against the EIP-170 limit (${LIMIT_BYTES} bytes)..."
+echo "Checking deployed bytecode sizes, including linked libraries, against the EIP-170 limit (${LIMIT_BYTES} bytes)..."
 
 checked=0
 oversized=0
@@ -37,11 +37,10 @@ while IFS= read -r source; do
     for artifact in "$artifact_dir"/*.json; do
         [ -e "$artifact" ] || continue
 
-        abi_length="$(jq -r '(.abi // []) | length' "$artifact")"
         deployed_bytecode="$(jq -r '.deployedBytecode.object // ""' "$artifact")"
         deployed_bytecode="${deployed_bytecode#0x}"
 
-        if [ "$abi_length" = "0" ] || [ -z "$deployed_bytecode" ]; then
+        if [ -z "$deployed_bytecode" ]; then
             continue
         fi
 
@@ -62,7 +61,6 @@ while IFS= read -r source; do
 done < <(
     find "$CONTRACTS_DIR" -type f -name "*.sol" \
         ! -path "$CONTRACTS_DIR/interfaces/*" \
-        ! -path "$CONTRACTS_DIR/libraries/*" \
         ! -path "$CONTRACTS_DIR/mocks/*" \
         | sort
 )

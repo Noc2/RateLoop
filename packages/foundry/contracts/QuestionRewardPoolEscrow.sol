@@ -16,6 +16,7 @@ import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import { QuestionRewardPoolEscrowBundleClaimableLib } from "./libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol";
 import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
@@ -1034,7 +1035,7 @@ contract QuestionRewardPoolEscrow is
         view
         returns (uint256 claimableAmount)
     {
-        return QuestionRewardPoolEscrowBundleActionsLib.claimableQuestionBundleReward(
+        return QuestionRewardPoolEscrowBundleClaimableLib.claimableQuestionBundleReward(
             bundleRewards,
             bundleQuestions,
             bundleRoundIds,

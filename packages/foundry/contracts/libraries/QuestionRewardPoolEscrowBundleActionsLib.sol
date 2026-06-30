@@ -45,6 +45,15 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 bundleId;
     }
 
+    struct BundleClaimContext {
+        address frontend;
+        bytes32 firstCommitKey;
+        bytes32 identityKey;
+        address rewardRecipient;
+        uint256 firstContentId;
+        uint256 firstRoundId;
+    }
+
     uint256 internal constant MIN_REQUIRED_VOTERS = 3;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant BPS_SCALE = 10_000;
@@ -486,23 +495,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             ),
             "Excluded voter"
         );
-        (address frontend, bytes32 firstCommitKey) = _requireCompletedBundleRoundSet(
-            bundleQuestions,
-            bundleRoundIds,
-            votingEngine,
-            protocolConfig,
-            bundle.bountyOpensAt,
-            bundle.bountyClosesAt,
-            bundleId,
-            roundSetIndex,
-            msg.sender
+        BundleClaimContext memory claimCtx = _resolveBundleClaimContext(
+            bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, msg.sender
         );
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (bytes32 identityKey, bytes32 resolvedFirstCommitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, protocolConfig, firstQuestion.contentId, firstRoundId, msg.sender
-        );
-        require(resolvedFirstCommitKey == firstCommitKey, "Bundle incomplete");
         require(
             !_isBundleCompleterBanned(
                 bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundleId, roundSetIndex, msg.sender
@@ -511,11 +506,11 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         require(
             _wasBundleBountyEligibleAtQualification(
-                qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
+                qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, claimCtx.firstCommitKey
             ),
             "Not bounty eligible"
         );
-        require(!bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey], "Already claimed");
+        require(!bundleRoundSetRewardClaimed[bundleId][roundSetIndex][claimCtx.firstCommitKey], "Already claimed");
         BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
         uint256 grossAmount;
         uint256 frontendFee;
@@ -530,9 +525,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 snapshot,
                 bundleId,
                 roundSetIndex,
-                identityKey,
-                firstCommitKey,
-                rewardRecipient,
+                claimCtx.identityKey,
+                claimCtx.firstCommitKey,
+                claimCtx.rewardRecipient,
                 payoutWeight,
                 proof,
                 payoutDomain,
@@ -541,10 +536,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
                 QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
                     votingEngine,
-                    firstQuestion.contentId,
-                    firstRoundId,
-                    firstCommitKey,
-                    frontend,
+                    claimCtx.firstContentId,
+                    claimCtx.firstRoundId,
+                    claimCtx.firstCommitKey,
+                    claimCtx.frontend,
                     claimWeight,
                     WeightedShareInputs({
                         allocation: snapshot.allocation,
@@ -559,10 +554,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
                 QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
                     votingEngine,
-                    firstQuestion.contentId,
-                    firstRoundId,
-                    firstCommitKey,
-                    frontend,
+                    claimCtx.firstContentId,
+                    claimCtx.firstRoundId,
+                    claimCtx.firstCommitKey,
+                    claimCtx.frontend,
                     EqualShareInputs({
                         allocation: snapshot.allocation,
                         frontendFeeAllocation: snapshot.frontendFeeAllocation,
@@ -574,7 +569,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         }
         require(grossAmount > 0, "No reward");
 
-        bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey] = true;
+        bundleRoundSetRewardClaimed[bundleId][roundSetIndex][claimCtx.firstCommitKey] = true;
         unchecked {
             snapshot.claimedCount++;
             bundle.claimedCount++;
@@ -591,7 +586,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         (rewardAmount, frontendFee, frontendRecipient, bundleRedirectedFrontendFee) =
             QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
                 _rewardToken(lrepToken, usdcToken, bundle.asset),
-                rewardRecipient,
+                claimCtx.rewardRecipient,
                 rewardAmount,
                 frontendRecipient,
                 frontendFee
@@ -604,14 +599,50 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         emit QuestionBundleRewardClaimed(
             bundleId,
             roundSetIndex,
-            rewardRecipient,
-            identityKey,
+            claimCtx.rewardRecipient,
+            claimCtx.identityKey,
             rewardAmount,
-            frontend,
+            claimCtx.frontend,
             frontendRecipient,
             frontendFee,
             grossAmount
         );
+    }
+
+    function _resolveBundleClaimContext(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        BundleReward storage bundle,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        address account
+    ) private view returns (BundleClaimContext memory ctx) {
+        (ctx.frontend, ctx.firstCommitKey) = _requireCompletedBundleRoundSet(
+            bundleQuestions,
+            bundleRoundIds,
+            votingEngine,
+            protocolConfig,
+            bundle.bountyOpensAt,
+            bundle.bountyClosesAt,
+            bundleId,
+            roundSetIndex,
+            account
+        );
+        ctx.firstContentId = bundleQuestions[bundleId][0].contentId;
+        ctx.firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
+        bytes32 resolvedFirstCommitKey;
+        (ctx.identityKey, resolvedFirstCommitKey, ctx.rewardRecipient) =
+            QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+                votingEngine, protocolConfig, ctx.firstContentId, ctx.firstRoundId, account
+            );
+        require(resolvedFirstCommitKey == ctx.firstCommitKey, "Bundle incomplete");
     }
 
     function qualifyRecoveredBundleRoundSet(
@@ -660,78 +691,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             recoveredAllocation
         );
         return bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified;
-    }
-
-    function claimableQuestionBundleReward(
-        mapping(uint256 => BundleReward) storage bundleRewards,
-        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
-        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
-        mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
-        mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
-        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
-        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
-        ContentRegistry registry,
-        RoundVotingEngine votingEngine,
-        ProtocolConfig protocolConfig,
-        uint256 bundleId,
-        uint256 roundSetIndex,
-        address account
-    ) external view returns (uint256 claimableAmount) {
-        BundleReward storage bundle = bundleRewards[bundleId];
-        if (bundle.id == 0 || !_isBundleRoundSetClaimOpen(bundleRoundSetSnapshots, bundle, bundleId, roundSetIndex)) {
-            return 0;
-        }
-        if (_usesClusterPayoutSnapshot(bundleRewardClusterPayoutOracle, bundle)) return 0;
-        if (_isBundleExcludedVoter(
-                bundleQuestions,
-                bundleRoundIds,
-                registry,
-                votingEngine,
-                protocolConfig,
-                bundle,
-                bundleId,
-                roundSetIndex,
-                account
-            )) return 0;
-
-        (bool completed, address frontend, bytes32 firstCommitKey) = _bundleRoundSetCommitStatus(
-            bundleQuestions,
-            bundleRoundIds,
-            votingEngine,
-            protocolConfig,
-            bundle.bountyOpensAt,
-            bundle.bountyClosesAt,
-            bundleId,
-            roundSetIndex,
-            account,
-            true,
-            true
-        );
-        if (!completed) return 0;
-        if (!_wasBundleBountyEligibleAtQualification(
-                qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
-            )) return 0;
-        if (bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey]) return 0;
-        if (_isBundleCompleterBanned(
-                bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundleId, roundSetIndex, account
-            )) return 0;
-
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
-        (, claimableAmount,,) = QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
-            votingEngine,
-            firstQuestion.contentId,
-            firstRoundId,
-            firstCommitKey,
-            frontend,
-            EqualShareInputs({
-                allocation: snapshot.allocation,
-                frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                eligibleParticipants: snapshot.eligibleCompleters,
-                claimedCount: snapshot.claimedCount
-            })
-        );
     }
 
     function refundQuestionBundleReward(
