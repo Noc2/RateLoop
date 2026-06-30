@@ -2,8 +2,8 @@
 """Spec-freshness guard for the Certora lane.
 
 Fails when a contract that has Certora coverage is changed in a PR without its
-spec being touched — the exact drift that left ClusterPayoutOracle.spec stale
-behind three contract commits (see docs/testing/certora-round3-plan.md, Track G).
+spec being touched — the exact drift that previously left ClusterPayoutOracle.spec
+stale behind contract changes.
 
 The contract -> spec(s) map is derived from the conf files themselves (no second
 source of truth to keep in sync):

@@ -11,11 +11,9 @@
  *   - LaunchDistributionPool cap  = (fullCap * bps) / 10000
  *         <= fullCap             when bps  <= 10000          (Track B)
  *
- * docs/testing/certora-security-findings.md records `(fullCap * bps) / 10000 <= fullCap`
- * as a deferred gap because the default *linear* SMT backend cannot discharge a
- * nonlinear multiply-then-divide. That doc's own re-run note ("`-smt_useNIA` ...
- * discharged the assignment multiplication") is the evidence this lemma is provable
- * once nonlinear arithmetic is enabled — which this conf does via prover_args.
+ * The default *linear* SMT backend cannot discharge this nonlinear
+ * multiply-then-divide directly, so the conf enables nonlinear arithmetic via
+ * prover_args.
  *
  * The rule calls no contract function: it is pure CVL integer arithmetic over the
  * mathematical integers (to_mathint avoids any 256-bit wraparound, so the bound is

@@ -137,7 +137,7 @@ slither:
 aderyn:
 	aderyn .
 
-# Formal verification (Certora). See certora/README.md and docs/testing/certora.md.
+# Formal verification (Certora). See certora/README.md.
 # The target conf inherits shared compiler/prover settings from base.conf via its
 # "override_base_config" key; certoraRun takes a single conf file.
 CERTORA_CONF ?= certora/confs/math.conf

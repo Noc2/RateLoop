@@ -12,7 +12,7 @@
  *     Open round (no draining a live round) and on a Settled round (settled rounds pay
  *     rewards, not refunds).
  *
- * Deferred (documented in docs/testing/certora-followup.md):
+ * Deferred:
  *   - Lifecycle monotonicity / no-double-settle. The natural rule ("a successful
  *     settleRound implies the round was Open") could not be proved in this setup: under
  *     solc_optimize + via_ir, certora-cli's auto-finder fails to instrument parts of the

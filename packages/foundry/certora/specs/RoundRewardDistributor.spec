@@ -12,7 +12,7 @@
  *
  * Deferred: aggregate-claimed <= pool, and the exact single-use revert (the claimed
  * commit/voter are derived from engine state, so that needs a faithful engine model
- * rather than the NONDET summaries used here). See docs/testing/certora.md.
+ * rather than the NONDET summaries used here).
  */
 
 methods {

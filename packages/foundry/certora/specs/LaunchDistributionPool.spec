@@ -9,8 +9,8 @@
  * by msg.sender, so the property holds over public state with only NONDET token/registry
  * summaries — no commit resolution needed.
  *
- * Deferred (documented in docs/testing/certora-followup.md): the per-rater
- * raterLaunchPaid[r] <= raterLaunchCap[r] conservation invariant. It is TRUE — every
+ * Deferred: the per-rater raterLaunchPaid[r] <= raterLaunchCap[r] conservation
+ * invariant. It is TRUE — every
  * payment clamps the target to the cap and pays only the positive delta — but it is not
  * self-inductive over the four record/unlock entry points (it needs auxiliary invariants
  * tying raterLaunchCapAssigned / cap-monotonicity together before the prover accepts the

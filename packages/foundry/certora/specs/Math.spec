@@ -6,7 +6,6 @@
  *
  * These are "smoke" properties: cheap to state, they validate the harness/config/CI
  * wiring while pinning the accounting and bounds guarantees the protocol relies on.
- * See docs/testing/certora.md (Phase 1) for the property rationale.
  *
  * Constants (mirrored from the libraries, kept literal so the spec is self-contained):
  *   BPS_SCALE      = 10_000

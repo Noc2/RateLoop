@@ -145,7 +145,7 @@ yarn foundry:certora:check
     exceeds certora-cli's 15-minute no-output window on this 1,490-line + 11-library
     contract, so it is **not** in the CI matrix. Run manually with a longer prover budget.
     Per-commit no-double-claim and snapshot claimed<=allocation stay deferred
-    (internal-resolution + contract size). See `docs/testing/certora-security-findings.md`.
+    (internal-resolution + contract size).
   - Phase 5 (`launch-distribution-pool.conf`) — **verified (first slice)**: the launch
     verified-bonus is single-use per account; a claim records the account flag. The
     per-rater paid<=cap invariant stays deferred (true but not self-inductive).
@@ -161,7 +161,7 @@ yarn foundry:certora:check
     role-gated (CONFIG / TREASURY / DEFAULT_ADMIN).
   - Phase 5b (`launch-distribution-pool-cap.conf`) — **verified (lemmas)**:
     `policyBpsBounded` + `capAssignedWhenPaid`. Headline paid<=cap deferred (nonlinear
-    SMT) — see `docs/testing/certora-security-findings.md`.
+    SMT).
   - Phase 5c (`launch-distribution-pool-conservation.conf`) — **verified**: earned-rater
     and verified-referral pool payouts never exceed their funded pools. Legacy-pool sweep
     deferred.
@@ -173,7 +173,7 @@ yarn foundry:certora:check
     cap clamp.
   - Track C (`round-reward-distributor-conservation.conf`) — the per-round claimed-amount
     accumulators are monotone (no clawback/underflow). Full `claimed <= pool` upper bound
-    deferred (needs the engine score-weight model). See `docs/testing/certora-round3-plan.md`.
+    deferred (needs the engine score-weight model).
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
   - See the repo audit docs under [`docs`](../../../docs) for the phase plan, verification results,
     and deferral reasons.

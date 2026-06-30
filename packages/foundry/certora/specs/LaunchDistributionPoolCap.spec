@@ -17,8 +17,7 @@
  * assignment to `fullCap * bps / 10000 <= fullCap` given `bps <= 10000` — a nonlinear
  * multiply-then-divide the *linear* SMT backend cannot discharge. This conf now enables
  * the nonlinear-arithmetic backend (`-smt_useNIA`), under which the assignment clamp IS
- * dischargeable (docs/testing/certora-security-findings.md confirmed NIA discharges the
- * assignment multiply). `assignedCapWithinFullCap` below machine-checks exactly that clamp
+ * dischargeable. `assignedCapWithinFullCap` below machine-checks exactly that clamp
  * at the point it is computed, via the harness wrapper `assignLaunchCap_`.
  *
  * Still deferred (honest residual): the *global* invariant `raterLaunchPaid <= raterLaunchCap`
@@ -26,7 +25,7 @@
  * (finalizeEarnedRaterRewardCredit / unlockFullEarnedRaterCap) — which contain further
  * cap * count / rewardingCount mul-div sites — still resist as a standalone inductive
  * invariant. So this slice proves the per-assignment clamp (the load-bearing step) rather
- * than the end-to-end invariant. See docs/testing/certora-round3-plan.md (Track B).
+ * than the end-to-end invariant.
  */
 
 methods {

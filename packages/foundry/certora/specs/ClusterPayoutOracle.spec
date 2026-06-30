@@ -27,7 +27,6 @@
  *     does NOT blacklist needs a getter for the snapshot's stored clusterRoot (private struct)
  *   - the disinterested-challenger guard (a proposer/frontend-operator cannot self-challenge,
  *     commit 808570b3) — reads the private snapshot struct's proposer/frontendOperator fields
- * See docs/testing/certora.md (Phase 2).
  */
 
 methods {

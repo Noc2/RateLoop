@@ -12,7 +12,7 @@ import {
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
 export const DEFAULT_BASE_SEPOLIA_NEXT_ENV_FILE =
-  "docs/testing/base-sepolia-next-env.fixture";
+  "scripts/fixtures/base-sepolia-next-env.fixture";
 
 export const BASE_SEPOLIA_READINESS_CONFIG = {
   appEnvName: "BASE_SEPOLIA_APP_URL",

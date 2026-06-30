@@ -8,7 +8,7 @@ import { RobustBtsMath } from "../../contracts/libraries/RobustBtsMath.sol";
 /// @title MathHarness
 /// @notice External wrappers around the internal, pure math libraries so the Certora
 ///         Prover can call them as `envfree` functions. This is the verification
-///         target for `certora/specs/Math.spec` (Phase 1 of docs/testing/certora.md).
+///         target for `certora/specs/Math.spec`.
 /// @dev Only the integer helpers of RatingMath are exposed. Its logit/sigmoid paths
 ///      use PRBMath SD59x18 (exp/ln) and are intentionally out of scope for Phase 1.
 contract MathHarness {

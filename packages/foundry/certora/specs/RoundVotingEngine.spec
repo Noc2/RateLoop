@@ -10,8 +10,7 @@
  * no rewards are burned to address(0)).
  *
  * Deferred (need lifecycle / multi-tx settle modeling): round-state terminal
- * absorption, single-use refunds, refund <= stake, rating bounds. See
- * docs/testing/certora.md (Phase 3).
+ * absorption, single-use refunds, refund <= stake, rating bounds.
  */
 
 methods {

@@ -16,8 +16,8 @@
  * resolution and no modeling of the qualification/claim-weight machinery — it is a pure
  * state gate over the pool's own `refunded` flag.
  *
- * Deferred (documented in docs/testing/certora-followup.md): per-commit no-double-claim
- * (rewardClaimed flag) and per-snapshot claimed<=allocation. Both require deterministic
+ * Deferred: per-commit no-double-claim (rewardClaimed flag) and per-snapshot
+ * claimed<=allocation. Both require deterministic
  * modeling of the escrow's INTERNAL _resolveQuestionRewardClaim, which is not
  * summarizable here because the escrow needs via_ir (under which certora-cli cannot
  * instrument internal-function summaries) — the same limitation hit in Phase 3b.
