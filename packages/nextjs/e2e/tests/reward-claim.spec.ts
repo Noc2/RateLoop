@@ -326,8 +326,6 @@ test.describe("Reward claim lifecycle", () => {
       );
     }
 
-    await evmIncreaseTime(EPOCH_DURATION + 1);
-
     const unrevealedApproved = await approveLREP(VOTING_ENGINE, STAKE, unrevealed.address, LREP_TOKEN);
     expect(unrevealedApproved, `Vote approval failed for ${unrevealed.address}`).toBe(true);
 
@@ -343,6 +341,8 @@ test.describe("Reward claim lifecycle", () => {
     expect(unrevealedCommit.roundId, `Unrevealed commit should stay in cleanup round for ${unrevealed.address}`).toBe(
       cleanupRoundId,
     );
+
+    await evmIncreaseTime(EPOCH_DURATION + 1);
 
     for (const commit of commits) {
       const revealed = await revealVoteDirect(
