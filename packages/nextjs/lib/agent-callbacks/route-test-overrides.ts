@@ -9,6 +9,8 @@ type AgentCallbackDeliverRouteTestOverrides = {
 };
 
 type AgentCallbackSweepRouteTestOverrides = {
+  processDueAgentCallbackDeliveries?: typeof processDueAgentCallbackDeliveries;
+  randomUUID?: typeof randomUUID;
   sweepAgentLifecycleCallbacks?: typeof sweepAgentLifecycleCallbacks;
   sweepExpiredHandoffIntents?: typeof sweepExpiredHandoffIntents;
 };

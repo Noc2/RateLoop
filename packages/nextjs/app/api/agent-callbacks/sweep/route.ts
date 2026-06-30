@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { processDueAgentCallbackDeliveries } from "~~/lib/agent-callbacks";
 import { sweepAgentLifecycleCallbacks } from "~~/lib/agent-callbacks/lifecycle";
 import { getAgentCallbackSweepRouteTestOverrides } from "~~/lib/agent-callbacks/route-test-overrides";
 import { sweepExpiredHandoffIntents } from "~~/lib/agent/handoffs";
@@ -29,9 +30,15 @@ function isAuthorizedCallbackRequest(token: string, secret: string) {
   return tokenBuffer.length === secretBuffer.length && timingSafeEqual(tokenBuffer, secretBuffer);
 }
 
+function getCallbackSweepSecrets() {
+  return [process.env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET?.trim(), process.env.CRON_SECRET?.trim()].filter(
+    (secret): secret is string => Boolean(secret),
+  );
+}
+
 async function handleSweep(request: NextRequest) {
-  const secret = process.env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET?.trim() || process.env.CRON_SECRET?.trim() || "";
-  if (!secret) {
+  const secrets = getCallbackSweepSecrets();
+  if (secrets.length === 0) {
     return NextResponse.json({ error: "Callback delivery is not configured." }, { status: 503 });
   }
 
@@ -39,18 +46,24 @@ async function handleSweep(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const token = request.headers.get("x-rateloop-agent-callback-secret")?.trim() || readBearerToken(request);
-  if (!isAuthorizedCallbackRequest(token, secret)) {
+  if (!secrets.some(secret => isAuthorizedCallbackRequest(token, secret))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   const overrides = getAgentCallbackSweepRouteTestOverrides();
   const sweepCallbacks = overrides?.sweepAgentLifecycleCallbacks ?? sweepAgentLifecycleCallbacks;
   const sweepHandoffs = overrides?.sweepExpiredHandoffIntents ?? sweepExpiredHandoffIntents;
+  const processDeliveries = overrides?.processDueAgentCallbackDeliveries ?? processDueAgentCallbackDeliveries;
+  const createRandomUUID = overrides?.randomUUID ?? randomUUID;
 
   const limit = parseLimit(request);
   const [callbacks, handoffs] = await Promise.all([sweepCallbacks({ limit }), sweepHandoffs(limit)]);
+  const deliveries = await processDeliveries({
+    limit,
+    workerId: `sweep:${createRandomUUID()}`,
+  });
 
-  return NextResponse.json({ ...callbacks, handoffs });
+  return NextResponse.json({ ...callbacks, handoffs, deliveries });
 }
 
 export async function GET(request: NextRequest) {

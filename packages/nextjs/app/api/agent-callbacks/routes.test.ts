@@ -15,6 +15,7 @@ let sweepRoute: SweepRouteModule;
 
 const env = process.env as Record<string, string | undefined>;
 const originalSecret = env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
+const originalCronSecret = env.CRON_SECRET;
 const routeWorkerId = "00000000-0000-4000-8000-000000000000";
 const deliveryResult = { dead: 0, delivered: 1, leased: 0, released: 0, retrying: 0 };
 const sweepResult = {
@@ -62,11 +63,14 @@ before(async () => {
 
 beforeEach(() => {
   env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
+  delete env.CRON_SECRET;
   setAgentCallbackDeliverRouteTestOverrides({
     randomUUID: () => routeWorkerId,
     processDueAgentCallbackDeliveries: async () => deliveryResult,
   });
   setAgentCallbackSweepRouteTestOverrides({
+    randomUUID: () => routeWorkerId,
+    processDueAgentCallbackDeliveries: async () => deliveryResult,
     sweepAgentLifecycleCallbacks: async () => sweepResult,
     sweepExpiredHandoffIntents: async () => handoffSweepResult,
   });
@@ -80,6 +84,11 @@ after(() => {
     delete env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
   } else {
     env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = originalSecret;
+  }
+  if (originalCronSecret === undefined) {
+    delete env.CRON_SECRET;
+  } else {
+    env.CRON_SECRET = originalCronSecret;
   }
 });
 
@@ -137,6 +146,11 @@ test("agent callback sweep route rejects unconfigured and unauthorized requests"
 test("agent callback sweep route accepts header auth and defaults invalid limits", async () => {
   const calls: unknown[] = [];
   setAgentCallbackSweepRouteTestOverrides({
+    randomUUID: () => routeWorkerId,
+    processDueAgentCallbackDeliveries: async input => {
+      calls.push(input);
+      return deliveryResult;
+    },
     sweepAgentLifecycleCallbacks: async input => {
       calls.push(input);
       return sweepResult;
@@ -154,17 +168,20 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult });
-  assert.deepEqual(calls, [{ limit: 25 }, { handoffLimit: 25 }]);
+  assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult, deliveries: deliveryResult });
+  assert.deepEqual(calls, [{ limit: 25 }, { handoffLimit: 25 }, { limit: 25, workerId: `sweep:${routeWorkerId}` }]);
 });
 
-test("agent callback sweep route accepts Vercel cron GET bearer auth", async () => {
+test("agent callback sweep route accepts Vercel cron GET bearer auth with a split cron secret", async () => {
+  env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
+  env.CRON_SECRET = "cron-secret";
+
   const response = await sweepRoute.GET(
     makeGetRequest("/api/agent-callbacks/sweep?limit=7", {
-      authorization: "Bearer callback-secret",
+      authorization: "Bearer cron-secret",
     }),
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult });
+  assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult, deliveries: deliveryResult });
 });
