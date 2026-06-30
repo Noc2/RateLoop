@@ -56,6 +56,7 @@
     "next:lint": "yarn workspace @rateloop/nextjs lint",
     "next:serve": "yarn workspace @rateloop/nextjs serve",
     "precommit": "lint-staged",
+    "security:audit": "yarn npm audit --recursive --environment production && yarn npm audit --recursive --environment development",
     "start": "yarn workspace @rateloop/nextjs dev",
     "test": "yarn test:ts",
     "test:all": "yarn foundry:test && yarn test:ts",

@@ -22,6 +22,22 @@ function workflowStepBlock(workflow, stepName) {
   return lines.slice(start, end === -1 ? undefined : end).join("\n");
 }
 
+test("static analysis includes a dependency audit gate", () => {
+  const workflow = readWorkflow(".github/workflows/static-analysis.yaml");
+  const auditJob = workflowJobBlock(workflow, "dependency-audit");
+  const packageJson = JSON.parse(readWorkflow("package.json"));
+
+  assert.equal(
+    packageJson.scripts["security:audit"],
+    "yarn npm audit --recursive --environment production && yarn npm audit --recursive --environment development",
+  );
+  assert.match(auditJob, /actions\/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5/);
+  assert.match(auditJob, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/);
+  assert.match(auditJob, /node-version: "24"/);
+  assert.match(auditJob, /yarn install --immutable/);
+  assert.match(auditJob, /yarn security:audit/);
+});
+
 test("legacy World Chain Sepolia readiness workflow is manual-only", () => {
   const workflow = readWorkflow(
     ".github/workflows/worldchain-sepolia-readiness.yaml",
