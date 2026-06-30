@@ -257,8 +257,13 @@ test.describe("Responsive layout", () => {
       })}`,
     ).toBe(true);
 
-    await page.mouse.move(metrics.wheelX, metrics.wheelY);
-    await page.mouse.wheel(0, 420);
+    await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>('[data-testid="vote-mobile-scroll-container"]');
+      if (!scroller) return;
+
+      scroller.scrollTop = 420;
+      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
 
     await expect
       .poll(

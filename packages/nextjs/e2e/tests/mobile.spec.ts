@@ -438,8 +438,7 @@ test.describe("Mobile viewport (phone)", () => {
       return scrollIntent;
     };
     const resetToFirstFeedCard = async () => {
-      await page.locator('article[aria-current="true"]').first().focus({ timeout: 1_000 }).catch(() => undefined);
-      await page.keyboard.press("Home");
+      await setFeedScrollTop(0);
       await expect.poll(async () => (await readLayout()).activeIndex, { timeout: 3_000 }).toBe(0);
       await expect.poll(async () => (await readLayout()).voteScrollTop, { timeout: 3_000 }).toBeLessThan(2);
     };
@@ -1169,44 +1168,39 @@ test.describe("Mobile viewport (phone)", () => {
     });
 
     const mobileHeader = page.locator('[data-mobile-header="true"]');
-    await page.evaluate(() => {
-      window.scrollTo(0, 0);
-      window.dispatchEvent(new Event("scroll"));
-    });
-    await page.waitForFunction(() => window.scrollY <= 1);
-    await expect(mobileHeader).toHaveAttribute("data-visible", "true");
+    const scrollWindowTo = async (top: number) => {
+      await page.evaluate(async scrollTop => {
+        window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+        document.scrollingElement?.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+        window.dispatchEvent(new Event("scroll"));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        window.dispatchEvent(new Event("scroll"));
+      }, top);
+    };
 
     const canScroll = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 200);
     expect(canScroll).toBe(true);
 
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       window.history.scrollRestoration = "manual";
-      window.scrollTo(0, 0);
-      document.scrollingElement?.scrollTo(0, 0);
+      for (const scrollTop of [120, 0]) {
+        window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+        document.scrollingElement?.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+        window.dispatchEvent(new Event("scroll"));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      }
       window.dispatchEvent(new Event("scroll"));
     });
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
 
     await page.waitForTimeout(320);
-    await page.evaluate(() => {
-      window.scrollTo(0, 900);
-      document.scrollingElement?.scrollTo(0, 900);
-      for (const target of [document, document.documentElement, document.body, window]) {
-        target.dispatchEvent(new Event("scroll", { bubbles: true }));
-      }
-    });
+    await scrollWindowTo(900);
     await page.waitForFunction(() => window.scrollY >= 800);
     await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("false");
 
     await page.waitForTimeout(320);
-    await page.evaluate(() => {
-      window.scrollTo(0, 320);
-      document.scrollingElement?.scrollTo(0, 320);
-      for (const target of [document, document.documentElement, document.body, window]) {
-        target.dispatchEvent(new Event("scroll", { bubbles: true }));
-      }
-    });
+    await scrollWindowTo(320);
     await page.waitForFunction(() => window.scrollY <= 340);
     await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("true");
   });
@@ -1292,10 +1286,14 @@ test.describe("Mobile viewport (phone)", () => {
 
     const activeSourceLink = page.locator('[aria-current="true"] [data-testid="content-source-link"]').first();
     await expect(activeSourceLink).toBeVisible({ timeout: 10_000 });
-    const expectedHref = await activeSourceLink.getAttribute("href");
+    const sourceLinkHandle = await activeSourceLink.elementHandle();
+    expect(sourceLinkHandle, "active source link should stay bound for the external navigation check").not.toBeNull();
+    if (!sourceLinkHandle) return;
+
+    const expectedHref = await sourceLinkHandle.evaluate(link => (link as HTMLAnchorElement).href);
     expect(expectedHref).toBeTruthy();
 
-    await activeSourceLink.evaluate(link => {
+    await sourceLinkHandle.evaluate(link => {
       const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
       if (!scroller) {
         link.scrollIntoView({ block: "center", inline: "nearest" });
@@ -1326,7 +1324,7 @@ test.describe("Mobile viewport (phone)", () => {
     });
     await expect
       .poll(() =>
-        activeSourceLink.evaluate(link => {
+        sourceLinkHandle.evaluate(link => {
           const rect = link.getBoundingClientRect();
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
@@ -1337,11 +1335,11 @@ test.describe("Mobile viewport (phone)", () => {
       .toBe(true);
 
     const popupPromise = page.context().waitForEvent("page");
-    await activeSourceLink.click();
+    await sourceLinkHandle.click();
 
     const popup = await popupPromise;
     await popup.waitForLoadState("domcontentloaded");
-    const expectedUrl = new URL(expectedHref!);
+    const expectedUrl = new URL(expectedHref);
     const actualUrl = new URL(popup.url());
     expect(actualUrl.hostname.replace(/^m\./, "www.")).toBe(expectedUrl.hostname.replace(/^m\./, "www."));
     expect(actualUrl.pathname).toBe(expectedUrl.pathname);

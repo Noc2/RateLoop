@@ -120,6 +120,10 @@ test.describe("Profile management", () => {
     const updatedName = `e2e_upd_${Date.now().toString(36).slice(-5)}`;
     const nameInput = page.getByLabel("Profile name");
     await expect(async () => {
+      if (await nameInput.isVisible({ timeout: 500 }).catch(() => false)) return;
+
+      await expect(editProfileButton).toBeVisible({ timeout: 5_000 });
+      await editProfileButton.scrollIntoViewIfNeeded();
       await editProfileButton.click({ timeout: 5_000 });
       await expect(nameInput).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });

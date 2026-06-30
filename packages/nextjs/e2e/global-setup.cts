@@ -3,7 +3,7 @@
  * before any test executes.  Fails fast with actionable error messages.
  */
 import { resolve } from "path";
-import { execFileSync, execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { ensureBaselineSeedData, ensureLocalHumanCredentials } from "./helpers/baseline-seed";
 import {
   E2E_BASE_URL,
@@ -38,25 +38,28 @@ const MAX_WAIT_MS = 30_000;
 const POLL_INTERVAL_MS = 2_000;
 const NEXTJS_DIR = resolve(__dirname, "..");
 
-function httpStatus(service: (typeof SERVICES)[number]): number | null {
-  const args = ["-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}"];
-
-  if (service.method) {
-    args.push("-X", service.method);
-  }
-
-  for (const [header, value] of Object.entries(service.headers ?? {})) {
-    args.push("-H", `${header}: ${value}`);
-  }
-
-  if (service.body) {
-    args.push("--data", service.body);
-  }
-
-  args.push(service.url);
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 5_000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return Number(execFileSync("curl", args, { encoding: "utf8" }).trim());
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function httpStatus(service: (typeof SERVICES)[number]): Promise<number | null> {
+  try {
+    const response = await fetchWithTimeout(service.url, {
+      method: service.method ?? "GET",
+      headers: service.headers,
+      body: service.body,
+    });
+    return response.status;
   } catch {
     return null;
   }
@@ -66,7 +69,7 @@ async function checkService(service: (typeof SERVICES)[number]): Promise<void> {
   const start = Date.now();
 
   while (Date.now() - start < MAX_WAIT_MS) {
-    const status = httpStatus(service);
+    const status = await httpStatus(service);
     if (status && status >= 200 && status < 400) {
       return;
     }
@@ -91,30 +94,18 @@ async function topUpKeeperBalance(): Promise<void> {
   const BALANCE_HEX = "0x21E19E0C9BAB2400000";
 
   try {
-    const json = JSON.parse(
-      execFileSync(
-        "curl",
-        [
-          "-sS",
-          "-m",
-          "5",
-          "-X",
-          "POST",
-          E2E_RPC_URL,
-          "-H",
-          "Content-Type: application/json",
-          "--data",
-          JSON.stringify({
-            jsonrpc: "2.0",
-            method: "anvil_setBalance",
-            params: [KEEPER_ADDRESS, BALANCE_HEX],
-            id: 1,
-          }),
-        ],
-        { encoding: "utf8" },
-      ),
-    );
-    if (!json.error) {
+    const response = await fetchWithTimeout(E2E_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "anvil_setBalance",
+        params: [KEEPER_ADDRESS, BALANCE_HEX],
+        id: 1,
+      }),
+    });
+    const json = await response.json().catch(() => null);
+    if (response.ok && !json?.error) {
       console.log("  ✓ Keeper (account #1) balance topped up to 10,000 ETH");
     }
   } catch {
@@ -133,7 +124,7 @@ async function ensureDatabaseSchema(): Promise<void> {
       cwd: NEXTJS_DIR,
       env: process.env,
       stdio: "pipe",
-      timeout: 15_000,
+      timeout: 60_000,
     });
     console.log("  ✓ Postgres database schema up to date");
   } catch (err: any) {
@@ -186,12 +177,8 @@ async function globalSetup() {
   // Keeper health check. The dedicated keeper-backed settlement project
   // requires a live keeper process with metrics enabled.
   try {
-    const status = Number(
-      execFileSync("curl", ["-sS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}", E2E_KEEPER_HEALTH_URL], {
-        encoding: "utf8",
-      }).trim(),
-    );
-    if (status >= 200 && status < 400) {
+    const response = await fetchWithTimeout(E2E_KEEPER_HEALTH_URL, {}, 3_000);
+    if (response.status >= 200 && response.status < 400) {
       console.log("  ✓ Keeper (settlement service) running with metrics");
     } else {
       if (process.env.REQUIRE_E2E_KEEPER === "1") {

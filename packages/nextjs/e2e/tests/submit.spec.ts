@@ -141,16 +141,16 @@ test.describe("Ask page", () => {
         const { items } = await getContentList({ search: title, limit: 5 });
         const submittedQuestion = items.find(item => item.title === title);
         return (
-          submittedQuestion?.rewardPoolSummary?.currency === "USDC" &&
-          submittedQuestion.rewardPoolSummary.asset === 1 &&
-          submittedQuestion.rewardPoolSummary.activeRewardPoolCount > 0 &&
-          BigInt(submittedQuestion.rewardPoolSummary.currentRewardPoolAmount) > 0n
+          submittedQuestion?.rewardPoolSummary?.fundedCurrency === "USDC" &&
+          submittedQuestion.rewardPoolSummary.fundedAsset === 1 &&
+          (submittedQuestion.rewardPoolSummary.rewardPoolCount ?? 0) > 0 &&
+          BigInt(submittedQuestion.rewardPoolSummary.totalFundedAmount ?? "0") >= 1_000_000n
         );
       },
       120_000,
       2_000,
       "waitForSubmittedUsdcBounty",
     );
-    expect(indexedAsUsdc, "submitted question should index with an active USDC bounty").toBe(true);
+    expect(indexedAsUsdc, "submitted question should index with a funded USDC bounty").toBe(true);
   });
 });
