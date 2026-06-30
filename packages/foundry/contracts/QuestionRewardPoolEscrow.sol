@@ -872,7 +872,6 @@ contract QuestionRewardPoolEscrow is
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
             bundleRewardClusterPayoutOraclePinnedAt,
-            bundleQuestionTerminalSyncCursor,
             votingEngine,
             bundleId,
             roundSetIndex,

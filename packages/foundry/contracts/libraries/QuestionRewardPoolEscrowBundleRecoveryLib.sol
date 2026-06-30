@@ -28,7 +28,6 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
         mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
-        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -41,7 +40,9 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         require(bundle.pendingRecoveredRoundSets == 0, "Recovered round set pending");
         require(roundSetIndex == bundle.completedRoundSets, "Round set out of order");
         require(roundSetIndex < bundle.requiredSettledRounds, "Invalid round set");
-        require(!bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified, "Round set qualified");
+        BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
+        require(!snapshot.qualified, "Round set qualified");
+        require(snapshot.clusterSnapshotDigest == bytes32(0), "Round set already skipped");
         require(
             QuestionRewardPoolEscrowBundleLib.isRoundSetComplete(
                 bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex
@@ -60,15 +61,8 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             payoutDomain
         );
 
-        QuestionRewardPoolEscrowBundleLib.resetRoundSet(
-            bundleQuestions,
-            bundleQuestionRecordedRounds,
-            bundleRoundIds,
-            bundleQuestionTerminalSyncCursor,
-            bundleId,
-            roundSetIndex
-        );
-        delete bundleRoundSetSnapshots[bundleId][roundSetIndex];
+        snapshot.clusterSnapshotDigest = snapshotDigest;
+        snapshot.clusterWeightRoot = weightRoot;
 
         emit PreQualificationRejectedSnapshotBundleRoundSetSkipped(bundleId, roundSetIndex, snapshotDigest, weightRoot);
     }
