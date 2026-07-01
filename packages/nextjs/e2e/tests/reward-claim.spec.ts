@@ -298,6 +298,22 @@ test.describe("Reward claim lifecycle", () => {
       roundId: bigint;
     }[] = [];
 
+    const unrevealedApproved = await approveLREP(VOTING_ENGINE, STAKE, unrevealed.address, LREP_TOKEN);
+    expect(unrevealedApproved, `Vote approval failed for ${unrevealed.address}`).toBe(true);
+
+    const unrevealedCommit = await commitVoteDirect(
+      BigInt(cleanupContentId!),
+      true,
+      STAKE,
+      ZERO_ADDRESS,
+      unrevealed.address,
+      VOTING_ENGINE,
+    );
+    expect(unrevealedCommit.success, `Vote commit failed for ${unrevealed.address}`).toBe(true);
+
+    const cleanupRoundId = unrevealedCommit.roundId;
+    expect(cleanupRoundId).toBeGreaterThan(0n);
+
     for (const voter of revealedVoters) {
       const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
       expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
@@ -320,29 +336,11 @@ test.describe("Reward claim lifecycle", () => {
       });
     }
 
-    const cleanupRoundId = await getActiveRoundId(BigInt(cleanupContentId!), VOTING_ENGINE);
-    expect(cleanupRoundId).toBeGreaterThan(0n);
     for (const commit of commits) {
       expect(commit.roundId, `Revealed commit should target cleanup round for ${commit.account.address}`).toBe(
         cleanupRoundId,
       );
     }
-
-    const unrevealedApproved = await approveLREP(VOTING_ENGINE, STAKE, unrevealed.address, LREP_TOKEN);
-    expect(unrevealedApproved, `Vote approval failed for ${unrevealed.address}`).toBe(true);
-
-    const unrevealedCommit = await commitVoteDirect(
-      BigInt(cleanupContentId!),
-      true,
-      STAKE,
-      ZERO_ADDRESS,
-      unrevealed.address,
-      VOTING_ENGINE,
-    );
-    expect(unrevealedCommit.success, `Vote commit failed for ${unrevealed.address}`).toBe(true);
-    expect(unrevealedCommit.roundId, `Unrevealed commit should stay in cleanup round for ${unrevealed.address}`).toBe(
-      cleanupRoundId,
-    );
 
     await evmIncreaseTime(EPOCH_DURATION + 1);
 
