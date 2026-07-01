@@ -1,5 +1,5 @@
-export type HandoffDraftPaymentMode = "wallet_calls" | "x402_authorization";
-export type HandoffDraftRewardAsset = "lrep" | "usdc";
+type HandoffDraftPaymentMode = "wallet_calls" | "x402_authorization";
+type HandoffDraftRewardAsset = "lrep" | "usdc";
 
 export function resolveDraftHandoffPaymentMode(params: {
   bountyAsset: HandoffDraftRewardAsset;
