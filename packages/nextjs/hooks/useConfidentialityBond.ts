@@ -19,6 +19,29 @@ import { contracts } from "~~/utils/scaffold-eth/contract";
 
 export const CONFIDENTIALITY_ESCROW_ABI = [
   {
+    type: "error",
+    name: "ERC20InsufficientAllowance",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "allowance", type: "uint256" },
+      { name: "needed", type: "uint256" },
+    ],
+  },
+  {
+    type: "error",
+    name: "ERC20InsufficientBalance",
+    inputs: [
+      { name: "sender", type: "address" },
+      { name: "balance", type: "uint256" },
+      { name: "needed", type: "uint256" },
+    ],
+  },
+  {
+    type: "error",
+    name: "SafeERC20FailedOperation",
+    inputs: [{ name: "token", type: "address" }],
+  },
+  {
     type: "function",
     name: "hasActiveBond",
     inputs: [
@@ -42,6 +65,10 @@ const LOCAL_DEVELOPMENT_CHAIN_IDS = new Set([31337]);
 const CONFIDENTIALITY_BOND_REUSABLE_ALLOWANCE_MULTIPLIER = 10n;
 const CONFIDENTIALITY_BOND_POSTCONDITION_TIMEOUT_MS = 20_000;
 const CONFIDENTIALITY_BOND_POSTCONDITION_SLOW_MS = 4_000;
+const CONFIDENTIALITY_BOND_ALLOWANCE_TIMEOUT_MS = 20_000;
+const CONFIDENTIALITY_BOND_ALLOWANCE_SLOW_MS = 4_000;
+export const ERC20_INSUFFICIENT_ALLOWANCE_SELECTOR = "0xfb8f41b2";
+export const ERC20_INSUFFICIENT_BALANCE_SELECTOR = "0xe450d38c";
 
 function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -86,6 +113,41 @@ function getConfidentialityBondPollingInterval(chainId: number) {
 
 function getReusableBondApprovalAmount(requiredAmount: bigint) {
   return requiredAmount > 0n ? requiredAmount * CONFIDENTIALITY_BOND_REUSABLE_ALLOWANCE_MULTIPLIER : requiredAmount;
+}
+
+function errorMessageFromUnknown(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "");
+}
+
+function hasErrorSelector(message: string, selector: string) {
+  return message.toLowerCase().includes(selector.toLowerCase());
+}
+
+export function getConfidentialityBondErrorMessage(error: unknown, asset: ConfidentialityBondRequirement["asset"]) {
+  const message = errorMessageFromUnknown(error);
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    message.includes("ERC20InsufficientAllowance") ||
+    normalizedMessage.includes("insufficient allowance") ||
+    hasErrorSelector(message, ERC20_INSUFFICIENT_ALLOWANCE_SELECTOR)
+  ) {
+    return `${asset} approval was not high enough or was not visible yet. Retry the bond after the approval confirms.`;
+  }
+
+  if (
+    message.includes("ERC20InsufficientBalance") ||
+    normalizedMessage.includes("insufficient balance") ||
+    hasErrorSelector(message, ERC20_INSUFFICIENT_BALANCE_SELECTOR)
+  ) {
+    return `You do not have enough liquid ${asset} to post this confidentiality bond.`;
+  }
+
+  if (message.includes("SafeERC20FailedOperation")) {
+    return `${asset} transfer failed while posting the confidentiality bond. Check the token approval and retry.`;
+  }
+
+  return message || "Could not post the required confidentiality bond.";
 }
 
 interface UseConfidentialityBondParams {
@@ -253,6 +315,82 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
     }
   }, [bondRequirement.asset, contentId, escrowAddress, identityKey, publicClient, targetNetwork.id]);
 
+  const waitForBondAllowance = useCallback(
+    async (params: { owner: Address; requiredAmount: bigint; spender: Address; token: Address }) => {
+      if (!publicClient) return false;
+
+      const timingLog = createTransactionTimingRun({
+        action: "approve confidentiality bond",
+        callCount: 1,
+        callTypes: ["allowance"],
+        chainId: targetNetwork.id,
+        metadata: {
+          asset: bondRequirement.asset,
+          contentId: contentId.toString(),
+          requiredAmount: params.requiredAmount.toString(),
+        },
+        route: "postcondition",
+        source: "confidentiality-bond",
+      });
+      const startedAt = Date.now();
+      let pollCount = 0;
+      let slowLogged = false;
+      timingLog.emit("allowance-wait-start");
+
+      for (;;) {
+        pollCount += 1;
+        try {
+          const allowance = (await publicClient.readContract({
+            address: params.token,
+            abi: ERC20_APPROVAL_ABI,
+            functionName: "allowance",
+            args: [params.owner, params.spender],
+          })) as bigint;
+
+          if (allowance >= params.requiredAmount) {
+            timingLog.emit("allowance-wait-complete", {
+              allowance: allowance.toString(),
+              pollCount,
+            });
+            return true;
+          }
+        } catch (allowanceError) {
+          timingLog.emit("allowance-poll-error", {
+            message: allowanceError instanceof Error ? allowanceError.message : "Unknown error",
+            pollCount,
+          });
+        }
+
+        const elapsedMs = Date.now() - startedAt;
+        if (!slowLogged && elapsedMs >= CONFIDENTIALITY_BOND_ALLOWANCE_SLOW_MS) {
+          slowLogged = true;
+          timingLog.emit("allowance-wait-slow", {
+            pollCount,
+            status: "pending",
+          });
+        }
+        if (elapsedMs >= CONFIDENTIALITY_BOND_ALLOWANCE_TIMEOUT_MS) {
+          timingLog.emit("allowance-wait-timeout", {
+            pollCount,
+            status: "pending",
+          });
+          return false;
+        }
+
+        await delay(
+          Math.max(
+            200,
+            Math.min(
+              getConfidentialityBondPollingInterval(targetNetwork.id),
+              CONFIDENTIALITY_BOND_ALLOWANCE_TIMEOUT_MS - elapsedMs,
+            ),
+          ),
+        );
+      }
+    },
+    [bondRequirement.asset, contentId, publicClient, targetNetwork.id],
+  );
+
   useEffect(() => {
     void refreshBond();
   }, [refreshBond]);
@@ -414,6 +552,15 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
       } else {
         if (approvalCall) {
           await writeContractCall(approvalCall, `approve ${bondRequirement.asset} bond`);
+          const allowanceReady = await waitForBondAllowance({
+            owner: address as Address,
+            requiredAmount: bondRequirement.amount,
+            spender: escrowAddress,
+            token: tokenAddress,
+          });
+          if (!allowanceReady) {
+            throw new Error(`${bondRequirement.asset} approval is still pending. Retry the bond after it confirms.`);
+          }
         }
 
         await writeContractCall(postBondCall, "post confidentiality bond");
@@ -427,9 +574,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
       return true;
     } catch (bondError) {
       console.error("[confidentiality] failed to post confidentiality bond.", bondError);
-      const message =
-        bondError instanceof Error ? bondError.message : "Could not post the required confidentiality bond.";
-      setError(message);
+      setError(getConfidentialityBondErrorMessage(bondError, bondRequirement.asset));
       return false;
     } finally {
       setIsPostingBond(false);
@@ -458,6 +603,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
     refetchIdentity,
     refreshBond,
     tokenAddress,
+    waitForBondAllowance,
     waitForPostedBondPostcondition,
     writeContractCall,
   ]);
