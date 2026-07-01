@@ -404,14 +404,15 @@ export function NotificationSettingsPanel({
           ) : null}
 
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
+            <GradientActionButton
+              className="max-w-full"
+              innerClassName="text-center"
+              motion={isEmailSaving ? "processing" : "idle"}
               onClick={() => void handleSaveEmailSettings()}
               disabled={isEmailSaving || (!emailDirty && emailPayload.email.length > 0)}
-              className="btn btn-submit disabled:bg-base-content/60 disabled:text-base-100/70"
             >
               {isEmailSaving ? "Saving..." : emailPayload.email ? "Save email settings" : "Remove email notifications"}
-            </button>
+            </GradientActionButton>
             {!emailSettings.verified && hasEmail ? (
               <button
                 type="button"
