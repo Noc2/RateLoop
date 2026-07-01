@@ -1875,7 +1875,7 @@ async function readCommitCleanupStateLatest(
   return { stakeAmount: BigInt(commit[1]), revealed: commit[4] };
 }
 
-export async function readUnprocessedUnrevealedStakeInRangeLatest(
+async function readUnprocessedUnrevealedStakeInRangeLatest(
   contractAddress: string,
   contentId: bigint,
   roundId: bigint,
