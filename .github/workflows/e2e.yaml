@@ -12,6 +12,8 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   APP_URL: http://localhost:3000
+  # Shared local-only token for production-mode Next.js -> Ponder metadata sync.
+  PONDER_METADATA_SYNC_TOKEN: rateloop-e2e-metadata-sync-token
 
 permissions:
   contents: read
