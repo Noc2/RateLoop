@@ -15,6 +15,7 @@ import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
 import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 
@@ -53,7 +54,6 @@ contract ConfidentialityEscrow is
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
-    bytes32 public constant ACCESS_RECORDER_ROLE = keccak256("ACCESS_RECORDER_ROLE");
 
     uint8 public constant BOND_ASSET_LREP = 0;
     uint8 public constant BOND_ASSET_USDC = 1;
@@ -104,7 +104,7 @@ contract ConfidentialityEscrow is
     mapping(uint256 => bool) public configured;
     mapping(uint256 => mapping(bytes32 => BondPosition)) public bonds;
     mapping(uint8 => mapping(bytes32 => bool)) public nullifierHasBond;
-    mapping(bytes32 => LogRootAnchor) public logRootAnchors;
+    mapping(address => mapping(bytes32 => LogRootAnchor)) public logRootAnchors;
 
     uint256[39] private __gap;
 
@@ -127,12 +127,15 @@ contract ConfidentialityEscrow is
     );
     event ConfiscationRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event BondBoundsUpdated(uint256 maxBond, uint256 evidenceWindow, uint256 maxBondLockDuration);
-    event ConfidentialityNexusRecorded(uint256 indexed contentId, address indexed holder, address indexed recorder);
+    event ConfidentialityNexusRecorded(
+        address indexed frontend, uint256 indexed contentId, address indexed holder, address recorder
+    );
     event ConfidentialityLogRootPublished(
+        address indexed frontend,
         bytes32 indexed epochHash,
-        bytes32 indexed merkleRoot,
         address indexed publisher,
         string epoch,
+        bytes32 merkleRoot,
         bytes32 artifactHash,
         string artifactUri
     );
@@ -162,12 +165,10 @@ contract ConfidentialityEscrow is
         _grantRole(CONFIG_ROLE, governance);
         _grantRole(PAUSER_ROLE, governance);
         _grantRole(GOVERNANCE_ROLE, governance);
-        _grantRole(ACCESS_RECORDER_ROLE, governance);
         _grantRole(CONFIG_ROLE, registry_);
         if (admin != governance) {
             _grantRole(CONFIG_ROLE, admin);
             _grantRole(PAUSER_ROLE, admin);
-            _grantRole(ACCESS_RECORDER_ROLE, admin);
         }
 
         lrepToken = IERC20(lrepToken_);
@@ -315,30 +316,29 @@ contract ConfidentialityEscrow is
         if (!_isAuthorizedNexusVotingEngine(contentId)) {
             revert("Not voting engine");
         }
-        _recordConfidentialityNexus(contentId, holder, msg.sender, registryAddress);
+        _recordConfidentialityNexus(address(0), contentId, holder, msg.sender, registryAddress);
     }
 
-    function recordAccessNexus(uint256 contentId, address holder)
-        external
-        onlyRole(ACCESS_RECORDER_ROLE)
-        whenNotPaused
-    {
-        _recordConfidentialityNexus(contentId, holder, msg.sender, protocolConfig.raterRegistry());
+    function recordAccessNexus(address frontend, uint256 contentId, address holder) external whenNotPaused {
+        _requireAuthorizedAccessRecorder(frontend);
+        _recordConfidentialityNexus(frontend, contentId, holder, msg.sender, protocolConfig.raterRegistry());
     }
 
     function publishLogRoot(
+        address frontend,
         string calldata epoch,
         bytes32 merkleRoot,
         bytes32 artifactHash,
         string calldata artifactUri
-    ) external onlyRole(ACCESS_RECORDER_ROLE) whenNotPaused {
+    ) external whenNotPaused {
+        _requireAuthorizedAccessRecorder(frontend);
         uint256 epochLength = bytes(epoch).length;
         if (epochLength == 0 || epochLength > MAX_LOG_ROOT_EPOCH_LENGTH) revert("Invalid epoch");
         if (artifactHash == bytes32(0)) revert("Invalid artifact");
         if (bytes(artifactUri).length > MAX_LOG_ROOT_ARTIFACT_URI_LENGTH) revert("Invalid artifact URI");
         bytes32 epochHash = keccak256(bytes(epoch));
         bytes32 artifactUriHash = keccak256(bytes(artifactUri));
-        LogRootAnchor storage anchor = logRootAnchors[epochHash];
+        LogRootAnchor storage anchor = logRootAnchors[frontend][epochHash];
         if (anchor.artifactHash != bytes32(0)) {
             if (
                 anchor.merkleRoot != merkleRoot || anchor.artifactHash != artifactHash
@@ -353,15 +353,30 @@ contract ConfidentialityEscrow is
         anchor.artifactUriHash = artifactUriHash;
         anchor.publisher = msg.sender;
         anchor.publishedAt = block.timestamp.toUint64();
-        emit ConfidentialityLogRootPublished(epochHash, merkleRoot, msg.sender, epoch, artifactHash, artifactUri);
+        emit ConfidentialityLogRootPublished(
+            frontend, epochHash, msg.sender, epoch, merkleRoot, artifactHash, artifactUri
+        );
     }
 
-    function _recordConfidentialityNexus(uint256 contentId, address holder, address recorder, address registryAddress)
-        private
+    function _recordConfidentialityNexus(
+        address frontend,
+        uint256 contentId,
+        address holder,
+        address recorder,
+        address registryAddress
+    ) private
     {
         if (!_configs[contentId].gated) return;
         _markNullifierBonded(holder, registryAddress);
-        emit ConfidentialityNexusRecorded(contentId, holder, recorder);
+        emit ConfidentialityNexusRecorded(frontend, contentId, holder, recorder);
+    }
+
+    function _requireAuthorizedAccessRecorder(address frontend) private view {
+        if (frontend == address(0)) revert("Invalid frontend");
+        address frontendRegistry = protocolConfig.frontendRegistry();
+        if (frontendRegistry == address(0)) revert("Frontend registry unset");
+        bool authorized = IFrontendRegistry(frontendRegistry).isAuthorizedAccessRecorder(frontend, msg.sender);
+        if (!authorized) revert("Not access recorder");
     }
 
     function slashBond(

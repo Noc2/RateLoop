@@ -2885,6 +2885,18 @@ contract MockFrontendRegistry {
         if (frontend == proposer) return true;
         return snapshotFrontend[proposer] == frontend && snapshotProposerForFrontend[frontend] == proposer;
     }
+
+    function authorizedAccessRecorderFrontend(address recorder) external view returns (address frontend) {
+        return eligible[recorder] ? recorder : address(0);
+    }
+
+    function isAuthorizedAccessRecorder(address frontend, address recorder) external view returns (bool) {
+        return recorder != address(0) && frontend == recorder && eligible[frontend];
+    }
+
+    function accessRecorderForFrontend(address) external pure returns (address recorder) {
+        return address(0);
+    }
 }
 
 contract MockRoundPayoutSnapshotConsumer {

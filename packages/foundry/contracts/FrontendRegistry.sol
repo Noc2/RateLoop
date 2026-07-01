@@ -81,6 +81,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => uint256) public frontendExitAvailableAt;
     mapping(address => address) public snapshotProposerForFrontend;
     mapping(address => address) public frontendForSnapshotProposer;
+    mapping(address => address) public accessRecorderForFrontend;
+    mapping(address => address) public frontendForAccessRecorder;
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
     mapping(address => bool) private authorizedFeeCreditors;
@@ -100,7 +102,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => uint256) public pendingFeeWithdrawalReleaseAt;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[39] private __gap;
+    uint256[37] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -117,6 +119,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event VotingEngineUpdated(address votingEngine);
     event SnapshotProposerUpdated(
         address indexed frontend, address indexed previousProposer, address indexed newProposer
+    );
+    event AccessRecorderUpdated(
+        address indexed frontend, address indexed previousRecorder, address indexed newRecorder
     );
     /// @notice L-Frontend-2: emitted when governance rotates the confiscation recipient.
     event ConfiscationRecipientUpdated(address indexed previous, address indexed current);
@@ -229,6 +234,29 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     }
 
     /// @inheritdoc IFrontendRegistry
+    function authorizedAccessRecorderFrontend(address recorder) external view override returns (address frontend) {
+        if (recorder == address(0)) return address(0);
+        Frontend storage direct = frontends[recorder];
+        if (_isEligible(recorder, direct)) return recorder;
+
+        frontend = frontendForAccessRecorder[recorder];
+        if (frontend == address(0)) return address(0);
+        Frontend storage delegated = frontends[frontend];
+        if (!_isEligible(frontend, delegated) || accessRecorderForFrontend[frontend] != recorder) {
+            return address(0);
+        }
+    }
+
+    /// @inheritdoc IFrontendRegistry
+    function isAuthorizedAccessRecorder(address frontend, address recorder) external view override returns (bool) {
+        if (recorder == address(0)) return false;
+        Frontend storage f = frontends[frontend];
+        if (!_isEligible(frontend, f)) return false;
+        if (frontend == recorder) return true;
+        return accessRecorderForFrontend[frontend] == recorder && frontendForAccessRecorder[recorder] == frontend;
+    }
+
+    /// @inheritdoc IFrontendRegistry
     function getFrontendInfo(address frontend)
         external
         view
@@ -273,6 +301,10 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         address assignedFrontend = frontendForSnapshotProposer[msg.sender];
         if (assignedFrontend != address(0)) {
             _clearSnapshotProposer(assignedFrontend);
+        }
+        assignedFrontend = frontendForAccessRecorder[msg.sender];
+        if (assignedFrontend != address(0)) {
+            _clearAccessRecorder(assignedFrontend);
         }
 
         lrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
@@ -451,6 +483,29 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         _clearSnapshotProposer(msg.sender);
     }
 
+    /// @notice Assign an operational wallet to publish confidentiality log roots for this frontend.
+    /// @dev The frontend remains slashable/accountable; the recorder is only the transaction signer.
+    function setAccessRecorder(address recorder) external nonReentrant {
+        Frontend storage f = frontends[msg.sender];
+        require(f.operator != address(0), "Not registered");
+        require(!f.slashed, "Frontend is slashed");
+        if (frontendExitAvailableAt[msg.sender] != 0) revert FrontendExitPending();
+        require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
+        require(recorder != address(0), "Invalid recorder");
+        require(recorder == msg.sender || frontends[recorder].operator == address(0), "Recorder is registered");
+
+        address assignedFrontend = frontendForAccessRecorder[recorder];
+        require(assignedFrontend == address(0) || assignedFrontend == msg.sender, "Recorder already assigned");
+
+        _setAccessRecorder(msg.sender, recorder);
+    }
+
+    /// @notice Clear the operational wallet authorized to publish confidentiality log roots for this frontend.
+    function clearAccessRecorder() external nonReentrant {
+        require(frontends[msg.sender].operator != address(0), "Not registered");
+        _clearAccessRecorder(msg.sender);
+    }
+
     // --- Governance Functions ---
 
     /// @notice Slash a frontend's stake (partial or full)
@@ -501,6 +556,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         delete pendingFeeWithdrawalReleaseAt[frontend];
         f.slashed = true;
         _clearSnapshotProposer(frontend);
+        _clearAccessRecorder(frontend);
 
         // L-Frontend-3: slashing must reset the unbonding clock. Otherwise a slash → unslash →
         // immediate-exit pattern lets governance be coerced into shortening the operator's
@@ -637,6 +693,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(!f.slashed, "Frontend is slashed");
         if (frontendExitAvailableAt[frontend] != 0) revert FrontendExitPending();
         _clearSnapshotProposer(frontend);
+        _clearAccessRecorder(frontend);
 
         uint256 availableAt = block.timestamp + UNBONDING_PERIOD;
         frontendExitAvailableAt[frontend] = availableAt;
@@ -661,6 +718,25 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         delete snapshotProposerForFrontend[frontend];
         delete frontendForSnapshotProposer[previousProposer];
         emit SnapshotProposerUpdated(frontend, previousProposer, address(0));
+    }
+
+    function _setAccessRecorder(address frontend, address recorder) internal {
+        address previousRecorder = accessRecorderForFrontend[frontend];
+        if (previousRecorder == recorder) return;
+        if (previousRecorder != address(0)) {
+            delete frontendForAccessRecorder[previousRecorder];
+        }
+        accessRecorderForFrontend[frontend] = recorder;
+        frontendForAccessRecorder[recorder] = frontend;
+        emit AccessRecorderUpdated(frontend, previousRecorder, recorder);
+    }
+
+    function _clearAccessRecorder(address frontend) internal {
+        address previousRecorder = accessRecorderForFrontend[frontend];
+        if (previousRecorder == address(0)) return;
+        delete accessRecorderForFrontend[frontend];
+        delete frontendForAccessRecorder[previousRecorder];
+        emit AccessRecorderUpdated(frontend, previousRecorder, address(0));
     }
 
     function _removeRegisteredFrontend(address frontend) internal {

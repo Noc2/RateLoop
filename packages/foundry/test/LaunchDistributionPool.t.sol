@@ -3227,6 +3227,18 @@ contract MockLaunchOracleFrontendRegistry {
     function snapshotProposerForFrontend(address) external pure returns (address proposer) {
         return address(0);
     }
+
+    function authorizedAccessRecorderFrontend(address recorder) external view returns (address frontend) {
+        return eligible[recorder] ? recorder : address(0);
+    }
+
+    function isAuthorizedAccessRecorder(address frontend, address recorder) external view returns (bool) {
+        return recorder != address(0) && frontend == recorder && eligible[frontend];
+    }
+
+    function accessRecorderForFrontend(address) external pure returns (address recorder) {
+        return address(0);
+    }
 }
 
 /// @dev Test source for M-Oracle-1 readiness checks. Always returns 1 (epoch-second 1) so that

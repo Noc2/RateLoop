@@ -614,6 +614,132 @@ contract FrontendRegistryTest is Test {
         assertEq(registry.authorizedSnapshotFrontend(keeper), address(0));
     }
 
+    function test_SetAccessRecorderDirectlyAuthorizesRecorderAddress() public {
+        address recorder = address(0xAACC);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setAccessRecorder(recorder);
+        vm.stopPrank();
+
+        assertEq(registry.accessRecorderForFrontend(frontend1), recorder);
+        assertEq(registry.frontendForAccessRecorder(recorder), frontend1);
+        assertEq(registry.authorizedAccessRecorderFrontend(recorder), frontend1);
+        assertTrue(registry.isAuthorizedAccessRecorder(frontend1, recorder));
+        assertEq(registry.authorizedAccessRecorderFrontend(frontend1), frontend1);
+        assertTrue(registry.isAuthorizedAccessRecorder(frontend1, frontend1));
+
+        vm.prank(frontend1);
+        registry.setAccessRecorder(recorder);
+        assertEq(registry.accessRecorderForFrontend(frontend1), recorder);
+    }
+
+    function test_SetAccessRecorderRotatesAndClearsPreviousRecorder() public {
+        address recorder1 = address(0xAACC);
+        address recorder2 = address(0xDDEE);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setAccessRecorder(recorder1);
+        registry.setAccessRecorder(recorder2);
+        vm.stopPrank();
+
+        assertEq(registry.accessRecorderForFrontend(frontend1), recorder2);
+        assertEq(registry.frontendForAccessRecorder(recorder1), address(0));
+        assertEq(registry.frontendForAccessRecorder(recorder2), frontend1);
+        assertEq(registry.authorizedAccessRecorderFrontend(recorder1), address(0));
+        assertEq(registry.authorizedAccessRecorderFrontend(recorder2), frontend1);
+
+        vm.prank(frontend1);
+        registry.clearAccessRecorder();
+
+        assertEq(registry.accessRecorderForFrontend(frontend1), address(0));
+        assertEq(registry.frontendForAccessRecorder(recorder2), address(0));
+        assertEq(registry.authorizedAccessRecorderFrontend(recorder2), address(0));
+    }
+
+    function test_SetAccessRecorderRejectsRecorderAlreadyAssignedToAnotherFrontend() public {
+        address recorder = address(0xAACC);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setAccessRecorder(recorder);
+        vm.stopPrank();
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.expectRevert("Recorder already assigned");
+        registry.setAccessRecorder(recorder);
+        vm.stopPrank();
+    }
+
+    function test_SetAccessRecorderRejectsRegisteredRecorder() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(frontend1);
+        vm.expectRevert("Recorder is registered");
+        registry.setAccessRecorder(frontend2);
+    }
+
+    function test_AssignedAccessRecorderCanRegisterAndClearInboundAssignment() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setAccessRecorder(frontend2);
+        vm.stopPrank();
+
+        assertEq(registry.accessRecorderForFrontend(frontend1), frontend2);
+        assertEq(registry.frontendForAccessRecorder(frontend2), frontend1);
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        assertEq(registry.accessRecorderForFrontend(frontend1), address(0));
+        assertEq(registry.frontendForAccessRecorder(frontend2), address(0));
+        assertEq(registry.authorizedAccessRecorderFrontend(frontend2), frontend2);
+        assertTrue(registry.isEligible(frontend2));
+    }
+
+    function test_AccessRecorderAuthorizationDropsWhenFrontendExitsOrIsSlashed() public {
+        address recorder = address(0xAACC);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setAccessRecorder(recorder);
+        registry.requestDeregister();
+        vm.stopPrank();
+
+        assertEq(registry.accessRecorderForFrontend(frontend1), address(0));
+        assertEq(registry.authorizedAccessRecorderFrontend(recorder), address(0));
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setAccessRecorder(recorder);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        registry.slashFrontend(frontend2, STAKE / 2, "Test");
+
+        assertEq(registry.accessRecorderForFrontend(frontend2), address(0));
+        assertEq(registry.authorizedAccessRecorderFrontend(recorder), address(0));
+    }
+
     // --- Slash Tests ---
 
     function test_SlashFrontend() public {

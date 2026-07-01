@@ -48,6 +48,18 @@ contract MockRoundIntegrationFrontendRegistry {
     function isAuthorizedSnapshotProposer(address frontend, address proposer) external pure returns (bool) {
         return frontend != address(0) && frontend == proposer;
     }
+
+    function authorizedAccessRecorderFrontend(address recorder) external pure returns (address frontend) {
+        return recorder == address(0) ? address(0) : recorder;
+    }
+
+    function isAuthorizedAccessRecorder(address frontend, address recorder) external pure returns (bool) {
+        return frontend != address(0) && frontend == recorder;
+    }
+
+    function accessRecorderForFrontend(address) external pure returns (address) {
+        return address(0);
+    }
 }
 
 /// @title Round-based integration tests for tlock commit-reveal flow with epoch-weighted rewards.

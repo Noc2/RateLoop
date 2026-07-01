@@ -290,8 +290,6 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
     "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
   const seederRole =
     "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1";
-  const accessRecorderRole =
-    "0xb82259307557a2e745f9b5e8967a4017845406824ddb2b55b3da0f9e27c2a8db";
   const governance = directAddressByName.get("TimelockController");
   const governor = directAddressByName.get("RateLoopGovernor");
   const clusterOracle = directAddressByName.get("ClusterPayoutOracle");
@@ -478,14 +476,6 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
     confidentialityEscrowAbi,
     "renounceRole",
     [configRole, deployer]
-  );
-  pushProxyCall(
-    transactions,
-    receipts,
-    confidentialityEscrow,
-    confidentialityEscrowAbi,
-    "renounceRole",
-    [accessRecorderRole, deployer]
   );
   pushCall(
     transactions,
@@ -1056,8 +1046,6 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
     "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5";
   const pauserRole =
     "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
-  const accessRecorderRole =
-    "0xb82259307557a2e745f9b5e8967a4017845406824ddb2b55b3da0f9e27c2a8db";
   const confidentialityEscrow = address(25);
   const confidentialityEscrowRenounce = (role) =>
     encodeFunctionData({
@@ -1109,13 +1097,6 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
         tx.contractAddress?.toLowerCase() ===
           confidentialityEscrow.toLowerCase() &&
         tx.input === confidentialityEscrowRenounce(configRole),
-    },
-    {
-      label: /ConfidentialityEscrow\.renounceRole\(ACCESS_RECORDER_ROLE\)/,
-      predicate: (tx) =>
-        tx.contractAddress?.toLowerCase() ===
-          confidentialityEscrow.toLowerCase() &&
-        tx.input === confidentialityEscrowRenounce(accessRecorderRole),
     },
   ];
 

@@ -67,8 +67,6 @@ const ROLE_HASHES = {
     "0xfd643c72710c63c0180259aba6b2d05451e3591a24e58b62239378085726f783",
   pauser: "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
   seeder: "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1",
-  accessRecorder:
-    "0xb82259307557a2e745f9b5e8967a4017845406824ddb2b55b3da0f9e27c2a8db",
 };
 
 const PROTOCOL_CONFIG_COMPLETION_ABI = parseAbi([
@@ -258,14 +256,6 @@ const REQUIRED_COMPLETION_CALLS = [
     functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
     abi: CONFIDENTIALITY_ESCROW_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
-  },
-  {
-    label: "ConfidentialityEscrow.renounceRole(ACCESS_RECORDER_ROLE)",
-    contractNames: ["ConfidentialityEscrow", "TransparentUpgradeableProxy"],
-    target: "ConfidentialityEscrow",
-    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
-    abi: CONFIDENTIALITY_ESCROW_COMPLETION_ABI,
-    args: (ctx) => [ROLE_HASHES.accessRecorder, ctx.deployer],
   },
   {
     label: "ContentRegistry.renounceRole(CONFIG_ROLE)",

@@ -25,6 +25,17 @@ interface IFrontendRegistry {
     /// @notice Currently delegated snapshot proposer for a frontend, or address(0) if unset.
     function snapshotProposerForFrontend(address frontend) external view returns (address proposer);
 
+    /// @notice Resolve the bonded frontend operator that authorizes `recorder` to publish confidentiality logs.
+    /// @dev Returns `recorder` itself when it is an eligible frontend operator, otherwise returns the
+    ///      eligible frontend that delegated access-recorder authority to `recorder`, or address(0).
+    function authorizedAccessRecorderFrontend(address recorder) external view returns (address frontend);
+
+    /// @notice Check whether `recorder` can publish confidentiality logs on behalf of `frontend`.
+    function isAuthorizedAccessRecorder(address frontend, address recorder) external view returns (bool);
+
+    /// @notice Currently delegated confidentiality access recorder for a frontend, or address(0) if unset.
+    function accessRecorderForFrontend(address frontend) external view returns (address recorder);
+
     /// @notice Credit LREP fees to a frontend operator (called by RoundVotingEngine)
     /// @param frontend The frontend address to credit
     /// @param lrepAmount Amount of LREP fees

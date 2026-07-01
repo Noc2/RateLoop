@@ -47,6 +47,18 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
         return address(0);
     }
 
+    function authorizedAccessRecorderFrontend(address recorder) external view returns (address) {
+        return recorder == frontend ? frontend : address(0);
+    }
+
+    function isAuthorizedAccessRecorder(address frontend_, address recorder) external view returns (bool) {
+        return frontend_ == frontend && recorder == frontend;
+    }
+
+    function accessRecorderForFrontend(address) external pure returns (address recorder) {
+        return address(0);
+    }
+
     function creditFees(address, uint256) external { }
 
     function feeCreditorForEngine(address) external pure returns (address) {

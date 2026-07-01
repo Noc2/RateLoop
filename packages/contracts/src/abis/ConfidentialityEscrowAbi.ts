@@ -19,19 +19,6 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
-    "name": "ACCESS_RECORDER_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "BOND_ASSET_LREP",
     "inputs": [],
     "outputs": [
@@ -636,6 +623,11 @@ export const ConfidentialityEscrowAbi = [
     "inputs": [
       {
         "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -892,6 +884,11 @@ export const ConfidentialityEscrowAbi = [
     "name": "publishLogRoot",
     "inputs": [
       {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "epoch",
         "type": "string",
         "internalType": "string"
@@ -919,6 +916,11 @@ export const ConfidentialityEscrowAbi = [
     "type": "function",
     "name": "recordAccessNexus",
     "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      },
       {
         "name": "contentId",
         "type": "uint256",
@@ -1344,13 +1346,13 @@ export const ConfidentialityEscrowAbi = [
     "name": "ConfidentialityLogRootPublished",
     "inputs": [
       {
-        "name": "epochHash",
-        "type": "bytes32",
+        "name": "frontend",
+        "type": "address",
         "indexed": true,
-        "internalType": "bytes32"
+        "internalType": "address"
       },
       {
-        "name": "merkleRoot",
+        "name": "epochHash",
         "type": "bytes32",
         "indexed": true,
         "internalType": "bytes32"
@@ -1366,6 +1368,12 @@ export const ConfidentialityEscrowAbi = [
         "type": "string",
         "indexed": false,
         "internalType": "string"
+      },
+      {
+        "name": "merkleRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
       },
       {
         "name": "artifactHash",
@@ -1387,6 +1395,12 @@ export const ConfidentialityEscrowAbi = [
     "name": "ConfidentialityNexusRecorded",
     "inputs": [
       {
+        "name": "frontend",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
         "name": "contentId",
         "type": "uint256",
         "indexed": true,
@@ -1401,7 +1415,7 @@ export const ConfidentialityEscrowAbi = [
       {
         "name": "recorder",
         "type": "address",
-        "indexed": true,
+        "indexed": false,
         "internalType": "address"
       }
     ],

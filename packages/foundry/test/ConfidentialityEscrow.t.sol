@@ -32,6 +32,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     RaterRegistry internal raterRegistry;
     ConfidentialityEscrow internal confidentialityEscrow;
     AdvisoryVoteRecorder internal advisoryRecorder;
+    FrontendRegistry internal frontendRegistry;
 
     address internal owner = address(0xA11CE);
     address internal submitter = address(0xB0B);
@@ -50,10 +51,11 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     bytes32 internal constant LOG_ARTIFACT_HASH = keccak256("confidentiality log artifact");
 
     event ConfidentialityLogRootPublished(
+        address indexed frontend,
         bytes32 indexed epochHash,
-        bytes32 indexed merkleRoot,
         address indexed publisher,
         string epoch,
+        bytes32 merkleRoot,
         bytes32 artifactHash,
         string artifactUri
     );
@@ -150,7 +152,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         advisoryRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
         protocolConfig.setAdvisoryVoteRecorder(address(advisoryRecorder));
 
-        FrontendRegistry frontendRegistry = FrontendRegistry(
+        frontendRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
                     address(new FrontendRegistry()),
@@ -161,6 +163,9 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         frontendRegistry.setVotingEngine(address(engine));
         frontendRegistry.addFeeCreditor(address(rewardDistributor));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
+        lrepToken.mint(owner, 10_000e6);
+        lrepToken.approve(address(frontendRegistry), frontendRegistry.STAKE_AMOUNT());
+        frontendRegistry.register();
 
         raterRegistry.setConfidentialityEscrow(address(confidentialityEscrow));
         protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
@@ -599,7 +604,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
 
         assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
         vm.prank(owner);
-        confidentialityEscrow.recordAccessNexus(contentId, voter1);
+        confidentialityEscrow.recordAccessNexus(owner, contentId, voter1);
         assertTrue(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
 
         vm.prank(owner);
@@ -614,12 +619,12 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(voter1)));
     }
 
-    function testRecordAccessNexusRequiresRecorderRole() public {
+    function testRecordAccessNexusRequiresAuthorizedAccessRecorder() public {
         uint256 contentId = _submitGatedQuestion("zero-bond-access-role", 0);
 
-        vm.expectRevert();
+        vm.expectRevert("Not access recorder");
         vm.prank(voter1);
-        confidentialityEscrow.recordAccessNexus(contentId, voter1);
+        confidentialityEscrow.recordAccessNexus(owner, contentId, voter1);
     }
 
     function testRecordConfidentialityNexusForRegistryRevertsWhenPaused() public {
@@ -633,20 +638,20 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         confidentialityEscrow.recordConfidentialityNexusForRegistry(contentId, voter1, address(raterRegistry));
     }
 
-    function testPublishLogRootRequiresRecorderRoleAndEmitsArtifactAnchor() public {
+    function testPublishLogRootRequiresAuthorizedAccessRecorderAndEmitsFrontendScopedArtifactAnchor() public {
         string memory epoch = "2026-06-15";
         string memory artifactUri = "https://rateloop.ai/api/confidentiality/log-roots/2026-06-15/artifact";
 
         vm.prank(voter1);
-        vm.expectRevert();
-        confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+        vm.expectRevert("Not access recorder");
+        confidentialityEscrow.publishLogRoot(owner, epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
 
         vm.expectEmit(true, true, true, true);
         emit ConfidentialityLogRootPublished(
-            keccak256(bytes(epoch)), LOG_ROOT, owner, epoch, LOG_ARTIFACT_HASH, artifactUri
+            owner, keccak256(bytes(epoch)), owner, epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri
         );
         vm.prank(owner);
-        confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+        confidentialityEscrow.publishLogRoot(owner, epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
 
         (
             bytes32 anchoredRoot,
@@ -654,7 +659,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             bytes32 anchoredArtifactUriHash,
             address publisher,
             uint64 publishedAt
-        ) = confidentialityEscrow.logRootAnchors(keccak256(bytes(epoch)));
+        ) = confidentialityEscrow.logRootAnchors(owner, keccak256(bytes(epoch)));
         assertEq(anchoredRoot, LOG_ROOT);
         assertEq(anchoredArtifactHash, LOG_ARTIFACT_HASH);
         assertEq(anchoredArtifactUriHash, keccak256(bytes(artifactUri)));
@@ -662,24 +667,53 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertEq(publishedAt, block.timestamp);
 
         vm.prank(owner);
-        confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+        confidentialityEscrow.publishLogRoot(owner, epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
 
         vm.prank(owner);
         vm.expectRevert("Log root sealed");
-        confidentialityEscrow.publishLogRoot(epoch, keccak256("changed root"), LOG_ARTIFACT_HASH, artifactUri);
+        confidentialityEscrow.publishLogRoot(owner, epoch, keccak256("changed root"), LOG_ARTIFACT_HASH, artifactUri);
+    }
+
+    function testMultipleFrontendsCanPublishDifferentLogRootsForSameEpoch() public {
+        address frontend = submitter;
+        address recorder = address(0xAACC);
+        string memory epoch = "2026-06-15";
+
+        vm.startPrank(frontend);
+        lrepToken.approve(address(frontendRegistry), frontendRegistry.STAKE_AMOUNT());
+        frontendRegistry.register();
+        frontendRegistry.setAccessRecorder(recorder);
+        vm.stopPrank();
+
+        vm.prank(owner);
+        confidentialityEscrow.publishLogRoot(owner, epoch, LOG_ROOT, LOG_ARTIFACT_HASH, "");
+
+        bytes32 otherRoot = keccak256("other root");
+        bytes32 otherArtifact = keccak256("other artifact");
+        vm.prank(recorder);
+        confidentialityEscrow.publishLogRoot(frontend, epoch, otherRoot, otherArtifact, "");
+
+        (bytes32 ownerRoot,,,,) = confidentialityEscrow.logRootAnchors(owner, keccak256(bytes(epoch)));
+        (bytes32 frontendRoot, bytes32 frontendArtifactHash,, address publisher,) =
+            confidentialityEscrow.logRootAnchors(frontend, keccak256(bytes(epoch)));
+        assertEq(ownerRoot, LOG_ROOT);
+        assertEq(frontendRoot, otherRoot);
+        assertEq(frontendArtifactHash, otherArtifact);
+        assertEq(publisher, recorder);
     }
 
     function testPublishLogRootRejectsInvalidArtifact() public {
         vm.startPrank(owner);
 
         vm.expectRevert("Invalid epoch");
-        confidentialityEscrow.publishLogRoot("", LOG_ROOT, LOG_ARTIFACT_HASH, "");
+        confidentialityEscrow.publishLogRoot(owner, "", LOG_ROOT, LOG_ARTIFACT_HASH, "");
 
         vm.expectRevert("Invalid artifact");
-        confidentialityEscrow.publishLogRoot("2026-06-15", LOG_ROOT, bytes32(0), "");
+        confidentialityEscrow.publishLogRoot(owner, "2026-06-15", LOG_ROOT, bytes32(0), "");
 
         vm.expectRevert("Invalid artifact URI");
         confidentialityEscrow.publishLogRoot(
+            owner,
             "2026-06-15",
             LOG_ROOT,
             LOG_ARTIFACT_HASH,
