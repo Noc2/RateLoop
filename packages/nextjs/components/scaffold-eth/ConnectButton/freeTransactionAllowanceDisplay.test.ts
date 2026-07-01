@@ -78,6 +78,19 @@ test("free transaction display shows quota for verified eligible wallets", () =>
   );
 });
 
+test("free transaction display hides exhausted verified allowances", () => {
+  assert.deepEqual(
+    getFreeTransactionAllowanceDisplayState({
+      canShowFreeTransactionAllowance: true,
+      isResolved: true,
+      limit: 25,
+      remaining: 0,
+      verified: true,
+    }),
+    { kind: "hidden" },
+  );
+});
+
 test("free transaction display hides unavailable allowance states", () => {
   assert.deepEqual(
     getFreeTransactionAllowanceDisplayState({
