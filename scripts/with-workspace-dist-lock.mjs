@@ -12,6 +12,7 @@ const RETRY_MS = Number.parseInt(process.env.RATELOOP_WORKSPACE_DIST_LOCK_RETRY_
 const HEARTBEAT_MS =
   Number.parseInt(process.env.RATELOOP_WORKSPACE_DIST_LOCK_HEARTBEAT_MS ?? "", 10) ||
   Math.max(25, Math.min(30_000, Math.floor(STALE_LOCK_MS / 3)));
+const REMOVE_LOCK_OPTIONS = { force: true, recursive: true, maxRetries: 5, retryDelay: RETRY_MS };
 
 function hashScope(value) {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
@@ -238,7 +239,7 @@ async function acquireLock(lockDir) {
         !currentOwner && stats && Date.now() - stats.mtimeMs > STALE_LOCK_MS;
 
       if (!legacyLiveOwner && (heartbeatExpired || deadOwnerExpired || ownerMissingAndDirectoryExpired)) {
-        await rm(lockDir, { force: true, recursive: true });
+        await rm(lockDir, REMOVE_LOCK_OPTIONS);
         continue;
       }
 
@@ -255,7 +256,7 @@ async function releaseLock(lockDir, owner) {
   if (currentOwner?.token !== owner.token) {
     return;
   }
-  await rm(lockDir, { force: true, recursive: true });
+  await rm(lockDir, REMOVE_LOCK_OPTIONS);
 }
 
 const command = process.argv.slice(2).join(" ").trim();

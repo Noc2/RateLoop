@@ -140,7 +140,7 @@ test("releasing an old workspace dist lock does not delete a newer owner", async
     const fs = require("node:fs");
     const path = require("node:path");
     const lockDir = process.env.RATELOOP_WORKSPACE_DIST_LOCK_DIR;
-    fs.rmSync(lockDir, { force: true, recursive: true });
+    fs.rmSync(lockDir, { force: true, recursive: true, maxRetries: 5, retryDelay: 20 });
     fs.mkdirSync(lockDir, { recursive: true });
     fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({
       pid: process.pid,
