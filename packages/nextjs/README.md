@@ -114,7 +114,7 @@ Key environment variables (see `.env.example` for the full list):
 | `RATELOOP_CONFIDENTIALITY_JOB_SECRET`                  | Optional RateLoop-specific bearer/header secret also accepted by confidentiality disclosure reconciliation and log-root publication jobs                                                     |
 | `RATELOOP_CONFIDENTIALITY_SECRET`                      | HMAC secret for confidential context IP hashes and view tokens; required in production                                                                                                       |
 | `RATELOOP_CONFIDENTIALITY_LOG_ROOT_ARTIFACT_BASE_URL`  | Optional public base URL for deterministic confidentiality log-root artifacts; defaults to `APP_URL` artifact routes                                                                         |
-| `RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY` | Backend private key that publishes `ConfidentialityEscrow` log-root anchor events; required for green Base mainnet log-root cron health; its address needs `ACCESS_RECORDER_ROLE`             |
+| `RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY` | Backend private key that publishes frontend-scoped `ConfidentialityEscrow` log-root anchor events; required for green Base mainnet log-root cron health; set its address as the frontend Access Recorder |
 | `RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR`                  | Optional development directory for filesystem-backed image uploads when `BLOB_READ_WRITE_TOKEN` is empty. Defaults to `.local/image-attachments`.                                            |
 
 Notes:

@@ -610,6 +610,10 @@ const SmartContracts: NextPage = () => {
           separate operational wallet for payout-root proposal transactions while the frontend operator remains bonded.
         </li>
         <li>
+          <code>setAccessRecorder(recorder)</code> and <code>clearAccessRecorder()</code> &mdash; Assign or clear a
+          separate operational wallet for frontend-scoped confidentiality access-log root anchors.
+        </li>
+        <li>
           <code>requestFeeWithdrawal()</code> / <code>completeFeeWithdrawal()</code> &mdash; Two-step withdrawal of
           accumulated platform fees while healthy, fully bonded, and not exiting. The requested amount stays in the
           registry and remains fully slashable for a 21-day review window before it can be completed, so the fee stream

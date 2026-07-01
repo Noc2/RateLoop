@@ -160,7 +160,7 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
   );
   assert.match(
     liveJob,
-    /RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY: \$\{\{ secrets\.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY \}\}/,
+    /RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY: \$\{\{ secrets\.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY \}\}/,
   );
   assert.match(liveJob, /BASE_RPC_URL: \$\{\{ secrets\.BASE_RPC_URL \}\}/);
   assert.match(liveJob, /KEEPER_DATABASE_URL: \$\{\{ secrets\.KEEPER_DATABASE_URL \}\}/);

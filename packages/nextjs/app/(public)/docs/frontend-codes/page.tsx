@@ -127,6 +127,11 @@ const FrontendCodes: NextPage = () => {
           ClusterPayoutOracle epoch and round payout roots from the registered frontend wallet, or from a separate
           snapshot keeper wallet assigned by that frontend, so USDC bounty and launch LREP claims can finalize.
         </li>
+        <li>
+          <strong>Anchor confidentiality logs:</strong> If your frontend serves private context, publish your own
+          confidentiality access-log roots from the registered frontend wallet, or assign a separate Access Recorder
+          wallet in settings.
+        </li>
       </ol>
 
       <h2>Frontend Attribution</h2>
@@ -180,6 +185,11 @@ RoundVotingEngine.commitVote(
           artifacts and submit <code>ClusterPayoutOracle</code> roots from the registered frontend operator wallet or a
           delegated snapshot keeper wallet assigned by that frontend. Root proposal remains frontend-bonded,
           challengeable, and should point at a public deterministic artifact.
+        </li>
+        <li>
+          <strong>Publishing confidentiality log roots:</strong> If the frontend gates private context, the service
+          should publish frontend-scoped confidentiality access-log roots from the operator wallet or the assigned
+          Access Recorder wallet. These anchors bind breach evidence to the frontend that served the context.
         </li>
         <li>
           <strong>Finalizing and cleanup:</strong> If commit quorum was reached but reveal quorum never materializes by

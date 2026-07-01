@@ -191,36 +191,36 @@ test("validateBaseMainnetOfflineReadiness rejects removed dedicated Base preconf
   );
 });
 
-test("validateBaseMainnetLiveEnvironment requires a log-root anchor private key", () => {
+test("validateBaseMainnetLiveEnvironment requires an access recorder private key", () => {
   const missing = { ok: true, checks: [], failures: [] };
   validateBaseMainnetLiveEnvironment(missing, {});
 
   assert.equal(missing.ok, false);
   assert(
     missing.failures.some((message) =>
-      message.includes("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY"),
+      message.includes("RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY"),
     ),
   );
 
   const configured = { ok: true, checks: [], failures: [] };
   validateBaseMainnetLiveEnvironment(configured, {
-    RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
+    RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY: `0x${"1".repeat(64)}`,
   });
 
   assert.equal(configured.ok, true);
   assert.deepEqual(configured.failures, []);
 });
 
-test("validateBaseMainnetLiveEnvironment rejects malformed log-root anchor private keys", () => {
+test("validateBaseMainnetLiveEnvironment rejects malformed access recorder private keys", () => {
   const result = { ok: true, checks: [], failures: [] };
   validateBaseMainnetLiveEnvironment(result, {
-    RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY: "not-a-private-key",
+    RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY: "not-a-private-key",
   });
 
   assert.equal(result.ok, false);
   assert(
     result.failures.some((message) =>
-      message.includes("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY"),
+      message.includes("RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY"),
     ),
   );
 });

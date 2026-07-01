@@ -114,16 +114,13 @@ export function validateBaseMainnetOfflineReadiness(inputs) {
   return result;
 }
 
-export function validateBaseMainnetLiveEnvironment(
-  result,
-  env = process.env,
-) {
-  const anchorPrivateKey =
-    env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY?.trim() ?? "";
+export function validateBaseMainnetLiveEnvironment(result, env = process.env) {
+  const recorderPrivateKey =
+    env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY?.trim() ?? "";
   addCheck(
     result,
-    PRIVATE_KEY_PATTERN.test(anchorPrivateKey),
-    "RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY is configured for required log-root anchoring",
+    PRIVATE_KEY_PATTERN.test(recorderPrivateKey),
+    "RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY is configured for frontend-scoped log-root anchoring",
   );
   result.ok = result.failures.length === 0;
   return result;
