@@ -1902,11 +1902,16 @@ function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function readRoundLifecycleStateLatest(
+export async function readRoundLifecycleStateLatest(
   contractAddress: string,
   contentId: bigint,
   roundId: bigint,
-): Promise<{ revealGracePeriod: bigint; lastRevealableAfter: bigint }> {
+): Promise<{
+  revealGracePeriod: bigint;
+  lastRevealableAfter: bigint;
+  cleanupRemaining: bigint;
+  clusterPayoutReadyAt: bigint;
+}> {
   const { decodeFunctionResult, encodeFunctionData } = await import("viem");
   const abi = [
     {
@@ -1935,12 +1940,17 @@ async function readRoundLifecycleStateLatest(
     throw new Error(`readRoundLifecycleState failed for content=${contentId.toString()} round=${roundId.toString()}`);
   }
 
-  const [revealGracePeriod, lastRevealableAfter] = decodeFunctionResult({
+  const [revealGracePeriod, lastRevealableAfter, cleanupRemaining, clusterPayoutReadyAt] = decodeFunctionResult({
     abi,
     functionName: "roundLifecycleState",
     data: result,
   });
-  return { revealGracePeriod, lastRevealableAfter };
+  return {
+    revealGracePeriod,
+    lastRevealableAfter,
+    cleanupRemaining,
+    clusterPayoutReadyAt: BigInt(clusterPayoutReadyAt),
+  };
 }
 
 /**
