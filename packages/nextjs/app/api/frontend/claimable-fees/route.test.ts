@@ -56,10 +56,12 @@ beforeEach(() => {
       throw new Error("database offline");
     },
   });
+  route.__setListClaimableFrontendFeeRoundsForTests(null);
 });
 
 after(() => {
   rateLimit.__setRateLimitStoreForTests(null);
+  route.__setListClaimableFrontendFeeRoundsForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
 
   if (originalDatabaseUrl === undefined) {
@@ -138,6 +140,28 @@ test("frontend claimable fees route accepts an explicit supported chain id", asy
   );
 
   assert.equal(response.status, 200);
+});
+
+test("frontend claimable fees route returns a degraded empty page when lookup fails", async () => {
+  route.__setListClaimableFrontendFeeRoundsForTests(async () => {
+    throw new Error("Ponder request timed out");
+  });
+
+  const response = await route.GET(
+    makeRequest(
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=${TEST_CHAIN_ID}&limit=10&offset=7`,
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    items: [],
+    hasMore: false,
+    nextOffset: 7,
+    scannedRounds: 0,
+    totalRounds: 0,
+    degraded: true,
+  });
 });
 
 test("frontend claimable fees route rejects unsupported chain ids", async () => {

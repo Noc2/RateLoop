@@ -24,6 +24,7 @@ interface FrontendClaimableFeePage {
   nextOffset: number;
   scannedRounds: number;
   totalRounds: number;
+  degraded?: boolean;
 }
 
 const PAGE_SIZE = 10;

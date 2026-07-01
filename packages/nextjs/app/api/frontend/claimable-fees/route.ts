@@ -8,6 +8,25 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 const ROUTE_RATE_LIMIT = { limit: 120, windowMs: 60_000 };
 const LOOKUP_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
+type ListClaimableFrontendFeeRounds = typeof listClaimableFrontendFeeRounds;
+
+let listClaimableFrontendFeeRoundsForRoute: ListClaimableFrontendFeeRounds = listClaimableFrontendFeeRounds;
+
+export function __setListClaimableFrontendFeeRoundsForTests(override: ListClaimableFrontendFeeRounds | null) {
+  listClaimableFrontendFeeRoundsForRoute = override ?? listClaimableFrontendFeeRounds;
+}
+
+function buildDegradedFrontendFeeResponse(offset: number) {
+  return {
+    items: [],
+    hasMore: false,
+    nextOffset: offset,
+    scannedRounds: 0,
+    totalRounds: 0,
+    degraded: true,
+  };
+}
+
 export async function GET(request: NextRequest) {
   const frontend = request.nextUrl.searchParams.get("frontend");
   const chainIdRaw = request.nextUrl.searchParams.get("chainId");
@@ -42,10 +61,10 @@ export async function GET(request: NextRequest) {
   const offset = Math.max(parseInt(request.nextUrl.searchParams.get("offset") ?? "0") || 0, 0);
 
   try {
-    const result = await listClaimableFrontendFeeRounds(frontend, { chainId: parsedChainId, limit, offset });
+    const result = await listClaimableFrontendFeeRoundsForRoute(frontend, { chainId: parsedChainId, limit, offset });
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Failed to fetch claimable frontend fees:", error);
-    return NextResponse.json({ error: "Failed to fetch claimable frontend fees" }, { status: 500 });
+    console.warn("Failed to fetch claimable frontend fees; returning degraded empty response:", error);
+    return NextResponse.json(buildDegradedFrontendFeeResponse(offset));
   }
 }
