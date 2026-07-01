@@ -25,6 +25,7 @@ import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLrepTransferErrorMessage } from "~~/lib/lrepTransferErrors";
+import { getDelegateAddressInputValue, isDelegateAddressInputCurrent } from "~~/lib/profile/delegationDisplay";
 import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import scaffoldConfig from "~~/scaffold.config";
@@ -72,6 +73,16 @@ export function DelegationSection() {
     writeContractAsync,
     refetch,
   } = useDelegation(address);
+  const {
+    data: currentPendingDelegateTo,
+    isLoading: pendingDelegateToLoading,
+    refetch: refetchPendingDelegateTo,
+  } = useScaffoldReadContract({
+    contractName: "RaterRegistry" as any,
+    functionName: "pendingDelegateTo",
+    args: [address],
+    query: { enabled: !!address },
+  } as any);
   const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
@@ -106,7 +117,7 @@ export function DelegationSection() {
     isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
   });
 
-  const [delegateInput, setDelegateInput] = useState("");
+  const [delegateInput, setDelegateInput] = useState<string | null>(null);
   const [transferAddressInput, setTransferAddressInput] = useState("");
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [delegationError, setDelegationError] = useState<string | null>(null);
@@ -114,9 +125,15 @@ export function DelegationSection() {
   const [isSponsoredDelegationPending, setIsSponsoredDelegationPending] = useState(false);
   const [isSponsoredTransferPending, setIsSponsoredTransferPending] = useState(false);
 
-  const normalizedDelegateInput = delegateInput.trim();
+  const pendingDelegateTo = typeof currentPendingDelegateTo === "string" ? currentPendingDelegateTo : ZERO_ADDRESS;
+  const hasPendingDelegate =
+    !!pendingDelegateTo && normalizeAddress(pendingDelegateTo) !== normalizeAddress(ZERO_ADDRESS);
+  const existingDelegateAddress = getDelegateAddressInputValue({ delegateTo, pendingDelegateTo });
+  const delegateInputValue = delegateInput ?? existingDelegateAddress;
+  const normalizedDelegateInput = delegateInputValue.trim();
   const isValidAddress = normalizedDelegateInput.length > 0 && isAddress(normalizedDelegateInput);
   const isSelfAddress = normalizedDelegateInput.toLowerCase() === address?.toLowerCase();
+  const isCurrentDelegateInput = isDelegateAddressInputCurrent(delegateInputValue, existingDelegateAddress);
   const isLrepBalanceLoading = !!address && typeof lrepBalance !== "bigint";
   const lrepBalanceMicro = typeof lrepBalance === "bigint" ? lrepBalance : 0n;
   const formattedBalance = isLrepBalanceLoading ? "Loading..." : formatLrepAmount(lrepBalanceMicro, 6);
@@ -144,6 +161,12 @@ export function DelegationSection() {
     isValidTransferAmount &&
     !exceedsTransferBalance &&
     !walletTransactionReadiness.isBlocked;
+  const canSubmitDelegate = isValidAddress && !isSelfAddress && !isCurrentDelegateInput;
+
+  const refetchDelegationState = () => {
+    refetch();
+    refetchPendingDelegateTo();
+  };
 
   const submitDelegationWrite = async (
     functionName: "setDelegate" | "removeDelegate",
@@ -314,11 +337,11 @@ export function DelegationSection() {
     try {
       await submitDelegationWrite("setDelegate", [normalizedDelegateInput as `0x${string}`], "set delegate");
       notification.success("Delegate set successfully!");
-      setDelegateInput("");
+      setDelegateInput(null);
       setTransferAddressInput(currentValue =>
         currentValue.trim().length > 0 ? currentValue : normalizedDelegateInput,
       );
-      refetch();
+      refetchDelegationState();
     } catch (e: any) {
       console.error("Set delegate failed:", e);
       const msg = e?.shortMessage || e?.message || "Failed to set delegate";
@@ -341,7 +364,8 @@ export function DelegationSection() {
     try {
       await submitDelegationWrite("removeDelegate", [], "remove delegate");
       notification.success("Delegate removed!");
-      refetch();
+      setDelegateInput(null);
+      refetchDelegationState();
     } catch (e: any) {
       console.error("Remove delegate failed:", e);
       setDelegationError(e?.shortMessage || "Failed to remove delegate");
@@ -610,7 +634,7 @@ export function DelegationSection() {
     </div>
   );
 
-  if (credentialLoading || (hasActiveHumanCredential && isLoading)) {
+  if (credentialLoading || (hasActiveHumanCredential && (isLoading || pendingDelegateToLoading))) {
     return (
       <div className="surface-card rounded-2xl p-6">
         <div className="flex items-center justify-center py-8">
@@ -666,6 +690,27 @@ export function DelegationSection() {
         </div>
       )}
 
+      {hasPendingDelegate && (
+        <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 space-y-3">
+          <p className="text-base font-medium text-warning">Pending delegate</p>
+          <p className="text-base font-mono break-all">{pendingDelegateTo}</p>
+          <button
+            onClick={handleRemoveDelegate}
+            className="btn btn-outline btn-warning btn-sm"
+            disabled={isDelegationWritePending}
+          >
+            {isDelegationWritePending ? (
+              <span className="flex items-center gap-2">
+                <span className="loading loading-spinner loading-xs"></span>
+                Removing...
+              </span>
+            ) : (
+              "Remove Delegate"
+            )}
+          </button>
+        </div>
+      )}
+
       {isDelegate && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-4">
           <p className="text-base font-medium text-info">You are a delegate for</p>
@@ -674,50 +719,48 @@ export function DelegationSection() {
       )}
 
       {/* Set delegate form */}
-      {!hasDelegate && (
-        <div className="space-y-3">
-          <label className="flex items-center gap-1.5 text-base font-medium">
-            Delegate Address
-            <InfoTooltip text="Enter the address of your secondary wallet. This address will be able to vote using your rater credential." />
-          </label>
-          <input
-            type="text"
-            aria-label="Delegate address"
-            placeholder="0x..."
-            className={`input input-bordered w-full bg-base-100 font-mono ${
-              delegateInput.length > 0 && !isValidAddress ? "input-error" : ""
-            }`}
-            value={delegateInput}
-            onChange={e => {
-              setDelegateInput(e.target.value);
-              if (delegationError) {
-                setDelegationError(null);
-              }
-            }}
-            disabled={isDelegationWritePending}
-          />
-          {delegateInput.length > 0 && !isValidAddress && (
-            <p className="text-error text-base">Enter a valid Ethereum address</p>
-          )}
-          {isSelfAddress && <p className="text-warning text-base">Cannot delegate to yourself</p>}
+      <div className="space-y-3">
+        <label className="flex items-center gap-1.5 text-base font-medium">
+          Delegate Address
+          <InfoTooltip text="Enter the address of your secondary wallet. This address will be able to vote using your rater credential." />
+        </label>
+        <input
+          type="text"
+          aria-label="Delegate address"
+          placeholder="0x..."
+          className={`input input-bordered w-full bg-base-100 font-mono ${
+            delegateInputValue.length > 0 && !isValidAddress ? "input-error" : ""
+          }`}
+          value={delegateInputValue}
+          onChange={e => {
+            setDelegateInput(e.target.value);
+            if (delegationError) {
+              setDelegationError(null);
+            }
+          }}
+          disabled={isDelegationWritePending}
+        />
+        {delegateInputValue.length > 0 && !isValidAddress && (
+          <p className="text-error text-base">Enter a valid Ethereum address</p>
+        )}
+        {isSelfAddress && <p className="text-warning text-base">Cannot delegate to yourself</p>}
 
-          <GradientActionButton
-            onClick={handleSetDelegate}
-            className="w-full"
-            motion={getGradientActionMotion(isDelegationWritePending)}
-            disabled={isDelegationWritePending || !isValidAddress || isSelfAddress}
-          >
-            {isDelegationWritePending ? (
-              <span className="flex items-center gap-2">
-                <span className="loading loading-spinner loading-sm"></span>
-                Setting delegate...
-              </span>
-            ) : (
-              "Set Delegate"
-            )}
-          </GradientActionButton>
-        </div>
-      )}
+        <GradientActionButton
+          onClick={handleSetDelegate}
+          className="w-full"
+          motion={getGradientActionMotion(isDelegationWritePending)}
+          disabled={isDelegationWritePending || !canSubmitDelegate}
+        >
+          {isDelegationWritePending ? (
+            <span className="flex items-center gap-2">
+              <span className="loading loading-spinner loading-sm"></span>
+              Setting delegate...
+            </span>
+          ) : (
+            "Set Delegate"
+          )}
+        </GradientActionButton>
+      </div>
 
       {delegationError && (
         <div className="surface-card-nested rounded-lg p-4">
