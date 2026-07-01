@@ -111,6 +111,86 @@ const HANDOFF_ASSET_POSITION_MIGRATION_MESSAGE =
 const HANDOFF_LINK_EXPIRED_MESSAGE = "Handoff link has expired. Ask the AI agent to generate a new handoff link.";
 const IMAGE_BASE64_TRANSPORT_HINT =
   "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
+const CLIENT_REQUEST_ID_MAX_LENGTH = 160;
+
+function stableJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(item => (item === undefined ? null : stableJsonValue(item)));
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .filter(key => record[key] !== undefined)
+        .sort()
+        .map(key => [key, stableJsonValue(record[key])]),
+    );
+  }
+  return value;
+}
+
+function stableJsonStringify(value: unknown) {
+  return JSON.stringify(stableJsonValue(value));
+}
+
+function requestBodyWithoutClientRequestId(value: JsonObject) {
+  const next = redactSensitiveAgentRequestFields(value);
+  delete next.clientRequestId;
+  return next;
+}
+
+function readRequestClientRequestId(value: JsonObject) {
+  return typeof value.clientRequestId === "string" ? value.clientRequestId.trim() : "";
+}
+
+function handoffRequestBodiesMatchIgnoringClientRequestId(left: JsonObject, right: JsonObject) {
+  return (
+    stableJsonStringify(requestBodyWithoutClientRequestId(left)) ===
+    stableJsonStringify(requestBodyWithoutClientRequestId(right))
+  );
+}
+
+function normalizeClientRequestIdPrefix(value: string) {
+  return value.replace(/[^A-Za-z0-9._:-]/g, "-").replace(/[._:-]+$/g, "") || "handoff";
+}
+
+function handoffDraftClientRequestIdMarker(handoffId: string) {
+  return `:draft:${handoffId.slice(0, 16)}:`;
+}
+
+function isHandoffDraftClientRequestId(value: string, handoffId: string) {
+  return value.includes(handoffDraftClientRequestIdMarker(handoffId));
+}
+
+function buildHandoffDraftClientRequestId(params: { handoff: AgentAskHandoffRecord; originalClientRequestId: string }) {
+  const suffix = `${handoffDraftClientRequestIdMarker(params.handoff.id)}${params.handoff.draftRevision + 1}`;
+  const prefixMaxLength = Math.max(4, CLIENT_REQUEST_ID_MAX_LENGTH - suffix.length);
+  const prefix = normalizeClientRequestIdPrefix(params.originalClientRequestId).slice(0, prefixMaxLength);
+  return `${prefix || "handoff"}${suffix}`.slice(0, CLIENT_REQUEST_ID_MAX_LENGTH);
+}
+
+function withHandoffDraftClientRequestId(requestBody: JsonObject, handoff: AgentAskHandoffRecord) {
+  const originalClientRequestId = readRequestClientRequestId(handoff.originalRequestBody);
+  if (!originalClientRequestId) return requestBody;
+
+  if (handoffRequestBodiesMatchIgnoringClientRequestId(requestBody, handoff.originalRequestBody)) {
+    return readRequestClientRequestId(requestBody) === originalClientRequestId
+      ? requestBody
+      : { ...requestBody, clientRequestId: originalClientRequestId };
+  }
+
+  const currentClientRequestId = readRequestClientRequestId(requestBody);
+  const shouldDeriveDraftId =
+    !currentClientRequestId ||
+    currentClientRequestId === originalClientRequestId ||
+    isHandoffDraftClientRequestId(currentClientRequestId, handoff.id);
+  if (!shouldDeriveDraftId) return requestBody;
+
+  const draftClientRequestId = buildHandoffDraftClientRequestId({ handoff, originalClientRequestId });
+  return currentClientRequestId === draftClientRequestId
+    ? requestBody
+    : { ...requestBody, clientRequestId: draftClientRequestId };
+}
 
 function resolveHandoffTtl(requestedTtlMs: number | undefined) {
   const requested = requestedTtlMs ?? DEFAULT_HANDOFF_TTL_MS;
@@ -1290,7 +1370,16 @@ export async function updateAgentAskHandoffDraft(params: {
     requestBody: params.requestBody,
     validationImageUrls: params.validationImageUrls,
   });
-  const storedRequestBody = sealSensitiveAgentRequestFields(normalized.requestBody, params.token);
+  const draftRequestBody = withHandoffDraftClientRequestId(normalized.requestBody, params.handoff);
+  const draftNormalized =
+    draftRequestBody === normalized.requestBody
+      ? normalized
+      : normalizeAgentAskHandoffRequestBody({
+          fieldName: "requestBody",
+          requestBody: draftRequestBody,
+          validationImageUrls: params.validationImageUrls,
+        });
+  const storedRequestBody = sealSensitiveAgentRequestFields(draftNormalized.requestBody, params.token);
   const storedOriginalRequestBody = sealSensitiveAgentRequestFields(params.handoff.originalRequestBody, params.token, {
     preserveEncryptedFields: true,
   });
@@ -1318,10 +1407,10 @@ export async function updateAgentAskHandoffDraft(params: {
         AND status IN ('pending', 'failed')
     `,
     args: [
-      normalized.parsed.chainId,
-      normalized.parsed.clientRequestId,
-      normalized.paymentMode,
-      normalized.walletAddress,
+      draftNormalized.parsed.chainId,
+      draftNormalized.parsed.clientRequestId,
+      draftNormalized.paymentMode,
+      draftNormalized.walletAddress,
       JSON.stringify(storedRequestBody),
       JSON.stringify(storedOriginalRequestBody),
       now,
@@ -1331,6 +1420,19 @@ export async function updateAgentAskHandoffDraft(params: {
   if (result.rowCount === 0) {
     throw new AgentAskHandoffError("Handoff draft changed state before it could be saved.", 409);
   }
+}
+
+export async function restoreAgentAskHandoffOriginalDraft(params: {
+  handoff: AgentAskHandoffRecord;
+  token: string;
+  validationImageUrls?: string[];
+}) {
+  await updateAgentAskHandoffDraft({
+    handoff: params.handoff,
+    requestBody: unsealSensitiveAgentRequestFields(params.handoff.originalRequestBody, params.token),
+    token: params.token,
+    validationImageUrls: params.validationImageUrls,
+  });
 }
 
 export async function updateAgentAskHandoffAsset(params: {

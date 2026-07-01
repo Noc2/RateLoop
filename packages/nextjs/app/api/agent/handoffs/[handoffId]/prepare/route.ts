@@ -439,7 +439,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         });
       }
 
-      return prepareAsk({ chainId, handoffId, paymentAuthorization, requestUrl: request.url, token, walletAddress });
+      try {
+        return await prepareAsk({
+          chainId,
+          handoffId,
+          paymentAuthorization,
+          requestUrl: request.url,
+          token,
+          walletAddress,
+        });
+      } catch (error) {
+        await updateAgentAskHandoffStatus({
+          error: error instanceof Error ? error.message : String(error),
+          handoffId,
+          status: "failed",
+          walletAddress,
+        });
+        throw error;
+      }
     },
     rateLimit: AGENT_WRITE_RATE_LIMIT,
     request,

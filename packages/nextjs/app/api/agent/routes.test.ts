@@ -1458,6 +1458,31 @@ test("agent ask handoff route redacts webhook secrets from browser responses", a
   const storedPatchOriginalRequestBody = parseStoredJson(storedPatch.rows[0]?.original_request_body);
   assertStoredWebhookSecretSealed(storedPatchRequestBody, "edited-secret-callback-key");
   assertStoredWebhookSecretSealed(storedPatchOriginalRequestBody, "super-secret-callback-key");
+
+  const restoreResponse = await handoffRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      restoreOriginal: true,
+      token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const restoreBody = (await restoreResponse.json()) as Record<string, unknown>;
+  const restoreRequestBody = restoreBody.requestBody as Record<string, unknown>;
+  const restoreQuestion = restoreRequestBody.question as Record<string, unknown>;
+
+  assert.equal(restoreResponse.status, 200, JSON.stringify(restoreBody));
+  assert.equal(restoreBody.clientRequestId, originalRequest.clientRequestId);
+  assert.equal(restoreQuestion.title, "Pitch interest");
+  assert.equal("webhookSecret" in restoreRequestBody, false);
+
+  const storedRestore = await dbModule.dbClient.execute({
+    args: [handoffId],
+    sql: "SELECT request_body, original_request_body FROM agent_ask_handoff_intents WHERE id = ?",
+  });
+  const storedRestoreRequestBody = parseStoredJson(storedRestore.rows[0]?.request_body);
+  const storedRestoreOriginalRequestBody = parseStoredJson(storedRestore.rows[0]?.original_request_body);
+  assertStoredWebhookSecretSealed(storedRestoreRequestBody, "super-secret-callback-key");
+  assertStoredWebhookSecretSealed(storedRestoreOriginalRequestBody, "super-secret-callback-key");
 });
 
 test("agent ask handoff route stages generated image bytes behind a browser link", async () => {
@@ -2606,6 +2631,9 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(patchBody.status, "pending");
   assert.equal(patchBody.draftRevision, 1);
   assert.equal(patchBody.editedByUser, true);
+  assert.equal(patchBody.clientRequestId, patchRequestBody.clientRequestId);
+  assert.notEqual(patchRequestBody.clientRequestId, originalRequest.clientRequestId);
+  assert.match(String(patchRequestBody.clientRequestId), /^agent-handoff-editable:draft:ahf_/);
   assert.equal(patchRequestBody.maxPaymentAmount, "4500000");
   assert.equal((patchRequestBody.bounty as Record<string, unknown>).asset, "USDC");
   assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).amount, "2000000");
@@ -2633,6 +2661,8 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(prepareBody.status, "prepared");
   assert.equal(prepareBody.draftRevision, 1);
   assert.equal(prepareBody.preparedDraftRevision, 1);
+  assert.equal(prepareBody.clientRequestId, patchRequestBody.clientRequestId);
+  assert.equal((preparedPayload as { clientRequestId: string }).clientRequestId, patchRequestBody.clientRequestId);
   assert.equal(((prepareBody.x402AuthorizationRequest as Record<string, unknown>) ?? {}).value, "4500000");
   assert.equal(prepareBody.transactionPlan, null);
   assert.equal(payload.questions[0]?.title, "Edited pitch interest");
@@ -2648,6 +2678,61 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(payload.roundConfig.maxDuration, 600n);
   assert.equal(payload.roundConfig.minVoters, 4n);
   assert.equal(payload.roundConfig.maxVoters, 40n);
+});
+
+test("agent ask handoff prepare failure marks the draft recoverable", async () => {
+  installAskOverrides({
+    preparePermissionlessNativeX402QuestionSubmissionRequest: async () => {
+      const error = new Error("clientRequestId has already been used for a different question payload.") as Error & {
+        status: number;
+      };
+      error.status = 409;
+      throw error;
+    },
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-conflict"),
+        maxPaymentAmount: "1000000",
+        paymentMode: "eip3009_usdc_authorization",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200, JSON.stringify(createBody));
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 409, JSON.stringify(prepareBody));
+  assert.equal(prepareBody.message, "clientRequestId has already been used for a different question payload.");
+
+  const readResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readBody = (await readResponse.json()) as Record<string, unknown>;
+
+  assert.equal(readResponse.status, 200, JSON.stringify(readBody));
+  assert.equal(readBody.status, "failed");
+  assert.equal(readBody.error, "clientRequestId has already been used for a different question payload.");
 });
 
 test("agent ask handoff route accepts edited mixed-asset Feedback Bonus wallet-call drafts", async () => {

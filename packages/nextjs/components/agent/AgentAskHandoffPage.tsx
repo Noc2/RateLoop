@@ -3,7 +3,11 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { readHandoffDetailsUploadError } from "./handoffErrors";
+import {
+  isDuplicateAskPayloadError,
+  readHandoffDetailsUploadError,
+  readHandoffDuplicateAskPayloadError,
+} from "./handoffErrors";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
 import {
   type TargetAudience,
@@ -1881,7 +1885,8 @@ function readHandoffActionError(error: unknown, fallback: string) {
   if (isTransactionReceiptTimeoutError(error)) {
     return "Wallet returned a transaction hash, but Base did not confirm it before the timeout. Check MetaMask activity; if it is no longer pending, refresh and retry. No RateLoop ask was submitted yet.";
   }
-  return error instanceof Error ? error.message : fallback;
+  const message = error instanceof Error ? error.message : fallback;
+  return readHandoffDuplicateAskPayloadError(message) ?? message;
 }
 
 function canPrepareHandoff(handoff: Handoff | null | undefined) {
@@ -2070,6 +2075,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
   const canSaveDraftBeforeSubmit = Boolean(draftForm && isDraftEditable);
+  const duplicateAskPayloadRecoveryMessage =
+    readHandoffDuplicateAskPayloadError(error) ?? readHandoffDuplicateAskPayloadError(handoff?.error);
+  const canUseDuplicateAskPayloadRecovery = Boolean(
+    duplicateAskPayloadRecoveryMessage && handoff && draftForm && isDraftEditable && !isBusy,
+  );
   const canSubmit = Boolean(
     token &&
       address &&
@@ -2627,6 +2637,38 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     await saveDraft();
   }, [saveDraft]);
 
+  const handleSaveEditedDraftAsNewAsk = useCallback(async () => {
+    const saved = await saveDraft({ showSuccess: false });
+    if (!saved) return;
+    setError(null);
+    notification.success("Edited draft saved as a new ask. Submit when ready.");
+  }, [saveDraft]);
+
+  const handleRestoreOriginalDraft = useCallback(async () => {
+    if (!handoff) return;
+    setDraftError(null);
+    setError(null);
+    setIsSavingDraft(true);
+    try {
+      const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
+        body: JSON.stringify({
+          restoreOriginal: true,
+          token,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "PATCH",
+      });
+      const body = (await response.json()) as Handoff | { error?: string; message?: string };
+      if (!response.ok) throw new Error(readResponseError(body, "Failed to restore original ask."));
+      setHandoff(body as Handoff);
+      notification.success("Original agent ask restored.");
+    } catch (restoreError) {
+      setDraftError(restoreError instanceof Error ? restoreError.message : "Failed to restore original ask.");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }, [handoff, handoffId, token]);
+
   const prepareHandoff = useCallback(
     async (options: { skipUnsavedDraftCheck?: boolean } = {}) => {
       if (!address) {
@@ -3023,11 +3065,48 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         </div>
       ) : null}
 
-      {error ? (
+      {error && !isDuplicateAskPayloadError(error) ? (
         <div className="surface-card-nested rounded-lg p-4 text-sm text-error">
           <div className="flex items-start gap-2">
             <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{error}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {duplicateAskPayloadRecoveryMessage ? (
+        <div className="surface-card rounded-lg border border-warning/25 bg-warning/10 p-4 text-sm text-base-content">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="flex items-start gap-2">
+              <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              <div>
+                <p className="font-semibold">Draft needs a new request ID</p>
+                <p className="mt-1 text-base-content/70">{duplicateAskPayloadRecoveryMessage}</p>
+                {!isDraftEditable ? (
+                  <p className="mt-1 text-base-content/60">
+                    Refresh the handoff. If it is still preparing, retry after the current prepare step finishes.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
+              <button
+                className="btn btn-sm btn-warning"
+                disabled={!canUseDuplicateAskPayloadRecovery}
+                type="button"
+                onClick={() => void handleSaveEditedDraftAsNewAsk()}
+              >
+                Save edited draft
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                disabled={!canUseDuplicateAskPayloadRecovery}
+                type="button"
+                onClick={() => void handleRestoreOriginalDraft()}
+              >
+                Restore original
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -7,6 +7,7 @@ import {
   listAgentAskHandoffAssets,
   loadAgentAskHandoffByToken,
   readHandoffTokenFromHeaders,
+  restoreAgentAskHandoffOriginalDraft,
   updateAgentAskHandoffDraft,
 } from "~~/lib/agent/handoffs";
 import {
@@ -72,18 +73,30 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
       const token = readToken((body as { token?: unknown }).token);
-      const requestBody = readRequestBodyDraft((body as { requestBody?: unknown }).requestBody);
+      const shouldRestoreOriginal = (body as { restoreOriginal?: unknown }).restoreOriginal === true;
+      const requestBody = shouldRestoreOriginal
+        ? null
+        : readRequestBodyDraft((body as { requestBody?: unknown }).requestBody);
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const assets = await listAgentAskHandoffAssets(handoff.id);
-      await updateAgentAskHandoffDraft({
-        handoff,
-        requestBody,
-        token,
-        validationImageUrls: buildAgentAskHandoffValidationImageUrls({
-          appBaseUrl,
-          assets,
-        }),
+      const validationImageUrls = buildAgentAskHandoffValidationImageUrls({
+        appBaseUrl,
+        assets,
       });
+      if (shouldRestoreOriginal) {
+        await restoreAgentAskHandoffOriginalDraft({
+          handoff,
+          token,
+          validationImageUrls,
+        });
+      } else {
+        await updateAgentAskHandoffDraft({
+          handoff,
+          requestBody,
+          token,
+          validationImageUrls,
+        });
+      }
 
       const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const updatedAssets = await listAgentAskHandoffAssets(updatedHandoff.id);
