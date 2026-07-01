@@ -940,6 +940,8 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(frontendRegistryContract, "completeFeeWithdrawal")],
     [encodeCall(frontendRegistryContract, "setSnapshotProposer", [WALLET])],
     [encodeCall(frontendRegistryContract, "clearSnapshotProposer")],
+    [encodeCall(frontendRegistryContract, "setAccessRecorder", [WALLET])],
+    [encodeCall(frontendRegistryContract, "clearAccessRecorder")],
     [
       encodeCall(profileRegistryContract, "setProfile", [
         "EthHealth",

@@ -104,6 +104,9 @@ export function FrontendRegistration() {
   const [snapshotProposerInput, setSnapshotProposerInput] = useState("");
   const [isSettingSnapshotProposer, setIsSettingSnapshotProposer] = useState(false);
   const [isClearingSnapshotProposer, setIsClearingSnapshotProposer] = useState(false);
+  const [accessRecorderInput, setAccessRecorderInput] = useState("");
+  const [isSettingAccessRecorder, setIsSettingAccessRecorder] = useState(false);
+  const [isClearingAccessRecorder, setIsClearingAccessRecorder] = useState(false);
   const [claimingRoundKey, setClaimingRoundKey] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const configuredFrontendCode = scaffoldConfig.frontendCode;
@@ -178,6 +181,12 @@ export function FrontendRegistration() {
     args: [address],
   });
 
+  const { data: accessRecorderRaw, refetch: refetchAccessRecorder } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "accessRecorderForFrontend",
+    args: [address],
+  });
+
   // Read LREP balance
   const { data: lrepBalance, refetch: refetchRateLoop } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
@@ -212,6 +221,12 @@ export function FrontendRegistration() {
     normalizedSnapshotProposerInput.length > 0 &&
     isAddress(normalizedSnapshotProposerInput) &&
     (!address || normalizedSnapshotProposerInput.toLowerCase() !== address.toLowerCase());
+  const accessRecorder = accessRecorderRaw && accessRecorderRaw !== ZERO_ADDRESS ? accessRecorderRaw : undefined;
+  const normalizedAccessRecorderInput = accessRecorderInput.trim();
+  const accessRecorderInputIsValid =
+    normalizedAccessRecorderInput.length > 0 &&
+    isAddress(normalizedAccessRecorderInput) &&
+    (!address || normalizedAccessRecorderInput.toLowerCase() !== address.toLowerCase());
   // Parse fees (LREP only)
   const lrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
   const hasFees = lrepFees > 0;
@@ -665,6 +680,85 @@ export function FrontendRegistration() {
     }
   };
 
+  const handleSetAccessRecorder = async () => {
+    if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!ensureGasBalance()) return;
+
+    if (!accessRecorderInputIsValid) {
+      notification.error("Enter a separate valid access recorder wallet address.");
+      return;
+    }
+
+    const accessRecorderAddress = normalizedAccessRecorderInput as `0x${string}`;
+
+    setIsSettingAccessRecorder(true);
+    try {
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              args: [accessRecorderAddress],
+              functionName: "setAccessRecorder",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
+      } else {
+        await writeFrontendRegistry({
+          functionName: "setAccessRecorder",
+          args: [accessRecorderAddress],
+        });
+      }
+
+      notification.success("Access recorder updated.");
+      setAccessRecorderInput("");
+      refetchAccessRecorder();
+    } catch (e: any) {
+      console.error("Access recorder update failed:", e);
+      notifyTransactionError(
+        e,
+        "Failed to update access recorder. Use an unregistered wallet that is not assigned elsewhere.",
+      );
+    } finally {
+      setIsSettingAccessRecorder(false);
+    }
+  };
+
+  const handleClearAccessRecorder = async () => {
+    if (!address || !accessRecorder || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!ensureGasBalance()) return;
+
+    setIsClearingAccessRecorder(true);
+    try {
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              functionName: "clearAccessRecorder",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
+      } else {
+        await writeFrontendRegistry({
+          functionName: "clearAccessRecorder",
+        });
+      }
+
+      notification.success("Access recorder cleared.");
+      refetchAccessRecorder();
+    } catch (e: any) {
+      console.error("Access recorder clear failed:", e);
+      notifyTransactionError(e, "Failed to clear access recorder");
+    } finally {
+      setIsClearingAccessRecorder(false);
+    }
+  };
+
   // Status badge
   const getStatusBadge = () => {
     if (isSlashed) {
@@ -859,6 +953,78 @@ export function FrontendRegistration() {
               normalizedSnapshotProposerInput.toLowerCase() === address.toLowerCase() && (
                 <p className="text-sm text-warning">
                   Use a separate wallet here, or clear the keeper address to publish from the registered wallet.
+                </p>
+              )}
+          </div>
+
+          <div className="surface-card-nested rounded-xl p-4 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="flex items-center gap-1.5 font-medium">
+                  Access Recorder
+                  <InfoTooltip text="Optional operational wallet that can publish confidentiality log roots for this bonded frontend." />
+                </p>
+              </div>
+              {accessRecorder ? (
+                <FrontendOperatorAddressRow address={accessRecorder} />
+              ) : (
+                <span className="rounded-full bg-base-200 px-2 py-0.5 text-sm text-base-content/60">Not set</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={accessRecorderInput}
+                onChange={event => setAccessRecorderInput(event.target.value)}
+                placeholder="0x recorder address"
+                className="input input-bordered input-sm min-w-0 flex-1 font-mono text-sm"
+                disabled={
+                  isExitPending ||
+                  isSlashed ||
+                  isSettingAccessRecorder ||
+                  isClearingAccessRecorder ||
+                  isAwaitingSponsoredSubmitCalls
+                }
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleSetAccessRecorder}
+                disabled={
+                  isExitPending ||
+                  isSlashed ||
+                  isMissingGasBalance ||
+                  isSettingAccessRecorder ||
+                  isClearingAccessRecorder ||
+                  isAwaitingSponsoredSubmitCalls ||
+                  !accessRecorderInputIsValid
+                }
+              >
+                {isSettingAccessRecorder ? <span className="loading loading-spinner loading-xs" /> : "Set Recorder"}
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={handleClearAccessRecorder}
+                disabled={
+                  !accessRecorder ||
+                  isExitPending ||
+                  isSlashed ||
+                  isMissingGasBalance ||
+                  isSettingAccessRecorder ||
+                  isClearingAccessRecorder ||
+                  isAwaitingSponsoredSubmitCalls
+                }
+              >
+                {isClearingAccessRecorder ? <span className="loading loading-spinner loading-xs" /> : "Clear"}
+              </button>
+            </div>
+
+            {normalizedAccessRecorderInput &&
+              isAddress(normalizedAccessRecorderInput) &&
+              address &&
+              normalizedAccessRecorderInput.toLowerCase() === address.toLowerCase() && (
+                <p className="text-sm text-warning">
+                  Use a separate wallet here, or clear the access recorder to publish from the registered wallet.
                 </p>
               )}
           </div>

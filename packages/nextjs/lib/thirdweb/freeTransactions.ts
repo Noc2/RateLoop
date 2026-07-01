@@ -1577,7 +1577,9 @@ async function validateSponsoredCalls(
           functionName === "requestFeeWithdrawal" ||
           functionName === "completeFeeWithdrawal" ||
           functionName === "setSnapshotProposer" ||
-          functionName === "clearSnapshotProposer"
+          functionName === "clearSnapshotProposer" ||
+          functionName === "setAccessRecorder" ||
+          functionName === "clearAccessRecorder"
         ) {
           continue;
         }
