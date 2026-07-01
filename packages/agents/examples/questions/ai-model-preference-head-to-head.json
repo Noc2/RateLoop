@@ -1,0 +1,29 @@
+{
+  "clientRequestId": "ai-model-preference-gpt55-vs-claude-sonnet5",
+  "chainId": 8453,
+  "templateId": "head_to_head_ab",
+  "maxPaymentAmount": "3000000",
+  "bounty": {
+    "asset": "USDC",
+    "amount": "2000000",
+    "requiredVoters": "5"
+  },
+  "feedbackBonus": {
+    "asset": "USDC",
+    "amount": "1000000"
+  },
+  "question": {
+    "templateId": "head_to_head_ab",
+    "templateInputs": {
+      "optionAKey": "A",
+      "optionALabel": "OpenAI GPT-5.5",
+      "optionBKey": "B",
+      "optionBLabel": "Claude Sonnet 5"
+    },
+    "title": "Do you prefer A = OpenAI GPT-5.5 or B = Claude Sonnet 5?",
+    "description": "Pick which model you would choose as your default for daily research, writing, and coding. A = OpenAI GPT-5.5; B = Claude Sonnet 5. Feedback: one concrete reason or past example.",
+    "contextUrl": "https://arena.ai/leaderboard",
+    "categoryId": "6",
+    "tags": ["ai-models", "ab-test", "llm-eval"]
+  }
+}
