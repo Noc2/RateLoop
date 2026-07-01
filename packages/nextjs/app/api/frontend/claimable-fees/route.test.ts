@@ -15,11 +15,13 @@ const TEST_CHAIN_ID = 4801;
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
+type LookupModule = typeof import("./lookup");
 type RouteModule = typeof import("./route");
 
 let rateLimit: RateLimitModule;
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
+let lookup: LookupModule;
 let route: RouteModule;
 
 function makeRequest(pathname: string): NextRequest {
@@ -40,6 +42,7 @@ before(async () => {
   dbModule = await import("~~/lib/db");
   dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
+  lookup = await import("./lookup");
   route = await import("./route");
 });
 
@@ -56,12 +59,12 @@ beforeEach(() => {
       throw new Error("database offline");
     },
   });
-  route.__setListClaimableFrontendFeeRoundsForTests(null);
+  lookup.__setListClaimableFrontendFeeRoundsForTests(null);
 });
 
 after(() => {
   rateLimit.__setRateLimitStoreForTests(null);
-  route.__setListClaimableFrontendFeeRoundsForTests(null);
+  lookup.__setListClaimableFrontendFeeRoundsForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
 
   if (originalDatabaseUrl === undefined) {
@@ -143,7 +146,7 @@ test("frontend claimable fees route accepts an explicit supported chain id", asy
 });
 
 test("frontend claimable fees route returns a degraded empty page when lookup fails", async () => {
-  route.__setListClaimableFrontendFeeRoundsForTests(async () => {
+  lookup.__setListClaimableFrontendFeeRoundsForTests(async () => {
     throw new Error("Ponder request timed out");
   });
 

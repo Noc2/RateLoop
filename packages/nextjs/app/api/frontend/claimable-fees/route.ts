@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getListClaimableFrontendFeeRoundsForRoute } from "./lookup";
 import { isAddress } from "viem";
 import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
-import { listClaimableFrontendFeeRounds } from "~~/lib/frontendFees/server";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const ROUTE_RATE_LIMIT = { limit: 120, windowMs: 60_000 };
 const LOOKUP_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
-
-type ListClaimableFrontendFeeRounds = typeof listClaimableFrontendFeeRounds;
-
-let listClaimableFrontendFeeRoundsForRoute: ListClaimableFrontendFeeRounds = listClaimableFrontendFeeRounds;
-
-export function __setListClaimableFrontendFeeRoundsForTests(override: ListClaimableFrontendFeeRounds | null) {
-  listClaimableFrontendFeeRoundsForRoute = override ?? listClaimableFrontendFeeRounds;
-}
 
 function buildDegradedFrontendFeeResponse(offset: number) {
   return {
@@ -61,6 +53,7 @@ export async function GET(request: NextRequest) {
   const offset = Math.max(parseInt(request.nextUrl.searchParams.get("offset") ?? "0") || 0, 0);
 
   try {
+    const listClaimableFrontendFeeRoundsForRoute = getListClaimableFrontendFeeRoundsForRoute();
     const result = await listClaimableFrontendFeeRoundsForRoute(frontend, { chainId: parsedChainId, limit, offset });
     return NextResponse.json(result);
   } catch (error) {
