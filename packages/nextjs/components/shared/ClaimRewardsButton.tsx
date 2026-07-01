@@ -18,6 +18,7 @@ const MIN_VISIBLE_USDC_AMOUNT = 5_000n;
 
 type ClaimRewardsButtonProps = {
   className?: string;
+  includeFrontendRewards?: boolean;
   layout?: "default" | "compact";
   showUnavailableStatus?: boolean;
   showTokenSymbol?: boolean;
@@ -97,6 +98,7 @@ export function shouldShowClaimRewardsUnavailableStatus({
 
 export function ClaimRewardsButton({
   className,
+  includeFrontendRewards = true,
   layout = "default",
   showUnavailableStatus = true,
   showTokenSymbol = true,
@@ -109,7 +111,7 @@ export function ClaimRewardsButton({
     ponderUnavailable,
     isLoading: claimablesLoading,
     refetch: refetchClaimable,
-  } = useAllClaimableRewards();
+  } = useAllClaimableRewards({ includeFrontendRewards });
   const { claimAll, isClaiming, isPreparingClaim, progress } = useClaimAll();
   const [optimisticallyClaimedKeys, setOptimisticallyClaimedKeys] = useState<Set<string>>(() => new Set());
   const [isClaimAttemptInFlight, setIsClaimAttemptInFlight] = useState(false);

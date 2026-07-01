@@ -44,10 +44,15 @@ function getClaimableFrontendRewardsQueryKey(address?: string, chainId?: number)
   return ["claimableFrontendRewards", address?.toLowerCase() ?? null, chainId ?? null] as const;
 }
 
-export function useClaimableFrontendRewards() {
+type UseClaimableFrontendRewardsOptions = {
+  enabled?: boolean;
+};
+
+export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFrontendRewardsOptions = {}) {
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
+  const frontendRewardsEnabled = enabled && !!address;
 
   const {
     data: frontendInfo,
@@ -58,7 +63,7 @@ export function useClaimableFrontendRewards() {
     functionName: "getFrontendInfo",
     args: [address],
     query: {
-      enabled: !!address,
+      enabled: frontendRewardsEnabled,
       staleTime: 30_000,
       refetchInterval: isPageVisible ? 60_000 : false,
     },
@@ -78,7 +83,7 @@ export function useClaimableFrontendRewards() {
     functionName: "frontendExitAvailableAt",
     args: [address],
     query: {
-      enabled: !!address && isRegistered,
+      enabled: frontendRewardsEnabled && isRegistered,
       staleTime: 30_000,
       refetchInterval: isPageVisible ? 60_000 : false,
     },
@@ -96,7 +101,7 @@ export function useClaimableFrontendRewards() {
     functionName: "getAccumulatedFees",
     args: [address],
     query: {
-      enabled: !!address && isRegistered,
+      enabled: frontendRewardsEnabled && isRegistered,
       staleTime: 30_000,
       refetchInterval: isPageVisible ? 60_000 : false,
     },
@@ -111,7 +116,7 @@ export function useClaimableFrontendRewards() {
     functionName: "pendingFeeWithdrawalAmount",
     args: [address],
     query: {
-      enabled: !!address && isRegistered,
+      enabled: frontendRewardsEnabled && isRegistered,
       staleTime: 30_000,
       refetchInterval: isPageVisible ? 60_000 : false,
     },
@@ -126,7 +131,7 @@ export function useClaimableFrontendRewards() {
     functionName: "pendingFeeWithdrawalReleaseAt",
     args: [address],
     query: {
-      enabled: !!address && isRegistered,
+      enabled: frontendRewardsEnabled && isRegistered,
       staleTime: 30_000,
       refetchInterval: isPageVisible ? 60_000 : false,
     },
@@ -135,14 +140,14 @@ export function useClaimableFrontendRewards() {
   const frontendAddress = address?.toLowerCase() as `0x${string}` | undefined;
   const roundFeesQuery = useQuery({
     queryKey: getClaimableFrontendRewardsQueryKey(frontendAddress, targetNetwork.id),
-    enabled: !!frontendAddress && canCreditRoundFees,
+    enabled: frontendRewardsEnabled && !!frontendAddress && canCreditRoundFees,
     staleTime: 30_000,
     refetchInterval: isPageVisible ? 60_000 : false,
     queryFn: () => fetchAllClaimableFrontendFees(frontendAddress!, targetNetwork.id),
   });
 
   const roundFeeItems = useMemo<ClaimableRewardItem[]>(() => {
-    if (!frontendAddress || !canCreditRoundFees) {
+    if (!frontendRewardsEnabled || !frontendAddress || !canCreditRoundFees) {
       return [];
     }
 
@@ -164,10 +169,10 @@ export function useClaimableFrontendRewards() {
         } satisfies ClaimableRewardItem,
       ];
     });
-  }, [canCreditRoundFees, frontendAddress, roundFeesQuery.data?.items]);
+  }, [canCreditRoundFees, frontendAddress, frontendRewardsEnabled, roundFeesQuery.data?.items]);
 
   const claimableItems = useMemo<ClaimableRewardItem[]>(() => {
-    if (!frontendAddress) {
+    if (!frontendRewardsEnabled || !frontendAddress) {
       return [];
     }
 
@@ -202,6 +207,7 @@ export function useClaimableFrontendRewards() {
     accumulatedFees,
     canWithdrawFees,
     frontendAddress,
+    frontendRewardsEnabled,
     pendingFeeWithdrawal,
     pendingFeeWithdrawalReleaseAt,
     roundFeeItems,
@@ -211,6 +217,10 @@ export function useClaimableFrontendRewards() {
   const totalClaimable = useMemo(() => claimableItems.reduce((sum, item) => sum + item.reward, 0n), [claimableItems]);
 
   const refetch = useCallback(async () => {
+    if (!enabled) {
+      return;
+    }
+
     await Promise.all([
       refetchFrontendInfo(),
       refetchExitAvailableAt(),
@@ -221,6 +231,7 @@ export function useClaimableFrontendRewards() {
     ]);
   }, [
     canCreditRoundFees,
+    enabled,
     frontendAddress,
     refetchAccumulatedFees,
     refetchExitAvailableAt,
@@ -239,8 +250,8 @@ export function useClaimableFrontendRewards() {
       accumulatedFeesLoading ||
       pendingFeeWithdrawalLoading ||
       pendingFeeWithdrawalReleaseAtLoading ||
-      (canCreditRoundFees && roundFeesQuery.isLoading),
-    feesUnavailable: canCreditRoundFees && roundFeesQuery.isError,
+      (frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isLoading),
+    feesUnavailable: frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isError,
     refetch,
   };
 }

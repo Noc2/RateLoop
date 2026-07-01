@@ -20,6 +20,16 @@ import type { PonderVoteItem } from "~~/services/ponder/client";
 
 const RBTS_REWARD_STATE_FIELDS = 3;
 
+export type UseAllClaimableRewardsOptions = {
+  includeFrontendRewards?: boolean;
+};
+
+export function resolveAllClaimableRewardsOptions(options: UseAllClaimableRewardsOptions = {}) {
+  return {
+    includeFrontendRewards: options.includeFrontendRewards ?? true,
+  };
+}
+
 function safeBigInt(val: unknown): bigint {
   try {
     return BigInt(val as string | number | bigint);
@@ -60,7 +70,8 @@ function isRefundRound(vote: PonderVoteItem) {
  * Hook that identifies all claimable rewards across all rounds and content.
  * Uses Ponder API to find the user's recent votes, then checks on-chain state.
  */
-export function useAllClaimableRewards() {
+export function useAllClaimableRewards(options: UseAllClaimableRewardsOptions = {}) {
+  const { includeFrontendRewards } = resolveAllClaimableRewardsOptions(options);
   const queryClient = useQueryClient();
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
@@ -75,7 +86,7 @@ export function useAllClaimableRewards() {
     isLoading: frontendClaimableLoading,
     feesUnavailable: frontendFeesUnavailable,
     refetch: refetchFrontendClaimables,
-  } = useClaimableFrontendRewards();
+  } = useClaimableFrontendRewards({ enabled: includeFrontendRewards });
   const {
     claimableItems: questionRewardPoolClaimableItems,
     isLoading: questionRewardPoolClaimableLoading,
@@ -285,23 +296,28 @@ export function useAllClaimableRewards() {
     return { claimableItems: items, activeStake: active };
   }, [refundVotes, rbtsRewardsLoading, rbtsRewardStateResults, settledRbtsVotes, votes]);
 
+  const includedFrontendClaimableItems = useMemo(
+    () => (includeFrontendRewards ? frontendClaimableItems : []),
+    [frontendClaimableItems, includeFrontendRewards],
+  );
+
   const combinedClaimableItems = useMemo(
-    () => [...claimableItems, ...frontendClaimableItems, ...questionRewardPoolClaimableItems],
-    [claimableItems, frontendClaimableItems, questionRewardPoolClaimableItems],
+    () => [...claimableItems, ...includedFrontendClaimableItems, ...questionRewardPoolClaimableItems],
+    [claimableItems, includedFrontendClaimableItems, questionRewardPoolClaimableItems],
   );
 
   const combinedLrepClaimable = useMemo(
     () =>
       [
         ...claimableItems,
-        ...frontendClaimableItems,
+        ...includedFrontendClaimableItems,
         ...questionRewardPoolClaimableItems.filter(
           item =>
             (item.claimType === "question_reward" || item.claimType === "question_bundle_reward") &&
             item.asset === "LREP",
         ),
       ].reduce((sum, item) => sum + item.reward, 0n),
-    [claimableItems, frontendClaimableItems, questionRewardPoolClaimableItems],
+    [claimableItems, includedFrontendClaimableItems, questionRewardPoolClaimableItems],
   );
 
   const totalQuestionRewardPoolUsdcClaimable = useMemo(
@@ -320,20 +336,22 @@ export function useAllClaimableRewards() {
     votesLoading ||
     claimedLoading ||
     rbtsRewardsLoading ||
-    frontendClaimableLoading ||
+    (includeFrontendRewards && frontendClaimableLoading) ||
     questionRewardPoolClaimableLoading;
-  const ponderUnavailable = votesPonderUnavailable || questionRewardsPonderUnavailable || frontendFeesUnavailable;
+  const ponderUnavailable =
+    votesPonderUnavailable || questionRewardsPonderUnavailable || (includeFrontendRewards && frontendFeesUnavailable);
 
   const refetch = useCallback(async () => {
     await Promise.all([
       refetchVotes(),
       refetchClaimed(),
       refetchRbtsRewardState(),
-      refetchFrontendClaimables(),
+      ...(includeFrontendRewards ? [refetchFrontendClaimables()] : []),
       refetchQuestionRewardPoolClaimables(),
       refreshActiveWalletReadQueries(queryClient),
     ]);
   }, [
+    includeFrontendRewards,
     queryClient,
     refetchClaimed,
     refetchFrontendClaimables,
