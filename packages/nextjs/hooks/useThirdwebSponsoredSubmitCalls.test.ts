@@ -234,6 +234,33 @@ test("uses wagmi sendCalls for atomic external wallets even when the thirdweb ac
   );
 });
 
+test("does not use wagmi sendCalls for stale in-app wallet connector state", () => {
+  assert.equal(
+    shouldUseExternalWalletSendCalls({
+      chainId: 8453,
+      connectorId: "in-app-wallet",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      isThirdwebInApp: false,
+      supportsAtomicBatchCalls: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      activeWalletId: "io.metamask",
+      chainId: 8453,
+      connectorId: "in-app-wallet",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      isThirdwebInApp: false,
+      supportsAtomicBatchCalls: true,
+    }),
+    false,
+  );
+});
+
 test("routes self-funded external wallet batches through the wagmi connector path", () => {
   assert.equal(
     shouldRouteBatchThroughExternalWallet({
@@ -559,6 +586,33 @@ test("awaits self-funded reconnect after exhausted free transactions before wagm
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
       isThirdwebInApp: true,
+    }),
+    true,
+  );
+});
+
+test("awaits self-funded reconnect after exhausted free transactions when in-app connector state is stale", () => {
+  assert.equal(
+    shouldAwaitSelfFundedSubmitCalls({
+      activeWalletId: "io.metamask",
+      canUseFreeTransactions: false,
+      chainId: 8453,
+      connectorId: "in-app-wallet",
+      executionMode: "fee_currency",
+      freeTransactionAllowanceResolved: true,
+      isThirdwebInApp: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldAwaitSelfFundedSubmitCalls({
+      canUseFreeTransactions: false,
+      chainId: 8453,
+      connectorId: "in-app-wallet",
+      executionMode: "fee_currency",
+      freeTransactionAllowanceResolved: true,
+      isThirdwebInApp: false,
     }),
     true,
   );

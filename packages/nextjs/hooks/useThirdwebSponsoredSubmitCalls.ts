@@ -340,6 +340,7 @@ export function shouldUseExternalWalletSendCalls(params: {
     params.executionMode === "fee_currency" &&
     params.hasSendCalls === true &&
     params.isThirdwebInApp !== true &&
+    params.connectorId !== "in-app-wallet" &&
     params.supportsAtomicBatchCalls === true &&
     typeof params.connectorId === "string" &&
     typeof params.chainId === "number" &&
@@ -416,6 +417,7 @@ export function shouldAttemptSelfFundedThirdwebFallback(params: {
 }
 
 export function shouldAwaitSelfFundedSubmitCalls(params: {
+  activeWalletId?: string;
   canUseFreeTransactions: boolean;
   chainId: number | undefined;
   connectorId: string | undefined;
@@ -425,6 +427,10 @@ export function shouldAwaitSelfFundedSubmitCalls(params: {
   isThirdwebInApp?: boolean;
 }) {
   const expectsThirdwebBatchCalls = shouldExpectThirdwebBatchCalls(params);
+  const hasStaleInAppConnector =
+    params.connectorId === "in-app-wallet" &&
+    params.executionMode === "fee_currency" &&
+    !isThirdwebInAppWalletId(params.activeWalletId);
 
   if (
     params.isRestoringWallet &&
@@ -439,7 +445,7 @@ export function shouldAwaitSelfFundedSubmitCalls(params: {
     expectsThirdwebBatchCalls &&
     params.freeTransactionAllowanceResolved &&
     !params.canUseFreeTransactions &&
-    params.executionMode === "sponsored_7702"
+    (params.executionMode === "sponsored_7702" || hasStaleInAppConnector)
   );
 }
 
@@ -640,6 +646,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const isAwaitingSelfFundedSubmitCalls = useMemo(
     () =>
       shouldAwaitSelfFundedSubmitCalls({
+        activeWalletId,
         canUseFreeTransactions: freeTransactionAllowance.canUseFreeTransactions,
         chainId,
         connectorId: connector?.id,
@@ -649,6 +656,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         isThirdwebInApp,
       }),
     [
+      activeWalletId,
       chainId,
       connector?.id,
       executionMode,
