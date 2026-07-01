@@ -1828,6 +1828,8 @@ function readDraftFeedbackBonusLrepAmountAtomic(form: DraftForm | null, handoff:
 }
 
 function readDraftFeedbackBonusLabel(form: DraftForm | null, handoff: Handoff | null) {
+  if (form?.feedbackBonusAmount === null) return "No bonus";
+
   const draftAmount = form?.feedbackBonusAmount?.trim();
   if (draftAmount && form?.feedbackBonusAsset) {
     const parsed = parseFeedbackBonusAmount(draftAmount);
@@ -2108,6 +2110,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const canDraftFeedbackBonus = canDraftFeedbackBonusForBounty && canDraftFeedbackBonusForPaymentMode;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
+  const hasDraftFeedbackBonus = draftForm ? draftForm.feedbackBonusAmount !== null : Boolean(feedbackBonusSummary);
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
   const draftBountyUsdcAmountAtomic = readDraftBountyUsdcAmountAtomic(draftForm, handoff);
   const draftFeedbackBonusLrepAmountAtomic = readDraftFeedbackBonusLrepAmountAtomic(draftForm, handoff);
@@ -3076,7 +3079,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <ChatBubbleLeftRightIcon className="h-4 w-4" />
                   <span>Feedback Bonus</span>
                 </div>
-                <p className={`mt-2 text-sm font-semibold ${feedbackBonusSummary ? "" : "text-warning"}`}>
+                <p className={`mt-2 text-sm font-semibold ${hasDraftFeedbackBonus ? "" : "text-warning"}`}>
                   {feedbackBonusDraftLabel}
                 </p>
               </div>

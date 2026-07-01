@@ -309,6 +309,18 @@ test.describe("Agent browser handoffs", () => {
     await expect(page.locator("#agent-ask-round-min-voters")).toHaveValue("5");
     await expect(page.locator("#agent-ask-round-max-voters")).toHaveValue("50");
 
+    const handoffSummary = page
+      .locator("section")
+      .filter({ hasText: "Funding wallet" })
+      .filter({ hasText: "Feedback Bonus" })
+      .first();
+    await expect(handoffSummary.getByText("0.5 USDC")).toBeVisible();
+    await page.getByRole("button", { name: /^No bonus$/i }).click();
+    await expect(handoffSummary.getByText("No bonus")).toBeVisible();
+    await expect(handoffSummary.getByText("0.5 USDC")).toHaveCount(0);
+    await expect(page.locator("#agent-ask-feedback-bonus-amount")).toHaveCount(0);
+    await page.getByRole("button", { name: /^Add bonus$/i }).click();
+
     await page.locator("#agent-ask-feedback-bonus-amount").fill("0.75");
     await page.getByRole("button", { name: "Save draft" }).click();
     await expectSavedHandoffDraft(request, created.handoffId, token, saved => {
