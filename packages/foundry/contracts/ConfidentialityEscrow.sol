@@ -364,8 +364,7 @@ contract ConfidentialityEscrow is
         address holder,
         address recorder,
         address registryAddress
-    ) private
-    {
+    ) private {
         if (!_configs[contentId].gated) return;
         _markNullifierBonded(holder, registryAddress);
         emit ConfidentialityNexusRecorded(frontend, contentId, holder, recorder);
