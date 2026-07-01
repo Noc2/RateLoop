@@ -19,6 +19,7 @@ const MIN_VISIBLE_USDC_AMOUNT = 5_000n;
 type ClaimRewardsButtonProps = {
   className?: string;
   layout?: "default" | "compact";
+  showUnavailableStatus?: boolean;
   showTokenSymbol?: boolean;
 };
 
@@ -69,7 +70,37 @@ export function shouldShowClaimPreparationLabel({
   return isClaimAttemptInFlight && isPreparingClaim && !isClaiming;
 }
 
-export function ClaimRewardsButton({ className, layout = "default", showTokenSymbol = true }: ClaimRewardsButtonProps) {
+export function shouldShowClaimRewardsUnavailableStatus({
+  claimablesLoading,
+  isClaiming,
+  isPreparingActiveClaim,
+  ponderUnavailable,
+  showUnavailableStatus,
+  visibleClaimableItemsCount,
+}: {
+  claimablesLoading: boolean;
+  isClaiming: boolean;
+  isPreparingActiveClaim: boolean;
+  ponderUnavailable: boolean;
+  showUnavailableStatus: boolean;
+  visibleClaimableItemsCount: number;
+}) {
+  return (
+    showUnavailableStatus &&
+    ponderUnavailable &&
+    !claimablesLoading &&
+    visibleClaimableItemsCount === 0 &&
+    !isClaiming &&
+    !isPreparingActiveClaim
+  );
+}
+
+export function ClaimRewardsButton({
+  className,
+  layout = "default",
+  showUnavailableStatus = true,
+  showTokenSymbol = true,
+}: ClaimRewardsButtonProps) {
   const { address } = useAccount();
   const {
     claimableItems,
@@ -202,11 +233,14 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
   }
 
   if (
-    ponderUnavailable &&
-    !claimablesLoading &&
-    visibleClaimableItems.length === 0 &&
-    !isClaiming &&
-    !isPreparingActiveClaim
+    shouldShowClaimRewardsUnavailableStatus({
+      claimablesLoading,
+      isClaiming,
+      isPreparingActiveClaim,
+      ponderUnavailable,
+      showUnavailableStatus,
+      visibleClaimableItemsCount: visibleClaimableItems.length,
+    })
   ) {
     return (
       <p className={`${className ?? ""} text-xs text-base-content/60`} role="status">

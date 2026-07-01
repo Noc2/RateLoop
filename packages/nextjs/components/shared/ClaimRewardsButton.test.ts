@@ -2,6 +2,7 @@ import {
   buildClaimRewardsButtonLabel,
   buildClaimRewardsButtonParts,
   shouldShowClaimPreparationLabel,
+  shouldShowClaimRewardsUnavailableStatus,
 } from "./ClaimRewardsButton";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -91,6 +92,31 @@ test("shouldShowClaimPreparationLabel only reflects an active claim attempt", ()
       isClaimAttemptInFlight: true,
       isClaiming: true,
       isPreparingClaim: true,
+    }),
+    false,
+  );
+});
+
+test("shouldShowClaimRewardsUnavailableStatus can be hidden on global wallet surfaces", () => {
+  const unavailableState = {
+    claimablesLoading: false,
+    isClaiming: false,
+    isPreparingActiveClaim: false,
+    ponderUnavailable: true,
+    visibleClaimableItemsCount: 0,
+  };
+
+  assert.equal(
+    shouldShowClaimRewardsUnavailableStatus({
+      ...unavailableState,
+      showUnavailableStatus: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowClaimRewardsUnavailableStatus({
+      ...unavailableState,
+      showUnavailableStatus: false,
     }),
     false,
   );
