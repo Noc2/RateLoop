@@ -81,6 +81,16 @@ function buildFrontendFeeSnapshotCacheKey(frontend: `0x${string}`, chainId: numb
   return `${chainId}:${frontend}`;
 }
 
+function observeClaimableFrontendFeeRefresh(promise: Promise<ClaimableFrontendFeeSnapshot>) {
+  void promise.catch(error => {
+    console.warn("Failed to refresh claimable frontend fee cache:", error);
+  });
+}
+
+export function __observeClaimableFrontendFeeRefreshForTests(promise: Promise<ClaimableFrontendFeeSnapshot>) {
+  observeClaimableFrontendFeeRefresh(promise);
+}
+
 function resolveFrontendFeeReadContext(chainId: number): FrontendFeeReadContext | null {
   const targetNetwork = getServerTargetNetworkById(chainId);
   if (!targetNetwork) {
@@ -391,7 +401,7 @@ async function getClaimableFrontendFeeSnapshot(
   frontendFeeSnapshotPromises.set(cacheKey, refreshPromise);
 
   if (cachedSnapshot) {
-    void refreshPromise;
+    observeClaimableFrontendFeeRefresh(refreshPromise);
     return cachedSnapshot;
   }
 
