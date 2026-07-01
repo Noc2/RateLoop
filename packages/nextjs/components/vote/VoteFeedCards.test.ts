@@ -1,6 +1,7 @@
 import {
   type FeedCardMediaPlatformType,
   getFeedMediaHeightClassName,
+  getFeedRewardDeadlineChipSeconds,
   resolveFeedCardVisualPlatformType,
   shouldFlushFeedMediaEdges,
   usesNaturalFeedMediaHeight,
@@ -52,6 +53,51 @@ function assertImageLayout(platformType: FeedCardMediaPlatformType) {
     "w-full",
   );
 }
+
+test("feed reward deadline chip is used for a single visible bounty deadline", () => {
+  assert.equal(
+    getFeedRewardDeadlineChipSeconds({
+      rewardPoolTotal: 1_000_000n,
+      rewardPoolDeadline: 37_000n,
+      feedbackBonusTotal: 0n,
+      feedbackBonusDeadline: null,
+    }),
+    37_000n,
+  );
+});
+
+test("feed reward deadline chip is used for a single visible feedback bonus deadline", () => {
+  assert.equal(
+    getFeedRewardDeadlineChipSeconds({
+      rewardPoolTotal: 0n,
+      rewardPoolDeadline: null,
+      feedbackBonusTotal: 1_000_000n,
+      feedbackBonusDeadline: 37_000n,
+    }),
+    37_000n,
+  );
+});
+
+test("feed reward deadline chip only merges bounty and feedback bonus when deadlines match", () => {
+  assert.equal(
+    getFeedRewardDeadlineChipSeconds({
+      rewardPoolTotal: 1_000_000n,
+      rewardPoolDeadline: 37_000n,
+      feedbackBonusTotal: 1_000_000n,
+      feedbackBonusDeadline: 37_000n,
+    }),
+    37_000n,
+  );
+  assert.equal(
+    getFeedRewardDeadlineChipSeconds({
+      rewardPoolTotal: 1_000_000n,
+      rewardPoolDeadline: 37_000n,
+      feedbackBonusTotal: 1_000_000n,
+      feedbackBonusDeadline: 37_060n,
+    }),
+    null,
+  );
+});
 
 test("feed card image layout uses natural height and flush media edges", () => {
   const item = buildItem({

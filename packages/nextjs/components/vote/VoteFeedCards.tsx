@@ -63,6 +63,25 @@ function isInteractiveTarget(target: EventTarget | null) {
   return target instanceof Element && target.closest(CONTENT_INTENT_INTERACTIVE_SELECTOR) !== null;
 }
 
+export function getFeedRewardDeadlineChipSeconds({
+  rewardPoolTotal,
+  rewardPoolDeadline,
+  feedbackBonusTotal,
+  feedbackBonusDeadline,
+}: {
+  rewardPoolTotal: bigint;
+  rewardPoolDeadline: bigint | null;
+  feedbackBonusTotal: bigint;
+  feedbackBonusDeadline: bigint | null;
+}) {
+  if (rewardPoolTotal > 0n && feedbackBonusTotal > 0n) {
+    return getSharedRewardDeadlineSeconds(rewardPoolDeadline, feedbackBonusDeadline);
+  }
+  if (rewardPoolTotal > 0n) return rewardPoolDeadline;
+  if (feedbackBonusTotal > 0n) return feedbackBonusDeadline;
+  return null;
+}
+
 function getQuestionText(item: ContentItem) {
   return item.question?.trim() || item.title;
 }
@@ -666,10 +685,12 @@ function FeedContentMetaCard({
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item, nowSeconds);
   const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
   const feedbackBonusDeadline = getActiveFeedbackClosesAt(item, nowSeconds);
-  const sharedRewardDeadline =
-    rewardPoolTotal > 0n && feedbackBonusTotal > 0n
-      ? getSharedRewardDeadlineSeconds(rewardPoolDeadline, feedbackBonusDeadline)
-      : null;
+  const rewardDeadlineChipSeconds = getFeedRewardDeadlineChipSeconds({
+    rewardPoolTotal,
+    rewardPoolDeadline,
+    feedbackBonusTotal,
+    feedbackBonusDeadline,
+  });
   const hasVisibleReward = rewardPoolTotal > 0n || feedbackBonusTotal > 0n;
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
@@ -717,7 +738,7 @@ function FeedContentMetaCard({
         <RewardPoolAmountDisplay
           amount={rewardPoolTotal}
           currency={rewardPoolCurrency}
-          deadlineSeconds={sharedRewardDeadline === null ? rewardPoolDeadline : null}
+          deadlineSeconds={rewardDeadlineChipSeconds === null ? rewardPoolDeadline : null}
           nowSeconds={nowSeconds}
         />
       ) : null}
@@ -725,12 +746,12 @@ function FeedContentMetaCard({
         <FeedbackBonusAmountDisplay
           amount={feedbackBonusTotal}
           currency={feedbackBonusCurrency}
-          deadlineSeconds={sharedRewardDeadline === null ? feedbackBonusDeadline : null}
+          deadlineSeconds={rewardDeadlineChipSeconds === null ? feedbackBonusDeadline : null}
           nowSeconds={nowSeconds}
         />
       ) : null}
-      {sharedRewardDeadline !== null ? (
-        <SharedRewardDeadlineDisplay deadlineSeconds={sharedRewardDeadline} nowSeconds={nowSeconds} />
+      {rewardDeadlineChipSeconds !== null ? (
+        <SharedRewardDeadlineDisplay deadlineSeconds={rewardDeadlineChipSeconds} nowSeconds={nowSeconds} />
       ) : null}
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>
