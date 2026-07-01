@@ -3281,7 +3281,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           </div>
                         ) : null}
 
-                        <label className="form-control mt-4">
+                        <label className={`form-control ${hasQuestionBundle ? "mt-4" : "mt-5"}`}>
                           <span className="label-text flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             <span className="inline-flex items-center gap-1.5">
                               {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
