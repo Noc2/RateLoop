@@ -3,6 +3,10 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { invalidatePonderCache, isPonderAvailable, isPonderRateLimitError } from "~~/services/ponder/client";
 
+const PONDER_QUERY_MAX_RETRIES = 2;
+const PONDER_QUERY_RETRY_BASE_DELAY_MS = 750;
+const PONDER_QUERY_RETRY_MAX_DELAY_MS = 3_000;
+
 interface UsePonderQueryOptions<TPonder, TRpc> {
   queryKey: readonly unknown[];
   /** Deployment key that the configured Ponder endpoint must report before this query uses it. */
@@ -26,6 +30,14 @@ interface UsePonderQueryOptions<TPonder, TRpc> {
 interface PonderQueryResult<T> {
   data: T;
   source: "ponder" | "rpc";
+}
+
+export function shouldRetryPonderQueryFailure(failureCount: number, error: unknown) {
+  return !isPonderRateLimitError(error) && failureCount < PONDER_QUERY_MAX_RETRIES;
+}
+
+export function getPonderQueryRetryDelay(attemptIndex: number) {
+  return Math.min(PONDER_QUERY_RETRY_BASE_DELAY_MS * 2 ** attemptIndex, PONDER_QUERY_RETRY_MAX_DELAY_MS);
 }
 
 /**
@@ -57,12 +69,14 @@ export function usePonderQuery<TPonder, TRpc>({
     queryKey: ["ponder-fallback", ...queryKey],
     queryFn: async (): Promise<PonderQueryResult<TPonder | TRpc>> => {
       const available = await isPonderAvailable(availabilityDeploymentKey);
+      let ponderError: unknown = null;
 
       if (available) {
         try {
           const data = await ponderFn();
           return { data, source: "ponder" };
         } catch (e) {
+          ponderError = e;
           if (process.env.NODE_ENV !== "production") {
             console.warn("[Ponder] Query failed, falling back to RPC:", e);
           }
@@ -71,9 +85,16 @@ export function usePonderQuery<TPonder, TRpc>({
             invalidatePonderCache();
           }
         }
+      } else if (!rpcEnabled) {
+        // No fallback is available, so a retry should perform a fresh
+        // availability probe instead of reusing the short-lived failure cache.
+        invalidatePonderCache();
       }
 
       if (!rpcEnabled) {
+        if (ponderError) {
+          throw ponderError;
+        }
         throw new Error("Ponder is unavailable and RPC fallback is disabled.");
       }
 
@@ -83,7 +104,8 @@ export function usePonderQuery<TPonder, TRpc>({
     enabled,
     staleTime,
     refetchInterval,
-    retry: false,
+    retry: shouldRetryPonderQueryFailure,
+    retryDelay: getPonderQueryRetryDelay,
     placeholderData: keepPrevious ? keepPreviousData : undefined,
   });
 }
