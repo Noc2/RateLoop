@@ -180,12 +180,6 @@ type CompleteResponse = Handoff & {
   nextAction?: string;
 };
 
-type ImageSignatureStep = {
-  assetId: string;
-  filename: string;
-  status: "pending" | "signed";
-};
-
 type QuestionSummary = {
   categoryId: string;
   confidentiality: DraftConfidentiality;
@@ -1890,11 +1884,6 @@ function readHandoffActionError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function imageSignatureLabel(challenge: UploadChallenge, handoff: Handoff | null) {
-  const asset = handoff?.assets?.find(candidate => candidate.id === challenge.assetId);
-  return asset?.filename || challenge.attachmentId || challenge.assetId;
-}
-
 function canPrepareHandoff(handoff: Handoff | null | undefined) {
   const status = handoff?.status;
   return (
@@ -1948,7 +1937,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   }, []);
   const [savedDraftJson, setSavedDraftJson] = useState("");
   const [draftSourceKey, setDraftSourceKey] = useState("");
-  const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
   const { data: protocolRoundConfigBounds } = useScaffoldReadContract({
@@ -2663,20 +2651,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         description: "Approve the wallet request to continue.",
         title: "Preparing ask",
       });
-      setImageSignatureSteps([]);
       setError(null);
       try {
         let prepared = await postPrepare();
         setHandoff(prepared);
         const uploadChallenges = prepared.uploadChallenges ?? [];
         if (uploadChallenges.length > 0) {
-          setImageSignatureSteps(
-            uploadChallenges.map(challenge => ({
-              assetId: challenge.assetId,
-              filename: imageSignatureLabel(challenge, prepared),
-              status: "pending",
-            })),
-          );
           const imageSignatures = [];
           for (const challenge of uploadChallenges) {
             const signature = await signMessageAsync({ message: challenge.message });
@@ -2685,9 +2665,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               challengeId: challenge.challengeId,
               signature,
             });
-            setImageSignatureSteps(current =>
-              current.map(step => (step.assetId === challenge.assetId ? { ...step, status: "signed" } : step)),
-            );
           }
           prepared = await postPrepare({ imageSignatures });
         }
@@ -2744,7 +2721,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         }
 
         setHandoff(prepared);
-        setImageSignatureSteps([]);
         return prepared;
       } catch (prepareError) {
         const message = readHandoffActionError(prepareError, "Failed to prepare handoff.");
@@ -3731,16 +3707,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   );
                 })}
               </div>
-              {imageSignatureSteps.length > 0 ? (
-                <div className="mt-4 space-y-2">
-                  {imageSignatureSteps.map(step => (
-                    <div key={step.assetId} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate">{step.filename}</span>
-                      <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">{step.status}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
               {renderHandoffActionArea()}
             </section>
           ) : null}
