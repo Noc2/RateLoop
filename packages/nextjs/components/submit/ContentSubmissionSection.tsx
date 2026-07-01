@@ -25,6 +25,10 @@ import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import {
+  PrivateContextRemovalDialog,
+  PrivateContextRemovalNotice,
+} from "~~/components/shared/PrivateContextRemovalWarning";
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
@@ -121,6 +125,10 @@ import {
 } from "~~/lib/questionSubmissionCommitment";
 import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
 import { hasQuestionSubmittedPostcondition } from "~~/lib/submission/postconditions";
+import {
+  type PrivateContextRemovalField,
+  getPrivateContextRemovalImpact,
+} from "~~/lib/submission/privateContextRemovalImpact";
 import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
 import {
   getGasBalanceErrorMessage,
@@ -141,6 +149,15 @@ type MediaMode = "images" | "video";
 type ContextVisibility = "public" | "gated";
 type ConfidentialityDisclosurePolicy = "after_settlement" | "private_forever";
 const PRIVATE_FOREVER_DISCLOSURE_POLICY = "private_forever" satisfies ConfidentialityDisclosurePolicy;
+
+type RemovedPublicContextSnapshot = {
+  contextUrl: string;
+  fields: PrivateContextRemovalField[];
+  imageUrls: string[];
+  mediaMode: MediaMode;
+  questionIndex: number;
+  videoUrl: string;
+};
 
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add media context below",
@@ -637,6 +654,12 @@ export function ContentSubmissionSection() {
   const [imageUrlErrors, setImageUrlErrors] = useState<(string | null)[]>([null]);
   const [videoUrl, setVideoUrl] = useState("");
   const [videoUrlError, setVideoUrlError] = useState<string | null>(null);
+  const [pendingPrivateContextRemoval, setPendingPrivateContextRemoval] = useState<RemovedPublicContextSnapshot | null>(
+    null,
+  );
+  const [removedPublicContextSnapshot, setRemovedPublicContextSnapshot] = useState<RemovedPublicContextSnapshot | null>(
+    null,
+  );
   const [title, setTitle] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
   const [questionFormat, setQuestionFormat] = useState<QuestionFormat>("rate_one");
@@ -838,31 +861,97 @@ export function ContentSubmissionSection() {
     setContextUrlError(value.trim() ? getContextUrlValidationError(value) : null);
   };
 
-  const handlePrivateContextToggle = (enabled: boolean) => {
-    const nextVisibility: ContextVisibility = enabled ? "gated" : "public";
+  const createPublicContextRemovalSnapshot = (): RemovedPublicContextSnapshot | null => {
+    const fields = getPrivateContextRemovalImpact({ contextUrl, imageUrls, videoUrl });
+    if (fields.length === 0) return null;
+
+    return {
+      contextUrl,
+      fields,
+      imageUrls: [...imageUrls],
+      mediaMode,
+      questionIndex: activeQuestionIndex,
+      videoUrl,
+    };
+  };
+
+  const enablePrivateContext = (removedSnapshot: RemovedPublicContextSnapshot | null) => {
+    const nextVisibility: ContextVisibility = "gated";
     setContextVisibility(nextVisibility);
-    if (enabled) {
-      setContextUrl("");
-      setContextUrlError(null);
-      setImageUrls([""]);
-      setImageUrlErrors([null]);
-      setVideoUrl("");
-      setVideoUrlError(null);
-      setMediaMode("images");
-      patchActiveQuestionDraft({
-        contextUrl: "",
-        contextVisibility: nextVisibility,
-        disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
-        imageUrls: [""],
-        mediaMode: "images",
-        videoUrl: "",
-      });
-      return;
-    }
+    setContextUrl("");
+    setContextUrlError(null);
+    setImageUrls([""]);
+    setImageUrlErrors([null]);
+    setVideoUrl("");
+    setVideoUrlError(null);
+    setMediaMode("images");
+    setRemovedPublicContextSnapshot(removedSnapshot);
     patchActiveQuestionDraft({
+      contextUrl: "",
       contextVisibility: nextVisibility,
       disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
+      imageUrls: [""],
+      mediaMode: "images",
+      videoUrl: "",
     });
+  };
+
+  const restoreRemovedPublicContext = () => {
+    const snapshot = removedPublicContextSnapshot;
+    if (!snapshot || snapshot.questionIndex !== activeQuestionIndex) return;
+
+    const restoredImageUrls = snapshot.imageUrls.length > 0 ? snapshot.imageUrls : [""];
+    setContextVisibility("public");
+    setContextUrl(snapshot.contextUrl);
+    setContextUrlError(snapshot.contextUrl.trim() ? getContextUrlValidationError(snapshot.contextUrl) : null);
+    setImageUrls(restoredImageUrls);
+    setImageUrlErrors(restoredImageUrls.map(() => null));
+    setVideoUrl(snapshot.videoUrl);
+    setVideoUrlError(null);
+    setMediaMode(snapshot.mediaMode);
+    setRemovedPublicContextSnapshot(null);
+    patchActiveQuestionDraft({
+      contextUrl: snapshot.contextUrl,
+      contextVisibility: "public",
+      disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
+      imageUrls: restoredImageUrls,
+      mediaMode: snapshot.mediaMode,
+      videoUrl: snapshot.videoUrl,
+    });
+  };
+
+  const handlePrivateContextToggle = (enabled: boolean) => {
+    if (enabled) {
+      const removalSnapshot = createPublicContextRemovalSnapshot();
+      if (removalSnapshot) {
+        setPendingPrivateContextRemoval(removalSnapshot);
+        return;
+      }
+      enablePrivateContext(null);
+      return;
+    }
+
+    if (removedPublicContextSnapshot?.questionIndex === activeQuestionIndex) {
+      restoreRemovedPublicContext();
+      return;
+    }
+
+    setContextVisibility("public");
+    setRemovedPublicContextSnapshot(null);
+    patchActiveQuestionDraft({
+      contextVisibility: "public",
+      disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
+    });
+  };
+
+  const handleCancelPrivateContextRemoval = () => {
+    setPendingPrivateContextRemoval(null);
+  };
+
+  const handleConfirmPrivateContextRemoval = () => {
+    const removalSnapshot = pendingPrivateContextRemoval;
+    setPendingPrivateContextRemoval(null);
+    enablePrivateContext(removalSnapshot);
   };
 
   const handleDetailsTextChange = (value: string) => {
@@ -3026,6 +3115,8 @@ export function ContentSubmissionSection() {
       </div>
     </div>
   );
+  const activeRemovedPublicContextSnapshot =
+    removedPublicContextSnapshot?.questionIndex === activeQuestionIndex ? removedPublicContextSnapshot : null;
 
   const questionPreviewCard =
     previewUrl || title || detailsPreviewText || privatePreviewImageCount > 0 ? (
@@ -3599,6 +3690,13 @@ export function ContentSubmissionSection() {
             {submissionStep === "question" ? privateContextControl : null}
           </div>
 
+          {submissionStep === "question" && activeRemovedPublicContextSnapshot ? (
+            <PrivateContextRemovalNotice
+              fields={activeRemovedPublicContextSnapshot.fields}
+              onRestore={restoreRemovedPublicContext}
+            />
+          ) : null}
+
           {submissionStep === "question" ? (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
               <div className="space-y-5">
@@ -4114,6 +4212,14 @@ export function ContentSubmissionSection() {
           )}
         </form>
       </div>
+
+      {pendingPrivateContextRemoval ? (
+        <PrivateContextRemovalDialog
+          fields={pendingPrivateContextRemoval.fields}
+          onCancel={handleCancelPrivateContextRemoval}
+          onConfirm={handleConfirmPrivateContextRemoval}
+        />
+      ) : null}
 
       {submittedContent ? (
         <ShareModal

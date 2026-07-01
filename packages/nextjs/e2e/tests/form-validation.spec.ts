@@ -62,15 +62,29 @@ test.describe("Ask form validation", () => {
     await contextInput.fill("https://example.com/private-toggle");
 
     const privateContextToggle = form.getByRole("checkbox", { name: "Private context" });
-    await privateContextToggle.check();
+    await privateContextToggle.click();
+
+    const removalDialog = page.getByRole("alertdialog", {
+      name: "Switching to private context removes public context",
+    });
+    await expect(removalDialog).toBeVisible({ timeout: 5_000 });
+    await expect(removalDialog.getByText("https://example.com/private-toggle")).toBeVisible();
+    await removalDialog.getByRole("button", { name: "Keep public context" }).click();
+    await expect(privateContextToggle).not.toBeChecked();
+    await expect(contextInput).toHaveValue("https://example.com/private-toggle");
+
+    await privateContextToggle.click();
+    await expect(removalDialog).toBeVisible({ timeout: 5_000 });
+    await removalDialog.getByRole("button", { name: "Switch to private and remove" }).click();
 
     await expect(form.getByText("Context Source")).toHaveCount(0);
     await expect(form.getByPlaceholder("Paste a source link, or add media context below")).toHaveCount(0);
     await expect(form.getByRole("button", { name: "YouTube" })).toHaveCount(0);
+    await expect(form.getByText("Public context was removed for private mode.")).toBeVisible();
 
     await privateContextToggle.uncheck();
     await expect(contextInput).toBeVisible({ timeout: 5_000 });
-    await expect(contextInput).toHaveValue("");
+    await expect(contextInput).toHaveValue("https://example.com/private-toggle");
   });
 
   test("category dropdown shows options", async ({ connectedPage: page }) => {
