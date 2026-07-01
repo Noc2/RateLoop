@@ -1553,6 +1553,43 @@ test("agent ask handoff route reports clamped TTLs", async () => {
   ]);
 });
 
+test("agent ask handoff prepare explains how to recover an expired link", async () => {
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-expired-recovery"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  await dbModule.dbClient.execute({
+    args: [new Date(Date.now() - 1_000), handoffId],
+    sql: "UPDATE agent_ask_handoff_intents SET expires_at = ? WHERE id = ?",
+  });
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 410);
+  assert.equal(prepareBody.message, "Handoff link has expired. Ask the AI agent to generate a new handoff link.");
+});
+
 test("agent ask handoff route stages generated image upload metadata before blob bytes arrive", async () => {
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {

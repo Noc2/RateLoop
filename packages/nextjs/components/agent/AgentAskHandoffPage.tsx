@@ -2973,7 +2973,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <p className="font-semibold">This handoff link expired.</p>
-              <p className="mt-1 text-error/80">Ask agent for a fresh link before editing or submitting this ask.</p>
+              <p className="mt-1 text-error/80">
+                Ask the AI agent for a fresh handoff link before editing or submitting this ask.
+              </p>
             </div>
           </div>
         </div>

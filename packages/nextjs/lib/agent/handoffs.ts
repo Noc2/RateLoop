@@ -108,6 +108,7 @@ const HANDOFF_ASSET_POSITION_COLUMN = "position";
 const HANDOFF_ASSET_POSITION_MIGRATION_MESSAGE =
   `Agent ask handoff asset database migration is pending. Apply ${HANDOFF_ASSET_POSITION_MIGRATION_PATH} ` +
   "to the handoff database before creating or preparing browser handoff links.";
+const HANDOFF_LINK_EXPIRED_MESSAGE = "Handoff link has expired. Ask the AI agent to generate a new handoff link.";
 const IMAGE_BASE64_TRANSPORT_HINT =
   "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
 
@@ -808,7 +809,7 @@ export function normalizeAgentAskHandoffRequestBody(params: {
 
 function assertFresh(handoff: AgentAskHandoffRecord) {
   if (handoff.expiresAt.getTime() <= Date.now()) {
-    throw new AgentAskHandoffError("Handoff link has expired.", 410);
+    throw new AgentAskHandoffError(HANDOFF_LINK_EXPIRED_MESSAGE, 410);
   }
 }
 
@@ -896,7 +897,7 @@ export function buildAgentAskHandoffResponse(params: {
       return "Review the handoff error, save any needed draft changes, then retry preparation or ask the agent for a fresh link.";
     }
     if (params.handoff.status === "expired") {
-      return "Ask the agent for a fresh handoff link.";
+      return "Ask the AI agent to generate a new handoff link.";
     }
     if (params.handoff.status === "submitted") {
       return "Use resultTool or the public result URL to inspect the submitted ask.";
