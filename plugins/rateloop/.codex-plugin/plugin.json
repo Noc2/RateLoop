@@ -37,6 +37,9 @@
       "Use RateLoop to check whether this answer is supported"
     ],
     "brandColor": "#03CEA4",
+    "composerIcon": "./assets/rateloop-logo.svg",
+    "logo": "./assets/rateloop-logo.svg",
+    "logoDark": "./assets/rateloop-logo.svg",
     "screenshots": []
   }
 }
