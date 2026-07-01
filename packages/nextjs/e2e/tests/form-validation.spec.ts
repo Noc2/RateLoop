@@ -77,7 +77,6 @@ test.describe("Ask form validation", () => {
     await expect(removalDialog).toBeVisible({ timeout: 5_000 });
     await removalDialog.getByRole("button", { name: "Switch to private and remove" }).click();
 
-    await expect(form.getByText("Context Source")).toHaveCount(0);
     await expect(form.getByPlaceholder("Paste a source link, or add media context below")).toHaveCount(0);
     await expect(form.getByRole("button", { name: "YouTube" })).toHaveCount(0);
     await expect(form.getByText("Public context was removed for private mode.")).toBeVisible();

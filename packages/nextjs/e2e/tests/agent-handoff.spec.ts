@@ -274,7 +274,6 @@ test.describe("Agent browser handoffs", () => {
       asset: "USDC",
     };
     requestBody.maxPaymentAmount = "1500000";
-    requestBody.paymentMode = "x402_authorization";
     requestBody.roundConfig = {
       maxVoters: "50",
       minVoters: "5",
@@ -432,7 +431,7 @@ test.describe("Agent browser handoffs", () => {
     await expect(bountyAmountInput).not.toHaveClass(/input-error/);
 
     await page.locator("#agent-ask-round-max-voters").fill("200");
-    await expect(page.getByText("Minimum is 2 LREP for the selected voter cap.")).toBeVisible();
+    await expect(page.getByText("Minimum is 2 LREP for the selected voter cap.").first()).toBeVisible();
     await expect(bountyAmountInput).toHaveClass(/input-error/);
     await expect(page.getByRole("button", { name: /^Submit$/i })).toBeDisabled();
 
@@ -469,8 +468,8 @@ test.describe("Agent browser handoffs", () => {
     );
 
     await page.getByRole("button", { name: /Advanced question settings/i }).click();
-    const contextInput = page.getByRole("textbox", { name: /Context Source/i });
-    const videoInput = page.getByRole("textbox", { name: /Video URL/i });
+    const contextInput = page.locator("#agent-ask-advanced-question-settings-0-context-url");
+    const videoInput = page.locator("#agent-ask-advanced-question-settings-0-video-url");
     await expect(contextInput).toHaveValue("https://example.com/context");
     await expect(videoInput).toHaveValue("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
 

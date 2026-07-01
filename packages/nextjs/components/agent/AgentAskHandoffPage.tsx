@@ -782,6 +782,7 @@ function AdvancedQuestionSettingsControl({
               <input
                 className="input input-bordered mt-1 w-full bg-base-100"
                 disabled={disabled || isPrivateContext}
+                id={`${settingsId}-context-url`}
                 placeholder={
                   isPrivateContext
                     ? "Private context uses hosted images/details only"
@@ -801,6 +802,7 @@ function AdvancedQuestionSettingsControl({
                 <input
                   className="input input-bordered mt-1 w-full bg-base-100"
                   disabled={disabled || isPrivateContext}
+                  id={`${settingsId}-video-url`}
                   placeholder={isPrivateContext ? "Disabled for private context" : "Paste a YouTube URL"}
                   type="url"
                   value={videoUrl}
