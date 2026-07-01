@@ -105,6 +105,11 @@ export async function openAdvancedQuestionSettings(page: Page): Promise<void> {
           .click({ timeout: 1_000 })
           .catch(() => trigger.evaluate(element => (element as HTMLButtonElement).click()).catch(() => undefined));
 
+        const expandedAfterClick = (await trigger.getAttribute("aria-expanded").catch(() => null)) === "true";
+        if (!expandedAfterClick && !(await contextInput.isVisible({ timeout: 500 }).catch(() => false))) {
+          await trigger.evaluate(element => (element as HTMLButtonElement).click()).catch(() => undefined);
+        }
+
         return contextInput.isVisible({ timeout: 500 }).catch(() => false);
       },
       {

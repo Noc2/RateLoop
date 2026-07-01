@@ -171,7 +171,11 @@ export function useCategoryRegistry() {
   return {
     categories,
     categoryNameToId,
-    isLoading: ponderLoading && (metaLoading || idsPageLoading || categoriesLoading),
+    isLoading:
+      ponderLoading ||
+      ((result?.data?.length ?? 0) === 0 &&
+        rpcCategories.length === 0 &&
+        (metaLoading || idsPageLoading || categoriesLoading)),
     refetch: async () => {
       await refetchMeta();
       await refetchIds();
