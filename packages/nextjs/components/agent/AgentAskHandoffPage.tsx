@@ -39,6 +39,10 @@ import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning"
 import { ContentImageLightbox } from "~~/components/shared/ContentImageLightbox";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import {
+  PrivateContextRemovalDialog,
+  PrivateContextRemovalNotice,
+} from "~~/components/shared/PrivateContextRemovalWarning";
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { DurationInput } from "~~/components/ui/DurationInput";
@@ -104,6 +108,10 @@ import {
   type QuestionRoundConfigBounds,
 } from "~~/lib/questionRoundConfig";
 import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
+import {
+  type PrivateContextRemovalField,
+  getPrivateContextRemovalImpact,
+} from "~~/lib/submission/privateContextRemovalImpact";
 import { isTransactionReceiptTimeoutError, isUserRejectedTransactionError } from "~~/lib/transactionErrors";
 import {
   type HandoffWebMcpQuestion,
@@ -207,6 +215,12 @@ type QuestionSummary = {
   headToHeadTitleMode: HeadToHeadTitleMode;
 };
 
+type DraftRemovedPublicContext = {
+  contextUrl: string;
+  fields: PrivateContextRemovalField[];
+  videoUrl: string;
+};
+
 type RoundSettings = {
   epochDuration: bigint;
   maxDuration: bigint;
@@ -230,6 +244,7 @@ type DraftQuestionForm = {
   templateId: string;
   title: string;
   videoUrl: string;
+  removedPublicContext: DraftRemovedPublicContext | null;
   optionALabel: string;
   optionBLabel: string;
   headToHeadTitleMode: HeadToHeadTitleMode;
@@ -1234,6 +1249,23 @@ function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
   });
 }
 
+function createDraftRemovedPublicContext(question: {
+  contextUrl: string;
+  videoUrl: string;
+}): DraftRemovedPublicContext | null {
+  const fields = getPrivateContextRemovalImpact({
+    contextUrl: question.contextUrl,
+    videoUrl: question.videoUrl,
+  });
+  if (fields.length === 0) return null;
+
+  return {
+    contextUrl: question.contextUrl,
+    fields,
+    videoUrl: question.videoUrl,
+  };
+}
+
 function readBountyAmountAtomic(handoff: Handoff | null) {
   const bounty = handoff?.requestBody?.bounty;
   if (!isJsonRecord(bounty)) return null;
@@ -1358,23 +1390,29 @@ function createDraftForm(handoff: Handoff): DraftForm {
       : null,
     feedbackBonusAsset: feedbackBonusSummary ? feedbackBonusSummary.asset : null,
     questions: questions.length
-      ? questions.map(question => ({
-          categoryId: question.categoryId,
-          confidentiality: question.confidentiality,
-          contextUrl: question.confidentiality.visibility === "gated" ? "" : question.contextUrl,
-          description: question.description,
-          detailsHash: question.detailsHash,
-          detailsUrl: question.detailsUrl,
-          imageUrls: question.imageUrls,
-          tags: question.tags.join(", "),
-          targetAudience: cloneTargetAudienceDraft(question.targetAudience),
-          templateId: question.templateId,
-          title: question.title,
-          videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
-          optionALabel: question.optionALabel,
-          optionBLabel: question.optionBLabel,
-          headToHeadTitleMode: question.headToHeadTitleMode,
-        }))
+      ? questions.map(question => {
+          const removedPublicContext =
+            question.confidentiality.visibility === "gated" ? createDraftRemovedPublicContext(question) : null;
+
+          return {
+            categoryId: question.categoryId,
+            confidentiality: question.confidentiality,
+            contextUrl: question.confidentiality.visibility === "gated" ? "" : question.contextUrl,
+            description: question.description,
+            detailsHash: question.detailsHash,
+            detailsUrl: question.detailsUrl,
+            imageUrls: question.imageUrls,
+            removedPublicContext,
+            tags: question.tags.join(", "),
+            targetAudience: cloneTargetAudienceDraft(question.targetAudience),
+            templateId: question.templateId,
+            title: question.title,
+            videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
+            optionALabel: question.optionALabel,
+            optionBLabel: question.optionBLabel,
+            headToHeadTitleMode: question.headToHeadTitleMode,
+          };
+        })
       : [
           {
             categoryId: "",
@@ -1384,6 +1422,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
             detailsHash: EMPTY_DETAILS_HASH,
             detailsUrl: "",
             imageUrls: [],
+            removedPublicContext: null,
             tags: "",
             targetAudience: createEmptyTargetAudienceDraft(),
             templateId: "",
@@ -2006,6 +2045,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftForm, setDraftFormState] = useState<DraftForm | null>(null);
+  const [pendingPrivateContextRemoval, setPendingPrivateContextRemoval] = useState<{
+    questionIndex: number;
+    removedPublicContext: DraftRemovedPublicContext;
+  } | null>(null);
   const draftFormRef = useRef<DraftForm | null>(null);
   const setDraftForm = useCallback((next: DraftForm | null | ((current: DraftForm | null) => DraftForm | null)) => {
     const current = draftFormRef.current;
@@ -2609,8 +2652,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [setDraftForm],
   );
 
-  const updateDraftQuestionPrivateContext = useCallback(
-    (index: number, enabled: boolean) => {
+  const applyDraftQuestionPrivateContext = useCallback(
+    (index: number, enabled: boolean, removedPublicContext: DraftRemovedPublicContext | null) => {
       setDraftForm(current => {
         if (!current) return current;
         const sharedConfidentiality =
@@ -2639,8 +2682,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             return {
               ...question,
               confidentiality: nextConfidentiality,
-              contextUrl: enabled ? "" : question.contextUrl,
-              videoUrl: enabled ? "" : question.videoUrl,
+              contextUrl: enabled ? "" : (question.removedPublicContext?.contextUrl ?? question.contextUrl),
+              removedPublicContext: enabled ? removedPublicContext : null,
+              videoUrl: enabled ? "" : (question.removedPublicContext?.videoUrl ?? question.videoUrl),
             };
           }),
         };
@@ -2648,6 +2692,44 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       setDraftError(null);
     },
     [setDraftForm],
+  );
+
+  const updateDraftQuestionPrivateContext = useCallback(
+    (index: number, enabled: boolean) => {
+      if (enabled) {
+        const question = draftForm?.questions[index];
+        if (!question) return;
+        const removedPublicContext = createDraftRemovedPublicContext(question);
+        if (removedPublicContext) {
+          setPendingPrivateContextRemoval({ questionIndex: index, removedPublicContext });
+          return;
+        }
+      }
+
+      applyDraftQuestionPrivateContext(index, enabled, null);
+    },
+    [applyDraftQuestionPrivateContext, draftForm?.questions],
+  );
+
+  const handleCancelPrivateContextRemoval = useCallback(() => {
+    setPendingPrivateContextRemoval(null);
+  }, []);
+
+  const handleConfirmPrivateContextRemoval = useCallback(() => {
+    if (!pendingPrivateContextRemoval) return;
+    applyDraftQuestionPrivateContext(
+      pendingPrivateContextRemoval.questionIndex,
+      true,
+      pendingPrivateContextRemoval.removedPublicContext,
+    );
+    setPendingPrivateContextRemoval(null);
+  }, [applyDraftQuestionPrivateContext, pendingPrivateContextRemoval]);
+
+  const restoreDraftQuestionPublicContext = useCallback(
+    (index: number) => {
+      applyDraftQuestionPrivateContext(index, false, null);
+    },
+    [applyDraftQuestionPrivateContext],
   );
 
   const updateDraftPrivateConfidentialityBond = useCallback(
@@ -3553,6 +3635,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           </div>
                         ) : null}
 
+                        {question.removedPublicContext ? (
+                          <div className="mt-4">
+                            <PrivateContextRemovalNotice
+                              fields={question.removedPublicContext.fields}
+                              onRestore={canEditDraft ? () => restoreDraftQuestionPublicContext(index) : undefined}
+                            />
+                          </div>
+                        ) : null}
+
                         <label className="form-control mt-4">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             Description{" "}
@@ -3941,6 +4032,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             </section>
           ) : null}
         </>
+      ) : null}
+
+      {pendingPrivateContextRemoval ? (
+        <PrivateContextRemovalDialog
+          fields={pendingPrivateContextRemoval.removedPublicContext.fields}
+          onCancel={handleCancelPrivateContextRemoval}
+          onConfirm={handleConfirmPrivateContextRemoval}
+        />
       ) : null}
 
       {submittedContent ? (

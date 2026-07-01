@@ -48,6 +48,7 @@ type AgentQuestionRequest = {
     templateId?: string;
     templateInputs?: Record<string, string>;
     title: string;
+    videoUrl?: string;
   };
   roundConfig?: {
     maxVoters?: string;
@@ -434,6 +435,70 @@ test.describe("Agent browser handoffs", () => {
     await expect(page.getByText("Minimum is 2 LREP for the selected voter cap.")).toBeVisible();
     await expect(bountyAmountInput).toHaveClass(/input-error/);
     await expect(page.getByRole("button", { name: /^Submit$/i })).toBeDisabled();
+
+    await context.close();
+  });
+
+  test("agent ask handoff warns before private context removes public links", async ({ browser, request }) => {
+    test.setTimeout(120_000);
+
+    const title = `Agent handoff private warning ${Date.now()}`;
+    const requestBody = baseAgentQuestionRequest(`agent-handoff-private-warning-${Date.now()}`, title);
+    requestBody.question.videoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+    const createResponse = await request.post("/api/agent/handoffs", {
+      data: {
+        request: requestBody,
+        ttlMs: 300_000,
+      },
+    });
+    expect(createResponse.ok(), await createResponse.text()).toBe(true);
+    const created = (await createResponse.json()) as HandoffCreateResponse;
+    const token = tokenFromFragment(created.handoffUrl);
+    expect(token).toBeTruthy();
+
+    const context = await newE2EContext(browser);
+    const page = await context.newPage();
+    await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
+    await openPrivateTokenPage(
+      page,
+      created.handoffUrl,
+      new RegExp(`/agent/handoff/${created.handoffId}$`),
+      "Agent ask handoff",
+      title,
+    );
+
+    await page.getByRole("button", { name: /Advanced question settings/i }).click();
+    const contextInput = page.getByRole("textbox", { name: /Context Source/i });
+    const videoInput = page.getByRole("textbox", { name: /Video URL/i });
+    await expect(contextInput).toHaveValue("https://example.com/context");
+    await expect(videoInput).toHaveValue("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+
+    const privateContextToggle = page.getByRole("checkbox", { name: "Private context" });
+    await privateContextToggle.click();
+    const removalDialog = page.getByRole("alertdialog", {
+      name: "Switching to private context removes public context",
+    });
+    await expect(removalDialog).toBeVisible({ timeout: 5_000 });
+    await expect(removalDialog.getByText("https://example.com/context")).toBeVisible();
+    await expect(removalDialog.getByText("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBeVisible();
+    await removalDialog.getByRole("button", { name: "Keep public context" }).click();
+    await expect(privateContextToggle).not.toBeChecked();
+    await expect(contextInput).toHaveValue("https://example.com/context");
+    await expect(videoInput).toHaveValue("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+
+    await privateContextToggle.click();
+    await expect(removalDialog).toBeVisible({ timeout: 5_000 });
+    await removalDialog.getByRole("button", { name: "Switch to private and remove" }).click();
+    await expect(privateContextToggle).toBeChecked();
+    await expect(page.getByText("Public context was removed for private mode.")).toBeVisible();
+    await expect(contextInput).toHaveValue("");
+    await expect(videoInput).toHaveValue("");
+
+    await page.getByRole("button", { name: "Restore" }).click();
+    await expect(privateContextToggle).not.toBeChecked();
+    await expect(contextInput).toHaveValue("https://example.com/context");
+    await expect(videoInput).toHaveValue("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
 
     await context.close();
   });
