@@ -120,6 +120,13 @@
       "when": 1781297706000,
       "tag": "0016_free_transaction_reservation_session_token",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782901800000,
+      "tag": "0017_confidentiality_frontend_scope",
+      "breakpoints": true
     }
   ]
 }

@@ -449,6 +449,7 @@ export const questionConfidentiality = pgTable(
     deploymentKey: text("deployment_key"),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     gated: boolean("gated").notNull().default(false),
     bondAsset: text("bond_asset"),
@@ -465,15 +466,18 @@ export const questionConfidentiality = pgTable(
   table => ({
     deploymentContentUnique: uniqueIndex("question_confidentiality_deployment_content_unique").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.contentId,
     ),
     deploymentContentIdx: index("question_confidentiality_deployment_content_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.contentId,
     ),
     gatedPublishedIdx: index("question_confidentiality_gated_published_idx").on(table.gated, table.publishedAt),
     deploymentGatedPublishedIdx: index("question_confidentiality_deployment_gated_published_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.gated,
       table.publishedAt,
     ),
@@ -493,6 +497,7 @@ export const confidentialityTermsAcceptances = pgTable(
     deploymentKey: text("deployment_key"),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     termsVersion: text("terms_version").notNull(),
     termsDocHash: text("terms_doc_hash").notNull(),
@@ -508,12 +513,14 @@ export const confidentialityTermsAcceptances = pgTable(
   table => ({
     deploymentWalletContentTermsUnique: uniqueIndex("confidentiality_terms_deployment_wallet_content_terms_unique").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.walletAddress,
       table.contentId,
       table.termsVersion,
     ),
     deploymentContentIdentityIdx: index("confidentiality_terms_deployment_content_identity_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.contentId,
       table.identityKey,
     ),
@@ -534,6 +541,7 @@ export const confidentialContextAccessLogs = pgTable(
     deploymentKey: text("deployment_key"),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     resourceId: text("resource_id").notNull(),
     resourceKind: text("resource_kind").notNull(),
@@ -545,12 +553,14 @@ export const confidentialContextAccessLogs = pgTable(
     contentViewedIdx: index("confidential_access_content_viewed_idx").on(table.contentId, table.viewedAt),
     deploymentContentViewedIdx: index("confidential_access_deployment_content_viewed_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.contentId,
       table.viewedAt,
     ),
     identityContentIdx: index("confidential_access_identity_content_idx").on(table.identityKey, table.contentId),
     deploymentIdentityContentIdx: index("confidential_access_deployment_identity_content_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.identityKey,
       table.contentId,
     ),
@@ -570,6 +580,7 @@ export const confidentialityBreachReports = pgTable(
     deploymentKey: text("deployment_key"),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     evidenceUrl: text("evidence_url"),
     evidenceHash: text("evidence_hash").notNull(),
@@ -584,6 +595,7 @@ export const confidentialityBreachReports = pgTable(
     contentStatusIdx: index("confidentiality_breach_content_status_idx").on(table.contentId, table.status),
     deploymentContentStatusIdx: index("confidentiality_breach_deployment_content_status_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.contentId,
       table.status,
     ),
@@ -598,6 +610,7 @@ export const confidentialityLogRoots = pgTable(
   "confidentiality_log_roots",
   {
     deploymentKey: text("deployment_key").notNull().default("legacy"),
+    frontendAddress: text("frontend_address").notNull(),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
     epoch: text("epoch").notNull(),
@@ -616,11 +629,12 @@ export const confidentialityLogRoots = pgTable(
   },
   table => ({
     deploymentEpochPk: primaryKey({
-      columns: [table.deploymentKey, table.epoch],
-      name: "confidentiality_log_roots_deployment_epoch_pk",
+      columns: [table.deploymentKey, table.frontendAddress, table.epoch],
+      name: "confidentiality_log_roots_deployment_frontend_epoch_pk",
     }),
     deploymentPublishedIdx: index("confidentiality_log_roots_deployment_published_idx").on(
       table.deploymentKey,
+      table.frontendAddress,
       table.publishedAt,
     ),
     publishedIdx: index("confidentiality_log_roots_published_idx").on(table.publishedAt),

@@ -41,6 +41,7 @@ import { getOptionalAppUrl, getServerRpcOverrides, getServerTargetNetworkById } 
 import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
+import { publicEnv } from "~~/utils/env/public";
 
 export const CONFIDENTIALITY_TERMS_ACTION = "confidentiality_terms:accept";
 export const CONFIDENTIALITY_TERMS_CHALLENGE_TITLE = "RateLoop confidential context";
@@ -62,6 +63,7 @@ export interface ConfidentialityTermsPayload {
   contentId: string;
   deploymentKey: string;
   detailsHash: `0x${string}` | null;
+  frontendAddress: `0x${string}`;
   identityKey: `0x${string}` | null;
   mediaTupleHash: `0x${string}` | null;
   normalizedAddress: `0x${string}`;
@@ -91,6 +93,7 @@ type ConfidentialityDeploymentScopeInput = {
   chainId?: number | null;
   contentRegistryAddress?: string | null;
   deploymentKey?: string | null;
+  frontendAddress?: string | null;
 };
 
 type DeployedContract = {
@@ -154,6 +157,7 @@ const CONFIDENTIALITY_ESCROW_LOG_ROOT_ABI = [
     type: "function",
     name: "publishLogRoot",
     inputs: [
+      { name: "frontend", type: "address" },
       { name: "epoch", type: "string" },
       { name: "merkleRoot", type: "bytes32" },
       { name: "artifactHash", type: "bytes32" },
@@ -224,6 +228,30 @@ export function resolveConfidentialityDeploymentScope(
   }
 
   return resolveCurrentConfidentialityDeploymentScope();
+}
+
+function normalizeFrontendAddress(value: unknown): `0x${string}` | null {
+  return typeof value === "string" && isAddress(value) ? (getAddress(value) as `0x${string}`) : null;
+}
+
+export function resolveConfidentialityFrontendAddress(
+  input: Pick<ConfidentialityDeploymentScopeInput, "frontendAddress"> = {},
+): `0x${string}` | null {
+  return (
+    normalizeFrontendAddress(input.frontendAddress) ??
+    normalizeFrontendAddress(publicEnv.frontendCode) ??
+    normalizeFrontendAddress(process.env.NEXT_PUBLIC_FRONTEND_CODE)
+  );
+}
+
+function requireConfidentialityFrontendAddress(
+  input: Pick<ConfidentialityDeploymentScopeInput, "frontendAddress"> = {},
+): `0x${string}` {
+  const frontendAddress = resolveConfidentialityFrontendAddress(input);
+  if (!frontendAddress) {
+    throw new Error("NEXT_PUBLIC_FRONTEND_CODE is required for frontend-scoped confidentiality logs.");
+  }
+  return frontendAddress;
 }
 
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
@@ -320,6 +348,10 @@ export function normalizeConfidentialityTermsInput(
     deploymentKey: options.deploymentKey ?? (typeof body.deploymentKey === "string" ? body.deploymentKey : null),
   });
   if (!deploymentScope) return { ok: false, error: "Confidentiality deployment is not configured" };
+  const frontendAddress = resolveConfidentialityFrontendAddress({
+    frontendAddress: typeof body.frontendAddress === "string" ? body.frontendAddress : options.frontendAddress,
+  });
+  if (!frontendAddress) return { ok: false, error: "Confidentiality frontend is not configured" };
 
   const termsVersion =
     typeof body.termsVersion === "string" && body.termsVersion.trim()
@@ -336,6 +368,7 @@ export function normalizeConfidentialityTermsInput(
       contentId,
       deploymentKey: deploymentScope.deploymentKey,
       detailsHash: normalizeOptionalBytes32(body.detailsHash),
+      frontendAddress,
       identityKey: normalizeIdentityKey(body.identityKey),
       mediaTupleHash: normalizeOptionalBytes32(body.mediaTupleHash),
       normalizedAddress: normalizeWalletAddress(body.address),
@@ -374,6 +407,7 @@ export async function buildServerConfidentialityTermsPayload(
       contentHash: normalizeOptionalBytes32(record.contentHash),
       deploymentKey: record.deploymentKey ?? normalized.payload.deploymentKey,
       detailsHash: normalizeOptionalBytes32(record.detailsHash),
+      frontendAddress: normalizeFrontendAddress(record.frontendAddress) ?? normalized.payload.frontendAddress,
       identityKey: null,
       mediaTupleHash: normalizeOptionalBytes32(record.mediaTupleHash),
       questionMetadataHash: normalizeOptionalBytes32(record.questionMetadataHash),
@@ -387,6 +421,7 @@ export function hashConfidentialityTermsPayload(payload: ConfidentialityTermsPay
     payload.normalizedAddress,
     payload.identityKey ?? "",
     payload.deploymentKey,
+    payload.frontendAddress,
     payload.contentId,
     payload.questionMetadataHash ?? "",
     payload.contentHash ?? "",
@@ -442,7 +477,8 @@ export function isConfidentialityCurrentlyGated(record: StoredConfidentiality | 
 export async function getQuestionConfidentiality(contentId: string, options: ConfidentialityDeploymentScopeInput = {}) {
   const normalizedContentId = normalizeContentId(contentId);
   const deploymentScope = resolveConfidentialityDeploymentScope(options);
-  if (!normalizedContentId || !deploymentScope) return null;
+  const frontendAddress = resolveConfidentialityFrontendAddress(options);
+  if (!normalizedContentId || !deploymentScope || !frontendAddress) return null;
 
   const [record] = await db
     .select()
@@ -450,6 +486,7 @@ export async function getQuestionConfidentiality(contentId: string, options: Con
     .where(
       and(
         eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+        eq(questionConfidentiality.frontendAddress, frontendAddress),
         eq(questionConfidentiality.contentId, normalizedContentId),
       ),
     )
@@ -462,6 +499,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
   contentId: string;
   contentRegistryAddress?: string | null;
   deploymentKey?: string | null;
+  frontendAddress?: string | null;
   metadata: ConfidentialityMetadataInput | null;
   questionMetadataHash?: string | null;
 }) {
@@ -469,6 +507,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
   if (!contentId || !params.metadata || typeof params.metadata !== "object" || Array.isArray(params.metadata)) return;
   const deploymentScope = resolveConfidentialityDeploymentScope(params);
   if (!deploymentScope) return;
+  const frontendAddress = requireConfidentialityFrontendAddress(params);
 
   const metadata = params.metadata as Record<string, unknown>;
   const confidentiality = parseMetadataConfidentiality(metadata.confidentiality);
@@ -485,6 +524,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
       deploymentKey: deploymentScope.deploymentKey,
       detailsHash: normalizeOptionalBytes32(params.metadata.detailsHash),
       disclosurePolicy: confidentiality.disclosurePolicy,
+      frontendAddress,
       gated: confidentiality.gated,
       mediaTupleHash: normalizeOptionalBytes32(params.metadata.mediaTupleHash),
       publishedAt: confidentiality.gated ? null : now,
@@ -495,7 +535,11 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: [questionConfidentiality.deploymentKey, questionConfidentiality.contentId],
+      target: [
+        questionConfidentiality.deploymentKey,
+        questionConfidentiality.frontendAddress,
+        questionConfidentiality.contentId,
+      ],
       set: {
         bondAmount: confidentiality.bondAmount,
         bondAsset: confidentiality.bondAsset,
@@ -519,16 +563,19 @@ export async function hasConfidentialityTermsAcceptance(params: {
   contentRegistryAddress?: string | null;
   contentId: string;
   deploymentKey?: string | null;
+  frontendAddress?: string | null;
   payloadHash?: string;
   termsDocHash?: string;
   termsVersion?: string;
   walletAddress: `0x${string}`;
 }) {
   const deploymentScope = resolveConfidentialityDeploymentScope(params);
-  if (!deploymentScope) return false;
+  const frontendAddress = resolveConfidentialityFrontendAddress(params);
+  if (!deploymentScope || !frontendAddress) return false;
 
   const commonConditions = [
     eq(confidentialityTermsAcceptances.deploymentKey, deploymentScope.deploymentKey),
+    eq(confidentialityTermsAcceptances.frontendAddress, frontendAddress),
     eq(confidentialityTermsAcceptances.walletAddress, params.walletAddress),
     eq(confidentialityTermsAcceptances.contentId, params.contentId),
     eq(confidentialityTermsAcceptances.termsVersion, params.termsVersion ?? CONFIDENTIALITY_TERMS_VERSION),
@@ -564,6 +611,7 @@ export async function recordConfidentialityTermsAcceptance(params: {
       contentHash: params.payload.contentHash,
       deploymentKey: params.payload.deploymentKey,
       detailsHash: params.payload.detailsHash,
+      frontendAddress: params.payload.frontendAddress,
       identityKey: params.payload.identityKey,
       mediaTupleHash: params.payload.mediaTupleHash,
       nonce: params.nonce,
@@ -577,6 +625,7 @@ export async function recordConfidentialityTermsAcceptance(params: {
     .onConflictDoUpdate({
       target: [
         confidentialityTermsAcceptances.deploymentKey,
+        confidentialityTermsAcceptances.frontendAddress,
         confidentialityTermsAcceptances.walletAddress,
         confidentialityTermsAcceptances.contentId,
         confidentialityTermsAcceptances.termsVersion,
@@ -810,6 +859,10 @@ export async function authorizeGatedContextRequest(
   if (!deploymentScope) {
     return { ok: false as const, status: 503, error: "Confidentiality deployment is not configured" };
   }
+  const frontendAddress = resolveConfidentialityFrontendAddress(options);
+  if (!frontendAddress) {
+    return { ok: false as const, status: 503, error: "Confidentiality frontend is not configured" };
+  }
 
   const address = request.nextUrl.searchParams.get("address");
   if (!address || !isValidWalletAddress(address)) {
@@ -829,6 +882,7 @@ export async function authorizeGatedContextRequest(
     return {
       ok: true as const,
       deploymentKey: deploymentScope.deploymentKey,
+      frontendAddress,
       identityKey: null,
       walletAddress,
     };
@@ -844,7 +898,7 @@ export async function authorizeGatedContextRequest(
   }
 
   const serverPayload = await buildServerConfidentialityTermsPayload(
-    { address: walletAddress, contentId },
+    { address: walletAddress, contentId, frontendAddress },
     deploymentScope,
   );
   if (!serverPayload.ok) {
@@ -855,6 +909,7 @@ export async function authorizeGatedContextRequest(
     !(await hasConfidentialityTermsAcceptance({
       contentId,
       deploymentKey: deploymentScope.deploymentKey,
+      frontendAddress,
       payloadHash: hashConfidentialityTermsPayload(serverPayload.payload),
       walletAddress,
     }))
@@ -897,6 +952,7 @@ export async function authorizeGatedContextRequest(
   return {
     ok: true as const,
     deploymentKey: deploymentScope.deploymentKey,
+    frontendAddress: serverPayload.payload.frontendAddress,
     identityKey: viewer.identityKey,
     walletAddress,
   };
@@ -924,6 +980,7 @@ function hashIpAddress(request: NextRequest) {
 export function createConfidentialViewToken(params: {
   contentId: string;
   deploymentKey: string;
+  frontendAddress: string;
   identityKey: string | null;
   resourceId: string;
   walletAddress: `0x${string}`;
@@ -934,6 +991,7 @@ export function createConfidentialViewToken(params: {
       [
         params.identityKey ?? params.walletAddress,
         params.deploymentKey,
+        params.frontendAddress,
         params.contentId,
         params.resourceId,
         viewId,
@@ -947,6 +1005,7 @@ export async function logConfidentialContextAccess(params: {
   contentRegistryAddress?: string | null;
   contentId: string;
   deploymentKey?: string | null;
+  frontendAddress?: string | null;
   identityKey: string | null;
   request: NextRequest;
   resourceId: string;
@@ -956,7 +1015,8 @@ export async function logConfidentialContextAccess(params: {
 }) {
   if (!RESOURCE_ID_PATTERN.test(params.resourceId)) return;
   const deploymentScope = resolveConfidentialityDeploymentScope(params);
-  if (!deploymentScope) return;
+  const frontendAddress = resolveConfidentialityFrontendAddress(params);
+  if (!deploymentScope || !frontendAddress) return;
   const viewedAt = new Date();
   const dedupeSince = new Date(viewedAt.getTime() - CONFIDENTIAL_CONTEXT_ACCESS_LOG_DEDUPE_MS);
   const [recentAccess] = await db
@@ -965,6 +1025,7 @@ export async function logConfidentialContextAccess(params: {
     .where(
       and(
         eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialContextAccessLogs.frontendAddress, frontendAddress),
         eq(confidentialContextAccessLogs.contentId, params.contentId),
         params.identityKey
           ? eq(confidentialContextAccessLogs.identityKey, params.identityKey)
@@ -983,6 +1044,7 @@ export async function logConfidentialContextAccess(params: {
     contentId: params.contentId,
     contentRegistryAddress: deploymentScope.contentRegistryAddress,
     deploymentKey: deploymentScope.deploymentKey,
+    frontendAddress,
     identityKey: params.identityKey,
     ipHash: hashIpAddress(params.request),
     resourceId: params.resourceId,
@@ -997,7 +1059,8 @@ export async function publishConfidentialContextAfterSettlement(params: { conten
   const contentIds = [...new Set(params.contentIds.map(normalizeContentId).filter((id): id is string => Boolean(id)))];
   if (contentIds.length === 0) return { published: 0 };
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
-  if (!deploymentScope) return { published: 0 };
+  const frontendAddress = resolveConfidentialityFrontendAddress();
+  if (!deploymentScope || !frontendAddress) return { published: 0 };
 
   const now = params.settledAt ?? new Date();
   let published = 0;
@@ -1008,6 +1071,7 @@ export async function publishConfidentialContextAfterSettlement(params: { conten
       .where(
         and(
           eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+          eq(questionConfidentiality.frontendAddress, frontendAddress),
           eq(questionConfidentiality.contentId, contentId),
           eq(questionConfidentiality.gated, true),
           eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
@@ -1050,13 +1114,15 @@ export async function findDueConfidentialDisclosureContent(params: { limit?: num
   const limit = normalizePositiveLimit(params.limit, 100, 500);
   const scanLimit = normalizePositiveLimit(params.scanLimit, Math.max(limit * 10, 500), 5_000);
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
-  if (!deploymentScope) return { checked: 0, due: [], errors: [] };
+  const frontendAddress = resolveConfidentialityFrontendAddress();
+  if (!deploymentScope || !frontendAddress) return { checked: 0, due: [], errors: [] };
   const candidates = await db
     .select({ contentId: questionConfidentiality.contentId })
     .from(questionConfidentiality)
     .where(
       and(
         eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+        eq(questionConfidentiality.frontendAddress, frontendAddress),
         eq(questionConfidentiality.gated, true),
         eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
         isNull(questionConfidentiality.publishedAt),
@@ -1131,16 +1197,19 @@ function merkleRoot(leaves: string[]) {
   return `0x${level[0]!.toString("hex")}`;
 }
 
-function defaultConfidentialityLogRootArtifactUrl(epoch: string, deploymentKey: string) {
+function defaultConfidentialityLogRootArtifactUrl(epoch: string, deploymentKey: string, frontendAddress: string) {
   const configuredBase = process.env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ARTIFACT_BASE_URL?.trim();
   if (configuredBase) {
-    return `${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(deploymentKey)}/${encodeURIComponent(epoch)}.json`;
+    return `${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(deploymentKey)}/${encodeURIComponent(
+      frontendAddress,
+    )}/${encodeURIComponent(epoch)}.json`;
   }
   const appUrl = getOptionalAppUrl();
   if (!appUrl) return null;
   try {
     const url = new URL(`/api/confidentiality/log-roots/${encodeURIComponent(epoch)}/artifact`, appUrl);
     url.searchParams.set("deploymentKey", deploymentKey);
+    url.searchParams.set("frontendAddress", frontendAddress);
     return url.toString();
   } catch {
     return null;
@@ -1155,14 +1224,18 @@ function buildConfidentialityLogRootArtifact(params: {
   deploymentKey: string;
   end: Date;
   epoch: string;
+  frontendAddress: string;
+  recorderAddress: string | null;
   leaves: string[];
   merkleRoot: string;
   start: Date;
 }) {
   return {
-    schemaVersion: "rateloop.confidentiality-log-root.v2",
+    schemaVersion: "rateloop.confidentiality-log-root.v3",
     epoch: params.epoch,
     deploymentKey: params.deploymentKey,
+    frontendAddress: params.frontendAddress,
+    recorderAddress: params.recorderAddress,
     chainId: params.chainId,
     contentRegistryAddress: params.contentRegistryAddress,
     intervalStart: params.start.toISOString(),
@@ -1178,16 +1251,23 @@ function hashArtifactJson(artifactJson: string): Hex {
   return `0x${createHash("sha256").update(artifactJson).digest("hex")}` as Hex;
 }
 
+function getConfiguredAccessRecorderAddress(): `0x${string}` | null {
+  const privateKey = process.env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY?.trim();
+  if (!privateKey || !PRIVATE_KEY_PATTERN.test(privateKey)) return null;
+  return privateKeyToAccount(privateKey as Hex).address as `0x${string}`;
+}
+
 async function publishConfidentialityLogRootAnchor(params: {
   artifactHash: Hex;
   artifactUri: string | null;
   epoch: string;
+  frontendAddress: `0x${string}`;
   merkleRoot: Hex;
 }) {
-  const privateKey = process.env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY?.trim();
-  if (!privateKey) return { status: "skipped" as const, reason: "anchor_private_key_unset" };
+  const privateKey = process.env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY?.trim();
+  if (!privateKey) return { status: "skipped" as const, reason: "access_recorder_private_key_unset" };
   if (!PRIVATE_KEY_PATTERN.test(privateKey)) {
-    throw new Error("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY must be a 32-byte hex private key.");
+    throw new Error("RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY must be a 32-byte hex private key.");
   }
 
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
@@ -1208,7 +1288,7 @@ async function publishConfidentialityLogRootAnchor(params: {
     address: confidentialityEscrow.address,
     abi: CONFIDENTIALITY_ESCROW_LOG_ROOT_ABI,
     functionName: "publishLogRoot",
-    args: [params.epoch, params.merkleRoot, params.artifactHash, params.artifactUri ?? ""],
+    args: [params.frontendAddress, params.epoch, params.merkleRoot, params.artifactHash, params.artifactUri ?? ""],
   });
   await publicClient.waitForTransactionReceipt({ hash: txHash });
 
@@ -1229,13 +1309,18 @@ async function attemptConfidentialityLogRootAnchor(params: {
   artifactHash: Hex;
   artifactUri: string | null;
   epoch: string;
+  frontendAddress: `0x${string}`;
   merkleRoot: Hex;
 }): Promise<ConfidentialityLogRootAnchorResult> {
   try {
     return await publishConfidentialityLogRootAnchor(params);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Unable to publish confidentiality log-root anchor.";
-    console.error("[confidentiality] failed to publish log-root anchor.", { epoch: params.epoch, reason });
+    console.error("[confidentiality] failed to publish log-root anchor.", {
+      epoch: params.epoch,
+      frontendAddress: params.frontendAddress,
+      reason,
+    });
     return { status: "failed", reason };
   }
 }
@@ -1267,6 +1352,7 @@ export async function publishConfidentialityLogRoot(
   if (!deploymentScope) {
     throw new Error("Confidentiality deployment is not configured for log-root publishing.");
   }
+  const frontendAddress = requireConfidentialityFrontendAddress(params);
 
   const acceptances = await db
     .select()
@@ -1274,6 +1360,7 @@ export async function publishConfidentialityLogRoot(
     .where(
       and(
         eq(confidentialityTermsAcceptances.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialityTermsAcceptances.frontendAddress, frontendAddress),
         gte(confidentialityTermsAcceptances.acceptedAt, start),
         lt(confidentialityTermsAcceptances.acceptedAt, end),
       ),
@@ -1284,6 +1371,7 @@ export async function publishConfidentialityLogRoot(
     .where(
       and(
         eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialContextAccessLogs.frontendAddress, frontendAddress),
         gte(confidentialContextAccessLogs.viewedAt, start),
         lt(confidentialContextAccessLogs.viewedAt, end),
       ),
@@ -1294,6 +1382,7 @@ export async function publishConfidentialityLogRoot(
       leafHash([
         "acceptance",
         row.deploymentKey,
+        row.frontendAddress,
         row.chainId,
         row.contentRegistryAddress,
         row.walletAddress,
@@ -1314,6 +1403,7 @@ export async function publishConfidentialityLogRoot(
       leafHash([
         "access",
         row.deploymentKey,
+        row.frontendAddress,
         row.chainId,
         row.contentRegistryAddress,
         row.walletAddress,
@@ -1335,15 +1425,17 @@ export async function publishConfidentialityLogRoot(
     deploymentKey: deploymentScope.deploymentKey,
     end,
     epoch,
+    frontendAddress,
     leaves,
     merkleRoot: root,
+    recorderAddress: getConfiguredAccessRecorderAddress(),
     start,
   });
   const artifactJson = JSON.stringify(artifact);
   const artifactHash = hashArtifactJson(artifactJson);
   const artifactUrl =
     params.artifactUrl === undefined
-      ? defaultConfidentialityLogRootArtifactUrl(epoch, deploymentScope.deploymentKey)
+      ? defaultConfidentialityLogRootArtifactUrl(epoch, deploymentScope.deploymentKey, frontendAddress)
       : params.artifactUrl;
 
   const selectExistingRoot = async () => {
@@ -1361,6 +1453,7 @@ export async function publishConfidentialityLogRoot(
         chainId: confidentialityLogRoots.chainId,
         contentRegistryAddress: confidentialityLogRoots.contentRegistryAddress,
         deploymentKey: confidentialityLogRoots.deploymentKey,
+        frontendAddress: confidentialityLogRoots.frontendAddress,
         merkleRoot: confidentialityLogRoots.merkleRoot,
         publishedAt: confidentialityLogRoots.publishedAt,
       })
@@ -1368,6 +1461,7 @@ export async function publishConfidentialityLogRoot(
       .where(
         and(
           eq(confidentialityLogRoots.deploymentKey, deploymentScope.deploymentKey),
+          eq(confidentialityLogRoots.frontendAddress, frontendAddress),
           eq(confidentialityLogRoots.epoch, epoch),
         ),
       )
@@ -1403,6 +1497,7 @@ export async function publishConfidentialityLogRoot(
       chainId: existingRoot.chainId,
       contentRegistryAddress: existingRoot.contentRegistryAddress,
       deploymentKey: existingRoot.deploymentKey,
+      frontendAddress: existingRoot.frontendAddress,
       epoch,
       merkleRoot: existingRoot.merkleRoot,
     };
@@ -1420,6 +1515,7 @@ export async function publishConfidentialityLogRoot(
           artifactHash,
           artifactUri: artifactUrl,
           epoch,
+          frontendAddress,
           merkleRoot: root as Hex,
         });
 
@@ -1444,10 +1540,17 @@ export async function publishConfidentialityLogRoot(
       createdAt: now,
       deploymentKey: deploymentScope.deploymentKey,
       epoch,
+      frontendAddress,
       merkleRoot: root,
       publishedAt: now,
     })
-    .onConflictDoNothing({ target: [confidentialityLogRoots.deploymentKey, confidentialityLogRoots.epoch] })
+    .onConflictDoNothing({
+      target: [
+        confidentialityLogRoots.deploymentKey,
+        confidentialityLogRoots.frontendAddress,
+        confidentialityLogRoots.epoch,
+      ],
+    })
     .returning({ epoch: confidentialityLogRoots.epoch });
 
   if (inserted.length === 0) {
@@ -1465,6 +1568,7 @@ export async function publishConfidentialityLogRoot(
     chainId: deploymentScope.chainId,
     contentRegistryAddress: deploymentScope.contentRegistryAddress,
     deploymentKey: deploymentScope.deploymentKey,
+    frontendAddress,
     epoch,
     merkleRoot: root,
   };

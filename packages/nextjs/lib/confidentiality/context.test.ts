@@ -7,14 +7,16 @@ const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalConfidentialitySecret = env.RATELOOP_CONFIDENTIALITY_SECRET;
-const originalLogRootAnchorPrivateKey = env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
+const originalAccessRecorderPrivateKey = env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY;
 const originalAppUrl = env.APP_URL;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 env.DATABASE_URL = "memory:";
 env.NODE_ENV = "test";
 env.RATELOOP_CONFIDENTIALITY_SECRET = "test-confidentiality-secret";
 env.APP_URL = "https://rateloop.ai";
+env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
 
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
@@ -24,6 +26,7 @@ type SignedReadSessionsModule = typeof import("~~/lib/auth/signedReadSessions");
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 const CONTENT_ID = "42";
 const IDENTITY_KEY = `0x${"a".repeat(64)}` as const;
+const FRONTEND_ADDRESS = env.NEXT_PUBLIC_FRONTEND_CODE as `0x${string}`;
 
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
@@ -46,6 +49,7 @@ function termsPayload(): ConfidentialityTermsPayload {
     contentId: CONTENT_ID,
     deploymentKey: deploymentScope.deploymentKey,
     detailsHash: `0x${"2".repeat(64)}`,
+    frontendAddress: FRONTEND_ADDRESS,
     identityKey: IDENTITY_KEY,
     mediaTupleHash: `0x${"3".repeat(64)}`,
     normalizedAddress: WALLET,
@@ -146,7 +150,7 @@ beforeEach(async () => {
   await clearTables();
   confidentiality.__setConfidentialityOnchainGateForTests(null);
   confidentiality.__setConfidentialitySettledAtLookupForTests(null);
-  delete env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
+  delete env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY;
 });
 
 after(() => {
@@ -156,8 +160,9 @@ after(() => {
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("RATELOOP_CONFIDENTIALITY_SECRET", originalConfidentialitySecret);
-  restoreEnv("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY", originalLogRootAnchorPrivateKey);
+  restoreEnv("RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY", originalAccessRecorderPrivateKey);
   restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
 });
 
@@ -402,6 +407,7 @@ test("authorizes owners with owner context sessions without gated terms", async 
   assert.deepEqual(authorization, {
     ok: true,
     deploymentKey: deploymentScope.deploymentKey,
+    frontendAddress: FRONTEND_ADDRESS,
     identityKey: null,
     walletAddress: WALLET,
   });
@@ -476,6 +482,7 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   const viewToken = confidentiality.createConfidentialViewToken({
     contentId: CONTENT_ID,
     deploymentKey: authorization.deploymentKey,
+    frontendAddress: authorization.frontendAddress,
     identityKey: authorization.identityKey,
     resourceId,
     walletAddress: authorization.walletAddress,
@@ -505,12 +512,13 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   await dbModule.dbClient.execute({
     sql: `
       INSERT INTO confidential_context_access_logs (
-        deployment_key, chain_id, content_registry_address,
+        deployment_key, frontend_address, chain_id, content_registry_address,
         identity_key, wallet_address, content_id, resource_id, resource_kind, view_token, viewed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       "999:0x9999999999999999999999999999999999999999",
+      FRONTEND_ADDRESS,
       999,
       "0x9999999999999999999999999999999999999999",
       IDENTITY_KEY,
@@ -533,31 +541,34 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   assert.equal(root.chainId, deploymentScope.chainId);
   assert.equal(root.contentRegistryAddress, deploymentScope.contentRegistryAddress);
   assert.equal(root.deploymentKey, deploymentScope.deploymentKey);
+  assert.equal(root.frontendAddress, FRONTEND_ADDRESS);
   assert.equal(
     root.artifactUrl,
     `https://rateloop.ai/api/confidentiality/log-roots/${root.epoch}/artifact?deploymentKey=${encodeURIComponent(
       deploymentScope.deploymentKey,
-    )}`,
+    )}&frontendAddress=${FRONTEND_ADDRESS}`,
   );
   assert.match(root.artifactHash, /^0x[0-9a-f]{64}$/);
   assert.match(root.merkleRoot, /^0x[0-9a-f]{64}$/);
 
   const rootRows = await dbModule.dbClient.execute({
     sql: `
-      SELECT artifact_hash, artifact_json, artifact_url, anchor_tx_hash, deployment_key
+      SELECT artifact_hash, artifact_json, artifact_url, anchor_tx_hash, deployment_key, frontend_address
         FROM confidentiality_log_roots
-       WHERE deployment_key = ? AND epoch = ?
+       WHERE deployment_key = ? AND frontend_address = ? AND epoch = ?
     `,
-    args: [deploymentScope.deploymentKey, root.epoch],
+    args: [deploymentScope.deploymentKey, FRONTEND_ADDRESS, root.epoch],
   });
   assert.equal(rootRows.rowCount, 1);
   assert.equal(rootRows.rows[0].artifact_hash, root.artifactHash);
   assert.equal(rootRows.rows[0].artifact_url, root.artifactUrl);
   assert.equal(rootRows.rows[0].anchor_tx_hash, null);
   assert.equal(rootRows.rows[0].deployment_key, deploymentScope.deploymentKey);
+  assert.equal(rootRows.rows[0].frontend_address, FRONTEND_ADDRESS);
   const artifact = JSON.parse(String(rootRows.rows[0].artifact_json));
-  assert.equal(artifact.schemaVersion, "rateloop.confidentiality-log-root.v2");
+  assert.equal(artifact.schemaVersion, "rateloop.confidentiality-log-root.v3");
   assert.equal(artifact.deploymentKey, deploymentScope.deploymentKey);
+  assert.equal(artifact.frontendAddress, FRONTEND_ADDRESS);
   assert.equal(artifact.chainId, deploymentScope.chainId);
   assert.equal(artifact.contentRegistryAddress, deploymentScope.contentRegistryAddress);
   assert.equal(artifact.merkleRoot, root.merkleRoot);
@@ -575,12 +586,13 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   await dbModule.dbClient.execute({
     sql: `
       INSERT INTO confidential_context_access_logs (
-        deployment_key, chain_id, content_registry_address,
+        deployment_key, frontend_address, chain_id, content_registry_address,
         identity_key, wallet_address, content_id, resource_id, resource_kind, view_token, viewed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       deploymentScope.deploymentKey,
+      FRONTEND_ADDRESS,
       deploymentScope.chainId,
       deploymentScope.contentRegistryAddress,
       IDENTITY_KEY,
@@ -603,7 +615,7 @@ test("authorizes accepted signed sessions and logs gated context access", async 
 });
 
 test("persists log-root artifacts when on-chain anchoring fails", async () => {
-  env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY = "not-a-private-key";
+  env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY = "not-a-private-key";
 
   const root = await confidentiality.publishConfidentialityLogRoot({
     epoch: "2026-06-11",
@@ -612,12 +624,13 @@ test("persists log-root artifacts when on-chain anchoring fails", async () => {
 
   assert.equal(root.anchor.status, "failed");
   const rows = await dbModule.dbClient.execute(
-    "SELECT artifact_hash, merkle_root, anchor_tx_hash FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
+    "SELECT artifact_hash, merkle_root, anchor_tx_hash, frontend_address FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
   );
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0].artifact_hash, root.artifactHash);
   assert.equal(rows.rows[0].merkle_root, root.merkleRoot);
   assert.equal(rows.rows[0].anchor_tx_hash, null);
+  assert.equal(rows.rows[0].frontend_address, FRONTEND_ADDRESS);
 });
 
 test("rejects gated reads without an active human credential identity", async () => {

@@ -13,6 +13,11 @@ function readDeploymentKey(request: NextRequest) {
   return value || null;
 }
 
+function readFrontendAddress(request: NextRequest) {
+  const value = request.nextUrl.searchParams.get("frontendAddress")?.trim();
+  return value || null;
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ epoch: string }> }) {
   const { epoch } = await params;
   if (!EPOCH_PATTERN.test(epoch)) {
@@ -20,22 +25,31 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const deploymentKey = readDeploymentKey(request);
+  const frontendAddress = readFrontendAddress(request);
   const rows = await db
     .select({
       artifactHash: confidentialityLogRoots.artifactHash,
       artifactJson: confidentialityLogRoots.artifactJson,
       deploymentKey: confidentialityLogRoots.deploymentKey,
+      frontendAddress: confidentialityLogRoots.frontendAddress,
       merkleRoot: confidentialityLogRoots.merkleRoot,
     })
     .from(confidentialityLogRoots)
     .where(
       deploymentKey
-        ? and(eq(confidentialityLogRoots.deploymentKey, deploymentKey), eq(confidentialityLogRoots.epoch, epoch))
+        ? and(
+            eq(confidentialityLogRoots.deploymentKey, deploymentKey),
+            ...(frontendAddress ? [eq(confidentialityLogRoots.frontendAddress, frontendAddress)] : []),
+            eq(confidentialityLogRoots.epoch, epoch),
+          )
         : eq(confidentialityLogRoots.epoch, epoch),
     )
-    .limit(deploymentKey ? 1 : 2);
-  if (!deploymentKey && rows.length > 1) {
-    return NextResponse.json({ error: "deploymentKey is required for this epoch" }, { status: 400 });
+    .limit(deploymentKey && frontendAddress ? 1 : 2);
+  if ((!deploymentKey || !frontendAddress) && rows.length > 1) {
+    return NextResponse.json(
+      { error: "deploymentKey and frontendAddress are required for this epoch" },
+      { status: 400 },
+    );
   }
   const [row] = rows;
 
@@ -49,6 +63,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       "content-type": "application/json; charset=utf-8",
       "x-rateloop-artifact-hash": row.artifactHash ?? "",
       "x-rateloop-deployment-key": row.deploymentKey,
+      "x-rateloop-frontend-address": row.frontendAddress,
       "x-rateloop-merkle-root": row.merkleRoot,
     },
   });

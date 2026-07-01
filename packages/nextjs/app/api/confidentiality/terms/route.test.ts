@@ -5,6 +5,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalNodeEnv = env.NODE_ENV;
 
 env.DATABASE_URL = "memory:";
@@ -22,6 +23,7 @@ const account = privateKeyToAccount(`0x${"1".repeat(64)}`);
 const WALLET = account.address;
 const NORMALIZED_WALLET = WALLET.toLowerCase() as `0x${string}`;
 const CONTENT_ID = "42";
+const FRONTEND_ADDRESS = "0x3333333333333333333333333333333333333333";
 
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
@@ -74,6 +76,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  env.NEXT_PUBLIC_FRONTEND_CODE = FRONTEND_ADDRESS;
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   rateLimit.__setRateLimitStoreForTests(dbModule.dbClient);
 });
@@ -82,6 +85,7 @@ after(() => {
   rateLimit.__setRateLimitStoreForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NODE_ENV", originalNodeEnv);
 });
 
@@ -170,13 +174,14 @@ test("confidentiality terms accept route records acceptance and issues gated con
 
   const rows = await dbModule.dbClient.execute({
     sql: `
-      SELECT wallet_address, content_id, terms_version, terms_doc_hash, payload_hash, question_metadata_hash, content_hash, details_hash
+      SELECT wallet_address, content_id, frontend_address, terms_version, terms_doc_hash, payload_hash, question_metadata_hash, content_hash, details_hash
       FROM confidentiality_terms_acceptances
     `,
   });
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0].wallet_address, NORMALIZED_WALLET);
   assert.equal(rows.rows[0].content_id, CONTENT_ID);
+  assert.equal(rows.rows[0].frontend_address, FRONTEND_ADDRESS);
   assert.equal(rows.rows[0].terms_version, challenge.termsVersion);
   assert.equal(rows.rows[0].terms_doc_hash, challenge.termsDocHash);
   assert.match(String(rows.rows[0].payload_hash), /^[a-f0-9]{64}$/);

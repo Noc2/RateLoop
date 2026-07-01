@@ -47,12 +47,14 @@ const ONE_PIXEL_PNG = Buffer.from(
 const ONE_PIXEL_PNG_SHA256 = createHash("sha256").update(ONE_PIXEL_PNG).digest("hex");
 const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
 const originalVercelUrl = env.VERCEL_URL;
+const FRONTEND_ADDRESS = "0x3333333333333333333333333333333333333333";
 
 function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   if (value === undefined) {
@@ -201,6 +203,7 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
     sql: `
       INSERT INTO question_confidentiality (
         deployment_key,
+        frontend_address,
         chain_id,
         content_registry_address,
         content_id,
@@ -216,8 +219,8 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (deployment_key, content_id) DO UPDATE SET
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (deployment_key, frontend_address, content_id) DO UPDATE SET
         gated = excluded.gated,
         bond_asset = excluded.bond_asset,
         bond_amount = excluded.bond_amount,
@@ -231,6 +234,7 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
     `,
     args: [
       deploymentKey,
+      FRONTEND_ADDRESS,
       31337,
       contentRegistryAddress,
       contentId,
@@ -447,6 +451,7 @@ function ratingCommitReceiptLog(address = RATING_VOTING_ENGINE_ADDRESS) {
 }
 
 beforeEach(() => {
+  env.NEXT_PUBLIC_FRONTEND_CODE = FRONTEND_ADDRESS;
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   __setSignedActionVerificationClientForTests({ verifyMessage });
   __setUrlSafetyDnsResolversForTests({
@@ -462,6 +467,7 @@ afterEach(() => {
   __setUrlSafetyDnsResolversForTests(null);
   __setMcpToolTestOverridesForTests(null);
   restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);

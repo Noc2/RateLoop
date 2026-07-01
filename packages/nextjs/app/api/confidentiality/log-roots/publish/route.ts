@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
   const chainId = readOptionalChainId(body.chainId);
   const contentRegistryAddress = readOptionalString(body.contentRegistryAddress);
   const deploymentKey = readOptionalString(body.deploymentKey);
+  const frontendAddress = readOptionalString(body.frontendAddress);
   const requireAnchor = anchor === false ? false : readBodyRequireAnchor(body.requireAnchor, true);
 
   try {
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
         contentRegistryAddress,
         deploymentKey,
         epoch,
+        frontendAddress,
         requireAnchor,
       })),
     });

@@ -7,12 +7,14 @@ const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
 const originalCronSecret = env.CRON_SECRET;
 const originalDatabaseUrl = env.DATABASE_URL;
-const originalLogRootAnchorPrivateKey = env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
+const originalAccessRecorderPrivateKey = env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalNodeEnv = env.NODE_ENV;
 
 env.APP_URL = "https://rateloop.ai";
 env.CRON_SECRET = "cron-secret";
 env.DATABASE_URL = "memory:";
+env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
 env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
@@ -28,6 +30,7 @@ let rateLimit: RateLimitModule;
 let logRootPublishRoute: LogRootPublishRoute;
 let logRootPublishCronRoute: LogRootPublishCronRoute;
 let logRootArtifactRoute: LogRootArtifactRoute;
+const FRONTEND_ADDRESS = env.NEXT_PUBLIC_FRONTEND_CODE as `0x${string}`;
 
 const BAD_SECRET_RATE_LIMIT_HEADERS = {
   accept: "application/json",
@@ -56,7 +59,7 @@ before(async () => {
 beforeEach(async () => {
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   rateLimit.__setRateLimitStoreForTests(dbModule.dbClient);
-  delete env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
+  delete env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY;
 });
 
 after(() => {
@@ -65,7 +68,8 @@ after(() => {
   restoreEnv("APP_URL", originalAppUrl);
   restoreEnv("CRON_SECRET", originalCronSecret);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
-  restoreEnv("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY", originalLogRootAnchorPrivateKey);
+  restoreEnv("RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY", originalAccessRecorderPrivateKey);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NODE_ENV", originalNodeEnv);
 });
 
@@ -148,22 +152,24 @@ test("POST publishes log-root artifacts with Vercel cron bearer auth", async () 
     body.artifactUrl,
     `https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact?deploymentKey=${encodeURIComponent(
       body.deploymentKey,
-    )}`,
+    )}&frontendAddress=${FRONTEND_ADDRESS}`,
   );
 
   const rows = await dbModule.dbClient.execute(
-    "SELECT artifact_hash, artifact_json, artifact_url, deployment_key FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
+    "SELECT artifact_hash, artifact_json, artifact_url, deployment_key, frontend_address FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
   );
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0].artifact_hash, body.artifactHash);
   assert.equal(rows.rows[0].artifact_url, body.artifactUrl);
   assert.equal(rows.rows[0].deployment_key, body.deploymentKey);
+  assert.equal(rows.rows[0].frontend_address, FRONTEND_ADDRESS);
 
   const artifactResponse = await logRootArtifactRoute.GET(new NextRequest(body.artifactUrl), {
     params: Promise.resolve({ epoch: body.epoch }),
   });
   assert.equal(artifactResponse.status, 200);
   assert.equal(artifactResponse.headers.get("x-rateloop-deployment-key"), body.deploymentKey);
+  assert.equal(artifactResponse.headers.get("x-rateloop-frontend-address"), FRONTEND_ADDRESS);
   assert.deepEqual(await artifactResponse.json(), JSON.parse(String(rows.rows[0].artifact_json)));
 });
 

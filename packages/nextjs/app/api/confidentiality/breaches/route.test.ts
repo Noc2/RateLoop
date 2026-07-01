@@ -5,9 +5,11 @@ import { after, before, beforeEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalNodeEnv = env.NODE_ENV;
 
 env.DATABASE_URL = "memory:";
+env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
 env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
@@ -25,6 +27,7 @@ const CONTENT_ID = "42";
 const IDENTITY_KEY = `0x${"a".repeat(64)}`;
 const EVIDENCE_HASH = `0x${"b".repeat(64)}`;
 const VIEW_TOKEN = "c".repeat(64);
+const FRONTEND_ADDRESS = env.NEXT_PUBLIC_FRONTEND_CODE as `0x${string}`;
 
 let dbModule: DbModule;
 let dbSchema: DbSchemaModule;
@@ -89,6 +92,7 @@ async function insertRootedAccess(
       contentId: CONTENT_ID,
       contentRegistryAddress: scope.contentRegistryAddress,
       deploymentKey: scope.deploymentKey,
+      frontendAddress: FRONTEND_ADDRESS,
       identityKey: IDENTITY_KEY,
       resourceId: "det_private001",
       resourceKind: "details",
@@ -111,12 +115,13 @@ async function insertRootedAccess(
     artifactHash: `0x${"d".repeat(64)}`,
     artifactUrl: `https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact?deploymentKey=${encodeURIComponent(
       rootDeploymentKey,
-    )}`,
+    )}&frontendAddress=${FRONTEND_ADDRESS}`,
     chainId: rootChainId,
     contentRegistryAddress: rootContentRegistryAddress,
     createdAt: new Date("2026-06-12T00:00:00.000Z"),
     deploymentKey: rootDeploymentKey,
     epoch,
+    frontendAddress: FRONTEND_ADDRESS,
     merkleRoot: `0x${"e".repeat(64)}`,
     publishedAt: new Date("2026-06-12T00:01:00.000Z"),
   });
@@ -143,6 +148,7 @@ after(() => {
   rateLimit.__setRateLimitStoreForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NODE_ENV", originalNodeEnv);
 });
 
@@ -173,12 +179,13 @@ test("breach reports bind a matching view token to access-log and log-root evide
   assert.equal(body.evidenceArtifactUrl, "https://rateloop.ai/api/confidentiality/breaches/1/artifact");
 
   const rows = await dbModule.dbClient.execute(
-    "SELECT access_log_id, epoch, evidence_hash, proof, status FROM confidentiality_breach_reports",
+    "SELECT access_log_id, epoch, evidence_hash, frontend_address, proof, status FROM confidentiality_breach_reports",
   );
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0].access_log_id, accessLog.id);
   assert.equal(rows.rows[0].epoch, epoch);
   assert.equal(rows.rows[0].evidence_hash, body.evidenceHash);
+  assert.equal(rows.rows[0].frontend_address, FRONTEND_ADDRESS);
   assert.equal(rows.rows[0].evidence_hash, sha256Hash(String(rows.rows[0].proof)));
   assert.equal(rows.rows[0].status, "evidence_artifact_published");
   const proof = JSON.parse(String(rows.rows[0].proof)) as {
@@ -186,6 +193,7 @@ test("breach reports bind a matching view token to access-log and log-root evide
       chainId: number | null;
       contentRegistryAddress: string | null;
       deploymentKey: string;
+      frontendAddress: string;
       id: number;
       identityKey: string;
       leafHash: string;
@@ -197,6 +205,7 @@ test("breach reports bind a matching view token to access-log and log-root evide
       chainId: number | null;
       contentRegistryAddress: string | null;
       deploymentKey: string;
+      frontendAddress: string;
       epoch: string;
       artifactHash: string;
     } | null;
@@ -209,12 +218,14 @@ test("breach reports bind a matching view token to access-log and log-root evide
   assert.equal(proof.accessLog.chainId, scope.chainId);
   assert.equal(proof.accessLog.contentRegistryAddress, scope.contentRegistryAddress);
   assert.equal(proof.accessLog.deploymentKey, scope.deploymentKey);
+  assert.equal(proof.accessLog.frontendAddress, FRONTEND_ADDRESS);
   assert.equal(proof.accessLog.identityKey, IDENTITY_KEY);
   assert.equal(proof.accessLog.viewToken, VIEW_TOKEN);
   assert.match(proof.accessLog.leafHash, /^0x[0-9a-f]{64}$/);
   assert.equal(proof.logRoot?.chainId, scope.chainId);
   assert.equal(proof.logRoot?.contentRegistryAddress, scope.contentRegistryAddress);
   assert.equal(proof.logRoot?.deploymentKey, scope.deploymentKey);
+  assert.equal(proof.logRoot?.frontendAddress, FRONTEND_ADDRESS);
   assert.equal(proof.logRoot?.epoch, epoch);
   assert.equal(proof.logRoot?.anchor.txHash, `0x${"1".repeat(64)}`);
 
@@ -256,6 +267,7 @@ test("breach artifact routes reject stored proof bytes that do not match evidenc
     createdAt: now,
     deploymentKey: scope.deploymentKey,
     evidenceHash: EVIDENCE_HASH,
+    frontendAddress: FRONTEND_ADDRESS,
     proof: JSON.stringify({ schemaVersion: "legacy-or-tampered" }),
     reporter: REPORTER,
     status: "reported",
@@ -289,6 +301,7 @@ test("breach listings only return reports for the current deployment", async () 
       createdAt: now,
       deploymentKey: scope.deploymentKey,
       evidenceHash: sha256Hash(JSON.stringify({ schemaVersion: "current" })),
+      frontendAddress: FRONTEND_ADDRESS,
       proof: JSON.stringify({ schemaVersion: "current" }),
       reporter: REPORTER,
       status: "reported",
@@ -302,6 +315,7 @@ test("breach listings only return reports for the current deployment", async () 
       createdAt: now,
       deploymentKey: `${scope.chainId}:0x2222222222222222222222222222222222222222`,
       evidenceHash: sha256Hash(JSON.stringify({ schemaVersion: "other" })),
+      frontendAddress: FRONTEND_ADDRESS,
       proof: JSON.stringify({ schemaVersion: "other" }),
       reporter: REPORTER,
       status: "reported",
@@ -397,6 +411,7 @@ test("breach reports reject view tokens that do not match the accused confidenti
     contentId: CONTENT_ID,
     contentRegistryAddress: scope.contentRegistryAddress,
     deploymentKey: scope.deploymentKey,
+    frontendAddress: FRONTEND_ADDRESS,
     identityKey: IDENTITY_KEY,
     resourceId: "det_private001",
     resourceKind: "details",

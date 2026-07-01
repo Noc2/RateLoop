@@ -1,12 +1,12 @@
 import {
   DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+  type SubmissionConfidentialityConfig,
   approveLREP,
   readTokenBalance,
-  submitContentDirectWithResult,
   submitContentDirect,
+  submitContentDirectWithResult,
   transferLREP,
   waitForPonderIndexed,
-  type SubmissionConfidentialityConfig,
 } from "./admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "./anvil-accounts";
 import {
@@ -17,32 +17,29 @@ import {
   selectAskSubcategory,
   selectBountyRewardAsset,
 } from "./ask-form";
-import { getNamedSetCookie } from "./cookies";
 import { CONTRACT_ADDRESSES } from "./contracts";
+import { getNamedSetCookie } from "./cookies";
 import { ponderGet } from "./ponder-api";
+import { E2E_BASE_URL, E2E_RPC_URL } from "./service-urls";
 import { gotoWithRetry } from "./wait-helpers";
 import { setupWallet } from "./wallet-session";
 import { installLocalE2EWorldIdMock, readActiveHumanCredential } from "./world-id";
 import type { APIRequestContext, APIResponse, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { ConfidentialityEscrowAbi, RaterRegistryAbi, RaterRegistryConfidentialityAbi } from "@rateloop/contracts/abis";
+import { createHash } from "node:crypto";
 import {
+  type Hex,
   createPublicClient,
   createWalletClient,
+  getAddress,
   http,
   keccak256,
   maxUint64,
   toBytes,
-  type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { createHash } from "node:crypto";
-import {
-  ConfidentialityEscrowAbi,
-  RaterRegistryAbi,
-  RaterRegistryConfidentialityAbi,
-} from "@rateloop/contracts/abis";
-import { E2E_BASE_URL, E2E_RPC_URL } from "./service-urls";
 
 export const CONFIDENTIALITY_BOND_ASSET_LREP = 0;
 export const CONFIDENTIALITY_BOND_ASSET_USDC = 1;
@@ -63,6 +60,10 @@ const RETRYABLE_API_REQUEST_ERROR_PATTERNS = [
 function isRetryableApiRequestError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return RETRYABLE_API_REQUEST_ERROR_PATTERNS.some(pattern => pattern.test(message));
+}
+
+function getE2EFrontendAddress(): `0x${string}` {
+  return getAddress(process.env.NEXT_PUBLIC_FRONTEND_CODE ?? DEPLOYER.address) as `0x${string}`;
 }
 
 function isLocalE2EBaseUrl(): boolean {
@@ -332,10 +333,12 @@ export async function uploadGatedQuestionDetails(
   };
 }
 
-export async function submitHostedGatedQuestionDirect(config: SubmitGatedQuestionDirectConfig & {
-  detailsHash: Hex;
-  detailsUrl: string;
-}): Promise<SubmitHostedGatedQuestionDirectResult> {
+export async function submitHostedGatedQuestionDirect(
+  config: SubmitGatedQuestionDirectConfig & {
+    detailsHash: Hex;
+    detailsUrl: string;
+  },
+): Promise<SubmitHostedGatedQuestionDirectResult> {
   const submitter = config.submitter ?? ANVIL_ACCOUNTS.account2;
   const confidentiality: SubmissionConfidentialityConfig = {
     gated: true,
@@ -403,7 +406,10 @@ export async function submitHostedGatedQuestionDirect(config: SubmitGatedQuestio
 
 export async function attachHostedQuestionDetails(
   request: APIRequestContext,
-  submission: Pick<SubmitHostedGatedQuestionDirectResult, "contentId" | "detailsHash" | "detailsUrl" | "transactionHash">,
+  submission: Pick<
+    SubmitHostedGatedQuestionDirectResult,
+    "contentId" | "detailsHash" | "detailsUrl" | "transactionHash"
+  >,
 ) {
   const response = await request.post("/api/attachments/details/attach", {
     data: {
@@ -442,6 +448,7 @@ export async function upsertQuestionConfidentialityForE2E({
     `
       insert into question_confidentiality (
         deployment_key,
+        frontend_address,
         chain_id,
         content_registry_address,
         content_id,
@@ -454,8 +461,8 @@ export async function upsertQuestionConfidentialityForE2E({
         created_at,
         updated_at
       )
-      values ($1, $2, $3, $4, true, $5, $6, $7, null, $8, now(), now())
-      on conflict (deployment_key, content_id) do update set
+      values ($1, $2, $3, $4, $5, true, $6, $7, $8, null, $9, now(), now())
+      on conflict (deployment_key, frontend_address, content_id) do update set
         chain_id = excluded.chain_id,
         content_registry_address = excluded.content_registry_address,
         gated = excluded.gated,
@@ -468,6 +475,7 @@ export async function upsertQuestionConfidentialityForE2E({
     `,
     [
       E2E_CONTENT_DEPLOYMENT_KEY,
+      getE2EFrontendAddress(),
       foundry.id,
       CONTRACT_ADDRESSES.ContentRegistry.toLowerCase(),
       contentId,
@@ -514,13 +522,7 @@ async function replaceGatedQuestionDetailsLinkForE2E({
       where id = $5
       returning id
     `,
-    [
-      E2E_CONTENT_DEPLOYMENT_KEY,
-      foundry.id,
-      CONTRACT_ADDRESSES.ContentRegistry.toLowerCase(),
-      contentId,
-      detailsId,
-    ],
+    [E2E_CONTENT_DEPLOYMENT_KEY, foundry.id, CONTRACT_ADDRESSES.ContentRegistry.toLowerCase(), contentId, detailsId],
   );
   expect(linked.rowCount, "current gated question details should be linked to the submitted content").toBe(1);
   await upsertQuestionConfidentialityForE2E({
@@ -755,10 +757,11 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
     chain_id: number | null;
     content_registry_address: string | null;
     deployment_key: string;
+    frontend_address: string;
     viewed_at: Date | string;
   }>(
     `
-      select chain_id, content_registry_address, deployment_key, viewed_at
+      select chain_id, content_registry_address, deployment_key, frontend_address, viewed_at
         from confidential_context_access_logs
        where view_token = $1
        limit 1
@@ -769,6 +772,7 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
 
   const accessLog = accessResult.rows[0]!;
   const deploymentKey = accessLog.deployment_key;
+  const frontendAddress = getAddress(accessLog.frontend_address);
   const viewedAt = new Date(accessLog.viewed_at);
   const epoch = viewedAt.toISOString().slice(0, 10);
   const intervalStart = new Date(`${epoch}T00:00:00.000Z`);
@@ -778,19 +782,21 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
       select count(*)::text as count
         from confidential_context_access_logs
        where deployment_key = $1
-         and viewed_at >= $2
-         and viewed_at < $3
+         and frontend_address = $2
+         and viewed_at >= $3
+         and viewed_at < $4
     `,
-    [deploymentKey, intervalStart, intervalEnd],
+    [deploymentKey, frontendAddress, intervalStart, intervalEnd],
   );
   const merkleRoot = sha256Hex(`e2e-confidentiality-log-root:${deploymentKey}:${epoch}`);
   const artifactUrl = `https://rateloop.ai/api/confidentiality/log-roots/${epoch}/artifact?deploymentKey=${encodeURIComponent(
     deploymentKey,
-  )}`;
+  )}&frontendAddress=${frontendAddress}`;
   const artifact = {
-    schemaVersion: "rateloop.confidentiality-log-root.v2",
+    schemaVersion: "rateloop.confidentiality-log-root.v3",
     epoch,
     deploymentKey,
+    frontendAddress,
     chainId: accessLog.chain_id,
     contentRegistryAddress: accessLog.content_registry_address,
     intervalStart: intervalStart.toISOString(),
@@ -807,6 +813,7 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
     `
       insert into confidentiality_log_roots (
         deployment_key,
+        frontend_address,
         chain_id,
         content_registry_address,
         epoch,
@@ -823,8 +830,8 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
         published_at,
         created_at
       )
-      values ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, 31337, $10, $11, now(), now(), now())
-      on conflict (deployment_key, epoch) do update set
+      values ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10, 31337, $11, $12, now(), now(), now())
+      on conflict (deployment_key, frontend_address, epoch) do update set
         anchor_chain_id = excluded.anchor_chain_id,
         anchor_contract = excluded.anchor_contract,
         anchor_tx_hash = excluded.anchor_tx_hash,
@@ -836,6 +843,7 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
     `,
     [
       deploymentKey,
+      frontendAddress,
       accessLog.chain_id,
       accessLog.content_registry_address,
       epoch,

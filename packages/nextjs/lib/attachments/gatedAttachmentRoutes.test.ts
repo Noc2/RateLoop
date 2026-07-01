@@ -36,6 +36,7 @@ const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalConfidentialitySecret = env.RATELOOP_CONFIDENTIALITY_SECRET;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalLocalImageDir = env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
 
 const ATTACHMENT_ID = "att_routegateimage01";
@@ -47,6 +48,7 @@ const DETAILS_TEXT = "Sensitive unreleased positioning copy.";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 const RATER_WALLET = "0x2234567890abcdef1234567890abcdef12345678" as const;
 const IDENTITY_KEY = `0x${"a".repeat(64)}` as const;
+const FRONTEND_ADDRESS = "0x3333333333333333333333333333333333333333" as const;
 
 let tempDir: string | null = null;
 
@@ -189,6 +191,7 @@ async function acceptTermsAndBuildCookie(nonce: string, walletAddress: `0x${stri
       contentId: CONTENT_ID,
       deploymentKey: scope.deploymentKey,
       detailsHash: null,
+      frontendAddress: FRONTEND_ADDRESS,
       identityKey: null,
       mediaTupleHash: null,
       normalizedAddress: walletAddress,
@@ -208,6 +211,7 @@ beforeEach(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "test";
   env.RATELOOP_CONFIDENTIALITY_SECRET = "test-confidentiality-route-secret";
+  env.NEXT_PUBLIC_FRONTEND_CODE = FRONTEND_ADDRESS;
   env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   __setConfidentialityOnchainGateForTests({
@@ -231,6 +235,7 @@ after(async () => {
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("RATELOOP_CONFIDENTIALITY_SECRET", originalConfidentialitySecret);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR", originalLocalImageDir);
 });
 

@@ -106,6 +106,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const viewToken = createConfidentialViewToken({
       contentId: details.contentId,
       deploymentKey: authorization.deploymentKey,
+      frontendAddress: authorization.frontendAddress,
       identityKey: authorization.identityKey,
       resourceId: details.id,
       walletAddress: authorization.walletAddress,
@@ -114,6 +115,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...detailsDeploymentScope,
       contentId: details.contentId,
       deploymentKey: authorization.deploymentKey,
+      frontendAddress: authorization.frontendAddress,
       identityKey: authorization.identityKey,
       request,
       resourceId: details.id,

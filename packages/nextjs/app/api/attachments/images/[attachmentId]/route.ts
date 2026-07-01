@@ -144,6 +144,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const viewToken = createConfidentialViewToken({
         contentId: attachment.contentId,
         deploymentKey: gatedAuth.deploymentKey,
+        frontendAddress: gatedAuth.frontendAddress,
         identityKey: gatedAuth.identityKey,
         resourceId: attachment.id,
         walletAddress: gatedAuth.walletAddress,
@@ -152,6 +153,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         ...attachmentDeploymentScope,
         contentId: attachment.contentId,
         deploymentKey: gatedAuth.deploymentKey,
+        frontendAddress: gatedAuth.frontendAddress,
         identityKey: gatedAuth.identityKey,
         request,
         resourceId: attachment.id,
@@ -230,6 +232,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const viewToken = createConfidentialViewToken({
       contentId: attachment.contentId,
       deploymentKey: gatedAuth.deploymentKey,
+      frontendAddress: gatedAuth.frontendAddress,
       identityKey: gatedAuth.identityKey,
       resourceId: attachment.id,
       walletAddress: gatedAuth.walletAddress,
@@ -238,6 +241,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...attachmentDeploymentScope,
       contentId: attachment.contentId,
       deploymentKey: gatedAuth.deploymentKey,
+      frontendAddress: gatedAuth.frontendAddress,
       identityKey: gatedAuth.identityKey,
       request,
       resourceId: attachment.id,

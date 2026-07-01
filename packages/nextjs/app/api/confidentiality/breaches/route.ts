@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
 import {
   confidentialityEpochForDate,
+  resolveConfidentialityFrontendAddress,
   resolveCurrentConfidentialityDeploymentScope,
 } from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
@@ -55,6 +56,7 @@ function accessLogLeafHash(params: {
   contentId: string;
   contentRegistryAddress: string | null;
   deploymentKey: string;
+  frontendAddress: string;
   identityKey: string;
   resourceId: string;
   resourceKind: string;
@@ -67,6 +69,7 @@ function accessLogLeafHash(params: {
       JSON.stringify([
         "access",
         params.deploymentKey,
+        params.frontendAddress,
         params.chainId,
         params.contentRegistryAddress,
         params.walletAddress,
@@ -98,7 +101,8 @@ export async function GET(request: NextRequest) {
   }
 
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
-  if (!deploymentScope) {
+  const frontendAddress = resolveConfidentialityFrontendAddress();
+  if (!deploymentScope || !frontendAddress) {
     return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
   }
 
@@ -108,6 +112,7 @@ export async function GET(request: NextRequest) {
     .where(
       and(
         eq(confidentialityBreachReports.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialityBreachReports.frontendAddress, frontendAddress),
         eq(confidentialityBreachReports.contentId, contentId),
       ),
     )
@@ -172,7 +177,8 @@ export async function POST(request: NextRequest) {
   }
 
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
-  if (!deploymentScope) {
+  const frontendAddress = resolveConfidentialityFrontendAddress();
+  if (!deploymentScope || !frontendAddress) {
     return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
   }
 
@@ -191,6 +197,7 @@ export async function POST(request: NextRequest) {
       chainId: confidentialContextAccessLogs.chainId,
       contentRegistryAddress: confidentialContextAccessLogs.contentRegistryAddress,
       deploymentKey: confidentialContextAccessLogs.deploymentKey,
+      frontendAddress: confidentialContextAccessLogs.frontendAddress,
       id: confidentialContextAccessLogs.id,
       identityKey: confidentialContextAccessLogs.identityKey,
       resourceId: confidentialContextAccessLogs.resourceId,
@@ -203,6 +210,7 @@ export async function POST(request: NextRequest) {
       and(
         eq(confidentialContextAccessLogs.viewToken, viewTokenResult.viewToken),
         eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialContextAccessLogs.frontendAddress, frontendAddress),
         eq(confidentialContextAccessLogs.contentId, contentId),
         eq(confidentialContextAccessLogs.identityKey, accusedIdentityKey),
       ),
@@ -215,6 +223,7 @@ export async function POST(request: NextRequest) {
 
   const accessIdentityKey = accessLog.identityKey ?? accusedIdentityKey;
   const accessDeploymentKey = accessLog.deploymentKey ?? deploymentScope.deploymentKey;
+  const accessFrontendAddress = accessLog.frontendAddress;
   const epoch = confidentialityEpochForDate(accessLog.viewedAt);
   const [root] = await db
     .select({
@@ -227,12 +236,17 @@ export async function POST(request: NextRequest) {
       chainId: confidentialityLogRoots.chainId,
       contentRegistryAddress: confidentialityLogRoots.contentRegistryAddress,
       deploymentKey: confidentialityLogRoots.deploymentKey,
+      frontendAddress: confidentialityLogRoots.frontendAddress,
       merkleRoot: confidentialityLogRoots.merkleRoot,
       publishedAt: confidentialityLogRoots.publishedAt,
     })
     .from(confidentialityLogRoots)
     .where(
-      and(eq(confidentialityLogRoots.deploymentKey, accessDeploymentKey), eq(confidentialityLogRoots.epoch, epoch)),
+      and(
+        eq(confidentialityLogRoots.deploymentKey, accessDeploymentKey),
+        eq(confidentialityLogRoots.frontendAddress, accessFrontendAddress),
+        eq(confidentialityLogRoots.epoch, epoch),
+      ),
     )
     .limit(1);
 
@@ -248,6 +262,7 @@ export async function POST(request: NextRequest) {
     schemaVersion: BREACH_EVIDENCE_SCHEMA_VERSION,
     contentId,
     deploymentKey: accessDeploymentKey,
+    frontendAddress: accessFrontendAddress,
     accusedIdentityKey,
     reporter,
     createdAt: now.toISOString(),
@@ -260,6 +275,7 @@ export async function POST(request: NextRequest) {
       contentId: accessLog.contentId,
       contentRegistryAddress: accessLog.contentRegistryAddress,
       deploymentKey: accessDeploymentKey,
+      frontendAddress: accessFrontendAddress,
       id: accessLog.id,
       identityKey: accessIdentityKey,
       resourceId: accessLog.resourceId,
@@ -272,6 +288,7 @@ export async function POST(request: NextRequest) {
         contentId: accessLog.contentId,
         contentRegistryAddress: accessLog.contentRegistryAddress,
         deploymentKey: accessDeploymentKey,
+        frontendAddress: accessFrontendAddress,
         identityKey: accessIdentityKey,
         resourceId: accessLog.resourceId,
         resourceKind: accessLog.resourceKind,
@@ -292,6 +309,7 @@ export async function POST(request: NextRequest) {
       chainId: root.chainId,
       contentRegistryAddress: root.contentRegistryAddress,
       deploymentKey: root.deploymentKey,
+      frontendAddress: root.frontendAddress,
       epoch,
       merkleRoot: root.merkleRoot,
       publishedAt: root.publishedAt.toISOString(),
@@ -317,6 +335,7 @@ export async function POST(request: NextRequest) {
       epoch,
       evidenceHash,
       evidenceUrl,
+      frontendAddress: accessFrontendAddress,
       proof,
       reporter,
       status: "evidence_artifact_published",
