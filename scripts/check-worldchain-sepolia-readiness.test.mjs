@@ -159,6 +159,12 @@ function mockRpc(handler) {
   globalThis.fetch = async (_url, options = {}) => {
     const body = JSON.parse(options.body);
     const result = handler(body.method, body.params ?? []);
+    if (result && typeof result === "object" && "httpStatus" in result) {
+      return new Response(result.body ?? "", {
+        headers: result.headers ?? {},
+        status: result.httpStatus,
+      });
+    }
     const responseBody =
       result && typeof result === "object" && "error" in result
         ? { jsonrpc: "2.0", id: body.id, error: result.error }
@@ -724,6 +730,58 @@ test("validateLiveReadiness can skip missing targets for ad-hoc local use", asyn
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.failures, []);
+});
+
+test("validateLiveReadiness retries transient RPC HTTP rate limits", async () => {
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const submissionMediaValidatorAddress = addressFor(102);
+  let chainIdAttempts = 0;
+  const restoreFetch = mockRpc((method, params) => {
+    if (method === "eth_chainId") {
+      chainIdAttempts += 1;
+      if (chainIdAttempts === 1) {
+        return { httpStatus: 429, headers: { "retry-after": "0" } };
+      }
+      return "0x12c1";
+    }
+    if (method === "eth_call") {
+      if (
+        params[0].to === contentRegistryAddress &&
+        params[0].data === "0x738dbaa0"
+      ) {
+        return encodeStorageAddress(submissionMediaValidatorAddress);
+      }
+      if (
+        params[0].to === submissionMediaValidatorAddress &&
+        params[0].data === "0xb717bbbd"
+      ) {
+        return encodeStorageAddress(contentRegistryAddress);
+      }
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses);
+      if (wiringResult) return wiringResult;
+      throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
+    }
+    if (method === "eth_getStorageAt") {
+      assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
+      return encodeStorageAddress(addressFor(0));
+    }
+    if (method === "eth_getCode") return selectorBytecode();
+    throw new Error(`Unexpected RPC method ${method}`);
+  });
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      rpcUrl: "https://rpc.example",
+    });
+
+    assert.equal(result.ok, true, result.failures.join("\n"));
+    assert.equal(chainIdAttempts, 2);
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("validateLiveReadiness fails closed when required live targets are missing", async () => {
@@ -1369,28 +1427,42 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
     assert(
       result.failures.some((message) =>
         message.includes(
-          "X402QuestionSubmitter bytecode contains selector 0x1c2fa657",
+          "X402QuestionSubmitter bytecode contains selector 0x9892be28",
         ),
       ),
     );
     assert(
       result.failures.some((message) =>
         message.includes(
-          "X402QuestionSubmitter bytecode contains selector 0x61b030bc",
+          "X402QuestionSubmitter bytecode contains selector 0xdc7c61c6",
         ),
       ),
     );
     assert(
       result.failures.some((message) =>
         message.includes(
-          "X402QuestionSubmitter bytecode contains selector 0x2248a6e6",
+          "X402QuestionSubmitter bytecode contains selector 0x2dddea2d",
         ),
       ),
     );
     assert(
       result.failures.some((message) =>
         message.includes(
-          "X402QuestionSubmitter bytecode contains selector 0x834f6ea9",
+          "X402QuestionSubmitter bytecode contains selector 0xec7b44ac",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "X402QuestionSubmitter bytecode contains selector 0x3a8bbd4e",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "X402QuestionSubmitter bytecode contains selector 0x2a78c73f",
         ),
       ),
     );
@@ -1404,14 +1476,14 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
     assert(
       result.failures.some((message) =>
         message.includes(
-          "ContentRegistry implementation bytecode contains selector 0x774922ea",
+          "ContentRegistry implementation bytecode contains selector 0xe2f3b89f",
         ),
       ),
     );
     assert(
       result.failures.some((message) =>
         message.includes(
-          "ConfidentialityEscrow implementation bytecode contains selector 0xe3de2a7a",
+          "ConfidentialityEscrow implementation bytecode contains selector 0xba8520a2",
         ),
       ),
     );
