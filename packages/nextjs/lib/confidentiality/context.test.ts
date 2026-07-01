@@ -146,6 +146,14 @@ async function insertLegacyQuestionConfidentiality(params: {
   `);
 }
 
+async function dropQuestionConfidentialityFrontendScopeColumn() {
+  await dbModule.dbClient.execute('DROP INDEX IF EXISTS "question_confidentiality_deployment_content_unique"');
+  await dbModule.dbClient.execute('DROP INDEX IF EXISTS "question_confidentiality_deployment_content_idx"');
+  await dbModule.dbClient.execute('DROP INDEX IF EXISTS "question_confidentiality_deployment_gated_published_idx"');
+  await dbModule.dbClient.execute('ALTER TABLE "question_confidentiality" DROP COLUMN IF EXISTS "frontend_address"');
+  confidentiality.__resetConfidentialityFrontendScopeSchemaReadyForTests();
+}
+
 function installConfidentialityGate(
   params: {
     banned?: boolean;
@@ -196,6 +204,7 @@ beforeEach(async () => {
   await clearTables();
   confidentiality.__setConfidentialityOnchainGateForTests(null);
   confidentiality.__setConfidentialitySettledAtLookupForTests(null);
+  confidentiality.__resetConfidentialityFrontendScopeSchemaReadyForTests();
   delete env.RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY;
 });
 
@@ -233,6 +242,77 @@ test("resolves explicit confidentiality deployment scopes when multiple target n
   } finally {
     restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", previousTargetNetworks);
   }
+});
+
+test("repairs pending frontend-scope schema before confidentiality metadata upsert", async () => {
+  const deploymentScope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(deploymentScope);
+
+  await dropQuestionConfidentialityFrontendScopeColumn();
+  await dbModule.dbClient.execute({
+    sql: `
+      INSERT INTO "question_confidentiality" (
+        "deployment_key",
+        "chain_id",
+        "content_registry_address",
+        "content_id",
+        "gated",
+        "bond_asset",
+        "bond_amount",
+        "disclosure_policy",
+        "published_at",
+        "question_metadata_hash",
+        "content_hash",
+        "details_hash",
+        "media_tuple_hash",
+        "created_at",
+        "updated_at"
+      )
+      VALUES (?, ?, ?, ?, false, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      deploymentScope.deploymentKey,
+      deploymentScope.chainId,
+      deploymentScope.contentRegistryAddress,
+      CONTENT_ID,
+      "USDC",
+      "0",
+      "private_forever",
+      new Date("2026-06-01T00:00:00.000Z"),
+      null,
+      null,
+      null,
+      null,
+      new Date("2026-06-01T00:00:00.000Z"),
+      new Date("2026-06-01T00:00:00.000Z"),
+    ],
+  });
+
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+      contentHash: `0x${"1".repeat(64)}`,
+      detailsHash: `0x${"2".repeat(64)}`,
+      mediaTupleHash: `0x${"3".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"4".repeat(64)}`,
+  });
+
+  const record = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(record?.frontendAddress, FRONTEND_ADDRESS);
+  assert.equal(record?.gated, true);
+  assert.equal(record?.disclosurePolicy, "after_settlement");
+
+  const rows = await dbModule.dbClient.execute({
+    sql: 'SELECT "frontend_address" FROM "question_confidentiality" WHERE "content_id" = ?',
+    args: [CONTENT_ID],
+  });
+  assert.equal(rows.rows[0]?.frontend_address, FRONTEND_ADDRESS);
 });
 
 test("upserts gated metadata and flips disclosure after settlement", async () => {

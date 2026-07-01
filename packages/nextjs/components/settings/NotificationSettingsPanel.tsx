@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BellAlertIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
+import {
+  getEmailNotificationPrimaryActionLabel,
+  getEmailNotificationStatusText,
+  isEmailNotificationPrimaryActionDisabled,
+} from "~~/components/settings/NotificationSettingsPanel.helpers";
 import { GradientActionButton } from "~~/components/shared/GradientAction";
 import { useEmailNotificationSettings } from "~~/hooks/useEmailNotificationSettings";
 import { type NotificationPreferences, useNotificationPreferences } from "~~/hooks/useNotificationPreferences";
@@ -230,6 +235,17 @@ export function NotificationSettingsPanel({
     emailPayload.settlingSoonDay !== emailSettings.settlingSoonDay ||
     emailPayload.followedSubmission !== emailSettings.followedSubmission ||
     emailPayload.followedResolution !== emailSettings.followedResolution;
+  const emailPrimaryActionLabel = getEmailNotificationPrimaryActionLabel({
+    draftEmail: emailPayload.email,
+    savedEmail: emailSettings.email,
+    isSaving: isEmailSaving,
+  });
+  const emailPrimaryActionDisabled = isEmailNotificationPrimaryActionDisabled({
+    draftEmail: emailPayload.email,
+    emailDirty,
+    isSaving: isEmailSaving,
+    savedEmail: emailSettings.email,
+  });
 
   const handleSaveEmailSettings = useCallback(async () => {
     const result = await updateEmailSettings(emailPayload);
@@ -352,11 +368,7 @@ export function NotificationSettingsPanel({
             <h2 className="mt-3 text-xl font-semibold text-base-content">Email Notifications</h2>
           </div>
           <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/75">
-            {!emailSettings.email
-              ? "No email configured yet."
-              : emailSettings.verified
-                ? `Verified: ${emailSettings.email}`
-                : `Verification pending for ${emailSettings.email}`}
+            {getEmailNotificationStatusText(emailSettings)}
           </div>
         </div>
 
@@ -404,14 +416,15 @@ export function NotificationSettingsPanel({
           ) : null}
 
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
+            <GradientActionButton
+              className="max-w-full"
+              innerClassName="text-center"
+              motion={isEmailSaving ? "processing" : "idle"}
               onClick={() => void handleSaveEmailSettings()}
-              disabled={isEmailSaving || (!emailDirty && emailPayload.email.length > 0)}
-              className="btn btn-submit disabled:bg-base-content/60 disabled:text-base-100/70"
+              disabled={emailPrimaryActionDisabled}
             >
-              {isEmailSaving ? "Saving..." : emailPayload.email ? "Save email settings" : "Remove email notifications"}
-            </button>
+              {emailPrimaryActionLabel}
+            </GradientActionButton>
             {!emailSettings.verified && hasEmail ? (
               <button
                 type="button"

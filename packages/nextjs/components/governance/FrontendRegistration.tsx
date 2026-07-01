@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isAddress } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, useBalance } from "wagmi";
 import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
@@ -26,6 +26,7 @@ import {
   isInsufficientFundsError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
+import { formatEthTokenAmount } from "~~/lib/ui/tokenAmountDisplay";
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
@@ -36,11 +37,45 @@ function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function FrontendOperatorAddressRow({ label, address }: { label?: string; address?: string }) {
+function formatEthBalanceLabel(value: bigint | undefined) {
+  if (value === undefined) return "Loading ETH";
+  if (value === 0n) return "0 ETH";
+
+  const formatted = formatEthTokenAmount(value);
+  return `${formatted === "0.0000" ? "<0.0001" : formatted} ETH`;
+}
+
+function FrontendOperatorAddressRow({
+  label,
+  address,
+  showNativeBalance = false,
+}: {
+  label?: string;
+  address?: string;
+  showNativeBalance?: boolean;
+}) {
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard();
+  const { targetNetwork } = useTargetNetwork();
+  const walletAddress = address && isAddress(address) ? (address as `0x${string}`) : undefined;
+  const { data: nativeBalance, isLoading: nativeBalanceLoading } = useBalance({
+    address: walletAddress,
+    chainId: targetNetwork.id,
+    query: {
+      enabled: Boolean(showNativeBalance && walletAddress),
+    },
+  });
+  const nativeBalanceValue = nativeBalance?.value;
+  const shouldShowNativeBalance = Boolean(showNativeBalance && walletAddress);
+  const nativeBalanceIsZero = nativeBalanceValue === 0n;
+  const nativeBalanceLabel =
+    nativeBalanceValue !== undefined
+      ? formatEthBalanceLabel(nativeBalanceValue)
+      : nativeBalanceLoading
+        ? "Loading ETH"
+        : "ETH unavailable";
 
   return (
-    <div className="flex items-center gap-2 text-base">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-base">
       {label && <span className="text-base-content/60">{label}</span>}
       {address ? (
         <>
@@ -57,6 +92,16 @@ function FrontendOperatorAddressRow({ label, address }: { label?: string; addres
           >
             {isCopiedToClipboard ? <CheckIcon className="h-4 w-4" /> : <ClipboardDocumentIcon className="h-4 w-4" />}
           </button>
+          {shouldShowNativeBalance && (
+            <span
+              className={`font-mono text-sm tabular-nums ${
+                nativeBalanceIsZero ? "font-semibold text-error" : "text-base-content/60"
+              }`}
+              title={nativeBalanceValue === undefined ? undefined : `${nativeBalanceValue.toString()} wei`}
+            >
+              {nativeBalanceLabel}
+            </span>
+          )}
         </>
       ) : (
         <span className="text-base-content/50">Sign in</span>
@@ -894,7 +939,7 @@ export function FrontendRegistration() {
                 </p>
               </div>
               {snapshotProposer ? (
-                <FrontendOperatorAddressRow address={snapshotProposer} />
+                <FrontendOperatorAddressRow address={snapshotProposer} showNativeBalance />
               ) : (
                 <span className="rounded-full bg-base-200 px-2 py-0.5 text-sm text-base-content/60">Not set</span>
               )}
@@ -966,7 +1011,7 @@ export function FrontendRegistration() {
                 </p>
               </div>
               {accessRecorder ? (
-                <FrontendOperatorAddressRow address={accessRecorder} />
+                <FrontendOperatorAddressRow address={accessRecorder} showNativeBalance />
               ) : (
                 <span className="rounded-full bg-base-200 px-2 py-0.5 text-sm text-base-content/60">Not set</span>
               )}

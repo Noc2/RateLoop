@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
+import { assertConfidentialityFrontendScopeSchemaReady } from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
 import { confidentialityLogRoots } from "~~/lib/db/schema";
 
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const deploymentKey = readDeploymentKey(request);
   const frontendAddress = readFrontendAddress(request);
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const rows = await db
     .select({
       artifactHash: confidentialityLogRoots.artifactHash,

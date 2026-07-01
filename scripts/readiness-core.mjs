@@ -136,17 +136,19 @@ export const REQUIRED_SELECTOR_CHECKS = [
   {
     contractName: "X402QuestionSubmitter",
     selectors: [
-      "0x1c2fa657", // computeX402QuestionPaymentNonce with confidentiality config
-      "0x61b030bc", // submitQuestionWithX402Payment with confidentiality config
-      "0x2248a6e6", // submitQuestionWithX402OneShotPayment without confidentiality config
-      "0x834f6ea9", // submitQuestionWithX402OneShotPayment with confidentiality config
+      "0x9892be28", // computeX402QuestionPaymentNonce without confidentiality config
+      "0xdc7c61c6", // computeX402QuestionPaymentNonce with confidentiality config
+      "0x2dddea2d", // submitQuestionWithX402Payment without confidentiality config
+      "0xec7b44ac", // submitQuestionWithX402Payment with confidentiality config
+      "0x3a8bbd4e", // submitQuestionWithX402OneShotPayment without confidentiality config
+      "0x2a78c73f", // submitQuestionWithX402OneShotPayment with confidentiality config
       "0x8de79fb5", // feedbackBonusEscrow()
     ],
   },
   {
     contractName: "ContentRegistry",
     selectors: [
-      "0x774922ea", // submitQuestionWithRewardAndRoundConfig with confidentiality config
+      "0xe2f3b89f", // submitQuestionWithRewardAndRoundConfig with confidentiality config
     ],
   },
   {
@@ -188,16 +190,6 @@ export const REQUIRED_REMOVED_POST_CREATION_FUNDING_SELECTORS = [
     contractName: "QuestionRewardPoolEscrow",
     selector: "0x211d3e3f",
     label: "QuestionRewardPoolEscrow createPurposeRewardPool",
-  },
-  {
-    contractName: "FeedbackBonusEscrow",
-    selector: "0x12462f17",
-    label: "FeedbackBonusEscrow createFeedbackBonusPool",
-  },
-  {
-    contractName: "FeedbackBonusEscrow",
-    selector: "0x5714f732",
-    label: "FeedbackBonusEscrow createFeedbackBonusPoolWithAsset",
   },
   {
     contractName: "FeedbackBonusEscrow",
@@ -892,15 +884,48 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(value) {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, 10_000);
+  }
+
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    return Math.min(Math.max(dateMs - Date.now(), 0), 10_000);
+  }
+  return undefined;
+}
+
 async function rpcRaw(rpcUrl, method, params = []) {
-  const response = await fetchWithTimeout(rpcUrl, {
-    method: "POST",
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    headers: { "content-type": "application/json" },
-  });
-  if (!response.ok)
-    throw new Error(`${method} returned HTTP ${response.status}`);
-  return response.json();
+  const maxAttempts = 6;
+  let lastStatus;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await fetchWithTimeout(rpcUrl, {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: attempt, method, params }),
+      headers: { "content-type": "application/json" },
+    });
+    if (response.ok) return response.json();
+
+    lastStatus = response.status;
+    const retryable =
+      response.status === 429 ||
+      response.status === 502 ||
+      response.status === 503 ||
+      response.status === 504;
+    if (!retryable || attempt === maxAttempts) {
+      throw new Error(`${method} returned HTTP ${response.status}`);
+    }
+    const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+    await sleep(retryAfterMs ?? Math.min(1000 * 2 ** (attempt - 1), 12_000));
+  }
+  throw new Error(`${method} returned HTTP ${lastStatus ?? "unknown"}`);
 }
 
 async function rpc(rpcUrl, method, params = []) {

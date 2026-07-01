@@ -30,7 +30,7 @@ import {
   CONFIDENTIALITY_TERMS_URI,
   CONFIDENTIALITY_TERMS_VERSION,
 } from "~~/lib/confidentiality/terms";
-import { db } from "~~/lib/db";
+import { db, dbClient } from "~~/lib/db";
 import {
   confidentialContextAccessLogs,
   confidentialityLogRoots,
@@ -54,6 +54,36 @@ const BYTES32_HEX_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const CONTENT_ID_PATTERN = /^[0-9]{1,78}$/;
 const RESOURCE_ID_PATTERN = /^(att|det)_[A-Za-z0-9_-]{16,80}$/;
 const CONFIDENTIAL_CONTEXT_ACCESS_LOG_DEDUPE_MS = 60_000;
+const CONFIDENTIALITY_FRONTEND_SCOPE_TABLES = [
+  "question_confidentiality",
+  "confidentiality_terms_acceptances",
+  "confidential_context_access_logs",
+  "confidentiality_breach_reports",
+  "confidentiality_log_roots",
+] as const;
+const CONFIDENTIALITY_FRONTEND_SCOPE_INDEX_STATEMENTS = [
+  'DROP INDEX IF EXISTS "question_confidentiality_deployment_content_unique"',
+  'DROP INDEX IF EXISTS "question_confidentiality_deployment_content_idx"',
+  'DROP INDEX IF EXISTS "question_confidentiality_deployment_gated_published_idx"',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "question_confidentiality_deployment_content_unique" ON "question_confidentiality" ("deployment_key","frontend_address","content_id")',
+  'CREATE INDEX IF NOT EXISTS "question_confidentiality_deployment_content_idx" ON "question_confidentiality" ("deployment_key","frontend_address","content_id")',
+  'CREATE INDEX IF NOT EXISTS "question_confidentiality_deployment_gated_published_idx" ON "question_confidentiality" ("deployment_key","frontend_address","gated","published_at")',
+  'DROP INDEX IF EXISTS "confidentiality_terms_deployment_wallet_content_terms_unique"',
+  'DROP INDEX IF EXISTS "confidentiality_terms_deployment_content_identity_idx"',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "confidentiality_terms_deployment_wallet_content_terms_unique" ON "confidentiality_terms_acceptances" ("deployment_key","frontend_address","wallet_address","content_id","terms_version")',
+  'CREATE INDEX IF NOT EXISTS "confidentiality_terms_deployment_content_identity_idx" ON "confidentiality_terms_acceptances" ("deployment_key","frontend_address","content_id","identity_key")',
+  'DROP INDEX IF EXISTS "confidential_access_deployment_content_viewed_idx"',
+  'DROP INDEX IF EXISTS "confidential_access_deployment_identity_content_idx"',
+  'CREATE INDEX IF NOT EXISTS "confidential_access_deployment_content_viewed_idx" ON "confidential_context_access_logs" ("deployment_key","frontend_address","content_id","viewed_at")',
+  'CREATE INDEX IF NOT EXISTS "confidential_access_deployment_identity_content_idx" ON "confidential_context_access_logs" ("deployment_key","frontend_address","identity_key","content_id")',
+  'DROP INDEX IF EXISTS "confidentiality_breach_deployment_content_status_idx"',
+  'CREATE INDEX IF NOT EXISTS "confidentiality_breach_deployment_content_status_idx" ON "confidentiality_breach_reports" ("deployment_key","frontend_address","content_id","status")',
+  'ALTER TABLE "confidentiality_log_roots" DROP CONSTRAINT IF EXISTS "confidentiality_log_roots_deployment_epoch_pk"',
+  'ALTER TABLE "confidentiality_log_roots" DROP CONSTRAINT IF EXISTS "confidentiality_log_roots_deployment_frontend_epoch_pk"',
+  'ALTER TABLE "confidentiality_log_roots" ADD CONSTRAINT "confidentiality_log_roots_deployment_frontend_epoch_pk" PRIMARY KEY ("deployment_key","frontend_address","epoch")',
+  'DROP INDEX IF EXISTS "confidentiality_log_roots_deployment_published_idx"',
+  'CREATE INDEX IF NOT EXISTS "confidentiality_log_roots_deployment_published_idx" ON "confidentiality_log_roots" ("deployment_key","frontend_address","published_at")',
+] as const;
 
 export type DisclosurePolicy = "after_settlement" | "private_forever";
 export type ResourceKind = "image" | "details";
@@ -118,6 +148,86 @@ type ConfidentialityOnchainGate = {
 };
 
 type GateReadResult<T> = { ok: true; value: T } | { ok: false; error: string };
+type ErrorWithCause = { cause?: unknown; code?: unknown; message?: unknown };
+
+let confidentialityFrontendScopeSchemaReadyPromise: Promise<void> | null = null;
+
+function isMissingConfidentialityFrontendScopeSchemaError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as ErrorWithCause;
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const mentionsFrontendColumn = message.includes("frontend_address");
+  const mentionsConfidentialityTable = CONFIDENTIALITY_FRONTEND_SCOPE_TABLES.some(table => message.includes(table));
+
+  if ((code === "42703" || code === "42P01") && (mentionsFrontendColumn || mentionsConfidentialityTable)) {
+    return true;
+  }
+  if (message.includes("column") && message.includes("does not exist") && mentionsFrontendColumn) {
+    return true;
+  }
+  if (message.includes("relation") && message.includes("does not exist") && mentionsConfidentialityTable) {
+    return true;
+  }
+
+  return depth < 3 && candidate.cause !== undefined
+    ? isMissingConfidentialityFrontendScopeSchemaError(candidate.cause, depth + 1)
+    : false;
+}
+
+async function checkConfidentialityFrontendScopeSchemaReady() {
+  for (const table of CONFIDENTIALITY_FRONTEND_SCOPE_TABLES) {
+    await dbClient.execute(`SELECT "frontend_address" FROM "${table}" LIMIT 0`);
+  }
+}
+
+async function applyPendingConfidentialityFrontendScopeMigration(frontendAddress: `0x${string}`) {
+  for (const table of CONFIDENTIALITY_FRONTEND_SCOPE_TABLES) {
+    await dbClient.execute(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "frontend_address" text`);
+    await dbClient.execute({
+      sql: `UPDATE "${table}" SET "frontend_address" = ? WHERE "frontend_address" IS NULL`,
+      args: [frontendAddress],
+    });
+    await dbClient.execute(`ALTER TABLE "${table}" ALTER COLUMN "frontend_address" SET NOT NULL`);
+  }
+
+  for (const statement of CONFIDENTIALITY_FRONTEND_SCOPE_INDEX_STATEMENTS) {
+    await dbClient.execute(statement);
+  }
+}
+
+export async function assertConfidentialityFrontendScopeSchemaReady(frontendAddress?: string | null) {
+  const backfillFrontendAddress = normalizeFrontendAddress(frontendAddress) ?? resolveConfidentialityFrontendAddress();
+  if (!backfillFrontendAddress) return;
+
+  confidentialityFrontendScopeSchemaReadyPromise ??= (async () => {
+    try {
+      await checkConfidentialityFrontendScopeSchemaReady();
+      return;
+    } catch (error) {
+      if (!isMissingConfidentialityFrontendScopeSchemaError(error)) {
+        throw error;
+      }
+    }
+
+    try {
+      await applyPendingConfidentialityFrontendScopeMigration(backfillFrontendAddress);
+      await checkConfidentialityFrontendScopeSchemaReady();
+    } catch (migrationError) {
+      console.error("[confidentiality] Failed to apply pending frontend-scope migration", migrationError);
+      throw migrationError;
+    }
+  })().catch(error => {
+    confidentialityFrontendScopeSchemaReadyPromise = null;
+    throw error;
+  });
+  await confidentialityFrontendScopeSchemaReadyPromise;
+}
+
+export function __resetConfidentialityFrontendScopeSchemaReadyForTests() {
+  confidentialityFrontendScopeSchemaReadyPromise = null;
+}
 
 const PROTOCOL_CONFIG_CONFIDENTIALITY_ABI = [
   {
@@ -505,6 +615,7 @@ export async function getQuestionConfidentiality(contentId: string, options: Con
   const frontendAddress = resolveConfidentialityFrontendAddress(options);
   if (!normalizedContentId || !deploymentScope || !frontendAddress) return null;
 
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const [exactRecord] = await db
     .select()
     .from(questionConfidentiality)
@@ -559,6 +670,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
   const deploymentScope = resolveConfidentialityDeploymentScope(params);
   if (!deploymentScope) return;
   const frontendAddress = requireConfidentialityFrontendAddress(params);
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
 
   const metadata = params.metadata as Record<string, unknown>;
   const confidentiality = parseMetadataConfidentiality(metadata.confidentiality);
@@ -624,6 +736,7 @@ export async function hasConfidentialityTermsAcceptance(params: {
   const frontendAddress = resolveConfidentialityFrontendAddress(params);
   if (!deploymentScope || !frontendAddress) return false;
 
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const commonConditions = [
     eq(confidentialityTermsAcceptances.deploymentKey, deploymentScope.deploymentKey),
     eq(confidentialityTermsAcceptances.frontendAddress, frontendAddress),
@@ -652,6 +765,7 @@ export async function recordConfidentialityTermsAcceptance(params: {
   const acceptedAt = params.acceptedAt ?? new Date();
   const payloadHash = hashConfidentialityTermsPayload(params.payload);
   const deploymentScope = resolveConfidentialityDeploymentScope({ deploymentKey: params.payload.deploymentKey });
+  await assertConfidentialityFrontendScopeSchemaReady(params.payload.frontendAddress);
   await db
     .insert(confidentialityTermsAcceptances)
     .values({
@@ -1068,6 +1182,7 @@ export async function logConfidentialContextAccess(params: {
   const deploymentScope = resolveConfidentialityDeploymentScope(params);
   const frontendAddress = resolveConfidentialityFrontendAddress(params);
   if (!deploymentScope || !frontendAddress) return;
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const viewedAt = new Date();
   const dedupeSince = new Date(viewedAt.getTime() - CONFIDENTIAL_CONTEXT_ACCESS_LOG_DEDUPE_MS);
   const [recentAccess] = await db
@@ -1113,6 +1228,7 @@ export async function publishConfidentialContextAfterSettlement(params: { conten
   const frontendAddress = resolveConfidentialityFrontendAddress();
   if (!deploymentScope || !frontendAddress) return { published: 0 };
 
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const now = params.settledAt ?? new Date();
   let published = 0;
   for (const contentId of contentIds) {
@@ -1166,6 +1282,7 @@ export async function findDueConfidentialDisclosureContent(params: { limit?: num
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
   const frontendAddress = resolveConfidentialityFrontendAddress();
   if (!deploymentScope || !frontendAddress) return { checked: 0, due: [], errors: [] };
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const candidates = await db
     .select({ contentId: questionConfidentiality.contentId })
     .from(questionConfidentiality)
@@ -1405,6 +1522,7 @@ export async function publishConfidentialityLogRoot(
     throw new Error("Confidentiality deployment is not configured for log-root publishing.");
   }
   const frontendAddress = requireConfidentialityFrontendAddress(params);
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
 
   const acceptances = await db
     .select()

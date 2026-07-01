@@ -263,7 +263,7 @@ type DraftConfidentiality = {
 };
 
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
-const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0x774922ea";
+const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0xe2f3b89f";
 const BUNDLE_QUESTION_SUBMISSION_SELECTOR = "0x4bef7869";
 const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
 const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
@@ -3281,7 +3281,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           </div>
                         ) : null}
 
-                        <label className="form-control mt-4">
+                        <label className={`form-control ${hasQuestionBundle ? "mt-4" : "mt-5"}`}>
                           <span className="label-text flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             <span className="inline-flex items-center gap-1.5">
                               {hasQuestionBundle ? `Question ${index + 1}` : "Question"}

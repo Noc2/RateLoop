@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
 import {
+  assertConfidentialityFrontendScopeSchemaReady,
   confidentialityEpochForDate,
   resolveConfidentialityFrontendAddress,
   resolveCurrentConfidentialityDeploymentScope,
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
   }
 
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const rows = await db
     .select()
     .from(confidentialityBreachReports)
@@ -182,6 +184,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
   }
 
+  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const viewTokenResult = readOptionalViewToken(body.viewToken);
   if (!viewTokenResult.ok) {
     return NextResponse.json({ error: "Invalid view token" }, { status: 400 });

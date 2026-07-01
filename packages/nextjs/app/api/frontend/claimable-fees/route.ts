@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listClaimableFrontendFeeRoundsForRequest } from "./dependencies";
+import { getListClaimableFrontendFeeRoundsForRoute } from "./lookup";
 import { isAddress } from "viem";
 import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
   const offset = Math.max(parseInt(request.nextUrl.searchParams.get("offset") ?? "0") || 0, 0);
 
   try {
-    const result = await listClaimableFrontendFeeRoundsForRequest(frontend, { chainId: parsedChainId, limit, offset });
+    const listClaimableFrontendFeeRoundsForRoute = getListClaimableFrontendFeeRoundsForRoute();
+    const result = await listClaimableFrontendFeeRoundsForRoute(frontend, { chainId: parsedChainId, limit, offset });
     return NextResponse.json(result);
   } catch (error) {
     console.warn("Failed to fetch claimable frontend fees; returning degraded empty response:", error);
