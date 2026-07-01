@@ -234,6 +234,14 @@ function normalizeFrontendAddress(value: unknown): `0x${string}` | null {
   return typeof value === "string" && isAddress(value) ? (getAddress(value) as `0x${string}`) : null;
 }
 
+function isLegacyConfidentialityFrontendAddress(value: unknown) {
+  return normalizeFrontendAddress(value) === zeroAddress;
+}
+
+function storedFrontendAddressOrFallback(value: unknown, fallback: `0x${string}`) {
+  return isLegacyConfidentialityFrontendAddress(value) ? fallback : normalizeFrontendAddress(value) ?? fallback;
+}
+
 export function resolveConfidentialityFrontendAddress(
   input: Pick<ConfidentialityDeploymentScopeInput, "frontendAddress"> = {},
 ): `0x${string}` | null {
@@ -407,7 +415,7 @@ export async function buildServerConfidentialityTermsPayload(
       contentHash: normalizeOptionalBytes32(record.contentHash),
       deploymentKey: record.deploymentKey ?? normalized.payload.deploymentKey,
       detailsHash: normalizeOptionalBytes32(record.detailsHash),
-      frontendAddress: normalizeFrontendAddress(record.frontendAddress) ?? normalized.payload.frontendAddress,
+      frontendAddress: storedFrontendAddressOrFallback(record.frontendAddress, normalized.payload.frontendAddress),
       identityKey: null,
       mediaTupleHash: normalizeOptionalBytes32(record.mediaTupleHash),
       questionMetadataHash: normalizeOptionalBytes32(record.questionMetadataHash),
@@ -480,7 +488,7 @@ export async function getQuestionConfidentiality(contentId: string, options: Con
   const frontendAddress = resolveConfidentialityFrontendAddress(options);
   if (!normalizedContentId || !deploymentScope || !frontendAddress) return null;
 
-  const [record] = await db
+  const [exactRecord] = await db
     .select()
     .from(questionConfidentiality)
     .where(
@@ -491,7 +499,33 @@ export async function getQuestionConfidentiality(contentId: string, options: Con
       ),
     )
     .limit(1);
-  return record ?? null;
+  if (exactRecord) return exactRecord;
+
+  const [legacyFrontendRecord] = await db
+    .select()
+    .from(questionConfidentiality)
+    .where(
+      and(
+        eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+        eq(questionConfidentiality.frontendAddress, zeroAddress),
+        eq(questionConfidentiality.contentId, normalizedContentId),
+      ),
+    )
+    .limit(1);
+  if (legacyFrontendRecord) return legacyFrontendRecord;
+
+  const [legacyDeploymentRecord] = await db
+    .select()
+    .from(questionConfidentiality)
+    .where(
+      and(
+        isNull(questionConfidentiality.deploymentKey),
+        eq(questionConfidentiality.frontendAddress, zeroAddress),
+        eq(questionConfidentiality.contentId, normalizedContentId),
+      ),
+    )
+    .limit(1);
+  return legacyDeploymentRecord ?? null;
 }
 
 export async function upsertQuestionConfidentialityFromMetadata(params: {

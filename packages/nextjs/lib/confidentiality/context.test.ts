@@ -221,6 +221,63 @@ test("upserts gated metadata and flips disclosure after settlement", async () =>
   assert.equal(confidentiality.isConfidentialityCurrentlyGated(disclosed), false);
 });
 
+test("resolves legacy unscoped confidentiality rows without leaking gated context", async () => {
+  await dbModule.dbClient.execute(`
+    INSERT INTO question_confidentiality (
+      deployment_key,
+      chain_id,
+      content_registry_address,
+      frontend_address,
+      content_id,
+      gated,
+      bond_asset,
+      bond_amount,
+      disclosure_policy,
+      published_at,
+      question_metadata_hash,
+      content_hash,
+      details_hash,
+      media_tuple_hash,
+      created_at,
+      updated_at
+    ) VALUES (
+      NULL,
+      NULL,
+      NULL,
+      '0x0000000000000000000000000000000000000000',
+      '${CONTENT_ID}',
+      TRUE,
+      'USDC',
+      '0',
+      'private_forever',
+      NULL,
+      '0x${"4".repeat(64)}',
+      '0x${"1".repeat(64)}',
+      '0x${"2".repeat(64)}',
+      '0x${"3".repeat(64)}',
+      NOW(),
+      NOW()
+    )
+  `);
+
+  const gated = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(gated?.gated, true);
+  assert.equal(gated?.deploymentKey, null);
+  assert.equal(gated?.frontendAddress, "0x0000000000000000000000000000000000000000");
+
+  const serverPayload = await confidentiality.buildServerConfidentialityTermsPayload({
+    address: WALLET,
+    contentId: CONTENT_ID,
+  });
+  assert.equal(serverPayload.ok, true);
+  if (!serverPayload.ok) return;
+  assert.equal(
+    serverPayload.payload.deploymentKey,
+    confidentiality.resolveCurrentConfidentialityDeploymentScope()?.deploymentKey,
+  );
+  assert.equal(serverPayload.payload.frontendAddress, FRONTEND_ADDRESS);
+});
+
 test("defaults omitted gated disclosure policy to private forever", async () => {
   await confidentiality.upsertQuestionConfidentialityFromMetadata({
     contentId: CONTENT_ID,
