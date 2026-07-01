@@ -100,6 +100,52 @@ async function clearTables() {
   await dbModule.dbClient.execute("DELETE FROM signed_read_sessions");
 }
 
+async function insertLegacyQuestionConfidentiality(params: {
+  contentId?: string;
+  deploymentKey?: string | null;
+  disclosurePolicy?: "after_settlement" | "private_forever";
+  frontendAddress?: string;
+  publishedAt?: string | null;
+}) {
+  await dbModule.dbClient.execute(`
+    INSERT INTO question_confidentiality (
+      deployment_key,
+      chain_id,
+      content_registry_address,
+      frontend_address,
+      content_id,
+      gated,
+      bond_asset,
+      bond_amount,
+      disclosure_policy,
+      published_at,
+      question_metadata_hash,
+      content_hash,
+      details_hash,
+      media_tuple_hash,
+      created_at,
+      updated_at
+    ) VALUES (
+      ${params.deploymentKey === undefined || params.deploymentKey === null ? "NULL" : `'${params.deploymentKey}'`},
+      NULL,
+      NULL,
+      '${params.frontendAddress ?? "0x0000000000000000000000000000000000000000"}',
+      '${params.contentId ?? CONTENT_ID}',
+      TRUE,
+      'USDC',
+      '0',
+      '${params.disclosurePolicy ?? "private_forever"}',
+      ${params.publishedAt === undefined || params.publishedAt === null ? "NULL" : `'${params.publishedAt}'`},
+      '0x${"4".repeat(64)}',
+      '0x${"1".repeat(64)}',
+      '0x${"2".repeat(64)}',
+      '0x${"3".repeat(64)}',
+      NOW(),
+      NOW()
+    )
+  `);
+}
+
 function installConfidentialityGate(
   params: {
     banned?: boolean;
@@ -222,43 +268,7 @@ test("upserts gated metadata and flips disclosure after settlement", async () =>
 });
 
 test("resolves legacy unscoped confidentiality rows without leaking gated context", async () => {
-  await dbModule.dbClient.execute(`
-    INSERT INTO question_confidentiality (
-      deployment_key,
-      chain_id,
-      content_registry_address,
-      frontend_address,
-      content_id,
-      gated,
-      bond_asset,
-      bond_amount,
-      disclosure_policy,
-      published_at,
-      question_metadata_hash,
-      content_hash,
-      details_hash,
-      media_tuple_hash,
-      created_at,
-      updated_at
-    ) VALUES (
-      NULL,
-      NULL,
-      NULL,
-      '0x0000000000000000000000000000000000000000',
-      '${CONTENT_ID}',
-      TRUE,
-      'USDC',
-      '0',
-      'private_forever',
-      NULL,
-      '0x${"4".repeat(64)}',
-      '0x${"1".repeat(64)}',
-      '0x${"2".repeat(64)}',
-      '0x${"3".repeat(64)}',
-      NOW(),
-      NOW()
-    )
-  `);
+  await insertLegacyQuestionConfidentiality({});
 
   const gated = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
   assert.equal(gated?.gated, true);
@@ -276,6 +286,20 @@ test("resolves legacy unscoped confidentiality rows without leaking gated contex
     confidentiality.resolveCurrentConfidentialityDeploymentScope()?.deploymentKey,
   );
   assert.equal(serverPayload.payload.frontendAddress, FRONTEND_ADDRESS);
+});
+
+test("publishes legacy after-settlement confidentiality rows", async () => {
+  await insertLegacyQuestionConfidentiality({ disclosurePolicy: "after_settlement" });
+
+  const settledAt = new Date("2026-06-11T12:00:00.000Z");
+  assert.deepEqual(
+    await confidentiality.publishConfidentialContextAfterSettlement({ contentIds: [CONTENT_ID], settledAt }),
+    { published: 1 },
+  );
+
+  const disclosed = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(disclosed?.publishedAt?.toISOString(), settledAt.toISOString());
+  assert.equal(confidentiality.isConfidentialityCurrentlyGated(disclosed), false);
 });
 
 test("defaults omitted gated disclosure policy to private forever", async () => {
@@ -331,6 +355,29 @@ test("reconciles due gated disclosure rows after settlement", async () => {
   const privateForever = await confidentiality.getQuestionConfidentiality("43");
   assert.equal(disclosed?.publishedAt?.toISOString(), settledAt.toISOString());
   assert.equal(privateForever?.publishedAt, null);
+});
+
+test("due disclosure reconciliation includes legacy after-settlement rows", async () => {
+  const settledAt = new Date("2026-06-11T12:34:56.000Z");
+  await insertLegacyQuestionConfidentiality({
+    contentId: "45",
+    disclosurePolicy: "after_settlement",
+  });
+  confidentiality.__setConfidentialitySettledAtLookupForTests(async contentId =>
+    contentId === "45" ? settledAt : null,
+  );
+
+  assert.deepEqual(await confidentiality.reconcileDueConfidentialDisclosure({ limit: 10 }), {
+    checked: 1,
+    due: 1,
+    errors: [],
+    published: 1,
+  });
+
+  assert.equal(
+    (await confidentiality.getQuestionConfidentiality("45"))?.publishedAt?.toISOString(),
+    settledAt.toISOString(),
+  );
 });
 
 test("due disclosure reconciliation scans past older unsettled rows", async () => {

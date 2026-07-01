@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { createHash, createHmac, randomBytes } from "crypto";
-import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, or } from "drizzle-orm";
 import "server-only";
 import {
   type Abi,
@@ -239,7 +239,24 @@ function isLegacyConfidentialityFrontendAddress(value: unknown) {
 }
 
 function storedFrontendAddressOrFallback(value: unknown, fallback: `0x${string}`) {
-  return isLegacyConfidentialityFrontendAddress(value) ? fallback : normalizeFrontendAddress(value) ?? fallback;
+  return isLegacyConfidentialityFrontendAddress(value) ? fallback : (normalizeFrontendAddress(value) ?? fallback);
+}
+
+function currentOrLegacyQuestionConfidentialityScope(
+  deploymentScope: ConfidentialityDeploymentScope,
+  frontendAddress: `0x${string}`,
+) {
+  return or(
+    and(
+      eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+      eq(questionConfidentiality.frontendAddress, frontendAddress),
+    ),
+    and(
+      eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+      eq(questionConfidentiality.frontendAddress, zeroAddress),
+    ),
+    and(isNull(questionConfidentiality.deploymentKey), eq(questionConfidentiality.frontendAddress, zeroAddress)),
+  );
 }
 
 export function resolveConfidentialityFrontendAddress(
@@ -1104,8 +1121,7 @@ export async function publishConfidentialContextAfterSettlement(params: { conten
       .set({ publishedAt: now, updatedAt: now })
       .where(
         and(
-          eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
-          eq(questionConfidentiality.frontendAddress, frontendAddress),
+          currentOrLegacyQuestionConfidentialityScope(deploymentScope, frontendAddress),
           eq(questionConfidentiality.contentId, contentId),
           eq(questionConfidentiality.gated, true),
           eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
@@ -1155,8 +1171,7 @@ export async function findDueConfidentialDisclosureContent(params: { limit?: num
     .from(questionConfidentiality)
     .where(
       and(
-        eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
-        eq(questionConfidentiality.frontendAddress, frontendAddress),
+        currentOrLegacyQuestionConfidentialityScope(deploymentScope, frontendAddress),
         eq(questionConfidentiality.gated, true),
         eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
         isNull(questionConfidentiality.publishedAt),
@@ -1167,8 +1182,11 @@ export async function findDueConfidentialDisclosureContent(params: { limit?: num
 
   const due: Array<{ contentId: string; settledAt: Date }> = [];
   const errors: Array<{ contentId: string; error: string }> = [];
+  const seenContentIds = new Set<string>();
   let checked = 0;
   for (const candidate of candidates) {
+    if (seenContentIds.has(candidate.contentId)) continue;
+    seenContentIds.add(candidate.contentId);
     if (due.length >= limit) break;
     checked += 1;
     try {
