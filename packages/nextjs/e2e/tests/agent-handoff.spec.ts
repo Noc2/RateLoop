@@ -264,6 +264,7 @@ test.describe("Agent browser handoffs", () => {
 
     const originalTitle = `Agent feedback bonus handoff ${Date.now()}`;
     const requestBody = baseAgentQuestionRequest(`agent-handoff-feedback-${Date.now()}`, originalTitle);
+    requestBody.paymentMode = "wallet_calls";
     requestBody.bounty = {
       amount: "1000000",
       asset: "USDC",
@@ -329,6 +330,7 @@ test.describe("Agent browser handoffs", () => {
         asset: "USDC",
       });
       expect(saved.requestBody.maxPaymentAmount).toBe("1750000");
+      expect(saved.requestBody.paymentMode).toBe("wallet_calls");
       expect(saved.requestBody.roundConfig).toMatchObject({
         maxVoters: "50",
         minVoters: "5",
@@ -349,10 +351,12 @@ test.describe("Agent browser handoffs", () => {
       });
       expect(statusResponse.ok(), await statusResponse.text()).toBe(true);
       const status = (await statusResponse.json()) as {
+        error?: string | null;
+        nextAction?: string | null;
         status?: string;
         transactionHashes?: string[];
       };
-      expect(status.status).toBe("submitted");
+      expect(status.status, status.error ?? status.nextAction ?? "handoff status did not submit").toBe("submitted");
       expect(status.transactionHashes?.length ?? 0).toBeGreaterThan(0);
     }).toPass({ timeout: 120_000, intervals: [1_000, 2_000, 5_000] });
 
