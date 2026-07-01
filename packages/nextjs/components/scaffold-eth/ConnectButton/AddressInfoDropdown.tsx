@@ -277,10 +277,6 @@ function WalletSummaryDetails({
           <span className="text-base-content/52">{nativeTokenSymbol}</span>
         </button>
       ) : null}
-      <div className={balanceClassName}>
-        <span className="tabular-nums">{formatLrepTokenAmount(isClientMounted ? liquidBalance : null)}</span>{" "}
-        <span className="text-base-content/52">LREP</span>
-      </div>
       <button
         type="button"
         className={interactiveBalanceClassName}
@@ -292,6 +288,10 @@ function WalletSummaryDetails({
         <span className="tabular-nums">{formatUsdcTokenAmount(isClientMounted ? usdcBalance : null)}</span>{" "}
         <span className="text-base-content/52">USDC</span>
       </button>
+      <div className={balanceClassName}>
+        <span className="tabular-nums">{formatLrepTokenAmount(isClientMounted ? liquidBalance : null)}</span>{" "}
+        <span className="text-base-content/52">LREP</span>
+      </div>
       {showStaked ? (
         <div className={stakeClassName}>
           <span className="tabular-nums">{formatLrepTokenAmount(totalStakedMicro)}</span>
