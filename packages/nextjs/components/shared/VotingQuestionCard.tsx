@@ -77,7 +77,8 @@ const USDC_FEEDBACK_BONUS_TOOLTIP_TEXT =
   "This Feedback Bonus is funded in USDC. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
 const MIXED_FEEDBACK_BONUS_TOOLTIP_TEXT =
   "This question has Feedback Bonus pools in multiple assets. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
-const SHARED_REWARD_DEADLINE_TOOLTIP_TEXT = "Voting and active reward windows share this deadline.";
+const SHARED_REWARD_DEADLINE_TOOLTIP_TEXT =
+  "Voting closes with this window. Vote before it ends to qualify for the bounty, any Feedback Bonus, or both.";
 export const VOTING_SURFACE_BACKGROUND = "var(--rateloop-surface-elevated)";
 const STATUS_PILL_CLASS_NAME =
   "reward-chip reward-chip-muted inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2";

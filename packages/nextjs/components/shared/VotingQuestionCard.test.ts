@@ -108,5 +108,9 @@ test("shared reward deadline chip renders the answer window as a yellow reward c
 
   assert.match(html, /reward-chip reward-chip-label reward-chip-brand-yellow/);
   assert.match(html, /aria-label="Answer window closes in 7h"/);
+  assert.match(
+    html,
+    /aria-label="Voting closes with this window\. Vote before it ends to qualify for the bounty, any Feedback Bonus, or both\."/,
+  );
   assert.match(html, /Answer window <span[^>]*> · 7h<\/span>/);
 });
