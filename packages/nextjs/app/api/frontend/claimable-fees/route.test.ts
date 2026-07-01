@@ -16,11 +16,13 @@ type RateLimitModule = typeof import("~~/utils/rateLimit");
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RouteModule = typeof import("./route");
+type RouteDependenciesModule = typeof import("./dependencies");
 
 let rateLimit: RateLimitModule;
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
 let route: RouteModule;
+let routeDependencies: RouteDependenciesModule;
 
 function makeRequest(pathname: string): NextRequest {
   return new NextRequest(`https://rateloop.ai${pathname}`, {
@@ -41,6 +43,7 @@ before(async () => {
   dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
+  routeDependencies = await import("./dependencies");
 });
 
 beforeEach(() => {
@@ -56,12 +59,12 @@ beforeEach(() => {
       throw new Error("database offline");
     },
   });
-  route.__setListClaimableFrontendFeeRoundsForTests(null);
+  routeDependencies.__setListClaimableFrontendFeeRoundsForTests(null);
 });
 
 after(() => {
   rateLimit.__setRateLimitStoreForTests(null);
-  route.__setListClaimableFrontendFeeRoundsForTests(null);
+  routeDependencies.__setListClaimableFrontendFeeRoundsForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
 
   if (originalDatabaseUrl === undefined) {
@@ -143,7 +146,7 @@ test("frontend claimable fees route accepts an explicit supported chain id", asy
 });
 
 test("frontend claimable fees route returns a degraded empty page when lookup fails", async () => {
-  route.__setListClaimableFrontendFeeRoundsForTests(async () => {
+  routeDependencies.__setListClaimableFrontendFeeRoundsForTests(async () => {
     throw new Error("Ponder request timed out");
   });
 
