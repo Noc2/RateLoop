@@ -1,7 +1,7 @@
 /*
  * LaunchDistributionPool.spec — Phase 5.
  *
- * Verification target: contracts/LaunchDistributionPool.sol (verified directly).
+ * Verification target: certora/harnesses/LaunchDistributionPoolHarness.sol.
  * Run with:           certoraRun certora/confs/launch-distribution-pool.conf
  *
  * The launch pool pays a one-time "verified bonus" per account. This proves that bonus
@@ -18,7 +18,7 @@
  */
 
 methods {
-    function verifiedBonusClaimedByAccount(address) external returns (bool) envfree;
+    function verifiedBonusClaimedByAccount_(address) external returns (bool) envfree;
 
     // External token + registry calls in the reward/claim paths: NONDET so they cannot
     // havoc this contract's accounting storage. The single-use property holds regardless
@@ -45,5 +45,5 @@ rule verifiedBonusSingleUsePerAccount(env e1, env e2, address referrer1, address
 // And the mechanism behind that gate: a successful claim records the account flag.
 rule verifiedBonusRecordsFlag(env e, address referrer) {
     claimVerifiedBonus(e, referrer);
-    assert verifiedBonusClaimedByAccount(e.msg.sender);
+    assert verifiedBonusClaimedByAccount_(e.msg.sender);
 }

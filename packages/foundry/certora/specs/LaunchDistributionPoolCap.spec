@@ -18,7 +18,7 @@
  * multiply-then-divide the *linear* SMT backend cannot discharge. This conf now enables
  * the nonlinear-arithmetic backend (`-smt_useNIA`), under which the assignment clamp IS
  * dischargeable. `assignedCapWithinFullCap` below machine-checks exactly that clamp
- * at the point it is computed, via the harness wrapper `assignLaunchCap_`.
+ * through the same clamp expression, via the harness wrapper `assignLaunchCap_`.
  *
  * Still deferred (honest residual): the *global* invariant `raterLaunchPaid <= raterLaunchCap`
  * over every method. Per the findings doc, even with NIA the catch-up paths
@@ -51,9 +51,9 @@ invariant policyBpsBounded()
 invariant capAssignedWhenPaid(address r)
     raterLaunchPaid(r) > 0 => raterLaunchCapAssigned(r);
 
-// The cap-assignment clamp: the active cap computed at assignment never exceeds the full
-// cap. This is the load-bearing mul-div step (activeCap = (fullCap * bps) / 10000 when the
-// full cap is locked, else fullCap), the real-contract instance of MulDivLemma.spec's
+// The cap-assignment clamp: the active cap expression never exceeds the full cap. This is
+// the load-bearing mul-div step (activeCap = (fullCap * bps) / 10000 when the full cap is
+// locked, else fullCap), the real-contract instance of MulDivLemma.spec's
 // `(a*b)/c <= a`. Requires the nonlinear SMT backend enabled in this conf. The bps
 // precondition is `policyBpsBounded`, proved as an invariant above.
 rule assignedCapWithinFullCap(env e, address rater, uint256 fullCap) {
