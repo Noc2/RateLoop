@@ -5,10 +5,12 @@ import { after, before, beforeEach, test } from "node:test";
 const env = process.env as Record<string, string | undefined>;
 const originalCronSecret = env.CRON_SECRET;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalNodeEnv = env.NODE_ENV;
 
 env.CRON_SECRET = "cron-secret";
 env.DATABASE_URL = "memory:";
+env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
 env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
@@ -51,6 +53,7 @@ after(() => {
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("CRON_SECRET", originalCronSecret);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NODE_ENV", originalNodeEnv);
 });
 
