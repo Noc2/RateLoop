@@ -86,4 +86,5 @@ jobs:
           METRICS_AUTH_TOKEN: ${{ secrets.METRICS_AUTH_TOKEN }}
           PONDER_METADATA_SYNC_TOKEN: ${{ secrets.PONDER_METADATA_SYNC_TOKEN }}
           PONDER_KEEPER_WORK_TOKEN: ${{ secrets.PONDER_KEEPER_WORK_TOKEN }}
+          RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY: ${{ secrets.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY }}
         run: node scripts/check-base-mainnet-readiness.mjs --live --require-live-targets

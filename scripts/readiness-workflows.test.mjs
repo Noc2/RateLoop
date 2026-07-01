@@ -158,6 +158,10 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
     liveJob,
     /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
   );
+  assert.match(
+    liveJob,
+    /RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY: \$\{\{ secrets\.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY \}\}/,
+  );
   assert.match(liveJob, /BASE_RPC_URL: \$\{\{ secrets\.BASE_RPC_URL \}\}/);
   assert.match(liveJob, /KEEPER_DATABASE_URL: \$\{\{ secrets\.KEEPER_DATABASE_URL \}\}/);
   assert.match(liveJob, /METRICS_AUTH_TOKEN: \$\{\{ secrets\.METRICS_AUTH_TOKEN \}\}/);

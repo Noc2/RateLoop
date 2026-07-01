@@ -26,6 +26,7 @@ export const BASE_MAINNET_READINESS_CONFIG = {
 };
 
 const PRODUCTION_DEPLOYMENT_PROFILE = "production";
+const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
 function parseArgs(argv) {
   return {
@@ -113,6 +114,21 @@ export function validateBaseMainnetOfflineReadiness(inputs) {
   return result;
 }
 
+export function validateBaseMainnetLiveEnvironment(
+  result,
+  env = process.env,
+) {
+  const anchorPrivateKey =
+    env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY?.trim() ?? "";
+  addCheck(
+    result,
+    PRIVATE_KEY_PATTERN.test(anchorPrivateKey),
+    "RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY is configured for required log-root anchoring",
+  );
+  result.ok = result.failures.length === 0;
+  return result;
+}
+
 function loadBaseMainnetOfflineInputs(root = repoRoot) {
   return {
     ...loadOfflineInputs(root, BASE_MAINNET_READINESS_CONFIG),
@@ -164,6 +180,7 @@ async function main() {
       failures: liveResult.failures,
       sourceLabel: "live environment",
     });
+    validateBaseMainnetLiveEnvironment(liveResult);
     liveResult.ok = liveResult.failures.length === 0;
     printResult(
       "Base mainnet production live readiness",
