@@ -380,6 +380,6 @@ export async function cycleVoteFeedForVisible(
  * Returns true if voteable content was found.
  */
 export async function findVoteableContent(page: Page): Promise<boolean> {
-  const voteBtn = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME });
+  const voteBtn = page.getByTestId("vote-button-up");
   return cycleVoteFeedForVisible(page, voteBtn, { maxSteps: 20, timeout: 5_000 });
 }

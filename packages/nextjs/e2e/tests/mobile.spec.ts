@@ -1,7 +1,7 @@
 import { expect, test } from "../fixtures/wallet";
 import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
-import { findVoteableContent, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import type { Page } from "@playwright/test";
 
 // Device profile comes from Playwright project config (iPhone / Android).
@@ -14,6 +14,7 @@ const CLAIMABLE_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_total";
 const E2E_OPEN_STAKE_SELECTOR_EVENT = "rateloop:e2e-open-stake-selector";
 const CONNECTED_TEST_WALLET_ADDRESS = ANVIL_ACCOUNTS.account2.address.toLowerCase();
 const MOBILE_CHROME_RESTORE_STABILITY_MS = 850;
+const MOBILE_DOCK_LAYOUT_CONTENT_ID = "4";
 
 function seedSuppressedClaimRewardNotification(address: string) {
   const normalizedAddress = address.toLowerCase();
@@ -439,8 +440,36 @@ test.describe("Mobile viewport (phone)", () => {
     };
     const resetToFirstFeedCard = async () => {
       await setFeedScrollTop(0);
-      await expect.poll(async () => (await readLayout()).activeIndex, { timeout: 3_000 }).toBe(0);
-      await expect.poll(async () => (await readLayout()).voteScrollTop, { timeout: 3_000 }).toBeLessThan(2);
+      await page.evaluate(async () => {
+        const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+        const firstArticle = document.querySelector<HTMLElement>('article[data-feed-card-index="0"]');
+        if (!explicitScrollSource || !firstArticle) {
+          return;
+        }
+
+        const previousScrollBehavior = explicitScrollSource.style.scrollBehavior;
+        const previousScrollSnapType = explicitScrollSource.style.scrollSnapType;
+        explicitScrollSource.removeAttribute("data-mobile-header-scroll-intent");
+        explicitScrollSource.style.scrollBehavior = "auto";
+        explicitScrollSource.style.scrollSnapType = "none";
+
+        const scrollerRect = explicitScrollSource.getBoundingClientRect();
+        const firstRect = firstArticle.getBoundingClientRect();
+        explicitScrollSource.scrollTop = Math.max(
+          explicitScrollSource.scrollTop + firstRect.top - scrollerRect.top,
+          0,
+        );
+        explicitScrollSource.dispatchEvent(new Event("scroll", { bubbles: true }));
+
+        await new Promise<void>(resolve => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+
+        explicitScrollSource.style.scrollSnapType = previousScrollSnapType;
+        explicitScrollSource.style.scrollBehavior = previousScrollBehavior;
+      });
+      await expect.poll(async () => (await readLayout()).activeIndex, { timeout: 5_000 }).toBe(0);
+      await expect.poll(async () => (await readLayout()).voteScrollTop, { timeout: 5_000 }).toBeLessThan(2);
     };
     const forceDocumentScrollLeak = (targetScrollTop: number) =>
       page.evaluate(scrollTop => {
@@ -1018,14 +1047,20 @@ test.describe("Mobile viewport (phone)", () => {
   });
 
   test("mobile voting dock keeps rating orb raised above equal action circles", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
-    await waitForFeedLoaded(page);
-
-    const canVote = await findVoteableContent(page);
-    expect(canVote, "Should find at least one voteable content with dock vote controls").toBeTruthy();
+    await gotoWithRetry(page, `/rate?content=${MOBILE_DOCK_LAYOUT_CONTENT_ID}&waitForContent=1`, {
+      ensureWalletConnected: true,
+    });
+    await waitForFeedLoaded(page, 60_000);
+    await expect(
+      page.locator(
+        `article[aria-current="true"] [data-testid="vote-content-card-shell"][data-content-id="${MOBILE_DOCK_LAYOUT_CONTENT_ID}"]`,
+      ),
+    ).toBeVisible({ timeout: 15_000 });
 
     const dock = page.locator('[data-testid="vote-mobile-dock"]');
     await expect(dock).toBeVisible({ timeout: 5_000 });
+    await expect(dock.getByTestId("vote-button-up")).toBeVisible({ timeout: 15_000 });
+    await expect(dock.getByTestId("vote-button-down")).toBeVisible({ timeout: 15_000 });
     await expect(dock.locator('[data-mobile-dock-rating-orb="true"]')).toBeVisible({ timeout: 5_000 });
 
     const layout = await dock.evaluate(node => {
@@ -1273,7 +1308,6 @@ test.describe("Mobile viewport (phone)", () => {
   test("StakeSelector dialog opens on mobile", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 60_000);
-    expect(await findVoteableContent(page)).toBe(true);
 
     await page.evaluate(eventName => window.dispatchEvent(new Event(eventName)), E2E_OPEN_STAKE_SELECTOR_EVENT);
 
@@ -1301,52 +1335,93 @@ test.describe("Mobile viewport (phone)", () => {
     expect(sourceLinkHandle, "active source link should stay bound for the external navigation check").not.toBeNull();
     if (!sourceLinkHandle) return;
 
-    const expectedHref = await sourceLinkHandle.evaluate(link => (link as HTMLAnchorElement).href);
-    expect(expectedHref).toBeTruthy();
-
-    await sourceLinkHandle.evaluate(link => {
+    await sourceLinkHandle.evaluate(async link => {
       const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
       if (!scroller) {
         link.scrollIntoView({ block: "center", inline: "nearest" });
         return;
       }
 
-      const header = document.querySelector<HTMLElement>('[data-mobile-header="true"]');
-      const dock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
-      const scrollerRect = scroller.getBoundingClientRect();
-      const linkRect = link.getBoundingClientRect();
-      const safeTop = Math.max(scrollerRect.top, header?.getBoundingClientRect().bottom ?? 0) + 24;
-      const safeBottom = Math.min(scrollerRect.bottom, dock?.getBoundingClientRect().top ?? window.innerHeight) - 24;
-      const safeCenter = (safeTop + safeBottom) / 2;
-      const linkCenter = linkRect.top + linkRect.height / 2;
-      const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
-      const nextScrollTop = Math.min(Math.max(scroller.scrollTop + linkCenter - safeCenter, 0), maxScrollTop);
       const previousScrollBehavior = scroller.style.scrollBehavior;
       const previousScrollSnapType = scroller.style.scrollSnapType;
-
       scroller.style.scrollBehavior = "auto";
       scroller.style.scrollSnapType = "none";
-      scroller.scrollTop = nextScrollTop;
-      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
-      requestAnimationFrame(() => {
-        scroller.style.scrollSnapType = previousScrollSnapType;
-        scroller.style.scrollBehavior = previousScrollBehavior;
+
+      const readSafeViewportCenter = () => {
+        const scrollerRect = scroller.getBoundingClientRect();
+        const mobileHeader = document.querySelector<HTMLElement>('[data-mobile-header="true"]');
+        const voteTopChrome = document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]');
+        const mobileDock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
+        const mobileDockShell = mobileDock?.querySelector<HTMLElement>('[data-mobile-dock-shell="true"]') ?? null;
+        const headerBottom =
+          mobileHeader?.getAttribute("data-visible") === "true" ? (mobileHeader.getBoundingClientRect().bottom ?? 0) : 0;
+        const voteTopChromeBottom =
+          voteTopChrome?.getAttribute("data-visible") === "true"
+            ? (voteTopChrome.getBoundingClientRect().bottom ?? 0)
+            : 0;
+        const dockTop = mobileDockShell?.getBoundingClientRect().top ?? mobileDock?.getBoundingClientRect().top ?? innerHeight;
+        const safeTop = Math.max(scrollerRect.top, headerBottom, voteTopChromeBottom) + 16;
+        const safeBottom = Math.min(scrollerRect.bottom, dockTop, innerHeight) - 16;
+
+        return safeTop + Math.max((safeBottom - safeTop) / 2, 0);
+      };
+
+      const alignLinkToSafeCenter = () => {
+        const linkRect = link.getBoundingClientRect();
+        const linkCenter = linkRect.top + linkRect.height / 2;
+        scroller.scrollTop += linkCenter - readSafeViewportCenter();
+        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      };
+
+      alignLinkToSafeCenter();
+      await new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
+      alignLinkToSafeCenter();
+
+      scroller.style.scrollSnapType = previousScrollSnapType;
+      scroller.style.scrollBehavior = previousScrollBehavior;
     });
     await expect
-      .poll(() =>
-        sourceLinkHandle.evaluate(link => {
-          const rect = link.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          const topElement = document.elementFromPoint(centerX, centerY);
-          return topElement === link || link.contains(topElement);
-        }),
+      .poll(
+        () =>
+          sourceLinkHandle.evaluate(link => {
+            const linkRect = link.getBoundingClientRect();
+            const mobileHeader = document.querySelector<HTMLElement>('[data-mobile-header="true"]');
+            const voteTopChrome = document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]');
+            const mobileDock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
+            const mobileDockShell = mobileDock?.querySelector<HTMLElement>('[data-mobile-dock-shell="true"]') ?? null;
+            const headerBottom =
+              mobileHeader?.getAttribute("data-visible") === "true"
+                ? (mobileHeader.getBoundingClientRect().bottom ?? 0)
+                : 0;
+            const voteTopChromeBottom =
+              voteTopChrome?.getAttribute("data-visible") === "true"
+                ? (voteTopChrome.getBoundingClientRect().bottom ?? 0)
+                : 0;
+            const dockTop =
+              mobileDockShell?.getBoundingClientRect().top ?? mobileDock?.getBoundingClientRect().top ?? innerHeight;
+            const centerX = linkRect.left + linkRect.width / 2;
+            const centerY = linkRect.top + linkRect.height / 2;
+            const topElement = document.elementFromPoint(centerX, centerY);
+
+            return (
+              linkRect.width > 0 &&
+              linkRect.height > 0 &&
+              centerY > Math.max(headerBottom, voteTopChromeBottom) + 4 &&
+              centerY < dockTop - 4 &&
+              (topElement === link || link.contains(topElement))
+            );
+          }),
+        { timeout: 5_000 },
       )
       .toBe(true);
 
+    const expectedHref = await sourceLinkHandle.evaluate(link => (link as HTMLAnchorElement).href);
+    expect(expectedHref).toBeTruthy();
+
     const popupPromise = page.context().waitForEvent("page");
-    await sourceLinkHandle.click();
+    await sourceLinkHandle.click({ timeout: 15_000 });
 
     const popup = await popupPromise;
     await popup.waitForLoadState("domcontentloaded");

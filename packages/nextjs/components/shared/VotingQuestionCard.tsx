@@ -923,7 +923,7 @@ export function VotingQuestionCard({
     return (
       <>
         <div
-          className={`relative ${embedded ? "" : "rounded-lg"} flex min-h-0 flex-col transition-[padding-top] duration-200 ease-out ${dockWrapperTopPaddingClassName}`}
+          className={`pointer-events-none relative ${embedded ? "" : "rounded-lg"} flex min-h-0 flex-col transition-[padding-top] duration-200 ease-out ${dockWrapperTopPaddingClassName}`}
         >
           {compact ? (
             <div
@@ -958,7 +958,7 @@ export function VotingQuestionCard({
               </div>
             ) : null}
             <div
-              className={`relative overflow-hidden shadow-[0_16px_36px_rgb(0_0_0_/_0.28)] ${
+              className={`pointer-events-auto relative overflow-hidden shadow-[0_16px_36px_rgb(0_0_0_/_0.28)] ${
                 isAttentionActive ? "vote-surface-attention" : ""
               } ${dockShellClassName} ${dockShellBorderClassName}`}
               data-mobile-dock-shell={compact ? "true" : undefined}

@@ -2316,10 +2316,10 @@ const HomeInner = () => {
         <div
           ref={mobileDockContainerRef}
           data-testid="vote-mobile-dock"
-          className="fixed inset-x-0 bottom-0 z-30 xl:hidden"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-30 xl:hidden"
         >
-          <div className="w-full">
-            <div className="overflow-visible">
+          <div className="pointer-events-none w-full">
+            <div className="pointer-events-none overflow-visible">
               <VotingQuestionCard
                 contentId={mobileVoteDockItem.id}
                 categoryId={mobileVoteDockItem.categoryId}
