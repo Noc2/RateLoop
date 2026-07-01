@@ -88,6 +88,10 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     workflow,
     /BASE_SEPOLIA_NEXT_ENV_FILE: docs\/testing\/base-sepolia-next-env\.fixture/,
   );
+  assert.equal(
+    readWorkflow("docs/testing/base-sepolia-next-env.fixture").trim(),
+    "NEXT_PUBLIC_TARGET_NETWORKS=84532",
+  );
   const offlineJob = workflowJobBlock(workflow, "readiness");
   const liveJob = workflowJobBlock(workflow, "live-readiness");
 

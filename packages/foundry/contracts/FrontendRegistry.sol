@@ -81,8 +81,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => uint256) public frontendExitAvailableAt;
     mapping(address => address) public snapshotProposerForFrontend;
     mapping(address => address) public frontendForSnapshotProposer;
-    mapping(address => address) public accessRecorderForFrontend;
-    mapping(address => address) public frontendForAccessRecorder;
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
     mapping(address => bool) private authorizedFeeCreditors;
@@ -100,6 +98,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => uint256) public pendingFeeWithdrawalAmount;
     /// @notice Timestamp at which a pending fee withdrawal can be completed.
     mapping(address => uint256) public pendingFeeWithdrawalReleaseAt;
+    mapping(address => address) public accessRecorderForFrontend;
+    mapping(address => address) public frontendForAccessRecorder;
 
     /// @dev Reserved storage gap for future upgrades
     uint256[37] private __gap;

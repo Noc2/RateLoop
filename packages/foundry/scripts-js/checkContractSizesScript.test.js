@@ -39,7 +39,10 @@ test("contract size gate validates deploy-profile artifacts", () => {
   assert.equal(packageJson.scripts["check:sizes"], "make check-contract-sizes");
   assert.match(makefile, /forge build --force --skip script --skip test/);
   assert.match(makefile, /forge build \$\(DEPLOYED_DEPENDENCY_SIZE_SOURCES\)/);
-  assert.doesNotMatch(makefile, /forge build --force \$\(DEPLOYED_DEPENDENCY_SIZE_SOURCES\)/);
+  assert.doesNotMatch(
+    makefile,
+    /forge build --force \$\(DEPLOYED_DEPENDENCY_SIZE_SOURCES\)/
+  );
   assert.match(script, /Non-deploy-profile artifact/);
   assert.match(script, /metadata\.settings\.optimizer\.runs/);
   assert.match(script, /metadata\.settings\.metadata\.bytecodeHash/);

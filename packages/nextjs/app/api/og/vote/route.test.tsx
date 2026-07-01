@@ -6,6 +6,7 @@ import { after, beforeEach, test } from "node:test";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 const originalFetch = globalThis.fetch;
+const originalFrontendCode = process.env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
 const onePixelPng = Uint8Array.from(
   Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64"),
@@ -82,6 +83,7 @@ function createCountingRateLimitStore(): NonNullable<Parameters<typeof __setRate
 }
 
 beforeEach(() => {
+  process.env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
   globalThis.fetch = originalFetch;
   __setRateLimitStoreForTests({
@@ -95,6 +97,12 @@ beforeEach(() => {
 after(() => {
   globalThis.fetch = originalFetch;
   __setRateLimitStoreForTests(null);
+
+  if (originalFrontendCode === undefined) {
+    delete process.env.NEXT_PUBLIC_FRONTEND_CODE;
+  } else {
+    process.env.NEXT_PUBLIC_FRONTEND_CODE = originalFrontendCode;
+  }
 
   if (originalPonderUrl === undefined) {
     delete process.env.NEXT_PUBLIC_PONDER_URL;

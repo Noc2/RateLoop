@@ -1,8 +1,8 @@
-ALTER TABLE "question_confidentiality" ADD COLUMN "frontend_address" text NOT NULL;--> statement-breakpoint
-ALTER TABLE "confidentiality_terms_acceptances" ADD COLUMN "frontend_address" text NOT NULL;--> statement-breakpoint
-ALTER TABLE "confidential_context_access_logs" ADD COLUMN "frontend_address" text NOT NULL;--> statement-breakpoint
-ALTER TABLE "confidentiality_breach_reports" ADD COLUMN "frontend_address" text NOT NULL;--> statement-breakpoint
-ALTER TABLE "confidentiality_log_roots" ADD COLUMN "frontend_address" text NOT NULL;--> statement-breakpoint
+ALTER TABLE "question_confidentiality" ADD COLUMN "frontend_address" text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;--> statement-breakpoint
+ALTER TABLE "confidentiality_terms_acceptances" ADD COLUMN "frontend_address" text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;--> statement-breakpoint
+ALTER TABLE "confidential_context_access_logs" ADD COLUMN "frontend_address" text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;--> statement-breakpoint
+ALTER TABLE "confidentiality_breach_reports" ADD COLUMN "frontend_address" text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;--> statement-breakpoint
+ALTER TABLE "confidentiality_log_roots" ADD COLUMN "frontend_address" text DEFAULT '0x0000000000000000000000000000000000000000' NOT NULL;--> statement-breakpoint
 DROP INDEX "question_confidentiality_deployment_content_unique";--> statement-breakpoint
 DROP INDEX "question_confidentiality_deployment_content_idx";--> statement-breakpoint
 DROP INDEX "question_confidentiality_deployment_gated_published_idx";--> statement-breakpoint

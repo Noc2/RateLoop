@@ -57,56 +57,56 @@
     {
       "slot": 9,
       "offset": 0,
-      "label": "accessRecorderForFrontend",
-      "type": "t_mapping(t_address,t_address)"
-    },
-    {
-      "slot": 10,
-      "offset": 0,
-      "label": "frontendForAccessRecorder",
-      "type": "t_mapping(t_address,t_address)"
-    },
-    {
-      "slot": 11,
-      "offset": 0,
       "label": "initialFeeCreditorConfigured",
       "type": "t_bool"
     },
     {
-      "slot": 11,
+      "slot": 9,
       "offset": 1,
       "label": "feeCreditor",
       "type": "t_address"
     },
     {
-      "slot": 12,
+      "slot": 10,
       "offset": 0,
       "label": "authorizedFeeCreditors",
       "type": "t_mapping(t_address,t_bool)"
     },
     {
-      "slot": 13,
+      "slot": 11,
       "offset": 0,
       "label": "feeCreditorForEngine",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 14,
+      "slot": 12,
       "offset": 0,
       "label": "feeCreditorVotingEngine",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 15,
+      "slot": 13,
       "offset": 0,
       "label": "pendingFeeWithdrawalAmount",
       "type": "t_mapping(t_address,t_uint256)"
     },
     {
-      "slot": 16,
+      "slot": 14,
       "offset": 0,
       "label": "pendingFeeWithdrawalReleaseAt",
       "type": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "slot": 15,
+      "offset": 0,
+      "label": "accessRecorderForFrontend",
+      "type": "t_mapping(t_address,t_address)"
+    },
+    {
+      "slot": 16,
+      "offset": 0,
+      "label": "frontendForAccessRecorder",
+      "type": "t_mapping(t_address,t_address)"
     },
     {
       "slot": 17,

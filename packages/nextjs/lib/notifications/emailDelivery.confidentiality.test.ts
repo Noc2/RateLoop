@@ -6,6 +6,7 @@ const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalDeliverySecret = env.NOTIFICATION_DELIVERY_SECRET;
+const originalFrontendCode = env.NEXT_PUBLIC_FRONTEND_CODE;
 const originalNodeEnv = env.NODE_ENV;
 const originalPonderUrl = env.NEXT_PUBLIC_PONDER_URL;
 const originalResendApiKey = env.RESEND_API_KEY;
@@ -129,6 +130,7 @@ before(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "test";
   env.NOTIFICATION_DELIVERY_SECRET = "notification-secret";
+  env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
   env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example";
   env.RESEND_API_KEY = "resend-test-key";
   env.RESEND_FROM_EMAIL = "RateLoop <notifications@rateloop.ai>";
@@ -187,6 +189,7 @@ after(() => {
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("NOTIFICATION_DELIVERY_SECRET", originalDeliverySecret);
+  restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", originalFrontendCode);
   restoreEnv("NEXT_PUBLIC_PONDER_URL", originalPonderUrl);
   restoreEnv("RESEND_API_KEY", originalResendApiKey);
   restoreEnv("RESEND_FROM_EMAIL", originalResendFromEmail);

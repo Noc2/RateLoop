@@ -17,6 +17,10 @@
  *      reduces the stake by exactly that amount (it can never confiscate more than is
  *      bonded).
  *
+ * July 2026 storage-layout review: appending access-recorder mappings after the
+ * existing fee-accounting fields uses reserved gap slots only; these stake-conservation
+ * properties and their public state accessors are unchanged.
+ *
  * All proved over public state with NONDET token summaries; the single-use gate keys off
  * msg.sender, so no commit resolution is involved.
  */

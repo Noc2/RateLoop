@@ -45,8 +45,10 @@ test("getContentShareDataForParam preserves Ponder base path prefixes", async ()
 
 test("getContentShareDataForParam redacts gated private-context content", async () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalFrontendCode = process.env.NEXT_PUBLIC_FRONTEND_CODE;
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
   process.env.DATABASE_URL = "memory:";
+  process.env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example";
 
   const dbModule = await import("~~/lib/db");
@@ -99,6 +101,11 @@ test("getContentShareDataForParam redacts gated private-context content", async 
       delete process.env.DATABASE_URL;
     } else {
       process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+    if (originalFrontendCode === undefined) {
+      delete process.env.NEXT_PUBLIC_FRONTEND_CODE;
+    } else {
+      process.env.NEXT_PUBLIC_FRONTEND_CODE = originalFrontendCode;
     }
     if (originalPonderUrl === undefined) {
       delete process.env.NEXT_PUBLIC_PONDER_URL;
