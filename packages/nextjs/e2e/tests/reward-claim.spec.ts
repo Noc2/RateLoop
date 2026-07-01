@@ -8,6 +8,7 @@ import {
   getActiveRoundId,
   processUnrevealedVotes,
   readRoundLifecycleStateLatest,
+  readUnprocessedUnrevealedStakeInRangeLatest,
   readTokenBalance,
   revealVoteDirect,
   setTestConfig,
@@ -365,23 +366,14 @@ test.describe("Reward claim lifecycle", () => {
     const settled = await settleRoundDirect(BigInt(cleanupContentId!), cleanupRoundId, keeper.address, VOTING_ENGINE);
     expect(settled, "Cleanup setup round did not settle").toBe(true);
 
-    await expect
-      .poll(
-        async () => {
-          const lifecycle = await readRoundLifecycleStateLatest(
-            VOTING_ENGINE,
-            BigInt(cleanupContentId!),
-            cleanupRoundId,
-          );
-          return lifecycle.cleanupRemaining;
-        },
-        {
-          intervals: [500, 1_000, 2_000],
-          timeout: 10_000,
-          message: "Cleanup setup should queue the stale unrevealed vote after settlement",
-        },
-      )
-      .toBe(1n);
+    const unrevealedStakeBeforeCleanup = await readUnprocessedUnrevealedStakeInRangeLatest(
+      VOTING_ENGINE,
+      BigInt(cleanupContentId!),
+      cleanupRoundId,
+      0,
+      10,
+    );
+    expect(unrevealedStakeBeforeCleanup, "Cleanup setup should leave stale unrevealed stake to process").toBe(STAKE);
 
     const cleanupSuccess = await processUnrevealedVotes(
       BigInt(cleanupContentId!),
@@ -395,11 +387,19 @@ test.describe("Reward claim lifecycle", () => {
     const unrevealedAfter = await readTokenBalance(unrevealed.address, LREP_TOKEN);
     const unrevealedRefund = unrevealedAfter - unrevealedBefore;
     expect(cleanupSuccess, "Cleanup should process stale unrevealed stake").toBe(true);
+    const unrevealedStakeAfterCleanup = await readUnprocessedUnrevealedStakeInRangeLatest(
+      VOTING_ENGINE,
+      BigInt(cleanupContentId!),
+      cleanupRoundId,
+      0,
+      10,
+    );
     const cleanupLifecycle = await readRoundLifecycleStateLatest(
       VOTING_ENGINE,
       BigInt(cleanupContentId!),
       cleanupRoundId,
     );
+    expect(unrevealedStakeAfterCleanup, "Cleanup should consume the stale unrevealed stake").toBe(0n);
     expect(cleanupLifecycle.cleanupRemaining, "Cleanup should clear the stale unrevealed queue").toBe(0n);
     expect(unrevealedRefund, "Stale unrevealed stake should be forfeited instead of refunded").toBe(0n);
 
