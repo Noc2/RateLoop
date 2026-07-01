@@ -77,6 +77,11 @@ import {
 } from "~~/lib/headToHeadQuestion";
 import { formatHumanDuration } from "~~/lib/humanDuration";
 import {
+  getContentRegistrySubmissionRewardMinimum,
+  getSubmissionRewardCoverageMinimum,
+} from "~~/lib/questionRewardMinimums";
+import {
+  DEFAULT_SUBMISSION_REWARD_POOL,
   type FeedbackBonusAsset,
   type SubmissionRewardAsset,
   formatFeedbackBonusAmount,
@@ -1486,6 +1491,74 @@ function getMaxVotersTooltip(bounds: QuestionRoundConfigBounds): string {
   return `Per-round voter cap. Must be ${bounds.minVoterCap}-${bounds.maxVoterCap} and cannot be below min voters.`;
 }
 
+function readProtocolRoundConfigDefaults(value: unknown): RoundSettings {
+  const source = value as any;
+  return {
+    epochDuration: BigInt(source?.epochDuration ?? source?.[0] ?? DEFAULT_QUESTION_ROUND_CONFIG.epochDuration),
+    maxDuration: BigInt(source?.maxDuration ?? source?.[1] ?? DEFAULT_QUESTION_ROUND_CONFIG.maxDuration),
+    minVoters: BigInt(source?.minVoters ?? source?.[2] ?? DEFAULT_QUESTION_ROUND_CONFIG.minVoters),
+    maxVoters: BigInt(source?.maxVoters ?? source?.[3] ?? DEFAULT_QUESTION_ROUND_CONFIG.maxVoters),
+  };
+}
+
+function getDraftRoundConfigValidationError(form: DraftForm, bounds: QuestionRoundConfigBounds): string | null {
+  const questionDurationSeconds = parseWholeNumberInput(form.roundBlindSeconds);
+  const minVoters = parseWholeNumberInput(form.roundMinVoters);
+  const maxVoters = parseWholeNumberInput(form.roundMaxVoters);
+
+  if (questionDurationSeconds < bounds.minEpochDuration || questionDurationSeconds > bounds.maxEpochDuration) {
+    return `Question duration must be ${formatHumanDuration(bounds.minEpochDuration)}-${formatHumanDuration(
+      bounds.maxEpochDuration,
+    )}.`;
+  }
+  if (minVoters < bounds.minSettlementVoters || minVoters > bounds.maxSettlementVoters) {
+    return `Required voters must be ${bounds.minSettlementVoters}-${bounds.maxSettlementVoters}.`;
+  }
+  if (maxVoters < bounds.minVoterCap || maxVoters > bounds.maxVoterCap) {
+    return `Max voters must be ${bounds.minVoterCap}-${bounds.maxVoterCap}.`;
+  }
+  if (maxVoters < minVoters) {
+    return "Max voters must be at least the required voters.";
+  }
+
+  return null;
+}
+
+function getDraftBountyAmountValidationError({
+  configuredMinimum,
+  defaultMaxVoters,
+  form,
+}: {
+  configuredMinimum: bigint;
+  defaultMaxVoters: bigint;
+  form: DraftForm;
+}): string | null {
+  const bountyAmount = parseSubmissionRewardAmount(form.bountyAmount);
+  if (bountyAmount === null) {
+    return "Bounty must be a positive amount with up to 6 decimals.";
+  }
+
+  const minVoters = BigInt(Math.max(0, parseWholeNumberInput(form.roundMinVoters)));
+  const maxVoters = BigInt(Math.max(0, parseWholeNumberInput(form.roundMaxVoters)));
+  const submissionMinimum = getContentRegistrySubmissionRewardMinimum({
+    configuredMinimum,
+    defaultMaxVoters,
+  });
+  if (bountyAmount < submissionMinimum) {
+    return `Minimum is ${formatSubmissionRewardAmount(submissionMinimum, form.bountyAsset)}.`;
+  }
+
+  const coverageMinimum = getSubmissionRewardCoverageMinimum({
+    maxVoters,
+    requiredVoters: minVoters,
+  });
+  if (bountyAmount < coverageMinimum) {
+    return `Minimum is ${formatSubmissionRewardAmount(coverageMinimum, form.bountyAsset)} for the selected voter cap.`;
+  }
+
+  return null;
+}
+
 function parseRoundSecondsInput(value: string, fieldName: string) {
   return BigInt(parsePositiveInteger(value, fieldName));
 }
@@ -1953,9 +2026,40 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       staleTime: 300_000,
     },
   } as any);
+  const { data: protocolRoundConfig } = useScaffoldReadContract({
+    contractName: "ProtocolConfig" as any,
+    functionName: "config" as any,
+    chainId: boundsChainId,
+    watch: false,
+    query: {
+      staleTime: 300_000,
+    },
+  } as any);
+  const { data: minSubmissionLrepPool } = useScaffoldReadContract({
+    contractName: "ProtocolConfig" as any,
+    functionName: "minSubmissionLrepPool" as any,
+    chainId: boundsChainId,
+    watch: false,
+    query: {
+      staleTime: 300_000,
+    },
+  } as any);
+  const { data: minSubmissionUsdcPool } = useScaffoldReadContract({
+    contractName: "ProtocolConfig" as any,
+    functionName: "minSubmissionUsdcPool" as any,
+    chainId: boundsChainId,
+    watch: false,
+    query: {
+      staleTime: 300_000,
+    },
+  } as any);
   const roundConfigBounds = useMemo(
     () => readRoundConfigBounds(protocolRoundConfigBounds),
     [protocolRoundConfigBounds],
+  );
+  const roundConfigDefaults = useMemo(
+    () => readProtocolRoundConfigDefaults(protocolRoundConfig),
+    [protocolRoundConfig],
   );
   const roundBlindSecondBounds = useMemo(() => getRoundBlindSecondBounds(roundConfigBounds), [roundConfigBounds]);
   const roundMinVoterBounds = useMemo(
@@ -2075,6 +2179,33 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
   const canSaveDraftBeforeSubmit = Boolean(draftForm && isDraftEditable);
+  const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
+  const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
+  const draftBountyAsset = draftForm?.bountyAsset ?? readBountyAsset(handoff);
+  const configuredDraftMinimumRewardAmount =
+    draftBountyAsset === "lrep"
+      ? typeof minSubmissionLrepPool === "bigint"
+        ? minSubmissionLrepPool
+        : DEFAULT_SUBMISSION_REWARD_POOL
+      : typeof minSubmissionUsdcPool === "bigint"
+        ? minSubmissionUsdcPool
+        : DEFAULT_SUBMISSION_REWARD_POOL;
+  const draftBountyAmountError = useMemo(
+    () =>
+      draftForm
+        ? getDraftBountyAmountValidationError({
+            configuredMinimum: configuredDraftMinimumRewardAmount,
+            defaultMaxVoters: roundConfigDefaults.maxVoters,
+            form: draftForm,
+          })
+        : null,
+    [configuredDraftMinimumRewardAmount, draftForm, roundConfigDefaults.maxVoters],
+  );
+  const draftRoundConfigValidationError = useMemo(
+    () => (draftForm ? getDraftRoundConfigValidationError(draftForm, roundConfigBounds) : null),
+    [draftForm, roundConfigBounds],
+  );
+  const draftValidationError = draftRoundConfigValidationError ?? draftBountyAmountError;
   const duplicateAskPayloadRecoveryMessage =
     readHandoffDuplicateAskPayloadError(error) ?? readHandoffDuplicateAskPayloadError(handoff?.error);
   const canUseDuplicateAskPayloadRecovery = Boolean(
@@ -2089,12 +2220,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       !isBusy &&
       !failedImageUploadMessage &&
       !draftConfidentialityBondError &&
+      !draftValidationError &&
       (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
       (hasTransactionPlan || (connectedChainId && canPrepareHandoff(handoff))),
   );
-  const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
-  const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
-  const draftBountyAsset = draftForm?.bountyAsset ?? readBountyAsset(handoff);
   const draftFeedbackBonusAsset =
     draftForm?.feedbackBonusAsset ?? (draftForm?.feedbackBonusAmount === null ? null : draftBountyAsset);
   const draftPaymentMode = resolveDraftHandoffPaymentMode({
@@ -3074,6 +3203,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         </div>
       ) : null}
 
+      {draftValidationError ? (
+        <div className="surface-card-nested rounded-lg p-4 text-sm text-error">
+          <div className="flex items-start gap-2">
+            <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+            <span>{draftValidationError}</span>
+          </div>
+        </div>
+      ) : null}
+
       {duplicateAskPayloadRecoveryMessage ? (
         <div className="surface-card rounded-lg border border-warning/25 bg-warning/10 p-4 text-sm text-base-content">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -3573,7 +3711,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       </select>
                       <input
                         id="agent-ask-bounty-amount"
-                        className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                        className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100 ${
+                          draftBountyAmountError ? "input-error" : ""
+                        }`}
                         disabled={!canEditDraft}
                         inputMode="decimal"
                         value={draftForm?.bountyAmount ?? ""}
@@ -3581,6 +3721,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         onChange={event => updateDraftBountyAmount(event.target.value)}
                       />
                     </div>
+                    {draftBountyAmountError ? (
+                      <p className="mt-2 text-xs leading-relaxed text-error">{draftBountyAmountError}</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -3689,6 +3832,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         id="agent-ask-round-blind-seconds"
                         className="mt-1"
                         disabled={!canEditDraft}
+                        invalid={Boolean(draftRoundConfigValidationError)}
                         valueSeconds={draftForm?.roundBlindSeconds ?? ""}
                         minSeconds={roundBlindSecondBounds.min}
                         maxSeconds={roundBlindSecondBounds.max}
@@ -3704,7 +3848,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       <input
                         id="agent-ask-round-min-voters"
                         type="number"
-                        className="input input-bordered mt-1 w-full"
+                        className={`input input-bordered mt-1 w-full ${
+                          draftRoundConfigValidationError ? "input-error" : ""
+                        }`}
                         disabled={!canEditDraft}
                         inputMode="numeric"
                         min={roundMinVoterBounds.min}
@@ -3722,7 +3868,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       <input
                         id="agent-ask-round-max-voters"
                         type="number"
-                        className="input input-bordered mt-1 w-full"
+                        className={`input input-bordered mt-1 w-full ${
+                          draftRoundConfigValidationError ? "input-error" : ""
+                        }`}
                         disabled={!canEditDraft}
                         inputMode="numeric"
                         min={roundMaxVoterBounds.min}
@@ -3734,6 +3882,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       />
                     </div>
                   </div>
+                  {draftRoundConfigValidationError ? (
+                    <p className="mt-2 text-xs leading-relaxed text-error">{draftRoundConfigValidationError}</p>
+                  ) : null}
                 </div>
               </div>
             </div>

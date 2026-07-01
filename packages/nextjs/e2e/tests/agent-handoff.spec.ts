@@ -1,5 +1,5 @@
-import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { waitForPonderIndexed } from "../helpers/admin-helpers";
+import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { getContentList } from "../helpers/ponder-api";
 import { setupWallet } from "../helpers/wallet-session";
@@ -19,14 +19,14 @@ type SigningIntentCreateResponse = {
 type AgentQuestionRequest = {
   bounty: {
     amount: string;
-    asset: "USDC";
+    asset: "LREP" | "USDC";
     requiredVoters?: string;
   };
   chainId: number;
   clientRequestId: string;
   feedbackBonus?: {
     amount: string;
-    asset: "USDC";
+    asset: "LREP" | "USDC";
   };
   maxPaymentAmount: string;
   paymentMode: "wallet_calls" | "x402_authorization";
@@ -384,6 +384,56 @@ test.describe("Agent browser handoffs", () => {
     expect(indexed, "submitted handoff should index with the shared duration, USDC bounty, and Feedback Bonus").toBe(
       true,
     );
+
+    await context.close();
+  });
+
+  test("agent ask handoff validates bounty against edited voter cap before submit", async ({ browser, request }) => {
+    test.setTimeout(120_000);
+
+    const title = `Agent handoff bounty validation ${Date.now()}`;
+    const requestBody = baseAgentQuestionRequest(`agent-handoff-bounty-validation-${Date.now()}`, title);
+    requestBody.bounty = {
+      amount: "1000000",
+      asset: "LREP",
+      requiredVoters: "3",
+    };
+    requestBody.maxPaymentAmount = "1000000";
+    requestBody.roundConfig = {
+      maxVoters: "100",
+      minVoters: "3",
+      questionDurationSeconds: "1200",
+    };
+
+    const createResponse = await request.post("/api/agent/handoffs", {
+      data: {
+        request: requestBody,
+        ttlMs: 300_000,
+      },
+    });
+    expect(createResponse.ok(), await createResponse.text()).toBe(true);
+    const created = (await createResponse.json()) as HandoffCreateResponse;
+    const token = tokenFromFragment(created.handoffUrl);
+    expect(token).toBeTruthy();
+
+    const context = await newE2EContext(browser);
+    const page = await context.newPage();
+    await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
+    await openPrivateTokenPage(
+      page,
+      created.handoffUrl,
+      new RegExp(`/agent/handoff/${created.handoffId}$`),
+      "Agent ask handoff",
+      title,
+    );
+
+    const bountyAmountInput = page.locator("#agent-ask-bounty-amount");
+    await expect(bountyAmountInput).not.toHaveClass(/input-error/);
+
+    await page.locator("#agent-ask-round-max-voters").fill("200");
+    await expect(page.getByText("Minimum is 2 LREP for the selected voter cap.")).toBeVisible();
+    await expect(bountyAmountInput).toHaveClass(/input-error/);
+    await expect(page.getByRole("button", { name: /^Submit$/i })).toBeDisabled();
 
     await context.close();
   });
