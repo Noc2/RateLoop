@@ -25,7 +25,11 @@ import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLrepTransferErrorMessage } from "~~/lib/lrepTransferErrors";
-import { getDelegateAddressInputValue, isDelegateAddressInputCurrent } from "~~/lib/profile/delegationDisplay";
+import {
+  getDelegateAddressInputValue,
+  getSetDelegateErrorMessage,
+  isDelegateAddressInputCurrent,
+} from "~~/lib/profile/delegationDisplay";
 import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import scaffoldConfig from "~~/scaffold.config";
@@ -328,6 +332,10 @@ export function DelegationSection() {
       setDelegationError("Cannot delegate to yourself");
       return;
     }
+    if (isCurrentDelegateInput) {
+      setDelegationError("That address is already your current or pending delegate.");
+      return;
+    }
     if (walletTransactionReadiness.isBlocked) {
       setDelegationError(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       return;
@@ -344,14 +352,13 @@ export function DelegationSection() {
       refetchDelegationState();
     } catch (e: any) {
       console.error("Set delegate failed:", e);
-      const msg = e?.shortMessage || e?.message || "Failed to set delegate";
-      if (msg.includes("DelegateIsHolder")) {
-        setDelegationError("That address already has its own rater credential");
-      } else if (msg.includes("DelegateAlreadyAssigned")) {
-        setDelegationError("That address is already delegated");
-      } else {
-        setDelegationError(msg);
-      }
+      setDelegationError(
+        getSetDelegateErrorMessage({
+          attemptedDelegate: normalizedDelegateInput,
+          error: e,
+          existingDelegateAddress,
+        }),
+      );
     }
   };
 
