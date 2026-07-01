@@ -44,7 +44,7 @@ export function formatRaterProgress(voteCount: number, minimumRaters: number): s
   return `${voteCount}/${minimumRaters}`;
 }
 
-export function shouldShowStartNewRoundHint(
+export function shouldHidePendingRoundStats(
   snapshot: Pick<RoundSnapshot, "hasRound" | "phase" | "voteCount" | "willStartNewRound">,
 ) {
   return snapshot.willStartNewRound || !snapshot.hasRound || (snapshot.phase === "voting" && snapshot.voteCount === 0);
@@ -131,18 +131,8 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
     );
   }
 
-  if (shouldShowStartNewRoundHint(snapshot)) {
-    return (
-      <div className="flex flex-col gap-1.5 text-base text-base-content/60">
-        <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap">
-          <span className="font-medium text-base-content/70">Vote to start a new round</span>
-          <InfoTooltip
-            text="The first staked signal opens a fresh private round. Stake and rater counts reset for each round."
-            position="bottom"
-          />
-        </div>
-      </div>
-    );
+  if (shouldHidePendingRoundStats(snapshot)) {
+    return null;
   }
 
   const voteCount = Number(round.voteCount);

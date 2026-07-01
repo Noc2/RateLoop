@@ -1,5 +1,5 @@
 import React from "react";
-import { RoundRevealedBreakdown, formatRaterProgress, shouldShowStartNewRoundHint } from "./RoundStats";
+import { RoundRevealedBreakdown, formatRaterProgress, shouldHidePendingRoundStats } from "./RoundStats";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -66,9 +66,9 @@ test("formatRaterProgress shows committed raters against the settlement minimum"
   assert.equal(formatRaterProgress(1, 3), "1/3");
 });
 
-test("shouldShowStartNewRoundHint covers empty and rollover rounds", () => {
+test("shouldHidePendingRoundStats covers empty and rollover rounds", () => {
   assert.equal(
-    shouldShowStartNewRoundHint({
+    shouldHidePendingRoundStats({
       hasRound: false,
       phase: "none",
       voteCount: 0,
@@ -77,7 +77,7 @@ test("shouldShowStartNewRoundHint covers empty and rollover rounds", () => {
     true,
   );
   assert.equal(
-    shouldShowStartNewRoundHint({
+    shouldHidePendingRoundStats({
       hasRound: true,
       phase: "voting",
       voteCount: 0,
@@ -86,7 +86,7 @@ test("shouldShowStartNewRoundHint covers empty and rollover rounds", () => {
     true,
   );
   assert.equal(
-    shouldShowStartNewRoundHint({
+    shouldHidePendingRoundStats({
       hasRound: true,
       phase: "voting",
       voteCount: 1,
