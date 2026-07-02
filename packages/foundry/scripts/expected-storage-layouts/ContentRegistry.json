@@ -159,29 +159,35 @@
     {
       "slot": 26,
       "offset": 0,
-      "label": "nextRatingSnapshotRoundId",
+      "label": "latestAppliedRatingSnapshotRoundId",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
       "slot": 27,
       "offset": 0,
+      "label": "nextRatingSnapshotRoundId",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 28,
+      "offset": 0,
       "label": "contentSlashConfigSnapshot",
       "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
     },
     {
-      "slot": 28,
+      "slot": 29,
       "offset": 0,
       "label": "submissionMediaValidator",
       "type": "t_contract(SubmissionMediaValidator)"
     },
     {
-      "slot": 29,
+      "slot": 30,
       "offset": 0,
       "label": "questionBundleRoundObserverByContent",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 30,
+      "slot": 31,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -467,6 +473,12 @@
           "slot": 1,
           "offset": 17,
           "label": "applied",
+          "type": "t_bool"
+        },
+        {
+          "slot": 1,
+          "offset": 18,
+          "label": "provisionallySkipped",
           "type": "t_bool"
         },
         {

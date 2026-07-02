@@ -160,10 +160,12 @@ library ContentRegistryRatingSnapshotLib {
 
     function roundPayoutSnapshotSourceReadyAt(
         ContentRegistryTypes.PendingRatingSettlement storage pending,
+        uint256 latestAppliedRoundId,
         uint256 contentId,
         uint256 roundId
     ) external view returns (uint64) {
         if (!pending.exists || pending.applied || msg.sender != pending.clusterPayoutOracle) return 0;
+        if (pending.provisionallySkipped && latestAppliedRoundId >= roundId) return 0;
         (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
             IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
         if (cleanupRemaining != 0) return 0;
@@ -177,18 +179,23 @@ library ContentRegistryRatingSnapshotLib {
         RatingLib.RatingState storage ratingState,
         RatingLib.SlashConfig storage slashConfig,
         mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
-        uint256 latestRoundId,
+        mapping(uint256 => uint256) storage latestAppliedRatingSnapshotRoundId,
         uint256 contentId,
         uint256 roundId,
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
         bytes32[][] calldata proofs,
         uint48 settledAt
     ) external {
-        if (latestRoundId != 0 && roundId > latestRoundId) revert InvalidState();
         uint256 expectedRoundId = _expectedRatingSnapshotRound(nextRatingSnapshotRoundId, contentId);
-        if (roundId != expectedRoundId) revert RatingSnapshotOutOfOrder(expectedRoundId);
-
         ContentRegistryTypes.PendingRatingSettlement storage pending = pendingSettlements[roundId];
+        if (roundId != expectedRoundId) {
+            if (
+                roundId >= expectedRoundId || !pending.provisionallySkipped
+                    || latestAppliedRatingSnapshotRoundId[contentId] >= roundId
+            ) {
+                revert RatingSnapshotOutOfOrder(expectedRoundId);
+            }
+        }
         if (!pending.exists || pending.applied) revert InvalidState();
         pending.applied = true;
 
@@ -209,9 +216,12 @@ library ContentRegistryRatingSnapshotLib {
         ContentRegistryRatingStateLib.updateRatingState(
             content, ratingState, contentId, roundId, pending.referenceRatingBps, application.nextState, settledAt
         );
-        unchecked {
-            nextRatingSnapshotRoundId[contentId] = roundId + 1;
+        if (roundId == expectedRoundId) {
+            unchecked {
+                nextRatingSnapshotRoundId[contentId] = roundId + 1;
+            }
         }
+        latestAppliedRatingSnapshotRoundId[contentId] = roundId;
 
         emit RatingSnapshotApplied(
             contentId,
@@ -239,7 +249,11 @@ library ContentRegistryRatingSnapshotLib {
         while (advancedRounds < maxRounds) {
             if (latestRoundId != 0 && nextRoundId > latestRoundId) break;
             if (!_canAdvanceRatingSnapshotCursor(
-                    pendingSettlements, appliedRatingSnapshotDigest, votingEngine, contentId, nextRoundId
+                    pendingSettlements,
+                    appliedRatingSnapshotDigest,
+                    votingEngine,
+                    contentId,
+                    nextRoundId
                 )) {
                 break;
             }
@@ -271,20 +285,11 @@ library ContentRegistryRatingSnapshotLib {
         ContentRegistryTypes.PendingRatingSettlement storage prior = pendingSettlements[roundId];
         if (prior.exists) {
             if (prior.applied) return true;
-            if (_canSkipPendingRatingSnapshotWithoutProposal(prior, contentId, roundId)) {
-                prior.applied = true;
-                appliedRatingSnapshotDigest[contentId][roundId] = keccak256(
-                    abi.encode(
-                        RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON,
-                        contentId,
-                        roundId,
-                        prior.clusterPayoutOracle,
-                        prior.readyAt
-                    )
-                );
-                emit RatingSnapshotSkipped(
-                    contentId, roundId, prior.clusterPayoutOracle, RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON
-                );
+            if (prior.provisionallySkipped) return true;
+            (bool canSkip, bytes32 reasonHash) = _pendingRatingSnapshotSkipReason(prior, contentId, roundId);
+            if (canSkip) {
+                prior.provisionallySkipped = true;
+                emit RatingSnapshotSkipped(contentId, roundId, prior.clusterPayoutOracle, reasonHash);
                 return true;
             }
             return false;
@@ -294,28 +299,43 @@ library ContentRegistryRatingSnapshotLib {
         return _canSkipRatingSnapshotRound(state, appliedRatingSnapshotDigest[contentId][roundId]);
     }
 
-    function _canSkipPendingRatingSnapshotWithoutProposal(
+    function _pendingRatingSnapshotSkipReason(
         ContentRegistryTypes.PendingRatingSettlement storage pending,
         uint256 contentId,
         uint256 roundId
-    ) private view returns (bool) {
+    ) private view returns (bool canSkip, bytes32 reasonHash) {
         if (pending.clusterPayoutOracle == address(0) || pending.votingEngine == address(0)) {
-            return false;
+            return (false, bytes32(0));
         }
-        if (block.timestamp < uint256(pending.readyAt) + RATING_SNAPSHOT_NO_PROPOSAL_GRACE) return false;
+        if (block.timestamp < uint256(pending.readyAt) + RATING_SNAPSHOT_NO_PROPOSAL_GRACE) {
+            return (false, bytes32(0));
+        }
 
         (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
             IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
-        if (cleanupRemaining != 0 || sourceReadyAt == 0) return false;
+        if (cleanupRemaining != 0 || sourceReadyAt == 0) return (false, bytes32(0));
 
         IClusterPayoutOracle oracle = IClusterPayoutOracle(pending.clusterPayoutOracle);
         try oracle.roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId) returns (
             uint64 proposedAt
         ) {
-            return proposedAt == 0;
+            if (proposedAt == 0) return (true, RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON);
+            if (block.timestamp < uint256(proposedAt) + RATING_SNAPSHOT_NO_PROPOSAL_GRACE) {
+                return (false, bytes32(0));
+            }
         } catch {
-            return false;
+            return (false, bytes32(0));
         }
+        try oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
+        ) {
+            if (snapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected) {
+                return (true, RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON);
+            }
+        } catch {
+            return (false, bytes32(0));
+        }
+        return (false, bytes32(0));
     }
 
     function _canSkipRatingSnapshotRound(RoundLib.RoundState state, bytes32 appliedDigest) private pure returns (bool) {

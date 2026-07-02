@@ -109,6 +109,84 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         );
         registry.advanceRatingSnapshotCursor(contentId, 1);
 
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+        vm.prank(address(oracle));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+    }
+
+    function testPublicRatingNoProposalSkipCanStillApplyLateSnapshotBeforeLaterApply() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-late-after-skip");
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        vm.warp(block.timestamp + 1 hours);
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+
+        (IClusterPayoutOracle.PayoutWeight[] memory weights, bytes32[][] memory proofs) =
+            _finalizePublicRatingPayoutSnapshot(oracle, contentId, roundId, 3);
+        registry.applyRatingPayoutSnapshot(contentId, roundId, weights, proofs);
+
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+    }
+
+    function testPublicRatingLaterApplyClosesOlderProvisionalSkip() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-late-closed");
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        vm.warp(block.timestamp + 1 hours);
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+
+        vm.warp(block.timestamp + 24 hours + 1);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, false, true));
+        assertEq(secondRoundId, firstRoundId + 1);
+        (IClusterPayoutOracle.PayoutWeight[] memory secondWeights, bytes32[][] memory secondProofs) =
+            _finalizePublicRatingPayoutSnapshot(oracle, contentId, secondRoundId, 3);
+        registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
+
+        vm.prank(address(oracle));
+        assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, firstRoundId), 0);
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, firstRoundId));
+    }
+
+    function testPublicRatingRejectedSnapshotCanSkipAndStillAcceptReplacement() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-rejected-replacement");
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        bytes32[] memory leaves;
+        IClusterPayoutOracle.PayoutWeight[] memory weights;
+        (weights, leaves) = _publicRatingPayoutLeaves(oracle, contentId, roundId, 3);
+        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+            oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(weights), _merkleRoot(leaves)
+        );
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-rating-snapshot"));
+
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingSnapshotSkipped(
+            contentId, roundId, address(oracle), keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
+        );
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+
+        bytes32 replacementKey = _finalizePublicRatingPayoutSnapshotWithRootForEpoch(
+            oracle,
+            contentId,
+            roundId,
+            uint64(roundId + 1000),
+            3,
+            30_000,
+            _sumEffectiveWeights(weights),
+            _merkleRoot(leaves)
+        );
+        assertEq(replacementKey, snapshotKey);
+        bytes32[][] memory proofs = _merkleProofs(leaves);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(replacementKey);
+        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+
+        registry.applyRatingPayoutSnapshot(contentId, roundId, weights, proofs);
         assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
     }
 
@@ -196,12 +274,33 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         uint256 totalClaimWeight,
         bytes32 weightRoot
     ) internal returns (bytes32 snapshotKey) {
-        uint64 correlationEpochId = uint64(roundId);
+        return _finalizePublicRatingPayoutSnapshotWithRootForEpoch(
+            oracle,
+            contentId,
+            roundId,
+            uint64(roundId),
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            weightRoot
+        );
+    }
+
+    function _finalizePublicRatingPayoutSnapshotWithRootForEpoch(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint64 correlationEpochId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) internal returns (bytes32 snapshotKey) {
         oracle.proposeCorrelationEpoch(
             correlationEpochId,
             uint64(roundId),
             uint64(roundId),
-            keccak256(abi.encode("public-rating-cluster-root", roundId)),
+            keccak256(abi.encode("public-rating-cluster-root", roundId, correlationEpochId)),
             keccak256("params"),
             keccak256("epoch-artifact"),
             "ipfs://rating-epoch",

@@ -197,6 +197,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Applied rating snapshot digests keyed by content and round. Nonzero means the canonical rating consumed the root.
     mapping(uint256 => mapping(uint256 => bytes32)) internal appliedRatingSnapshotDigest;
 
+    /// @notice Latest round whose public-rating evidence was actually applied to the canonical rating.
+    mapping(uint256 => uint256) internal latestAppliedRatingSnapshotRoundId;
+
     /// @notice Next round whose public-rating snapshot may be applied for a content item.
     mapping(uint256 => uint256) internal nextRatingSnapshotRoundId;
 
@@ -1433,7 +1436,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             _ratingState[contentId],
             contentSlashConfigSnapshot[contentId],
             appliedRatingSnapshotDigest,
-            latestVotingRoundId[contentId],
+            latestAppliedRatingSnapshotRoundId,
             contentId,
             roundId,
             payoutWeights,
@@ -1497,7 +1500,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     {
         if (domain != 3 || rewardPoolId != 0) return 0;
         return ContentRegistryRatingSnapshotLib.roundPayoutSnapshotSourceReadyAt(
-            pendingRatingSettlement[contentId][roundId], contentId, roundId
+            pendingRatingSettlement[contentId][roundId],
+            latestAppliedRatingSnapshotRoundId[contentId],
+            contentId,
+            roundId
         );
     }
 
