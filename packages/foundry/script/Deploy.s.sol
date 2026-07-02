@@ -11,6 +11,7 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
@@ -124,6 +125,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine votingEngineImpl = new RoundVotingEngine();
+        RoundVotingEngineRbtsSettlementModule rbtsSettlementModule = new RoundVotingEngineRbtsSettlementModule();
         RoundRewardDistributor rewardDistributorImpl = new RoundRewardDistributor();
         FrontendRegistry frontendRegistryImpl = new FrontendRegistry();
         ProfileRegistry profileRegistryImpl = new ProfileRegistry();
@@ -174,8 +176,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             address(votingEngineImpl),
             governance,
             abi.encodeCall(
-                RoundVotingEngine.initialize,
-                (governance, address(lrepToken), address(registry), address(protocolConfig))
+                RoundVotingEngine.initializeWithRbtsSettlementModule,
+                (
+                    governance,
+                    address(lrepToken),
+                    address(registry),
+                    address(protocolConfig),
+                    address(rbtsSettlementModule)
+                )
             )
         );
         RoundVotingEngine votingEngine = RoundVotingEngine(address(votingEngineProxy));
@@ -371,6 +379,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
             clusterPayoutOracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry)
         );
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), address(votingEngine)
+        );
         if (!isLocalDev) {
             clusterPayoutOracle.grantRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), governance);
             clusterPayoutOracle.grantRole(clusterPayoutOracle.CONFIG_ROLE(), governance);
@@ -450,6 +461,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("ContentRegistryProxyAdmin", _proxyAdmin(address(registryProxy))));
         deployments.push(Deployment("RoundVotingEngine", address(votingEngineProxy)));
         deployments.push(Deployment("RoundVotingEngineProxyAdmin", _proxyAdmin(address(votingEngineProxy))));
+        deployments.push(Deployment("RoundVotingEngineRbtsSettlementModule", address(rbtsSettlementModule)));
         deployments.push(Deployment("ProtocolConfig", address(protocolConfigProxy)));
         deployments.push(Deployment("ProtocolConfigProxyAdmin", _proxyAdmin(address(protocolConfigProxy))));
         deployments.push(Deployment("RoundRewardDistributor", address(rewardDistributorProxy)));
@@ -488,6 +500,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("ProfileRegistry:", address(profileRegistry));
         console.log("ContentRegistry:", address(registry));
         console.log("RoundVotingEngine:", address(votingEngine));
+        console.log("RoundVotingEngineRbtsSettlementModule:", address(rbtsSettlementModule));
         console.log("ProtocolConfig:", address(protocolConfig));
         console.log("RoundRewardDistributor:", address(rewardDistributor));
         console.log("QuestionRewardPoolEscrow:", address(questionRewardPoolEscrow));

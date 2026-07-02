@@ -20,6 +20,7 @@ import {
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import {
@@ -87,6 +88,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
+    uint256 internal constant RECAPTURE_PROTECTION_THRESHOLD = 500e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD = 10_000e6;
     uint256 internal constant MIN_VERY_HIGH_VALUE_PARTICIPANTS = 8;
@@ -191,6 +193,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 )
             )
         );
+        votingEngine.setRbtsSettlementModule(address(new RoundVotingEngineRbtsSettlementModule()));
         rewardDistributor = RoundRewardDistributor(
             address(
                 new ERC1967Proxy(
@@ -508,6 +511,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function testSubmissionBundleAtRecaptureThresholdRequiresVerifiedHumanEligibility() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 questionDurationSeconds = _defaultBundleWindowSeconds(contentIds);
+        uint256 bountyClosesAt = block.timestamp + questionDurationSeconds;
+
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), RECAPTURE_PROTECTION_THRESHOLD);
+        vm.expectRevert("Verified bounty required");
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionBundleFromRegistry(
+            1,
+            contentIds,
+            funder,
+            REWARD_ASSET_USDC,
+            RECAPTURE_PROTECTION_THRESHOLD,
+            3,
+            bountyClosesAt,
+            questionDurationSeconds,
+            0
+        );
+
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds,
+            funder,
+            REWARD_ASSET_USDC,
+            RECAPTURE_PROTECTION_THRESHOLD,
+            3,
+            BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+        assertEq(bundleId, 1);
+    }
+
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(EPOCH_DURATION), minVoters: 5, maxVoters: 5
@@ -524,7 +559,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             contentId, funder, address(0), REWARD_ASSET_USDC, highValueAmount, 3, bountyClosesAt, EPOCH_DURATION, 0
         );
 
-        uint256 rewardPoolId = _createRewardPool(contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS);
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(
+            contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
 
         assertGt(rewardPoolId, 0);
     }
@@ -554,8 +591,36 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             0
         );
 
-        uint256 rewardPoolId = _createRewardPool(contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS);
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(
+            contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
 
+        assertGt(rewardPoolId, 0);
+    }
+
+    function testNonRefundableRewardPoolAtRecaptureThresholdRequiresVerifiedHumanEligibility() public {
+        uint256 contentId = _submitQuestion("recapture-threshold");
+        uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
+
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), RECAPTURE_PROTECTION_THRESHOLD);
+        vm.expectRevert("Verified bounty required");
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
+            contentId,
+            funder,
+            address(0),
+            REWARD_ASSET_USDC,
+            RECAPTURE_PROTECTION_THRESHOLD,
+            3,
+            bountyClosesAt,
+            EPOCH_DURATION,
+            0
+        );
+
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(
+            contentId, RECAPTURE_PROTECTION_THRESHOLD, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
         assertGt(rewardPoolId, 0);
     }
 
@@ -6358,6 +6423,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), address(votingEngine));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
     }

@@ -449,6 +449,7 @@ library RoundCleanupLib {
         if (
             round.state != RoundLib.RoundState.Settled && round.state != RoundLib.RoundState.Tied
                 && round.state != RoundLib.RoundState.RevealFailed
+                && round.state != RoundLib.RoundState.SettlementPending
         ) {
             revert RoundNotSettledOrTied();
         }
@@ -559,7 +560,11 @@ library RoundCleanupLib {
                 // below quorum (already constrained by the HRC gate in
                 // _canFinalizeRevealFailedRound), and the attacker gains nothing but delay
                 // while paying gas with stake locked.
-                if (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= pastEpochCutoffAt) {
+                if (
+                    (round.state == RoundLib.RoundState.Settled
+                        || round.state == RoundLib.RoundState.SettlementPending)
+                        && commit.revealableAfter <= pastEpochCutoffAt
+                ) {
                     processedPastEpochCount++;
                     forfeitedToTreasury += amount;
                 } else {

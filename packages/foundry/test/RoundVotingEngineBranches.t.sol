@@ -9,6 +9,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
@@ -17,10 +18,12 @@ import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
@@ -155,7 +158,9 @@ contract MockEip2935History {
 
 contract MockClusterPayoutOracleForRoundVotingEngine {
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
+    mapping(bytes32 => IClusterPayoutOracle.RoundPayoutSnapshot) internal snapshots;
     address public frontendRegistry;
+    uint64 public constant FINALIZATION_VETO_WINDOW = 0;
 
     constructor(address frontendRegistry_) {
         frontendRegistry = frontendRegistry_;
@@ -175,6 +180,85 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
 
     function roundPayoutSnapshotProposedAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
         return 0;
+    }
+
+    function configureFinalizedRbtsSnapshot(
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) external {
+        bytes32 snapshotKey = this.roundPayoutSnapshotKey(5, 0, contentId, roundId);
+        snapshots[snapshotKey] = IClusterPayoutOracle.RoundPayoutSnapshot({
+            snapshotKey: snapshotKey,
+            domain: 5,
+            correlationEpochId: 1,
+            finalizedAt: block.timestamp == 0 ? 0 : uint64(block.timestamp - 1),
+            rawEligibleVoters: rawEligibleVoters,
+            effectiveParticipantUnits: effectiveParticipantUnits,
+            rewardPoolId: 0,
+            contentId: contentId,
+            roundId: roundId,
+            totalClaimWeight: totalClaimWeight,
+            weightRoot: keccak256("rbts-weight-root"),
+            reasonRoot: keccak256("rbts-reason-root"),
+            status: IClusterPayoutOracle.SnapshotStatus.Finalized
+        });
+    }
+
+    function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (IClusterPayoutOracle.RoundPayoutSnapshot memory)
+    {
+        return snapshots[this.roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)];
+    }
+
+    function isRoundPayoutSnapshotFinalized(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bool)
+    {
+        return snapshots[this.roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)].status
+            == IClusterPayoutOracle.SnapshotStatus.Finalized;
+    }
+
+    function isRoundPayoutSnapshotRejectedByCorrelationEpoch(uint8, uint256, uint256, uint256)
+        external
+        pure
+        returns (bool)
+    {
+        return false;
+    }
+
+    function roundPayoutSnapshotConsumerFor(uint8 domain, uint256, uint256, uint256)
+        external
+        view
+        returns (address)
+    {
+        return roundPayoutSnapshotConsumer[domain];
+    }
+
+    function roundPayoutSnapshotProposalDigest(bytes32 snapshotKey) external pure returns (bytes32) {
+        return keccak256(abi.encode(snapshotKey, "digest"));
+    }
+
+    function rejectedRoundPayoutSnapshotDigests(bytes32, bytes32) external pure returns (bool) {
+        return false;
+    }
+
+    function rejectedRoundPayoutSnapshotRoots(bytes32, bytes32) external pure returns (bool) {
+        return false;
+    }
+
+    function verifyPayoutWeight(IClusterPayoutOracle.PayoutWeight calldata payout, bytes32[] calldata)
+        external
+        pure
+        returns (bool)
+    {
+        return payout.domain == 5 && payout.rewardPoolId == 0 && payout.baseWeight > 0
+            && payout.effectiveWeight > 0 && payout.effectiveWeight <= payout.baseWeight;
     }
 }
 
@@ -274,6 +358,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                 )
             )
         );
+        engine.setRbtsSettlementModule(address(new RoundVotingEngineRbtsSettlementModule()));
         protocolConfigAddress = address(engine.protocolConfig());
         advisoryRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
         ProtocolConfig(protocolConfigAddress).setAdvisoryVoteRecorder(address(advisoryRecorder));
@@ -323,6 +408,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         mockRaterIdentityRegistry.setHolder(frontend1);
         ProtocolConfig(protocolConfigAddress).setFrontendRegistry(address(frontendRegistry));
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
+        MockClusterPayoutOracleForRoundVotingEngine testOracle =
+            new MockClusterPayoutOracleForRoundVotingEngine(address(frontendRegistry));
+        MockQuestionRewardPoolEscrow defaultRewardEscrow = _newMockQuestionRewardPoolEscrow(registry);
+        testOracle.setRoundPayoutSnapshotConsumer(3, address(registry));
+        testOracle.setRoundPayoutSnapshotConsumer(5, address(engine));
+        testOracle.setRoundPayoutSnapshotConsumer(1, address(defaultRewardEscrow));
+        testOracle.setRoundPayoutSnapshotConsumer(4, address(defaultRewardEscrow));
+        ProtocolConfig(protocolConfigAddress).setClusterPayoutOracle(address(testOracle));
+        registry.setQuestionRewardPoolEscrow(address(defaultRewardEscrow));
 
         lrepToken.mint(owner, 2_000_000e6);
         lrepToken.approve(address(engine), 500_000e6);
@@ -357,6 +451,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     {
         oracle = new MockClusterPayoutOracleForRoundVotingEngine(address(frontendRegistry));
         oracle.setRoundPayoutSnapshotConsumer(3, address(registry));
+        oracle.setRoundPayoutSnapshotConsumer(5, address(engine));
         address questionRewardPoolEscrow = registry.questionRewardPoolEscrow();
         if (questionRewardPoolEscrow != address(0)) {
             oracle.setRoundPayoutSnapshotConsumer(1, questionRewardPoolEscrow);
@@ -364,6 +459,65 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         }
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setClusterPayoutOracle(address(oracle));
+    }
+
+    function _applyFullWeightRbtsSettlementSnapshot(
+        MockClusterPayoutOracleForRoundVotingEngine oracle,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32[] memory commitKeys
+    ) internal {
+        bytes32[] memory sortedCommitKeys = new bytes32[](commitKeys.length);
+        for (uint256 i = 0; i < commitKeys.length; i++) {
+            sortedCommitKeys[i] = commitKeys[i];
+        }
+        for (uint256 i = 1; i < sortedCommitKeys.length; i++) {
+            bytes32 key = sortedCommitKeys[i];
+            uint256 j = i;
+            while (j > 0 && sortedCommitKeys[j - 1] > key) {
+                sortedCommitKeys[j] = sortedCommitKeys[j - 1];
+                unchecked {
+                    --j;
+                }
+            }
+            sortedCommitKeys[j] = key;
+        }
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights =
+            new IClusterPayoutOracle.PayoutWeight[](sortedCommitKeys.length);
+        bytes32[][] memory proofs = new bytes32[][](sortedCommitKeys.length);
+        uint256 totalClaimWeight;
+        uint32 effectiveParticipantUnits;
+        for (uint256 i = 0; i < sortedCommitKeys.length; i++) {
+            bytes32 commitKey = sortedCommitKeys[i];
+            uint256 baseWeight = _commitRbtsScoringWeight(engine, contentId, roundId, commitKey);
+            totalClaimWeight += baseWeight;
+            effectiveParticipantUnits += 10_000;
+            payoutWeights[i] = IClusterPayoutOracle.PayoutWeight({
+                domain: 5,
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                commitKey: commitKey,
+                identityKey: _commitIdentityKey(engine, contentId, roundId, commitKey),
+                account: _commitIdentityHolder(engine, contentId, roundId, commitKey),
+                baseWeight: baseWeight,
+                independenceBps: 10_000,
+                effectiveWeight: baseWeight,
+                reasonHash: keccak256("full-weight-rbts-test")
+            });
+            proofs[i] = new bytes32[](0);
+        }
+
+        oracle.configureFinalizedRbtsSnapshot(
+            contentId,
+            roundId,
+            uint32(sortedCommitKeys.length),
+            effectiveParticipantUnits,
+            totalClaimWeight
+        );
+        vm.prank(address(oracle));
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
     }
 
     function test_SetRoleRotatesPauser() public {
@@ -638,9 +792,29 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.roll(seedBlock);
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        if (round.state == RoundLib.RoundState.SettlementPending) {
+            vm.roll(seedBlock + 1);
+            _applyFullWeightRbtsSettlementSnapshot(
+                MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle()),
+                contentId,
+                roundId,
+                RoundEngineReadHelpers.commitKeys(engine, contentId, roundId)
+            );
+            return;
+        }
         if (round.state != RoundLib.RoundState.Open) return;
         vm.roll(seedBlock + 1);
         engine.settleRound(contentId, roundId);
+        round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        if (round.state == RoundLib.RoundState.SettlementPending) {
+            vm.roll(seedBlock + 2);
+            _applyFullWeightRbtsSettlementSnapshot(
+                MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle()),
+                contentId,
+                roundId,
+                RoundEngineReadHelpers.commitKeys(engine, contentId, roundId)
+            );
+        }
     }
 
     function _rbtsEntropyFromLogs(Vm.Log[] memory logs, uint256 contentId, uint256 roundId)
@@ -1305,6 +1479,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
         RevertingBundleObserver observer = new RevertingBundleObserver();
         observer.setConfigShape(address(registry), address(engine));
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        oracle.setRoundPayoutSnapshotConsumer(1, address(observer));
+        oracle.setRoundPayoutSnapshotConsumer(4, address(observer));
 
         vm.prank(owner);
         registry.pause();
@@ -1428,6 +1606,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             );
         }
 
+        _installPublicRatingClusterPayoutOracle();
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         uint256 weightedScoreSum;
@@ -1459,8 +1638,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                 RewardMath.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, scoringWeight, scoreBps);
             uint256 expectedRewardWeight =
                 RewardMath.calculatePositiveScoreSpreadWeight(scoringWeight, scoreBps, benchmarkScoreBps);
+            RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKeys[i]);
             uint256 expectedForfeit = RewardMath.calculateNegativeScoreSpreadForfeit(
-                stakes[i], scoreBps, benchmarkScoreBps, SCORE_SPREAD_TEST_REVEALS
+                commit.stakeAmount, scoreBps, benchmarkScoreBps, SCORE_SPREAD_TEST_REVEALS
             );
 
             assertEq(
@@ -1471,7 +1651,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             assertEq(
                 _commitRbtsForfeitedStake(engine, contentId, roundId, commitKeys[i]),
                 expectedForfeit,
-                "forfeited stake should use leave-one-out benchmark"
+                string.concat("forfeited stake should use leave-one-out benchmark #", Strings.toString(i))
             );
         }
     }

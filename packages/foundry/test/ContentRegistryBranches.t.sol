@@ -8,6 +8,7 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { SubmissionMediaValidator } from "../contracts/SubmissionMediaValidator.sol";
 import { SubmissionMediaValidatorFactory } from "../contracts/SubmissionMediaValidatorFactory.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
@@ -80,6 +81,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     uint256 public constant T0 = 1000;
     uint256 public constant STAKE = 5e6;
+    uint256 internal constant RECAPTURE_PROTECTION_THRESHOLD = 500e6;
 
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
     event TreasuryUpdated(address treasury);
@@ -132,6 +134,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 )
             )
         );
+        votingEngine.setRbtsSettlementModule(address(new RoundVotingEngineRbtsSettlementModule()));
         rewardDistributor = RoundRewardDistributor(
             address(
                 new ERC1967Proxy(
@@ -159,7 +162,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.setQuestionRewardPoolEscrow(address(mockQuestionRewardPoolEscrow));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
-
         lrepToken.mint(owner, 2_000_000e6);
         lrepToken.approve(address(votingEngine), 500_000e6);
 
@@ -1281,6 +1283,61 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         assertEq(mockQuestionRewardPoolEscrow.lastBountyWindowSeconds(), roundConfig.maxDuration, "bounty window");
         assertEq(mockQuestionRewardPoolEscrow.lastFeedbackWindowSeconds(), roundConfig.maxDuration, "feedback window");
+    }
+
+    function test_SubmitQuestionWithReward_RejectsRecaptureSizedOpenBounty() public {
+        string memory contextUrl = "https://example.com/recapture-sized-open-bounty";
+        string memory title = "Can unlinked wallets recapture this bounty?";
+        string memory description = "High-value non-refundable bounties require Proof-of-Human payout eligibility.";
+        string memory tags = "Products,Bounty";
+        uint256 categoryId = 1;
+        bytes32 salt = keccak256("recapture-sized-open-bounty");
+        string[] memory imageUrls = _emptyImageUrls();
+        ContentRegistry.SubmissionRewardTerms memory openRewardTerms = ContentRegistry.SubmissionRewardTerms({
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            amount: RECAPTURE_PROTECTION_THRESHOLD,
+            requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            bountyEligibility: 0
+        });
+        RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
+            epochDuration: 1 hours,
+            maxDuration: 1 hours,
+            minVoters: uint16(DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS),
+            maxVoters: 100
+        });
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(mockQuestionRewardPoolEscrow), RECAPTURE_PROTECTION_THRESHOLD);
+        _reserveQuestionSubmissionWithRewardTermsAndRoundConfig(
+            contextUrl,
+            imageUrls,
+            "",
+            title,
+            description,
+            tags,
+            categoryId,
+            salt,
+            submitter,
+            openRewardTerms,
+            roundConfig
+        );
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert("Verified bounty required");
+        registry.submitQuestionWithRewardAndRoundConfig(
+            contextUrl,
+            imageUrls,
+            "",
+            title,
+            tags,
+            categoryId,
+            _emptySubmissionDetails(),
+            salt,
+            openRewardTerms,
+            roundConfig,
+            _defaultQuestionSpec(),
+            _defaultConfidentialityConfig()
+        );
+        vm.stopPrank();
     }
 
     function test_SubmitQuestionWithReward_UsesAgentWalletAsEscrowFunder() public {

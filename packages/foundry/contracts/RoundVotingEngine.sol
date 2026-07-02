@@ -10,25 +10,25 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundVotingEngineStorage } from "./RoundVotingEngineStorage.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
-import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
 import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
+import { RoundCommitStorageLib } from "./libraries/RoundCommitStorageLib.sol";
 import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
-import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IRoundVotingCommitReveal } from "./interfaces/IRoundVotingCommitReveal.sol";
 import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol";
 
 /// @title RoundVotingEngine
-/// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
+/// @notice Per-content round-based commit-reveal voting with keeper-assisted/self-reveal and RBTS settlement.
 /// @dev Flow: commitVote (stores ciphertext hash, drand metadata, and commit hash) → epoch ends → revealVote
 ///      (caller supplies plaintext consistent with the commit hash) → settleRound (≥3 revealed votes) or
 ///      finalizeRevealFailedRound().
@@ -40,13 +40,13 @@ import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol"
 ///      If the 20-minute voting window passes below commit quorum the round cancels with refunds; once commit quorum exists,
 ///      any unrevealed vote can finalize as RevealFailed only after the round stops accepting votes
 ///      and the final reveal grace deadline has passed.
-///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
-///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
-/// @dev Formally implements {IRoundVotingEngine} for compile-time interface coverage.
+///      Epoch-weighting: epoch-1 (blind) = 100% public-verdict weight; epoch-2+ (informed) = 25%.
+///      LREP stake rewards wait for finalized RBTS settlement weights from the correlation oracle.
 contract RoundVotingEngine is
-    IRoundVotingEngine,
     IRoundVotingCommitReveal,
     IRoundVotingSettlement,
+    IRoundPayoutSnapshotConsumer,
+    RoundVotingEngineStorage,
     Initializable,
     ReentrancyGuardTransient
 {
@@ -93,111 +93,8 @@ contract RoundVotingEngine is
     uint256 internal constant MAX_STAKE = 10e6; // 10 LREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
-    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_BPS = 100; // 1% of scored RBTS forfeits
-    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_MAX = 1e6; // 1 LREP
+    uint8 internal constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
     address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
-
-    // --- State ---
-    // M-Crosscutting-1 (audit 2026-05-20): Storage layout history. This contract is
-    // `TransparentUpgradeableProxy`-backed (see `script/Deploy.s.sol`). Slot positions matter
-    // for any future hot-upgrade. The current layout has the following SHIFTS from prior
-    // releases — fresh deployments are unaffected, but any hot-upgrade from a baseline that
-    // populated the old surface MUST run `forge-upgrade` / OZ Upgrades `validateUpgrade` first:
-    //
-    //   * Pre-2026-05-19: `roundDeferredCleanupBounty` (triple mapping → uint256) at the slot
-    //     now occupied by `roundClusterPayoutReadyAt` (triple mapping → uint48). Annotated
-    //     with `@custom:oz-renamed-from roundDeferredCleanupBounty` (I-Crosscutting-A).
-    //   * Pre-2026-05-19: `consensusReserve` (uint256) sat at the end of the layout. Removed
-    //     when the consensus-reserve mechanism was deleted (`bc96d7e5`); all later slots
-    //     shifted up by 1.
-    //   * Post-2026-05-19: `roundRbtsMeanScoreBps` (uint256→uint16) inserted mid-layout at
-    //     line 159; all later slots shifted down by 1.
-    //   * Post-2026-05-28: `roundRbtsScoreSeed` inserted after `roundRbtsMeanScoreBps` so
-    //     advisory sampling can bind to the finalized engine seed. Fresh deployments only.
-    //   * Post-2026-05-29: `roundAdvisoryVoteRecorderSnapshot` inserted after
-    //     `roundRaterRegistrySnapshot` so recorder rotation does not affect open rounds.
-    //   * Post-2026-06-18: `pendingRatingSettlementReplay` inserted before the storage gap
-    //     so transient pending-rating side-effect failures have a bounded replay path.
-    //
-    // CI runbook: any future change to the order or type of state variables in this contract
-    // must run OZ `validateUpgrade` against the previous implementation before any non-31337
-    // deploy. If the deploy is `--upgrade`, the validator catches incompatible shifts and
-    // aborts. If the deploy is fresh (TransparentUpgradeableProxy with a brand-new admin),
-    // the layout is permitted to shift freely.
-    IERC20 internal lrepToken;
-    ContentRegistry internal registry;
-    ProtocolConfig public protocolConfig;
-
-    // Round data: contentId => roundId => Round
-    mapping(uint256 => mapping(uint256 => RoundLib.Round)) internal rounds;
-
-    // Per-content round tracking
-    mapping(uint256 => uint256) public currentRoundId; // contentId => latest current-round slot (0 = none)
-    mapping(uint256 => uint256) internal nextRoundId; // contentId => next round ID to create
-
-    // Commits: contentId => roundId => commitKey => Commit
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => RoundLib.Commit))) internal commits;
-
-    // Track commit keys per round for iteration (reveal/settlement)
-    mapping(uint256 => mapping(uint256 => bytes32[])) internal roundCommitHashes;
-
-    // Time-based cooldown: contentId => voter => timestamp of last vote
-    mapping(uint256 => mapping(address => uint256)) internal lastVoteTimestamp;
-
-    // Reward accounting per round
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundVoterPool; // contentId => roundId => voter pool
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundWinningStake; // contentId => roundId => reward-distribution weight
-
-    // Robust BTS reward accounting per round.
-    mapping(uint256 => mapping(uint256 => bool)) internal roundRbtsScored;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsRewardWeight;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsRewardClaimants;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsParticipationWeight;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsParticipationClaimants;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsForfeitedPool;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsForfeitClaimants;
-    mapping(uint256 => mapping(uint256 => uint16)) internal roundRbtsMeanScoreBps;
-    mapping(uint256 => mapping(uint256 => bytes32)) internal roundRbtsScoreSeed;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundThresholdReachedBlock;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictedUpBps;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitRbtsScoreBps;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsRewardWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsStakeReturned;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsForfeitedStake;
-
-    // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
-    mapping(uint256 => mapping(uint256 => mapping(address => bool))) internal cancelledRoundRefundClaimed;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal cancelledRoundRefundCommitClaimed;
-
-    // Fast zero/non-zero indicator for content vote history. Public so the IRoundVotingEngine
-    // `hasCommits` view is fulfilled by the auto-getter without an explicit function definition.
-    mapping(uint256 => bool) public hasCommits;
-
-    uint256 internal accountedLrepBalance;
-
-    // Config snapshot per round: prevents governance config changes from affecting in-progress rounds
-    mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) public roundConfigSnapshot;
-    mapping(uint256 => mapping(uint256 => RatingLib.RatingConfig)) internal roundRatingConfigSnapshot;
-    mapping(uint256 => mapping(uint256 => uint16)) internal roundReferenceRatingBpsSnapshot;
-
-    // Voter to commit hash lookup: contentId => roundId => voter => commitHash (O(1) claim lookups)
-    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) internal voterCommitHash;
-
-    // Stable rater-identity keyed commit lookups for duplicate prevention and delegated wallets.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) internal identityCommitKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) internal commitIdentityKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => address))) internal commitIdentityHolder;
-    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) internal holderCommitKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal identityRoundStake;
-
-    // Frontend fee aggregation (computed incrementally during revealVote for O(1) settlement)
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundStakeWithEligibleFrontend;
-    mapping(uint256 => mapping(uint256 => mapping(address => uint256))) internal roundPerFrontendStake;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundFrontendPool;
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundEligibleFrontendCount;
-    mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
-    mapping(uint256 => mapping(uint256 => address)) internal roundAdvisoryVoteRecorderSnapshot;
 
     // --- Events ---
     event VoteCommitted(
@@ -240,6 +137,16 @@ contract RoundVotingEngine is
         uint256 forfeitClaimants,
         uint16 meanScoreBps
     );
+    event RbtsSettlementPending(uint256 indexed contentId, uint256 indexed roundId, address indexed oracle);
+    event RbtsSettlementSnapshotApplied(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 snapshotDigest,
+        uint32 effectiveParticipantUnits,
+        bool forfeitsEnabled
+    );
+    event RbtsSettlementSnapshotTimedOut(uint256 indexed contentId, uint256 indexed roundId);
+    event RbtsSettlementModuleUpdated(address indexed module);
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
     event SettlementCallerIncentivePaid(
         uint256 indexed contentId, uint256 indexed roundId, address indexed caller, uint256 amount
@@ -294,6 +201,26 @@ contract RoundVotingEngine is
         public
         initializer
     {
+        _initialize(_governance, _lrepToken, _registry, _protocolConfig, address(0));
+    }
+
+    function initializeWithRbtsSettlementModule(
+        address _governance,
+        address _lrepToken,
+        address _registry,
+        address _protocolConfig,
+        address _rbtsSettlementModule
+    ) public initializer {
+        _initialize(_governance, _lrepToken, _registry, _protocolConfig, _rbtsSettlementModule);
+    }
+
+    function _initialize(
+        address _governance,
+        address _lrepToken,
+        address _registry,
+        address _protocolConfig,
+        address _rbtsSettlementModule
+    ) private {
         if (_governance == address(0)) revert InvalidAddress();
         if (_lrepToken == address(0)) revert InvalidAddress();
         if (_registry == address(0)) revert InvalidAddress();
@@ -305,6 +232,9 @@ contract RoundVotingEngine is
         lrepToken = IERC20(_lrepToken);
         registry = ContentRegistry(_registry);
         protocolConfig = ProtocolConfig(_protocolConfig);
+        if (_rbtsSettlementModule != address(0)) {
+            _setRbtsSettlementModule(_rbtsSettlementModule);
+        }
     }
 
     /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
@@ -614,22 +544,42 @@ contract RoundVotingEngine is
         lrepToken.safeTransferFrom(voter, address(this), stakeAmount);
         accountedLrepBalance += stakeAmount;
 
-        _storeCommittedVote(
-            contentId,
-            roundId,
-            commitKey,
-            voter,
-            stakeAmount64,
-            ciphertextHash,
-            frontend,
-            epochEnd,
-            targetRound,
-            epochIdx,
-            commitHash,
-            resolved.identityKey,
-            resolved.holder,
-            credentialMask,
-            freshCredentialMask
+        uint256 effectiveRevealableAfter = _targetRoundRevealableAt(contentId, roundId, targetRound);
+        if (effectiveRevealableAfter < epochEnd) effectiveRevealableAfter = epochEnd;
+        RoundCommitStorageLib.storeCommittedVote(
+            commits[contentId][roundId],
+            commitCommittedAt[contentId][roundId],
+            frontendEligibleAtCommit[contentId][roundId],
+            roundCommitHashes[contentId][roundId],
+            epochUnrevealedCount[contentId][roundId],
+            lastCommitRevealableAfter[contentId],
+            voterCommitHash[contentId][roundId],
+            identityCommitKey[contentId][roundId],
+            commitIdentityKey[contentId][roundId],
+            commitIdentityHolder[contentId][roundId],
+            holderCommitKey[contentId][roundId],
+            commitCredentialMask[contentId][roundId],
+            commitFreshCredentialMask[contentId][roundId],
+            hasCommits,
+            roundFrontendRegistrySnapshot[contentId][roundId],
+            RoundCommitStorageLib.StoreParams({
+                contentId: contentId,
+                roundId: roundId,
+                commitKey: commitKey,
+                voter: voter,
+                stakeAmount64: stakeAmount64,
+                ciphertextHash: ciphertextHash,
+                frontend: frontend,
+                epochEnd: epochEnd,
+                effectiveRevealableAfter: effectiveRevealableAfter,
+                targetRound: targetRound,
+                epochIdx: epochIdx,
+                commitHash: commitHash,
+                identityKey: resolved.identityKey,
+                identityHolder: resolved.holder,
+                credentialMask: credentialMask,
+                freshCredentialMask: freshCredentialMask
+            })
         );
         _recordCommitAccounting(
             round, contentId, roundId, voter, resolved.holder, resolved.identityKey, stakeAmount64, stakeAmount
@@ -681,120 +631,6 @@ contract RoundVotingEngine is
             drandChainHash,
             epochEnd,
             epochDuration
-        );
-    }
-
-    function _storeCommittedVote(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        address voter,
-        uint64 stakeAmount64,
-        bytes32 ciphertextHash,
-        address frontend,
-        uint256 epochEnd,
-        uint64 targetRound,
-        uint8 epochIdx,
-        bytes32 commitHash,
-        bytes32 identityKey,
-        address identityHolder,
-        uint8 credentialMask,
-        uint8 freshCredentialMask
-    ) internal {
-        _writeCommitStruct(
-            contentId,
-            roundId,
-            commitKey,
-            voter,
-            stakeAmount64,
-            ciphertextHash,
-            frontend,
-            epochEnd,
-            targetRound,
-            epochIdx
-        );
-        _markFrontendEligibility(contentId, roundId, commitKey, frontend);
-        _recordCommitIndexes(
-            contentId, roundId, commitKey, epochEnd, voter, commitHash, identityKey, identityHolder, targetRound
-        );
-        commitCredentialMask[contentId][roundId][commitKey] = credentialMask;
-        commitFreshCredentialMask[contentId][roundId][commitKey] = freshCredentialMask;
-    }
-
-    function _writeCommitStruct(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        address voter,
-        uint64 stakeAmount64,
-        bytes32 ciphertextHash,
-        address frontend,
-        uint256 epochEnd,
-        uint64 targetRound,
-        uint8 epochIdx
-    ) internal {
-        commits[contentId][roundId][commitKey] = RoundLib.Commit({
-            voter: voter,
-            stakeAmount: stakeAmount64,
-            ciphertextHash: ciphertextHash,
-            frontend: frontend,
-            revealableAfter: epochEnd.toUint48(),
-            targetRound: targetRound,
-            revealed: false,
-            isUp: false,
-            epochIndex: epochIdx
-        });
-        commitCommittedAt[contentId][roundId][commitKey] = block.timestamp.toUint48();
-    }
-
-    function _markFrontendEligibility(uint256 contentId, uint256 roundId, bytes32 commitKey, address frontend)
-        internal
-    {
-        if (frontend == address(0)) {
-            return;
-        }
-        address snapshotRegistry = roundFrontendRegistrySnapshot[contentId][roundId];
-        IFrontendRegistry frontendRegistry = IFrontendRegistry(snapshotRegistry);
-        if (VotePreflightLib.isFrontendEligible(frontendRegistry, frontend)) {
-            frontendEligibleAtCommit[contentId][roundId][commitKey] = true;
-        }
-    }
-
-    function _recordCommitIndexes(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        uint256 epochEnd,
-        address voter,
-        bytes32 commitHash,
-        bytes32 identityKey,
-        address identityHolder,
-        uint64 targetRound
-    ) internal {
-        uint256 effectiveRevealableAfter = _targetRoundRevealableAt(contentId, roundId, targetRound);
-        if (effectiveRevealableAfter < epochEnd) effectiveRevealableAfter = epochEnd;
-        hasCommits[contentId] = true;
-        RoundCleanupLib.recordCommitIndexes(
-            roundCommitHashes[contentId][roundId],
-            epochUnrevealedCount[contentId][roundId],
-            lastCommitRevealableAfter[contentId],
-            voterCommitHash[contentId][roundId],
-            roundId,
-            commitKey,
-            epochEnd,
-            effectiveRevealableAfter,
-            voter,
-            commitHash
-        );
-        RoundCleanupLib.recordIdentityCommitIndex(
-            identityCommitKey[contentId][roundId],
-            commitIdentityKey[contentId][roundId],
-            commitIdentityHolder[contentId][roundId],
-            holderCommitKey[contentId][roundId],
-            commitKey,
-            identityKey,
-            identityHolder,
-            voter
         );
     }
 
@@ -949,6 +785,31 @@ contract RoundVotingEngine is
         }
     }
 
+    function setRbtsSettlementModule(address module) external onlyRole(bytes32(0)) {
+        _setRbtsSettlementModule(module);
+    }
+
+    function _setRbtsSettlementModule(address module) private {
+        if (module == address(0) || module.code.length == 0) revert InvalidAddress();
+        rbtsSettlementModule = module;
+        emit RbtsSettlementModuleUpdated(module);
+    }
+
+    function _delegateRbtsSettlementModule() private {
+        address module = rbtsSettlementModule;
+        if (module == address(0) || module.code.length == 0) revert InvalidAddress();
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, 0, calldatasize())
+            let ok := delegatecall(gas(), module, ptr, calldatasize(), 0, 0)
+            let size := returndatasize()
+            if iszero(ok) {
+                returndatacopy(ptr, 0, size)
+                revert(ptr, size)
+            }
+        }
+    }
+
     // =========================================================================
     // ROUND EXPIRY
     // =========================================================================
@@ -1015,7 +876,7 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Settle a round after ≥minVoters votes have been revealed. Permissionless.
-    /// @dev Win condition uses epoch-weighted stake pools to prevent late-voter herding.
+    /// @dev Public verdict uses epoch-weighted stake pools while RBTS settlement weights finalize LREP accounting.
     ///      Rating update uses bounded binary signal evidence so public rating movement is
     ///      compatible with absolute Robust BTS reports without making it a raw stake vote.
     function settleRound(uint256 contentId, uint256 roundId) external nonReentrant {
@@ -1041,14 +902,10 @@ contract RoundVotingEngine is
             unrevealedPastEpochCount = roundUnrevealedCleanupRemaining[contentId][roundId];
         }
 
-        uint256 weightedRewardStake;
-        uint256 rbtsForfeitedPool;
-        uint256 binaryLosingPool;
         bool upWins;
-        bytes32 scoreSeed;
 
-        // Determine winner: weighted majority wins (anti-herding). Robust BTS scores only
-        // calibrate rewards; they do not override the binary signal used for rating movement.
+        // Record the public verdict from epoch-weighted binary pools. Robust BTS scores
+        // settle LREP rewards later; they do not override the binary signal used for rating movement.
         upWins = round.weightedUpPool > round.weightedDownPool;
         if (round.weightedUpPool == round.weightedDownPool) {
             if (round.upPool == round.downPool) {
@@ -1064,83 +921,29 @@ contract RoundVotingEngine is
             // This inverts the conventional raw-majority-breaks-tie convention intentionally.
             upWins = round.upPool < round.downPool;
         }
-        binaryLosingPool = upWins ? round.downPool : round.upPool;
-
         if (!scoringClosed) {
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+            address rbtsSettlementOracle = protocolConfig.clusterPayoutOracle();
+            if (rbtsSettlementOracle == address(0)) revert InvalidAddress();
+            roundRbtsSettlementOracle[contentId][roundId] = rbtsSettlementOracle;
+            round.upWins = upWins;
+            round.state = RoundLib.RoundState.SettlementPending;
+            if (unrevealedPastEpochCount == 0) {
+                roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
+            }
+            emit RbtsSettlementPending(contentId, roundId, rbtsSettlementOracle);
             return;
         }
-        bool rbtsSeedReady;
-        (weightedRewardStake, rbtsForfeitedPool, scoreSeed, rbtsSeedReady) =
-            _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
-        if (!rbtsSeedReady) {
-            return;
-        }
-        roundRbtsScored[contentId][roundId] = true;
-        rbtsForfeitedPool = _paySettlementCallerIncentive(contentId, roundId, rbtsForfeitedPool);
-
-        round.upWins = upWins;
-        round.state = RoundLib.RoundState.Settled;
-        round.settledAt = block.timestamp.toUint48();
-        if (unrevealedPastEpochCount == 0) {
-            roundClusterPayoutReadyAt[contentId][roundId] = round.settledAt;
-        }
-
-        uint256 treasuryPaid = RoundSettlementDistributionLib.distribute(
-            lrepToken,
-            protocolConfig,
-            roundVoterPool,
-            roundWinningStake,
-            roundStakeWithEligibleFrontend,
-            roundFrontendPool,
-            roundFrontendRegistrySnapshot,
-            contentId,
-            roundId,
-            weightedRewardStake,
-            rbtsForfeitedPool
-        );
-        if (treasuryPaid > 0) {
-            accountedLrepBalance -= treasuryPaid;
-        }
-
-        if (!_recordPendingRatingSettlement(contentId, roundId)) {
-            pendingRatingSettlementReplay[contentId][roundId] = true;
-        }
-        _notifyBundleRoundTerminal(contentId, roundId, true);
-        emit RbtsRewardsScored(
-            contentId,
-            roundId,
-            scoreSeed,
-            roundRbtsRewardWeight[contentId][roundId],
-            roundRbtsRewardClaimants[contentId][roundId],
-            roundRbtsForfeitedPool[contentId][roundId],
-            roundRbtsForfeitClaimants[contentId][roundId],
-            roundRbtsMeanScoreBps[contentId][roundId]
-        );
-        emit RoundSettled(contentId, roundId, upWins, binaryLosingPool);
+        revert RoundNotOpen();
     }
 
-    function _paySettlementCallerIncentive(uint256 contentId, uint256 roundId, uint256 forfeitedPool)
-        internal
-        returns (uint256 remainingForfeitedPool)
-    {
-        remainingForfeitedPool = forfeitedPool;
-        uint256 incentive = _settlementCallerIncentive(forfeitedPool);
-        if (incentive == 0) return remainingForfeitedPool;
-
-        try TokenTransferLib.safeTransfer(lrepToken, msg.sender, incentive) {
-            accountedLrepBalance -= incentive;
-            remainingForfeitedPool = forfeitedPool - incentive;
-            roundRbtsForfeitedPool[contentId][roundId] = remainingForfeitedPool;
-            emit SettlementCallerIncentivePaid(contentId, roundId, msg.sender, incentive);
-        } catch {
-            emit SettlementCallerIncentiveSkipped(contentId, roundId, incentive);
-        }
-    }
-
-    function _settlementCallerIncentive(uint256 forfeitedPool) internal pure returns (uint256 incentive) {
-        incentive = forfeitedPool * SETTLEMENT_CALLER_INCENTIVE_BPS / 10_000;
-        if (incentive > SETTLEMENT_CALLER_INCENTIVE_MAX) incentive = SETTLEMENT_CALLER_INCENTIVE_MAX;
+    function applyRbtsSettlementSnapshot(
+        uint256,
+        uint256,
+        IClusterPayoutOracle.PayoutWeight[] calldata,
+        bytes32[][] calldata
+    ) external nonReentrant {
+        _delegateRbtsSettlementModule();
     }
 
     function _recordPendingRatingSettlement(uint256 contentId, uint256 roundId) internal returns (bool recorded) {
@@ -1218,7 +1021,8 @@ contract RoundVotingEngine is
             _pendingTreasuryForfeitLrep += pendingDelta;
         }
         if (
-            round.state == RoundLib.RoundState.Settled && roundUnrevealedCleanupRemaining[contentId][roundId] == 0
+            (round.state == RoundLib.RoundState.Settled || round.state == RoundLib.RoundState.SettlementPending)
+                && roundUnrevealedCleanupRemaining[contentId][roundId] == 0
                 && roundClusterPayoutReadyAt[contentId][roundId] == 0
         ) {
             roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
@@ -1451,47 +1255,6 @@ contract RoundVotingEngine is
         (,,,, lastActivityAt,,,,,) = registry.contents(contentId);
     }
 
-    function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount, uint48 thresholdReachedAt)
-        internal
-        returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed, bool seedReady)
-    {
-        (bytes32 settlementEntropy, bool ready) =
-            RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
-        if (!ready) return (0, 0, bytes32(0), false);
-        RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
-            roundCommitHashes[contentId][roundId],
-            commits[contentId][roundId],
-            commitPredictedUpBps[contentId][roundId],
-            commitRbtsWeight[contentId][roundId],
-            commitRbtsScoreBps[contentId][roundId],
-            commitRbtsRewardWeight[contentId][roundId],
-            commitRbtsStakeReturned[contentId][roundId],
-            commitRbtsForfeitedStake[contentId][roundId],
-            commitIdentityKey[contentId][roundId],
-            RoundRevealLib.ScoreRbtsParams({
-                contentId: contentId,
-                roundId: roundId,
-                revealedCount: revealedCount,
-                minParticipants: MIN_RBTS_PARTICIPANTS,
-                settlementEntropy: settlementEntropy,
-                thresholdReachedAt: thresholdReachedAt
-            })
-        );
-
-        rewardWeight = result.rewardWeight;
-        forfeitedPool = result.forfeitedPool;
-        scoreSeed = result.scoreSeed;
-        roundRbtsRewardWeight[contentId][roundId] = result.rewardWeight;
-        roundRbtsRewardClaimants[contentId][roundId] = result.rewardClaimants;
-        roundRbtsParticipationWeight[contentId][roundId] = result.participationWeight;
-        roundRbtsParticipationClaimants[contentId][roundId] = result.participationClaimants;
-        roundRbtsForfeitedPool[contentId][roundId] = result.forfeitedPool;
-        roundRbtsForfeitClaimants[contentId][roundId] = result.forfeitClaimants;
-        roundRbtsMeanScoreBps[contentId][roundId] = result.meanScoreBps;
-        roundRbtsScoreSeed[contentId][roundId] = result.scoreSeed;
-        seedReady = true;
-    }
-
     function _revealRbtsVoteInternal(
         uint256 contentId,
         uint256 roundId,
@@ -1678,6 +1441,31 @@ contract RoundVotingEngine is
         );
     }
 
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == PAYOUT_DOMAIN_RBTS_SETTLEMENT;
+    }
+
+    function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bool)
+    {
+        return domain == PAYOUT_DOMAIN_RBTS_SETTLEMENT && rewardPoolId == 0
+            && roundRbtsSettlementSnapshotDigest[contentId][roundId] != bytes32(0);
+    }
+
+    function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
+        if (domain != PAYOUT_DOMAIN_RBTS_SETTLEMENT || rewardPoolId != 0) return 0;
+        if (rounds[contentId][roundId].state != RoundLib.RoundState.SettlementPending) return 0;
+        if (msg.sender != roundRbtsSettlementOracle[contentId][roundId]) return 0;
+        if (roundUnrevealedCleanupRemaining[contentId][roundId] != 0) return 0;
+        return uint64(roundClusterPayoutReadyAt[contentId][roundId]);
+    }
+
     function rbtsCommitState(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
         view
@@ -1844,93 +1632,4 @@ contract RoundVotingEngine is
         emit Unpaused(msg.sender);
     }
 
-    // =========================================================================
-    // STORAGE
-    // =========================================================================
-
-    // Per-identity cooldown: contentId => identity key => timestamp (survives delegation)
-    mapping(uint256 => mapping(bytes32 => uint256)) internal lastVoteTimestampByIdentity;
-
-    // Per-epoch unrevealed commit counter: prevents selective vote revelation (front-running keeper).
-    // contentId => roundId => epochEnd => number of unrevealed commits for that epoch.
-    mapping(uint256 => mapping(uint256 => mapping(uint256 => uint256))) internal epochUnrevealedCount;
-
-    // Per-round reveal grace period snapshot for governance consistency across open rounds.
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRevealGracePeriodSnapshot;
-
-    // Per-round drand config snapshot so reveal timing stays stable across governance updates.
-    mapping(uint256 => mapping(uint256 => bytes32)) internal roundDrandChainHashSnapshot;
-    mapping(uint256 => mapping(uint256 => uint64)) internal roundDrandGenesisTimeSnapshot;
-    mapping(uint256 => mapping(uint256 => uint64)) internal roundDrandPeriodSnapshot;
-
-    // Latest effective revealable timestamp among all commits in a round, including drand target delay.
-    mapping(uint256 => mapping(uint256 => uint256)) internal lastCommitRevealableAfter;
-
-    // Commit-time frontend eligibility snapshot to prevent retroactive fee eligibility changes.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal frontendEligibleAtCommit;
-
-    // Frontend registry snapshot per round so historical fee claims do not depend on live registry replacement.
-    mapping(uint256 => mapping(uint256 => address)) public roundFrontendRegistrySnapshot;
-
-    // Settled rounds with expired unrevealed votes must be cleaned before reward claims.
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundUnrevealedCleanupRemaining;
-
-    // Cumulative cleanup incentive paid per round.
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
-
-    // Bounded binary signal evidence used for public rating movement. Reward and payout
-    // accounting continue to use stake-weighted RBTS weights.
-    mapping(uint256 => mapping(uint256 => uint64)) internal roundRatingUpEvidence;
-    mapping(uint256 => mapping(uint256 => uint64)) internal roundRatingDownEvidence;
-
-    // Commit timestamp used for bounty eligibility.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) internal commitCommittedAt;
-
-    /// @notice Tracks bundle-observer terminal notifications that reverted on the escrow side.
-    /// @dev Set true by `_notifyBundleRoundTerminal` on revert; cleared by
-    ///      `replayBundleObserverNotify` (or by a subsequent successful notification).
-    ///      Indexed by (contentId, roundId).
-    mapping(uint256 contentId => mapping(uint256 roundId => bool)) internal pendingBundleObserverReplay;
-
-    // Commit-time count of HRC-verified voters. RevealFailed lockout requires HRC commit quorum,
-    // not merely one HRC voter plus non-HRC padding.
-    mapping(uint256 => mapping(uint256 => uint16)) internal roundHumanVerifiedCommitCount;
-
-    // Delayed seed marker captured when settlement closes the scoring set; the marker packs
-    // closure timestamp and seed block so cleanup uses the original scoring cutoff.
-    mapping(uint256 => mapping(uint256 => bytes32)) internal roundRbtsSeedEntropy;
-
-    /// @notice Timestamp when a settled round's payout source became fully auditable.
-    /// @dev For rounds without stale unrevealed votes this equals `settledAt`; otherwise it is
-    ///      set when the cleanup queue reaches zero. Oracle consumers reject roots proposed
-    ///      before this timestamp so the optimistic challenge window only runs on complete data.
-    ///      I-Crosscutting-A: this slot was swapped in-place from `roundDeferredCleanupBounty`
-    ///      (triple mapping → uint48) when the deferred-cleanup bounty was removed in commit
-    ///      `38dae9e6`. Fresh deployments are unaffected; any future upgrade from a baseline
-    ///      that populated the old surface must run `validateUpgrade` first and treat this slot
-    ///      as freshly initialized. The annotation marks the in-place swap so OZ Upgrades tools
-    ///      do not flag the storage layout change.
-    /// @custom:oz-renamed-from roundDeferredCleanupBounty
-    mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
-
-    /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
-    ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless
-    ///         `flushPendingTreasuryForfeit` retries the transfer; until then the amount stays
-    ///         in `accountedLrepBalance` so it isn't classified as recoverable surplus.
-    uint256 internal _pendingTreasuryForfeitLrep;
-
-    // Commit-time credential snapshots for bounty qualification.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) internal commitCredentialMask;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) internal commitFreshCredentialMask;
-
-    // Per-round content dormancy generation snapshot. If content becomes dormant and is later
-    // revived, pre-dormancy rounds cannot resume reveal/settlement in the revived lifecycle.
-    mapping(uint256 => mapping(uint256 => uint8)) internal roundContentDormantCountSnapshot;
-    mapping(uint256 => mapping(uint256 => address)) internal roundConfidentialityEscrowSnapshot;
-
-    /// @notice Tracks pending-rating settlement records that reverted during settlement.
-    mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingRatingSettlementReplay;
-
-    // --- Storage gap reserved for future upgrades ---
-    uint256[15] private __gap;
 }

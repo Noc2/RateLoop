@@ -48,6 +48,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint8 internal constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
+    uint8 internal constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     error InvalidAddress();
@@ -832,6 +833,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address contentRegistry = _readRewardDistributorRegistry(distributor);
         if (contentRegistry == address(0)) revert InvalidConfig();
         _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_PUBLIC_RATING, contentRegistry);
+        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_RBTS_SETTLEMENT, engine);
 
         address questionRewardEscrow = _readQuestionRewardPoolEscrow(contentRegistry);
         if (questionRewardEscrow == address(0)) return;

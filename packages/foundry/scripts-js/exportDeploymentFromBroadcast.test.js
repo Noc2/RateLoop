@@ -272,6 +272,21 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
     );
   }
 
+  {
+    const contractName = "RoundVotingEngineRbtsSettlementModule";
+    const contractAddress = address(nextAddress++);
+    const hash = nextTxHash(transactions);
+    directAddressByName.set(contractName, contractAddress);
+    transactions.push({
+      transactionType: "CREATE",
+      contractName,
+      contractAddress,
+      transaction: { from: deployer },
+      hash,
+    });
+    receipts.push(successfulReceipt(hash, "0x64"));
+  }
+
   const defaultAdminRole =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
   const adminRole =
@@ -547,6 +562,14 @@ function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
     "ClusterPayoutOracle",
     "setRoundPayoutSnapshotConsumer(uint8,address)",
     ["3", contentRegistry],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "setRoundPayoutSnapshotConsumer(uint8,address)",
+    ["5", votingEngine],
     clusterOracle
   );
   pushCall(
@@ -1017,6 +1040,11 @@ test("reconstructDeploymentExportFromBroadcast rejects missing oracle payout con
       label:
         /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(PUBLIC_RATING\)/,
     },
+    {
+      domain: "5",
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(RBTS_SETTLEMENT\)/,
+    },
   ];
 
   for (const { domain, label } of cases) {
@@ -1382,6 +1410,20 @@ test("reconstructDeploymentExportFromBroadcast rejects final-state rewrites afte
         );
       },
     },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(RBTS_SETTLEMENT\)/,
+      mutate: (transactions, receipts) => {
+        pushCall(
+          transactions,
+          receipts,
+          "ClusterPayoutOracle",
+          "setRoundPayoutSnapshotConsumer(uint8,address)",
+          ["5", address(606)],
+          address(6)
+        );
+      },
+    },
   ];
 
   for (const { label, mutate } of cases) {
@@ -1584,6 +1626,21 @@ test("reconstructDeploymentExportFromBroadcast rejects tampered completion argum
             candidate.arguments?.[0] === "3"
         );
         tx.arguments[1] = address(207);
+      },
+    },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(RBTS_SETTLEMENT\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function ===
+              "setRoundPayoutSnapshotConsumer(uint8,address)" &&
+            candidate.arguments?.[0] === "5"
+        );
+        tx.arguments[1] = address(208);
       },
     },
     {

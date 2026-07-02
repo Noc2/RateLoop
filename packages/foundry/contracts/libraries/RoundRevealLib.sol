@@ -262,6 +262,30 @@ library RoundRevealLib {
         result.meanScoreBps = meanScoreBps;
     }
 
+    function returnRbtsStakes(
+        bytes32[] storage commitKeys,
+        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
+        mapping(bytes32 => uint256) storage commitRbtsWeight,
+        mapping(bytes32 => uint256) storage commitRbtsStakeReturned
+    ) external returns (ScoreRbtsResult memory result) {
+        uint256 committedCount = commitKeys.length;
+        for (uint256 i = 0; i < committedCount;) {
+            bytes32 commitKey = commitKeys[i];
+            RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
+            uint256 rbtsWeight = commitRbtsWeight[commitKey];
+            if (revealedCommit.revealed && rbtsWeight > 0) {
+                commitRbtsStakeReturned[commitKey] = revealedCommit.stakeAmount;
+                result.participationWeight += rbtsWeight;
+                unchecked {
+                    ++result.participationClaimants;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function captureRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,

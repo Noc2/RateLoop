@@ -50,6 +50,7 @@ const PROXY_BACKED_DEPLOYMENT_EXPORT_CONTRACTS = [
   "ProfileRegistry",
   "ContentRegistry",
   "RoundVotingEngine",
+  "RoundVotingEngineRbtsSettlementModule",
   "ProtocolConfig",
   "RoundRewardDistributor",
   "QuestionRewardPoolEscrow",
@@ -1137,6 +1138,10 @@ function updatePonderEnv(allGeneratedContracts, deployers = {}) {
 const ABI_TARGETS = [
   {
     contract: "RoundVotingEngine",
+    targets: ["contracts/src/abis"],
+  },
+  {
+    contract: "RoundVotingEngineRbtsSettlementModule",
     targets: ["contracts/src/abis"],
   },
   {

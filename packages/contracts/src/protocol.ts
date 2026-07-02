@@ -16,6 +16,7 @@ export const ROUND_STATE = {
   Cancelled: 2,
   Tied: 3,
   RevealFailed: 4,
+  SettlementPending: 5,
 } as const;
 
 export type RoundState = (typeof ROUND_STATE)[keyof typeof ROUND_STATE];
@@ -26,7 +27,18 @@ export const ROUND_STATE_LABEL: Record<RoundState, string> = {
   [ROUND_STATE.Cancelled]: "Cancelled",
   [ROUND_STATE.Tied]: "Tied",
   [ROUND_STATE.RevealFailed]: "RevealFailed",
+  [ROUND_STATE.SettlementPending]: "SettlementPending",
 };
+
+export const PAYOUT_DOMAIN = {
+  QuestionReward: 1,
+  LaunchCredit: 2,
+  PublicRating: 3,
+  QuestionBundleReward: 4,
+  RbtsSettlement: 5,
+} as const;
+
+export type PayoutDomain = (typeof PAYOUT_DOMAIN)[keyof typeof PAYOUT_DOMAIN];
 
 export const DEFAULT_ROUND_CONFIG = {
   epochDurationSeconds: 20 * 60,
@@ -79,6 +91,15 @@ export function requiredQuestionRewardParticipants(amountAtomic: bigint | number
     return QUESTION_REWARD_PARTICIPANT_FLOORS.highValueMinParticipants;
   }
   return QUESTION_REWARD_PARTICIPANT_FLOORS.minParticipants;
+}
+
+export const BOUNTY_ELIGIBILITY_OPEN = 0 as const;
+export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1 << 3;
+export const NON_REFUNDABLE_BOUNTY_RECAPTURE_PROTECTION_AMOUNT = 500_000_000;
+
+export function requiresVerifiedHumanBountyEligibility(amountAtomic: bigint | number): boolean {
+  const amount = typeof amountAtomic === "bigint" ? amountAtomic : BigInt(amountAtomic);
+  return amount >= BigInt(NON_REFUNDABLE_BOUNTY_RECAPTURE_PROTECTION_AMOUNT);
 }
 
 export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1 as const;

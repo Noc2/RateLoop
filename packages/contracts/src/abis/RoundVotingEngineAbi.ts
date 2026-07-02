@@ -65,6 +65,91 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "applyRbtsSettlementSnapshot",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "tuple[]",
+        "internalType": "struct IClusterPayoutOracle.PayoutWeight[]",
+        "components": [
+          {
+            "name": "domain",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "rewardPoolId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "contentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "roundId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "commitKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "identityKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "account",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "baseWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "independenceBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "effectiveWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "reasonHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "",
+        "type": "bytes32[][]",
+        "internalType": "bytes32[][]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "cancelExpiredRound",
     "inputs": [
       {
@@ -592,10 +677,77 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "initializeWithRbtsSettlementModule",
+    "inputs": [
+      {
+        "name": "_governance",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_lrepToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_registry",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_protocolConfig",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_rbtsSettlementModule",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "isDormancyBlocked",
     "inputs": [
       {
         "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isRoundPayoutSnapshotConsumed",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1237,6 +1389,40 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "roundPayoutSnapshotSourceReadyAt",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundRaterRegistrySnapshot",
     "inputs": [
       {
@@ -1290,6 +1476,19 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "setRbtsSettlementModule",
+    "inputs": [
+      {
+        "name": "module",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setRole",
     "inputs": [
       {
@@ -1328,6 +1527,25 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "supportsRoundPayoutSnapshotDomain",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -1690,6 +1908,100 @@ export const RoundVotingEngineAbi = [
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RbtsSettlementModuleUpdated",
+    "inputs": [
+      {
+        "name": "module",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RbtsSettlementPending",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "oracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RbtsSettlementSnapshotApplied",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "snapshotDigest",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "effectiveParticipantUnits",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "forfeitsEnabled",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RbtsSettlementSnapshotTimedOut",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
