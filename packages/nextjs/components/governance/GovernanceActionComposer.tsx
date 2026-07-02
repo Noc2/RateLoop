@@ -77,6 +77,11 @@ export const RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID = "rater-registry-unban-ide
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
 const MAX_UINT64 = (1n << 64n) - 1n;
+export const ORACLE_TIMING_CONFIG_ACTION_ID = "oracle-set-timing-config";
+const LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS = 60 * 60;
+const DEFAULT_KEEPER_OPS_LAG_BUDGET_SECONDS = 15 * 60;
+const MONITORING_EVIDENCE_PATTERN =
+  /\b(alert|alerts|dashboard|dashboards|keeper|indexer|monitoring|ponder|p95|p99|slo|sla|breach|breaches)\b/i;
 
 const protocolConfigConfidentialityAbi = [
   {
@@ -96,6 +101,41 @@ function assertNonZeroBytes32(value: `0x${string}`, label: string) {
 function validateUint64(value: bigint, label: string) {
   if (value > MAX_UINT64) throw new Error(`${label} must fit in uint64.`);
   return value;
+}
+
+function parsePreviewSeconds(value: string | undefined, fallback: bigint) {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return fallback;
+  return BigInt(trimmed);
+}
+
+function formatSecondsPreview(value: bigint) {
+  if (value % 3600n === 0n) return `${value / 3600n}h`;
+  if (value % 60n === 0n) return `${value / 60n}m`;
+  return `${value}s`;
+}
+
+export function getOracleTimingLaunchBudgetPreview(values: Record<string, string>) {
+  const challengeWindowSeconds = parsePreviewSeconds(values.challengeWindow, 0n);
+  const finalizationVetoWindowSeconds = parsePreviewSeconds(values.finalizationVetoWindow, 0n);
+  const keeperOpsLagBudgetSeconds = parsePreviewSeconds(
+    values.keeperOpsLagBudget,
+    BigInt(DEFAULT_KEEPER_OPS_LAG_BUDGET_SECONDS),
+  );
+  const healthyPathSeconds = challengeWindowSeconds + finalizationVetoWindowSeconds + keeperOpsLagBudgetSeconds;
+
+  return {
+    challengeWindowSeconds,
+    exceedsLaunchBudget: healthyPathSeconds > BigInt(LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS),
+    finalizationVetoWindowSeconds,
+    healthyPathSeconds,
+    keeperOpsLagBudgetSeconds,
+    launchBudgetSeconds: BigInt(LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS),
+  };
+}
+
+export function oracleTimingDescriptionReferencesMonitoringEvidence(description: string) {
+  return MONITORING_EVIDENCE_PATTERN.test(description);
 }
 
 function cleanDescriptionValue(value: string | undefined, fallback: string) {
@@ -507,6 +547,51 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       `Set ClusterPayoutOracle config: ${values.challengeWindow || "0"}s challenge window, ${
         values.challengeBond || "0"
       } USDC atomic-unit challenge bond`,
+  },
+  {
+    id: ORACLE_TIMING_CONFIG_ACTION_ID,
+    group: "Cluster Payout Oracle",
+    label: "Set oracle timing",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "setOracleTimingConfig",
+    description: "Create a proposal to update payout-root challenge and finalization-veto timing.",
+    fields: [
+      {
+        key: "challengeWindow",
+        label: "Challenge window (seconds)",
+        type: "uint",
+        required: true,
+        helperText:
+          "Launch default is 900 seconds. Longer windows increase the normal wait before payout roots can finalize.",
+      },
+      {
+        key: "finalizationVetoWindow",
+        label: "Finalization veto window (seconds)",
+        type: "uint",
+        required: true,
+        helperText:
+          "Launch default is 900 seconds. This window is included in the normal one-hour payout-finality UX budget.",
+      },
+      {
+        key: "keeperOpsLagBudget",
+        label: "Keeper/indexer budget for preview (seconds)",
+        type: "uint",
+        helperText:
+          "Preview-only. Defaults to 900 seconds and is used to show the derived healthy-path wait before proposal submission.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      validateUint64(parser.uint("challengeWindow", "Challenge window"), "Challenge window"),
+      validateUint64(parser.uint("finalizationVetoWindow", "Finalization veto window"), "Finalization veto window"),
+    ],
+    buildDescription: values => {
+      const preview = getOracleTimingLaunchBudgetPreview(values);
+      return [
+        `Set ClusterPayoutOracle timing: ${preview.challengeWindowSeconds.toString()}s challenge window, ${preview.finalizationVetoWindowSeconds.toString()}s finalization veto window.`,
+        `Derived healthy-path wait preview: ${preview.healthyPathSeconds.toString()}s using ${preview.keeperOpsLagBudgetSeconds.toString()}s keeper/indexer budget.`,
+      ].join("\n");
+    },
   },
   {
     id: "oracle-finalize-challenged-correlation-epoch",
@@ -948,6 +1033,11 @@ export function GovernanceActionComposer() {
     configuredTreasuryAddress.toLowerCase() !== timelockAddress.toLowerCase();
   const grantExceedsTreasury =
     isTreasuryGrant && grantAmount !== undefined && treasuryBalance !== undefined && grantAmount > treasuryBalance;
+  const oracleTimingBudgetPreview = useMemo(
+    () =>
+      selectedTemplate?.id === ORACLE_TIMING_CONFIG_ACTION_ID ? getOracleTimingLaunchBudgetPreview(formValues) : null,
+    [formValues, selectedTemplate?.id],
+  );
   const thresholdUpdateAmount = useMemo(
     () =>
       selectedTemplate?.id === "governor-set-threshold" ? parsePreviewLrepAmount(formValues.threshold) : undefined,
@@ -1082,6 +1172,15 @@ export function GovernanceActionComposer() {
       if (selectedTemplate.mode === "proposal") {
         if (!effectiveDescription) {
           throw new Error("Proposal description is required.");
+        }
+        if (
+          selectedTemplate.id === ORACLE_TIMING_CONFIG_ACTION_ID &&
+          getOracleTimingLaunchBudgetPreview(formValues).exceedsLaunchBudget &&
+          !oracleTimingDescriptionReferencesMonitoringEvidence(effectiveDescription)
+        ) {
+          throw new Error(
+            "Oracle timing proposals above the one-hour healthy-path launch budget must reference monitoring evidence in the proposal description.",
+          );
         }
       }
 
@@ -1327,6 +1426,25 @@ export function GovernanceActionComposer() {
                   {thresholdUpdateExceedsMax && (
                     <p className="text-base text-warning">
                       The proposed threshold exceeds the governor cap and would revert.
+                    </p>
+                  )}
+                </div>
+              )}
+              {oracleTimingBudgetPreview && (
+                <div className="space-y-1 pt-2">
+                  <p className="text-base text-base-content/50">
+                    Healthy-path timing preview:{" "}
+                    <span className="font-mono text-base-content/80">
+                      {formatSecondsPreview(oracleTimingBudgetPreview.challengeWindowSeconds)} challenge +{" "}
+                      {formatSecondsPreview(oracleTimingBudgetPreview.finalizationVetoWindowSeconds)} veto +{" "}
+                      {formatSecondsPreview(oracleTimingBudgetPreview.keeperOpsLagBudgetSeconds)} keeper/indexing ={" "}
+                      {formatSecondsPreview(oracleTimingBudgetPreview.healthyPathSeconds)}
+                    </span>
+                  </p>
+                  {oracleTimingBudgetPreview.exceedsLaunchBudget && (
+                    <p className="text-base text-warning">
+                      This exceeds the one-hour launch UX budget. The proposal description must reference current
+                      monitoring evidence before submission.
                     </p>
                   )}
                 </div>
