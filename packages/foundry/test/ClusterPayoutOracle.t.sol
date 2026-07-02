@@ -2370,7 +2370,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
     }
 
-    function test_FinalizedRoundPayoutSnapshotRejectAllowedWithinVetoWindowEvenIfConsumed() public {
+    function test_FinalizedRoundPayoutSnapshotRejectRevertsWithinVetoWindowWhenConsumed() public {
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -2394,21 +2394,11 @@ contract ClusterPayoutOracleTest is Test {
 
         questionConsumer.setConsumed(true);
 
-        // Within the veto window the arbiter can still reject even after a claim landed.
-        // Already-paid leaves stay paid; future claims revert via verifyPayoutWeight.
-        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
-        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
-        assertTrue(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
-
-        input.artifactHash = keccak256("replacement-after-consumed");
-        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
-        oracle.proposeRoundPayoutSnapshot(input);
-
-        input.weightRoot = keccak256("replacement-after-consumed-root");
-        input.artifactHash = keccak256("epoch-artifact");
+        // Even inside the veto window, once a consumer reports first use the root stays pinned.
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
-        oracle.proposeRoundPayoutSnapshot(input);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
+        ClusterPayoutOracle.RoundPayoutProposal memory stillFinalized = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(stillFinalized.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectUsesSnapshottedConsumerAfterRotation() public {
@@ -2474,7 +2464,6 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("broken-consumer-view"));
         ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
-        assertFalse(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
     }
 
     function test_FinalizedRoundPayoutSnapshotReproposalAllowedWhenConsumerViewReverts() public {

@@ -1733,8 +1733,8 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-partial-root"));
-        assertTrue(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
 
         IClusterPayoutOracle.PayoutWeight memory bobPayout =
             _launchPayoutWeight(1, bobCommitKey, bob, 2_500, keccak256("bob-clustered"));

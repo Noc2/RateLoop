@@ -122,7 +122,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(uint256 => bytes32) public correlationEpochSourceSetDigest;
     mapping(uint256 => mapping(bytes32 => bytes32)) public correlationEpochSnapshotCoverageDigest;
     mapping(address => uint256) public pendingBondWithdrawals;
-    mapping(bytes32 => bool) public rejectedRoundPayoutSnapshotConsumed;
     /// @notice Exact rejected round-payout proposal payloads. Used when the arbiter rejects bad
     ///         metadata around a deterministic weightRoot without burning the root itself.
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
@@ -471,9 +470,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
             }
         }
-        if (existing.snapshot.status == SnapshotStatus.Rejected && rejectedRoundPayoutSnapshotConsumed[snapshotKey]) {
-            revert SnapshotConsumed();
-        }
         address consumer = roundPayoutSnapshotConsumer[input.domain];
         if (consumer == address(0)) revert InvalidAddress();
         address proposalTimeSnapshotProposer = frontendRegistry.snapshotProposerForFrontend(frontendOperator);
@@ -644,13 +640,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
-    /// @notice Reject a finalized round payout snapshot. Allowed in two cases:
-    ///         (a) the consumer reports the snapshot has not yet been consumed (fast-path, no time
-    ///             limit — already-paid leaves are not possible);
-    ///         (b) the rejection happens within `FINALIZATION_VETO_WINDOW` after finalization, even
-    ///             if the consumer reports the snapshot consumed. Already-paid leaves stay paid;
-    ///             future claims revert because `verifyPayoutWeight` returns false for non-finalized
-    ///             snapshots. M-Oracle-2 from 2026-05-16 audit.
+    /// @notice Reject a finalized round payout snapshot only while the consumer reports that it has
+    ///         not been consumed. Once a claim or credit has used the root, remediation must happen
+    ///         outside this oracle rejection path so already-paid and future claimants see one root.
     function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
@@ -677,13 +669,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
 
-        bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
         // L-Oracle-B + L-Oracle-2: wrap the consumer call in try/catch so a broken / removed
         // consumer cannot trap the arbiter. Track `consumed` AND `consumedKnown` separately.
-        // The catch path defaults to `consumed = true` to block out-of-veto rejection of
-        // potentially-paid snapshots, but `consumedKnown = false` keeps us from permanently
-        // killing the (key, weightRoot) slot via `rejectedRoundPayoutSnapshotConsumed` when we
-        // don't actually know the consumer's state.
+        // The catch path defaults to `consumed = true`, but `consumedKnown = false` keeps a broken
+        // view from blocking exceptional recovery or permanently killing the snapshot key.
         bool consumed = false;
         bool consumedKnown = false;
         try IRoundPayoutSnapshotConsumer(consumer)
@@ -697,26 +686,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             consumed = true;
         }
-        if (!withinVetoWindow) {
-            // Outside the veto window the rejection is only safe if the consumer has not yet paid
-            // any claim against this snapshot's merkle root. A catch-path default of
-            // `consumed=true` with `consumedKnown=false` must not block rejection when the
-            // consumer view is broken or removed.
-            if (consumedKnown && consumed) {
-                revert SnapshotConsumed();
-            }
+        if (consumedKnown && consumed) {
+            revert SnapshotConsumed();
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
         if (rejectRoot) {
             rejectedRoundPayoutSnapshotRoots[snapshotKey][snapshot.weightRoot] = true;
-        }
-        // L-Oracle-2: only mark the slot as permanently consumed-rejected when the consumer
-        // call SUCCEEDED and returned true. The catch path's defensive default must not flag
-        // the slot as dead.
-        if (consumed && consumedKnown) {
-            rejectedRoundPayoutSnapshotConsumed[snapshotKey] = true;
         }
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }

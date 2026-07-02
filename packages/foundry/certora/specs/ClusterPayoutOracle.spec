@@ -37,7 +37,6 @@ methods {
     function pendingBondWithdrawals(address) external returns (uint256) envfree;
     function rejectedRoundPayoutSnapshotRoots(bytes32, bytes32) external returns (bool) envfree;
     function rejectedRoundPayoutSnapshotDigests(bytes32, bytes32) external returns (bool) envfree;
-    function rejectedRoundPayoutSnapshotConsumed(bytes32) external returns (bool) envfree;
     function rejectedCorrelationEpochRoots(uint256, bytes32) external returns (bool) envfree;
     function rejectedCorrelationEpochRootKeys(bytes32) external returns (bool) envfree;
     function rejectedCorrelationEpochSnapshotDigests(uint256, bytes32) external returns (bool) envfree;
