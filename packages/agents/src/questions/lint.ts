@@ -263,6 +263,21 @@ function lintSingleDurationTiming(request: Partial<AgentAskExample>, findings: Q
   }
 }
 
+function lintBountyEligibility(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
+  if (!isObject(request.bounty)) return;
+  const raw = (request.bounty as JsonObject).bountyEligibility;
+  if (raw === undefined || raw === null) return;
+
+  const parsed = parseLintNonNegativeInteger(raw);
+  if (parsed === 0n || parsed === 8n) return;
+  pushFinding(
+    findings,
+    "error",
+    "bounty.bountyEligibility",
+    "bounty.bountyEligibility must be 0 for everyone or 8 for Proof of Human.",
+  );
+}
+
 function lintRoundConfigSingleDuration(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
   const roundConfigInfo = getRequestRoundConfig(request);
   if (!roundConfigInfo) return;
@@ -641,6 +656,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     pushFinding(findings, "error", "bounty", "A bounty object is required before an agent spends.");
   } else {
     lintSingleDurationTiming(request, findings);
+    lintBountyEligibility(request, findings);
 
     const amount = parseLintPositiveInteger(request.bounty.amount);
     if (amount === null) {

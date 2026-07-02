@@ -720,6 +720,44 @@ describe("round config voter alignment linting", () => {
     expect(summarizeLintFindings(findings).ok).toBe(true);
   });
 
+  it("rejects unsupported bounty eligibility values", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        bountyEligibility: "7",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.bountyEligibility",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects non-integer bounty eligibility values", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        bountyEligibility: "proof_of_human",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.bountyEligibility",
+        }),
+      ]),
+    );
+  });
+
   it("accepts an explicit roundConfig.minVoters that matches bounty.requiredVoters", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
