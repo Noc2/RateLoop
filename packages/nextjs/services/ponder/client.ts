@@ -1101,6 +1101,13 @@ export interface PonderContentOpenRoundSummary {
   humanVerifiedCommitQuorumMet?: boolean;
   lastCommitRevealableAfter?: string | null;
   revealGracePeriod?: string | null;
+  rbtsSettlementStatus?: string | null;
+  rbtsSettlementOracle?: string | null;
+  rbtsSettlementPendingAt?: string | null;
+  rbtsSettlementReadyAt?: string | null;
+  rbtsSettlementSnapshotDigest?: string | null;
+  rbtsSettlementAppliedAt?: string | null;
+  rbtsSettlementTimedOutAt?: string | null;
   estimatedSettlementTime: string | null;
 }
 
@@ -1138,6 +1145,13 @@ export interface PonderRoundItem {
   url: string | null;
   submitter: string | null;
   categoryId: string | null;
+  rbtsSettlementStatus?: string | null;
+  rbtsSettlementOracle?: string | null;
+  rbtsSettlementPendingAt?: string | null;
+  rbtsSettlementReadyAt?: string | null;
+  rbtsSettlementSnapshotDigest?: string | null;
+  rbtsSettlementAppliedAt?: string | null;
+  rbtsSettlementTimedOutAt?: string | null;
 }
 
 export interface PonderRoundsResponse {

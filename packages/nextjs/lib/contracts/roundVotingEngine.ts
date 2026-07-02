@@ -1,7 +1,7 @@
 import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { RoundData } from "~~/types/votingTypes";
 
-export type RoundPhase = "voting" | "settled" | "cancelled" | "tied" | "revealFailed" | "none";
+export type RoundPhase = "voting" | "settlementPending" | "settled" | "cancelled" | "tied" | "revealFailed" | "none";
 
 export interface VotingConfig {
   epochDuration: number;
@@ -367,6 +367,8 @@ function deriveRoundPhase(state: number, hasRound: boolean): RoundPhase {
   switch (state) {
     case ROUND_STATE.Open:
       return "voting";
+    case ROUND_STATE.SettlementPending:
+      return "settlementPending";
     case ROUND_STATE.Settled:
       return "settled";
     case ROUND_STATE.Cancelled:
@@ -429,13 +431,15 @@ export function deriveRoundSnapshot(params: {
               revealedCount < settlementQuorum &&
               voteCount < params.config.maxVoters,
             status:
-              thresholdReachedAt !== 0 || revealedCount >= settlementQuorum
+              state !== ROUND_STATE.Open
                 ? COMMIT_AVAILABILITY_STATUS.WaitingForSettlement
-                : voteCount >= params.config.maxVoters
-                  ? COMMIT_AVAILABILITY_STATUS.RoundFull
-                  : state === ROUND_STATE.Open && timing.roundTimeRemaining <= 0
-                    ? COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace
-                    : COMMIT_AVAILABILITY_STATUS.Open,
+                : thresholdReachedAt !== 0 || revealedCount >= settlementQuorum
+                  ? COMMIT_AVAILABILITY_STATUS.WaitingForSettlement
+                  : voteCount >= params.config.maxVoters
+                    ? COMMIT_AVAILABILITY_STATUS.RoundFull
+                    : state === ROUND_STATE.Open && timing.roundTimeRemaining <= 0
+                      ? COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace
+                      : COMMIT_AVAILABILITY_STATUS.Open,
             roundId: params.roundId,
             referenceRatingBps: 0,
             willStartNewRound: false,

@@ -21,7 +21,12 @@ const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "ac
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
 const MAX_PUBLIC_TAGS = 3;
-import { MIN_NONZERO_CONFIDENTIALITY_BOND, requiredQuestionRewardParticipants } from "@rateloop/contracts/protocol";
+import {
+  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
+  MIN_NONZERO_CONFIDENTIALITY_BOND,
+  requiredQuestionRewardParticipants,
+  requiresVerifiedHumanBountyEligibility,
+} from "@rateloop/contracts/protocol";
 import {
   findBlockedContentTags,
   getContentTitleValidationError,
@@ -173,6 +178,12 @@ function parseLintPositiveInteger(value: unknown): bigint | null {
   if (!/^\d+$/.test(raw)) return null;
   const parsed = BigInt(raw);
   return parsed > 0n ? parsed : null;
+}
+
+function parseLintNonNegativeInteger(value: unknown): bigint | null {
+  const raw = readLintIntegerString(value);
+  if (raw === null) return null;
+  return /^\d+$/.test(raw) ? BigInt(raw) : null;
 }
 
 function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
@@ -647,6 +658,22 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
           "error",
           "bounty.requiredVoters",
           `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+        );
+      }
+      const bountyEligibility =
+        request.bounty.bountyEligibility === undefined || request.bounty.bountyEligibility === null
+          ? undefined
+          : parseLintNonNegativeInteger(request.bounty.bountyEligibility);
+      if (
+        requiresVerifiedHumanBountyEligibility(amount) &&
+        bountyEligibility !== undefined &&
+        (bountyEligibility === null || (bountyEligibility & BigInt(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN)) === 0n)
+      ) {
+        pushFinding(
+          findings,
+          "error",
+          "bounty.bountyEligibility",
+          "Bounties of 500000000 atomic units or more must use Proof of Human bounty eligibility (8).",
         );
       }
     }

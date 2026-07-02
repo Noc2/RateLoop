@@ -93,23 +93,19 @@ test("describeOpenRoundActivity keeps using reveal progress after commit quorum 
   );
 });
 
-test("estimateVoteReturn uses informed weight during open phase", () => {
+test("estimateVoteReturn uses informed weight without projecting majority-pool rewards", () => {
   const estimate = estimateVoteReturn(
     {
       isEpoch1: false,
-      upPool: 20_000_000n,
-      downPool: 40_000_000n,
-      weightedUpPool: 20_000_000n,
-      weightedDownPool: 40_000_000n,
     },
     true,
     10,
   );
 
   assert.equal(estimate.effectiveStakeMicro, 2_500_000n);
-  assert.equal(estimate.projectedVoterPoolMicro, 38_400_000n);
-  assert.equal(estimate.projectedPoolShareMicro, 4_266_666n);
-  assert.equal(estimate.estimatedGrossReturnMicro, 14_266_666n);
+  assert.equal(estimate.projectedVoterPoolMicro, 0n);
+  assert.equal(estimate.projectedPoolShareMicro, 0n);
+  assert.equal(estimate.estimatedGrossReturnMicro, 10_000_000n);
   assert.equal(estimate.belowMeanFloorMicro, 0n);
 });
 
@@ -117,16 +113,12 @@ test("estimateVoteReturn keeps full weight during blind phase", () => {
   const estimate = estimateVoteReturn(
     {
       isEpoch1: true,
-      upPool: 20_000_000n,
-      downPool: 40_000_000n,
-      weightedUpPool: 20_000_000n,
-      weightedDownPool: 40_000_000n,
     },
     true,
     10,
   );
 
   assert.equal(estimate.effectiveStakeMicro, 10_000_000n);
-  assert.equal(estimate.projectedPoolShareMicro, 12_800_000n);
-  assert.equal(estimate.estimatedGrossReturnMicro, 22_800_000n);
+  assert.equal(estimate.projectedPoolShareMicro, 0n);
+  assert.equal(estimate.estimatedGrossReturnMicro, 10_000_000n);
 });

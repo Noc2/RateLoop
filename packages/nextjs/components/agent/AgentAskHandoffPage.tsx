@@ -70,6 +70,7 @@ import {
   getQuestionDetailsTextSizeBytes,
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
+import { BOUNTY_ELIGIBILITY_VERIFIED_HUMAN, requiresVerifiedHumanBountyEligibility } from "~~/lib/bountyEligibility";
 import {
   HEAD_TO_HEAD_AB_QUESTION_TOOLTIP,
   type HeadToHeadTitleMode,
@@ -1772,6 +1773,9 @@ async function buildDraftRequestBody(
     requiredVoters: minVoters.toString(),
   };
   const draftBounty = requestBody.bounty as JsonRecord;
+  if (requiresVerifiedHumanBountyEligibility(bountyAmount)) {
+    draftBounty.bountyEligibility = String(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+  }
   delete draftBounty.bountyStartBy;
   delete draftBounty.bountyWindowSeconds;
   delete draftBounty.feedbackWindowSeconds;

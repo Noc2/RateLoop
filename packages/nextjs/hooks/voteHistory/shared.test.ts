@@ -5,6 +5,7 @@ import test from "node:test";
 
 test("getVoteClaimType marks settled rounds as rewards and refund-eligible terminal rounds as refunds", () => {
   assert.equal(getVoteClaimType(ROUND_STATE.Open), null);
+  assert.equal(getVoteClaimType(ROUND_STATE.SettlementPending), null);
   assert.equal(getVoteClaimType(ROUND_STATE.Settled), "reward");
   assert.equal(getVoteClaimType(ROUND_STATE.Cancelled), "refund");
   assert.equal(getVoteClaimType(ROUND_STATE.Tied), "refund");

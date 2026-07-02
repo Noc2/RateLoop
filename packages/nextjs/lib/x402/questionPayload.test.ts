@@ -853,6 +853,40 @@ test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
   assert.equal(payload.roundConfig.minVoters, 8n);
 });
 
+test("parseX402QuestionRequest protects recapture-sized bounties with Proof of Human", () => {
+  const defaulted = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      amount: "500000000",
+    },
+  });
+  assert.equal(defaulted.bounty.bountyEligibility, 8);
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: "500000000",
+          bountyEligibility: "0",
+        },
+      }),
+    /bountyEligibility must be 8/,
+  );
+
+  const explicitHuman = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      amount: "500000000",
+      bountyEligibility: "8",
+    },
+  });
+  assert.equal(explicitHuman.bounty.bountyEligibility, 8);
+});
+
 test("parseX402QuestionRequest rejects bounty and round voter mismatches", () => {
   assert.throws(
     () =>

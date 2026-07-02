@@ -531,6 +531,37 @@ test("buildAgentResultPackage keeps open rounds pending", () => {
   assert.ok(result.limitations.some(item => item.includes("not final")));
 });
 
+test("buildAgentResultPackage keeps RBTS settlement-pending rounds non-final", () => {
+  const result = buildAgentResultPackage({
+    audienceContext: null,
+    content: content({
+      ratingBps: 6500,
+      ratingSettledRounds: 0,
+    }),
+    feedback: [],
+    latestRound: {
+      downCount: 2,
+      downPool: "300",
+      revealedCount: 8,
+      roundId: "2",
+      state: ROUND_STATE.SettlementPending,
+      totalStake: "1000",
+      upCount: 6,
+      upPool: "700",
+      upWins: true,
+      voteCount: 8,
+    },
+    publicUrl: "https://rateloop.ai/rate?content=123",
+  });
+
+  assert.equal(result.ready, false);
+  assert.equal(result.answer, "pending");
+  assert.equal(result.recommendedNextAction, "wait_for_settlement");
+  assert.equal(result.distribution.stateLabel, "SettlementPending");
+  assert.equal(result.protocolState.latestRound?.state, ROUND_STATE.SettlementPending);
+  assert.ok(result.limitations.some(item => item.includes("not final")));
+});
+
 test("buildAgentResultPackage prefers the latest round rating over stale content aggregates", () => {
   const result = buildAgentResultPackage({
     audienceContext: null,

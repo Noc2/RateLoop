@@ -4,6 +4,10 @@ import {
   type TargetAudience,
 } from "@rateloop/node-utils/profileSelfReport";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
+import {
+  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
+  requiresVerifiedHumanBountyEligibility,
+} from "@rateloop/contracts/protocol";
 
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
@@ -124,6 +128,15 @@ export function buildQuestionMetadataUri(
   return `${normalizeQuestionMetadataBaseUrl(baseUrl)}/question-metadata/${questionMetadataHash.toLowerCase()}`;
 }
 
+function defaultBountyEligibility(input: NonNullable<AgentQuestionSpecInput["bounty"]>): string {
+  if (input.bountyEligibility !== undefined && input.bountyEligibility !== null) {
+    return input.bountyEligibility.toString();
+  }
+  return requiresVerifiedHumanBountyEligibility(BigInt(input.amount))
+    ? BOUNTY_ELIGIBILITY_VERIFIED_HUMAN.toString()
+    : "0";
+}
+
 export function buildQuestionMetadata(
   input: AgentQuestionSpecInput,
 ): JsonValue {
@@ -135,7 +148,7 @@ export function buildQuestionMetadata(
       ? {
           amount: input.bounty.amount.toString(),
           asset: input.bounty.asset,
-          bountyEligibility: input.bounty.bountyEligibility?.toString() ?? "0",
+          bountyEligibility: defaultBountyEligibility(input.bounty),
           requiredVoters: input.bounty.requiredVoters?.toString() ?? null,
         }
       : null,

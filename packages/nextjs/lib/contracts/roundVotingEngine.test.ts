@@ -71,6 +71,27 @@ test("deriveRoundSnapshot marks rounds ready once the revealed threshold is met"
   assert.equal(snapshot.thresholdReachedAt, 1250);
 });
 
+test("deriveRoundSnapshot marks RBTS settlement-pending rounds as closed to voting", () => {
+  const snapshot = deriveRoundSnapshot({
+    roundId: 1n,
+    round: makeRound({
+      state: ROUND_STATE.SettlementPending,
+      voteCount: 8n,
+      revealedCount: 8n,
+      totalStake: 80_000_000n,
+      thresholdReachedAt: 0n,
+    }),
+    config: DEFAULT_VOTING_CONFIG,
+    now: 1_300,
+  });
+
+  assert.equal(snapshot.phase, "settlementPending");
+  assert.equal(snapshot.readyToSettle, false);
+  assert.equal(snapshot.commitAvailability?.canCommit, false);
+  assert.equal(snapshot.commitAvailability?.status, COMMIT_AVAILABILITY_STATUS.WaitingForSettlement);
+  assert.equal(isRoundAcceptingVotes(snapshot), false);
+});
+
 test("isOptimisticRoundDeltaReflected detects when live round data includes an optimistic vote", () => {
   const optimisticDelta = {
     baseTotalStake: 10_000_000n,

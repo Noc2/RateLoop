@@ -649,6 +649,39 @@ describe("agent question linting", () => {
 });
 
 describe("round config voter alignment linting", () => {
+  it("flags explicit open eligibility for recapture-sized bounties", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: "500000000",
+        bountyEligibility: "0",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.bountyEligibility",
+        }),
+      ]),
+    );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
+  });
+
+  it("accepts omitted eligibility for recapture-sized bounties because the parser defaults it", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: "500000000",
+      },
+    });
+
+    expect(summarizeLintFindings(findings).ok).toBe(true);
+  });
+
   it("accepts an explicit roundConfig.minVoters that matches bounty.requiredVoters", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

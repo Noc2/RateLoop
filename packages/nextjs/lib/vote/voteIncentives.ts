@@ -1,10 +1,9 @@
-import { BPS_SCALE, EPOCH_WEIGHT_BPS, REWARD_SPLIT_BPS } from "@rateloop/contracts/protocol";
+import { BPS_SCALE, EPOCH_WEIGHT_BPS } from "@rateloop/contracts/protocol";
 import type { RoundSnapshot } from "~~/lib/contracts/roundVotingEngine";
 import { formatLrepAmount } from "~~/lib/ui/tokenAmountDisplay";
 
 export { formatLrepAmount };
 
-const VOTER_POOL_SHARE_BPS = REWARD_SPLIT_BPS.voter;
 type ProgressTone = "primary" | "warning" | "success" | "neutral";
 
 type IncentiveSnapshot = Pick<
@@ -127,27 +126,19 @@ function getEpochWeightBps(isEpoch1: boolean) {
 }
 
 export function estimateVoteReturn(
-  snapshot: Pick<IncentiveSnapshot, "isEpoch1" | "upPool" | "downPool" | "weightedUpPool" | "weightedDownPool">,
+  snapshot: Pick<IncentiveSnapshot, "isEpoch1">,
   isUp: boolean,
   stakeAmount: number,
 ): VoteReturnEstimate {
+  void isUp;
   const stakeMicro = BigInt(Math.round(stakeAmount * 1e6));
   const effectiveStakeMicro = (stakeMicro * BigInt(getEpochWeightBps(snapshot.isEpoch1))) / BigInt(BPS_SCALE);
-  const losingPoolMicro = isUp ? snapshot.downPool : snapshot.upPool;
-  const currentWinningWeightedMicro = isUp ? snapshot.weightedUpPool : snapshot.weightedDownPool;
-  const projectedWinningWeightedMicro = currentWinningWeightedMicro + effectiveStakeMicro;
-  const projectedVoterPoolMicro = (losingPoolMicro * BigInt(VOTER_POOL_SHARE_BPS)) / BigInt(BPS_SCALE);
-  const projectedPoolShareMicro =
-    projectedWinningWeightedMicro > 0n
-      ? (effectiveStakeMicro * projectedVoterPoolMicro) / projectedWinningWeightedMicro
-      : 0n;
-  const estimatedGrossReturnMicro = stakeMicro + projectedPoolShareMicro;
 
   return {
     effectiveStakeMicro,
-    projectedVoterPoolMicro,
-    projectedPoolShareMicro,
-    estimatedGrossReturnMicro,
+    projectedVoterPoolMicro: 0n,
+    projectedPoolShareMicro: 0n,
+    estimatedGrossReturnMicro: stakeMicro,
     belowMeanFloorMicro: 0n,
   };
 }

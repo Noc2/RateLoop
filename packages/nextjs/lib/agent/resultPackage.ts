@@ -417,7 +417,13 @@ function classifyAnswer(params: {
   roundState: number | null;
   template: AgentResultTemplate;
 }): AgentDecisionAnswer {
-  if (params.roundState === ROUND_STATE.Open || params.roundState === null) return "pending";
+  if (
+    params.roundState === ROUND_STATE.Open ||
+    params.roundState === ROUND_STATE.SettlementPending ||
+    params.roundState === null
+  ) {
+    return "pending";
+  }
   if (params.roundState === ROUND_STATE.Tied) return "inconclusive";
   if (params.roundState === ROUND_STATE.Cancelled || params.roundState === ROUND_STATE.RevealFailed) return "failed";
   if (params.roundState !== ROUND_STATE.Settled) return "inconclusive";

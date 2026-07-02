@@ -3,6 +3,7 @@
 import { type ReactNode } from "react";
 import {
   CheckIcon,
+  ClockIcon,
   ExclamationTriangleIcon,
   EyeIcon,
   LockClosedIcon,
@@ -18,8 +19,9 @@ interface RoundProgressProps {
 }
 
 const TERMINAL_ROUND_TOOLTIPS = {
-  settled:
-    "The round settled successfully. Rewards are allocated by phase-weighted stake; blind signals earned the 4x early-rater advantage.",
+  settlementPending:
+    "The public verdict is closed. LREP stake rewards wait for a finalized RBTS correlation snapshot before they can be claimed.",
+  settled: "The round settled successfully. LREP rewards are ready when the wallet has an eligible revealed signal.",
   cancelled:
     "The round expired before enough signals were committed. All stakes are refunded. Check the round details below for stake and rater counts.",
   tied: "The round ended in a tie. All stakes are returned to raters.",
@@ -99,10 +101,21 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
   if (phase === "settled") {
     return (
       <RoundStatusChip
-        label="Resolved"
+        label="Rewards ready"
         tooltip={TERMINAL_ROUND_TOOLTIPS.settled}
         tone="success"
         icon={<CheckIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+      />
+    );
+  }
+
+  if (phase === "settlementPending") {
+    return (
+      <RoundStatusChip
+        label="Settlement pending"
+        tooltip={TERMINAL_ROUND_TOOLTIPS.settlementPending}
+        tone="primary"
+        icon={<ClockIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
       />
     );
   }

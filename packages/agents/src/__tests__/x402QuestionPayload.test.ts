@@ -31,6 +31,7 @@ const VALID_REQUEST = {
   clientRequestId: "agents:test",
   question: {
     categoryId: "5",
+    contextUrl: "https://example.com/mockup",
     description: "Vote based on the source material and the prompt.",
     imageUrls: [],
     tags: ["Media"],
@@ -42,6 +43,33 @@ const VALID_REQUEST = {
     questionDurationSeconds: "1200",
   },
 };
+
+describe("x402 question bounty recapture protection", () => {
+  it("defaults recapture-sized bounties to Proof of Human eligibility", () => {
+    const payload = parseX402QuestionRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: "500000000",
+      },
+    });
+
+    expect(payload.bounty.bountyEligibility).toBe(8);
+  });
+
+  it("rejects explicit open eligibility for recapture-sized bounties", () => {
+    expect(() =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: "500000000",
+          bountyEligibility: "0",
+        },
+      }),
+    ).toThrow(/Proof of Human/);
+  });
+});
 
 describe("x402 question attachment origins", () => {
   it("rejects production uploaded images from hostile configured app origins", () => {
