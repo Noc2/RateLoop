@@ -209,12 +209,14 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
 
   await evmIncreaseTime(Number(challengeWindow) + 1);
   await waitForCorrelationEpochStatus(correlationEpochId, [SNAPSHOT_STATUS_FINALIZED]);
+  await advancePastCorrelationEpochVetoDeadline(correlationEpochId);
 
   const snapshotKey = await getRoundPayoutSnapshotKey(rewardPoolId, contentId, roundId);
   await waitForRoundPayoutSnapshotStatus(snapshotKey, [SNAPSHOT_STATUS_PROPOSED, SNAPSHOT_STATUS_FINALIZED]);
 
   await evmIncreaseTime(Number(challengeWindow) + 1);
   await waitForRoundPayoutSnapshotStatus(snapshotKey, [SNAPSHOT_STATUS_FINALIZED]);
+  await advancePastRoundPayoutSnapshotVetoDeadline(rewardPoolId, contentId, roundId);
 
   const snapshotIndexed = await waitForPonderIndexed(
     async () => {
@@ -230,6 +232,41 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
     "correlation-bounty:snapshot-indexed",
   );
   expect(snapshotIndexed, "Ponder did not index the finalized round payout snapshot").toBe(true);
+}
+
+async function advancePastTimestamp(deadline: bigint, label: string) {
+  if (deadline === 0n) {
+    throw new Error(`${label} veto deadline is unavailable before finalization`);
+  }
+
+  const block = await correlationPublicClient.getBlock();
+  if (block.timestamp >= deadline) return;
+
+  await evmIncreaseTime(Number(deadline - block.timestamp) + 1);
+}
+
+export async function advancePastCorrelationEpochVetoDeadline(epochId: bigint) {
+  const deadline = await correlationPublicClient.readContract({
+    address: CONTRACT_ADDRESSES.ClusterPayoutOracle,
+    abi: ClusterPayoutOracleAbi,
+    functionName: "correlationEpochVetoDeadline",
+    args: [epochId],
+  });
+  await advancePastTimestamp(deadline, `Correlation epoch ${epochId.toString()}`);
+}
+
+export async function advancePastRoundPayoutSnapshotVetoDeadline(
+  rewardPoolId: bigint,
+  contentId: bigint,
+  roundId: bigint,
+) {
+  const deadline = await correlationPublicClient.readContract({
+    address: CONTRACT_ADDRESSES.ClusterPayoutOracle,
+    abi: ClusterPayoutOracleAbi,
+    functionName: "roundPayoutSnapshotVetoDeadline",
+    args: [PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, contentId, roundId],
+  });
+  await advancePastTimestamp(deadline, `Round payout snapshot ${contentId.toString()}/${roundId.toString()}`);
 }
 
 export async function waitForClaimCandidateWithProof(
