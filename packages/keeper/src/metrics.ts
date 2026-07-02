@@ -100,7 +100,7 @@ export function setGauge(name: string, value: number) {
   }
 }
 
-export interface CorrelationSnapshotMetricsResult {
+interface CorrelationSnapshotMetricsResult {
   epochsProposed: number;
   epochsFinalized: number;
   roundSnapshotsProposed: number;
