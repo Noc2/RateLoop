@@ -24,6 +24,9 @@ library QuestionRewardPoolEscrowRecoveryLib {
         bytes32 snapshotDigest,
         bytes32 weightRoot
     );
+    event PreQualificationSnapshotlessClusterRoundSkipped(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId
+    );
 
     function skipPreQualificationRejectedSnapshotRound(
         mapping(uint256 => RewardPool) storage rewardPools,
@@ -109,6 +112,65 @@ library QuestionRewardPoolEscrowRecoveryLib {
         emit PreQualificationRejectedSnapshotRoundSkipped(
             rewardPoolId, rewardPool.contentId, roundId, snapshotDigest, oracleSnapshot.weightRoot
         );
+    }
+
+    function skipPreQualificationSnapshotlessClusterRound(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
+        mapping(uint256 => mapping(uint256 => bool)) storage preQualificationRejectedRound,
+        RoundVotingEngine votingEngine,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) external {
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        require(rewardPool.id != 0, "Bounty not found");
+        require(!rewardPool.refunded, "Bounty refunded");
+        require(!rewardPool.unallocatedRefunded, "Bounty refunded");
+        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
+        require(_usesClusterPayoutSnapshot(rewardPool, rewardPoolClusterPayoutOracle), "Not cluster-snapshot pool");
+        require(roundId >= rewardPool.startRoundId, "Round too early");
+        require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
+        require(!preQualificationRejectedRound[rewardPoolId][roundId], "Round already skipped");
+        require(
+            QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(votingEngine, rewardPool, roundId),
+            "Bounty not started"
+        );
+
+        (bool roundSettled, bool canQualify,,,) = _snapshotlessRoundStatus(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            votingEngine,
+            rewardPool,
+            roundId
+        );
+        require(roundSettled, "Round not settled");
+        require(canQualify, "Too few eligible voters");
+        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
+            votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        require(cleanupRemaining == 0, "Cleanup pending");
+        require(sourceReadyAt != 0, "Cluster source pending");
+
+        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
+        require(oracleAddr != address(0), "Oracle not pinned");
+        uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
+        require(pinnedAt != 0, "Oracle not pinned");
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        require(oracle.roundPayoutSnapshotConsumer(payoutDomain) == address(this), "Cluster consumer mismatch");
+        require(
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) == 0,
+            "Oracle snapshot exists"
+        );
+
+        preQualificationRejectedRound[rewardPoolId][roundId] = true;
+        rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
+
+        emit PreQualificationSnapshotlessClusterRoundSkipped(rewardPoolId, rewardPool.contentId, roundId);
     }
 
     function recoverRejectedSnapshotRound(
@@ -220,6 +282,47 @@ library QuestionRewardPoolEscrowRecoveryLib {
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle
     ) private view returns (bool) {
         return rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
+    }
+
+    function _snapshotlessRoundStatus(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId
+    )
+        private
+        view
+        returns (
+            bool roundSettled,
+            bool canQualify,
+            uint256 rawEligibleVoters,
+            uint256 effectiveParticipantUnits,
+            uint256 totalClaimWeight
+        )
+    {
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
+            QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
+        if (!windowActive) return (false, false, 0, 0, 0);
+        (roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight,) =
+            QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
+                QuestionRewardPoolEscrowQualificationLib.QualificationContext({
+                    votingEngine: votingEngine,
+                    protocolConfig: votingEngine.protocolConfig(),
+                    rewardId: rewardPool.id,
+                    contentId: rewardPool.contentId,
+                    roundId: roundId,
+                    bountyOpensAt: bountyOpensAt,
+                    bountyClosesAt: bountyClosesAt,
+                    requiredVoters: rewardPool.requiredVoters,
+                    bountyEligibility: rewardPool.bountyEligibility,
+                    funder: rewardPool.funder,
+                    funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                    funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+                    submitterIdentity: rewardPool.submitterIdentity,
+                    submitterIdentityKey: rewardPool.submitterIdentityKey
+                })
+            );
     }
 
     function _isRoundPayoutSnapshotRejectedByCorrelationEpoch(

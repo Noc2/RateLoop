@@ -317,6 +317,28 @@ test("question reward pool escrow ABI exposes typed lookup errors", () => {
   assert.deepEqual(errorInputs.get("BundleRewardNotFound"), ["uint256"]);
 });
 
+test("question reward pool escrow ABI exposes snapshotless recovery surface", () => {
+  const snapshotlessSkip = generatedAbis.QuestionRewardPoolEscrowAbi.find(
+    (item) =>
+      item.type === "function" &&
+      item.name === "skipPreQualificationSnapshotlessClusterRound",
+  );
+  const snapshotlessEvent = generatedAbis.QuestionRewardPoolEscrowAbi.find(
+    (item) =>
+      item.type === "event" &&
+      item.name === "PreQualificationSnapshotlessClusterRoundSkipped",
+  );
+
+  assert.deepEqual(
+    snapshotlessSkip?.inputs.map((input) => input.type),
+    ["uint256", "uint256"],
+  );
+  assert.deepEqual(
+    snapshotlessEvent?.inputs.map((input) => input.type),
+    ["uint256", "uint256", "uint256"],
+  );
+});
+
 test("question reward pool escrow ABI exposes bundle recovery monitoring events", () => {
   const bundleEvents = new Map(
     generatedAbis.QuestionRewardPoolEscrowAbi.filter(

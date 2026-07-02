@@ -203,6 +203,9 @@ contract QuestionRewardPoolEscrow is
         bytes32 snapshotDigest,
         bytes32 weightRoot
     );
+    event PreQualificationSnapshotlessClusterRoundSkipped(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId
+    );
     /// @notice Emitted by `reopenRecoveredSnapshotRound` when a recovered round can be
     ///         requalified against a NEW finalized oracle snapshot. (FE-1.)
     event RecoveredSnapshotRoundReopened(
@@ -800,6 +803,31 @@ contract QuestionRewardPoolEscrow is
     ///      refunded; the qualification path treats this flag as a cursor bypass only.
     function skipPreQualificationRejectedSnapshotRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
         QuestionRewardPoolEscrowRecoveryLib.skipPreQualificationRejectedSnapshotRound(
+            rewardPools,
+            roundSnapshots,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            preQualificationRejectedRound,
+            votingEngine,
+            rewardPoolId,
+            roundId,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
+    }
+
+    /// @notice Governance escape hatch for a source-ready cluster round whose pinned oracle has
+    ///         no snapshot proposal at all.
+    /// @dev This is intentionally not automatic: it advances only the cursor and preserves all
+    ///      allocation so governance can still repoint to a fresh oracle and qualify the same
+    ///      round before any refund.
+    function skipPreQualificationSnapshotlessClusterRound(uint256 rewardPoolId, uint256 roundId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        QuestionRewardPoolEscrowRecoveryLib.skipPreQualificationSnapshotlessClusterRound(
             rewardPools,
             roundSnapshots,
             rewardPoolPayerIdentity,

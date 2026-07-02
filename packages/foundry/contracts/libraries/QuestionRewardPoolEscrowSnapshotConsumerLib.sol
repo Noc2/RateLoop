@@ -31,6 +31,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
     ) external {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         require(rewardPool.id != 0, "Bounty not found");
+        require(!rewardPool.refunded && !rewardPool.unallocatedRefunded, "Bounty refunded");
         require(rewardPool.qualifiedRounds == 0 && rewardPool.claimedAmount == 0, "Pool already consumed");
         address oldOracle = rewardPoolClusterPayoutOracle[rewardPoolId];
         require(oldOracle != address(0), "Oracle not pinned");
@@ -154,7 +155,8 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (
             rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId
-                || msg.sender != rewardPoolClusterPayoutOracle[rewardPool.id] || roundId < rewardPool.startRoundId
+                || rewardPool.unallocatedRefunded || msg.sender != rewardPoolClusterPayoutOracle[rewardPool.id]
+                || roundId < rewardPool.startRoundId
         ) return 0;
         (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
         return readyAt;
