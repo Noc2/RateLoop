@@ -49,9 +49,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint256 public constant MAX_CORRELATION_EPOCH_SOURCES = 256;
     uint256 public constant MAX_ARTIFACT_URI_LENGTH = 2048;
     /// @dev Window after a round payout snapshot or its parent correlation epoch is finalized
-    ///      during which the arbiter can still reject it. Once the proposal-time consumer reports
-    ///      that a child root was consumed, the root stays pinned so already-paid and future
-    ///      claimants see one finalized root. M-Oracle-2 from 2026-05-16 audit.
+    ///      during which the arbiter can still reject it, even after first consumption. Once this
+    ///      window elapses, a proposal-time consumer that reports consumption pins the root so
+    ///      already-paid and future claimants see one finalized root. M-Oracle-2 from 2026-05-16 audit.
     uint64 public constant FINALIZATION_VETO_WINDOW = 7 days;
 
     error InvalidAddress();
@@ -642,9 +642,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
-    /// @notice Reject a finalized round payout snapshot only while the consumer reports that it has
-    ///         not been consumed. Once a claim or credit has used the root, remediation must happen
-    ///         outside this oracle rejection path so already-paid and future claimants see one root.
+    /// @notice Reject a finalized round payout snapshot during the veto window even if the
+    ///         consumer has consumed it. After the veto window, consumed roots stay pinned so
+    ///         already-paid and future claimants see one root.
     function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
@@ -670,6 +670,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
+        bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + FINALIZATION_VETO_WINDOW;
 
         // L-Oracle-B + L-Oracle-2: wrap the consumer call in try/catch so a broken / removed
         // consumer cannot trap the arbiter. Track `consumed` AND `consumedKnown` separately.
@@ -688,7 +689,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             consumed = true;
         }
-        if (consumedKnown && consumed) {
+        if (consumedKnown && consumed && !withinVetoWindow) {
             revert SnapshotConsumed();
         }
 

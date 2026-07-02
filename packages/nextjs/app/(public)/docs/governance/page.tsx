@@ -135,7 +135,8 @@ const GovernanceDocs: NextPage = () => {
         governance can use <code>slashFrontendWithBounty</code> to route a fixed 50% of everything confiscated — the
         stake cut, accrued fees, and any pending fee withdrawal — to the recorded challenger, so a correct challenge is
         directly profitable rather than just bond-neutral. Finalized payout roots remain rejectable during the veto
-        period only until the configured consumer has consumed them; consumed roots are final for that consumer path.
+        period even after configured consumers first consume them; after the veto window, consumed roots are final for
+        that consumer path.
       </p>
       <p>
         The intended security model is optimistic rather than fully per-snapshot economically secured on-chain. Public

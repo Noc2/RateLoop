@@ -2431,7 +2431,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
     }
 
-    function test_FinalizedRoundPayoutSnapshotRejectRevertsWithinVetoWindowWhenConsumed() public {
+    function test_FinalizedRoundPayoutSnapshotRejectAllowsConsumedRootWithinVetoWindow() public {
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -2455,11 +2455,9 @@ contract ClusterPayoutOracleTest is Test {
 
         questionConsumer.setConsumed(true);
 
-        // Even inside the veto window, once a consumer reports first use the root stays pinned.
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
-        ClusterPayoutOracle.RoundPayoutProposal memory stillFinalized = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(stillFinalized.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectUsesSnapshottedConsumerAfterRotation() public {

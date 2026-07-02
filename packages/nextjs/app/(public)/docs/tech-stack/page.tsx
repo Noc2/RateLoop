@@ -310,10 +310,10 @@ const TechStackPage: NextPage = () => {
         Any keeper or indexer can recompute the same artifact. Registered frontend operators backed by a 1,000 LREP bond
         can propose the correlation epoch and round payout roots directly or through a delegated snapshot keeper that
         the frontend assigned, while other operators or auditors can challenge a bad root during the window and finalize
-        the snapshot on-chain after the window passes. Once an escrow or launch consumer has consumed a finalized payout
-        root, the oracle no longer permits governance to reject that consumed root. Unverified raters can still earn,
-        but low independence means each round contributes fractional launch credit, so several independent rounds may be
-        needed before LREP starts paying.
+        the snapshot on-chain after the window passes. Governance can still reject a consumed root during the
+        finalization veto window; after that window, consumed roots are pinned for the relevant escrow or launch
+        consumer. Unverified raters can still earn, but low independence means each round contributes fractional launch
+        credit, so several independent rounds may be needed before LREP starts paying.
       </p>
 
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>

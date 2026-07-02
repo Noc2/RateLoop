@@ -637,8 +637,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>rejectFinalizedRoundPayoutSnapshot(...)</code> &mdash; Governance veto path during the finalization veto
-          period. It now rejects immediately once the configured consumer has consumed the finalized root, so later
-          claims are not stranded by a post-consumption rejection.
+          period. It can reject a consumed root during that window, then treats consumed roots as pinned once the window
+          elapses so ordinary claims have stable finality.
         </li>
         <li>
           <code>setRoundPayoutSnapshotConsumer(domain, consumer)</code> &mdash; Governance wiring for the consumer that

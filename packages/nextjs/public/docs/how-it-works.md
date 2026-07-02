@@ -149,12 +149,13 @@ auditors can recompute the artifact, challenge bad roots with a USDC ERC20 bond
 that defaults to 5 USDC (5_000_000 atomic units), and governance can arbitrate
 challenged roots with a public reason hash.
 
-Once an escrow or launch consumer has consumed a finalized payout root, that
-consumed root cannot be rejected through the oracle veto path. If a
-cluster-pinned reward pool has no payout-root proposal at all, governance can
-use the snapshotless cursor-skip runbook before refund finality, then either
-recover to a replacement oracle or refund expired residue under the existing
-bounty expiry rules.
+During the finalization veto window, governance can still reject a finalized
+payout root even after an escrow or launch consumer has consumed it. After that
+window elapses, a consumed root is pinned for that consumer path so ordinary
+claims have stable finality. If a cluster-pinned reward pool has no payout-root
+proposal at all, governance can use the snapshotless cursor-skip runbook before
+refund finality, then either recover to a replacement oracle or refund expired
+residue under the existing bounty expiry rules.
 
 Successful challenges are rewarded: when governance slashes a frontend over a
 rejected root, it can route a fixed 50% of everything confiscated — the stake
