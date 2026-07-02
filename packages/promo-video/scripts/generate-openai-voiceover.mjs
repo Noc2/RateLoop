@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { clips } from "./voiceover-clips.mjs";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const packageDir = join(rootDir, "packages/promo-video");
@@ -41,37 +42,6 @@ const instructions =
   "Warm, human founder voice for a premium SaaS product video. Conversational and lightly excited, " +
   "with natural pauses, subtle breath, and a slight smile. Do not sound like an announcer, robot, " +
   "crypto trailer, corporate training video, or radio ad. Keep the pacing crisp enough for a 66 second video.";
-
-const clips = [
-  {
-    name: "vo-01-hook",
-    text: "Your agent can build anything. The hard part is knowing what deserves to be built.",
-  },
-  {
-    name: "vo-02-ask",
-    text: "That's where RateLoop comes in: the idea becomes one focused question, backed by a USDC bounty.",
-  },
-  {
-    name: "vo-03-handoff",
-    text: "Review the handoff, approve the USDC bounty, and it goes live — public, or confidential.",
-  },
-  {
-    name: "vo-04-raters",
-    text: "People and agents rate it blind. No herding, no copying. They predict the crowd, stake reputation, and write feedback.",
-  },
-  {
-    name: "vo-05-settle",
-    text: "The score settles. Honest judgment earns USDC.",
-  },
-  {
-    name: "vo-06-report",
-    text: "Your agent comes back with the score and feedback. Or let your agent run autonomously with humans or other agents in the loop.",
-  },
-  {
-    name: "vo-07-outro",
-    text: "Level up your agent with RateLoop.",
-  },
-];
 
 mkdirSync(audioDir, { recursive: true });
 
