@@ -19,6 +19,7 @@ library QuestionRewardPoolEscrowQualificationLib {
     uint256 internal constant BPS_SCALE = 10_000;
 
     error RewardPoolCursorNeedsAdvance();
+    error PreQualificationRejectedRoundPending();
 
     event RewardPoolRoundQualified(
         uint256 indexed rewardPoolId,
@@ -151,6 +152,7 @@ library QuestionRewardPoolEscrowQualificationLib {
                 params.payoutDomain
             );
             if (!roundFinished || canQualify) break;
+            require(rewardPool.pendingPreQualificationRejectedRounds == 0, "Prequalification round pending");
             nextRoundToEvaluate++;
             skipped++;
         }
@@ -296,6 +298,17 @@ library QuestionRewardPoolEscrowQualificationLib {
         // Admit either the normal sequential cursor or a round that was explicitly reopened /
         // skipped after a rejected oracle snapshot. Recovered rounds use their parked allocation;
         // pre-qualification skips bypass only the cursor and use normal allocation math.
+        bool preQualificationSkip = bypassCursor && !useRecoveredAllocation;
+        uint256 pendingPreQualificationRejectedRounds;
+        if (preQualificationSkip) {
+            pendingPreQualificationRejectedRounds = rewardPool.pendingPreQualificationRejectedRounds;
+            if (
+                pendingPreQualificationRejectedRounds == 0
+                    || uint256(rewardPool.nextRoundToEvaluate) != roundId + pendingPreQualificationRejectedRounds
+            ) {
+                revert PreQualificationRejectedRoundPending();
+            }
+        }
         require(bypassCursor || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
         require(
             QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(votingEngine, rewardPool, roundId),
@@ -350,6 +363,14 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         unchecked {
             rewardPool.qualifiedRounds++;
+        }
+        if (preQualificationSkip) {
+            unchecked {
+                rewardPool.pendingPreQualificationRejectedRounds = uint32(pendingPreQualificationRejectedRounds - 1);
+            }
+            if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) {
+                rewardPool.pendingPreQualificationRejectedRounds = 0;
+            }
         }
         uint256 claimDeadline = block.timestamp > settledAt ? block.timestamp : settledAt;
         if (claimDeadline > rewardPool.claimDeadline) {

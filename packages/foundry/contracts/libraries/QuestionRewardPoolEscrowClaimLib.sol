@@ -594,7 +594,10 @@ library QuestionRewardPoolEscrowClaimLib {
         if (rewardPool.refunded || rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) {
             return false;
         }
-        bool preQualificationSkippedPreview = bypassCursor && !useRecoveredAllocation;
+        bool preQualificationSkippedPreview = bypassCursor && !useRecoveredAllocation
+            && rewardPool.pendingPreQualificationRejectedRounds != 0
+            && uint256(rewardPool.nextRoundToEvaluate)
+                == roundId + uint256(rewardPool.pendingPreQualificationRejectedRounds);
         if (rewardPool.pendingPreQualificationRejectedRounds != 0 && !preQualificationSkippedPreview) {
             return false;
         }

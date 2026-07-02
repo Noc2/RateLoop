@@ -592,6 +592,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         for (uint256 i; i < roundIds.length;) {
             uint256 roundId = roundIds[i];
             require(preQualificationRejectedRound[rewardPoolId][roundId], "Round not skipped");
+            if (uint256(rewardPool.nextRoundToEvaluate) != roundId + pendingPreQualificationRejectedRounds) {
+                revert PreQualificationRejectedRoundPending();
+            }
             if (_hasRecoveredReplacementSnapshot(
                     rewardPoolPayerIdentity,
                     rewardPoolPayerIdentityKey,

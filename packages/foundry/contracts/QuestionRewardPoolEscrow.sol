@@ -587,7 +587,7 @@ contract QuestionRewardPoolEscrow is
         require(revealed, "Vote not revealed");
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
-        uint256 baseClaimWeight = _roundClaimWeight(rewardPool.contentId, roundId, commitKey);
+        uint256 baseClaimWeight = BPS_SCALE;
         uint256 claimWeight = _effectiveQuestionClaimWeight(
             rewardPool,
             rewardPoolId,
@@ -625,13 +625,14 @@ contract QuestionRewardPoolEscrow is
         }
 
         uint256 redirectedFrontendFee;
-        (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) = _settleClaimPayout(
-            rewardPool.asset == REWARD_ASSET_LREP ? lrepToken : usdcToken,
-            rewardRecipient,
-            rewardAmount,
-            frontendRecipient,
-            frontendFee
-        );
+        (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) =
+            QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
+                rewardPool.asset == REWARD_ASSET_LREP ? lrepToken : usdcToken,
+                rewardRecipient,
+                rewardAmount,
+                frontendRecipient,
+                frontendFee
+            );
         if (redirectedFrontendFee > 0) {
             // M-Funds-1: the bucket was credited reservedFrontendFee at line above, but the
             // frontend transfer failed and the amount was redirected to the voter. Decrement
@@ -657,18 +658,6 @@ contract QuestionRewardPoolEscrow is
             frontendRecipient,
             frontendFee,
             grossAmount
-        );
-    }
-
-    function _settleClaimPayout(
-        IERC20 rewardToken,
-        address rewardRecipient,
-        uint256 rewardAmount,
-        address frontendRecipient,
-        uint256 frontendFee
-    ) internal returns (uint256, uint256, address, uint256) {
-        return QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
-            rewardToken, rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
     }
 
@@ -1491,43 +1480,44 @@ contract QuestionRewardPoolEscrow is
                 reopened,
                 recoveredAllocation
             );
-            if (reopened) {
-                _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
-            } else if (preQualificationSkipped) {
-                _finishPreQualificationRejectedRoundQualification(rewardPool, rewardPoolId, roundId);
-            }
-            return;
+        } else {
+            (
+                uint256 allocation,
+                uint256 effectiveParticipantUnits,
+                uint256 frontendFeeAllocation,
+                uint256 rawEligibleVoters,
+                uint256 totalClaimWeight
+            ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
+                roundSnapshots,
+                qualifiedQuestionRewardClaimants,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                votingEngine,
+                rewardPool,
+                rewardPoolId,
+                roundId,
+                BPS_SCALE
+            );
+            emit RewardPoolRoundQualified(
+                rewardPoolId,
+                rewardPool.contentId,
+                roundId,
+                allocation,
+                effectiveParticipantUnits,
+                frontendFeeAllocation
+            );
+            emit RewardPoolRoundEffectiveUnits(
+                rewardPoolId,
+                rewardPool.contentId,
+                roundId,
+                rawEligibleVoters,
+                effectiveParticipantUnits,
+                totalClaimWeight
+            );
         }
-
-        (
-            uint256 allocation,
-            uint256 effectiveParticipantUnits,
-            uint256 frontendFeeAllocation,
-            uint256 rawEligibleVoters,
-            uint256 totalClaimWeight
-        ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
-            roundSnapshots,
-            qualifiedQuestionRewardClaimants,
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            votingEngine,
-            rewardPool,
-            rewardPoolId,
-            roundId,
-            BPS_SCALE
-        );
         if (reopened) {
             _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
-        } else if (preQualificationSkipped) {
-            _finishPreQualificationRejectedRoundQualification(rewardPool, rewardPoolId, roundId);
         }
-
-        emit RewardPoolRoundQualified(
-            rewardPoolId, rewardPool.contentId, roundId, allocation, effectiveParticipantUnits, frontendFeeAllocation
-        );
-        emit RewardPoolRoundEffectiveUnits(
-            rewardPoolId, rewardPool.contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
-        );
     }
 
     function _timelyRevealedCommitFrontend(
@@ -1540,10 +1530,6 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
             votingEngine, contentId, roundId, commitKey, opensAt, closesAt
         );
-    }
-
-    function _roundClaimWeight(uint256, uint256, bytes32) internal pure returns (uint256) {
-        return BPS_SCALE;
     }
 
     function _effectiveQuestionClaimWeight(
@@ -1643,18 +1629,6 @@ contract QuestionRewardPoolEscrow is
         _consumePendingRecoveredRound(rewardPool);
         reopenedRecoveredRound[rewardPoolId][roundId] = false;
         rejectedRecoveredRound[rewardPoolId][roundId] = false;
-    }
-
-    function _finishPreQualificationRejectedRoundQualification(
-        RewardPool storage rewardPool,
-        uint256 rewardPoolId,
-        uint256 roundId
-    ) private {
-        require(rewardPool.pendingPreQualificationRejectedRounds > 0, "Prequalification round pending");
-        unchecked {
-            rewardPool.pendingPreQualificationRejectedRounds -= 1;
-        }
-        preQualificationRejectedRound[rewardPoolId][roundId] = false;
     }
 
     uint256[41] private __gap;

@@ -4316,6 +4316,82 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(replacementSnapshot.clusterWeightRoot, replacementRoot);
     }
 
+    function testPreQualificationSkippedRoundsMustQualifyOldestFirst() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, block.timestamp + 3 days);
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory firstWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, firstRoundId, 0);
+        bytes32 firstRoot = oracle.payoutWeightLeaf(firstWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, firstRoundId, 3, 30_000, firstWeight.effectiveWeight, firstRoot
+        );
+        bytes32 firstSnapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, firstRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(firstSnapshotKey, keccak256("oldest-first-reject-first"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, firstRoundId);
+
+        vm.warp(block.timestamp + 25 hours);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory secondWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, secondRoundId, 0);
+        bytes32 secondRoot = oracle.payoutWeightLeaf(secondWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, secondRoundId, 3, 30_000, secondWeight.effectiveWeight, secondRoot
+        );
+        bytes32 secondSnapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, secondRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(secondSnapshotKey, keccak256("oldest-first-reject-second"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, secondRoundId);
+
+        IClusterPayoutOracle.PayoutWeight memory firstReplacementWeight = firstWeight;
+        firstReplacementWeight.reasonHash = keccak256("oldest-first-replacement-first");
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            firstRoundId,
+            uint64(firstRoundId),
+            3,
+            30_000,
+            firstReplacementWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(firstReplacementWeight)
+        );
+        IClusterPayoutOracle.PayoutWeight memory secondReplacementWeight = secondWeight;
+        secondReplacementWeight.reasonHash = keccak256("oldest-first-replacement-second");
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            secondRoundId,
+            uint64(secondRoundId),
+            3,
+            30_000,
+            secondReplacementWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(secondReplacementWeight)
+        );
+
+        assertEq(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, secondRoundId, voter1, secondReplacementWeight, new bytes32[](0)
+            ),
+            0
+        );
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, secondRoundId);
+        vm.prank(voter1);
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, secondRoundId, secondReplacementWeight, new bytes32[](0));
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, firstRoundId);
+        assertEq(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, secondRoundId, voter1, secondReplacementWeight, new bytes32[](0)
+            ),
+            0
+        );
+    }
+
     function testPreQualificationRejectedReplacementBlocksRefundRace() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
