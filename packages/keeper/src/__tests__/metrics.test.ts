@@ -9,6 +9,8 @@ import {
   incrementCounter,
   getMetricsText,
   recordCorrelationFinalitySlaMetrics,
+  recordHumanVerifiedCommitCountWarning,
+  recordPayoutFinalityLaunchBudgetConfigViolation,
   setHealthThreshold,
   setGauge,
   setWalletBalanceWei,
@@ -177,6 +179,7 @@ describe("metrics", () => {
 
   it("records and clears correlation finality backlog gauges", () => {
     recordCorrelationFinalitySlaMetrics({
+      breachCount: 2,
       phases: [
         { domain: 1, phase: "source_ready_unproposed", oldestAgeSeconds: 120 },
         { domain: "correlation_epoch", phase: "challenge_window", oldestAgeSeconds: 240 },
@@ -187,17 +190,64 @@ describe("metrics", () => {
     });
 
     let metricsBody = getMetricsText();
+    expect(metricsBody).toContain(
+      "# HELP keeper_payout_finality_sla_breached_paths Current number of healthy unchallenged payout-finality paths past the one-hour SLA in the latest Ponder SLA payload (-1 = unavailable)",
+    );
+    expect(metricsBody).toContain("# TYPE keeper_payout_finality_sla_breached_paths gauge");
+    expect(metricsBody).toContain("keeper_payout_finality_sla_breached_paths 2");
     expect(metricsBody).toContain("keeper_correlation_source_ready_backlog_oldest_seconds 120");
     expect(metricsBody).toContain("keeper_correlation_epoch_finalization_backlog_oldest_seconds 300");
     expect(metricsBody).toContain("keeper_round_payout_finalization_backlog_oldest_seconds 360");
     expect(metricsBody).toContain("keeper_round_payout_apply_backlog_oldest_seconds 480");
 
-    recordCorrelationFinalitySlaMetrics({ phases: [] });
+    recordCorrelationFinalitySlaMetrics({ breachCount: 2, phases: [] });
     metricsBody = getMetricsText();
+    expect(metricsBody).toContain("keeper_payout_finality_sla_breached_paths 2");
+
+    recordCorrelationFinalitySlaMetrics({ breachCount: 0, phases: [] });
+    metricsBody = getMetricsText();
+    expect(metricsBody).toContain("keeper_payout_finality_sla_breached_paths 0");
     expect(metricsBody).toContain("keeper_correlation_source_ready_backlog_oldest_seconds -1");
     expect(metricsBody).toContain("keeper_correlation_epoch_finalization_backlog_oldest_seconds -1");
     expect(metricsBody).toContain("keeper_round_payout_finalization_backlog_oldest_seconds -1");
     expect(metricsBody).toContain("keeper_round_payout_apply_backlog_oldest_seconds -1");
+
+    recordCorrelationFinalitySlaMetrics({ phases: [] });
+    metricsBody = getMetricsText();
+    expect(metricsBody).toContain("keeper_payout_finality_sla_breached_paths -1");
+  });
+
+  it("records explicit payout finality and HRC warning counters", () => {
+    const before = getMetricsText();
+    const beforeBudgetViolations = metricValue(
+      before,
+      "keeper_payout_finality_launch_budget_config_violations_total",
+    );
+    const beforeHrcWarnings = metricValue(
+      before,
+      "keeper_work_human_verified_commit_count_warning_observations_total",
+    );
+
+    recordPayoutFinalityLaunchBudgetConfigViolation();
+    recordHumanVerifiedCommitCountWarning();
+
+    const metricsBody = getMetricsText();
+    expect(metricsBody).toContain(
+      "# HELP keeper_payout_finality_launch_budget_config_violations_total Total startup checks where the configured payout-finality budget exceeded launch policy",
+    );
+    expect(metricsBody).toContain("# TYPE keeper_payout_finality_launch_budget_config_violations_total counter");
+    expect(metricValue(metricsBody, "keeper_payout_finality_launch_budget_config_violations_total")).toBe(
+      beforeBudgetViolations + 1,
+    );
+    expect(metricsBody).toContain(
+      "# HELP keeper_work_human_verified_commit_count_warning_observations_total Total Ponder keeper-work humanVerifiedCommitCount warning observations",
+    );
+    expect(metricsBody).toContain(
+      "# TYPE keeper_work_human_verified_commit_count_warning_observations_total counter",
+    );
+    expect(metricValue(metricsBody, "keeper_work_human_verified_commit_count_warning_observations_total")).toBe(
+      beforeHrcWarnings + 1,
+    );
   });
 
   it("reports -1 for the grace gauge when no round is at risk", () => {

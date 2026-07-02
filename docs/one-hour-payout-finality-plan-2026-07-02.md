@@ -108,7 +108,9 @@ Implementation status, 2026-07-02: the fresh-deployment path now uses 15-minute 
      - `keeper_correlation_epoch_finalization_backlog_oldest_seconds`
      - `keeper_round_payout_finalization_backlog_oldest_seconds`
      - `keeper_round_payout_apply_backlog_oldest_seconds`
-     - `keeper_payout_finality_sla_breaches_total`
+     - `keeper_payout_finality_sla_breached_paths`
+     - `keeper_payout_finality_launch_budget_config_violations_total`
+     - `keeper_work_human_verified_commit_count_warning_observations_total`
      - `keeper_artifact_cache_or_fetch_failure_total`
    - Alert policy:
      - warn when oldest normal-path phase age exceeds 30 minutes

@@ -42,7 +42,8 @@ const counters: Record<string, number> = {
   keeper_round_payout_snapshot_finalized_total: 0,
   keeper_rating_snapshot_applied_total: 0,
   keeper_rbts_settlement_snapshot_applied_total: 0,
-  keeper_payout_finality_sla_breaches_total: 0,
+  keeper_payout_finality_launch_budget_config_violations_total: 0,
+  keeper_work_human_verified_commit_count_warning_observations_total: 0,
   keeper_artifact_cache_or_fetch_failure_total: 0,
 };
 
@@ -68,6 +69,7 @@ const gauges: Record<string, number> = {
   keeper_settlement_backlog_oldest_seconds: -1,
   keeper_work_discovery_reward_pool_qualification_candidates: 0,
   keeper_work_discovery_bundle_terminal_sync_candidates: 0,
+  keeper_payout_finality_sla_breached_paths: -1,
   keeper_correlation_source_ready_backlog_oldest_seconds: -1,
   keeper_correlation_epoch_finalization_backlog_oldest_seconds: -1,
   keeper_round_payout_finalization_backlog_oldest_seconds: -1,
@@ -121,6 +123,11 @@ function readPhaseAgeSeconds(value: unknown): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function readNonNegativeInteger(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function setMaxGauge(name: (typeof CORRELATION_BACKLOG_GAUGES)[number], value: number) {
   gauges[name] = Math.max(gauges[name], value);
 }
@@ -129,8 +136,12 @@ export function recordCorrelationFinalitySlaMetrics(payload: unknown) {
   for (const gauge of CORRELATION_BACKLOG_GAUGES) {
     gauges[gauge] = -1;
   }
+  gauges.keeper_payout_finality_sla_breached_paths = -1;
   if (!payload || typeof payload !== "object") return;
-  const phases = (payload as Record<string, unknown>).phases;
+  const payloadRecord = payload as Record<string, unknown>;
+  const breachCount = readNonNegativeInteger(payloadRecord.breachCount);
+  gauges.keeper_payout_finality_sla_breached_paths = breachCount ?? -1;
+  const phases = payloadRecord.phases;
   if (!Array.isArray(phases)) return;
 
   for (const phase of phases) {
@@ -158,6 +169,14 @@ export function recordCorrelationFinalitySlaMetrics(payload: unknown) {
       setMaxGauge("keeper_round_payout_apply_backlog_oldest_seconds", age);
     }
   }
+}
+
+export function recordPayoutFinalityLaunchBudgetConfigViolation() {
+  incrementCounter("keeper_payout_finality_launch_budget_config_violations_total");
+}
+
+export function recordHumanVerifiedCommitCountWarning() {
+  incrementCounter("keeper_work_human_verified_commit_count_warning_observations_total");
 }
 
 export function recordCorrelationSnapshotResult(result: CorrelationSnapshotMetricsResult) {
@@ -269,7 +288,10 @@ function renderMetrics(): string {
     keeper_round_payout_snapshot_finalized_total: "Total round payout snapshots finalized by keeper",
     keeper_rating_snapshot_applied_total: "Total finalized public rating payout snapshots applied by keeper",
     keeper_rbts_settlement_snapshot_applied_total: "Total finalized RBTS settlement snapshots applied by keeper",
-    keeper_payout_finality_sla_breaches_total: "Total healthy unchallenged payout-finality paths observed past the one-hour SLA",
+    keeper_payout_finality_launch_budget_config_violations_total:
+      "Total startup checks where the configured payout-finality budget exceeded launch policy",
+    keeper_work_human_verified_commit_count_warning_observations_total:
+      "Total Ponder keeper-work humanVerifiedCommitCount warning observations",
     keeper_artifact_cache_or_fetch_failure_total: "Total correlation artifact cache or fetch failures observed by keeper",
   };
 
@@ -308,6 +330,8 @@ function renderMetrics(): string {
       "Reward pool qualification candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_bundle_terminal_sync_candidates:
       "Question bundle terminal sync candidates returned by the last keeper work discovery phase",
+    keeper_payout_finality_sla_breached_paths:
+      "Current number of healthy unchallenged payout-finality paths past the one-hour SLA in the latest Ponder SLA payload (-1 = unavailable)",
     keeper_correlation_source_ready_backlog_oldest_seconds:
       "Age in seconds of the oldest source-ready correlation source without a round payout proposal (-1 = none)",
     keeper_correlation_epoch_finalization_backlog_oldest_seconds:

@@ -36,7 +36,7 @@ import {
   recordMainLoopLockSkip,
   recordError,
   recordCorrelationSnapshotResult,
-  incrementCounter,
+  recordPayoutFinalityLaunchBudgetConfigViolation,
   setGauge,
   setWalletBalanceWei,
   getConsecutiveErrors,
@@ -82,7 +82,7 @@ async function validatePayoutFinalityLaunchBudget() {
     !LOCAL_CHAIN_IDS.has(config.chainId) &&
     configuredBudget > BigInt(LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS)
   ) {
-    incrementCounter("keeper_payout_finality_sla_breaches_total");
+    recordPayoutFinalityLaunchBudgetConfigViolation();
     throw new Error(
       `Configured payout finality budget exceeds launch policy: ${configuredBudget}s > ${LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS}s`,
     );

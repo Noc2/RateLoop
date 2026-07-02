@@ -68,7 +68,12 @@ import {
 } from "./contract-reads.js";
 import { config } from "./config.js";
 import type { Logger } from "./logger.js";
-import { incrementCounter, recordCorrelationFinalitySlaMetrics, setGauge } from "./metrics.js";
+import {
+  incrementCounter,
+  recordCorrelationFinalitySlaMetrics,
+  recordHumanVerifiedCommitCountWarning,
+  setGauge,
+} from "./metrics.js";
 import { buildPonderUrl } from "./ponder-url.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
@@ -789,7 +794,7 @@ function inspectKeeperWorkHealth(payload: unknown, logger: Logger): void {
   const status = (humanVerifiedCommitCount as Record<string, unknown>).status;
   if (status !== "warning") return;
 
-  incrementCounter("keeper_work_hrc_health_warning_total");
+  recordHumanVerifiedCommitCountWarning();
   logger.warn("Ponder humanVerifiedCommitCount health is degraded", {
     staleRoundCount: (humanVerifiedCommitCount as Record<string, unknown>).staleRoundCount,
     message: (humanVerifiedCommitCount as Record<string, unknown>).message,
