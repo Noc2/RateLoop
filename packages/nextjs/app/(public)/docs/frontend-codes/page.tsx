@@ -175,17 +175,19 @@ RoundVotingEngine.commitVote(
           unrevealed commit. Vote choices stay hidden until this step runs.
         </li>
         <li>
-          <strong>Settling rounds:</strong> Once at least 3 votes are revealed and all past-epoch votes have been
-          revealed (or the 60-minute reveal grace period has expired), the service calls{" "}
-          <code>settleRound(contentId, roundId)</code> to finalize the round, record pending public-rating evidence, and
-          prepare rewards for claiming after the matching oracle roots finalize.
+          <strong>Closing public verdicts:</strong> Once at least 3 votes are revealed and all past-epoch votes have
+          been revealed (or the 60-minute reveal grace period has expired), the service calls{" "}
+          <code>settleRound(contentId, roundId)</code> to close the public verdict. Non-tied RBTS-backed rounds then
+          enter <code>SettlementPending</code> while reward finality waits for the matching oracle roots.
         </li>
         <li>
-          <strong>Publishing payout snapshots:</strong> After settlement, the service can recompute correlation epoch
-          artifacts and submit <code>ClusterPayoutOracle</code> roots from the registered frontend operator wallet or a
-          delegated snapshot keeper wallet assigned by that frontend. Root proposal remains frontend-bonded,
-          challengeable, and should point at a public deterministic artifact whose v3 parameter hash commits to the
-          settlement-time input snapshot references.
+          <strong>Publishing and applying payout snapshots:</strong> After the public verdict closes, the service can
+          recompute correlation epoch artifacts and submit <code>ClusterPayoutOracle</code> roots from the registered
+          frontend operator wallet or a delegated snapshot keeper wallet assigned by that frontend. Root proposal
+          remains frontend-bonded, challengeable, and should point at a public deterministic artifact whose v3 parameter
+          hash commits to the settlement-time input snapshot references. Once the RBTS settlement root is usable,{" "}
+          <code>applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs)</code> completes LREP settlement
+          and final round side effects.
         </li>
         <li>
           <strong>Publishing confidentiality log roots:</strong> If the frontend gates private context, the service
