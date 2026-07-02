@@ -19,6 +19,9 @@ import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
 import {
+    QuestionRewardPoolEscrowBundleRecoveryLib
+} from "../contracts/libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
+import {
     QuestionRewardPoolEscrowPoolActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
@@ -1711,6 +1714,97 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 refund = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
         assertGt(refund, 0);
+    }
+
+    function testRecoveredBundleSnapshotRoundSetCanRefundAfterGraceWithoutReplacement() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-bundle-snapshot-no-replacement"));
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+
+        vm.warp(block.timestamp + 30 days + BUNDLE_REFUND_GRACE + BUNDLE_CLAIM_GRACE + 1);
+        vm.expectRevert();
+        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 refund = rewardPoolEscrow.refundRecoveredQuestionBundleReward(bundleId, _singleRoundSetIndexes(0));
+
+        assertEq(refund, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + REWARD_POOL_AMOUNT);
+        assertFalse(
+            rewardPoolEscrow.isRoundPayoutSnapshotConsumed(
+                oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1
+            )
+        );
+        vm.expectRevert("Bundle refunded");
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+    }
+
+    function testRecoveredBundleRefundRevertsWhenReplacementFinalizedBeforeReopen() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-bundle-snapshot-with-replacement"));
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+
+        vm.warp(block.timestamp + 30 days + BUNDLE_REFUND_GRACE + BUNDLE_CLAIM_GRACE + 1);
+
+        IClusterPayoutOracle.PayoutWeight memory replacementWeight = payoutWeight;
+        replacementWeight.reasonHash = keccak256("replacement-bundle-before-recovered-refund");
+        bytes32 replacementRoot = oracle.payoutWeightLeaf(replacementWeight);
+        _finalizeBundleRoundPayoutSnapshotWithRoot(
+            oracle, bundleId, 0, uint64(1), 3, 30_000, replacementWeight.effectiveWeight, replacementRoot
+        );
+
+        vm.expectRevert(
+            QuestionRewardPoolEscrowBundleRecoveryLib.RecoveredBundleRoundSetReplacementSnapshotAvailable.selector
+        );
+        rewardPoolEscrow.refundRecoveredQuestionBundleReward(bundleId, _singleRoundSetIndexes(0));
+
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+        assertGt(
+            rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
+                bundleId, 0, voter1, replacementWeight, new bytes32[](0)
+            ),
+            0
+        );
     }
 
     function testBundleClusterSnapshotWithWrongConsumerDoesNotQualifyRoundSet() public {
@@ -4641,6 +4735,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function _singleRoundIds(uint256 roundId) internal pure returns (uint256[] memory roundIds) {
         roundIds = new uint256[](1);
         roundIds[0] = roundId;
+    }
+
+    function _singleRoundSetIndexes(uint256 roundSetIndex)
+        internal
+        pure
+        returns (uint256[] memory roundSetIndexes)
+    {
+        roundSetIndexes = new uint256[](1);
+        roundSetIndexes[0] = roundSetIndex;
     }
 
     function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidClusterRootAndDigest() public {

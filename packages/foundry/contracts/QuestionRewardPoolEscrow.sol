@@ -254,6 +254,9 @@ contract QuestionRewardPoolEscrow is
     event RecoveredSnapshotBundleRoundSetReopened(
         uint256 indexed bundleId, uint256 indexed roundSetIndex, bytes32 newWeightRoot
     );
+    event RecoveredSnapshotBundleRoundSetAbandoned(
+        uint256 indexed bundleId, uint256 indexed roundSetIndex, uint256 allocation
+    );
     event QuestionBundleTerminalSkipped(
         uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed roundId, uint8 reasonCode
     );
@@ -894,6 +897,28 @@ contract QuestionRewardPoolEscrow is
         _qualifyRecoveredSnapshotBundleRoundSetIfNeeded(bundleId, roundSetIndex);
     }
 
+    function refundRecoveredQuestionBundleReward(uint256 bundleId, uint256[] calldata roundSetIndexes)
+        external
+        nonReentrant
+        returns (uint256 refundAmount)
+    {
+        QuestionRewardPoolEscrowBundleRecoveryLib.abandonRecoveredRoundSets(
+            bundleRewards,
+            bundleQuestions,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
+            rejectedRecoveredBundleRoundSet,
+            reopenedRecoveredBundleRoundSet,
+            votingEngine,
+            bundleId,
+            roundSetIndexes,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+        );
+        return _refundQuestionBundleReward(bundleId);
+    }
+
     function skipPreQualificationRejectedSnapshotBundleRoundSet(uint256 bundleId, uint256 roundSetIndex)
         external
         nonReentrant
@@ -1113,6 +1138,10 @@ contract QuestionRewardPoolEscrow is
     }
 
     function refundQuestionBundleReward(uint256 bundleId) external nonReentrant returns (uint256 refundAmount) {
+        return _refundQuestionBundleReward(bundleId);
+    }
+
+    function _refundQuestionBundleReward(uint256 bundleId) private returns (uint256 refundAmount) {
         return QuestionRewardPoolEscrowBundleActionsLib.refundQuestionBundleReward(
             bundleRewards,
             bundleQuestions,
