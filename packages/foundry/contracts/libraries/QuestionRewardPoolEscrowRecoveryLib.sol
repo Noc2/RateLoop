@@ -47,6 +47,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(!rewardPool.unallocatedRefunded, "Bounty refunded");
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
         require(_usesClusterPayoutSnapshot(rewardPool, rewardPoolClusterPayoutOracle), "Not cluster-snapshot pool");
+        require(rewardPool.pendingRecoveredRounds == 0, "Recovered round pending");
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
@@ -107,10 +108,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(rejected, "Snapshot rejection missing");
 
         preQualificationRejectedRound[rewardPoolId][roundId] = true;
-        require(
-            rewardPool.pendingPreQualificationRejectedRounds < type(uint32).max,
-            "Too many prequalification skips"
-        );
+        require(rewardPool.pendingPreQualificationRejectedRounds < type(uint32).max, "Too many prequalification skips");
         unchecked {
             rewardPool.pendingPreQualificationRejectedRounds += 1;
         }
@@ -140,6 +138,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(!rewardPool.unallocatedRefunded, "Bounty refunded");
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
         require(_usesClusterPayoutSnapshot(rewardPool, rewardPoolClusterPayoutOracle), "Not cluster-snapshot pool");
+        require(rewardPool.pendingRecoveredRounds == 0, "Recovered round pending");
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
@@ -171,10 +170,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         );
 
         preQualificationRejectedRound[rewardPoolId][roundId] = true;
-        require(
-            rewardPool.pendingPreQualificationRejectedRounds < type(uint32).max,
-            "Too many prequalification skips"
-        );
+        require(rewardPool.pendingPreQualificationRejectedRounds < type(uint32).max, "Too many prequalification skips");
         unchecked {
             rewardPool.pendingPreQualificationRejectedRounds += 1;
         }
@@ -196,6 +192,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(rewardPool.id != 0, "Bounty not found");
         require(!rewardPool.refunded, "Bounty refunded");
         require(_usesClusterPayoutSnapshot(rewardPool, rewardPoolClusterPayoutOracle), "Not cluster-snapshot pool");
+        require(rewardPool.pendingPreQualificationRejectedRounds == 0, "Prequalification round pending");
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
         require(snapshot.qualified, "Round not qualified");

@@ -830,10 +830,7 @@ contract QuestionRewardPoolEscrow is
     ///         has no snapshot proposal at all.
     /// @dev It advances only the cursor and preserves all allocation so a fresh oracle snapshot
     ///      can still qualify the same round before any refund.
-    function skipPreQualificationSnapshotlessClusterRound(uint256 rewardPoolId, uint256 roundId)
-        external
-        nonReentrant
-    {
+    function skipPreQualificationSnapshotlessClusterRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
         QuestionRewardPoolEscrowRecoveryLib.skipPreQualificationSnapshotlessClusterRound(
             rewardPools,
             roundSnapshots,
@@ -906,13 +903,16 @@ contract QuestionRewardPoolEscrow is
         QuestionRewardPoolEscrowBundleRecoveryLib.abandonRecoveredRoundSets(
             bundleRewards,
             bundleQuestions,
+            bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
             bundleRewardClusterPayoutOraclePinnedAt,
             rejectedRecoveredBundleRoundSet,
             reopenedRecoveredBundleRoundSet,
+            registry,
             votingEngine,
+            votingEngine.protocolConfig(),
             bundleId,
             roundSetIndexes,
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
@@ -1185,6 +1185,8 @@ contract QuestionRewardPoolEscrow is
     {
         return QuestionRewardPoolEscrowPoolActionsLib.refundExpiredRecoveredRewardPool(
             rewardPools,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
@@ -1205,6 +1207,8 @@ contract QuestionRewardPoolEscrow is
     {
         return QuestionRewardPoolEscrowPoolActionsLib.refundInactiveRecoveredRewardPool(
             rewardPools,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
@@ -1219,17 +1223,15 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function refundPreQualificationRejectedRewardPool(
-        uint256 rewardPoolId,
-        uint256[] calldata roundIds,
-        bool inactive
-    )
+    function refundPreQualificationRejectedRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds, bool inactive)
         external
         nonReentrant
         returns (uint256 refundAmount)
     {
         return QuestionRewardPoolEscrowPoolActionsLib.refundPreQualificationRejectedRewardPool(
             rewardPools,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             preQualificationRejectedRound,
             rewardPoolClusterPayoutOracle,
             rewardPoolClusterPayoutOraclePinnedAt,

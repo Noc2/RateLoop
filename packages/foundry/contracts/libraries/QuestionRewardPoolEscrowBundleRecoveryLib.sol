@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
@@ -10,6 +11,8 @@ import { QuestionRewardPoolEscrowBundleActionsLib } from "./QuestionRewardPoolEs
 import { QuestionRewardPoolEscrowBundleLib } from "./QuestionRewardPoolEscrowBundleLib.sol";
 
 library QuestionRewardPoolEscrowBundleRecoveryLib {
+    using SafeCast for uint256;
+
     error RecoveredBundleRoundSetReplacementSnapshotAvailable();
 
     event RejectedSnapshotBundleRoundSetRecovered(
@@ -122,13 +125,16 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
     function abandonRecoveredRoundSets(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
         mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredBundleRoundSet,
+        ContentRegistry registry,
         RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
         uint256 bundleId,
         uint256[] calldata roundSetIndexes,
         uint8 payoutDomain
@@ -150,11 +156,17 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             if (
                 !reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex]
                     && _hasRecoveredReplacementSnapshot(
+                        bundleRewards,
                         bundleQuestions,
+                        bundleQuestionRecordedRounds,
                         bundleRoundIds,
                         oracleAddr,
                         pinnedAt,
+                        bundleRewardClusterPayoutOracle,
+                        bundleRewardClusterPayoutOraclePinnedAt,
+                        registry,
                         votingEngine,
+                        protocolConfig,
                         bundleId,
                         roundSetIndex,
                         payoutDomain
@@ -293,6 +305,9 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
         require(proposedAt >= sourceReadyAt && proposedAt >= pinnedAt, "Cluster source stale");
 
+        if (block.timestamp > bundle.claimDeadline) {
+            bundle.claimDeadline = block.timestamp.toUint64();
+        }
         reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex] = true;
 
         emit RecoveredSnapshotBundleRoundSetReopened(bundleId, roundSetIndex, newSnapshot.weightRoot);
@@ -361,47 +376,36 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
     }
 
     function _hasRecoveredReplacementSnapshot(
+        mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         address oracleAddr,
         uint64 pinnedAt,
+        mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
+        ContentRegistry registry,
         RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
         uint256 bundleId,
         uint256 roundSetIndex,
         uint8 payoutDomain
     ) private view returns (bool) {
         if (oracleAddr == address(0) || pinnedAt == 0) return false;
-
-        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
-        uint256 snapshotRoundId = _bundleSnapshotRoundId(roundSetIndex);
-        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot;
-        try oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId) returns (
-            IClusterPayoutOracle.RoundPayoutSnapshot memory loadedSnapshot
-        ) {
-            snapshot = loadedSnapshot;
-        } catch {
-            return false;
-        }
-        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) return false;
-
-        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
-        if (proposedAt < pinnedAt) return false;
-        uint64 readyAt =
-            _bundlePayoutSnapshotSourceReadyAt(bundleQuestions, bundleRoundIds, votingEngine, bundleId, roundSetIndex);
-        if (readyAt == 0 || proposedAt < readyAt) return false;
-        if (oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId) != address(this)) {
-            return false;
-        }
-
-        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, bundleId, bundleId, snapshotRoundId);
-        bytes32 snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
-        if (oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshotDigest)) return false;
-        if (oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.weightRoot)) return false;
-        if (_isRoundPayoutSnapshotRejectedByCorrelationEpoch(oracle, payoutDomain, bundleId, bundleId, snapshotRoundId))
-        {
-            return false;
-        }
-        return true;
+        return QuestionRewardPoolEscrowBundleActionsLib.hasQualifiableRecoveredBundleReplacementSnapshot(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
+            registry,
+            votingEngine,
+            protocolConfig,
+            payoutDomain,
+            bundleId,
+            roundSetIndex
+        );
     }
 
     function _clearQualifiedBundleRoundSetClaimants(

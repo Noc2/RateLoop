@@ -1633,5 +1633,4 @@ contract RoundVotingEngine is
         }
         emit Unpaused(msg.sender);
     }
-
 }

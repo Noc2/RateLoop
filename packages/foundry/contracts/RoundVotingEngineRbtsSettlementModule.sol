@@ -43,11 +43,9 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
             if (readyAt == 0 || block.timestamp < uint256(readyAt) + RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT) {
                 revert RoundNotExpired();
             }
-            if (
-                _hasLiveRbtsSettlementSnapshot(
+            if (_hasLiveRbtsSettlementSnapshot(
                     roundRbtsSettlementOracle[contentId][roundId], contentId, roundId, round.revealedCount
-                )
-            ) {
+                )) {
                 revert SnapshotAvailable();
             }
             _returnRbtsStakes(contentId, roundId);
@@ -56,20 +54,20 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
             return;
         }
 
-        RoundRbtsSettlementSnapshotLib.SnapshotResult memory snapshot = RoundRbtsSettlementSnapshotLib
-            .applySnapshotWeights(
-            roundCommitHashes[contentId][roundId],
-            commits[contentId][roundId],
-            commitIdentityKey[contentId][roundId],
-            commitIdentityHolder[contentId][roundId],
-            commitRbtsWeight[contentId][roundId],
-            roundRbtsSettlementOracle[contentId][roundId],
-            contentId,
-            roundId,
-            round.revealedCount,
-            payoutWeights,
-            proofs
-        );
+        RoundRbtsSettlementSnapshotLib.SnapshotResult memory snapshot =
+            RoundRbtsSettlementSnapshotLib.applySnapshotWeights(
+                roundCommitHashes[contentId][roundId],
+                commits[contentId][roundId],
+                commitIdentityKey[contentId][roundId],
+                commitIdentityHolder[contentId][roundId],
+                commitRbtsWeight[contentId][roundId],
+                roundRbtsSettlementOracle[contentId][roundId],
+                contentId,
+                roundId,
+                round.revealedCount,
+                payoutWeights,
+                proofs
+            );
 
         uint256 weightedRewardStake;
         uint256 rbtsForfeitedPool;
@@ -145,8 +143,7 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         ) {
             if (
                 !_isLiveRbtsSettlementSnapshotStatus(snapshot.status) || snapshot.rawEligibleVoters != revealedCount
-                    || snapshot.totalClaimWeight == 0
-                    || snapshot.weightRoot == bytes32(0)
+                    || snapshot.totalClaimWeight == 0 || snapshot.weightRoot == bytes32(0)
             ) {
                 return false;
             }

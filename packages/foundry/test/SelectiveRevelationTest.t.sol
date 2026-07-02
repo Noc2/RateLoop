@@ -35,6 +35,8 @@ contract SelectiveRevelationTest is VotingTestBase {
     uint256 public constant T0 = 1_000_000;
     uint256 public constant EPOCH = 1 hours;
     uint256 public constant GRACE_PERIOD = 60 minutes;
+    uint256 private constant RBTS_SEED_BLOCK_FLAG = 1 << 255;
+    uint256 private constant RBTS_SEED_BLOCK_MASK = RBTS_SEED_BLOCK_FLAG - 1;
 
     function setUp() public {
         vm.warp(T0);
@@ -161,7 +163,24 @@ contract SelectiveRevelationTest is VotingTestBase {
                 logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
                     && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
             ) {
-                settlementEntropy = abi.decode(logs[i].data, (bytes32));
+                uint256 seedBlock = uint256(abi.decode(logs[i].data, (bytes32)));
+                bytes32 blockEntropy = keccak256(abi.encode("rateloop.rbts.seed-block", seedBlock));
+                settlementEntropy = bytes32(
+                    uint256(
+                        keccak256(
+                            abi.encode(
+                                "rateloop.rbts.future-block-seed.v1",
+                                block.chainid,
+                                address(engine),
+                                contentId,
+                                roundId,
+                                seedBlock,
+                                blockEntropy
+                            )
+                        )
+                    ) & RBTS_SEED_BLOCK_MASK
+                );
+                if (settlementEntropy == bytes32(0)) settlementEntropy = bytes32(uint256(1));
             }
         }
         if (settlementEntropy != bytes32(0)) return settlementEntropy;
@@ -179,7 +198,7 @@ contract SelectiveRevelationTest is VotingTestBase {
     function _completeRbtsSettlementAfterPendingCleanup(uint256 contentId, uint256 roundId) internal {
         RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _processUnrevealedBeforeRbtsSettlement(engine, contentId, roundId, pendingRound);
-        vm.roll(block.number + 1);
+        _rollPastRbtsSeedBlock(block.number + 1);
         _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, pendingRound.revealedCount);
     }
 
@@ -335,11 +354,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         bytes32[10] memory commitKeys,
         bytes32[10] memory salts,
         uint256 count
-    )
-        internal
-        view
-        returns (bytes32 hash)
-    {
+    ) internal view returns (bytes32 hash) {
         for (uint256 i = 0; i < count; i++) {
             bytes32 drawKey = _commitIdentityKey(engine, contentId, roundId, commitKeys[i]);
             if (drawKey == bytes32(0)) {

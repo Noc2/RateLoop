@@ -181,9 +181,8 @@ library RoundRbtsSettlementSnapshotLib {
             RoundLib.Commit storage commit = roundCommits[commitKey];
             if (commit.revealed && commitRbtsWeight[commitKey] > 0) {
                 bytes32 identityKey = commitIdentityKey[commitKey];
-                bytes32 drawKey = identityKey == bytes32(0)
-                    ? VotePreflightLib.addressIdentityKey(commit.voter)
-                    : identityKey;
+                bytes32 drawKey =
+                    identityKey == bytes32(0) ? VotePreflightLib.addressIdentityKey(commit.voter) : identityKey;
                 bytes32 revealEntropy = commitRevealEntropy[commitKey];
                 if (revealEntropy == bytes32(0)) revert MissingRevealEntropy();
                 scoringSetHash = keccak256(abi.encode(scoringSetHash, commitKey, drawKey, revealEntropy));

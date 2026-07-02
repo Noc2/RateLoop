@@ -176,6 +176,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function refundExpiredRecoveredRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
@@ -188,11 +190,14 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256[] calldata roundIds
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        _requireNoPendingPreQualificationRejectedRounds(rewardPool);
         bool completeRecoveredExit = uint256(rewardPool.qualifiedRounds) + uint256(rewardPool.pendingRecoveredRounds)
                 >= uint256(rewardPool.requiredSettledRounds) || rewardPool.unallocatedRefunded;
         _requireRecoveredRefundGrace(rewardPool, CLAIM_GRACE);
         _abandonRecoveredRounds(
             rewardPool,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
@@ -220,6 +225,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function refundInactiveRecoveredRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
@@ -233,10 +240,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256[] calldata roundIds
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        _requireNoPendingPreQualificationRejectedRounds(rewardPool);
         require(!registry.isContentActive(rewardPool.contentId), "Content active");
         require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
         _abandonRecoveredRounds(
             rewardPool,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
@@ -258,6 +268,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function refundPreQualificationRejectedRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => mapping(uint256 => bool)) storage preQualificationRejectedRound,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
@@ -277,6 +289,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         }
         _abandonPreQualificationRejectedRounds(
             rewardPool,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             preQualificationRejectedRound,
             rewardPoolClusterPayoutOracle,
             rewardPoolClusterPayoutOraclePinnedAt,
@@ -500,10 +514,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _abandonRecoveredRounds(
         RewardPool storage rewardPool,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
-        mapping(
-            uint256 => mapping(uint256 => bool)
-        ) storage rejectedRecoveredRound,
+        mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
@@ -525,7 +539,17 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             if (reopenedRecoveredRound[rewardPoolId][roundId]) {
                 _requireRecoveredRefundGrace(rewardPool, claimGrace);
             } else if (_hasRecoveredReplacementSnapshot(
-                    oracleAddr, pinnedAt, votingEngine, rewardPool, rewardPoolId, roundId, payoutDomain
+                    rewardPoolPayerIdentity,
+                    rewardPoolPayerIdentityKey,
+                    rewardPoolClusterPayoutOracle,
+                    rewardPoolClusterPayoutOraclePinnedAt,
+                    oracleAddr,
+                    pinnedAt,
+                    votingEngine,
+                    rewardPool,
+                    rewardPoolId,
+                    roundId,
+                    payoutDomain
                 )) {
                 revert RecoveredReplacementSnapshotAvailable();
             }
@@ -549,6 +573,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _abandonPreQualificationRejectedRounds(
         RewardPool storage rewardPool,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => mapping(uint256 => bool)) storage preQualificationRejectedRound,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
@@ -567,7 +593,17 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             uint256 roundId = roundIds[i];
             require(preQualificationRejectedRound[rewardPoolId][roundId], "Round not skipped");
             if (_hasRecoveredReplacementSnapshot(
-                    oracleAddr, pinnedAt, votingEngine, rewardPool, rewardPoolId, roundId, payoutDomain
+                    rewardPoolPayerIdentity,
+                    rewardPoolPayerIdentityKey,
+                    rewardPoolClusterPayoutOracle,
+                    rewardPoolClusterPayoutOraclePinnedAt,
+                    oracleAddr,
+                    pinnedAt,
+                    votingEngine,
+                    rewardPool,
+                    rewardPoolId,
+                    roundId,
+                    payoutDomain
                 )) {
                 revert PreQualificationRejectedReplacementSnapshotAvailable();
             }
@@ -583,6 +619,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     }
 
     function _hasRecoveredReplacementSnapshot(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         address oracleAddr,
         uint64 pinnedAt,
         RoundVotingEngine votingEngine,
@@ -592,6 +632,18 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint8 payoutDomain
     ) private view returns (bool) {
         if (oracleAddr == address(0) || pinnedAt == 0) return false;
+
+        (, bool canQualify,,,,) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
+            rewardPool,
+            roundId,
+            payoutDomain
+        );
+        if (!canQualify) return false;
 
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot;

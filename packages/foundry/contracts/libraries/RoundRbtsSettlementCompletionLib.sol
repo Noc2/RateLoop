@@ -100,19 +100,19 @@ library RoundRbtsSettlementCompletionLib {
         );
         if (treasuryPaid > 0) accountedLrepBalance -= treasuryPaid;
 
-        if (
-            !RoundSettlementSideEffectsLib.recordSettlement(
+        if (!RoundSettlementSideEffectsLib.recordSettlement(
                 registry,
                 contentId,
                 roundId,
                 roundReferenceRatingBpsSnapshot[contentId][roundId],
                 roundRatingUpEvidence[contentId][roundId],
                 roundRatingDownEvidence[contentId][roundId]
-            )
-        ) {
+            )) {
             pendingRatingSettlementReplay[contentId][roundId] = true;
         }
-        RoundCleanupLib.notifyBundleRoundTerminal(pendingBundleObserverReplay[contentId], registry, contentId, roundId, true);
+        RoundCleanupLib.notifyBundleRoundTerminal(
+            pendingBundleObserverReplay[contentId], registry, contentId, roundId, true
+        );
         emit RbtsRewardsScored(
             contentId,
             roundId,

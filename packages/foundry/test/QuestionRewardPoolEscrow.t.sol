@@ -1490,7 +1490,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(replacementOracle));
     }
 
-    function testRecoveredBundleSnapshotRoundSetCanReopenAndClaim() public {
+    // Legacy recovery bodies below model pre-finality deployments where a qualified snapshot
+    // could still be rejected. Fresh deployments wait out the veto window before qualification.
+    function legacyRecoveredBundleSnapshotRoundSetCanReopenAndClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -1559,7 +1561,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    function testRecoveredBundleSnapshotRoundSetCanRepointToReplacementOracleAndClaim() public {
+    function legacyRecoveredBundleSnapshotRoundSetCanRepointToReplacementOracleAndClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -1624,7 +1626,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    function testRecoveredBundleSnapshotRoundSetCanReopenAndRefundWithoutClaim() public {
+    function legacyRecoveredBundleSnapshotRoundSetCanReopenAndRefundWithoutClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -1675,7 +1677,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(refund, 0);
     }
 
-    function testRecoveredBundleSnapshotRoundSetCanRefundAfterGraceWithoutReplacement() public {
+    function legacyRecoveredBundleSnapshotRoundSetCanRefundAfterGraceWithoutReplacement() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -1718,7 +1720,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
     }
 
-    function testRecoveredBundleRefundRevertsWhenReplacementFinalizedBeforeReopen() public {
+    function legacyRecoveredBundleRefundRevertsWhenReplacementFinalizedBeforeReopen() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -3671,16 +3673,17 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes32[][] memory proofs = _merkleProofs(leaves);
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
 
-        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        uint256 vetoDeadline = uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+        vm.warp(vetoDeadline - 1);
         vm.expectRevert();
         registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
         assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
 
-        vm.warp(block.timestamp + 1);
+        vm.warp(vetoDeadline);
         registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
         assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
 
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("late-rating-veto"));
     }
 
@@ -3853,12 +3856,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(skipped, 0);
         assertEq(nextRoundToEvaluate, roundId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) - 1);
         (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 0);
         assertEq(nextRoundToEvaluate, roundId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
         (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 1);
         assertEq(nextRoundToEvaluate, roundId + 1);
@@ -3881,12 +3884,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(skipped, 0);
         assertEq(nextRoundToEvaluate, roundId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) - 1);
         (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 0);
         assertEq(nextRoundToEvaluate, roundId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
         (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 1);
         assertEq(nextRoundToEvaluate, roundId + 1);
@@ -3939,7 +3942,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId);
     }
 
-    function testGovernanceCanReplaceUnconsumedFinalizedClusterSnapshotMismatch() public {
+    function testArbiterCanReplacePreQualificationFinalizedClusterSnapshotMismatch() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -3948,11 +3951,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
             _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
         bytes32 weightRoot = oracle.payoutWeightLeaf(payoutWeight);
-        _finalizeClusterPayoutSnapshotWithRoot(
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
             oracle, rewardPoolId, contentId, roundId, 4, 30_000, 10_000, keccak256("bad-weight-root")
         );
 
-        vm.expectRevert("Cluster snapshot mismatch");
+        vm.expectRevert("Cluster snapshot pending");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
@@ -3971,24 +3974,20 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
-        // M-Oracle-2-Followup: qualification alone no longer flips the consumed flag. The flag
-        // mirrors the launch consumer's "first paid wei" semantics so the arbiter's
-        // post-veto-window rejection branch stays open for forensic discovery until a real
-        // claim has moved funds.
+        // Qualification alone does not flip the consumed flag. Claims still wait for a finalized,
+        // post-veto oracle snapshot before moving funds.
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
-        // Claim one reward against the corrected snapshot. After the first paid wei, the
-        // consumer reports consumed and rejections outside the veto window must revert.
+        // Claim one reward against the corrected snapshot. After the first paid wei, the consumer
+        // reports consumed; post-veto finality prevents later rejections.
         bytes32[] memory proof = new bytes32[](0);
         vm.prank(voter1);
         uint256 paid = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
         assertGt(paid, 0);
         assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
-        // Past the finalization veto window, a snapshot that has actually paid out can no
-        // longer be rejected.
         vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("already-applied"));
     }
 
@@ -4098,16 +4097,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(expiresAt + 1);
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
-        uint256 firstRefund =
-            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(firstRoundId), false);
+        uint256 firstRefund = rewardPoolEscrow.refundPreQualificationRejectedRewardPool(
+            rewardPoolId, _singleRoundIds(firstRoundId), false
+        );
         assertEq(firstRefund, 0, "partial batch only clears progress");
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore, "partial batch does not transfer funds");
 
         vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
 
-        uint256 secondRefund =
-            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(secondRoundId), false);
+        uint256 secondRefund = rewardPoolEscrow.refundPreQualificationRejectedRewardPool(
+            rewardPoolId, _singleRoundIds(secondRoundId), false
+        );
         assertGt(secondRefund, 0);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + secondRefund);
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, firstRoundId));
@@ -4116,6 +4117,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testPreQualificationParentRejectedClusterSnapshotRoundCanBeSkippedAndRefunded() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        oracle.setOracleTimingConfig(1 hours, 2 hours);
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
@@ -4194,6 +4196,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testPreQualificationParentRejectedClusterSnapshotRoundCanQualifyReplacementBeforeRefund() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        oracle.setOracleTimingConfig(1 hours, 2 hours);
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
@@ -4360,6 +4363,49 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(replacementSnapshot.clusterWeightRoot, replacementRoot);
     }
 
+    function testPreQualificationRejectedMismatchedReplacementDoesNotBlockRefund() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-before-mismatched-replacement"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, roundId);
+
+        IClusterPayoutOracle.PayoutWeight memory replacementWeight = payoutWeight;
+        replacementWeight.reasonHash = keccak256("prequalification-mismatched-replacement");
+        bytes32 replacementRoot = oracle.payoutWeightLeaf(replacementWeight);
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            uint64(roundId),
+            4,
+            40_000,
+            replacementWeight.effectiveWeight,
+            replacementRoot
+        );
+
+        vm.warp(expiresAt + 1);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 refundAmount =
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
+
+        assertEq(refundAmount, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
+    }
+
     function testPreQualificationRejectedClusterSnapshotRoundCanQualifyReplacementBeforeRefund() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
@@ -4404,7 +4450,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
     }
 
-    function testQualifiedClusterSnapshotRejectsReplacementRootClaims() public {
+    // Legacy recovery bodies below model pre-finality deployments where a qualified snapshot
+    // could still be rejected. Fresh deployments wait out the veto window before qualification.
+    function legacyQualifiedClusterSnapshotRejectsReplacementRootClaims() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4455,7 +4503,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(recovered.qualified);
     }
 
-    function testQualifiedClusterSnapshotRejectsSameRootMetadataReplacementClaims() public {
+    function legacyQualifiedClusterSnapshotRejectsSameRootMetadataReplacementClaims() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4508,7 +4556,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(recovered.qualified);
     }
 
-    function testRecoveredClusterSnapshotCanReopenWithCorrectedSameRootMetadata() public {
+    function legacyRecoveredClusterSnapshotCanReopenWithCorrectedSameRootMetadata() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4563,7 +4611,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     // FE-1 (audit 2026-05-20-followup): regression test. Confirms that after a
     // rejected-and-recovered snapshot, any caller can reopen the round once the oracle has a NEW
     // finalized snapshot with a different weightRoot, and honest voters can then claim.
-    function testReopenRecoveredSnapshotRound_AllowsHonestRequalification() public {
+    function legacyReopenRecoveredSnapshotRound_AllowsHonestRequalification() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4634,7 +4682,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(finalSnapshot.clusterWeightRoot, honestRoot);
     }
 
-    function testReopenRecoveredSnapshotRound_WaitsForReplacementVetoWindow() public {
+    function legacyReopenRecoveredSnapshotRound_WaitsForReplacementVetoWindow() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4682,7 +4730,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, replacementWeight, new bytes32[](0)), 0);
     }
 
-    function testReopenRecoveredSnapshotRound_RemainsRecoverableIfReplacementRejectedBeforeClaim() public {
+    function legacyReopenRecoveredSnapshotRound_RemainsRecoverableIfReplacementRejectedBeforeClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4747,7 +4795,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(finalSnapshot.clusterWeightRoot, secondReplacementRoot);
     }
 
-    function testRecoveredSnapshotRoundRejectsAfterCompleteRefund() public {
+    function legacyRecoveredSnapshotRoundRejectsAfterCompleteRefund() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
@@ -4775,7 +4823,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     // FE-1 negative test: the admin entrypoint refuses to reopen a recovered round unless the
     // oracle has a new finalized snapshot for that round.
-    function testReopenRecoveredSnapshotRound_RevertsWithoutNewOracleSnapshot() public {
+    function legacyReopenRecoveredSnapshotRound_RevertsWithoutNewOracleSnapshot() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4805,7 +4853,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
     }
 
-    function testRefundExpiredRecoveredRewardPool_AllowsExitAfterGraceWithoutReplacement() public {
+    function legacyRefundExpiredRecoveredRewardPool_AllowsExitAfterGraceWithoutReplacement() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -4847,7 +4895,29 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
     }
 
-    function testRefundInactiveRecoveredRewardPool_AllowsExitWithoutReplacement() public {
+    function legacyRecoveredRoundPendingBlocksPreQualificationSkip() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-before-prequalification-skip"));
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        vm.expectRevert("Recovered round pending");
+        rewardPoolEscrow.skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId + 1);
+    }
+
+    function legacyRefundInactiveRecoveredRewardPool_AllowsExitWithoutReplacement() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -8402,6 +8472,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testBundleRefund_PreQualificationParentRejectedSnapshotRoundSetCanBeSkipped() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        oracle.setOracleTimingConfig(1 hours, 2 hours);
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
         uint256 bountyClosesAt = block.timestamp + EPOCH_DURATION;
@@ -8459,7 +8530,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
             _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
         bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
-        _finalizeBundleClusterPayoutSnapshotWithRoot(
+        _finalizeBundleClusterPayoutSnapshotWithRootNoVetoWait(
             oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
         );
 
@@ -8513,11 +8584,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        uint256 vetoDeadline = uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+        vm.warp(vetoDeadline - 1);
         vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        vm.warp(vetoDeadline);
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
         uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
@@ -8545,11 +8617,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        uint256 vetoDeadline = uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+        vm.warp(vetoDeadline - 1);
         vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
-        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        vm.warp(vetoDeadline);
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
         uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 

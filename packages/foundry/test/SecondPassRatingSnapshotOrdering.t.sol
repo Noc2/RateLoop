@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import { Vm } from "forge-std/Vm.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
@@ -90,6 +91,55 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
 
         registry.applyRatingPayoutSnapshot(contentId, settledRoundId, weights, proofs);
         assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, settledRoundId));
+    }
+
+    function testPublicRatingSnapshotCursorSkipsPendingRoundWithoutProposalAfterGrace() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-no-proposer");
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId), "grace blocks early skip");
+
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingSnapshotSkipped(
+            contentId, roundId, address(oracle), keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
+        );
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+    }
+
+    function testPublicRatingSnapshotAppliedIndexesSnapshotKey() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-event-abi");
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        bytes32[] memory leaves;
+        IClusterPayoutOracle.PayoutWeight[] memory weights;
+        (weights, leaves) = _publicRatingPayoutLeaves(oracle, contentId, roundId, 3);
+        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+            oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(weights), _merkleRoot(leaves)
+        );
+        bytes32[][] memory proofs = _merkleProofs(leaves);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+
+        vm.recordLogs();
+        registry.applyRatingPayoutSnapshot(contentId, roundId, weights, proofs);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 eventTopic = keccak256("RatingSnapshotApplied(uint256,uint256,bytes32,bytes32,uint256,uint256)");
+        bool found;
+        for (uint256 i; i < logs.length; i++) {
+            if (logs[i].emitter == address(registry) && logs[i].topics.length != 0 && logs[i].topics[0] == eventTopic) {
+                assertEq(logs[i].topics.length, 4, "snapshotKey is indexed");
+                assertEq(logs[i].topics[3], snapshotKey, "indexed snapshot key");
+                found = true;
+            }
+        }
+        assertTrue(found, "RatingSnapshotApplied emitted");
     }
 
     function _moveRoundToSettlementPending(uint256 contentId) internal returns (uint256 roundId) {

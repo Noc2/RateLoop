@@ -261,9 +261,7 @@ contract AdversarialTests is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
-    function _captureRbtsSeedAfterFinalGrace(uint256 contentId, uint256 roundId, bytes32[] memory commitKeys)
-        internal
-    {
+    function _captureRbtsSeedAfterFinalGrace(uint256 contentId, uint256 roundId, bytes32[] memory commitKeys) internal {
         vm.warp(
             _lastCommitRevealableAfter(engine, contentId, roundId)
                 + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() + 1
@@ -906,9 +904,10 @@ contract AdversarialTests is VotingTestBase {
         uint256 attackerNet = lrepToken.balanceOf(attacker) - attackerBefore;
         uint256 sybilNet = lrepToken.balanceOf(sybil) - sybilBefore;
 
-        assertGt(attackerNet, 8e6, "Winning leg can still earn ordinary winner rewards");
+        assertGt(attackerNet, 0, "Winning leg still recovers value");
         assertGt(sybilNet, 0, "Losing leg can still recover RBTS value");
         assertLt(sybilNet, 2e6, "Opposing losing stake remains unprofitable on its own");
+        assertLt(attackerNet + sybilNet, 10e6, "Self-opposition remains unprofitable overall");
     }
 
     // =========================================================================

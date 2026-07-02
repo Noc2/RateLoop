@@ -19,10 +19,13 @@ library ContentRegistryRatingSnapshotLib {
     event RatingSnapshotApplied(
         uint256 indexed contentId,
         uint256 indexed roundId,
-        bytes32 snapshotKey,
+        bytes32 indexed snapshotKey,
         bytes32 snapshotDigest,
         uint256 adjustedUpEvidence,
         uint256 adjustedDownEvidence
+    );
+    event RatingSnapshotSkipped(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed clusterPayoutOracle, bytes32 reasonHash
     );
     event RatingReviewPending(
         uint256 indexed contentId,
@@ -44,6 +47,9 @@ library ContentRegistryRatingSnapshotLib {
     uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
     uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
     uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
+    uint256 internal constant RATING_SNAPSHOT_NO_PROPOSAL_GRACE = 1 hours;
+    bytes32 internal constant RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON =
+        keccak256("rateloop.rating-snapshot.no-proposal-skip.v1");
 
     struct SnapshotApplication {
         bytes32 snapshotKey;
@@ -261,12 +267,55 @@ library ContentRegistryRatingSnapshotLib {
         IRoundVotingEngine votingEngine,
         uint256 contentId,
         uint256 roundId
-    ) private view returns (bool) {
+    ) private returns (bool) {
         ContentRegistryTypes.PendingRatingSettlement storage prior = pendingSettlements[roundId];
-        if (prior.exists) return prior.applied;
+        if (prior.exists) {
+            if (prior.applied) return true;
+            if (_canSkipPendingRatingSnapshotWithoutProposal(prior, contentId, roundId)) {
+                prior.applied = true;
+                appliedRatingSnapshotDigest[contentId][roundId] = keccak256(
+                    abi.encode(
+                        RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON,
+                        contentId,
+                        roundId,
+                        prior.clusterPayoutOracle,
+                        prior.readyAt
+                    )
+                );
+                emit RatingSnapshotSkipped(
+                    contentId, roundId, prior.clusterPayoutOracle, RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON
+                );
+                return true;
+            }
+            return false;
+        }
 
         (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, roundId);
         return _canSkipRatingSnapshotRound(state, appliedRatingSnapshotDigest[contentId][roundId]);
+    }
+
+    function _canSkipPendingRatingSnapshotWithoutProposal(
+        ContentRegistryTypes.PendingRatingSettlement storage pending,
+        uint256 contentId,
+        uint256 roundId
+    ) private view returns (bool) {
+        if (pending.clusterPayoutOracle == address(0) || pending.votingEngine == address(0)) {
+            return false;
+        }
+        if (block.timestamp < uint256(pending.readyAt) + RATING_SNAPSHOT_NO_PROPOSAL_GRACE) return false;
+
+        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
+            IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
+        if (cleanupRemaining != 0 || sourceReadyAt == 0) return false;
+
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(pending.clusterPayoutOracle);
+        try oracle.roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId) returns (
+            uint64 proposedAt
+        ) {
+            return proposedAt == 0;
+        } catch {
+            return false;
+        }
     }
 
     function _canSkipRatingSnapshotRound(RoundLib.RoundState state, bytes32 appliedDigest) private pure returns (bool) {
@@ -323,11 +372,10 @@ library ContentRegistryRatingSnapshotLib {
         snapshot = context.oracle
         .getRoundPayoutSnapshot(PAYOUT_DOMAIN_PUBLIC_RATING, 0, context.contentId, context.roundId);
         if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) revert InvalidState();
-        if (
-            !context.oracle.isRoundPayoutSnapshotOutsideVetoWindow(
-                PAYOUT_DOMAIN_PUBLIC_RATING, 0, context.contentId, context.roundId
-            )
-        ) {
+        if (!context.oracle
+                .isRoundPayoutSnapshotOutsideVetoWindow(
+                    PAYOUT_DOMAIN_PUBLIC_RATING, 0, context.contentId, context.roundId
+                )) {
             revert InvalidState();
         }
         if (snapshot.rawEligibleVoters != payoutWeightCount || snapshot.totalClaimWeight == 0) revert InvalidState();

@@ -828,7 +828,7 @@ contract FrontendRegistryCoverageTest is Test {
         vm.prank(frontend1);
         registry.requestDeregister();
 
-        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY() + 1);
+        vm.warp(block.timestamp + registry.UNBONDING_PERIOD() + 1);
         vm.expectEmit(true, false, false, true);
         emit FrontendRegistry.FeesClaimed(frontend1, 200e6);
         vm.prank(frontend1);

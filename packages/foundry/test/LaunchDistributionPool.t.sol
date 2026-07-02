@@ -1762,7 +1762,7 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-partial-root"));
 
         // M-Funds-3: finalize clears `pendingEarnedRaterCredits`, so a re-finalize attempt
@@ -1791,7 +1791,7 @@ contract LaunchDistributionPoolTest is Test {
 
         // Past the finalization veto window, a consumed snapshot cannot be rejected.
         vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("paid-launch-root"));
     }
 

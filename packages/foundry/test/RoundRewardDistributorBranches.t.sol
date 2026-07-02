@@ -428,9 +428,10 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         if (readyAt != 0 && block.timestamp < readyAt) {
             vm.warp(readyAt);
         }
-        TestClusterPayoutOracle(address(oracle)).setFinalizedRoundPayoutSnapshot(
-            launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, contentId, roundId, 1, 10_000, 10_000
-        );
+        TestClusterPayoutOracle(address(oracle))
+            .setFinalizedRoundPayoutSnapshot(
+                launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, contentId, roundId, 1, 10_000, 10_000
+            );
         IClusterPayoutOracle.PayoutWeight memory payoutWeight = IClusterPayoutOracle.PayoutWeight({
             domain: launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
             rewardPoolId: 0,
@@ -902,9 +903,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         address oracle = config.clusterPayoutOracle();
         revertingLaunchPool.setClusterPayoutOracle(oracle);
-        TestClusterPayoutOracle(oracle).setRoundPayoutSnapshotConsumer(
-            launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(revertingLaunchPool)
-        );
+        TestClusterPayoutOracle(oracle)
+            .setRoundPayoutSnapshotConsumer(launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(revertingLaunchPool));
         vm.prank(owner);
         config.setLaunchDistributionPool(address(revertingLaunchPool));
 

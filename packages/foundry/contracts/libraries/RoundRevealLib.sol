@@ -284,6 +284,7 @@ library RoundRevealLib {
         uint256 roundId
     ) external returns (bytes32 settlementEntropy, bool ready) {
         bytes32 capturedSeed = roundRbtsSeedEntropy[contentId][roundId];
+        if (capturedSeed == bytes32(0)) return (bytes32(0), false);
         uint256 encodedSeedBlock = uint256(capturedSeed);
         if ((encodedSeedBlock & RBTS_SEED_BLOCK_FLAG) == 0) return (capturedSeed, true);
 
@@ -294,7 +295,10 @@ library RoundRevealLib {
         if (blockEntropy == bytes32(0) && block.number - seedBlock <= EIP2935_HISTORY_SERVE_WINDOW) {
             blockEntropy = _eip2935BlockHash(seedBlock);
         }
-        if (blockEntropy == bytes32(0)) return (bytes32(0), true);
+        if (blockEntropy == bytes32(0)) {
+            _armRbtsSeedBlock(roundRbtsSeedEntropy, contentId, roundId);
+            return (bytes32(0), false);
+        }
 
         settlementEntropy = _normalizeRbtsEntropy(
             keccak256(
@@ -325,9 +329,17 @@ library RoundRevealLib {
         uint256 contentId,
         uint256 roundId
     ) private {
+        _armRbtsSeedBlock(roundRbtsSeedEntropy, contentId, roundId);
+        roundRbtsScoringClosedAt[contentId][roundId] = block.timestamp.toUint48();
+    }
+
+    function _armRbtsSeedBlock(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) private {
         uint256 seedBlock = block.number + 1;
         roundRbtsSeedEntropy[contentId][roundId] = bytes32(RBTS_SEED_BLOCK_FLAG | seedBlock);
-        roundRbtsScoringClosedAt[contentId][roundId] = block.timestamp.toUint48();
         emit RbtsSeedCaptured(contentId, roundId, bytes32(seedBlock));
     }
 

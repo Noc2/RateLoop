@@ -561,8 +561,7 @@ library RoundCleanupLib {
                 // _canFinalizeRevealFailedRound), and the attacker gains nothing but delay
                 // while paying gas with stake locked.
                 if (
-                    (round.state == RoundLib.RoundState.Settled
-                        || round.state == RoundLib.RoundState.SettlementPending)
+                    (round.state == RoundLib.RoundState.Settled || round.state == RoundLib.RoundState.SettlementPending)
                         && commit.revealableAfter <= pastEpochCutoffAt
                 ) {
                     processedPastEpochCount++;

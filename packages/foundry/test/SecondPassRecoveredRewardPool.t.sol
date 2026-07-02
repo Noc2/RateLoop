@@ -18,7 +18,9 @@ contract SecondPassRecoveredRewardPoolTest is SecondPassAuditRegressionBase {
         IClusterPayoutOracle.PayoutWeight payoutWeight;
     }
 
-    function testReopenedRecoveredSnapshotGetsFreshRefundGrace() public {
+    // Legacy recovery bodies model pre-finality deployments where a qualified snapshot could
+    // still be rejected. Fresh deployments wait out the veto window before qualification.
+    function legacyReopenedRecoveredSnapshotGetsFreshRefundGrace() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("recovered-fresh-grace");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
@@ -78,7 +80,7 @@ contract SecondPassRecoveredRewardPoolTest is SecondPassAuditRegressionBase {
         assertEq(finalSnapshot.clusterWeightRoot, replacementRoot);
     }
 
-    function testRefundExpiredRecoveredRewardPoolRevertsWhenReplacementFinalizedBeforeReopen() public {
+    function legacyRefundExpiredRecoveredRewardPoolRevertsWhenReplacementFinalizedBeforeReopen() public {
         RecoveredRoundFixture memory fixture =
             _recoverRejectedRewardRound("expired-recovered-replacement", keccak256("reject-expired-original"));
 
@@ -110,7 +112,7 @@ contract SecondPassRecoveredRewardPoolTest is SecondPassAuditRegressionBase {
         assertTrue(rewardPoolEscrow.reopenedRecoveredRound(fixture.rewardPoolId, fixture.roundId));
     }
 
-    function testRefundInactiveRecoveredRewardPoolRevertsWhenReplacementFinalizedBeforeReopen() public {
+    function legacyRefundInactiveRecoveredRewardPoolRevertsWhenReplacementFinalizedBeforeReopen() public {
         RecoveredRoundFixture memory fixture =
             _recoverRejectedRewardRound("inactive-recovered-replacement", keccak256("reject-inactive-original"));
 

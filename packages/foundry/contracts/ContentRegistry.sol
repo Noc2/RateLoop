@@ -302,6 +302,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 adjustedUpEvidence,
         uint256 adjustedDownEvidence
     );
+    event RatingSnapshotSkipped(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed clusterPayoutOracle, bytes32 reasonHash
+    );
     event QuestionRewardPoolEscrowUpdated(address rewardPoolEscrow);
     event TreasuryUpdated(address treasury);
     event ContentRoundConfigSet(

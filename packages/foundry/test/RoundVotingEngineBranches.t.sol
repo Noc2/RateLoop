@@ -1752,7 +1752,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         MockClusterPayoutOracleForRoundVotingEngine oracle =
             MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
-        oracle.configureRbtsSnapshotStatus(contentId, roundId, 8, 80_000, 8, IClusterPayoutOracle.SnapshotStatus.Proposed);
+        oracle.configureRbtsSnapshotStatus(
+            contentId, roundId, 8, 80_000, 8, IClusterPayoutOracle.SnapshotStatus.Proposed
+        );
         vm.warp(block.timestamp + 1 hours);
 
         IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
@@ -2013,24 +2015,26 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "future block entropy scores RBTS");
     }
 
-    function test_RbtsSeedPastNativeWindowWithoutHistoryReturnsStakes() public {
-        (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
-            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+    function test_RbtsSeedPastNativeWindowWithoutHistoryRearmsFutureBlock() public {
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
+        vm.recordLogs();
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        uint256 rearmedSeedBlock = _rbtsSeedBlockFromLogs(vm.getRecordedLogs(), contentId, roundId);
+        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.SettlementPending));
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "missed entropy re-arms instead of settling");
+
+        _rollPastRbtsSeedBlock(rearmedSeedBlock);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stake-return fallback finalizes accounting");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy skips RBTS scoring");
-        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "no RBTS reward without entropy");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "ck1 stake accounted");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[1]), 0, "ck2 stake accounted");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[2]), 0, "ck3 stake accounted");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[3]), 0, "ck4 stake accounted");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "rearmed entropy finalizes accounting");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "rearmed entropy scores RBTS");
     }
 
     function test_RbtsSeedPastNativeWindowUsesEip2935History() public {
@@ -2050,20 +2054,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_RbtsLongDelayedSettlementReturnsStakesWithoutRearm() public {
+    function test_RbtsLongDelayedSettlementRearmsMissedEntropy() public {
         (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 8192);
 
+        vm.recordLogs();
         vm.prank(keeper);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        uint256 rearmedSeedBlock = _rbtsSeedBlockFromLogs(vm.getRecordedLogs(), contentId, roundId);
 
+        RoundLib.Round memory pending = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pending.state), uint256(RoundLib.RoundState.SettlementPending), "missed entropy re-arms");
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "no stake-return fallback");
+
+        _rollPastRbtsSeedBlock(rearmedSeedBlock);
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "long-delayed settlement succeeds");
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stake returns finalize once");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "no rearmed sampler seed");
+        assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "rearmed settlement succeeds");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "rearmed sampler seed");
     }
 
     function test_RbtsLongDelayedSettlementCanSettleOnlyOnce() public {
@@ -2072,9 +2083,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         engine.settleRound(contentId, roundId);
         vm.roll(block.number + 8192);
+        vm.recordLogs();
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement finalizes once");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy skips RBTS scoring");
+        uint256 rearmedSeedBlock = _rbtsSeedBlockFromLogs(vm.getRecordedLogs(), contentId, roundId);
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "missed entropy re-arms first");
+
+        _rollPastRbtsSeedBlock(rearmedSeedBlock);
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "rearmed settlement finalizes once");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "rearmed entropy scores RBTS");
 
         _expectFullWeightRbtsSettlementSnapshotRevert(contentId, roundId, RoundVotingEngine.RoundNotOpen.selector);
 
@@ -2132,6 +2149,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         vm.roll(seedBlock + 8192);
         vm.warp(seedTimestamp + 3 * EPOCH);
+        vm.recordLogs();
+        _applyFullWeightRbtsSettlementSnapshot(
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle()),
+            contentId,
+            roundId,
+            commitKeys
+        );
+        uint256 rearmedSeedBlock = _rbtsSeedBlockFromLogs(vm.getRecordedLogs(), contentId, roundId);
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "missed entropy re-arms after cleanup");
+        _rollPastRbtsSeedBlock(rearmedSeedBlock);
         _applyFullWeightRbtsSettlementSnapshot(
             MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle()),
             contentId,
@@ -2139,7 +2166,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             commitKeys
         );
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement finalizes");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy returns stakes");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "rearmed entropy scores");
     }
 
     function test_AdvisoryLaunchCreditLongDelayedRbtsSettlementScoresBeforeClaim() public {
@@ -2292,10 +2319,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
+        vm.recordLogs();
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement finalizes");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "prevrandao is not fallback entropy");
-        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "no RBTS reward without block entropy");
+        uint256 rearmedSeedBlock = _rbtsSeedBlockFromLogs(vm.getRecordedLogs(), contentId, roundId);
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "prevrandao does not settle missed entropy");
+
+        _rollPastRbtsSeedBlock(rearmedSeedBlock);
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "rearmed settlement finalizes");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), settlementPrevrandao, "prevrandao is ignored");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
@@ -3729,7 +3761,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             "settled unrevealed stake less incentive routes to treasury"
         );
 
-        vm.roll(block.number + 1);
+        _rollPastRbtsSeedBlock(block.number + 1);
         _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, settledRound.revealedCount);
 
         uint256 feesBefore = frontendRegistry.getAccumulatedFees(frontend1);
@@ -5484,9 +5516,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(newRoundId, roundId + 1);
     }
 
-    function test_RbtsSeedMissedExplicitBlockWindowReturnsStakesWithoutRearm() public {
-        (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
-            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+    function test_RbtsSeedMissedExplicitBlockWindowRearmsFutureBlock() public {
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         uint256 settlementBlock = block.number + 1;
         vm.roll(settlementBlock);
@@ -5494,16 +5525,20 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(_roundRbtsScored(engine, contentId, roundId), "first call only captures seed");
 
         vm.roll(settlementBlock + 8193);
+        vm.recordLogs();
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        uint256 rearmedSeedBlock = _rbtsSeedBlockFromLogs(vm.getRecordedLogs(), contentId, roundId);
 
+        RoundLib.Round memory pending = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pending.state), uint256(RoundLib.RoundState.SettlementPending));
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "missed explicit seed block re-arms");
+
+        _rollPastRbtsSeedBlock(rearmedSeedBlock);
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed seed finalizes accounting");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy has no score seed");
-        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "RBTS reward skipped without entropy");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "revealed stake accounted");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[1]), 0, "revealed stake accounted");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[2]), 0, "revealed stake accounted");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "rearmed seed finalizes accounting");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "rearmed seed scores RBTS");
     }
 
     function test_ThresholdReachedAt_SetOnMinVotersReveal() public {
