@@ -933,6 +933,24 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "invalidateObjectivelyInvalidRoundPayoutSnapshot",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "isRoundPayoutSnapshotFinalized",
     "inputs": [
       {
