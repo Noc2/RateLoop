@@ -155,6 +155,26 @@ Launch-credit payout roots are optimistic public artifacts. Before proposing a `
 
 When governance bans a verified-human anchor, scan pending launch-credit artifacts for that anchor before proposing or accepting a root. If the fraud is tied to the rater, ban the rater before finalization so the pending credit finalizes to zero through the existing banned-rater path.
 
+### Cluster-pinned reward pool recovery
+
+Cluster-pinned question reward pools and bundle rewards depend on a finalized `ClusterPayoutOracle` root before USDC
+or launch-LREP payout weights can be consumed. Normal liveness should come from the keeper proposing/finalizing roots
+and proactively calling `qualifyRound` / `syncQuestionBundleTerminals`, not from longer user-facing wait windows.
+
+If a settled cursor round is source-ready and raw-eligible but the pinned oracle has no payout-root proposal, governance
+has two recovery choices:
+
+1. **Recover to a replacement oracle:** call `skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId)` to
+   advance the cursor past the missing snapshot, then call `repointRewardPoolClusterPayoutOracle` or
+   `repointQuestionBundleClusterPayoutOracle` before any refund finality. Qualify the round against the replacement
+   oracle once its root is finalized.
+2. **Refund expired residue:** call `skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId)`, then run the
+   normal refund path after the existing bounty expiry rules allow it.
+
+Do not refund first if the intent is recovery to a replacement oracle. After `refunded` or `unallocatedRefunded` is set,
+the escrow rejects oracle repointing for that reward, and `roundPayoutSnapshotSourceReadyAt` reports `0` for the
+refunded pool.
+
 ### Voting engine rotation
 
 Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine` alone does **not** migrate the full protocol stack. Several contracts pin the voting engine at initialization and reject callbacks from a replacement engine with `"Stale engine"` until a coordinated replacement is deployed and rewired.

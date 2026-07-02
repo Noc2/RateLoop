@@ -134,7 +134,8 @@ const GovernanceDocs: NextPage = () => {
         through the FrontendRegistry if the on-chain-data computation was wrong. When a slash follows a rejected root,
         governance can use <code>slashFrontendWithBounty</code> to route a fixed 50% of everything confiscated — the
         stake cut, accrued fees, and any pending fee withdrawal — to the recorded challenger, so a correct challenge is
-        directly profitable rather than just bond-neutral.
+        directly profitable rather than just bond-neutral. Finalized payout roots remain rejectable during the veto
+        period only until the configured consumer has consumed them; consumed roots are final for that consumer path.
       </p>
       <p>
         The intended security model is optimistic rather than fully per-snapshot economically secured on-chain. Public

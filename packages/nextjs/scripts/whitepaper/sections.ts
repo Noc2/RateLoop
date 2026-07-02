@@ -324,6 +324,7 @@ export const SECTIONS: Section[] = [
               "Economic anti-herding through blind commit-reveal, epoch-weighted rewards, correlation-adjusted RBTS/public-rating weights, and surprise-weighted bounty claims.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
               "Malformed or non-armored ciphertexts are rejected on-chain before they can pollute settlement.",
+              "Reward-pool qualification and bundle terminal sync are permissionless, and the keeper can drive them before the first claimant pays that gas.",
               "Public on-chain history and frontend-backed challengeable payout roots make suspicious funding, timing, and prediction patterns auditable by the community.",
             ],
           },
@@ -634,11 +635,11 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet or a delegated snapshot keeper; artifact v3 commits each epoch parameter hash to both scorer parameters and pinned source-event input snapshot references. Independent operators can recompute them and challenge bad roots with the configured USDC ERC20 challenge bond, defaulting to 5 USDC (5_000_000 atomic units). Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong.",
+            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet or a delegated snapshot keeper; artifact v3 commits each epoch parameter hash to both scorer parameters and pinned source-event input snapshot references. Independent operators can recompute them and challenge bad roots with the configured USDC ERC20 challenge bond, defaulting to 5 USDC (5_000_000 atomic units). Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong. Once an escrow or launch consumer has consumed a finalized payout root, that consumed root cannot be rejected through the veto path.",
           },
           {
             type: "paragraph",
-            text: "The design does not try to fully collateralize every payout snapshot on-chain. It is an optimistic model: globally bonded frontend operators publish public artifacts, challengers get a window to recompute them, governance arbitrates disputes, and dishonest operators can lose frontend stake, reputation, and future income.",
+            text: "The design does not try to fully collateralize every payout snapshot on-chain. It is an optimistic model: globally bonded frontend operators publish public artifacts, challengers get a window to recompute them, governance arbitrates disputes, and dishonest operators can lose frontend stake, reputation, and future income. If a cluster-pinned reward pool has no payout-root proposal at all, governance can use the snapshotless cursor-skip runbook before refund finality, then either recover to a replacement oracle or refund expired residue under the existing bounty expiry rules.",
           },
         ],
       },

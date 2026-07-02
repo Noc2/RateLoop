@@ -52,20 +52,23 @@ Everything else is Medium or below: a snapshot-input determinism gap that weaken
 
 No Critical/High. Findings are Medium-at-most: liveness risks, monitoring gaps, and fragile cross-contract conventions worth a future governed cleanup.
 
+**Implementation status (2026-07-02):** The smart-contract remediation pass was implemented for the next deployment. No
+normal-path timing parameter was increased: the plan keeps current challenge/reveal UX and uses structural fixes,
+keeper automation, and governance recovery runbooks instead of making users wait longer.
+
 ### M-1 (contracts). Cluster-pinned reward pools have a hard liveness dependency on snapshot proposers
 
 - **Severity:** Medium (funds temporarily frozen; fully recoverable by governance; no third-party loss).
 - **Where:** `QuestionRewardPoolEscrow.sol`; `libraries/QuestionRewardPoolEscrowQualificationLib.sol` (`_clusterRoundQualificationStatus` ~495–553, `requireNoPendingFinishedRound` ~95–125); `...PoolActionsLib.sol` (`_refundUnallocatedRewardPool` ~315–338); `...SnapshotConsumerLib.sol` (`repoint` ~23–55).
 - **Scenario:** For a pool pinned to a `ClusterPayoutOracle`, a settled cursor round cannot be qualified, skipped, or advanced past until the oracle holds a Finalized (or Rejected) snapshot for it. `_clusterRoundQualificationStatus` returns `roundFinished=false` when `getRoundPayoutSnapshot` reverts `SnapshotNotFound` (catch ~550), so `advanceQualificationCursor` stalls and `requireNoPendingFinishedRound` reverts every refund path with `RewardPoolCursorNeedsAdvance`. If no bonded frontend ever proposes a snapshot (frontend set winds down, all deregister), both voter payouts and the residue sweep freeze indefinitely.
-- **Recovery exists but is multi-step:** admin `repointRewardPoolClusterPayoutOracle` (allowed while `qualifiedRounds == 0 && claimedAmount == 0`) to a fresh governance-controlled oracle, then propose → arbiter-reject → `skipPreQualificationRejectedSnapshotRound` → refund. Note the runbook still requires a *Rejected* snapshot on the new oracle, hence a proposal step by an eligible frontend.
-- **Remediation:** No redeploy strictly required. (a) Write and test this operational runbook now, before it is needed under pressure. (b) In a future governed escrow upgrade, add a long-timeout fallback (e.g., 90+ days after `sourceReadyAt` with no live proposal) that lets the cursor skip a snapshot-less round without oracle interaction. Confidence: high on mechanics; practical severity depends on how likely a zero-proposer state is.
+- **Status:** Fixed for the next deployment without adding a long timeout. `QuestionRewardPoolEscrow` now has governance-only `skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId)` for source-ready/raw-eligible cluster-pinned cursor rounds where the pinned oracle has no payout-root proposal. It preserves the option to repoint to a replacement oracle before refund finality, and blocks repointing after `refunded` / `unallocatedRefunded`.
 
 ### L-1 (contracts). Correlation-epoch and round-payout challenge windows run fully concurrently
 
 - **Severity:** Low (parameter risk).
 - **Where:** `ClusterPayoutOracle.sol` — `proposeRoundPayoutSnapshot` (~430–544) accepts proposals against a merely-`Proposed` epoch (~435); `setOracleConfig` (~213–224) bounds `challengeWindow ≤ 3 days`, `DEFAULT_CHALLENGE_WINDOW = 2 hours`.
 - **Scenario:** A proposer submits the correlation epoch and all dependent round snapshots in one block; both layers' 2-hour windows expire simultaneously, so a human challenger who must fetch the artifact, recompute the deterministic scorer output, and fund a USDC bond gets one 2-hour (possibly overnight) window to catch errors at either layer. The 7-day `FINALIZATION_VETO_WINDOW` backstops this, but converts a permissionless check into a trusted (arbiter) one.
-- **Remediation:** Pure parameter change — raise `challengeWindow` (≤ 3 days) once real bounty value flows. Optionally require the epoch to be `Finalized` before round snapshots can be proposed (sequential windows), which needs an oracle redeploy since it is non-upgradeable.
+- **Status:** No parameter increase made, per UX review. The docs now explicitly frame this as an optimistic trust model with the existing veto/governance backstop, not as a reason to make normal bounty claimants wait longer.
 
 ### L-2 (contracts). Narrowed `roundCore` interface re-declarations are ABI-fragile across future engine upgrades
 
@@ -73,7 +76,7 @@ No Critical/High. Findings are Medium-at-most: liveness risks, monitoring gaps, 
 - **Where:** `ConfidentialityEscrow.sol` (`IConfidentialityRoundState.roundCore`, 24–35; used ~555, ~589), `interfaces/ILaunchDistributionPool.sol` (`IRoundClusterReadyAtSource.roundCore`, 21–32; consumed via raw `staticcall` in `LaunchDistributionPool._roundCoreSettledAtView` ~1061–1075) vs. `RoundVotingEngine.roundCore` (1593–1605) which returns **8** values (adds `uint8 upWins`).
 - **Verified safe today:** Solidity tolerates extra trailing static return data, so the 7-tuple `try` decode reads the first 7 words correctly and `LaunchDistributionPool` reads `settledAt` at offset 224 with a `length >= 224` check.
 - **Risk:** silent coupling. If a future engine upgrade reorders/shrinks `roundCore`, the consumers flip fail-closed (`catch → false`), which for `ConfidentialityEscrow` means confidentiality bonds become unreleasable until another wiring fix ships.
-- **Remediation:** No on-chain action now. Add a repo invariant test asserting the engine's `roundCore` tuple against both narrowed interfaces, and document the coupling next to the getter.
+- **Status:** Fixed for the next deployment. All `roundCore` consumers now use the canonical 8-return tuple including trailing `uint8 upWins`, and the contracts package has an ABI invariant test.
 
 ### L-3 (contracts). `ContentRegistry.setTreasury` writes via raw `sstore` with no event
 
@@ -89,33 +92,33 @@ No Critical/High. Findings are Medium-at-most: liveness risks, monitoring gaps, 
 ```
 
 - **Scenario:** `ProtocolConfig.setTreasury` emits `TreasuryUpdated` (643–647); the registry twin emits nothing, so monitors watching for treasury rotation miss a registry-level rotation and forensics lose the trail. `TREASURY_ROLE` is trusted, so this is not an access-control issue.
-- **Remediation:** Governed `ContentRegistry` upgrade to add the event (a `log2` in the same assembly block is cheap; bytecode pressure is presumably why it's assembly). Until then, monitor the storage slot directly.
+- **Status:** Fixed for the next deployment. `ContentRegistry.setTreasury` emits `TreasuryUpdated(address)` and the ABI/tests were updated.
 
 ### L-4 (contracts). Qualification/bundle iteration gas scales with `commitCount × external calls`; the 200-voter cap is near practical limits
 
 - **Severity:** Low (bounded DoS-adjacent; confidence medium — not gas-profiled).
 - **Where:** `QuestionRewardPoolEscrowQualificationLib.sol` — `qualifyRound` runs two full passes (`_countEligibleRevealedVoters` ~596–616, `_markEligibleRevealedVoters` ~618–636) over up to `MAX_REWARD_POOL_ROUND_VOTERS = 200` commits, each ~6–10 staticcalls plus up to two ban lookups across two registries; bundle qualification multiplies by bundle question count.
 - **Scenario:** The first claimant on a 200-voter round pays full qualification cost inside `claimQuestionReward`. Fine on a cheap L2; near an L1-style 30M gas limit a large bundle could make first-claim/refund un-mineable.
-- **Remediation:** Operational for now — run a keeper that calls `qualifyRound`/`syncQuestionBundleTerminals` proactively, and keep `maxVoters` conservative for bounty-carrying content (parameter). A paginated qualification path needs an escrow upgrade.
+- **Status:** Operational fix implemented without changing voter caps. Ponder `/keeper/work` now surfaces bounded `rewardPoolQualifications` and `bundleTerminalSyncs`; the keeper proactively calls `qualifyRound` and `syncQuestionBundleTerminals` with per-tick gas controls and metrics.
 
 ### L-5 (contracts). `finalizeRevealFailedRound` quorum coupling with `ProtocolConfig` bounds is load-bearing but only enforced by a comment
 
 - **Severity:** Low (acknowledged in code; re-flagged as a governance tripwire).
 - **Where:** `RoundVotingEngine.sol` 985–999 uses raw `roundCfg.minVoters` as reveal quorum, safe only because `ProtocolConfig._validateRoundConfigBounds` enforces `minSettlementVoters >= 3 == MIN_RBTS_PARTICIPANTS`. If governance relaxes that bound without touching the engine, rounds with `revealedCount ∈ [minVoters, 3)` get permanently stuck (`ThresholdReached` here while RBTS scoring rejects settlement), locking stakes.
-- **Remediation:** Add the invariant to `ProtocolConfig`'s validation-change checklist and a fork test. Structural fix (derive quorum via `max()` in the engine) needs an engine upgrade and EIP-170 headroom.
+- **Status:** Fixed structurally for the next deployment. `RoundVotingEngine` derives reveal quorum as `max(roundCfg.minVoters, MIN_RBTS_PARTICIPANTS)` in settlement, reveal-failed finalization, HRC commit checks, and cancel lockout.
 
 ### L-6 (contracts). Arbiter rejection of a partially-claimed snapshot permanently strands remaining claimants' shares
 
 - **Severity:** Low (inherent to the accepted M-Oracle-2 veto semantics; flagged for documentation).
 - **Where:** `ClusterPayoutOracle._rejectFinalizedRoundPayoutSnapshot` (~672–722); `QuestionRewardPoolEscrowRecoveryLib.recoverRejectedSnapshotRound` requires `!snapshot.firstClaimPaid` (line 130).
-- **Scenario:** A snapshot finalizes, some voters claim, and within the 7-day veto window the arbiter rejects it (or its correlation epoch). Future claims revert at `verifyPayoutWeight`; recovery is blocked by `firstClaimPaid`; the unclaimed remainder sits until `claimDeadline + 7 days`, then sweeps to funder/treasury. Honest late-claimers lose their share.
-- **Remediation:** Off-chain: arbiter policy should treat post-first-claim rejection as last-resort, and the ops runbook should compensate affected claimants. A protocol-level partial-recovery path would need an escrow upgrade and careful accounting.
+- **Scenario:** A snapshot finalizes, some voters claim, and within the 7-day veto window the arbiter attempts to reject it (or its correlation epoch). Before the fix, future claims could revert at `verifyPayoutWeight`; recovery was blocked by `firstClaimPaid`; the unclaimed remainder sat until `claimDeadline + 7 days`, then swept to funder/treasury.
+- **Status:** Fixed for the next deployment. The oracle now rejects a finalized payout snapshot only while the configured consumer has not consumed it; once consumed, `rejectFinalizedRoundPayoutSnapshot` reverts immediately.
 
 ### Informational (contracts)
 
-- **I-1:** `QuestionRewardPoolEscrow._getExistingRewardPool` (1293) and `_getExistingBundleReward` (1298) revert with empty `revert()` — no selector/message, degrading trace debugging. Upgrade-fixable.
-- **I-2:** Duplicate event declarations between `QuestionRewardPoolEscrow.sol` and its libraries (`RewardPoolCreated`, `RewardPoolRoundQualified`, `QuestionBundleRewardClaimed`, …). Emission address is the escrow (delegatecall), but a parameter-order drift would silently split indexer schemas — add a signature check.
-- **I-3:** `RoundVotingEngine.setRole`/`_grantRole` (321–369) emit a single custom `log4` topic instead of OZ `RoleGranted`/`RoleRevoked`, so OZ-expecting role-audit tooling shows no history. Document the event ABI.
+- **I-1:** Fixed. `QuestionRewardPoolEscrow._getExistingRewardPool` and `_getExistingBundleReward` now use typed custom errors.
+- **I-2:** Fixed. The generated ABI test now guards indexer-critical escrow event schemas against parameter-order drift.
+- **I-3:** Documented. `RoundVotingEngine.setRole`/`_grantRole` emit the custom `RoleUpdated` log rather than OZ `RoleGranted`/`RoleRevoked`; contract docs now call this out.
 - **I-4 (verified working-as-designed trust assumptions):** `RaterRegistry.SEEDER_ROLE` can seed human credentials without proof (fully trusted); voters naming an ineligible frontend receive the frontend fee themselves at claim time (self-serve voters strictly out-earn frontend-routed ones by the fee); a slashed proposer self-challenging via a fresh wallet recovers ≤50% (`CHALLENGER_BOUNTY_BPS = 5000`); `ProfileRegistry._migrateProfileForIdentityKey` silently consumes an old wallet's profile name on World ID re-verification from a new wallet.
 
 ### Cross-contract consistency notes (contracts)
@@ -274,9 +277,9 @@ function independenceForVote(
 2. **Done for fresh redeploy: pin correlation scoring inputs to the source event (M-1 off-chain).** Keep artifact v3 and Ponder snapshot persistence as required deployment gates.
 3. **Document that RBTS truthfulness is BNE-only after mitigations (H-2).** Correlation snapshots and surprise-weighted bounties help materially; undetected coordinated blocs remain an accepted residual risk, with multi-task/DMI/CA as the upgrade path.
 4. **Close the alt-wallet bounty-recapture path (M-1 incentives):** mandatory cluster gating and/or verified-human floors on USDC pools above a size threshold.
-5. **Write the cluster-pinned-pool zero-proposer runbook now (M-1 contracts)** and add the fork-test invariants for the quorum coupling (L-5) and `roundCore` ABI coupling (L-2).
+5. **Operate the cluster-pinned-pool zero-proposer runbook (M-1 contracts)** and keep fork-test invariants for the quorum coupling (L-5) and `roundCore` ABI coupling (L-2) in CI.
 6. **Reconcile docs with implementation:** the vestigial parimutuel "majority wins" narrative and the "mean prediction" vs. "mean RBTS score" phrasing.
-7. **Operational hardening:** keep ≥2 keeper replicas with separate keys + `keeper_settlement_backlog_oldest_seconds` alerting; emit a `ContentRegistry.setTreasury` event (L-3, next governed upgrade); raise `challengeWindow` before real bounty value flows (L-1).
+7. **Operational hardening:** ≥2 keeper replicas with separate keys, settlement/reward-qualification backlog alerting, treasury-rotation log monitoring, and clear escalation for challenged payout roots. Do not increase normal-path challenge windows unless governance later decides the extra user wait is worth it.
 
 ---
 

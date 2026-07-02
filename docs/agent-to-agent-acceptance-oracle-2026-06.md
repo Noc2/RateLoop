@@ -32,9 +32,10 @@ an optimistic-acceptance pattern (instant release, RateLoop round only on
 dispute).
 
 The cheapest remaining unlocks are not latency at all: **the binary verdict
-(`upWins`) is now exposed on-chain as the trailing `roundCore` verdict flag**,
-so trustless escrow adapters can read the settled direction without relying on
-events; and the
+(`upWins`) is now exposed on-chain as the trailing `roundCore` verdict flag**.
+The canonical tuple is `(startTime, state, voteCount, revealedCount, upCount,
+thresholdReachedAt, settledAt, upWins)`, so trustless escrow adapters can read
+the settled direction without relying on events; and the
 "don't settle external financial contracts" disclaimer ships in every result
 package, so the product is advisory-only until a scoped carve-out exists.
 
@@ -148,12 +149,14 @@ the buyer cannot run the jury because the buyer is a counterparty.
 1. **No verdict-keyed escrow.** `QuestionRewardPoolEscrow` is voter-bounty escrow
    only — qualification checks `Settled`, never the side; nothing releases
    third-party funds on an outcome. The engine now exposes the canonical
-   direction through `roundCore(contentId, roundId)`, whose trailing `uint8
-   upWins` flag is `1` for UP and `0` for DOWN. A future escrow can trustlessly
-   gate release/refund on `state == Settled` plus that flag instead of proving or
-   trusting `RoundSettled` logs. Pools/counts remain internal/event/indexer
-   surface, which is fine for this use case because the escrow only needs the
-   settled side.
+   direction through `roundCore(contentId, roundId)`, whose tuple is
+   `(startTime, state, voteCount, revealedCount, upCount, thresholdReachedAt,
+   settledAt, upWins)`. The trailing `uint8 upWins` flag is `1` for UP and `0`
+   for DOWN. A future escrow can trustlessly gate release/refund on
+   `state == Settled` plus that flag instead of proving or trusting
+   `RoundSettled` logs. Pools/counts remain internal/event/indexer surface,
+   which is fine for this use case because the escrow only needs the settled
+   side.
 2. **The disclaimer.** "Settled RateLoop scores must not be used to settle
    external financial contracts" ships in every agent result package
    (`resultPackage.ts:543`), MCP outputs, install snippets, docs, and the

@@ -351,6 +351,10 @@ const SmartContracts: NextPage = () => {
           internal reference prior, and the conservative rating bound. Fresh content can use the internal default prior
           while the public UI still shows <strong>N/A</strong> until the first settlement.
         </li>
+        <li>
+          <code>setTreasury(address)</code> &mdash; Governance treasury rotation for registry-level fund flows. Emits{" "}
+          <code>TreasuryUpdated(address)</code> for indexers and treasury monitors.
+        </li>
       </ul>
       <h3>Submission Economics</h3>
       <p>
@@ -500,6 +504,16 @@ const SmartContracts: NextPage = () => {
           settlement evidence.
         </li>
         <li>
+          <code>roundCore(contentId, roundId)</code> &mdash; Canonical compact round read. The tuple order is{" "}
+          <code>startTime, state, voteCount, revealedCount, upCount, thresholdReachedAt, settledAt, upWins</code>, where{" "}
+          <code>upWins</code> is the trailing verdict flag for settled binary rounds.
+        </li>
+        <li>
+          <strong>RoleUpdated event:</strong> role changes emit RateLoop&apos;s custom <code>RoleUpdated</code> log
+          rather than OpenZeppelin&apos;s <code>RoleGranted</code> / <code>RoleRevoked</code> event pair, so role
+          monitors should decode the contract ABI directly.
+        </li>
+        <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a
           bundle bounty round set after the voter revealed on every bundled question in that set. Multi-round bundles
           create one claimable allocation per completed round set.
@@ -533,6 +547,39 @@ const SmartContracts: NextPage = () => {
 
       <hr />
 
+      <h2>QuestionRewardPoolEscrow</h2>
+      <p>
+        Custodies question bounties and bundle bounties, records qualified reward rounds, verifies finalized correlation
+        payout snapshots for USDC claims, and routes the configured frontend share.
+      </p>
+      <ul>
+        <li>
+          <code>qualifyRound(rewardPoolId, roundId)</code> &mdash; Permissionless qualification for a settled
+          single-question bounty round. The keeper now calls this proactively from Ponder work discovery so the first
+          claimant is not responsible for all qualification gas.
+        </li>
+        <li>
+          <code>syncQuestionBundleTerminals(bundleId, maxRounds)</code> and{" "}
+          <code>syncBundleQuestionTerminal(contentId, roundId)</code> &mdash; Permissionless bundle terminal sync. The
+          keeper processes bounded bundle sync candidates in the background so large bundles advance toward claimable
+          round sets without extending user-facing oracle windows.
+        </li>
+        <li>
+          <code>repointRewardPoolClusterPayoutOracle(...)</code> /{" "}
+          <code>repointQuestionBundleClusterPayoutOracle(...)</code> &mdash; Governance recovery paths for
+          cluster-pinned pools before refund finality. Use these before refunding when the intended recovery is to move
+          a stalled pool to a replacement oracle.
+        </li>
+        <li>
+          <code>skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId)</code> &mdash; Governance escape
+          hatch for a source-ready, raw-eligible cluster-pinned cursor round when the pinned oracle has no payout-root
+          proposal. It advances the cursor without adding a new timeout; after unallocated funds are refunded, oracle
+          repointing is blocked for that pool.
+        </li>
+      </ul>
+
+      <hr />
+
       <h2>ProtocolConfig</h2>
       <p>
         Governance-controlled address book and parameter store for <code>RoundVotingEngine</code>. Governance sets the
@@ -561,6 +608,30 @@ const SmartContracts: NextPage = () => {
       </ul>
 
       <hr />
+
+      <hr />
+
+      <h2>ClusterPayoutOracle</h2>
+      <p>
+        Stores optimistic correlation epoch roots and round payout roots for USDC bounties, launch LREP credits, and
+        public-rating effective weights. Registered frontend operators propose public deterministic artifacts; auditors
+        can challenge them with the configured USDC bond, and governance arbitrates challenged roots.
+      </p>
+      <ul>
+        <li>
+          <code>proposeRoundPayoutSnapshot(...)</code> / <code>finalizeRoundPayoutSnapshot(...)</code> &mdash; Propose
+          and finalize a round payout root after the challenge window.
+        </li>
+        <li>
+          <code>rejectFinalizedRoundPayoutSnapshot(...)</code> &mdash; Governance veto path during the finalization veto
+          period. It now rejects immediately once the configured consumer has consumed the finalized root, so later
+          claims are not stranded by a post-consumption rejection.
+        </li>
+        <li>
+          <code>setRoundPayoutSnapshotConsumer(domain, consumer)</code> &mdash; Governance wiring for the consumer that
+          makes consumption final for a payout domain.
+        </li>
+      </ul>
 
       <hr />
 

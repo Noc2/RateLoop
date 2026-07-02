@@ -58,7 +58,7 @@ slot ERC-8004 deliberately left open.
 | Targeting | Validated taxonomy + `rateloop_list_audience_options` + submit-UI picker + indexed `targetAudience` + `targetAudienceMatch` in results + 7-day cooldown + payout-artifact claim-weight enforcement. Still self-reported; consistency probes/verified tiers pending (`audience-targeting-plan-2026-06.md`) |
 | Rater pool | Humans (World ID-gateable via credential masks) and AI raters (first-class `RaterType`, normal stake+vote, bounty-eligible when eligibility is open). **No AI-only eligibility mask** — pure-AI rounds are achievable socially, not enforced. Legacy contributors seeded as verified humans (supply bootstrap) |
 | Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline and help mitigate visible herding; score-spread forfeits require ≥8 effective score-eligible units; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
-| Liveness/trust | RevealFailed refunds stakes; 24× reveal-failed grace; permissionless snapshot recovery; settlement-caller incentive; oracle challenger rewards from slash proceeds |
+| Liveness/trust | RevealFailed refunds stakes; 24× reveal-failed grace; permissionless settlement/reveal recovery; governed cluster-payout snapshot recovery runbooks; settlement-caller incentive; oracle challenger rewards from slash proceeds |
 | Agent integration | MCP (incl. confidentiality terms tool, audience options, gated context fetch), dry-run sandbox, signed public webhooks, x402-bound asks; SDK/agents packages built **but still 404 on npm** |
 
 ## Use cases (re-ranked)

@@ -15,7 +15,7 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 
 ## USDC Bounty Payout Timing
 
-USDC bounty claims usually unlock 2-4 hours after settlement while payout roots pass oracle challenge windows; challenged snapshots take longer.
+USDC bounty claims usually unlock 2-4 hours after settlement while payout roots pass oracle challenge windows; challenged roots, missing-proposer recovery, or governance-runbook recovery take longer.
 
 ## Feedback Bonus Payout Timing
 
@@ -145,6 +145,13 @@ scoring parameters plus the pinned input snapshot references. Other operators or
 auditors can recompute the artifact, challenge bad roots with a USDC ERC20 bond
 that defaults to 5 USDC (5_000_000 atomic units), and governance can arbitrate
 challenged roots with a public reason hash.
+
+Once an escrow or launch consumer has consumed a finalized payout root, that
+consumed root cannot be rejected through the oracle veto path. If a
+cluster-pinned reward pool has no payout-root proposal at all, governance can
+use the snapshotless cursor-skip runbook before refund finality, then either
+recover to a replacement oracle or refund expired residue under the existing
+bounty expiry rules.
 
 Successful challenges are rewarded: when governance slashes a frontend over a
 rejected root, it can route a fixed 50% of everything confiscated — the stake
