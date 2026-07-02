@@ -1574,6 +1574,52 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
     }
 
+    function test_RbtsSettlementTimeoutBeforeDeadlineReverts() public {
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+
+        engine.settleRound(contentId, roundId);
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.RoundNotExpired.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+    }
+
+    function test_RbtsSettlementTimeoutReturnsStakesWhenNoSnapshotExists() public {
+        (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
+            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+
+        engine.settleRound(contentId, roundId);
+        vm.warp(block.timestamp + 14 days);
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "timeout records no score seed");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "ck1 stake returned");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[7]), 0, "ck8 stake returned");
+    }
+
+    function test_RbtsSettlementTimeoutRevertsWhenUsableSnapshotExists() public {
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+
+        engine.settleRound(contentId, roundId);
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        _fullWeightRbtsSettlementPayload(
+            oracle, contentId, roundId, _sortedCommitKeys(RoundEngineReadHelpers.commitKeys(engine, contentId, roundId))
+        );
+        vm.warp(block.timestamp + 14 days);
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.SnapshotAvailable.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+    }
+
     function test_ReplayBundleObserverNotify_ReplaysFailedSettledNotification() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
         RevertingBundleObserver observer = new RevertingBundleObserver();

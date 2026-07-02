@@ -14,8 +14,10 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
     error RoundNotOpen();
     error RoundNotExpired();
     error UnrevealedPastEpochVotes();
+    error SnapshotAvailable();
 
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    uint8 internal constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
     uint256 internal constant RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT = 14 days;
 
     event RbtsSettlementSnapshotApplied(
@@ -40,6 +42,13 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
             uint48 readyAt = roundClusterPayoutReadyAt[contentId][roundId];
             if (readyAt == 0 || block.timestamp < uint256(readyAt) + RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT) {
                 revert RoundNotExpired();
+            }
+            if (
+                _hasFinalizedRbtsSettlementSnapshot(
+                    roundRbtsSettlementOracle[contentId][roundId], contentId, roundId, round.revealedCount
+                )
+            ) {
+                revert SnapshotAvailable();
             }
             _returnRbtsStakes(contentId, roundId);
             _completeRbtsSettlement(contentId, roundId, round, 0, 0, bytes32(0));
@@ -121,6 +130,37 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
                 caller: msg.sender
             })
         );
+    }
+
+    function _hasFinalizedRbtsSettlementSnapshot(
+        address oracleAddress,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 revealedCount
+    ) internal view returns (bool) {
+        if (oracleAddress == address(0)) return false;
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
+        try oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
+        ) {
+            if (
+                snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
+                    || snapshot.rawEligibleVoters != revealedCount || snapshot.totalClaimWeight == 0
+                    || snapshot.weightRoot == bytes32(0)
+            ) {
+                return false;
+            }
+        } catch {
+            return false;
+        }
+
+        try oracle.roundPayoutSnapshotConsumerFor(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId) returns (
+            address consumer
+        ) {
+            return consumer == address(this);
+        } catch {
+            return false;
+        }
     }
 
     function _returnRbtsStakes(uint256 contentId, uint256 roundId)
