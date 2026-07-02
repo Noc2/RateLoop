@@ -107,6 +107,13 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(rejected, "Snapshot rejection missing");
 
         preQualificationRejectedRound[rewardPoolId][roundId] = true;
+        require(
+            rewardPool.pendingPreQualificationRejectedRounds < type(uint32).max,
+            "Too many prequalification skips"
+        );
+        unchecked {
+            rewardPool.pendingPreQualificationRejectedRounds += 1;
+        }
         rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
 
         emit PreQualificationRejectedSnapshotRoundSkipped(
@@ -164,6 +171,13 @@ library QuestionRewardPoolEscrowRecoveryLib {
         );
 
         preQualificationRejectedRound[rewardPoolId][roundId] = true;
+        require(
+            rewardPool.pendingPreQualificationRejectedRounds < type(uint32).max,
+            "Too many prequalification skips"
+        );
+        unchecked {
+            rewardPool.pendingPreQualificationRejectedRounds += 1;
+        }
         rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
 
         emit PreQualificationSnapshotlessClusterRoundSkipped(rewardPoolId, rewardPool.contentId, roundId);

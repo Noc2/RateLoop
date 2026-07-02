@@ -48,6 +48,7 @@ struct RewardPool {
     // Append-only upgrade field. Keep after all pre-existing RewardPool fields so
     // deployed proxy storage for packed fields above remains stable.
     uint32 pendingRecoveredRounds;
+    uint32 pendingPreQualificationRejectedRounds;
 }
 
 struct RoundSnapshot {

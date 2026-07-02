@@ -206,6 +206,9 @@ contract QuestionRewardPoolEscrow is
     event PreQualificationSnapshotlessClusterRoundSkipped(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId
     );
+    event PreQualificationRejectedSnapshotRoundAbandoned(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId
+    );
     /// @notice Emitted by `reopenRecoveredSnapshotRound` when a recovered round can be
     ///         requalified against a NEW finalized oracle snapshot. (FE-1.)
     event RecoveredSnapshotRoundReopened(
@@ -1222,6 +1225,46 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    function refundExpiredPreQualificationRejectedRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds)
+        external
+        nonReentrant
+        returns (uint256 refundAmount)
+    {
+        return QuestionRewardPoolEscrowPoolActionsLib.refundExpiredPreQualificationRejectedRewardPool(
+            rewardPools,
+            preQualificationRejectedRound,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
+            lrepToken,
+            usdcToken,
+            rewardPoolId,
+            roundIds,
+            BUNDLE_CLAIM_GRACE,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
+    }
+
+    function refundInactivePreQualificationRejectedRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds)
+        external
+        nonReentrant
+        returns (uint256 refundAmount)
+    {
+        return QuestionRewardPoolEscrowPoolActionsLib.refundInactivePreQualificationRejectedRewardPool(
+            rewardPools,
+            preQualificationRejectedRound,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            registry,
+            votingEngine,
+            lrepToken,
+            usdcToken,
+            rewardPoolId,
+            roundIds,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
+    }
+
     function claimableQuestionReward(uint256 rewardPoolId, uint256 roundId, address account)
         external
         view
@@ -1620,6 +1663,11 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _finishPreQualificationRejectedRoundQualification(uint256 rewardPoolId, uint256 roundId) private {
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        require(rewardPool.pendingPreQualificationRejectedRounds > 0, "Prequalification round pending");
+        unchecked {
+            rewardPool.pendingPreQualificationRejectedRounds -= 1;
+        }
         preQualificationRejectedRound[rewardPoolId][roundId] = false;
     }
 
