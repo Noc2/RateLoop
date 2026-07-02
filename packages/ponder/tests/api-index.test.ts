@@ -19,6 +19,17 @@ async function loadApp(env: Record<string, string | undefined>) {
   vi.doMock("../src/api/human-verified-commit-health.js", () => ({
     inspectHumanVerifiedCommitCountHealth: vi.fn().mockResolvedValue({ status: "ok", staleRoundCount: 0 }),
   }));
+  vi.doMock("../src/api/correlation-finality-sla.js", () => ({
+    buildCorrelationFinalitySla: vi.fn().mockResolvedValue({
+      status: "ok",
+      normalMaxDelaySeconds: 3600,
+      includesVetoWindow: true,
+      breachCount: 0,
+      disputedCount: 0,
+      rejectedCount: 0,
+      phases: [],
+    }),
+  }));
 
   return import("../src/api/index.js");
 }

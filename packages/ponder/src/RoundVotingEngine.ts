@@ -25,6 +25,7 @@ import {
   voterCategoryStats,
   dailyVoteActivity,
   voterStreak,
+  roundPayoutSnapshot,
 } from "ponder:schema";
 import {
   formatUtcDateKey,
@@ -38,6 +39,7 @@ import {
   loadCorrelationBanStateAt,
   snapshotCorrelationInputForAccount,
 } from "./correlation-input-snapshot.js";
+import { roundPayoutSnapshotKey } from "./correlation-snapshot-key.js";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
@@ -1111,6 +1113,19 @@ ponder.on(
       snapshotDigest: `0x${string}`;
     };
     const roundKey = `${contentId}-${roundId}`;
+    await context.db
+      .update(roundPayoutSnapshot, {
+        id: roundPayoutSnapshotKey({
+          domain: 5,
+          rewardPoolId: 0n,
+          contentId,
+          roundId,
+        }),
+      })
+      .set({
+        consumedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
     const existingRound = await context.db.find(round, { id: roundKey });
     if (existingRound) {
       await context.db.update(round, { id: roundKey }).set({

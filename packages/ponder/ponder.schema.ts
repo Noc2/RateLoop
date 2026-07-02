@@ -509,14 +509,20 @@ export const correlationEpochSnapshot = onchainTable(
     artifactUri: t.text().notNull(),
     status: t.integer().notNull(),
     proposedAt: t.bigint().notNull(),
+    challengeWindowSeconds: t.bigint().notNull().default(0n),
+    challengeEndsAt: t.bigint(),
     finalizedAt: t.bigint(),
+    finalizationVetoWindowSeconds: t.bigint().notNull().default(0n),
+    vetoEndsAt: t.bigint(),
     updatedAt: t.bigint().notNull(),
   }),
   (table) => ({
     statusIdx: index().on(table.status),
     frontendOperatorIdx: index().on(table.frontendOperator),
     proposedAtIdx: index().on(table.proposedAt),
+    challengeEndsAtIdx: index().on(table.challengeEndsAt),
     finalizedAtIdx: index().on(table.finalizedAt),
+    vetoEndsAtIdx: index().on(table.vetoEndsAt),
   }),
 );
 
@@ -541,7 +547,12 @@ export const roundPayoutSnapshot = onchainTable(
     artifactUri: t.text().notNull(),
     status: t.integer().notNull(),
     proposedAt: t.bigint().notNull(),
+    challengeWindowSeconds: t.bigint().notNull().default(0n),
+    challengeEndsAt: t.bigint(),
     finalizedAt: t.bigint(),
+    finalizationVetoWindowSeconds: t.bigint().notNull().default(0n),
+    vetoEndsAt: t.bigint(),
+    consumedAt: t.bigint(),
     updatedAt: t.bigint().notNull(),
   }),
   (table) => ({
@@ -551,6 +562,9 @@ export const roundPayoutSnapshot = onchainTable(
     epochIdx: index().on(table.correlationEpochId),
     frontendOperatorIdx: index().on(table.frontendOperator),
     statusIdx: index().on(table.status),
+    challengeEndsAtIdx: index().on(table.challengeEndsAt),
+    vetoEndsAtIdx: index().on(table.vetoEndsAt),
+    consumedAtIdx: index().on(table.consumedAt),
   }),
 );
 

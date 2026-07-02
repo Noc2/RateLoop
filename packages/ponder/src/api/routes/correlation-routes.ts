@@ -37,6 +37,7 @@ import {
   correlationVoteScanPageBudget,
   isCorrelationVoteScanTruncated,
 } from "../correlation-vote-scan.js";
+import { buildCorrelationFinalitySla } from "../correlation-finality-sla.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 const SNAPSHOT_STATUS_PROPOSED = 1;
@@ -547,6 +548,12 @@ function formatLaunchCreditRow(args: {
 }
 
 export function registerCorrelationRoutes(app: ApiApp) {
+  app.get("/correlation/finality-sla", async (c) => {
+    const now = resolveApiNowSeconds(c.req.query("now"));
+    if (now === null) return c.json({ error: "Invalid now" }, 400);
+    return c.json(await buildCorrelationFinalitySla(now));
+  });
+
   app.get("/correlation/round-candidates", async (c) => {
     const limit = safeLimit(c.req.query("limit"), 50, 200);
     const offset = safeOffset(c.req.query("offset"));

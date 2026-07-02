@@ -15,6 +15,8 @@ const ARTIFACT_MAX_BYTES = 10_000_000;
 const DATA_URI_PREFIX = "data:";
 const DATA_URI_BASE64_MAX_BYTES = Math.ceil(ARTIFACT_MAX_BYTES / 3) * 4;
 const DATA_URI_PERCENT_ENCODED_MAX_BYTES = ARTIFACT_MAX_BYTES * 3;
+const DEFAULT_CHALLENGE_WINDOW_SECONDS = 15n * 60n;
+const DEFAULT_FINALIZATION_VETO_WINDOW_SECONDS = 15n * 60n;
 const httpsArtifactAllowlist = parseHttpsArtifactAllowlist(
   process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? process.env.KEEPER_ARTIFACT_HTTPS_ALLOWLIST ?? "",
 );
@@ -25,6 +27,20 @@ function readFrontendOperator(args: Record<string, unknown>): `0x${string}` {
 
 function readProposer(args: Record<string, unknown>): `0x${string}` {
   return (args.proposer ?? args.frontendOperator) as `0x${string}`;
+}
+
+function readBigintArg(
+  args: Record<string, unknown>,
+  name: string,
+  fallback: bigint,
+): bigint {
+  const value = args[name];
+  if (typeof value === "bigint" && value >= 0n) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+  if (typeof value === "string" && /^\d+$/u.test(value)) return BigInt(value);
+  return fallback;
 }
 
 async function cachePayoutArtifact(params: {
@@ -244,6 +260,16 @@ ponder.on(
     } = event.args;
     const frontendOperator = readFrontendOperator(event.args);
     const proposer = readProposer(event.args);
+    const challengeWindowSeconds = readBigintArg(
+      event.args,
+      "challengeWindowAtProposal",
+      DEFAULT_CHALLENGE_WINDOW_SECONDS,
+    );
+    const finalizationVetoWindowSeconds = readBigintArg(
+      event.args,
+      "finalizationVetoWindowAtProposal",
+      DEFAULT_FINALIZATION_VETO_WINDOW_SECONDS,
+    );
 
     await context.db
       .insert(correlationEpochSnapshot)
@@ -260,7 +286,11 @@ ponder.on(
         artifactUri: artifactURI,
         status: SNAPSHOT_STATUS.Proposed,
         proposedAt: event.block.timestamp,
+        challengeWindowSeconds,
+        challengeEndsAt: event.block.timestamp + challengeWindowSeconds,
         finalizedAt: null,
+        finalizationVetoWindowSeconds,
+        vetoEndsAt: null,
         updatedAt: event.block.timestamp,
       })
       .onConflictDoUpdate({
@@ -275,7 +305,11 @@ ponder.on(
         artifactUri: artifactURI,
         status: SNAPSHOT_STATUS.Proposed,
         proposedAt: event.block.timestamp,
+        challengeWindowSeconds,
+        challengeEndsAt: event.block.timestamp + challengeWindowSeconds,
         finalizedAt: null,
+        finalizationVetoWindowSeconds,
+        vetoEndsAt: null,
         updatedAt: event.block.timestamp,
       });
     await cachePayoutArtifact({
@@ -304,10 +338,17 @@ ponder.on(
   "ClusterPayoutOracle:CorrelationEpochFinalized",
   async ({ event, context }) => {
     const { epochId } = event.args;
+    const existing = await context.db.find(correlationEpochSnapshot, {
+      id: epochId,
+    });
+    const finalizationVetoWindowSeconds =
+      existing?.finalizationVetoWindowSeconds ??
+      DEFAULT_FINALIZATION_VETO_WINDOW_SECONDS;
 
     await context.db.update(correlationEpochSnapshot, { id: epochId }).set({
       status: SNAPSHOT_STATUS.Finalized,
       finalizedAt: event.block.timestamp,
+      vetoEndsAt: event.block.timestamp + finalizationVetoWindowSeconds,
       updatedAt: event.block.timestamp,
     });
   },
@@ -345,6 +386,16 @@ ponder.on(
     } = event.args;
     const frontendOperator = readFrontendOperator(event.args);
     const proposer = readProposer(event.args);
+    const challengeWindowSeconds = readBigintArg(
+      event.args,
+      "challengeWindowAtProposal",
+      DEFAULT_CHALLENGE_WINDOW_SECONDS,
+    );
+    const finalizationVetoWindowSeconds = readBigintArg(
+      event.args,
+      "finalizationVetoWindowAtProposal",
+      DEFAULT_FINALIZATION_VETO_WINDOW_SECONDS,
+    );
 
     await context.db
       .insert(roundPayoutSnapshot)
@@ -367,7 +418,12 @@ ponder.on(
         artifactUri: artifactURI,
         status: SNAPSHOT_STATUS.Proposed,
         proposedAt: event.block.timestamp,
+        challengeWindowSeconds,
+        challengeEndsAt: event.block.timestamp + challengeWindowSeconds,
         finalizedAt: null,
+        finalizationVetoWindowSeconds,
+        vetoEndsAt: null,
+        consumedAt: null,
         updatedAt: event.block.timestamp,
       })
       .onConflictDoUpdate({
@@ -388,7 +444,12 @@ ponder.on(
         artifactUri: artifactURI,
         status: SNAPSHOT_STATUS.Proposed,
         proposedAt: event.block.timestamp,
+        challengeWindowSeconds,
+        challengeEndsAt: event.block.timestamp + challengeWindowSeconds,
         finalizedAt: null,
+        finalizationVetoWindowSeconds,
+        vetoEndsAt: null,
+        consumedAt: null,
         updatedAt: event.block.timestamp,
       });
     await cachePayoutArtifact({
@@ -417,10 +478,17 @@ ponder.on(
   "ClusterPayoutOracle:RoundPayoutSnapshotFinalized",
   async ({ event, context }) => {
     const { snapshotKey } = event.args;
+    const existing = await context.db.find(roundPayoutSnapshot, {
+      id: snapshotKey,
+    });
+    const finalizationVetoWindowSeconds =
+      existing?.finalizationVetoWindowSeconds ??
+      DEFAULT_FINALIZATION_VETO_WINDOW_SECONDS;
 
     await context.db.update(roundPayoutSnapshot, { id: snapshotKey }).set({
       status: SNAPSHOT_STATUS.Finalized,
       finalizedAt: event.block.timestamp,
+      vetoEndsAt: event.block.timestamp + finalizationVetoWindowSeconds,
       updatedAt: event.block.timestamp,
     });
   },

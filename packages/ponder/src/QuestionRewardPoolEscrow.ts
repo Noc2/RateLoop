@@ -1,5 +1,9 @@
 import { ponder } from "ponder:registry";
 import {
+  PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+  PAYOUT_DOMAIN_QUESTION_REWARD,
+} from "@rateloop/node-utils/correlationScoring";
+import {
   content,
   questionBundleClaim,
   questionBundleRecoveredRoundSet,
@@ -11,7 +15,9 @@ import {
   questionRewardPoolClaim,
   questionRewardPoolPreQualificationSkip,
   questionRewardPoolRound,
+  roundPayoutSnapshot,
 } from "ponder:schema";
+import { roundPayoutSnapshotKey } from "./correlation-snapshot-key.js";
 
 function bundleRoundRowId(
   bundleId: bigint,
@@ -511,6 +517,25 @@ ponder.on(
   async ({ event, context }) => {
     const { rewardPoolId, roundId, correlationEpochId, weightRoot } =
       event.args;
+    const existingRound = await context.db.find(questionRewardPoolRound, {
+      id: `${rewardPoolId}-${roundId}`,
+    });
+
+    if (existingRound) {
+      await context.db
+        .update(roundPayoutSnapshot, {
+          id: roundPayoutSnapshotKey({
+            domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+            rewardPoolId,
+            contentId: existingRound.contentId,
+            roundId,
+          }),
+        })
+        .set({
+          consumedAt: event.block.timestamp,
+          updatedAt: event.block.timestamp,
+        });
+    }
 
     await context.db
       .update(questionRewardPoolRound, { id: `${rewardPoolId}-${roundId}` })
@@ -914,6 +939,19 @@ ponder.on(
       totalClaimWeight,
       weightRoot,
     } = event.args;
+    await context.db
+      .update(roundPayoutSnapshot, {
+        id: roundPayoutSnapshotKey({
+          domain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+          rewardPoolId: bundleId,
+          contentId: bundleId,
+          roundId: BigInt(roundSetIndex) + 1n,
+        }),
+      })
+      .set({
+        consumedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
 
     await context.db
       .update(questionBundleRoundSet, {

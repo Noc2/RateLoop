@@ -13,8 +13,10 @@ import {
   questionBundleQuestion,
   ratingChange,
   round,
+  roundPayoutSnapshot,
 } from "ponder:schema";
 import { getCanonicalUrlParts } from "./urlCanonicalization.js";
+import { roundPayoutSnapshotKey } from "./correlation-snapshot-key.js";
 
 const CONTENT_REGISTRY_MEDIA_VALIDATOR_ABI = [
   {
@@ -660,6 +662,19 @@ ponder.on("ContentRegistry:RatingReviewPending", async ({ event, context }) => {
 ponder.on("ContentRegistry:RatingSnapshotApplied", async ({ event, context }) => {
   const { contentId, roundId, snapshotDigest, adjustedUpEvidence, adjustedDownEvidence } = event.args;
   const roundKey = `${contentId}-${roundId}`;
+  await context.db
+    .update(roundPayoutSnapshot, {
+      id: roundPayoutSnapshotKey({
+        domain: 3,
+        rewardPoolId: 0n,
+        contentId,
+        roundId,
+      }),
+    })
+    .set({
+      consumedAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    });
   const existingContent = await context.db.find(content, { id: contentId });
   const contentUpdate =
     existingContent?.ratingReviewRoundId === roundId

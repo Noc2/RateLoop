@@ -152,7 +152,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 clusterRoot,
         bytes32 parameterHash,
         bytes32 artifactHash,
-        string artifactURI
+        string artifactURI,
+        uint64 challengeWindowAtProposal,
+        uint64 finalizationVetoWindowAtProposal
     );
     event CorrelationEpochChallenged(uint64 indexed epochId, address indexed challenger, bytes32 reasonHash);
     event CorrelationEpochFinalized(uint64 indexed epochId, bytes32 clusterRoot, bytes32 parameterHash);
@@ -173,7 +175,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 weightRoot,
         bytes32 reasonRoot,
         bytes32 artifactHash,
-        string artifactURI
+        string artifactURI,
+        uint64 challengeWindowAtProposal,
+        uint64 finalizationVetoWindowAtProposal
     );
     event RoundPayoutSnapshotChallenged(bytes32 indexed snapshotKey, address indexed challenger, bytes32 reasonHash);
     event RoundPayoutSnapshotFinalized(
@@ -334,7 +338,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             clusterRoot,
             parameterHash,
             artifactHash,
-            artifactURI
+            artifactURI,
+            challengeWindow,
+            finalizationVetoWindow
         );
     }
 
@@ -558,7 +564,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             input.weightRoot,
             input.reasonRoot,
             input.artifactHash,
-            input.artifactURI
+            input.artifactURI,
+            challengeWindow,
+            finalizationVetoWindow
         );
     }
 

@@ -211,8 +211,13 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       urlHost: "contentMedia.urlHost",
     },
     correlationEpochSnapshot: {
+      challengeEndsAt: "correlationEpochSnapshot.challengeEndsAt",
+      finalizedAt: "correlationEpochSnapshot.finalizedAt",
       id: "correlationEpochSnapshot.id",
+      proposedAt: "correlationEpochSnapshot.proposedAt",
+      status: "correlationEpochSnapshot.status",
       updatedAt: "correlationEpochSnapshot.updatedAt",
+      vetoEndsAt: "correlationEpochSnapshot.vetoEndsAt",
     },
     globalStats: {
       id: "globalStats.id",
@@ -529,12 +534,18 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
     },
     roundPayoutSnapshot: {
       artifactUri: "roundPayoutSnapshot.artifactUri",
+      challengeEndsAt: "roundPayoutSnapshot.challengeEndsAt",
+      consumedAt: "roundPayoutSnapshot.consumedAt",
       contentId: "roundPayoutSnapshot.contentId",
       domain: "roundPayoutSnapshot.domain",
+      finalizedAt: "roundPayoutSnapshot.finalizedAt",
       id: "roundPayoutSnapshot.id",
+      proposedAt: "roundPayoutSnapshot.proposedAt",
       rewardPoolId: "roundPayoutSnapshot.rewardPoolId",
       roundId: "roundPayoutSnapshot.roundId",
       status: "roundPayoutSnapshot.status",
+      updatedAt: "roundPayoutSnapshot.updatedAt",
+      vetoEndsAt: "roundPayoutSnapshot.vetoEndsAt",
       weightRoot: "roundPayoutSnapshot.weightRoot",
     },
     ratingChange: {
@@ -3618,6 +3629,74 @@ describe("registerDataRoutes", () => {
 });
 
 describe("registerCorrelationRoutes", () => {
+  it("summarizes correlation finality SLA phases", async () => {
+    mockPonderModules(
+      [
+        {
+          id: `0x${"a".repeat(64)}`,
+          domain: 5,
+          status: 3,
+          proposedAt: 1_000n,
+          challengeEndsAt: 1_900n,
+          finalizedAt: 2_000n,
+          vetoEndsAt: 2_900n,
+          consumedAt: null,
+          updatedAt: 2_000n,
+        },
+      ],
+      [
+        [
+          {
+            id: 11n,
+            status: 1,
+            proposedAt: 2_400n,
+            challengeEndsAt: 3_300n,
+            finalizedAt: null,
+            vetoEndsAt: null,
+            updatedAt: 2_400n,
+          },
+        ],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/finality-sla?now=2500",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      status: "ok",
+      normalMaxDelaySeconds: 3600,
+      includesVetoWindow: true,
+      breachCount: 0,
+    });
+    expect(body.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: 5,
+          phase: "finalization_veto",
+          count: 1,
+          oldestAgeSeconds: 500,
+          oldestEstimatedReadyAt: 2900,
+        }),
+        expect.objectContaining({
+          domain: "correlation_epoch",
+          phase: "challenge_window",
+          count: 1,
+          oldestAgeSeconds: 100,
+          oldestEstimatedReadyAt: 3300,
+        }),
+      ]),
+    );
+  });
+
   it("lists settled reward rounds that still need payout snapshots", async () => {
     const { queryBuilder } = mockPonderModules([
       {

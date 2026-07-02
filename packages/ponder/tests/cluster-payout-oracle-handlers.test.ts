@@ -50,6 +50,15 @@ function createDb() {
         updates.push({ table, key, values });
       }),
     })),
+    find: vi.fn(async (table: string, key: Record<string, unknown>) => {
+      const match = inserts.find((insert) => {
+        if (insert.table !== table) return false;
+        return Object.entries(key).every(
+          ([field, value]) => insert.values[field] === value,
+        );
+      });
+      return match?.values;
+    }),
   };
 
   return { db, inserts, conflictUpdates, updates };
@@ -88,6 +97,8 @@ describe("ClusterPayoutOracle ponder handlers", () => {
           parameterHash: `0x${"2".repeat(64)}`,
           artifactHash: `0x${"3".repeat(64)}`,
           artifactURI: "ipfs://epoch",
+          challengeWindowAtProposal: 900n,
+          finalizationVetoWindowAtProposal: 900n,
         },
         block: { number: 10n, timestamp: 1_700n },
       },
@@ -100,6 +111,8 @@ describe("ClusterPayoutOracle ponder handlers", () => {
         id: 1n,
         proposer: "0x00000000000000000000000000000000000000a1",
         frontendOperator: "0x00000000000000000000000000000000000000f1",
+        challengeEndsAt: 2_600n,
+        vetoEndsAt: null,
       }),
     });
     expect(conflictUpdates).toContainEqual(
@@ -352,7 +365,7 @@ describe("ClusterPayoutOracle ponder handlers", () => {
         handler: "ClusterPayoutOracle:CorrelationEpochFinalized",
         args: { epochId: 1n },
         blockTimestamp: 2_000n,
-        expected: { status: 3, finalizedAt: 2_000n, updatedAt: 2_000n },
+        expected: { status: 3, finalizedAt: 2_000n, vetoEndsAt: 2_900n, updatedAt: 2_000n },
       },
       {
         handler: "ClusterPayoutOracle:CorrelationEpochRejected",
@@ -396,7 +409,7 @@ describe("ClusterPayoutOracle ponder handlers", () => {
         handler: "ClusterPayoutOracle:RoundPayoutSnapshotFinalized",
         args: { snapshotKey },
         blockTimestamp: 2_300n,
-        expected: { status: 3, finalizedAt: 2_300n, updatedAt: 2_300n },
+        expected: { status: 3, finalizedAt: 2_300n, vetoEndsAt: 3_200n, updatedAt: 2_300n },
       },
       {
         handler: "ClusterPayoutOracle:RoundPayoutSnapshotRejected",

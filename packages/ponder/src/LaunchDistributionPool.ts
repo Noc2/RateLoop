@@ -1,4 +1,5 @@
 import { ponder } from "ponder:registry";
+import { PAYOUT_DOMAIN_LAUNCH_CREDIT } from "@rateloop/node-utils/correlationScoring";
 import {
   globalStats,
   launchEarnedRaterCredit,
@@ -6,11 +7,13 @@ import {
   launchRewardPolicyState,
   profile,
   rewardClaim,
+  roundPayoutSnapshot,
 } from "ponder:schema";
 import {
   loadCorrelationBanStateAt,
   snapshotCorrelationInputForAccount,
 } from "./correlation-input-snapshot.js";
+import { roundPayoutSnapshotKey } from "./correlation-snapshot-key.js";
 
 const CURRENT_LAUNCH_REWARD_POLICY_ID = "current";
 
@@ -460,6 +463,19 @@ ponder.on(
       effectiveCreditBps,
       qualifyingCreditBps,
     } = event.args;
+    await context.db
+      .update(roundPayoutSnapshot, {
+        id: roundPayoutSnapshotKey({
+          domain: PAYOUT_DOMAIN_LAUNCH_CREDIT,
+          rewardPoolId: 0n,
+          contentId,
+          roundId,
+        }),
+      })
+      .set({
+        consumedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
 
     await context.db
       .insert(launchEarnedRaterCredit)

@@ -15,6 +15,7 @@ import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
 import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
 import { inspectHumanVerifiedCommitCountHealth } from "./human-verified-commit-health.js";
+import { buildCorrelationFinalitySla } from "./correlation-finality-sla.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
 
 const require = createRequire(import.meta.url);
@@ -165,12 +166,19 @@ app.use(
 
 // Ponder provides /health and /status natively. /health/indexer adds indexer-specific signals.
 app.get("/health/indexer", async (c) => {
-  const humanVerifiedCommitCount = await inspectHumanVerifiedCommitCountHealth();
+  const [humanVerifiedCommitCount, correlationFinality] = await Promise.all([
+    inspectHumanVerifiedCommitCountHealth(),
+    buildCorrelationFinalitySla(),
+  ]);
+  const degraded =
+    humanVerifiedCommitCount.status === "warning" ||
+    correlationFinality.status === "degraded";
 
   return c.json({
-    status: humanVerifiedCommitCount.status === "warning" ? "degraded" : "ok",
+    status: degraded ? "degraded" : "ok",
     checks: {
       humanVerifiedCommitCount,
+      correlationFinality,
     },
   });
 });
