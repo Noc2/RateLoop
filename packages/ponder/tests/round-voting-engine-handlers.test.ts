@@ -413,7 +413,7 @@ describe("RoundVotingEngine ponder handlers", () => {
       table: "feedbackBonusPool",
       key: { id: 11n },
       values: {
-        awardDeadline: 89_400n,
+        awardDeadline: 6_600n,
         updatedAt: 3_000n,
       },
     });

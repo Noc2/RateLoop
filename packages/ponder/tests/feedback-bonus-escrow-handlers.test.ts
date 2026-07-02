@@ -131,7 +131,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
 
   it("extends the award deadline when the pool targets an already-settled round", async () => {
     const settledAt = 1_000_000n;
-    const feedbackClosesAt = 1_000_100n; // before settledAt + 24h
+    const feedbackClosesAt = 1_000_100n; // before settledAt + 1h
     const { db, inserts } = createDb({
       content: { id: 1n },
       'round:{"id":"1-3"}': { id: "1-3", settledAt },
@@ -158,13 +158,13 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
     });
 
     // On-chain deadline for pools targeting terminal rounds is
-    // max(feedbackClosesAt, settledAt + 24h).
+    // max(feedbackClosesAt, settledAt + 1h).
     expect(inserts).toContainEqual({
       table: "feedbackBonusPool",
       values: expect.objectContaining({
         id: 8n,
         feedbackClosesAt,
-        awardDeadline: settledAt + 24n * 60n * 60n,
+        awardDeadline: settledAt + 60n * 60n,
       }),
     });
   });

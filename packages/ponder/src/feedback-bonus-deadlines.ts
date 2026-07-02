@@ -1,7 +1,7 @@
 import { and, eq } from "ponder";
 import { feedbackBonusPool } from "ponder:schema";
 
-export const MIN_FEEDBACK_AWARD_DECISION_SECONDS = 24n * 60n * 60n;
+export const MIN_FEEDBACK_AWARD_DECISION_SECONDS = 60n * 60n;
 
 function toBigIntValue(value: bigint | string | number | null | undefined) {
   if (typeof value === "bigint") return value;
@@ -11,8 +11,8 @@ function toBigIntValue(value: bigint | string | number | null | undefined) {
 }
 
 // Mirrors FeedbackBonusEscrow._feedbackBonusAwardDeadline for terminal rounds:
-// the awarder always gets at least 24h after settlement to decide, so the
-// effective deadline is max(feedbackClosesAt, settledAt + 24h).
+// the awarder always gets at least 1h after settlement to decide, so the
+// effective deadline is max(feedbackClosesAt, settledAt + 1h).
 export function resolveFeedbackBonusAwardDeadline(
   feedbackClosesAt: bigint | string | number | null | undefined,
   settledAt: bigint | string | number | null | undefined,
