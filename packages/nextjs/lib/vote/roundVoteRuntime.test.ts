@@ -39,7 +39,7 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
         return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
-      return [900n, 0, 0n, 0n, 0n, 0n, 0n];
+      return [900n, 0, 0n, 0n, 0n, 0n, 0n, 0];
     },
   };
 
@@ -97,7 +97,7 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
         return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
-      return args.blockTag === "pending" ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n] : [0n, 0, 0n, 0n, 0n, 0n, 0n];
+      return args.blockTag === "pending" ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n, 0] : [0n, 0, 0n, 0n, 0n, 0n, 0n, 0];
     },
   };
 
@@ -152,7 +152,7 @@ test("resolveRoundVoteRuntime uses current open round when preview points at an 
       }
 
       const contractArgs = args.args as unknown[] | undefined;
-      return contractArgs?.[1] === 2n ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n] : [0n, 0, 0n, 0n, 0n, 0n, 0n];
+      return contractArgs?.[1] === 2n ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n, 0] : [0n, 0, 0n, 0n, 0n, 0n, 0n, 0];
     },
   };
 
@@ -199,7 +199,7 @@ test("resolveRoundVoteRuntime derives a contract-window target for open rounds",
         return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
-      return [roundStartTime, 0, 0n, 0n, 0n, 0n, 0n];
+      return [roundStartTime, 0, 0n, 0n, 0n, 0n, 0n, 0];
     },
   };
 
@@ -230,7 +230,7 @@ test("resolveRoundVoteRuntime rejects non-votable preview states", async () => {
         return [100, 3_600, 3, 1_000];
       }
 
-      return [900n, 0, 3n, 3n, 0n, 950n, 0n];
+      return [900n, 0, 3n, 3n, 0n, 950n, 0n, 0];
     },
   };
 
