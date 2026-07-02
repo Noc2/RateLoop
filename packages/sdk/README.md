@@ -275,7 +275,7 @@ context unless the ask explicitly uses RateLoop-hosted gated context.
 
 For ranked-option bundles, the bounty funds the creation-anchored round set. Every sibling question must settle once for bundle completion.
 
-`bountyEligibility` defaults to `0` for everyone below the recapture-protection threshold and to `8` for Proof of Human on non-refundable bounties at or above 500 USDC/LREP atomic units. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
+`bountyEligibility` defaults to `0` for everyone below the recapture-protection threshold and to `8` for Proof of Human on non-refundable bounties at or above 500 USDC/LREP (500,000,000 atomic units). Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
 For ask flows, start with `dryRun: true` / `mode: "dry_run"` to validate the payload and receive a deterministic
 synthetic result without a wallet signature, payment authorization, transaction plan, callback registration, or on-chain

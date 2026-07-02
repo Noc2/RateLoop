@@ -328,9 +328,9 @@ const SmartContracts: NextPage = () => {
           <code>contentHash</code> and emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks
           use the same function after the user or scoped agent wallet executes the returned funding and submission
           calls. <code>rewardTerms</code> also commits to bounty eligibility: everyone or Proof of Human for the v3
-          launch, with Proof of Human required for non-refundable bounties at or above 500 USDC/LREP atomic units.{" "}
-          <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled qualifying
-          round is also bounty-qualifying, and bounty size can raise the required participant floor.
+          launch, with Proof of Human required for non-refundable bounties at or above 500 USDC/LREP (500,000,000 atomic
+          units). <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled
+          qualifying round is also bounty-qualifying, and bounty size can raise the required participant floor.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
@@ -518,8 +518,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>roundCore(contentId, roundId)</code> &mdash; Canonical compact round read. The tuple order is{" "}
-          <code>startTime, state, voteCount, revealedCount, upCount, thresholdReachedAt, settledAt, upWins</code>, where{" "}
-          <code>upWins</code> is the trailing verdict flag for settled binary rounds.
+          <code>startTime, state, voteCount, revealedCount, totalStake, thresholdReachedAt, settledAt, upWins</code>,
+          where <code>upWins</code> is the trailing verdict flag for settled binary rounds.
         </li>
         <li>
           <strong>RoleUpdated event:</strong> role changes emit RateLoop&apos;s custom <code>RoleUpdated</code> log

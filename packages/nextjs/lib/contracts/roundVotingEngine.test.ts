@@ -148,6 +148,16 @@ test("parseRound preserves viem numeric tuple fields", () => {
   assert.equal(parsedRound.thresholdReachedAt, 0n);
 });
 
+test("parseRound preserves compact roundCore upWins flag", () => {
+  const parsedRound = parseRound([1_000n, ROUND_STATE.Settled, 3n, 3n, 15_000_000n, 1_200n, 1_300n, true]);
+
+  assert.ok(parsedRound);
+  assert.equal(parsedRound.totalStake, 15_000_000n);
+  assert.equal(parsedRound.thresholdReachedAt, 1_200n);
+  assert.equal(parsedRound.settledAt, 1_300n);
+  assert.equal(parsedRound.upWins, true);
+});
+
 test("mergeRoundDataWithFallback keeps the higher feed vote totals for the same round", () => {
   const merged = mergeRoundDataWithFallback({
     roundId: 7n,

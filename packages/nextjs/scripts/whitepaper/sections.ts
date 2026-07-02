@@ -445,7 +445,7 @@ export const SECTIONS: Section[] = [
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",
               "Optional LREP or USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
-              "Small USDC asks can stay open to everyone, while non-refundable bounties at or above 500 USDC/LREP atomic units require Proof-of-Human bounty eligibility for claims; finalized claim weights, reputation, and calibration can still shape policy and routing.",
+              "Small USDC asks can stay open to everyone, while non-refundable bounties at or above 500 USDC/LREP (500,000,000 atomic units) require Proof-of-Human bounty eligibility for claims; finalized claim weights, reputation, and calibration can still shape policy and routing.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
             ],
           },

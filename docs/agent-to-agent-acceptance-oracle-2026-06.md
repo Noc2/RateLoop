@@ -33,7 +33,7 @@ dispute).
 
 The cheapest remaining unlocks are not latency at all: **the binary verdict
 (`upWins`) is now exposed on-chain as the trailing `roundCore` verdict flag**.
-The canonical tuple is `(startTime, state, voteCount, revealedCount, upCount,
+The canonical tuple is `(startTime, state, voteCount, revealedCount, totalStake,
 thresholdReachedAt, settledAt, upWins)`, so trustless escrow adapters can read
 the settled direction without relying on events; and the
 "don't settle external financial contracts" disclaimer ships in every result
@@ -150,7 +150,7 @@ the buyer cannot run the jury because the buyer is a counterparty.
    only — qualification checks `Settled`, never the side; nothing releases
    third-party funds on an outcome. The engine now exposes the canonical
    direction through `roundCore(contentId, roundId)`, whose tuple is
-   `(startTime, state, voteCount, revealedCount, upCount, thresholdReachedAt,
+   `(startTime, state, voteCount, revealedCount, totalStake, thresholdReachedAt,
    settledAt, upWins)`. The trailing `uint8 upWins` flag is `1` for UP and `0`
    for DOWN. A future escrow can trustlessly gate release/refund on
    `state == Settled` plus that flag instead of proving or trusting

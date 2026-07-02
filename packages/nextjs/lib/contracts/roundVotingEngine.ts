@@ -222,7 +222,7 @@ export function parseRound(rawRoundData: unknown): RoundData | undefined {
     };
   }
 
-  if (Array.isArray(round) && round.length >= 7) {
+  if (Array.isArray(round) && round.length >= 8) {
     return {
       startTime: toBigInt(round[0]),
       state: toNumber(round[1]),
@@ -233,7 +233,7 @@ export function parseRound(rawRoundData: unknown): RoundData | undefined {
       downPool: 0n,
       upCount: 0n,
       downCount: 0n,
-      upWins: false,
+      upWins: Boolean(round[7]),
       settledAt: toBigInt(round[6]),
       thresholdReachedAt: toBigInt(round[5]),
       weightedUpPool: 0n,
