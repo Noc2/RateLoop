@@ -16,5 +16,6 @@ export { RaterRegistryAbi } from "./RaterRegistryAbi";
 export { RaterRegistryConfidentialityAbi } from "./RaterRegistryConfidentialityAbi";
 export { RoundRewardDistributorAbi } from "./RoundRewardDistributorAbi";
 export { RoundVotingEngineAbi } from "./RoundVotingEngineAbi";
+export { RoundVotingEngineRbtsSettlementModuleAbi } from "./RoundVotingEngineRbtsSettlementModuleAbi";
 export { X402QuestionSubmitterAbi } from "./X402QuestionSubmitterAbi";
 export { TimelockControllerAbi } from "./TimelockControllerAbi";

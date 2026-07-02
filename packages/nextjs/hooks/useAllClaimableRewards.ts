@@ -20,7 +20,7 @@ import type { PonderVoteItem } from "~~/services/ponder/client";
 
 const RBTS_REWARD_STATE_FIELDS = 3;
 
-export type UseAllClaimableRewardsOptions = {
+type UseAllClaimableRewardsOptions = {
   includeFrontendRewards?: boolean;
 };
 

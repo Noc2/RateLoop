@@ -6,7 +6,7 @@ export type PrivateContextRemovalField = {
   value: string;
 };
 
-export type PrivateContextRemovalImpactInput = {
+type PrivateContextRemovalImpactInput = {
   contextUrl?: string | null;
   imageUrls?: readonly string[] | null;
   videoUrl?: string | null;
