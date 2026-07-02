@@ -101,14 +101,17 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 - **Liveness check:** `http://localhost:9090/live`
 - **Readiness check:** `http://localhost:9090/health`
 
-Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), `keeper_unrevealed_cleanup_batches_total` (counter), and `keeper_feedback_bonus_forfeits_total` (counter).
+Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_settlement_backlog_oldest_seconds` (gauge), `keeper_rounds_reveal_failed_finalized_total` (counter), `keeper_unrevealed_cleanup_batches_total` (counter), and `keeper_feedback_bonus_forfeits_total` (counter).
 
-### Reveal-liveness metrics and alerting
+### Settlement/reveal liveness metrics and alerting
+
+Run at least two production keeper replicas with separate operational keys, `KEEPER_STARTUP_JITTER_MS`, `KEEPER_DATABASE_URL`, and the main-loop advisory lock enabled. If every keeper is down, any user or operator can still call `RoundVotingEngine.settleRound(contentId, roundId)` directly once a round has enough revealed votes; the keeper is automation, not a privileged settlement authority. A fully down keeper still delays normal settlement, cleanup, dormancy, and snapshot publication, so page on backlog age rather than waiting for user self-settlement.
 
 A keeper/Ponder/drand outage that outlasts the on-chain reveal grace period lets rounds finalize as `RevealFailed`. Current contracts refund unrevealed voter stakes in that state, but the round loses RBTS scoring and indicates systemic reveal-liveness failure — so reveal liveness is still the keeper signal most worth paging on:
 
 | Metric | Type | Meaning |
 | --- | --- | --- |
+| `keeper_settlement_backlog_oldest_seconds` | gauge | Age in seconds of the oldest settle-ready round returned by keeper work discovery (`-1` = none observed) |
 | `keeper_rounds_awaiting_reveal_quorum` | gauge | Open rounds with commit quorum whose reveal quorum is still unmet |
 | `keeper_reveal_grace_seconds_remaining_min` | gauge | Seconds until the most at-risk round becomes finalizable as `RevealFailed` (`-1` = none at risk) |
 | `keeper_rounds_reveal_failed_finalized_total` | counter | Rounds this keeper finalized as `RevealFailed` (unrevealed stakes refund, but scoring did not complete) |
@@ -125,6 +128,10 @@ groups:
     rules:
       - alert: KeeperDown
         expr: time() - keeper_last_successful_run_timestamp > 300
+        labels: { severity: page }
+      - alert: KeeperSettlementBacklogAged
+        # A settle-ready round has been present for at least 15 minutes.
+        expr: keeper_settlement_backlog_oldest_seconds > 900
         labels: { severity: page }
       - alert: KeeperRevealGraceExpiring
         # A round is within 15 minutes of RevealFailed finalization.

@@ -49,6 +49,8 @@ const gauges: Record<string, number> = {
   keeper_work_discovery_cleanup_round_candidates: 0,
   keeper_work_discovery_dormant_content_candidates: 0,
   keeper_work_discovery_feedback_bonus_forfeit_candidates: 0,
+  // -1 means no settle-ready backlog was observed in the last work discovery.
+  keeper_settlement_backlog_oldest_seconds: -1,
 };
 
 const startTime = Date.now();
@@ -187,6 +189,8 @@ function renderMetrics(): string {
     keeper_work_discovery_dormant_content_candidates: "Dormant content candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_feedback_bonus_forfeit_candidates:
       "Expired Feedback Bonus pool candidates returned by the last keeper work discovery phase",
+    keeper_settlement_backlog_oldest_seconds:
+      "Age in seconds of the oldest settle-ready round returned by keeper work discovery (-1 = none)",
   };
 
   for (const [name, value] of Object.entries(gauges)) {
@@ -235,6 +239,8 @@ function renderHealth(): { status: number; body: string } {
     dormantContentCandidates: gauges.keeper_work_discovery_dormant_content_candidates,
     feedbackBonusForfeitCandidates:
       gauges.keeper_work_discovery_feedback_bonus_forfeit_candidates,
+    settlementBacklogOldestSeconds:
+      gauges.keeper_settlement_backlog_oldest_seconds,
     walletBalanceWei: (walletBalanceWei ?? 0n).toString(),
   });
   return { status: healthy ? 200 : 503, body };

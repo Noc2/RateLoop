@@ -101,6 +101,7 @@ vi.mock("tlock-js", () => ({
 
 import { resolveRounds, resetKeeperStateForTests } from "../keeper.js";
 import { FailoverChainClient } from "../drand.js";
+import { getMetricsText } from "../metrics.js";
 
 type RoundStateValue = 0 | 1 | 2 | 3 | 4;
 
@@ -723,6 +724,71 @@ describe("resolveRounds", () => {
         functionName: "markDormant",
         args: [1n],
       }),
+    );
+  });
+
+  it("exports the oldest settle-ready backlog age from Ponder work discovery", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+    mockConfig.keeperWorkDiscovery.reconciliationEveryTicks = 2;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [
+            {
+              contentId: "1",
+              roundId: "1",
+              reason: "settle",
+              settlementReadyAt: "2500",
+            },
+            {
+              contentId: "2",
+              roundId: "1",
+              reason: "settle",
+              settlementReadyAt: "2000",
+            },
+            {
+              contentId: "3",
+              roundId: "1",
+              reason: "reveal",
+              settlementReadyAt: "1000",
+            },
+          ],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      makeLogger() as any,
+    );
+
+    expect(getMetricsText()).toContain(
+      "keeper_settlement_backlog_oldest_seconds 1000",
     );
   });
 

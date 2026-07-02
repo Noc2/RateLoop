@@ -104,6 +104,7 @@ interface KeeperWorkRoundCandidate {
   contentId: bigint;
   roundId: bigint;
   reason?: string;
+  settlementReadyAt?: bigint;
 }
 interface KeeperWorkContentCandidate {
   contentId: bigint;
@@ -575,6 +576,10 @@ async function discoverKeeperWorkCandidates(
     "keeper_work_discovery_feedback_bonus_forfeit_candidates",
     discovery.feedbackBonusForfeits.length,
   );
+  setGauge(
+    "keeper_settlement_backlog_oldest_seconds",
+    oldestSettlementBacklogSeconds(discovery.openRounds, now),
+  );
 
   return discovery;
 }
@@ -864,8 +869,32 @@ function parseKeeperWorkRound(value: unknown): KeeperWorkRoundCandidate | null {
   return {
     contentId,
     roundId,
+    settlementReadyAt: parseOptionalNonNegativeBigInt(
+      record.settlementReadyAt,
+    ),
     reason: typeof record.reason === "string" ? record.reason : undefined,
   };
+}
+
+function oldestSettlementBacklogSeconds(
+  candidates: readonly KeeperWorkRoundCandidate[],
+  now: bigint,
+): number {
+  let oldestSeconds: bigint | null = null;
+  for (const candidate of candidates) {
+    if (
+      candidate.reason !== "settle" ||
+      candidate.settlementReadyAt === undefined
+    ) {
+      continue;
+    }
+    const age =
+      candidate.settlementReadyAt > now ? 0n : now - candidate.settlementReadyAt;
+    oldestSeconds = oldestSeconds === null || age > oldestSeconds
+      ? age
+      : oldestSeconds;
+  }
+  return oldestSeconds === null ? -1 : Number(oldestSeconds);
 }
 
 function dedupeRoundCandidates(

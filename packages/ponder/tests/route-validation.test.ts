@@ -5066,6 +5066,8 @@ describe("registerKeeperRoutes", () => {
     const serializedSelect = serializeExpression(db.select.mock.calls[0]?.[0]);
     expect(serializedSelect).toContain("round.voteCount");
     expect(serializedSelect).toContain("round.revealedCount");
+    expect(serializedSelect).toContain("settlementReadyAt");
+    expect(serializedSelect).toContain("vote.revealedAt");
     expect(serializedSelect).not.toContain("round.humanVerifiedCommitCount");
     expect(serializedSelect).toContain("greatest");
     expect(queryBuilders[0]?.from).toHaveBeenCalled();

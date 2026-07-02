@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
-import { content, feedbackBonusPool, round } from "ponder:schema";
+import { content, feedbackBonusPool, round, vote } from "ponder:schema";
 import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
@@ -88,6 +88,16 @@ export function registerKeeperRoutes(app: ApiApp) {
             then 'reveal_failed'
           when ${round.voteCount} > ${round.revealedCount} then 'reveal'
           else 'open'
+        end`,
+        settlementReadyAt: sql<bigint | null>`case
+          when ${round.revealedCount} >= ${revealQuorum} then (
+            select max(${vote.revealedAt})
+            from ${vote}
+            where ${vote.contentId} = ${round.contentId}
+              and ${vote.roundId} = ${round.roundId}
+              and ${vote.revealed} = true
+          )
+          else null
         end`,
       })
       .from(round)

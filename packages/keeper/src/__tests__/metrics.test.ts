@@ -148,6 +148,7 @@ describe("metrics", () => {
     expect(metricsBody).toContain("keeper_wallet_balance_wei 4000000000000");
     expect(metricsBody).toContain("keeper_rounds_awaiting_reveal_quorum 4");
     expect(metricsBody).toContain("keeper_reveal_grace_seconds_remaining_min 120");
+    expect(metricsBody).toContain("keeper_settlement_backlog_oldest_seconds -1");
     expect(metricsBody).toContain("keeper_ciphertext_log_fallback_total 0");
     expect(metricsBody).toContain("keeper_drand_relay_failovers_total 0");
     expect(metricsBody).toContain("keeper_reveal_failed_finalize_skipped_total 0");
@@ -161,6 +162,7 @@ describe("metrics", () => {
       walletBalanceWei: "4000000000000",
       roundsAwaitingRevealQuorum: 4,
       revealGraceSecondsRemainingMin: 120,
+      settlementBacklogOldestSeconds: -1,
     });
   });
 
