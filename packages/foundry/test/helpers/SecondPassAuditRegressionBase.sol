@@ -319,6 +319,18 @@ abstract contract SecondPassAuditRegressionBase is VotingTestBase {
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
         vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+        _warpPastQuestionRewardSnapshotVeto(oracle, rewardPoolId, contentId, roundId);
+    }
+
+    function _warpPastQuestionRewardSnapshotVeto(
+        ClusterPayoutOracle oracle,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) internal {
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), rewardPoolId, contentId, roundId);
+        vm.warp(uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
     }
 
     function _questionEpochSources(uint256 rewardPoolId, uint256 contentId, uint256 roundId)

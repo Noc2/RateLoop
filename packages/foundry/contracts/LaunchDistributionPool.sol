@@ -696,6 +696,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         IClusterPayoutOracle oracle = IClusterPayoutOracle(pending.oracle);
         if (address(oracle) == address(0)) revert SnapshotNotFinalized();
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
+        if (!_launchPayoutSnapshotOutsideVetoWindow(oracle, contentId, roundId)) revert SnapshotNotFinalized();
         if (
             payoutWeight.domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || payoutWeight.rewardPoolId != 0
                 || payoutWeight.contentId != contentId || payoutWeight.roundId != roundId
@@ -1522,6 +1523,21 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             uint64 proposedAt
         ) {
             return proposedAt >= readyAt;
+        } catch {
+            return false;
+        }
+    }
+
+    function _launchPayoutSnapshotOutsideVetoWindow(
+        IClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId
+    ) private view returns (bool) {
+        try oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
+        ) {
+            return snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+                && block.timestamp > uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
         } catch {
             return false;
         }

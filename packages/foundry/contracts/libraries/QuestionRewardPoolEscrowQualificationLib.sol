@@ -525,6 +525,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         ) {
             if (
                 payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
+                    || _finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot)
                     || payoutSnapshot.rawEligibleVoters != rawEligibleVoters
                     || !_questionPayoutSnapshotConsumerMatches(clusterPayoutOracle, rewardPool, roundId, payoutDomain)
                     || !_questionPayoutSnapshotSourceReady(
@@ -547,7 +548,6 @@ library QuestionRewardPoolEscrowQualificationLib {
             canQualify = rawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
                 && payoutSnapshot.totalClaimWeight > 0;
             if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false, 0) >= effectiveParticipantUnits;
-            if (!canQualify && _finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot)) return (false, false, 0);
             return (true, canQualify, effectiveParticipantUnits);
         } catch {
             return (false, false, 0);
@@ -767,6 +767,9 @@ library QuestionRewardPoolEscrowQualificationLib {
             if (payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
+            if (_finalizedSnapshotWithinVetoWindow(IClusterPayoutOracle(clusterPayoutOracle), payoutSnapshot)) {
+                return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
+            }
             if (!_questionPayoutSnapshotConsumerMatches(clusterPayoutOracle, rewardPool, roundId, payoutDomain)) {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
@@ -811,6 +814,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         IClusterPayoutOracle oracle = IClusterPayoutOracle(clusterPayoutOracle);
         payoutSnapshot = oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, contentId, roundId);
         require(payoutSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized, "Cluster snapshot pending");
+        require(!_finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot), "Cluster snapshot pending");
         require(
             oracle.roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, contentId, roundId) == address(this),
             "Cluster consumer mismatch"

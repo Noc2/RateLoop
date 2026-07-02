@@ -209,6 +209,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         );
         IClusterPayoutOracle.RoundPayoutSnapshot memory newSnapshot =
             oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        require(!_finalizedSnapshotWithinVetoWindow(oracle, newSnapshot), "Oracle snapshot not finalized");
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, bundleId, bundleId, snapshotRoundId);
         bytes32 newSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         require(!oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, newSnapshotDigest), "Snapshot payload rejected");
@@ -365,6 +366,13 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
 
     function _bundleSnapshotRoundId(uint256 roundSetIndex) private pure returns (uint256) {
         return roundSetIndex + 1;
+    }
+
+    function _finalizedSnapshotWithinVetoWindow(
+        IClusterPayoutOracle oracle,
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+    ) private view returns (bool) {
+        return block.timestamp <= uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
     }
 
     function _bundlePayoutSnapshotSourceReadyAt(

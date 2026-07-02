@@ -973,6 +973,7 @@ contract LaunchDistributionPoolTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
         vm.warp(4);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+        _warpPastLaunchPayoutSnapshotVeto(oracle, 1);
 
         uint256 paidAfterSnapshot = pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
         assertEq(paidAfterSnapshot, 0);
@@ -984,6 +985,34 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 1);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+    }
+
+    function test_LaunchCreditWaitsForFinalizationVetoWindowBeforeCreditFinalization() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice,
+            1,
+            1,
+            _commitKey(1),
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(bytes32("anchor-a")),
+            uint64(block.timestamp)
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshotNoVetoWait(oracle, 1, payout, keccak256("epoch-artifact"));
+
+        vm.expectRevert(LaunchDistributionPool.SnapshotNotFinalized.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+
+        _warpPastLaunchPayoutSnapshotVeto(oracle, 1);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
     function test_LaunchCreditRejectsMismatchedPayoutIdentityKey() public {
@@ -1629,7 +1658,7 @@ contract LaunchDistributionPoolTest is Test {
         ClusterPayoutOracle currentOracle = _configureLaunchOracle(1);
         _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 1, payout, keccak256("epoch-artifact"));
 
-        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        vm.expectRevert(LaunchDistributionPool.SnapshotNotFinalized.selector);
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
@@ -3102,6 +3131,16 @@ contract LaunchDistributionPoolTest is Test {
         IClusterPayoutOracle.PayoutWeight memory payout,
         bytes32 artifactHash
     ) internal {
+        _proposeAndFinalizeLaunchPayoutSnapshotNoVetoWait(oracle, roundId, payout, artifactHash);
+        _warpPastLaunchPayoutSnapshotVeto(oracle, roundId);
+    }
+
+    function _proposeAndFinalizeLaunchPayoutSnapshotNoVetoWait(
+        ClusterPayoutOracle oracle,
+        uint256 roundId,
+        IClusterPayoutOracle.PayoutWeight memory payout,
+        bytes32 artifactHash
+    ) internal {
         bytes32 leaf = oracle.payoutWeightLeaf(payout);
         oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
@@ -3123,6 +3162,12 @@ contract LaunchDistributionPoolTest is Test {
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
         vm.warp(uint256(proposal.proposedAt) + 2);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+    }
+
+    function _warpPastLaunchPayoutSnapshotVeto(ClusterPayoutOracle oracle, uint256 roundId) internal {
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId);
+        vm.warp(uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
     }
 
     function _verify(address account, bytes32 nullifier) internal {

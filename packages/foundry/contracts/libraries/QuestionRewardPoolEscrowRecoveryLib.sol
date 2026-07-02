@@ -254,6 +254,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         );
         IClusterPayoutOracle.RoundPayoutSnapshot memory newSnapshot =
             oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+        require(!_finalizedSnapshotWithinVetoWindow(oracle, newSnapshot), "Oracle snapshot not finalized");
         uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
         require(pinnedAt != 0, "Oracle not pinned");
         require(
@@ -281,6 +282,13 @@ library QuestionRewardPoolEscrowRecoveryLib {
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle
     ) private view returns (bool) {
         return rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
+    }
+
+    function _finalizedSnapshotWithinVetoWindow(
+        IClusterPayoutOracle oracle,
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+    ) private view returns (bool) {
+        return block.timestamp <= uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
     }
 
     function _snapshotlessRoundStatus(

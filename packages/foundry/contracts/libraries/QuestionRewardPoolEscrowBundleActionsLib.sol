@@ -1691,6 +1691,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) {
             payoutSnapshot = snapshot;
             ready = snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+                && !_finalizedSnapshotWithinVetoWindow(oracle, snapshot)
                 && (snapshot.totalClaimWeight == 0 || snapshot.weightRoot != bytes32(0));
             if (ready) {
                 uint64 sourceReadyAt = _bundlePayoutSnapshotSourceReadyAt(
