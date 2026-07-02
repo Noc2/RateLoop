@@ -3655,7 +3655,21 @@ describe("registerCorrelationRoutes", () => {
             vetoEndsAt: null,
             updatedAt: 2_400n,
           },
+          {
+            id: 12n,
+            status: 3,
+            proposedAt: 1_200n,
+            challengeEndsAt: 2_100n,
+            finalizedAt: 2_200n,
+            vetoEndsAt: 2_900n,
+            updatedAt: 2_200n,
+          },
         ],
+        [],
+        [],
+        [],
+        [],
+        [],
       ],
     );
     const { registerCorrelationRoutes } = await import(
@@ -3693,6 +3707,13 @@ describe("registerCorrelationRoutes", () => {
           oldestAgeSeconds: 100,
           oldestEstimatedReadyAt: 3300,
         }),
+        expect.objectContaining({
+          domain: "correlation_epoch",
+          phase: "finalization_veto",
+          count: 1,
+          oldestAgeSeconds: 300,
+          oldestEstimatedReadyAt: 2900,
+        }),
       ]),
     );
   });
@@ -3724,7 +3745,17 @@ describe("registerCorrelationRoutes", () => {
         },
       ],
       [
-        [],
+        [
+          {
+            id: 12n,
+            status: 3,
+            proposedAt: 100n,
+            challengeEndsAt: 200n,
+            finalizedAt: 300n,
+            vetoEndsAt: 400n,
+            updatedAt: 300n,
+          },
+        ],
         [{ domain: 1, sourceReadyAt: 1_000n }],
         [],
         [],
@@ -3772,12 +3803,24 @@ describe("registerCorrelationRoutes", () => {
         }),
       ]),
     );
+    expect(body.phases).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "correlation_epoch",
+          phase: "ready_for_consumer",
+        }),
+      ]),
+    );
 
     const roundSnapshotWhere = serializeExpression(
       queryBuilders[0]?.where.mock.calls[0]?.[0],
     );
     expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.consumedAt");
     expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.vetoEndsAt");
+    const epochSnapshotWhere = serializeExpression(
+      queryBuilders[1]?.where.mock.calls[0]?.[0],
+    );
+    expect(epochSnapshotWhere).toContain("correlationEpochSnapshot.vetoEndsAt");
   });
 
   it("lists settled reward rounds that still need payout snapshots", async () => {

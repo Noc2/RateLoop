@@ -71,7 +71,11 @@ function percentile95(values: number[]): number {
   return sorted[index] ?? 0;
 }
 
-function classifySnapshot(row: SnapshotRow, now: bigint) {
+function classifySnapshot(
+  row: SnapshotRow,
+  now: bigint,
+  options: { completeAfterFinalizedVeto?: boolean } = {},
+) {
   const status = Number(row.status);
   if (status === SNAPSHOT_STATUS.Challenged) {
     return {
@@ -109,6 +113,7 @@ function classifySnapshot(row: SnapshotRow, now: bigint) {
     }
     const consumedAt = toBigInt(row.consumedAt);
     if (consumedAt !== null) return null;
+    if (options.completeAfterFinalizedVeto) return null;
     return {
       phase: "ready_for_consumer",
       since: vetoEndsAt ?? row.finalizedAt ?? row.updatedAt,
@@ -127,6 +132,7 @@ function summarizeRows(
   now: bigint,
   rows: Array<SnapshotRow & { domain?: unknown }>,
   domainFallback: number | "correlation_epoch",
+  options: { completeAfterFinalizedVeto?: boolean } = {},
 ) {
   const agesByBucket = new Map<string, number[]>();
   const readyAtByBucket = new Map<string, Array<number | null>>();
@@ -135,7 +141,7 @@ function summarizeRows(
   let rejectedCount = 0;
 
   for (const row of rows) {
-    const classification = classifySnapshot(row, now);
+    const classification = classifySnapshot(row, now, options);
     if (!classification) continue;
     const domain =
       typeof row.domain === "number" ? row.domain : domainFallback;
@@ -426,12 +432,17 @@ export async function buildCorrelationFinalitySla(
       .select()
       .from(correlationEpochSnapshot)
       .where(
-        inArray(correlationEpochSnapshot.status, [
-          SNAPSHOT_STATUS.Proposed,
-          SNAPSHOT_STATUS.Challenged,
-          SNAPSHOT_STATUS.Finalized,
-          SNAPSHOT_STATUS.Rejected,
-        ]),
+        or(
+          inArray(correlationEpochSnapshot.status, [
+            SNAPSHOT_STATUS.Proposed,
+            SNAPSHOT_STATUS.Challenged,
+            SNAPSHOT_STATUS.Rejected,
+          ]),
+          and(
+            eq(correlationEpochSnapshot.status, SNAPSHOT_STATUS.Finalized),
+            sql`${correlationEpochSnapshot.vetoEndsAt} > ${nowSeconds}`,
+          ),
+        ),
       )
       .orderBy(
         asc(correlationEpochSnapshot.updatedAt),
@@ -449,6 +460,7 @@ export async function buildCorrelationFinalitySla(
     nowSeconds,
     epochRows as SnapshotRow[],
     "correlation_epoch",
+    { completeAfterFinalizedVeto: true },
   );
   const sourceReadySummary = summarizeSourceReadyRows(
     nowSeconds,
