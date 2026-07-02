@@ -1856,6 +1856,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     }
 
     function _isTerminalRound(RoundLib.RoundState state, uint48 settledAt) private pure returns (bool) {
-        return (state != RoundLib.RoundState.Open && state != RoundLib.RoundState.SettlementPending) || settledAt != 0;
+        if (state == RoundLib.RoundState.Open || state == RoundLib.RoundState.SettlementPending) return false;
+        return settledAt != 0 || state == RoundLib.RoundState.Cancelled || state == RoundLib.RoundState.Tied
+            || state == RoundLib.RoundState.RevealFailed;
     }
 }
