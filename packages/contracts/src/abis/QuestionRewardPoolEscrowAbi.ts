@@ -2733,6 +2733,17 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "error",
+    "name": "BundleRewardNotFound",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "EnforcedPause",
     "inputs": []
   },
@@ -2760,6 +2771,17 @@ export const QuestionRewardPoolEscrowAbi = [
     "type": "error",
     "name": "RewardPoolCursorNeedsAdvance",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RewardPoolNotFound",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

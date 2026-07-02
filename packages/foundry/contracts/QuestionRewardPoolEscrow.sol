@@ -73,6 +73,8 @@ contract QuestionRewardPoolEscrow is
     error RewardPoolCursorNeedsAdvance();
     error StaleEngine();
     error StaleEscrow();
+    error RewardPoolNotFound(uint256 rewardPoolId);
+    error BundleRewardNotFound(uint256 bundleId);
 
     IERC20 internal lrepToken;
     IERC20 internal usdcToken;
@@ -1290,12 +1292,12 @@ contract QuestionRewardPoolEscrow is
 
     function _getExistingRewardPool(uint256 rewardPoolId) internal view returns (RewardPool storage rewardPool) {
         rewardPool = rewardPools[rewardPoolId];
-        if (rewardPool.id == 0) revert();
+        if (rewardPool.id == 0) revert RewardPoolNotFound(rewardPoolId);
     }
 
     function _getExistingBundleReward(uint256 bundleId) internal view returns (BundleReward storage bundle) {
         bundle = bundleRewards[bundleId];
-        if (bundle.id == 0) revert();
+        if (bundle.id == 0) revert BundleRewardNotFound(bundleId);
     }
 
     function _getIncompleteRewardPoolForQualification(uint256 rewardPoolId)

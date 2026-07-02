@@ -602,6 +602,24 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function testMissingRewardPoolUsesTypedError() public {
+        uint256 missingRewardPoolId = 404;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(QuestionRewardPoolEscrow.RewardPoolNotFound.selector, missingRewardPoolId)
+        );
+        rewardPoolEscrow.getRewardPoolEligibility(missingRewardPoolId);
+    }
+
+    function testMissingBundleRewardUsesTypedError() public {
+        uint256 missingBundleId = 405;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(QuestionRewardPoolEscrow.BundleRewardNotFound.selector, missingBundleId)
+        );
+        rewardPoolEscrow.getQuestionBundleEligibility(missingBundleId);
+    }
+
     function testQuestionRewardCannotReplayAfterRaterIdentityRemintWithSameNullifier() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);

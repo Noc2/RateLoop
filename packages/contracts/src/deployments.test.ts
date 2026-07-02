@@ -304,6 +304,19 @@ test("question reward pool escrow ABI exposes snapshot consumer view", () => {
   assert.equal(consumerView?.stateMutability, "view");
 });
 
+test("question reward pool escrow ABI exposes typed lookup errors", () => {
+  const errorInputs = new Map(
+    generatedAbis.QuestionRewardPoolEscrowAbi.filter(
+      (item) =>
+        item.type === "error" &&
+        ["RewardPoolNotFound", "BundleRewardNotFound"].includes(item.name),
+    ).map((item) => [item.name, item.inputs.map((input) => input.type)]),
+  );
+
+  assert.deepEqual(errorInputs.get("RewardPoolNotFound"), ["uint256"]);
+  assert.deepEqual(errorInputs.get("BundleRewardNotFound"), ["uint256"]);
+});
+
 test("question reward pool escrow ABI exposes bundle recovery monitoring events", () => {
   const bundleEvents = new Map(
     generatedAbis.QuestionRewardPoolEscrowAbi.filter(
