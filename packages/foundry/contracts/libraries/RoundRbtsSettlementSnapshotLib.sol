@@ -43,7 +43,9 @@ library RoundRbtsSettlementSnapshotLib {
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
         bytes32[][] calldata proofs
     ) external returns (SnapshotResult memory result) {
-        if (oracleAddress == address(0) || payoutWeights.length != proofs.length) revert InvalidState();
+        if (oracleAddress == address(0) || payoutWeights.length != proofs.length) {
+            revert InvalidState();
+        }
         if (commitKeys.length < payoutWeights.length) revert InvalidState();
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
@@ -66,6 +68,7 @@ library RoundRbtsSettlementSnapshotLib {
             if (i != 0 && payout.commitKey <= previousCommitKey) revert InvalidState();
             previousCommitKey = payout.commitKey;
             _validatePayoutScope(payout, contentId, roundId);
+            if (payout.independenceBps > BPS_DENOMINATOR) revert InvalidState();
             if (!oracle.verifyPayoutWeight(payout, proofs[i])) revert InvalidState();
 
             RoundLib.Commit storage commit = roundCommits[payout.commitKey];
@@ -101,11 +104,10 @@ library RoundRbtsSettlementSnapshotLib {
         result.forfeitsEnabled = snapshot.effectiveParticipantUnits >= MIN_EFFECTIVE_FORFEIT_UNITS;
     }
 
-    function _validatePayoutScope(
-        IClusterPayoutOracle.PayoutWeight calldata payout,
-        uint256 contentId,
-        uint256 roundId
-    ) private pure {
+    function _validatePayoutScope(IClusterPayoutOracle.PayoutWeight calldata payout, uint256 contentId, uint256 roundId)
+        private
+        pure
+    {
         if (
             payout.domain != PAYOUT_DOMAIN_RBTS_SETTLEMENT || payout.rewardPoolId != 0 || payout.contentId != contentId
                 || payout.roundId != roundId

@@ -1574,6 +1574,33 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
     }
 
+    function test_RbtsSettlementRejectsLeafIndependenceAboveBps() public {
+        (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
+
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        RbtsSettlementPayload memory payload = _fullWeightRbtsSettlementPayload(
+            oracle, contentId, roundId, _sortedCommitKeys(RoundEngineReadHelpers.commitKeys(engine, contentId, roundId))
+        );
+        payload.payoutWeights[0].independenceBps = 10_001;
+
+        uint256 totalClaimWeight;
+        uint32 effectiveParticipantUnits;
+        for (uint256 i = 0; i < payload.payoutWeights.length; i++) {
+            totalClaimWeight += payload.payoutWeights[i].effectiveWeight;
+            effectiveParticipantUnits += payload.payoutWeights[i].independenceBps;
+        }
+        oracle.configureFinalizedRbtsSnapshot(
+            contentId, roundId, uint32(payload.payoutWeights.length), effectiveParticipantUnits, totalClaimWeight
+        );
+
+        vm.expectRevert(RoundRbtsSettlementSnapshotLib.InvalidState.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payload.payoutWeights, payload.proofs);
+    }
+
     function test_RbtsSettlementTimeoutBeforeDeadlineReverts() public {
         (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
