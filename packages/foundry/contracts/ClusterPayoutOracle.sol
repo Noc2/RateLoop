@@ -717,8 +717,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
-    /// @notice Reject a finalized round payout snapshot during its proposal-scoped veto window.
-    ///         At the exact veto deadline the root is usable and can no longer be rejected.
+    /// @notice Reject a finalized round payout snapshot during its effective veto window.
+    ///         At the exact child/parent veto deadline the root is usable and can no longer be rejected.
     function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
@@ -744,7 +744,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
-        if (block.timestamp >= _roundPayoutSnapshotVetoDeadline(proposal)) revert SnapshotNotFinalizable();
+        if (block.timestamp >= _effectiveRoundPayoutSnapshotVetoDeadline(proposal)) revert SnapshotNotFinalizable();
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
@@ -840,9 +840,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (!_isCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId)) {
             return false;
         }
-        CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[proposal.snapshot.correlationEpochId];
-        return block.timestamp >= _roundPayoutSnapshotVetoDeadline(proposal)
-            && block.timestamp >= _correlationEpochVetoDeadline(epoch);
+        return block.timestamp >= _effectiveRoundPayoutSnapshotVetoDeadline(proposal);
     }
 
     function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -1238,6 +1236,17 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function _roundPayoutSnapshotVetoDeadline(RoundPayoutProposal storage proposal) private view returns (uint256) {
         if (proposal.snapshot.finalizedAt == 0) return 0;
         return uint256(proposal.snapshot.finalizedAt) + uint256(proposal.finalizationVetoWindowAtProposal);
+    }
+
+    function _effectiveRoundPayoutSnapshotVetoDeadline(RoundPayoutProposal storage proposal)
+        private
+        view
+        returns (uint256 deadline)
+    {
+        deadline = _roundPayoutSnapshotVetoDeadline(proposal);
+        CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[proposal.snapshot.correlationEpochId];
+        uint256 epochDeadline = _correlationEpochVetoDeadline(epoch);
+        if (epochDeadline > deadline) deadline = epochDeadline;
     }
 
     function _validateChallengeWindow(uint64 newChallengeWindow) private pure {
