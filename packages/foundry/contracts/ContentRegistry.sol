@@ -1439,6 +1439,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
+    function advanceRatingSnapshotCursor(uint256 contentId, uint256 maxRounds) external {
+        ContentRegistryRatingSnapshotLib.advanceRatingSnapshotCursor(
+            pendingRatingSettlement[contentId],
+            nextRatingSnapshotRoundId,
+            appliedRatingSnapshotDigest,
+            votingEngine,
+            latestVotingRoundId[contentId],
+            contentId,
+            maxRounds
+        );
+    }
+
     /// @notice Repoint the pinned cluster payout oracle for an in-flight pending public rating.
     function repointPendingRatingClusterPayoutOracle(uint256 contentId, uint256 roundId, address newOracle)
         external

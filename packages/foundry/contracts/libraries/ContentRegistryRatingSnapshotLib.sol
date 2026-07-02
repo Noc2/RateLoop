@@ -38,6 +38,7 @@ library ContentRegistryRatingSnapshotLib {
         address indexed oldClusterPayoutOracle,
         address newClusterPayoutOracle
     );
+    event RatingSnapshotCursorAdvanced(uint256 indexed contentId, uint256 nextRoundId, uint256 advancedRounds);
 
     uint8 internal constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
     uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
@@ -177,18 +178,12 @@ library ContentRegistryRatingSnapshotLib {
         bytes32[][] calldata proofs,
         uint48 settledAt
     ) external {
+        if (latestRoundId != 0 && roundId > latestRoundId) revert InvalidState();
+        uint256 expectedRoundId = _expectedRatingSnapshotRound(nextRatingSnapshotRoundId, contentId);
+        if (roundId != expectedRoundId) revert RatingSnapshotOutOfOrder(expectedRoundId);
+
         ContentRegistryTypes.PendingRatingSettlement storage pending = pendingSettlements[roundId];
         if (!pending.exists || pending.applied) revert InvalidState();
-        uint256 expectedRoundId = _advanceRatingSnapshotCursor(
-            pendingSettlements,
-            nextRatingSnapshotRoundId,
-            appliedRatingSnapshotDigest,
-            pending.votingEngine,
-            latestRoundId,
-            contentId,
-            roundId
-        );
-        if (roundId != expectedRoundId) revert RatingSnapshotOutOfOrder(expectedRoundId);
         pending.applied = true;
 
         SnapshotApplication memory application = _validateAndBuild(
@@ -222,36 +217,56 @@ library ContentRegistryRatingSnapshotLib {
         );
     }
 
-    function _advanceRatingSnapshotCursor(
+    function advanceRatingSnapshotCursor(
         mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement) storage pendingSettlements,
         mapping(uint256 => uint256) storage nextRatingSnapshotRoundId,
         mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
         address votingEngineAddress,
         uint256 latestRoundId,
         uint256 contentId,
-        uint256 roundId
-    ) private returns (uint256 expectedRoundId) {
-        if (latestRoundId != 0 && roundId > latestRoundId) revert InvalidState();
+        uint256 maxRounds
+    ) external returns (uint256 advancedRounds, uint256 nextRoundId) {
+        if (votingEngineAddress == address(0)) revert InvalidState();
 
-        expectedRoundId = nextRatingSnapshotRoundId[contentId];
-        if (expectedRoundId == 0) expectedRoundId = 1;
+        nextRoundId = _expectedRatingSnapshotRound(nextRatingSnapshotRoundId, contentId);
         IRoundVotingEngine votingEngine = IRoundVotingEngine(votingEngineAddress);
-        while (expectedRoundId < roundId) {
-            ContentRegistryTypes.PendingRatingSettlement storage prior = pendingSettlements[expectedRoundId];
-            if (prior.exists) {
-                if (!prior.applied) break;
-            } else {
-                (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, expectedRoundId);
-                if (!_canSkipRatingSnapshotRound(state, appliedRatingSnapshotDigest[contentId][expectedRoundId])) {
-                    break;
-                }
+        while (advancedRounds < maxRounds) {
+            if (latestRoundId != 0 && nextRoundId > latestRoundId) break;
+            if (!_canAdvanceRatingSnapshotCursor(
+                    pendingSettlements, appliedRatingSnapshotDigest, votingEngine, contentId, nextRoundId
+                )) {
+                break;
             }
 
             unchecked {
-                ++expectedRoundId;
+                ++nextRoundId;
+                ++advancedRounds;
             }
         }
-        nextRatingSnapshotRoundId[contentId] = expectedRoundId;
+        nextRatingSnapshotRoundId[contentId] = nextRoundId;
+        if (advancedRounds != 0) emit RatingSnapshotCursorAdvanced(contentId, nextRoundId, advancedRounds);
+    }
+
+    function _expectedRatingSnapshotRound(
+        mapping(uint256 => uint256) storage nextRatingSnapshotRoundId,
+        uint256 contentId
+    ) private view returns (uint256 expectedRoundId) {
+        expectedRoundId = nextRatingSnapshotRoundId[contentId];
+        if (expectedRoundId == 0) expectedRoundId = 1;
+    }
+
+    function _canAdvanceRatingSnapshotCursor(
+        mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement) storage pendingSettlements,
+        mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
+        IRoundVotingEngine votingEngine,
+        uint256 contentId,
+        uint256 roundId
+    ) private view returns (bool) {
+        ContentRegistryTypes.PendingRatingSettlement storage prior = pendingSettlements[roundId];
+        if (prior.exists) return prior.applied;
+
+        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, roundId);
+        return _canSkipRatingSnapshotRound(state, appliedRatingSnapshotDigest[contentId][roundId]);
     }
 
     function _canSkipRatingSnapshotRound(RoundLib.RoundState state, bytes32 appliedDigest) private pure returns (bool) {

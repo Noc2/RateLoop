@@ -45,6 +45,53 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         assertGt(registry.getRating(contentId), 0);
     }
 
+    function testPublicRatingSnapshotCursorAdvancesSkippedRoundsInBoundedBatches() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-cursor-batches");
+
+        uint256 firstSkippedRoundId = _cancelEmptyRound(contentId);
+        uint256 skippedRounds = 6;
+        for (uint256 i = 1; i < skippedRounds; i++) {
+            _cancelEmptyRound(contentId);
+        }
+
+        uint256 settledRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        assertEq(settledRoundId, firstSkippedRoundId + skippedRounds);
+
+        (IClusterPayoutOracle.PayoutWeight[] memory weights, bytes32[][] memory proofs) =
+            _finalizePublicRatingPayoutSnapshot(oracle, contentId, settledRoundId, 3);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ContentRegistryRatingSnapshotLib.RatingSnapshotOutOfOrder.selector, firstSkippedRoundId
+            )
+        );
+        registry.applyRatingPayoutSnapshot(contentId, settledRoundId, weights, proofs);
+
+        registry.advanceRatingSnapshotCursor(contentId, 2);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ContentRegistryRatingSnapshotLib.RatingSnapshotOutOfOrder.selector, firstSkippedRoundId + 2
+            )
+        );
+        registry.applyRatingPayoutSnapshot(contentId, settledRoundId, weights, proofs);
+
+        registry.advanceRatingSnapshotCursor(contentId, 2);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ContentRegistryRatingSnapshotLib.RatingSnapshotOutOfOrder.selector, firstSkippedRoundId + 4
+            )
+        );
+        registry.applyRatingPayoutSnapshot(contentId, settledRoundId, weights, proofs);
+
+        registry.advanceRatingSnapshotCursor(contentId, 10);
+
+        registry.applyRatingPayoutSnapshot(contentId, settledRoundId, weights, proofs);
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, settledRoundId));
+    }
+
     function _moveRoundToSettlementPending(uint256 contentId) internal returns (uint256 roundId) {
         roundId = _revealRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         _ensureTestClusterPayoutOracle(votingEngine);
@@ -53,6 +100,18 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint8(round.state), uint8(RoundLib.RoundState.SettlementPending));
+    }
+
+    function _cancelEmptyRound(uint256 contentId) internal returns (uint256 roundId) {
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
+        roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+
+        vm.warp(block.timestamp + EPOCH_DURATION + 1);
+        votingEngine.cancelExpiredRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint8(round.state), uint8(RoundLib.RoundState.Cancelled));
     }
 
     function _finalizePublicRatingPayoutSnapshot(
@@ -209,7 +268,10 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
 
         while (level.length > 1) {
             uint256 siblingIndex = leafIndex % 2 == 0 ? leafIndex + 1 : leafIndex - 1;
-            proof[proofIndex++] = siblingIndex < level.length ? level[siblingIndex] : level[leafIndex];
+            proof[proofIndex] = siblingIndex < level.length ? level[siblingIndex] : level[leafIndex];
+            unchecked {
+                ++proofIndex;
+            }
             leafIndex = leafIndex / 2;
             level = _nextMerkleLevel(level);
         }
