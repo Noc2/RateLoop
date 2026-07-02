@@ -14,6 +14,7 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundCreationLib } from "../contracts/libraries/RoundCreationLib.sol";
+import { RoundRbtsSettlementSnapshotLib } from "../contracts/libraries/RoundRbtsSettlementSnapshotLib.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
@@ -160,6 +161,7 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(bytes32 => IClusterPayoutOracle.RoundPayoutSnapshot) internal snapshots;
     address public frontendRegistry;
+    bool public allowZeroEffectiveWeight;
     uint64 public constant FINALIZATION_VETO_WINDOW = 0;
 
     constructor(address frontendRegistry_) {
@@ -252,13 +254,17 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
         return false;
     }
 
+    function setAllowZeroEffectiveWeight(bool value) external {
+        allowZeroEffectiveWeight = value;
+    }
+
     function verifyPayoutWeight(IClusterPayoutOracle.PayoutWeight calldata payout, bytes32[] calldata)
         external
-        pure
+        view
         returns (bool)
     {
         return payout.domain == 5 && payout.rewardPoolId == 0 && payout.baseWeight > 0
-            && payout.effectiveWeight > 0 && payout.effectiveWeight <= payout.baseWeight;
+            && (payout.effectiveWeight > 0 || allowZeroEffectiveWeight) && payout.effectiveWeight <= payout.baseWeight;
     }
 }
 
@@ -467,21 +473,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 roundId,
         bytes32[] memory commitKeys
     ) internal {
-        bytes32[] memory sortedCommitKeys = new bytes32[](commitKeys.length);
-        for (uint256 i = 0; i < commitKeys.length; i++) {
-            sortedCommitKeys[i] = commitKeys[i];
-        }
-        for (uint256 i = 1; i < sortedCommitKeys.length; i++) {
-            bytes32 key = sortedCommitKeys[i];
-            uint256 j = i;
-            while (j > 0 && sortedCommitKeys[j - 1] > key) {
-                sortedCommitKeys[j] = sortedCommitKeys[j - 1];
-                unchecked {
-                    --j;
-                }
-            }
-            sortedCommitKeys[j] = key;
-        }
+        bytes32[] memory sortedCommitKeys = _sortedCommitKeys(commitKeys);
 
         IClusterPayoutOracle.PayoutWeight[] memory payoutWeights =
             new IClusterPayoutOracle.PayoutWeight[](sortedCommitKeys.length);
@@ -518,6 +510,24 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
         vm.prank(address(oracle));
         engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+    }
+
+    function _sortedCommitKeys(bytes32[] memory commitKeys) internal pure returns (bytes32[] memory sortedCommitKeys) {
+        sortedCommitKeys = new bytes32[](commitKeys.length);
+        for (uint256 i = 0; i < commitKeys.length; i++) {
+            sortedCommitKeys[i] = commitKeys[i];
+        }
+        for (uint256 i = 1; i < sortedCommitKeys.length; i++) {
+            bytes32 key = sortedCommitKeys[i];
+            uint256 j = i;
+            while (j > 0 && sortedCommitKeys[j - 1] > key) {
+                sortedCommitKeys[j] = sortedCommitKeys[j - 1];
+                unchecked {
+                    --j;
+                }
+            }
+            sortedCommitKeys[j] = key;
+        }
     }
 
     function test_SetRoleRotatesPauser() public {
@@ -1473,6 +1483,56 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertTrue(round.upWins);
         assertGt(round.settledAt, 0);
+    }
+
+    function test_RbtsSettlementRejectsZeroEffectiveWeightLeaf() public {
+        (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
+
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        oracle.setAllowZeroEffectiveWeight(true);
+
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.SettlementPending));
+
+        bytes32[] memory commitKeys = _sortedCommitKeys(RoundEngineReadHelpers.commitKeys(engine, contentId, roundId));
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights =
+            new IClusterPayoutOracle.PayoutWeight[](commitKeys.length);
+        bytes32[][] memory proofs = new bytes32[][](commitKeys.length);
+        uint256 totalClaimWeight;
+        uint32 effectiveParticipantUnits;
+        for (uint256 i = 0; i < commitKeys.length; i++) {
+            bytes32 commitKey = commitKeys[i];
+            uint256 baseWeight = _commitRbtsScoringWeight(engine, contentId, roundId, commitKey);
+            uint256 effectiveWeight = i == 0 ? 0 : baseWeight;
+            totalClaimWeight += effectiveWeight;
+            effectiveParticipantUnits += 10_000;
+            payoutWeights[i] = IClusterPayoutOracle.PayoutWeight({
+                domain: 5,
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                commitKey: commitKey,
+                identityKey: _commitIdentityKey(engine, contentId, roundId, commitKey),
+                account: _commitIdentityHolder(engine, contentId, roundId, commitKey),
+                baseWeight: baseWeight,
+                independenceBps: 10_000,
+                effectiveWeight: effectiveWeight,
+                reasonHash: keccak256("zero-effective-rbts-test")
+            });
+            proofs[i] = new bytes32[](0);
+        }
+
+        oracle.configureFinalizedRbtsSnapshot(
+            contentId, roundId, uint32(commitKeys.length), effectiveParticipantUnits, totalClaimWeight
+        );
+
+        vm.prank(address(oracle));
+        vm.expectRevert(RoundRbtsSettlementSnapshotLib.InvalidState.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
     }
 
     function test_ReplayBundleObserverNotify_ReplaysFailedSettledNotification() public {

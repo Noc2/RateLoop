@@ -3175,6 +3175,26 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    function testSettlementPendingRoundDoesNotAdvanceRewardPoolCursor() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+        _ensureTestClusterPayoutOracle(votingEngine);
+
+        uint256 roundId = _revealRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        vm.roll(block.number + 1);
+        votingEngine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.SettlementPending));
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, roundId, round.revealedCount);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
     function testOpenRoundThatReachedThresholdBeforeExpiryBlocksRefundAndCanQualify() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;

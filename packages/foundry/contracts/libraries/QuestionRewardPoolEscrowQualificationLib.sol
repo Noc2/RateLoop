@@ -453,7 +453,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint8 payoutDomain
     ) private view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
         (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(rewardPool.contentId, roundId);
-        if (state == RoundLib.RoundState.Open) return (false, false, 0);
+        if (state == RoundLib.RoundState.Open || state == RoundLib.RoundState.SettlementPending) {
+            return (false, false, 0);
+        }
         if (state != RoundLib.RoundState.Settled) return (true, false, 0);
         (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
             QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
