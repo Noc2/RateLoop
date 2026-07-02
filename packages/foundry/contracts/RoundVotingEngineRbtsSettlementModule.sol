@@ -41,7 +41,7 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
             if (readyAt == 0 || block.timestamp < uint256(readyAt) + RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT) {
                 revert RoundNotExpired();
             }
-            _returnRbtsStakes(contentId, roundId);
+            _returnRevealedRbtsStakes(contentId, roundId);
             _completeRbtsSettlement(contentId, roundId, round, 0, 0, bytes32(0));
             emit RbtsSettlementSnapshotTimedOut(contentId, roundId);
             return;
@@ -137,6 +137,30 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         roundRbtsRewardClaimants[contentId][roundId] = 0;
         roundRbtsParticipationWeight[contentId][roundId] = result.participationWeight;
         roundRbtsParticipationClaimants[contentId][roundId] = result.participationClaimants;
+        roundRbtsForfeitedPool[contentId][roundId] = 0;
+        roundRbtsForfeitClaimants[contentId][roundId] = 0;
+        roundRbtsMeanScoreBps[contentId][roundId] = 0;
+        roundRbtsScoreSeed[contentId][roundId] = bytes32(0);
+    }
+
+    function _returnRevealedRbtsStakes(uint256 contentId, uint256 roundId) internal {
+        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
+        uint256 committedCount = commitKeys.length;
+        for (uint256 i = 0; i < committedCount;) {
+            bytes32 commitKey = commitKeys[i];
+            RoundLib.Commit storage revealedCommit = commits[contentId][roundId][commitKey];
+            if (revealedCommit.revealed) {
+                commitRbtsStakeReturned[contentId][roundId][commitKey] = revealedCommit.stakeAmount;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        roundRbtsRewardWeight[contentId][roundId] = 0;
+        roundRbtsRewardClaimants[contentId][roundId] = 0;
+        roundRbtsParticipationWeight[contentId][roundId] = 0;
+        roundRbtsParticipationClaimants[contentId][roundId] = 0;
         roundRbtsForfeitedPool[contentId][roundId] = 0;
         roundRbtsForfeitClaimants[contentId][roundId] = 0;
         roundRbtsMeanScoreBps[contentId][roundId] = 0;

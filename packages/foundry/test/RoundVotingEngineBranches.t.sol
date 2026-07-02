@@ -1516,6 +1516,51 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(round.settledAt, 0);
     }
 
+    function test_RbtsSettlementTimeoutReturnsRevealedStake() public {
+        (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
+
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.SettlementPending));
+        uint48 readyAt = _roundClusterPayoutReadyAt(engine, contentId, roundId);
+        assertGt(readyAt, 0);
+
+        IClusterPayoutOracle.PayoutWeight[] memory emptyWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory emptyProofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.RoundNotExpired.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        vm.warp(uint256(readyAt) + 14 days);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertTrue(_roundRbtsScored(engine, contentId, roundId));
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0);
+
+        bytes32[] memory commitKeys = RoundEngineReadHelpers.commitKeys(engine, contentId, roundId);
+        for (uint256 i = 0; i < commitKeys.length; i++) {
+            assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[i]), STAKE);
+        }
+
+        uint256 voter1Before = lrepToken.balanceOf(voter1);
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(lrepToken.balanceOf(voter1) - voter1Before, STAKE);
+
+        uint256 voter2Before = lrepToken.balanceOf(voter2);
+        vm.prank(voter2);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(lrepToken.balanceOf(voter2) - voter2Before, STAKE);
+
+        uint256 voter3Before = lrepToken.balanceOf(voter3);
+        vm.prank(voter3);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(lrepToken.balanceOf(voter3) - voter3Before, STAKE);
+    }
+
     function test_RbtsSettlementRejectsZeroEffectiveWeightLeaf() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
