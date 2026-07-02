@@ -141,6 +141,14 @@ test("whitepaper includes how-it-works formulas as rendered formula blocks", () 
   assert.match(whitepaperText, /buys scarce, informative judgment/i);
 });
 
+test("whitepaper documents pinned correlation artifact inputs", () => {
+  const whitepaperText = collectWhitepaperText();
+
+  assert.match(whitepaperText, /pinned source-event input snapshots/i);
+  assert.match(whitepaperText, /artifact v3 commits each epoch parameter hash/i);
+  assert.doesNotMatch(whitepaperText, /rateloop-correlation-epoch-v2/i);
+});
+
 test("whitepaper executive summary centers the agent-first thesis", () => {
   const whitepaperText = collectWhitepaperText();
 

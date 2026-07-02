@@ -95,14 +95,18 @@ raw rating evidence is 3.3 up units versus 1.3 down units. If the public-rating
 snapshot leaves those weights unchanged, the applied rating is about `7.2/10`;
 if it discounts a detected cluster, the adjusted evidence can move less. USDC
 bounty and launch LREP claims still wait for their own correlation payout
-snapshots. With the current oracle default, USDC bounty payout takes at least 2
+snapshots. The keeper normally calls settlement once reveal conditions are met,
+but any user or operator can self-settle an eligible round on-chain if automation
+is delayed. With the current oracle default, USDC bounty payout takes at least 2
 hours after settlement and normally up to 4 hours on the happy path if both
 oracle layers still need to finalize.
 
 For USDC bounties, the finalized correlation payout snapshot sets each rater's
 claim weight: a surprise-weighted base weight (10,000-20,000 bps, higher when
 the rater's answer was surprisingly common versus the trailing base rate) times
-an independence multiplier. It is not the rater's LREP stake amount.
+an independence multiplier. Artifacts commit to the settlement-time scoring
+input snapshots, so later credential, ban, or voting-history changes cannot
+alter an old root. It is not the rater's LREP stake amount.
 
 ```
 payout_i   = allocation_R * w_i / sum(w_j)                                # allocation_R = funded / required rounds
@@ -135,10 +139,12 @@ Settled RateLoop scores are public feedback signals, not objective truth. Do not
 ClusterPayoutOracle is governed by LREP holders and stores the challengeable
 roots used for USDC bounty and launch LREP claim weights. Registered frontend
 operators with the 1,000 LREP operator bond can propose deterministic
-correlation epoch and round payout roots. Other operators or auditors can
-recompute the artifact, challenge bad roots with a USDC ERC20 bond that defaults
-to 5 USDC (5_000_000 atomic units), and governance can arbitrate challenged
-roots with a public reason hash.
+correlation epoch and round payout roots. The public artifact shape is
+`rateloop-correlation-artifact-v3`, and each epoch parameter hash commits to the
+scoring parameters plus the pinned input snapshot references. Other operators or
+auditors can recompute the artifact, challenge bad roots with a USDC ERC20 bond
+that defaults to 5 USDC (5_000_000 atomic units), and governance can arbitrate
+challenged roots with a public reason hash.
 
 Successful challenges are rewarded: when governance slashes a frontend over a
 rejected root, it can route a fixed 50% of everything confiscated — the stake

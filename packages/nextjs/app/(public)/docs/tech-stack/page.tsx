@@ -237,8 +237,8 @@ const TechStackPage: NextPage = () => {
         ]}
       />
       <p>
-        Defaults come from the normative spec (scorer rateloop-correlation-epoch-v2); parameters are committed via the
-        snapshot parameterHash.
+        Defaults come from the normative spec (scorer rateloop-correlation-epoch-v3); parameters and pinned input
+        snapshot references are committed via the snapshot parameterHash.
       </p>
       <SurpriseMultiplierChart />
       <p>
@@ -281,6 +281,13 @@ const TechStackPage: NextPage = () => {
         : it compresses dense wallet clusters, timing/funding links, agent operator links, and repeated cross-round
         behavior into an independence multiplier. Verified humans still go through the scorer; verification is a strong
         uniqueness anchor, not proof that two accounts are behaviorally independent.
+      </p>
+      <p>
+        Correlation artifacts use the <code>rateloop-correlation-artifact-v3</code> shape. Ponder snapshots each scoring
+        input at the round settlement event, or at the pending launch-credit event, including historical vote count,
+        verified-human status, credential reference, active ban reasons, and the source block/transaction/log pointer.
+        The epoch parameter hash commits to those input snapshot references, so two honest operators recomputing the
+        same finalized round use the same boundary instead of whatever identity state exists later.
       </p>
       <p>
         Any keeper or indexer can recompute the same artifact. Registered frontend operators backed by a 1,000 LREP bond

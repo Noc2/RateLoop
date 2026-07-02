@@ -41,7 +41,7 @@ Key pieces:
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and USDC Bounties and Feedback Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and the fresh redeploy uses one question duration for the blind window, bounty eligibility, and Feedback Bonus close; wallet-call asks keep bounty and bonus in the same asset, while USDC remains the x402-compatible public agent payment lane with one-shot bounty plus bonus funding
-- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, USDC payouts, and launch LREP payouts across rounds; USDC bounty roots also carry surprise-weighted claim weights
+- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, USDC payouts, and launch LREP payouts across rounds; artifacts carry settlement-time input snapshots so challengers recompute the same roots
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
@@ -167,7 +167,7 @@ the same production flow.
 
 ### Run the Keeper
 
-The keeper is a standalone service that settles eligible rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. In production it depends on Ponder for work discovery and may use Postgres advisory locks for correlation snapshot publication — see [`packages/keeper/README.md`](packages/keeper/README.md) for persistence, lock, and multi-replica guidance.
+The keeper is a standalone service that settles eligible rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. Settlement itself is permissionless — any user or operator can call `RoundVotingEngine.settleRound(contentId, roundId)` once reveal conditions are met — but production should still run multiple keeper replicas and page on `keeper_settlement_backlog_oldest_seconds`. In production the keeper depends on Ponder for work discovery and may use Postgres advisory locks for correlation snapshot publication; see [`packages/keeper/README.md`](packages/keeper/README.md) for persistence, lock, and multi-replica guidance.
 
 **Configure** by copying `.env.example` and setting an RPC URL, `CHAIN_ID`, and keeper wallet:
 
@@ -201,7 +201,7 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 - Liveness check: `http://localhost:9090/live`
 - Readiness check: `http://localhost:9090/health`
 
-**Redundancy:** Run multiple instances with different wallets and `KEEPER_STARTUP_JITTER_MS=15000` to stagger execution. Configure `KEEPER_DATABASE_URL` when correlation snapshot locks are required. Duplicate settlement attempts usually revert on-chain, but operators should follow `packages/keeper/README.md` rather than assuming fully stateless redundancy.
+**Redundancy:** Run multiple instances with different wallets and `KEEPER_STARTUP_JITTER_MS=15000` to stagger execution. Configure `KEEPER_DATABASE_URL` when correlation snapshot locks are required. Duplicate settlement attempts usually revert on-chain, but operators should follow `packages/keeper/README.md` rather than assuming fully stateless redundancy; alert when `keeper_settlement_backlog_oldest_seconds` exceeds the production SLO.
 
 ### Run Tests
 

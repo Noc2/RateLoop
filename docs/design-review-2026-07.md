@@ -44,7 +44,7 @@ The three headline items are:
 2. **Peer-prediction remains BNE-only.** A reward-seeking rater is expected, and RateLoop's rewards make honest independent reporting attractive under the model; the residual risk is that a credible, undetected coordinated bloc can still be a rational equilibrium in a single-task mechanism.
 3. **Askers can recapture "non-refundable" bounties** through unlinked alt wallets that both vote and claim, for any pool without mandatory cluster-oracle gating (all LREP pools, and USDC pools where gating is optional).
 
-Everything else is Medium or below: a snapshot-input determinism gap that weakens the challenge game, keeper single-point-of-failure liveness, a cluster-pinned-pool liveness dependency, and an assortment of monitoring/consistency cleanups.
+Everything else is Medium or below: a snapshot-input determinism gap that weakened the challenge game before the July 2 remediation, keeper liveness hardening, a cluster-pinned-pool liveness dependency, and an assortment of monitoring/consistency cleanups.
 
 ---
 
@@ -200,6 +200,7 @@ Mechanism as implemented: a binary Robust Bayesian Truth Serum (RBTS) turned int
 
 ### M-1 (off-chain). Correlation snapshot inputs are read at query time, not pinned per round — two honest operators can compute different payout roots
 
+- **Status as of July 2, 2026:** remediated for the fresh redeploy path. Ponder persists correlation-scoring inputs at the source event (`RoundSettled` for round domains, pending launch-credit event for launch credits), the keeper requires those `inputSnapshot` refs in `rateloop-correlation-artifact-v3`, and the epoch `parameterHash` commits to both scoring params and pinned snapshot refs. Routes fail closed when the persisted input snapshot is missing.
 - **Severity:** Medium; confidence High (code-verified).
 - **Mechanism:** the artifact builder scores each vote using `verifiedHuman`, `historicalVoteCount`, cluster features, and exclusion/ban reasons fetched live from Ponder (`fetchRoundVotes` in `correlation-artifact-builder.ts`), and the independence multiplier depends directly on those time-varying inputs:
 
@@ -231,13 +232,13 @@ function independenceForVote(
 
   `historicalVoteCount` grows over time and `verifiedHuman` flips when a rater verifies later, so an operator scoring the same round at T1 vs. T2 can legitimately produce a **different `weightRoot`**. The `now` parameter (`ponderNowSeconds`) is threaded through freshness and vote queries to pin time-relative exclusions, and `parseRoundContextQuestionMetadataRef` deliberately drops `targetAudienceHash` "so payout roots stay reproducible" — evidence the determinism boundary is understood — but the *maturity/verification* inputs themselves are not snapshotted at a canonical block.
 - **Why it matters for the challenge game:** the optimistic model assumes a challenger who recomputes the artifact gets the *same* root as an honest proposer. If honest recomputation legitimately diverges (because the rater's maturity/verification state advanced), a correct proposer can be challenged, or a challenger can't reproduce a correct root — weakening the "recompute and challenge" guarantee that underpins the accepted trust model.
-- **Remediation:** pin all scoring inputs to a canonical block (or the round's settlement block) — snapshot `historicalVoteCount` and `verifiedHuman` as of that block, the way `now` already pins time-relative exclusions — and include that block reference in the artifact's parameter hash. Off-chain/keeper change; no contract change required. This is the one item that touches the payout-root challenge game and should be prioritized.
+- **Remediation:** implemented off-chain. The persisted snapshot includes `historicalVoteCount`, `verifiedHuman`, credential provider/nullifier/timestamps, active ban reasons, and source block/tx/log/timestamp. The public artifact keeps the on-chain publish shape unchanged while storing the pinned refs in the challenge artifact and verifier. No contract change required for the future deployment.
 
 ### M-2 (off-chain). Single-keeper liveness on a long settlement clock
 
 - **Severity:** Medium; confidence Medium.
 - **Mechanism:** settlement, unrevealed-commit cleanup, dormancy marking, and snapshot publication all depend on the keeper running. The README documents multi-replica operation (different wallets, `KEEPER_STARTUP_JITTER_MS`, `KEEPER_DATABASE_URL` advisory locks) and duplicate on-chain attempts revert, but a fully-down keeper stalls settlement and (via M-1 contracts) can freeze cluster-pinned pools. Users can self-settle eligible rounds on-chain, which mitigates the worst case, but routine liveness leans on the operator.
-- **Remediation:** document the self-settlement fallback prominently; ensure at least two independent keeper replicas with separate keys in production; alert on settlement backlog age.
+- **Status as of July 2, 2026:** operational remediation implemented. The keeper/Ponder path now exposes `settlementReadyAt` and `keeper_settlement_backlog_oldest_seconds`, README runbooks call out two independent replicas with separate keys, and public/operator docs explain that `settleRound(contentId, roundId)` is permissionless self-settlement when automation is delayed.
 
 ### Consistency / drift notes (off-chain)
 
@@ -249,7 +250,7 @@ function independenceForVote(
 
 - x402/EIP-3009 payments bound to payload; local signer trusts nothing from the hosted API (no operator custody path).
 - Freshness gate prevents indexing-lag bad roots; bounded response reads (`PONDER_JSON_MAX_BYTES`, page/size caps) prevent memory blowups from a hostile API.
-- Deterministic canonical JSON + parameter hash + scorer/eligibility/feature version stamps in every artifact, with a candidate fingerprint — strong reproducibility scaffolding (M-1 is the one remaining gap in that scaffolding).
+- Deterministic canonical JSON + parameter hash + scorer/eligibility/feature version stamps in every artifact, with a candidate fingerprint and v3 pinned input snapshot refs — strong reproducibility scaffolding.
 
 ---
 
@@ -270,12 +271,12 @@ function independenceForVote(
 ## Prioritized recommendations
 
 1. **Keep RBTS/public-rating correlation snapshots mandatory and monitored (H-1 / incentives-open-Q1).** The key signal-integrity lever is no longer "add cluster weights"; it is making sure the configured oracle path, canonical input snapshots, alerts, and timeout runbook are production-grade.
-2. **Pin correlation scoring inputs to a canonical block (M-1 off-chain).** The only item touching the payout-root challenge game; keeper-only change.
+2. **Done for fresh redeploy: pin correlation scoring inputs to the source event (M-1 off-chain).** Keep artifact v3 and Ponder snapshot persistence as required deployment gates.
 3. **Document that RBTS truthfulness is BNE-only after mitigations (H-2).** Correlation snapshots and surprise-weighted bounties help materially; undetected coordinated blocs remain an accepted residual risk, with multi-task/DMI/CA as the upgrade path.
 4. **Close the alt-wallet bounty-recapture path (M-1 incentives):** mandatory cluster gating and/or verified-human floors on USDC pools above a size threshold.
 5. **Write the cluster-pinned-pool zero-proposer runbook now (M-1 contracts)** and add the fork-test invariants for the quorum coupling (L-5) and `roundCore` ABI coupling (L-2).
 6. **Reconcile docs with implementation:** the vestigial parimutuel "majority wins" narrative and the "mean prediction" vs. "mean RBTS score" phrasing.
-7. **Operational hardening:** ≥2 keeper replicas with separate keys + settlement-backlog alerting; emit a `ContentRegistry.setTreasury` event (L-3, next governed upgrade); raise `challengeWindow` before real bounty value flows (L-1).
+7. **Operational hardening:** keep ≥2 keeper replicas with separate keys + `keeper_settlement_backlog_oldest_seconds` alerting; emit a `ContentRegistry.setTreasury` event (L-3, next governed upgrade); raise `challengeWindow` before real bounty value flows (L-1).
 
 ---
 

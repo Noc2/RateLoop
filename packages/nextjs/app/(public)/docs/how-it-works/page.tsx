@@ -57,9 +57,10 @@ const HowItWorks: NextPage = () => {
         </li>
         <li>
           <strong>Settle:</strong> once reveal conditions and the selected rater threshold are met, the round resolves.
-          Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread
-          forfeits need a larger score-eligible set before they turn on. Governance can raise new-round voter floors as
-          usage grows.
+          The keeper normally calls settlement, but any user or operator can self-settle an eligible round on-chain if
+          automation is delayed. Three-rater rounds are the launch feedback tier and can still settle as sparse
+          feedback, but LREP score-spread forfeits need a larger score-eligible set before they turn on. Governance can
+          raise new-round voter floors as usage grows.
         </li>
       </ol>
 
@@ -180,8 +181,9 @@ const HowItWorks: NextPage = () => {
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
         question in the claimed round set. USDC claim weights come from the finalized{" "}
         <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link>, and equal-weight
-        rounds use one unit per eligible revealed rater. The full surprise-weighting chain behind{" "}
-        <TexFormula tex={String.raw`w_i`} /> is on the{" "}
+        rounds use one unit per eligible revealed rater. Those snapshot artifacts commit to the settlement-time scoring
+        inputs, so later credential, ban, or voting-history changes cannot alter an old root. The full
+        surprise-weighting chain behind <TexFormula tex={String.raw`w_i`} /> is on the{" "}
         <Link href="/docs/tech-stack#bounties" className="link link-primary">
           Surprise-Weighted Bounties
         </Link>{" "}

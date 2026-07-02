@@ -184,7 +184,8 @@ RoundVotingEngine.commitVote(
           <strong>Publishing payout snapshots:</strong> After settlement, the service can recompute correlation epoch
           artifacts and submit <code>ClusterPayoutOracle</code> roots from the registered frontend operator wallet or a
           delegated snapshot keeper wallet assigned by that frontend. Root proposal remains frontend-bonded,
-          challengeable, and should point at a public deterministic artifact.
+          challengeable, and should point at a public deterministic artifact whose v3 parameter hash commits to the
+          settlement-time input snapshot references.
         </li>
         <li>
           <strong>Publishing confidentiality log roots:</strong> If the frontend gates private context, the service
@@ -200,12 +201,14 @@ RoundVotingEngine.commitVote(
         </li>
       </ol>
       <p>
-        Without resolution services, votes would never be revealed and rounds would never resolve. Running one alongside
-        your frontend ensures a smooth experience for your users and contributes to the health of the network. Since
-        these actions are permissionless, anyone can run a resolution service. Under the keeper-assisted/self-reveal
-        model, reveal still relies on off-chain drand decryption and stanza validation rather than an on-chain proof
-        that the stored ciphertext was honestly decryptable, so the keeper is a trust-minimized convenience layer rather
-        than a cryptographic gatekeeper. The more independent services running, the more resilient the network becomes.
+        Without resolution services, users can still self-reveal and anyone can self-settle an eligible round, but the
+        routine experience would degrade: reveals, settlement, cleanup, dormancy, and payout-root publication would lag
+        until someone acted manually. Running one alongside your frontend ensures a smooth experience for your users and
+        contributes to the health of the network. Since these actions are permissionless, anyone can run a resolution
+        service. Under the keeper-assisted/self-reveal model, reveal still relies on off-chain drand decryption and
+        stanza validation rather than an on-chain proof that the stored ciphertext was honestly decryptable, so the
+        keeper is a trust-minimized convenience layer rather than a cryptographic gatekeeper. The more independent
+        services running, the more resilient the network becomes.
       </p>
       <p>
         The reference resolution runtime lives in{" "}

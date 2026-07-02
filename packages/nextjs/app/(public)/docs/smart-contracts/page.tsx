@@ -492,10 +492,11 @@ const SmartContracts: NextPage = () => {
           Claim the USDC-backed bounty for a revealed voter after the round has a finalized correlation payout snapshot.
           Snapshot roots are proposed through <code>ClusterPayoutOracle</code> by registered frontend operators bonded
           with 1,000 LREP, either directly or through assigned keeper wallets, then finalized after the challenge
-          window. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to 5 USDC (5_000_000
-          atomic units). New bounties default to a 3% frontend-operator share, attributed from the vote commit;
-          unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps gate this
-          payout path, while a separate public-rating oracle domain controls visible rating movement from pending
+          window. The public v3 artifact commits to settlement-time scoring input snapshots as part of the epoch
+          parameter hash. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to 5 USDC
+          (5_000_000 atomic units). New bounties default to a 3% frontend-operator share, attributed from the vote
+          commit; unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps gate
+          this payout path, while a separate public-rating oracle domain controls visible rating movement from pending
           settlement evidence.
         </li>
         <li>

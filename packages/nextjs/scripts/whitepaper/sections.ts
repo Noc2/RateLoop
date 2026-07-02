@@ -290,7 +290,7 @@ export const SECTIONS: Section[] = [
               "Reputation, calibration history, and credential signals can inform earning policy without making proof-of-personhood a hard settlement gate.",
               "Each account is capped at 10 LREP per content per round by default.",
               "Optional identity providers can unlock a one-time launch bonus and verified-human launch anchors, but they do not change settlement reward weight.",
-              "Correlation Epoch Snapshots cap USDC and launch LREP payouts for dense wallet or operator clusters across multiple rounds, with roots proposed by globally bonded 1,000 LREP frontend operators.",
+              "Correlation Epoch Snapshots cap USDC and launch LREP payouts for dense wallet or operator clusters across multiple rounds, with roots proposed by globally bonded 1,000 LREP frontend operators and recomputed from pinned source-event input snapshots.",
             ],
           },
         ],
@@ -634,7 +634,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet or a delegated snapshot keeper; independent operators can recompute them and challenge bad roots with the configured USDC ERC20 challenge bond, defaulting to 5 USDC (5_000_000 atomic units). Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong.",
+            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet or a delegated snapshot keeper; artifact v3 commits each epoch parameter hash to both scorer parameters and pinned source-event input snapshot references. Independent operators can recompute them and challenge bad roots with the configured USDC ERC20 challenge bond, defaulting to 5 USDC (5_000_000 atomic units). Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong.",
           },
           {
             type: "paragraph",
@@ -725,7 +725,7 @@ export const SECTIONS: Section[] = [
             items: [
               "RateLoop returns public rating judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
               "The current single-task RBTS mechanism is Bayes-Nash truthful under independent-rater assumptions, but not collusion-proof; undetected coordinated blocs remain a residual signal risk despite correlation and surprise-weighting mitigations.",
-              "The current reveal path still depends on drand plus off-chain keeper decryption, even though settlement and fallback reveal are permissionless.",
+              "The current reveal path still depends on drand plus off-chain keeper decryption for routine automation, even though fallback reveal and eligible-round settlement are permissionless.",
               "Private-context asks are operator-trust by design: wallet-signed terms, watermarks, access logs, optional bonds, and identity bans deter leaks, but they do not stop an eligible rater, the serving operator, or compromised infrastructure from seeing the material.",
               "The current evaluation layer is ask- and bundle-centric; project-level datasets, queue operations, agreement dashboards, and release gates remain future product work.",
               "Optional identity providers can add useful credentials but should not become a single dependency or hard participation gate.",
