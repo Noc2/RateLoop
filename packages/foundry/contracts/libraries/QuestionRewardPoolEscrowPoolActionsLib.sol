@@ -30,6 +30,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 
     error RecoveredRoundPending();
+    error RecoveredReplacementSnapshotAvailable();
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -171,12 +172,15 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 rewardPoolId,
         uint256[] calldata roundIds,
-        uint256 claimGrace
+        uint256 claimGrace,
+        uint8 payoutDomain
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
         bool completeRecoveredExit = uint256(rewardPool.qualifiedRounds) + uint256(rewardPool.pendingRecoveredRounds)
@@ -187,9 +191,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
             rewardPoolId,
             roundIds,
-            claimGrace
+            claimGrace,
+            payoutDomain
         );
         if (completeRecoveredExit) {
             rewardPool.unallocatedAmount = 0;
@@ -210,13 +218,16 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 rewardPoolId,
         uint256[] calldata roundIds,
-        uint256 claimGrace
+        uint256 claimGrace,
+        uint8 payoutDomain
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
         require(!registry.isContentActive(rewardPool.contentId), "Content active");
@@ -226,9 +237,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
             rewardPoolId,
             roundIds,
-            claimGrace
+            claimGrace,
+            payoutDomain
         );
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
             votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
@@ -435,19 +450,29 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             uint256 => mapping(uint256 => bool)
         ) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
+        RoundVotingEngine votingEngine,
         uint256 rewardPoolId,
         uint256[] calldata roundIds,
-        uint256 claimGrace
+        uint256 claimGrace,
+        uint8 payoutDomain
     ) private {
         uint256 pendingRecoveredRounds = rewardPool.pendingRecoveredRounds;
         require(pendingRecoveredRounds != 0, "Recovered round pending");
         require(roundIds.length != 0, "Round required");
+        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
+        uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
 
         for (uint256 i = 0; i < roundIds.length;) {
             uint256 roundId = roundIds[i];
             require(rejectedRecoveredRound[rewardPoolId][roundId], "Round not recovered");
             if (reopenedRecoveredRound[rewardPoolId][roundId]) {
                 _requireRecoveredRefundGrace(rewardPool, claimGrace);
+            } else if (_hasRecoveredReplacementSnapshot(
+                    oracleAddr, pinnedAt, votingEngine, rewardPool, rewardPoolId, roundId, payoutDomain
+                )) {
+                revert RecoveredReplacementSnapshotAvailable();
             }
             RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
             require(!snapshot.qualified, "Round qualified");
@@ -465,6 +490,52 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
         rewardPool.pendingRecoveredRounds = pendingRecoveredRounds.toUint32();
         _requireNoPendingRecoveredRounds(rewardPool);
+    }
+
+    function _hasRecoveredReplacementSnapshot(
+        address oracleAddr,
+        uint64 pinnedAt,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) private view returns (bool) {
+        if (oracleAddr == address(0) || pinnedAt == 0) return false;
+
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot;
+        try oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory loadedSnapshot
+        ) {
+            snapshot = loadedSnapshot;
+        } catch {
+            return false;
+        }
+        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) return false;
+
+        uint64 proposedAt =
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+        if (proposedAt < pinnedAt) return false;
+        (,,, uint48 readyAt) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        if (readyAt == 0 || proposedAt < readyAt) return false;
+        if (
+            oracle.roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, rewardPool.contentId, roundId)
+                != address(this)
+        ) {
+            return false;
+        }
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+        bytes32 snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        if (oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshotDigest)) return false;
+        if (oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.weightRoot)) return false;
+        if (oracle.isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+                payoutDomain, rewardPoolId, rewardPool.contentId, roundId
+            )) {
+            return false;
+        }
+        return true;
     }
 
     function _refundCompleteRewardPool(

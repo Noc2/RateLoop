@@ -1158,12 +1158,15 @@ contract QuestionRewardPoolEscrow is
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             votingEngine,
             lrepToken,
             usdcToken,
             rewardPoolId,
             roundIds,
-            BUNDLE_CLAIM_GRACE
+            BUNDLE_CLAIM_GRACE,
+            PAYOUT_DOMAIN_QUESTION_REWARD
         );
     }
 
@@ -1177,13 +1180,16 @@ contract QuestionRewardPoolEscrow is
             roundSnapshots,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             registry,
             votingEngine,
             lrepToken,
             usdcToken,
             rewardPoolId,
             roundIds,
-            BUNDLE_CLAIM_GRACE
+            BUNDLE_CLAIM_GRACE,
+            PAYOUT_DOMAIN_QUESTION_REWARD
         );
     }
 
