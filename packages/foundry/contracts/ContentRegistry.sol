@@ -197,6 +197,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Applied rating snapshot digests keyed by content and round. Nonzero means the canonical rating consumed the root.
     mapping(uint256 => mapping(uint256 => bytes32)) internal appliedRatingSnapshotDigest;
 
+    /// @notice Next round whose public-rating snapshot may be applied for a content item.
+    mapping(uint256 => uint256) internal nextRatingSnapshotRoundId;
+
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
 
@@ -205,7 +208,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => address) internal questionBundleRoundObserverByContent;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[37] private __gap;
+    uint256[36] private __gap;
 
     // --- Events ---
     event ContentSubmitted(
@@ -1421,11 +1424,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             appliedAt := appliedAt256
         }
         ContentRegistryRatingSnapshotLib.applyRatingPayoutSnapshot(
-            pendingRatingSettlement[contentId][roundId],
+            pendingRatingSettlement[contentId],
+            nextRatingSnapshotRoundId,
             contents[contentId],
             _ratingState[contentId],
             contentSlashConfigSnapshot[contentId],
             appliedRatingSnapshotDigest,
+            latestVotingRoundId[contentId],
             contentId,
             roundId,
             payoutWeights,

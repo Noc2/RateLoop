@@ -1,0 +1,262 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
+
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { SecondPassAuditRegressionBase } from "./helpers/SecondPassAuditRegressionBase.sol";
+
+contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
+    uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
+    uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
+    uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
+
+    function testPublicRatingSnapshotsApplyInRoundOrderAcrossRbtsPendingRounds() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rating-order");
+
+        uint256 firstRoundId = _moveRoundToSettlementPending(contentId);
+        vm.warp(block.timestamp + 24 hours + 1);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        assertEq(secondRoundId, firstRoundId + 1);
+
+        (IClusterPayoutOracle.PayoutWeight[] memory secondWeights, bytes32[][] memory secondProofs) =
+            _finalizePublicRatingPayoutSnapshot(oracle, contentId, secondRoundId, 3);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ContentRegistryRatingSnapshotLib.RatingSnapshotOutOfOrder.selector, firstRoundId)
+        );
+        registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
+
+        RoundLib.Round memory firstRound = RoundEngineReadHelpers.round(votingEngine, contentId, firstRoundId);
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, firstRoundId, firstRound.revealedCount);
+
+        (IClusterPayoutOracle.PayoutWeight[] memory firstWeights, bytes32[][] memory firstProofs) =
+            _finalizePublicRatingPayoutSnapshot(oracle, contentId, firstRoundId, 3);
+
+        registry.applyRatingPayoutSnapshot(contentId, firstRoundId, firstWeights, firstProofs);
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, firstRoundId));
+
+        registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, secondRoundId));
+
+        assertGt(registry.getRating(contentId), 0);
+    }
+
+    function _moveRoundToSettlementPending(uint256 contentId) internal returns (uint256 roundId) {
+        roundId = _revealRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        _ensureTestClusterPayoutOracle(votingEngine);
+        vm.roll(block.number + 1);
+        votingEngine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint8(round.state), uint8(RoundLib.RoundState.SettlementPending));
+    }
+
+    function _finalizePublicRatingPayoutSnapshot(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint256 commitCount
+    ) internal returns (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[][] memory proofs) {
+        bytes32[] memory leaves;
+        (payoutWeights, leaves) = _publicRatingPayoutLeaves(oracle, contentId, roundId, commitCount);
+        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+            oracle,
+            contentId,
+            roundId,
+            uint32(commitCount),
+            30_000,
+            _sumEffectiveWeights(payoutWeights),
+            _merkleRoot(leaves)
+        );
+        proofs = _merkleProofs(leaves);
+
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+    }
+
+    function _finalizePublicRatingPayoutSnapshotWithRoot(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) internal returns (bytes32 snapshotKey) {
+        uint64 correlationEpochId = uint64(roundId);
+        oracle.proposeCorrelationEpoch(
+            correlationEpochId,
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("public-rating-cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://rating-epoch",
+            _publicRatingEpochSources(contentId, roundId)
+        );
+        vm.warp(block.timestamp + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeCorrelationEpoch(correlationEpochId);
+
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: correlationEpochId,
+                rawEligibleVoters: rawEligibleVoters,
+                effectiveParticipantUnits: effectiveParticipantUnits,
+                totalClaimWeight: totalClaimWeight,
+                weightRoot: weightRoot,
+                reasonRoot: keccak256("rating-reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://rating-round"
+            })
+        );
+        snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+    }
+
+    function _publicRatingPayoutLeaves(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint256 commitCount
+    ) internal view returns (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) {
+        payoutWeights = new IClusterPayoutOracle.PayoutWeight[](commitCount);
+        for (uint256 i = 0; i < commitCount; i++) {
+            bytes32 commitKey = votingEngine.getRoundCommitKey(contentId, roundId, i);
+            (uint256 flags, bytes32 identityKey, address holder) =
+                votingEngine.ratingCommitStateCompact(contentId, roundId, commitKey);
+            uint256 baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8), uint8(flags >> 72));
+            payoutWeights[i] = IClusterPayoutOracle.PayoutWeight({
+                domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                commitKey: commitKey,
+                identityKey: identityKey,
+                account: holder,
+                baseWeight: baseEvidence,
+                independenceBps: 10_000,
+                effectiveWeight: baseEvidence,
+                reasonHash: keccak256(abi.encodePacked("public-rating-payout", i))
+            });
+        }
+        _sortPayoutWeightsByCommitKey(payoutWeights);
+
+        leaves = new bytes32[](commitCount);
+        for (uint256 i = 0; i < commitCount; i++) {
+            leaves[i] = oracle.payoutWeightLeaf(payoutWeights[i]);
+        }
+    }
+
+    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) internal pure returns (uint256) {
+        uint256 stakeForBonus =
+            stakeAmount > RATING_EVIDENCE_STAKE_BONUS_CAP ? RATING_EVIDENCE_STAKE_BONUS_CAP : stakeAmount;
+        uint256 stakeBonus = (stakeForBonus * RATING_EVIDENCE_MAX_STAKE_BONUS) / RATING_EVIDENCE_STAKE_BONUS_CAP;
+        uint256 rawEvidence = RATING_EVIDENCE_BASE_UNIT + stakeBonus;
+        return (rawEvidence * RoundLib.epochWeightBps(epochIndex)) / 10_000;
+    }
+
+    function _publicRatingEpochSources(uint256 contentId, uint256 roundId)
+        internal
+        pure
+        returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+    {
+        sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+        sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+            domain: 3, rewardPoolId: 0, contentId: contentId, roundId: roundId
+        });
+    }
+
+    function _sumEffectiveWeights(IClusterPayoutOracle.PayoutWeight[] memory payoutWeights)
+        internal
+        pure
+        returns (uint256 total)
+    {
+        for (uint256 i = 0; i < payoutWeights.length; i++) {
+            total += payoutWeights[i].effectiveWeight;
+        }
+    }
+
+    function _merkleRoot(bytes32[] memory leaves) internal pure returns (bytes32) {
+        bytes32[] memory level = _sortedLeaves(leaves);
+        while (level.length > 1) {
+            level = _nextMerkleLevel(level);
+        }
+        return level.length == 0 ? bytes32(0) : level[0];
+    }
+
+    function _merkleProofs(bytes32[] memory leaves) internal pure returns (bytes32[][] memory proofs) {
+        proofs = new bytes32[][](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            proofs[i] = _merkleProof(leaves, leaves[i]);
+        }
+    }
+
+    function _merkleProof(bytes32[] memory leaves, bytes32 leaf) internal pure returns (bytes32[] memory proof) {
+        bytes32[] memory level = _sortedLeaves(leaves);
+        uint256 leafIndex = _findLeafIndex(level, leaf);
+        proof = new bytes32[](_merkleDepth(level.length));
+        uint256 proofIndex;
+
+        while (level.length > 1) {
+            uint256 siblingIndex = leafIndex % 2 == 0 ? leafIndex + 1 : leafIndex - 1;
+            proof[proofIndex++] = siblingIndex < level.length ? level[siblingIndex] : level[leafIndex];
+            leafIndex = leafIndex / 2;
+            level = _nextMerkleLevel(level);
+        }
+    }
+
+    function _sortedLeaves(bytes32[] memory leaves) internal pure returns (bytes32[] memory sorted) {
+        sorted = new bytes32[](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            sorted[i] = leaves[i];
+        }
+        for (uint256 i = 0; i < sorted.length; i++) {
+            for (uint256 j = i + 1; j < sorted.length; j++) {
+                if (uint256(sorted[j]) < uint256(sorted[i])) {
+                    bytes32 current = sorted[i];
+                    sorted[i] = sorted[j];
+                    sorted[j] = current;
+                }
+            }
+        }
+    }
+
+    function _nextMerkleLevel(bytes32[] memory level) internal pure returns (bytes32[] memory next) {
+        next = new bytes32[]((level.length + 1) / 2);
+        for (uint256 i = 0; i < level.length; i += 2) {
+            bytes32 right = i + 1 < level.length ? level[i + 1] : level[i];
+            next[i / 2] = _hashSortedPair(level[i], right);
+        }
+    }
+
+    function _hashSortedPair(bytes32 left, bytes32 right) internal pure returns (bytes32) {
+        return
+            uint256(left) <= uint256(right)
+                ? keccak256(bytes.concat(left, right))
+                : keccak256(bytes.concat(right, left));
+    }
+
+    function _findLeafIndex(bytes32[] memory level, bytes32 leaf) internal pure returns (uint256) {
+        for (uint256 i = 0; i < level.length; i++) {
+            if (level[i] == leaf) return i;
+        }
+        revert("Leaf not found");
+    }
+
+    function _merkleDepth(uint256 leafCount) internal pure returns (uint256 depth) {
+        while (leafCount > 1) {
+            leafCount = (leafCount + 1) / 2;
+            depth++;
+        }
+    }
+}

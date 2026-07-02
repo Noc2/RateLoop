@@ -14,6 +14,7 @@ import { RoundLib } from "./RoundLib.sol";
 /// @notice Validates finalized rating payout snapshots and computes the resulting rating state.
 library ContentRegistryRatingSnapshotLib {
     error InvalidState();
+    error RatingSnapshotOutOfOrder(uint256 expectedRoundId);
 
     event RatingSnapshotApplied(
         uint256 indexed contentId,
@@ -163,18 +164,31 @@ library ContentRegistryRatingSnapshotLib {
     }
 
     function applyRatingPayoutSnapshot(
-        ContentRegistryTypes.PendingRatingSettlement storage pending,
+        mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement) storage pendingSettlements,
+        mapping(uint256 => uint256) storage nextRatingSnapshotRoundId,
         ContentRegistryTypes.Content storage content,
         RatingLib.RatingState storage ratingState,
         RatingLib.SlashConfig storage slashConfig,
         mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
+        uint256 latestRoundId,
         uint256 contentId,
         uint256 roundId,
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
         bytes32[][] calldata proofs,
         uint48 settledAt
     ) external {
+        ContentRegistryTypes.PendingRatingSettlement storage pending = pendingSettlements[roundId];
         if (!pending.exists || pending.applied) revert InvalidState();
+        uint256 expectedRoundId = _advanceRatingSnapshotCursor(
+            pendingSettlements,
+            nextRatingSnapshotRoundId,
+            appliedRatingSnapshotDigest,
+            pending.votingEngine,
+            latestRoundId,
+            contentId,
+            roundId
+        );
+        if (roundId != expectedRoundId) revert RatingSnapshotOutOfOrder(expectedRoundId);
         pending.applied = true;
 
         SnapshotApplication memory application = _validateAndBuild(
@@ -194,6 +208,9 @@ library ContentRegistryRatingSnapshotLib {
         ContentRegistryRatingStateLib.updateRatingState(
             content, ratingState, contentId, roundId, pending.referenceRatingBps, application.nextState, settledAt
         );
+        unchecked {
+            nextRatingSnapshotRoundId[contentId] = roundId + 1;
+        }
 
         emit RatingSnapshotApplied(
             contentId,
@@ -203,6 +220,44 @@ library ContentRegistryRatingSnapshotLib {
             application.adjustedUpEvidence,
             application.adjustedDownEvidence
         );
+    }
+
+    function _advanceRatingSnapshotCursor(
+        mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement) storage pendingSettlements,
+        mapping(uint256 => uint256) storage nextRatingSnapshotRoundId,
+        mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
+        address votingEngineAddress,
+        uint256 latestRoundId,
+        uint256 contentId,
+        uint256 roundId
+    ) private returns (uint256 expectedRoundId) {
+        if (latestRoundId != 0 && roundId > latestRoundId) revert InvalidState();
+
+        expectedRoundId = nextRatingSnapshotRoundId[contentId];
+        if (expectedRoundId == 0) expectedRoundId = 1;
+        IRoundVotingEngine votingEngine = IRoundVotingEngine(votingEngineAddress);
+        while (expectedRoundId < roundId) {
+            ContentRegistryTypes.PendingRatingSettlement storage prior = pendingSettlements[expectedRoundId];
+            if (prior.exists) {
+                if (!prior.applied) break;
+            } else {
+                (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, expectedRoundId);
+                if (!_canSkipRatingSnapshotRound(state, appliedRatingSnapshotDigest[contentId][expectedRoundId])) {
+                    break;
+                }
+            }
+
+            unchecked {
+                ++expectedRoundId;
+            }
+        }
+        nextRatingSnapshotRoundId[contentId] = expectedRoundId;
+    }
+
+    function _canSkipRatingSnapshotRound(RoundLib.RoundState state, bytes32 appliedDigest) private pure returns (bool) {
+        return state == RoundLib.RoundState.Cancelled || state == RoundLib.RoundState.Tied
+            || state == RoundLib.RoundState.RevealFailed
+            || (state == RoundLib.RoundState.Settled && appliedDigest != bytes32(0));
     }
 
     function _validateAndBuild(
