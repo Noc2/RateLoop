@@ -144,6 +144,7 @@ contract ContentRegistryRepointTest is VotingTestBase {
         vm.startPrank(owner);
         oracle = new ClusterPayoutOracle(owner, address(frontend), address(usdc));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), ratingConsumer);
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), address(votingEngine));
         oracle.setRoundPayoutSnapshotConsumer(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), registry.questionRewardPoolEscrow()
         );

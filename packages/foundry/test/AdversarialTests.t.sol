@@ -261,6 +261,19 @@ contract AdversarialTests is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
+    function _captureRbtsSeedAfterFinalGrace(uint256 contentId, uint256 roundId, bytes32[] memory commitKeys)
+        internal
+    {
+        vm.warp(
+            _lastCommitRevealableAfter(engine, contentId, roundId)
+                + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() + 1
+        );
+        for (uint256 i = 0; i < commitKeys.length; i++) {
+            _reveal(contentId, roundId, commitKeys[i]);
+        }
+        _captureRbtsSeedForCleanup(engine, contentId, roundId);
+    }
+
     // =========================================================================
     // 1. REWARD EXHAUSTION — sum of all winner claims equals winningPool + voterPool
     // =========================================================================
@@ -417,13 +430,15 @@ contract AdversarialTests is VotingTestBase {
         cks[0] = ck1;
         cks[1] = ck2;
         cks[2] = ck3;
-        _settleAfterFinalGrace(contentId, roundId, cks);
+        _captureRbtsSeedAfterFinalGrace(contentId, roundId, cks);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
 
         vm.prank(voter4);
-        vm.expectRevert(RoundRewardDistributor.UnrevealedCleanupPending.selector);
+        vm.expectRevert("Round not settled");
         distributor.claimReward(contentId, roundId);
 
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, 3);
 
         // Unrevealed votes cannot claim winner rewards, even after cleanup.
         vm.prank(voter4);
@@ -452,7 +467,8 @@ contract AdversarialTests is VotingTestBase {
         cks[0] = ck1;
         cks[1] = ck2;
         cks[2] = ck3;
-        _settleAfterFinalGrace(contentId, roundId, cks);
+        _captureRbtsSeedAfterFinalGrace(contentId, roundId, cks);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
 
@@ -524,7 +540,7 @@ contract AdversarialTests is VotingTestBase {
         _settleRound(contentId, roundId, cks);
 
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     /// @notice Cannot cancel a settled round

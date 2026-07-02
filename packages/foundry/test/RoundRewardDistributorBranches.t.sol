@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { TestClusterPayoutOracle, VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
@@ -10,6 +10,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -22,6 +23,7 @@ contract MockRevertingLaunchDistributionPool {
 
     RaterRegistry public immutable raterRegistry;
     address public roundClusterReadyAtSource;
+    IClusterPayoutOracle public clusterPayoutOracle;
     mapping(address => bool) public authorizedCallers;
 
     constructor(RaterRegistry raterRegistry_) {
@@ -34,6 +36,10 @@ contract MockRevertingLaunchDistributionPool {
 
     function setRoundClusterReadyAtSource(address source) external {
         roundClusterReadyAtSource = source;
+    }
+
+    function setClusterPayoutOracle(address oracle) external {
+        clusterPayoutOracle = IClusterPayoutOracle(oracle);
     }
 
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
@@ -174,7 +180,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6;
     uint256 public constant EPOCH_DURATION = 5 minutes;
     uint256 internal constant ROUND_RBTS_SCORED_SLOT = 11;
-    uint256 internal constant COMMIT_RBTS_SCORE_BPS_SLOT = 23;
+    uint256 internal constant COMMIT_RBTS_SCORE_BPS_SLOT = 25;
 
     event LaunchRaterRewardCreditFailed(
         uint256 indexed contentId,
@@ -374,14 +380,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         if (r2.thresholdReachedAt > 0) {
-            uint256 seedBlock = block.number + 1;
-            vm.roll(seedBlock);
-            try votingEngine.settleRound(contentId, roundId) { } catch { }
-            RoundLib.Round memory r3 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-            if (r3.state == RoundLib.RoundState.Open) {
-                vm.roll(seedBlock + 1);
-                try votingEngine.settleRound(contentId, roundId) { } catch { }
-            }
+            _settleAfterRbtsSeed(votingEngine, contentId, roundId);
         }
     }
 
@@ -411,6 +410,41 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             _commitMappingSlot(COMMIT_RBTS_SCORE_BPS_SLOT, contentId, roundId, commitKey),
             bytes32(uint256(scoreBps))
         );
+    }
+
+    function _voterCommitKey(uint256 contentId, uint256 roundId, address voter) internal view returns (bytes32) {
+        (, bytes32 commitKey) = votingEngine.voterCommitKey(contentId, roundId, voter);
+        return commitKey;
+    }
+
+    function _finalizeLaunchCredit(uint256 contentId, uint256 roundId, address rater) internal {
+        bytes32 commitKey = _voterCommitKey(contentId, roundId, rater);
+        _finalizeLaunchCreditFor(contentId, roundId, commitKey, rater);
+    }
+
+    function _finalizeLaunchCreditFor(uint256 contentId, uint256 roundId, bytes32 commitKey, address rater) internal {
+        IClusterPayoutOracle oracle = launchPool.clusterPayoutOracle();
+        uint64 readyAt = launchPool.pendingEarnedRaterCreditReadyAt(contentId, roundId, commitKey);
+        if (readyAt != 0 && block.timestamp < readyAt) {
+            vm.warp(readyAt);
+        }
+        TestClusterPayoutOracle(address(oracle)).setFinalizedRoundPayoutSnapshot(
+            launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, contentId, roundId, 1, 10_000, 10_000
+        );
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight = IClusterPayoutOracle.PayoutWeight({
+            domain: launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
+            rewardPoolId: 0,
+            contentId: contentId,
+            roundId: roundId,
+            commitKey: commitKey,
+            identityKey: bytes32(0),
+            account: rater,
+            baseWeight: 10_000,
+            independenceBps: 10_000,
+            effectiveWeight: 10_000,
+            reasonHash: bytes32(0)
+        });
+        launchPool.finalizeEarnedRaterRewardCredit(contentId, roundId, commitKey, payoutWeight, new bytes32[](0));
     }
 
     function _setupSettledRound() internal returns (uint256 contentId, uint256 roundId) {
@@ -454,6 +488,9 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 8_000, s2);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, 7_000, s3);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+        _writeCommitRbtsScoreBps(contentId, roundId, ck1, 8_000);
+        _writeCommitRbtsScoreBps(contentId, roundId, ck2, 8_000);
+        _writeCommitRbtsScoreBps(contentId, roundId, ck3, 7_000);
     }
 
     function _verifyHuman(address account, bytes32 nullifier) internal {
@@ -667,6 +704,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
+        _finalizeLaunchCredit(contentId, roundId, voter1);
 
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
@@ -684,6 +722,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
+        _finalizeLaunchCredit(contentId, roundId, voter1);
 
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
@@ -747,6 +786,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
+        _finalizeLaunchCredit(contentId, roundId, voter1);
 
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
@@ -761,6 +801,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
+        _finalizeLaunchCredit(contentId, roundId, voter1);
 
         bytes32 worldIdAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, sharedAnchor);
         bytes32 seededAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, sharedAnchor);
@@ -782,6 +823,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
+        _finalizeLaunchCredit(contentId, roundId, voter1);
 
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
@@ -858,6 +900,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         revertingLaunchPool.setRoundClusterReadyAtSource(address(votingEngine));
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        address oracle = config.clusterPayoutOracle();
+        revertingLaunchPool.setClusterPayoutOracle(oracle);
+        TestClusterPayoutOracle(oracle).setRoundPayoutSnapshotConsumer(
+            launchPool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(revertingLaunchPool)
+        );
         vm.prank(owner);
         config.setLaunchDistributionPool(address(revertingLaunchPool));
 
@@ -958,7 +1005,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.prank(address(rewardDistributor));
         launchPool.recordEarnedRaterRewardWithSourceReady(
             address(0x5000),
-            contentId + 100,
+            contentId,
             roundId,
             keccak256("fanout-existing-credit"),
             8_000,
@@ -968,6 +1015,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             anchorIds,
             uint64(block.timestamp)
         );
+        _finalizeLaunchCreditFor(contentId, roundId, keccak256("fanout-existing-credit"), address(0x5000));
         assertEq(launchPool.verifiedAnchorDistinctRaterCount(anchorId), 1);
 
         vm.prank(voter1);
@@ -983,6 +1031,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.prank(owner);
         launchPool.setLaunchRewardPolicy(policy);
         rewardDistributor.retryLaunchRaterRewardCredit(contentId, roundId, voter1CommitKey);
+        _finalizeLaunchCredit(contentId, roundId, voter1);
 
         assertTrue(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
         assertTrue(launchPool.raterRoundCreditRecorded(voter1, contentId, roundId));

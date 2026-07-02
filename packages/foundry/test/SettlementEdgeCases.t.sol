@@ -380,7 +380,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         // Attempting to settle again should revert with RoundNotOpen
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     // =========================================================================
@@ -419,7 +419,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         // Trying to settle again should revert
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     // =========================================================================

@@ -59,6 +59,7 @@ contract TestClusterPayoutOracle {
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(bytes32 => IClusterPayoutOracle.RoundPayoutSnapshot) internal snapshots;
     mapping(bytes32 => bytes32) internal proposalDigests;
+    mapping(bytes32 => uint64) internal proposalTimes;
 
     IFrontendRegistry public frontendRegistry;
 
@@ -108,6 +109,7 @@ contract TestClusterPayoutOracle {
             status: IClusterPayoutOracle.SnapshotStatus.Finalized
         });
         proposalDigests[snapshotKey] = keccak256(abi.encode(snapshotKey, totalClaimWeight, effectiveParticipantUnits));
+        proposalTimes[snapshotKey] = uint64(block.timestamp);
     }
 
     function isRoundPayoutSnapshotFinalized(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -139,8 +141,12 @@ contract TestClusterPayoutOracle {
         return roundPayoutSnapshotConsumer[domain];
     }
 
-    function roundPayoutSnapshotProposedAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
-        return 1;
+    function roundPayoutSnapshotProposedAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
+        return proposalTimes[roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)];
     }
 
     function roundPayoutSnapshotProposalDigest(bytes32 snapshotKey) external view returns (bytes32) {
@@ -885,7 +891,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
     // ContentRegistry.questionBundleRoundObserverByContent storage slot (see ContentRegistry.json).
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 29;
 
     uint256 private _votingTestCheckpoint;
 

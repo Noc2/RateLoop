@@ -175,6 +175,13 @@ contract SelectiveRevelationTest is VotingTestBase {
         contentId = 1;
     }
 
+    function _completeRbtsSettlementAfterPendingCleanup(uint256 contentId, uint256 roundId) internal {
+        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _processUnrevealedBeforeRbtsSettlement(engine, contentId, roundId, pendingRound);
+        vm.roll(block.number + 1);
+        _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, pendingRound.revealedCount);
+    }
+
     // =========================================================================
     // CORE ATTACK SCENARIO
     // =========================================================================
@@ -280,45 +287,45 @@ contract SelectiveRevelationTest is VotingTestBase {
     function test_SingleDuration_UnrevealedAfterGraceDoesNotAffectRbtsSeed() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
-        (bytes32 unrevealedKey1,) = _commit(voters[3], contentId, false, STAKE);
-        (bytes32 unrevealedKey2,) = _commit(voters[4], contentId, false, STAKE);
+        bytes32[10] memory commitKeys;
+        bytes32[10] memory salts;
+        bool[10] memory directions = [true, true, false, true, false, true, false, true, false, false];
+        for (uint256 i = 0; i < 10; i++) {
+            (commitKeys[i], salts[i]) = _commit(voters[i], contentId, directions[i], STAKE);
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD + 1);
+        uint256 lastRevealableAfter = _lastCommitRevealableAfter(engine, contentId, roundId);
+        _warpPastTlockRevealTime(lastRevealableAfter);
 
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
+        for (uint256 i = 0; i < 8; i++) {
+            _reveal(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+        }
+        vm.warp(lastRevealableAfter + GRACE_PERIOD + 1);
 
-        uint256 seedBlock = block.number + 1;
-        vm.roll(seedBlock);
-        engine.settleRound(contentId, roundId);
-        vm.roll(seedBlock + 1);
         vm.recordLogs();
-        engine.settleRound(contentId, roundId);
+        _captureRbtsSeedForCleanup(engine, contentId, roundId);
+        _completeRbtsSettlementAfterPendingCleanup(contentId, roundId);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes32 actualSeed = _scoreSeedFromLogs(logs, contentId, roundId);
         bytes32 settlementEntropy = _settlementEntropyFromLogs(logs, contentId, roundId);
 
         bytes32 scoringSetHash;
-        scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck1));
-        scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck2));
-        scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck3));
+        for (uint256 i = 0; i < 8; i++) {
+            scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, commitKeys[i]));
+        }
         bytes32 expectedSeed = keccak256(
             abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(3), scoringSetHash, settlementEntropy
+                block.chainid, address(engine), contentId, roundId, uint256(8), scoringSetHash, settlementEntropy
             )
         );
 
         bytes32 pollutedSetHash = scoringSetHash;
-        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, unrevealedKey1));
-        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, unrevealedKey2));
+        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, commitKeys[8]));
+        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, commitKeys[9]));
         bytes32 pollutedSeed = keccak256(
             abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(5), pollutedSetHash, settlementEntropy
+                block.chainid, address(engine), contentId, roundId, uint256(10), pollutedSetHash, settlementEntropy
             )
         );
 
@@ -345,7 +352,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
             assertEq(_roundVoterPool(engine, contentId, roundId), forfeitedPool);
@@ -478,8 +485,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, true, s3);
 
-        vm.roll(block.number + 1);
-        engine.settleRound(contentId, roundId);
+        _captureRbtsSeedForCleanup(engine, contentId, roundId);
 
         RoundLib.Round memory beforeReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
         (,,,, bool revealedBefore,,) = engine.commitCore(contentId, roundId, ck4);
@@ -522,17 +528,19 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
         _reveal(contentId, roundId, commitKeys[2], false, salts[2]);
 
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        _captureRbtsSeedForCleanup(engine, contentId, roundId);
 
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
+        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.SettlementPending));
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
 
-        vm.expectRevert(RoundRewardDistributor.UnrevealedCleanupPending.selector);
+        vm.expectRevert(bytes("Round not settled"));
         vm.prank(voters[0]);
         rewardDistributor.claimReward(contentId, roundId);
 
-        engine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _completeRbtsSettlementAfterPendingCleanup(contentId, roundId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
     }
 
@@ -560,7 +568,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
             assertEq(_roundVoterPool(engine, contentId, roundId), forfeitedPool);
@@ -592,9 +600,11 @@ contract SelectiveRevelationTest is VotingTestBase {
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
         _reveal(contentId, roundId, commitKeys[3], false, salts[3]);
 
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        _captureRbtsSeedForCleanup(engine, contentId, roundId);
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
         assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[3]), 0);
+        _completeRbtsSettlementAfterPendingCleanup(contentId, roundId);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
     }
 
     /// @notice Within grace period, unrevealed votes still block settlement.
@@ -717,7 +727,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
     }
 
     function test_RevealGracePeriodSnapshot_NewRoundUsesUpdatedValue() public {
@@ -754,7 +764,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
     }
 
     // =========================================================================

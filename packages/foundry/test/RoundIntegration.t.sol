@@ -260,6 +260,7 @@ contract RoundIntegrationTest is VotingTestBase {
         oracle = new ClusterPayoutOracle(owner, address(frontendRegistry), address(usdc));
         vm.startPrank(owner);
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), address(votingEngine));
         address questionRewardPoolEscrow = registry.questionRewardPoolEscrow();
         if (questionRewardPoolEscrow != address(0)) {
             oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), questionRewardPoolEscrow);
@@ -279,7 +280,8 @@ contract RoundIntegrationTest is VotingTestBase {
 
     function _assertPublicRatingSourceReadyForPinnedOracle(uint256 contentId, uint256 roundId) internal {
         assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
-        vm.prank(address(clusterPayoutOracle));
+        address oracle = ProtocolConfig(address(votingEngine.protocolConfig())).clusterPayoutOracle();
+        vm.prank(oracle);
         assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
     }
 
@@ -3485,6 +3487,7 @@ contract RoundIntegrationTest is VotingTestBase {
                 )
             )
         );
+        _setTestClusterPayoutOracleFrontendRegistry(votingEngine, address(replacementRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setFrontendRegistry(address(replacementRegistry));
         replacementRegistry.setVotingEngine(address(votingEngine));
         replacementRegistry.addFeeCreditor(address(rewardDistributor));

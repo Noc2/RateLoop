@@ -34,6 +34,7 @@ contract MockAdvisoryLaunchDistributionPool {
     uint16 public maxUnverifiedCreditsPerRound;
     uint256 public advisoryRecordCallCount;
     address public roundClusterReadyAtSource;
+    IClusterPayoutOracle public clusterPayoutOracle;
     mapping(address => bool) public authorizedCallers;
 
     constructor(uint16 cap, address raterRegistry_) {
@@ -47,6 +48,10 @@ contract MockAdvisoryLaunchDistributionPool {
 
     function setRoundClusterReadyAtSource(address source) external {
         roundClusterReadyAtSource = source;
+    }
+
+    function setClusterPayoutOracle(address oracle) external {
+        clusterPayoutOracle = IClusterPayoutOracle(oracle);
     }
 
     function setMaxUnverifiedCreditsPerRound(uint16 cap) external {
@@ -448,6 +453,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         launchPool.setAuthorizedCaller(address(rewardDistributor), true);
         launchPool.setAuthorizedCaller(address(advisoryRecorder), true);
         launchPool.setRoundClusterReadyAtSource(address(engine));
+        address oracle = ProtocolConfig(protocolConfigAddress).clusterPayoutOracle();
+        launchPool.setClusterPayoutOracle(oracle);
+        MockClusterPayoutOracleForRoundVotingEngine(oracle).setRoundPayoutSnapshotConsumer(2, address(launchPool));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
     }
@@ -1774,8 +1782,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.roll(block.number + 1);
 
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
-        vm.prank(keeper);
+        vm.startPrank(keeper);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        vm.stopPrank();
 
         uint256 grossForfeited;
         for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
@@ -1971,20 +1980,25 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_AdvisoryLaunchCreditExpiredRbtsSeedRearmsBeforeClaim() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
-        (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(voter5, contentId, "expired-seed-advisory");
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
-        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 7_000, 4e6);
+        address[] memory voters = _scoreSpreadFixtureVoters();
+        bool[] memory directions = _scoreSpreadFixtureDirections();
+        bytes32[] memory commitKeys = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+        bytes32[] memory salts = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            (commitKeys[i], salts[i]) =
+                _commitPrediction(voters[i], contentId, directions[i], _predictionBps(i, directions[i]), STAKE);
+        }
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(voter8, contentId, "expired-seed-advisory");
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
-        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            engine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], directions[i], _predictionBps(i, directions[i]), salts[i]
+            );
+        }
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
 
         uint256 seedBlock = block.number;
@@ -2036,7 +2050,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "round scored");
-        assertTrue(_roundRbtsScoreSeed(engine, contentId, roundId) != bytes32(0), "score seed captured");
 
         mockRaterIdentityRegistry.setBanned(mockRaterIdentityRegistry.addressIdentityKey(delegate1), true);
 
@@ -2075,7 +2088,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "round scored");
-        assertTrue(_roundRbtsScoreSeed(engine, contentId, roundId) != bytes32(0), "score seed captured");
 
         mockRaterIdentityRegistry.setBanned(mockRaterIdentityRegistry.addressIdentityKey(voter5), true);
 
@@ -2107,11 +2119,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         assertTrue(_roundRbtsScoringClosed(engine, contentId, roundId), "seed capture closes scoring");
 
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
-        _settleRoundAfterRbtsSeed(contentId, roundId);
-
-        vm.expectRevert(AdvisoryVoteRecorder.AdvisoryRevealedAfterSettlement.selector);
-        advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
     }
 
     function test_RbtsExpiredSeedDoesNotUsePrevrandaoFallback() public {
@@ -3916,7 +3925,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, false, s2);
         _reveal(contentId, roundId, ck3, true, s3);
 
-        engine.settleRound(contentId, roundId);
         _settleRoundAfterRbtsSeed(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled), "recovered round settles normally");

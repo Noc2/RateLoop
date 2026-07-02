@@ -246,6 +246,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         oracle.setRoundPayoutSnapshotConsumer(1, address(mockQuestionRewardPoolEscrow));
         oracle.setRoundPayoutSnapshotConsumer(3, address(registry));
         oracle.setRoundPayoutSnapshotConsumer(4, address(mockQuestionRewardPoolEscrow));
+        oracle.setRoundPayoutSnapshotConsumer(5, address(votingEngine));
 
         vm.startPrank(owner);
         config.setClusterPayoutOracle(address(oracle));
@@ -3007,6 +3008,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         oracle.setRoundPayoutSnapshotConsumer(1, address(mockQuestionRewardPoolEscrow));
         oracle.setRoundPayoutSnapshotConsumer(3, address(registry));
         oracle.setRoundPayoutSnapshotConsumer(4, address(mockQuestionRewardPoolEscrow));
+        oracle.setRoundPayoutSnapshotConsumer(5, address(votingEngine));
         address protocolConfig = address(votingEngine.protocolConfig());
         vm.prank(owner);
         ProtocolConfig(protocolConfig).setClusterPayoutOracle(address(oracle));
@@ -3018,7 +3020,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
         assertEq(registry.getRating(1), ratingBefore, "tracked old engine rating waits for correlation snapshot");
-        vm.prank(address(oracle));
+        address pinnedOracle = ProtocolConfig(protocolConfig).clusterPayoutOracle();
+        vm.prank(pinnedOracle);
         assertGt(
             registry.roundPayoutSnapshotSourceReadyAt(3, 0, 1, roundId), 0, "tracked old engine records pending review"
         );

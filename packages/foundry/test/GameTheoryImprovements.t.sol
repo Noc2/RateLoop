@@ -191,6 +191,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     function _installPublicRatingClusterPayoutOracle() internal returns (MockClusterPayoutOracleForGameTheory oracle) {
         oracle = new MockClusterPayoutOracleForGameTheory();
         oracle.setRoundPayoutSnapshotConsumer(3, address(registry));
+        oracle.setRoundPayoutSnapshotConsumer(5, address(engine));
         address questionRewardPoolEscrow = registry.questionRewardPoolEscrow();
         if (questionRewardPoolEscrow != address(0)) {
             oracle.setRoundPayoutSnapshotConsumer(1, questionRewardPoolEscrow);
@@ -269,7 +270,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         // thresholdReachedAt was set when the 4th vote was revealed (minVoters = 4)
         assertGt(round.thresholdReachedAt, 0, "threshold reached");
 
-        MockClusterPayoutOracleForGameTheory oracle = _installPublicRatingClusterPayoutOracle();
+        _installPublicRatingClusterPayoutOracle();
 
         _settle(cid, roundId);
 
@@ -277,7 +278,8 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertTrue(settled.upWins, "UP wins by full-weight raw majority");
         assertEq(registry.getRating(cid), 5_000, "public rating waits for correlation snapshot");
-        vm.prank(address(oracle));
+        address pinnedOracle = ProtocolConfig(address(engine.protocolConfig())).clusterPayoutOracle();
+        vm.prank(pinnedOracle);
         assertGt(
             registry.roundPayoutSnapshotSourceReadyAt(3, 0, cid, roundId),
             0,

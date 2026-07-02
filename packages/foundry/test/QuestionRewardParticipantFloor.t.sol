@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { Test } from "forge-std/Test.sol";
 import { ContentRegistryRewardLib } from "../contracts/libraries/ContentRegistryRewardLib.sol";
 import { QuestionRewardParticipantFloorLib } from "../contracts/libraries/QuestionRewardParticipantFloorLib.sol";
+import { BOUNTY_ELIGIBILITY_VERIFIED_HUMAN } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
 
 contract QuestionRewardParticipantFloorHarness {
     function requiredParticipantFloorForAmount(uint256 amount) external pure returns (uint256) {
@@ -12,6 +13,12 @@ contract QuestionRewardParticipantFloorHarness {
 
     function validateSubmissionReward(uint256 amount, uint256 requiredVoters) external pure {
         ContentRegistryRewardLib.validateSubmissionReward(1, amount, requiredVoters, 0, 1_000);
+    }
+
+    function validateVerifiedSubmissionReward(uint256 amount, uint256 requiredVoters) external pure {
+        ContentRegistryRewardLib.validateSubmissionReward(
+            1, amount, requiredVoters, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN, 1_000
+        );
     }
 }
 
@@ -35,6 +42,6 @@ contract QuestionRewardParticipantFloorTest is Test {
     }
 
     function test_SubmissionReward_AcceptsVeryHighValueAtEconomicFloor() public view {
-        harness.validateSubmissionReward(10_000e6, 8);
+        harness.validateVerifiedSubmissionReward(10_000e6, 8);
     }
 }
