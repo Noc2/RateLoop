@@ -167,6 +167,7 @@ contract MockClusterPayoutOracleForConfig {
     address internal questionRewardConsumer;
     address internal publicRatingConsumer;
     address internal questionBundleRewardConsumer;
+    address internal rbtsSettlementConsumer;
     address public frontendRegistry;
 
     constructor(address launchConsumer_) {
@@ -187,6 +188,10 @@ contract MockClusterPayoutOracleForConfig {
 
     function setQuestionBundleRewardConsumer(address questionBundleRewardConsumer_) external {
         questionBundleRewardConsumer = questionBundleRewardConsumer_;
+    }
+
+    function setRbtsSettlementConsumer(address rbtsSettlementConsumer_) external {
+        rbtsSettlementConsumer = rbtsSettlementConsumer_;
     }
 
     function setFrontendRegistry(address frontendRegistry_) external {
@@ -210,6 +215,7 @@ contract MockClusterPayoutOracleForConfig {
         if (domain == 2) return launchConsumer;
         if (domain == 3) return publicRatingConsumer;
         if (domain == 4) return questionBundleRewardConsumer;
+        if (domain == 5) return rbtsSettlementConsumer;
         return address(0);
     }
 }
@@ -808,6 +814,7 @@ contract ProtocolConfigBranchesTest is Test {
         config.setClusterPayoutOracle(address(mismatchedOracle));
 
         pinnedOracle.setPublicRatingConsumer(contentRegistry);
+        pinnedOracle.setRbtsSettlementConsumer(engine);
         config.setClusterPayoutOracle(address(pinnedOracle));
         assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
     }
@@ -823,6 +830,7 @@ contract ProtocolConfigBranchesTest is Test {
 
         config.setRewardDistributor(distributor);
         oracle.setPublicRatingConsumer(address(contentRegistry));
+        oracle.setRbtsSettlementConsumer(engine);
         oracle.setQuestionRewardConsumer(address(escrow));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
@@ -841,6 +849,7 @@ contract ProtocolConfigBranchesTest is Test {
         MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
 
         oracle.setPublicRatingConsumer(address(contentRegistry));
+        oracle.setRbtsSettlementConsumer(engine);
         oracle.setQuestionRewardConsumer(address(escrow));
         config.setClusterPayoutOracle(address(oracle));
 
@@ -861,6 +870,7 @@ contract ProtocolConfigBranchesTest is Test {
 
         config.setRewardDistributor(distributor);
         oracle.setPublicRatingConsumer(contentRegistry);
+        oracle.setRbtsSettlementConsumer(engine);
         config.setClusterPayoutOracle(address(oracle));
 
         assertEq(config.clusterPayoutOracle(), address(oracle));
@@ -1396,6 +1406,7 @@ contract ProtocolConfigBranchesTest is Test {
         MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
 
         oracle.setPublicRatingConsumer(address(contentRegistry));
+        oracle.setRbtsSettlementConsumer(engine);
         oracle.setQuestionRewardConsumer(address(escrow));
         oracle.setQuestionBundleRewardConsumer(address(escrow));
         config.setRewardDistributor(firstDistributor);
