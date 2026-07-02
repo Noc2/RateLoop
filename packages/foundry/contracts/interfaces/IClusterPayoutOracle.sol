@@ -114,7 +114,23 @@ interface IClusterPayoutOracle {
 
     function rejectedRoundPayoutSnapshotRoots(bytes32 snapshotKey, bytes32 weightRoot) external view returns (bool);
 
+    function finalizationVetoWindow() external view returns (uint64);
+
     function FINALIZATION_VETO_WINDOW() external view returns (uint64);
+
+    function correlationEpochVetoDeadline(uint64 epochId) external view returns (uint256);
+
+    function roundPayoutSnapshotVetoDeadline(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint256);
+
+    function isRoundPayoutSnapshotOutsideVetoWindow(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (bool);
 
     function rejectFinalizedCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external;
 

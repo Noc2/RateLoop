@@ -19,7 +19,7 @@ library LaunchRaterRewardLib {
             IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
         ) {
             return snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
-                && block.timestamp > uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+                && oracle.isRoundPayoutSnapshotOutsideVetoWindow(payoutDomain, 0, contentId, roundId);
         } catch {
             return false;
         }

@@ -161,6 +161,36 @@ contract TestClusterPayoutOracle {
         return false;
     }
 
+    function finalizationVetoWindow() external pure returns (uint64) {
+        return FINALIZATION_VETO_WINDOW;
+    }
+
+    function correlationEpochVetoDeadline(uint64) external pure returns (uint256) {
+        return 0;
+    }
+
+    function roundPayoutSnapshotVetoDeadline(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        public
+        view
+        returns (uint256)
+    {
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            snapshots[roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)];
+        return uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
+    }
+
+    function isRoundPayoutSnapshotOutsideVetoWindow(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (bool) {
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            snapshots[roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)];
+        return snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+            && block.timestamp >= roundPayoutSnapshotVetoDeadline(domain, rewardPoolId, contentId, roundId);
+    }
+
     function rejectFinalizedCorrelationEpoch(uint64, bytes32) external pure { }
 
     function verifyPayoutWeight(IClusterPayoutOracle.PayoutWeight calldata, bytes32[] calldata)

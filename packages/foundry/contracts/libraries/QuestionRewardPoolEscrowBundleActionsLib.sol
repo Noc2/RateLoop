@@ -1717,7 +1717,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         IClusterPayoutOracle oracle,
         IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
     ) private view returns (bool) {
-        return block.timestamp <= uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+        return !oracle.isRoundPayoutSnapshotOutsideVetoWindow(
+            payoutSnapshot.domain, payoutSnapshot.rewardPoolId, payoutSnapshot.contentId, payoutSnapshot.roundId
+        );
     }
 
     function _bundlePayoutSnapshotSourceReadyAt(

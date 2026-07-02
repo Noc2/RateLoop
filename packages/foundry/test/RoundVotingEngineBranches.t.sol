@@ -214,6 +214,34 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
         });
     }
 
+    function configureRbtsSnapshotStatus(
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        IClusterPayoutOracle.SnapshotStatus status
+    ) external {
+        bytes32 snapshotKey = this.roundPayoutSnapshotKey(5, 0, contentId, roundId);
+        snapshots[snapshotKey] = IClusterPayoutOracle.RoundPayoutSnapshot({
+            snapshotKey: snapshotKey,
+            domain: 5,
+            correlationEpochId: 1,
+            finalizedAt: status == IClusterPayoutOracle.SnapshotStatus.Finalized
+                ? (block.timestamp == 0 ? 0 : uint64(block.timestamp - 1))
+                : 0,
+            rawEligibleVoters: rawEligibleVoters,
+            effectiveParticipantUnits: effectiveParticipantUnits,
+            rewardPoolId: 0,
+            contentId: contentId,
+            roundId: roundId,
+            totalClaimWeight: totalClaimWeight,
+            weightRoot: keccak256("rbts-weight-root"),
+            reasonRoot: keccak256("rbts-reason-root"),
+            status: status
+        });
+    }
+
     function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view
@@ -253,6 +281,36 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
 
     function rejectedRoundPayoutSnapshotRoots(bytes32, bytes32) external pure returns (bool) {
         return false;
+    }
+
+    function finalizationVetoWindow() external pure returns (uint64) {
+        return FINALIZATION_VETO_WINDOW;
+    }
+
+    function correlationEpochVetoDeadline(uint64) external pure returns (uint256) {
+        return 0;
+    }
+
+    function roundPayoutSnapshotVetoDeadline(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        public
+        view
+        returns (uint256)
+    {
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            snapshots[this.roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)];
+        return uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
+    }
+
+    function isRoundPayoutSnapshotOutsideVetoWindow(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (bool) {
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            snapshots[this.roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)];
+        return snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+            && block.timestamp >= roundPayoutSnapshotVetoDeadline(domain, rewardPoolId, contentId, roundId);
     }
 
     function setAllowZeroEffectiveWeight(bool value) external {
@@ -1658,7 +1716,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         engine.settleRound(contentId, roundId);
-        vm.warp(block.timestamp + 14 days);
+        vm.warp(block.timestamp + 1 hours);
 
         IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
         bytes32[][] memory proofs = new bytes32[][](0);
@@ -1680,7 +1738,22 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _fullWeightRbtsSettlementPayload(
             oracle, contentId, roundId, _sortedCommitKeys(RoundEngineReadHelpers.commitKeys(engine, contentId, roundId))
         );
-        vm.warp(block.timestamp + 14 days);
+        vm.warp(block.timestamp + 1 hours);
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.SnapshotAvailable.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+    }
+
+    function test_RbtsSettlementTimeoutRevertsWhenProposedSnapshotExists() public {
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+
+        engine.settleRound(contentId, roundId);
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        oracle.configureRbtsSnapshotStatus(contentId, roundId, 8, 80_000, 8, IClusterPayoutOracle.SnapshotStatus.Proposed);
+        vm.warp(block.timestamp + 1 hours);
 
         IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
         bytes32[][] memory proofs = new bytes32[][](0);

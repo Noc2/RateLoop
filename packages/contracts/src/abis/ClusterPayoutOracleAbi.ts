@@ -152,7 +152,33 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "DEFAULT_FINALIZATION_VETO_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "FINALIZATION_VETO_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "LAUNCH_PAYOUT_FINALITY_BUDGET",
     "inputs": [],
     "outputs": [
       {
@@ -211,6 +237,19 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_FINALIZATION_VETO_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -511,6 +550,11 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "finalizationVetoWindowAtProposal",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "finalizedAt",
             "type": "uint64",
             "internalType": "uint64"
@@ -614,6 +658,38 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "correlationEpochVetoDeadline",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalizationVetoWindow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -858,6 +934,40 @@ export const ClusterPayoutOracleAbi = [
   {
     "type": "function",
     "name": "isRoundPayoutSnapshotFinalized",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isRoundPayoutSnapshotOutsideVetoWindow",
     "inputs": [
       {
         "name": "domain",
@@ -1557,6 +1667,11 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "finalizationVetoWindowAtProposal",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "consumer",
             "type": "address",
             "internalType": "address"
@@ -1753,6 +1868,40 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "roundPayoutSnapshotVetoDeadline",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "setFrontendRegistry",
     "inputs": [
       {
@@ -1782,6 +1931,24 @@ export const ClusterPayoutOracleAbi = [
         "name": "newBondRecipient",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setOracleTimingConfig",
+    "inputs": [
+      {
+        "name": "newChallengeWindow",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "newFinalizationVetoWindow",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "outputs": [],
@@ -2176,6 +2343,25 @@ export const ClusterPayoutOracleAbi = [
         "type": "address",
         "indexed": false,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OracleTimingConfigUpdated",
+    "inputs": [
+      {
+        "name": "challengeWindow",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "finalizationVetoWindow",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
       }
     ],
     "anonymous": false

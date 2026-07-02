@@ -981,8 +981,8 @@ contract FrontendRegistryTest is Test {
 
     // --- Fee Withdrawal Tests ---
 
-    function test_FeeWithdrawalDelayCoversGovernanceReviewSlack() public view {
-        assertEq(registry.FEE_WITHDRAWAL_DELAY(), 21 days);
+    function test_FeeWithdrawalDelayUsesOneHourLaunchDefault() public view {
+        assertEq(registry.FEE_WITHDRAWAL_DELAY(), 1 hours);
     }
 
     function test_FeeWithdrawalTwoStep() public {

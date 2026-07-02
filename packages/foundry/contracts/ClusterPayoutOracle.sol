@@ -39,8 +39,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint8 public constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
     uint8 public constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     uint8 public constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
-    uint64 public constant DEFAULT_CHALLENGE_WINDOW = 2 hours;
+    uint64 public constant DEFAULT_CHALLENGE_WINDOW = 15 minutes;
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
+    uint64 public constant DEFAULT_FINALIZATION_VETO_WINDOW = 15 minutes;
+    uint64 public constant MAX_FINALIZATION_VETO_WINDOW = 7 days;
+    uint64 public constant LAUNCH_PAYOUT_FINALITY_BUDGET = 1 hours;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND = 1e6;
     /// @dev Challenge bonds are anti-spam only, not payout-value coverage. Keep governance
@@ -48,12 +51,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint256 public constant MAX_CHALLENGE_BOND = 100e6;
     uint256 public constant MAX_CORRELATION_EPOCH_SOURCES = 256;
     uint256 public constant MAX_ARTIFACT_URI_LENGTH = 2048;
-    /// @dev Window after a round payout snapshot or its parent correlation epoch is finalized
-    ///      during which the arbiter can still reject it, even after first consumption. Once this
-    ///      window elapses, a proposal-time consumer that reports consumption pins the root so
-    ///      already-paid and future claimants see one finalized root. M-Oracle-2 from 2026-05-16 audit.
-    uint64 public constant FINALIZATION_VETO_WINDOW = 7 days;
-
     error InvalidAddress();
     error InvalidBond();
     error InvalidSnapshot();
@@ -76,6 +73,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 toRoundId;
         uint64 proposedAt;
         uint64 challengeWindowAtProposal;
+        uint64 finalizationVetoWindowAtProposal;
         uint64 finalizedAt;
         address proposer;
         address frontendOperator;
@@ -94,6 +92,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutSnapshot snapshot;
         uint64 proposedAt;
         uint64 challengeWindowAtProposal;
+        uint64 finalizationVetoWindowAtProposal;
         address consumer;
         address proposer;
         address frontendOperator;
@@ -109,6 +108,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     uint64 public challengeWindow;
+    uint64 public finalizationVetoWindow;
     uint256 public challengeBond;
     address public bondRecipient;
     IERC20 public immutable challengeBondToken;
@@ -138,6 +138,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(bytes32 => bool) public rejectedCorrelationEpochRootKeys;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
+    event OracleTimingConfigUpdated(uint64 challengeWindow, uint64 finalizationVetoWindow);
     event FrontendRegistryUpdated(address indexed frontendRegistry);
     event RoundPayoutSnapshotConsumerUpdated(uint8 indexed domain, address indexed consumer);
     event BondWithdrawalCredited(address indexed recipient, uint256 amount);
@@ -197,10 +198,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         _grantRole(CONFIG_ROLE, admin);
         _grantRole(ARBITER_ROLE, admin);
         challengeWindow = DEFAULT_CHALLENGE_WINDOW;
+        finalizationVetoWindow = DEFAULT_FINALIZATION_VETO_WINDOW;
         challengeBond = DEFAULT_CHALLENGE_BOND;
         bondRecipient = admin;
         _setFrontendRegistry(newFrontendRegistry);
         emit OracleConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_CHALLENGE_BOND, admin);
+        emit OracleTimingConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_FINALIZATION_VETO_WINDOW);
     }
 
     // N-5: Intentionally no receive() function. The contract holds no ETH balance;
@@ -213,13 +216,29 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         external
         onlyRole(CONFIG_ROLE)
     {
-        if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
+        _validateChallengeWindow(newChallengeWindow);
         if (newBondRecipient == address(0)) revert InvalidAddress();
         if (newChallengeBond < MIN_CHALLENGE_BOND || newChallengeBond > MAX_CHALLENGE_BOND) revert InvalidBond();
         challengeWindow = newChallengeWindow;
         challengeBond = newChallengeBond;
         bondRecipient = newBondRecipient;
         emit OracleConfigUpdated(newChallengeWindow, newChallengeBond, newBondRecipient);
+    }
+
+    function setOracleTimingConfig(uint64 newChallengeWindow, uint64 newFinalizationVetoWindow)
+        external
+        onlyRole(CONFIG_ROLE)
+    {
+        _validateChallengeWindow(newChallengeWindow);
+        _validateFinalizationVetoWindow(newFinalizationVetoWindow);
+        challengeWindow = newChallengeWindow;
+        finalizationVetoWindow = newFinalizationVetoWindow;
+        emit OracleTimingConfigUpdated(newChallengeWindow, newFinalizationVetoWindow);
+    }
+
+    /// @notice Backwards-compatible timing getter for existing scripts and dashboards.
+    function FINALIZATION_VETO_WINDOW() external view returns (uint64) {
+        return finalizationVetoWindow;
     }
 
     function setFrontendRegistry(address newFrontendRegistry) external onlyRole(CONFIG_ROLE) {
@@ -291,6 +310,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             toRoundId: toRoundId,
             proposedAt: block.timestamp.toUint64(),
             challengeWindowAtProposal: challengeWindow,
+            finalizationVetoWindowAtProposal: finalizationVetoWindow,
             finalizedAt: 0,
             proposer: msg.sender,
             frontendOperator: frontendOperator,
@@ -414,7 +434,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
-        if (block.timestamp > uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW)) {
+        if (block.timestamp >= _correlationEpochVetoDeadline(snapshot)) {
             revert SnapshotNotFinalizable();
         }
         bytes32 correlationEpochDigest = _correlationEpochDigest(snapshot);
@@ -510,6 +530,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             }),
             proposedAt: block.timestamp.toUint64(),
             challengeWindowAtProposal: challengeWindow,
+            finalizationVetoWindowAtProposal: finalizationVetoWindow,
             consumer: consumer,
             proposer: msg.sender,
             frontendOperator: frontendOperator,
@@ -642,9 +663,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
-    /// @notice Reject a finalized round payout snapshot during the veto window even if the
-    ///         consumer has consumed it. After the veto window, consumed roots stay pinned so
-    ///         already-paid and future claimants see one root.
+    /// @notice Reject a finalized round payout snapshot during its proposal-scoped veto window.
+    ///         At the exact veto deadline the root is usable and can no longer be rejected.
     function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
@@ -670,28 +690,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
-        bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + FINALIZATION_VETO_WINDOW;
-
-        // L-Oracle-B + L-Oracle-2: wrap the consumer call in try/catch so a broken / removed
-        // consumer cannot trap the arbiter. Track `consumed` AND `consumedKnown` separately.
-        // The catch path defaults to `consumed = true`, but `consumedKnown = false` keeps a broken
-        // view from blocking exceptional recovery or permanently killing the snapshot key.
-        bool consumed = false;
-        bool consumedKnown = false;
-        try IRoundPayoutSnapshotConsumer(consumer)
-            .isRoundPayoutSnapshotConsumed(
-                snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
-            ) returns (
-            bool isConsumed
-        ) {
-            consumed = isConsumed;
-            consumedKnown = true;
-        } catch {
-            consumed = true;
-        }
-        if (consumedKnown && consumed && !withinVetoWindow) {
-            revert SnapshotConsumed();
-        }
+        if (block.timestamp >= _roundPayoutSnapshotVetoDeadline(proposal)) revert SnapshotNotFinalizable();
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
@@ -756,6 +755,38 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal memory proposal = roundPayoutProposals[snapshotKey];
         return proposal.snapshot.status == SnapshotStatus.Finalized
             && _isCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
+    }
+
+    function correlationEpochVetoDeadline(uint64 epochId) external view returns (uint256) {
+        CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
+        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        return _correlationEpochVetoDeadline(snapshot);
+    }
+
+    function roundPayoutSnapshotVetoDeadline(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        public
+        view
+        returns (uint256)
+    {
+        bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        return _roundPayoutSnapshotVetoDeadline(proposal);
+    }
+
+    function isRoundPayoutSnapshotOutsideVetoWindow(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) public view returns (bool) {
+        bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        if (proposal.snapshot.status != SnapshotStatus.Finalized) return false;
+        if (!_isCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId)) {
+            return false;
+        }
+        return block.timestamp >= _roundPayoutSnapshotVetoDeadline(proposal);
     }
 
     function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -1114,6 +1145,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     function _challengeDeadline(uint64 proposedAt, uint64 window) private pure returns (uint256) {
         return uint256(proposedAt) + uint256(window);
+    }
+
+    function _correlationEpochVetoDeadline(CorrelationEpochSnapshot storage snapshot) private view returns (uint256) {
+        if (snapshot.finalizedAt == 0) return 0;
+        return uint256(snapshot.finalizedAt) + uint256(snapshot.finalizationVetoWindowAtProposal);
+    }
+
+    function _roundPayoutSnapshotVetoDeadline(RoundPayoutProposal storage proposal) private view returns (uint256) {
+        if (proposal.snapshot.finalizedAt == 0) return 0;
+        return uint256(proposal.snapshot.finalizedAt) + uint256(proposal.finalizationVetoWindowAtProposal);
+    }
+
+    function _validateChallengeWindow(uint64 newChallengeWindow) private pure {
+        if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
+    }
+
+    function _validateFinalizationVetoWindow(uint64 newFinalizationVetoWindow) private pure {
+        if (newFinalizationVetoWindow == 0 || newFinalizationVetoWindow > MAX_FINALIZATION_VETO_WINDOW) {
+            revert InvalidSnapshot();
+        }
     }
 
     function _requireCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view {

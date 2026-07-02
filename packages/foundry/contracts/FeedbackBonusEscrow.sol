@@ -38,7 +38,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     uint256 public constant BPS_SCALE = 10_000;
     uint256 public constant DEFAULT_FRONTEND_FEE_BPS = 300;
     uint256 public constant MAX_FRONTEND_FEE_BPS = 500;
-    uint256 public constant MIN_FEEDBACK_AWARD_DECISION_SECONDS = 1 days;
+    uint256 public constant MIN_FEEDBACK_AWARD_DECISION_SECONDS = 1 hours;
     uint8 public constant REWARD_ASSET_LREP = 0;
     uint8 public constant REWARD_ASSET_USDC = 1;
 

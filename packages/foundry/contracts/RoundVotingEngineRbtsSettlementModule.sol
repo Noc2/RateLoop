@@ -18,7 +18,7 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
 
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
     uint8 internal constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
-    uint256 internal constant RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT = 14 days;
+    uint256 internal constant RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT = 1 hours;
 
     event RbtsSettlementSnapshotApplied(
         uint256 indexed contentId,
@@ -44,7 +44,7 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
                 revert RoundNotExpired();
             }
             if (
-                _hasFinalizedRbtsSettlementSnapshot(
+                _hasLiveRbtsSettlementSnapshot(
                     roundRbtsSettlementOracle[contentId][roundId], contentId, roundId, round.revealedCount
                 )
             ) {
@@ -132,7 +132,7 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         );
     }
 
-    function _hasFinalizedRbtsSettlementSnapshot(
+    function _hasLiveRbtsSettlementSnapshot(
         address oracleAddress,
         uint256 contentId,
         uint256 roundId,
@@ -144,8 +144,8 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
             IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
         ) {
             if (
-                snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
-                    || snapshot.rawEligibleVoters != revealedCount || snapshot.totalClaimWeight == 0
+                !_isLiveRbtsSettlementSnapshotStatus(snapshot.status) || snapshot.rawEligibleVoters != revealedCount
+                    || snapshot.totalClaimWeight == 0
                     || snapshot.weightRoot == bytes32(0)
             ) {
                 return false;
@@ -161,6 +161,16 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         } catch {
             return false;
         }
+    }
+
+    function _isLiveRbtsSettlementSnapshotStatus(IClusterPayoutOracle.SnapshotStatus status)
+        internal
+        pure
+        returns (bool)
+    {
+        return status == IClusterPayoutOracle.SnapshotStatus.Proposed
+            || status == IClusterPayoutOracle.SnapshotStatus.Challenged
+            || status == IClusterPayoutOracle.SnapshotStatus.Finalized;
     }
 
     function _returnRbtsStakes(uint256 contentId, uint256 roundId)

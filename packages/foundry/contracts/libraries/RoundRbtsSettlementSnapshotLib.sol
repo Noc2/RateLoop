@@ -53,7 +53,7 @@ library RoundRbtsSettlementSnapshotLib {
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
             oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId);
         if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) revert InvalidState();
-        if (block.timestamp <= uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW())) {
+        if (!oracle.isRoundPayoutSnapshotOutsideVetoWindow(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId)) {
             revert InvalidState();
         }
         if (snapshot.rawEligibleVoters != payoutWeights.length || snapshot.rawEligibleVoters != revealedCount) {

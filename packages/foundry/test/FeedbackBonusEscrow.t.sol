@@ -803,7 +803,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(remainingAmount, 90e6);
     }
 
-    function testAwardDeadlineExtendsToOneDayAfterSettlement() public {
+    function testAwardDeadlineExtendsToOneHourAfterSettlement() public {
         uint256 contentId = _submitQuestion("");
         uint256 requestedDeadline = block.timestamp + 1;
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);

@@ -47,6 +47,8 @@ contract ClusterPayoutOracleTest is Test {
     uint256 internal constant CHALLENGE_BOND = 5e6;
     address internal constant CHALLENGER = address(0xCA11);
 
+    event OracleTimingConfigUpdated(uint64 challengeWindow, uint64 finalizationVetoWindow);
+
     ClusterPayoutOracle internal oracle;
     MockFrontendRegistry internal frontendRegistry;
     MockRoundPayoutSnapshotConsumer internal questionConsumer;
@@ -317,6 +319,97 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
         oracle.setOracleConfig(2 hours, maxChallengeBond + 1, address(this));
+    }
+
+    function test_ConstructorLaunchTimingDefaultsToOneHourPolicy() public {
+        ClusterPayoutOracle freshOracle =
+            new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
+
+        assertEq(freshOracle.challengeWindow(), 15 minutes);
+        assertEq(freshOracle.finalizationVetoWindow(), 15 minutes);
+        assertEq(freshOracle.FINALIZATION_VETO_WINDOW(), 15 minutes);
+        assertEq(freshOracle.DEFAULT_FINALIZATION_VETO_WINDOW(), 15 minutes);
+        assertEq(freshOracle.MAX_FINALIZATION_VETO_WINDOW(), 7 days);
+        assertEq(freshOracle.LAUNCH_PAYOUT_FINALITY_BUDGET(), 1 hours);
+    }
+
+    function test_OracleTimingConfigUpdatesFutureProposalScopedVetoOnly() public {
+        vm.expectEmit(false, false, false, true);
+        emit OracleTimingConfigUpdated(2 hours, 30 minutes);
+        oracle.setOracleTimingConfig(2 hours, 30 minutes);
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory proposed = oracle.correlationEpochSnapshot(1);
+        assertEq(proposed.challengeWindowAtProposal, 2 hours);
+        assertEq(proposed.finalizationVetoWindowAtProposal, 30 minutes);
+
+        oracle.setOracleTimingConfig(1 hours, 45 minutes);
+        vm.warp(uint256(proposed.proposedAt) + 2 hours);
+        oracle.finalizeCorrelationEpoch(1);
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory finalized = oracle.correlationEpochSnapshot(1);
+        assertEq(oracle.correlationEpochVetoDeadline(1), uint256(finalized.finalizedAt) + 30 minutes);
+    }
+
+    function test_RoundPayoutSnapshotUsesExactProposalScopedVetoDeadline() public {
+        oracle.setOracleTimingConfig(2 hours, 20 minutes);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory epochProposal = oracle.correlationEpochSnapshot(1);
+        vm.warp(uint256(epochProposal.proposedAt) + 2 hours);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+
+        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(proposed.challengeWindowAtProposal, 2 hours);
+        assertEq(proposed.finalizationVetoWindowAtProposal, 20 minutes);
+
+        oracle.setOracleTimingConfig(1 hours, 45 minutes);
+        vm.warp(uint256(proposed.proposedAt) + 2 hours);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory finalized =
+            oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        uint256 vetoDeadline =
+            oracle.roundPayoutSnapshotVetoDeadline(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(vetoDeadline, uint256(finalized.finalizedAt) + 20 minutes);
+
+        vm.warp(vetoDeadline - 1);
+        assertFalse(
+            oracle.isRoundPayoutSnapshotOutsideVetoWindow(
+                input.domain, input.rewardPoolId, input.contentId, input.roundId
+            )
+        );
+
+        vm.warp(vetoDeadline);
+        assertTrue(
+            oracle.isRoundPayoutSnapshotOutsideVetoWindow(
+                input.domain, input.rewardPoolId, input.contentId, input.roundId
+            )
+        );
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("too-late-at-deadline"));
     }
 
     function test_CorrelationEpochKeepsProposalChallengeTermsWhenConfigShrinks() public {
@@ -1120,7 +1213,7 @@ contract ClusterPayoutOracleTest is Test {
         vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
-        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW());
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedCorrelationEpoch(1, keccak256("too-late"));
     }
@@ -1206,6 +1299,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_RejectedFinalizedCorrelationEpochBlocksFuturePayoutVerification() public {
+        oracle.setOracleTimingConfig(2 hours, 3 hours);
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -1292,6 +1386,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_FinalizedCorrelationEpochRejectRevertsWhenChildSnapshotConsumed() public {
+        oracle.setOracleTimingConfig(2 hours, 3 hours);
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -1353,6 +1448,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_StaleFinalizedRoundPayoutSnapshotCanBeReplacedWhenUnconsumed() public {
+        oracle.setOracleTimingConfig(2 hours, 3 hours);
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -1403,6 +1499,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_StaleFinalizedRoundPayoutSnapshotCannotBeReplacedWhenConsumed() public {
+        oracle.setOracleTimingConfig(2 hours, 3 hours);
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -2401,7 +2498,7 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(replacement.snapshot.totalClaimWeight, 2_501);
     }
 
-    function test_FinalizedRoundPayoutSnapshotRejectChecksConsumerAfterVetoWindow() public {
+    function test_FinalizedRoundPayoutSnapshotRejectRevertsAfterVetoWindow() public {
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -2425,9 +2522,9 @@ contract ClusterPayoutOracleTest is Test {
 
         questionConsumer.setConsumed(true);
 
-        // Past the veto window, the consumed flag locks rejection.
-        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        // Past the veto window, the finalized root is pinned even if the consumer has not applied it.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW());
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
     }
 
@@ -2486,14 +2583,13 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(replacementConsumer));
         questionConsumer.setConsumed(true);
 
-        // Past the veto window the original consumer (snapshotted on the proposal) still gates
-        // the rejection; rotating to a fresh consumer does not bypass the consumed flag.
-        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        // Past the veto window the finalized root is pinned regardless of later consumer rotation.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW());
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("snapshotted-consumer"));
     }
 
-    function test_FinalizedRoundPayoutSnapshotRejectAllowedPostVetoWhenConsumerViewReverts() public {
+    function test_FinalizedRoundPayoutSnapshotRejectRevertsPostVetoWhenConsumerViewReverts() public {
         RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer =
             new RevertingConsumedRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
@@ -2519,13 +2615,13 @@ contract ClusterPayoutOracleTest is Test {
         vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
-        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW());
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("broken-consumer-view"));
-        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
     }
 
     function test_FinalizedRoundPayoutSnapshotReproposalAllowedWhenConsumerViewReverts() public {
+        oracle.setOracleTimingConfig(2 hours, 3 hours);
         RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer =
             new RevertingConsumedRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
