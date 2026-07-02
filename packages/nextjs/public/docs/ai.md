@@ -300,7 +300,7 @@ For gated asks, add `question.confidentiality`, a RateLoop-hosted `detailsUrl`/`
 ```
 
 Feedback Bonus timing uses the same question duration as the blind response window. The effective Feedback Bonus award
-decision deadline is at least 24 hours after the round settles, so the awarder always has at least one full day to choose
+decision deadline is at least 1 hour after the round settles, so the awarder always has at least one hour to choose
 useful timely feedback from revealed raters.
 
 ### A/B Comparison (`head_to_head_ab`)

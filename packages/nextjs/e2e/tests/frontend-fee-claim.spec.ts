@@ -44,7 +44,7 @@ test.describe("Frontend fee claim lifecycle", () => {
   const STAKE = BigInt(10e6);
   const FRONTEND_STAKE = BigInt(1000e6);
   const EPOCH_DURATION = 300;
-  const FEE_WITHDRAWAL_DELAY = 21 * 86400;
+  const FEE_WITHDRAWAL_DELAY = 60 * 60;
 
   // Shared across serial tests — set by test 1, consumed by test 3.
   let withdrawableFrontend: `0x${string}` | null = null;

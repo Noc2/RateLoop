@@ -177,9 +177,11 @@ const HowItWorks: NextPage = () => {
       <div className="not-prose my-4 rounded-lg bg-warning/10 p-4 text-sm text-base-content">
         <p className="font-semibold text-warning">USDC payout timing</p>
         <p className="mt-1 text-base-content/75">
-          LREP stake rewards become claimable after the RBTS settlement snapshot is applied. USDC bounty claims usually
-          unlock <strong>2-4 hours</strong> after the public verdict closes while payout roots pass oracle challenge
-          windows; challenged snapshots, missing-proposer recovery, or governance-runbook recovery take longer.
+          LREP stake rewards become claimable after the RBTS settlement snapshot is applied. On the healthy unchallenged
+          path, reward and result finality normally completes within{" "}
+          <strong>{protocolDocFacts.payoutFinalityMaxDelayLabel}</strong> after the public verdict or payout source is
+          ready, including challenge, finalization, veto, keeper/application transactions, and indexing. Challenged
+          snapshots, missing-proposer recovery, or governance-runbook recovery take longer.
         </p>
       </div>
       <p>
@@ -246,7 +248,7 @@ const HowItWorks: NextPage = () => {
       <p>
         To earn a feedback bonus, reveal your vote and publish useful written feedback on-chain when you rate; after
         settlement, the configured awarder can pay one award per independent rater or feedback hash until the later of
-        the requested feedback close and 24 hours after settlement. The calculation is{" "}
+        the requested feedback close and 1 hour after settlement. The calculation is{" "}
         <code>recipient amount = gross award - frontend fee</code>, with the default frontend fee at 3% when an eligible
         frontend applies; unawarded remainder goes to treasury after the effective award deadline.
       </p>

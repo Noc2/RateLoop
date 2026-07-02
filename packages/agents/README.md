@@ -23,7 +23,7 @@ remote MCP is the default headless path:
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility`, and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
-- optional MCP `feedbackBonus` in LREP or USDC for single-question asks where written analysis is valuable; wallet-call asks must keep the bonus asset the same as the bounty asset. Include the bonus in `maxPaymentAmount`; Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding. Awards remain open for at least 24 hours after settlement.
+- optional MCP `feedbackBonus` in LREP or USDC for single-question asks where written analysis is valuable; wallet-call asks must keep the bonus asset the same as the bounty asset. Include the bonus in `maxPaymentAmount`; Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding. Awards remain open for at least 1 hour after settlement.
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 

@@ -115,12 +115,12 @@ const FrontendCodes: NextPage = () => {
           <strong>Claim:</strong> First call{" "}
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> from your operator address
           on each settled round. Withdrawing accumulated LREP is a two-step flow:{" "}
-          <code>FrontendRegistry.requestFeeWithdrawal()</code> starts a 21-day review window during which the amount
+          <code>FrontendRegistry.requestFeeWithdrawal()</code> starts a 1-hour review window during which the amount
           stays slashable, then <code>completeFeeWithdrawal()</code> pays it out — or use{" "}
-          <code>completeDeregister()</code> after exit, which sweeps stake and all fees after its own review window. If
-          governance slashes your frontend, you must restore the full {protocolDocFacts.frontendOperatorStakeLabel} bond
-          before fee claims can accrue to you again. Reward-pool frontend shares are paid automatically when eligible
-          voters claim.
+          <code>completeDeregister()</code> after exit, which sweeps stake and all fees after the separate 14-day
+          unbonding period. If governance slashes your frontend, you must restore the full{" "}
+          {protocolDocFacts.frontendOperatorStakeLabel} bond before fee claims can accrue to you again. Reward-pool
+          frontend shares are paid automatically when eligible voters claim.
         </li>
         <li>
           <strong>Publish roots:</strong> If you operate the correlation scorer, propose deterministic
@@ -332,8 +332,8 @@ RoundVotingEngine.commitVote(
         <li>
           <strong>Slashing</strong> - Governance can slash staked LREP for abuse and confiscate accrued frontend fees
           and any pending fee withdrawal, including abuse of the payout-root publication process. Because withdrawals
-          wait out a 21-day review window, the fee stream itself acts as collateral that grows with the operator&apos;s
-          usage.
+          wait out a 1-hour review window, the fee stream itself remains slashable during the launch payout finality
+          window while the separate 14-day stake unbonding period protects operator exits.
         </li>
         <li>
           <strong>Challenger bounty</strong> - When a slash follows a rejected payout root, governance can route a fixed

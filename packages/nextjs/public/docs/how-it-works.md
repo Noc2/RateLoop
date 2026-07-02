@@ -10,16 +10,16 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 4. Votes are revealed after the blind commit-reveal window.
 5. The revealed set closes and records the public verdict on-chain. Non-tied rounds then enter RBTS settlement pending until the finalized correlation root supplies effective stake-settlement weights. Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 effective score-eligible participant units before they turn on. Governance can raise new-round voter floors as usage grows.
 6. Registered frontend operators propose correlation payout snapshots, then finalized roots set RBTS effective settlement weights, public-rating evidence weights, USDC and launch LREP claim weights; USDC weights are surprise-weighted with per-cluster bonus budgets, launch-credit weights stay flat.
-7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful public feedback from revealed raters.
+7. Feedback Bonus awarders have at least 1 hour after settlement to pay useful public feedback from revealed raters.
 8. Eligible voters claim rewards and agents read the public result package. Gated context is either disclosed after settlement or kept private forever according to the ask's disclosure policy.
 
 ## USDC Bounty Payout Timing
 
-LREP stake rewards are claimable only after the RBTS settlement snapshot is applied. USDC bounty claims usually unlock 2-4 hours after the public verdict closes while payout roots pass oracle challenge windows; challenged snapshots, missing-proposer recovery, or governance-runbook recovery take longer.
+LREP stake rewards are claimable only after the RBTS settlement snapshot is applied. On the healthy unchallenged path, reward and result finality normally completes within 1 hour after the public verdict or payout source is ready, including oracle challenge, finalization, veto, keeper/application transactions, and indexing; challenged snapshots, missing-proposer recovery, or governance-runbook recovery take longer.
 
 ## Feedback Bonus Payout Timing
 
-Feedback Bonuses use the later of the creation-anchored question-duration close and 24 hours after settlement as the
+Feedback Bonuses use the later of the creation-anchored question-duration close and 1 hour after settlement as the
 award deadline. The configured awarder can pay selected on-chain revealed feedback during that window; unawarded
 remainder can be forfeited only after the effective award deadline.
 
@@ -98,9 +98,7 @@ bounty and launch LREP claims still wait for their own correlation payout
 snapshots. The keeper normally closes the public verdict once reveal conditions are met,
 but any user or operator can self-settle an eligible round on-chain if automation
 is delayed. Non-tied rounds then wait for the RBTS settlement snapshot before LREP
-stake rewards are claimable. With the current oracle default, USDC bounty payout takes at least 2
-hours after the public verdict closes and normally up to 4 hours on the happy path if both
-oracle layers still need to finalize.
+stake rewards are claimable. With the launch oracle defaults, healthy unchallenged reward and result finality normally completes within 1 hour after the public verdict or payout source is ready, including challenge, finalization, veto, keeper/application transactions, and indexing.
 
 For USDC bounties, the finalized correlation payout snapshot sets each rater's
 claim weight: a surprise-weighted base weight, reduced by weak verified-anchor
@@ -167,7 +165,7 @@ The oracle is intentionally optimistic. The goal is not fully per-snapshot
 economic collateralization on-chain; it is public artifacts, challenge windows,
 governance arbitration, and frontend-operator accountability through possible
 slashing, reputation loss, and future-income loss. Frontend fee withdrawals
-wait out a 21-day slashable review window in the FrontendRegistry, so an
+wait out a 1-hour slashable review window in the FrontendRegistry, so an
 operator's undelivered earnings act as collateral that grows automatically with
 their usage.
 

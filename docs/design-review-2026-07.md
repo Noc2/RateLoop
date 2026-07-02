@@ -70,7 +70,7 @@ keeper automation, and governance recovery runbooks instead of making users wait
 - **Severity:** Low (parameter risk).
 - **Where:** `ClusterPayoutOracle.sol` — `proposeRoundPayoutSnapshot` (~430–544) accepts proposals against a merely-`Proposed` epoch (~435); `setOracleConfig` (~213–224) bounds `challengeWindow ≤ 3 days`, `DEFAULT_CHALLENGE_WINDOW = 2 hours`.
 - **Scenario:** A proposer submits the correlation epoch and all dependent round snapshots in one block; both layers' 2-hour windows expire simultaneously, so a human challenger who must fetch the artifact, recompute the deterministic scorer output, and fund a USDC bond gets one 2-hour (possibly overnight) window to catch errors at either layer. The 7-day `FINALIZATION_VETO_WINDOW` backstops this, but converts a permissionless check into a trusted (arbiter) one.
-- **Status:** No parameter increase made, per UX review. The docs now explicitly frame this as an optimistic trust model with the existing veto/governance backstop, not as a reason to make normal bounty claimants wait longer.
+- **Status:** Superseded for launch by the one-hour payout-finality remediation. The next deployment uses 15-minute challenge windows, a 15-minute finalization veto window, and readiness/keeper checks that fail when the configured healthy-path budget exceeds 1 hour. The docs frame this as an optimistic trust model with visible monitoring and governance backstops, not as a reason to make normal bounty claimants wait longer.
 
 ### L-2 (contracts). Narrowed `roundCore` interface re-declarations are ABI-fragile across future engine upgrades
 

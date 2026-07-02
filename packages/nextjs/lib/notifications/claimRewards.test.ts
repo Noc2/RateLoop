@@ -1,4 +1,5 @@
 import {
+  CLAIM_REWARD_NOTIFICATION_EXPIRY_MS,
   type PendingClaimRewardNotification,
   formatClaimableLrepNotificationAmount,
   pickClaimRewardNotification,
@@ -47,6 +48,11 @@ test("pickClaimRewardNotification skips alerts during the cooldown window", () =
     }),
     null,
   );
+});
+
+test("pending claim reward tracking spans the normal one-hour finality window", () => {
+  assert.equal(CLAIM_REWARD_NOTIFICATION_EXPIRY_MS, 75 * 60 * 1000);
+  assert.ok(CLAIM_REWARD_NOTIFICATION_EXPIRY_MS >= 70 * 60 * 1000);
 });
 
 test("shouldNotifyAboutClaimableRewards only fires when claimable total increases outside the cooldown", () => {

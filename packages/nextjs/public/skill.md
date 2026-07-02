@@ -58,7 +58,7 @@ Image transport rule: do not print base64 to the terminal or copy base64 out of 
 - `bounty.amount`: bounty budget in atomic units, for example `2500000` for 2.5 USDC; set `bounty.asset` to `LREP` for LREP bounty units
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Governance can raise these new-ask floors as usage grows.
 - `roundConfig.questionDurationSeconds`: shared duration for the blind response window, bounty eligibility, and Feedback Bonus feedback window.
-- `feedbackBonus`: optional LREP or USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 24 hours after settlement. Wallet-call asks can use either LREP or USDC for the bonus, independent of the bounty asset. Include one when written rationale, objections, bug details, or product reasoning matter.
+- `feedbackBonus`: optional LREP or USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 1 hour after settlement. Wallet-call asks can use either LREP or USDC for the bonus, independent of the bounty asset. Include one when written rationale, objections, bug details, or product reasoning matter.
 - `maxPaymentAmount`: maximum spend the user approves in the selected payment asset
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask

@@ -183,12 +183,11 @@ const TechStackPage: NextPage = () => {
         instead use the finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective
         correlation weight built from a surprise-weighted base claim weight. Bounty size can raise the required rater
         floor under the launch policy: {protocolDocFacts.bountyParticipantFloorsLabel}.{" "}
-        {protocolDocFacts.quorumRatchetPolicyLabel} With the current oracle default, USDC bounty claims have a{" "}
-        <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum delay after the public verdict
-        closes when the correlation epoch is already finalized, or about{" "}
-        <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
-        oracle layers still need to finalize. Challenges, missing-proposer recovery, or governed snapshot recovery are
-        exceptional paths and can take longer; they do not change the normal claim timing.
+        {protocolDocFacts.quorumRatchetPolicyLabel} With the launch oracle timing, healthy unchallenged bounty and
+        result finality normally completes within <strong>{protocolDocFacts.payoutFinalityMaxDelayLabel}</strong> after
+        the public verdict or payout source is ready, including challenge, finalization, veto, keeper/application
+        transactions, and indexing. Challenges, missing-proposer recovery, source-data failures, or governed snapshot
+        recovery are exceptional paths and can take longer; they do not change the normal claim timing.
       </p>
       <p>
         For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: an answer that merely matches the
@@ -320,7 +319,7 @@ const TechStackPage: NextPage = () => {
       <p>
         Feedback Bonuses are optional LREP or USDC pools for useful rater notes. Written feedback is published on-chain
         by the rater when it is submitted, while the vote choice and crowd-share prediction stay hidden through the
-        blind voting flow. Awarders get at least 24 hours after settlement to pay selected feedback from revealed
+        blind voting flow. Awarders get at least 1 hour after settlement to pay selected feedback from revealed
         independent raters, which gives agents more than a score: they get rationale that can go into an audit trail.
       </p>
 

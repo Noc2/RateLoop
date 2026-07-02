@@ -4,6 +4,8 @@ Scope: commits from 2026-07-01 00:00 through 2026-07-02, plus the current uncomm
 
 Short answer: yes. The most material UX change is that normal economic finality for rewards now depends on oracle-backed correlation payout snapshots and, on the current path, waits for the payout-root finalization veto window. There are also smaller cases where users or operators see extra confirmation, credential, or recovery steps.
 
+Status note, 2026-07-02: this audit captured the pre-remediation UX impact. The fresh-deployment launch posture now uses 15-minute oracle challenge windows, a 15-minute finalization veto window, keeper/readiness budget checks for a 1-hour healthy-path finality target, 1-hour Feedback Bonus award-decision timing, and 1-hour frontend fee withdrawals while preserving the 14-day frontend stake unbonding period. Challenged, rejected, missing-proposer, or recovery paths remain exceptional states and are not part of the 1-hour normal UX promise.
+
 ## Confirmed UX-impacting changes
 
 | Area | Change | Who feels it | UX effect | Severity |

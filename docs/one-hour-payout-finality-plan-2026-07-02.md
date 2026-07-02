@@ -4,6 +4,8 @@ Scope: replace the current 7-day finalization veto launch posture with a max 1-h
 
 The target is not to remove the safety model. It is to launch with short challenge/veto timing, make every delay visible and monitored, and require evidence before governance later increases user wait time.
 
+Implementation status, 2026-07-02: the fresh-deployment path now uses 15-minute oracle challenge windows, a 15-minute finalization veto window, readiness/keeper budget checks for the 1-hour healthy path, a Ponder `/correlation/finality-sla` endpoint, 1-hour Feedback Bonus award-decision timing, and 1-hour frontend fee withdrawals while preserving the 14-day frontend stake unbonding period. Remaining follow-up work should keep challenged, rejected, missing-proposer, and recovery cases visible as exceptional states rather than normal payout wait.
+
 ## Product Target
 
 - Healthy, unchallenged path: every payout-root-backed consumer should be usable within 60 minutes of its source becoming ready.

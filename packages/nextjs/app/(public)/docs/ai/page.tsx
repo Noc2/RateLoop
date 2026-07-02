@@ -545,8 +545,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       </pre>
       <p>
         Feedback Bonus submissions use the same <code>roundConfig.questionDurationSeconds</code> close as the question
-        and bounty eligibility window. The effective Feedback Bonus award decision deadline is at least 24 hours after
-        the round settles.
+        and bounty eligibility window. The effective Feedback Bonus award decision deadline is at least 1 hour after the
+        round settles.
       </p>
 
       <h3 id="head-to-head-ab">A/B Comparison (head_to_head_ab)</h3>

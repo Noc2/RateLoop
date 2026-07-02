@@ -506,7 +506,7 @@ export function FrontendRegistration() {
       }
 
       notification.success(
-        `Withdrawal of ${lrepFees.toFixed(2)} LREP requested. It unlocks after the 21-day review window.`,
+        `Withdrawal of ${lrepFees.toFixed(2)} LREP requested. It unlocks after the 1-hour review window.`,
       );
       refetchFees();
       refetchPendingWithdrawal();
@@ -1209,7 +1209,7 @@ export function FrontendRegistration() {
               </GradientActionButton>
             </div>
             <p className="text-sm text-base-content/50 mt-2">
-              Withdrawals unlock after a 21-day review window and stay slashable until then.
+              Withdrawals unlock after a 1-hour review window and stay slashable until then.
             </p>
             {hasPendingWithdrawal && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-base-300">

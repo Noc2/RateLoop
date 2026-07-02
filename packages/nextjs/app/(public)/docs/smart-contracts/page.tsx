@@ -534,7 +534,7 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>FeedbackBonusEscrow.awardFeedbackBonus(poolId, recipient, feedbackHash, grossAmount)</code> &mdash; Pay
           an awarded feedback hash that was published by the requested feedback close directly to a revealed,
-          independent voter until the later of that close and 24 hours after settlement. The awarder pays this
+          independent voter until the later of that close and 1 hour after settlement. The awarder pays this
           transaction, the recipient receives USDC or LREP immediately, and an eligible vote-attributed frontend
           receives the 3% share.
         </li>
@@ -673,9 +673,10 @@ const SmartContracts: NextPage = () => {
         receive {protocolDocFacts.frontendShareLabel} for each settled two-sided round they facilitated votes in. This
         global operator bond also backs optimistic payout-root proposals; the oracle design relies on public artifacts,
         challenge windows, governance arbitration, and possible slashing or future-income loss rather than fully
-        collateralizing each snapshot on-chain. Fee withdrawals are delayed behind a 21-day slashable review window and
-        successful oracle challengers receive a fixed share of slash proceeds, so accountability scales with an
-        operator&apos;s actual earnings instead of requiring per-snapshot bonds.
+        collateralizing each snapshot on-chain. Fee withdrawals are delayed behind a 1-hour slashable review window,
+        successful oracle challengers receive a fixed share of slash proceeds, and the separate 14-day stake unbonding
+        period remains intact, so accountability scales with an operator&apos;s actual earnings instead of requiring
+        per-snapshot bonds.
       </p>
       <h3>Key Functions</h3>
       <ul>
@@ -701,8 +702,8 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>requestFeeWithdrawal()</code> / <code>completeFeeWithdrawal()</code> &mdash; Two-step withdrawal of
           accumulated platform fees while healthy, fully bonded, and not exiting. The requested amount stays in the
-          registry and remains fully slashable for a 21-day review window before it can be completed, so the fee stream
-          works as collateral that grows with the operator&apos;s usage.
+          registry and remains fully slashable for a 1-hour review window before it can be completed. Voluntary frontend
+          stake exits still wait out the separate 14-day unbonding period.
         </li>
         <li>
           <code>slashFrontend(address, amount, reason)</code> &mdash; Slash frontend stake (governance). Already accrued
