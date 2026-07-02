@@ -123,305 +123,323 @@
     {
       "slot": 20,
       "offset": 0,
+      "label": "roundRbtsSettlementOracle",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
+      "label": "roundRbtsSettlementSnapshotDigest",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))"
+    },
+    {
+      "slot": 22,
+      "offset": 0,
       "label": "roundThresholdReachedBlock",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 21,
+      "slot": 23,
       "offset": 0,
       "label": "commitPredictedUpBps",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint16)))"
     },
     {
-      "slot": 22,
+      "slot": 24,
       "offset": 0,
       "label": "commitRbtsWeight",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256)))"
     },
     {
-      "slot": 23,
+      "slot": 25,
       "offset": 0,
       "label": "commitRbtsScoreBps",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint16)))"
     },
     {
-      "slot": 24,
+      "slot": 26,
       "offset": 0,
       "label": "commitRbtsRewardWeight",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256)))"
     },
     {
-      "slot": 25,
+      "slot": 27,
       "offset": 0,
       "label": "commitRbtsStakeReturned",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256)))"
     },
     {
-      "slot": 26,
+      "slot": 28,
       "offset": 0,
       "label": "commitRbtsForfeitedStake",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256)))"
     },
     {
-      "slot": 27,
+      "slot": 29,
       "offset": 0,
       "label": "cancelledRoundRefundClaimed",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_address,t_bool)))"
     },
     {
-      "slot": 28,
+      "slot": 30,
       "offset": 0,
       "label": "cancelledRoundRefundCommitClaimed",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 29,
+      "slot": 31,
       "offset": 0,
       "label": "hasCommits",
       "type": "t_mapping(t_uint256,t_bool)"
     },
     {
-      "slot": 30,
+      "slot": 32,
       "offset": 0,
       "label": "accountedLrepBalance",
       "type": "t_uint256"
     },
     {
-      "slot": 31,
+      "slot": 33,
       "offset": 0,
       "label": "roundConfigSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RoundConfig)))"
     },
     {
-      "slot": 32,
+      "slot": 34,
       "offset": 0,
       "label": "roundRatingConfigSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RatingConfig)))"
     },
     {
-      "slot": 33,
+      "slot": 35,
       "offset": 0,
       "label": "roundReferenceRatingBpsSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint16))"
     },
     {
-      "slot": 34,
+      "slot": 36,
       "offset": 0,
       "label": "voterCommitHash",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_address,t_bytes32)))"
     },
     {
-      "slot": 35,
+      "slot": 37,
       "offset": 0,
       "label": "identityCommitKey",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bytes32)))"
     },
     {
-      "slot": 36,
+      "slot": 38,
       "offset": 0,
       "label": "commitIdentityKey",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bytes32)))"
     },
     {
-      "slot": 37,
+      "slot": 39,
       "offset": 0,
       "label": "commitIdentityHolder",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_address)))"
     },
     {
-      "slot": 38,
+      "slot": 40,
       "offset": 0,
       "label": "holderCommitKey",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_address,t_bytes32)))"
     },
     {
-      "slot": 39,
+      "slot": 41,
       "offset": 0,
       "label": "identityRoundStake",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256)))"
     },
     {
-      "slot": 40,
+      "slot": 42,
       "offset": 0,
       "label": "roundStakeWithEligibleFrontend",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 41,
+      "slot": 43,
       "offset": 0,
       "label": "roundPerFrontendStake",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_address,t_uint256)))"
     },
     {
-      "slot": 42,
+      "slot": 44,
       "offset": 0,
       "label": "roundFrontendPool",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 43,
+      "slot": 45,
       "offset": 0,
       "label": "roundEligibleFrontendCount",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 44,
+      "slot": 46,
       "offset": 0,
       "label": "roundRaterRegistrySnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
     },
     {
-      "slot": 45,
+      "slot": 47,
       "offset": 0,
       "label": "roundAdvisoryVoteRecorderSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
     },
     {
-      "slot": 46,
+      "slot": 48,
       "offset": 0,
       "label": "lastVoteTimestampByIdentity",
       "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256))"
     },
     {
-      "slot": 47,
+      "slot": 49,
       "offset": 0,
       "label": "epochUnrevealedCount",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint256)))"
     },
     {
-      "slot": 48,
+      "slot": 50,
       "offset": 0,
       "label": "roundRevealGracePeriodSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 49,
+      "slot": 51,
       "offset": 0,
       "label": "roundDrandChainHashSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))"
     },
     {
-      "slot": 50,
+      "slot": 52,
       "offset": 0,
       "label": "roundDrandGenesisTimeSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint64))"
     },
     {
-      "slot": 51,
+      "slot": 53,
       "offset": 0,
       "label": "roundDrandPeriodSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint64))"
     },
     {
-      "slot": 52,
+      "slot": 54,
       "offset": 0,
       "label": "lastCommitRevealableAfter",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 53,
+      "slot": 55,
       "offset": 0,
       "label": "frontendEligibleAtCommit",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 54,
+      "slot": 56,
       "offset": 0,
       "label": "roundFrontendRegistrySnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
     },
     {
-      "slot": 55,
+      "slot": 57,
       "offset": 0,
       "label": "roundUnrevealedCleanupRemaining",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 56,
+      "slot": 58,
       "offset": 0,
       "label": "roundCleanupIncentivePaid",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 57,
+      "slot": 59,
       "offset": 0,
       "label": "roundRatingUpEvidence",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint64))"
     },
     {
-      "slot": 58,
+      "slot": 60,
       "offset": 0,
       "label": "roundRatingDownEvidence",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint64))"
     },
     {
-      "slot": 59,
+      "slot": 61,
       "offset": 0,
       "label": "commitCommittedAt",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint48)))"
     },
     {
-      "slot": 60,
+      "slot": 62,
       "offset": 0,
       "label": "pendingBundleObserverReplay",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 61,
+      "slot": 63,
       "offset": 0,
       "label": "roundHumanVerifiedCommitCount",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint16))"
     },
     {
-      "slot": 62,
+      "slot": 64,
       "offset": 0,
       "label": "roundRbtsSeedEntropy",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))"
     },
     {
-      "slot": 63,
+      "slot": 65,
       "offset": 0,
       "label": "roundClusterPayoutReadyAt",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint48))"
     },
     {
-      "slot": 64,
+      "slot": 66,
       "offset": 0,
       "label": "_pendingTreasuryForfeitLrep",
       "type": "t_uint256"
     },
     {
-      "slot": 65,
+      "slot": 67,
       "offset": 0,
       "label": "commitCredentialMask",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
     },
     {
-      "slot": 66,
+      "slot": 68,
       "offset": 0,
       "label": "commitFreshCredentialMask",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
     },
     {
-      "slot": 67,
+      "slot": 69,
       "offset": 0,
       "label": "roundContentDormantCountSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint8))"
     },
     {
-      "slot": 68,
+      "slot": 70,
       "offset": 0,
       "label": "roundConfidentialityEscrowSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
     },
     {
-      "slot": 69,
+      "slot": 71,
       "offset": 0,
       "label": "pendingRatingSettlementReplay",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 70,
+      "slot": 72,
+      "offset": 0,
+      "label": "rbtsSettlementModule",
+      "type": "t_address"
+    },
+    {
+      "slot": 73,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -444,8 +462,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[15]",
-      "numberOfBytes": "480",
+      "label": "uint256[14]",
+      "numberOfBytes": "448",
       "base": "t_uint256"
     },
     {
