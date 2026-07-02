@@ -259,15 +259,10 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         registry.requestDeregister();
-        uint256 feeReviewAvailableAt = block.timestamp + registry.FEE_WITHDRAWAL_DELAY();
+        uint256 exitAvailableAt = registry.frontendExitAvailableAt(frontend1);
 
+        vm.warp(exitAvailableAt);
         uint256 balanceBefore = lrepToken.balanceOf(frontend1);
-        vm.warp(block.timestamp + registry.UNBONDING_PERIOD() + 1);
-        vm.prank(frontend1);
-        vm.expectRevert("Fee withdrawal delay active");
-        registry.completeDeregister();
-
-        vm.warp(feeReviewAvailableAt);
         vm.prank(frontend1);
         registry.completeDeregister();
 
@@ -983,6 +978,7 @@ contract FrontendRegistryTest is Test {
 
     function test_FeeWithdrawalDelayUsesOneHourLaunchDefault() public view {
         assertEq(registry.FEE_WITHDRAWAL_DELAY(), 1 hours);
+        assertEq(registry.UNBONDING_PERIOD(), 14 days);
     }
 
     function test_FeeWithdrawalTwoStep() public {
@@ -1100,18 +1096,14 @@ contract FrontendRegistryTest is Test {
         vm.prank(frontend1);
         registry.requestDeregister();
         uint256 feeReviewAvailableAt = registry.pendingFeeWithdrawalReleaseAt(frontend1);
-
-        // Completion is blocked mid-exit and before fee review matures.
-        vm.warp(block.timestamp + registry.UNBONDING_PERIOD() + 1);
-        vm.prank(frontend1);
-        vm.expectRevert("Fee withdrawal delay active");
-        registry.completeDeregister();
+        uint256 exitAvailableAt = registry.frontendExitAvailableAt(frontend1);
 
         vm.warp(feeReviewAvailableAt);
         vm.prank(frontend1);
         vm.expectRevert(IFrontendRegistry.FrontendExitPending.selector);
         registry.completeFeeWithdrawal();
 
+        vm.warp(exitAvailableAt);
         uint256 balanceBefore = lrepToken.balanceOf(frontend1);
         vm.prank(frontend1);
         registry.completeDeregister();
@@ -1194,10 +1186,10 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         registry.requestDeregister();
-        uint256 feeReviewAvailableAt = block.timestamp + registry.FEE_WITHDRAWAL_DELAY();
+        uint256 exitAvailableAt = registry.frontendExitAvailableAt(frontend1);
 
         uint256 balanceBefore = lrepToken.balanceOf(frontend1);
-        vm.warp(feeReviewAvailableAt);
+        vm.warp(exitAvailableAt);
         vm.prank(frontend1);
         registry.completeDeregister();
 

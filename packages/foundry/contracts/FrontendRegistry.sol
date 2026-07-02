@@ -55,10 +55,10 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Slashable cooldown before a frontend can complete a voluntary exit.
     uint256 public constant UNBONDING_PERIOD = 14 days;
 
-    /// @notice Delay between requesting a fee withdrawal and the LREP leaving the registry.
-    /// @dev Keep earned fees in the same slashable review buffer as frontend stake. User
-    ///      payout finality stays fast; operator fee liquidity waits for the enforcement window.
-    uint256 public constant FEE_WITHDRAWAL_DELAY = UNBONDING_PERIOD;
+    /// @notice Launch delay between requesting a fee withdrawal and the LREP leaving the registry.
+    /// @dev Earned operator fees stay slashable during this short review buffer. The longer
+    ///      14-day `UNBONDING_PERIOD` still applies to voluntary frontend stake exits.
+    uint256 public constant FEE_WITHDRAWAL_DELAY = 1 hours;
 
     // --- Structs ---
     struct Frontend {
