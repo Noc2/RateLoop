@@ -300,6 +300,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 adjustedDownEvidence
     );
     event QuestionRewardPoolEscrowUpdated(address rewardPoolEscrow);
+    event TreasuryUpdated(address treasury);
     event ContentRoundConfigSet(
         uint256 indexed contentId, uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters
     );
@@ -506,6 +507,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             if iszero(_treasury) { revert(0, 0) }
             sstore(treasury.slot, _treasury)
         }
+        emit TreasuryUpdated(_treasury);
     }
 
     // --- Content Lifecycle ---

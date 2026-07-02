@@ -82,6 +82,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6;
 
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
+    event TreasuryUpdated(address treasury);
     bytes32 internal constant QUESTION_CONTENT_ANCHORED_TOPIC =
         keccak256("QuestionContentAnchored(uint256,uint8,uint256,string,bytes32,bytes32)");
     bytes32 internal constant QUESTION_BUNDLE_CONTENT_LINKED_TOPIC =
@@ -171,6 +172,18 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         }
 
         vm.stopPrank();
+    }
+
+    function test_SetTreasury_EmitsTreasuryUpdated() public {
+        address newTreasury = address(0xBEEF);
+
+        vm.expectEmit(false, false, false, true, address(registry));
+        emit TreasuryUpdated(newTreasury);
+
+        vm.prank(owner);
+        registry.setTreasury(newTreasury);
+
+        assertEq(registry.treasury(), newTreasury);
     }
 
     function _anchoredImageUrl(string memory slug) internal pure returns (string memory) {
