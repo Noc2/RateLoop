@@ -880,6 +880,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         return revealBase + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24;
     }
 
+    function _forceRoundConfigSnapshot(
+        uint256 contentId,
+        uint256 roundId,
+        RoundLib.RoundConfig memory roundConfig
+    ) internal {
+        bytes32 contentSlot = keccak256(abi.encode(contentId, uint256(31)));
+        bytes32 roundSlot = keccak256(abi.encode(roundId, contentSlot));
+        uint256 packed = uint256(roundConfig.epochDuration) | (uint256(roundConfig.maxDuration) << 32)
+            | (uint256(roundConfig.minVoters) << 64) | (uint256(roundConfig.maxVoters) << 80);
+        vm.store(address(engine), roundSlot, bytes32(packed));
+    }
+
     function _expectAdvisoryRevert(address voter, uint256 contentId, string memory saltTag, bytes4 selector) internal {
         uint256 roundId = _previewCommitRoundId(engine, contentId);
         uint16 referenceRatingBps = _previewCommitReferenceRatingBps(engine, contentId);
@@ -3747,6 +3759,37 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         engine.finalizeRevealFailedRound(contentId, roundId);
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 2, "two unrevealed votes queued");
+
+        RoundLib.Round memory failedRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(failedRound.state), uint256(RoundLib.RoundState.RevealFailed));
+    }
+
+    function test_RbtsRevealQuorumUsesStructuralMinimumWhenSnapshotMinVotersIsLowered() public {
+        uint256 contentId = _submitContent();
+
+        mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        RoundLib.RoundConfig memory lowered = RoundEngineReadHelpers.roundConfig(engine, contentId, roundId);
+        lowered.minVoters = 2;
+        _forceRoundConfigSnapshot(contentId, roundId, lowered);
+        assertEq(RoundEngineReadHelpers.roundConfig(engine, contentId, roundId).minVoters, 2);
+
+        _warpPastTlockRevealTime(uint256(round.startTime) + uint256(lowered.epochDuration));
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+
+        vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
+        engine.settleRound(contentId, roundId);
+
+        vm.warp(_revealFailedFinalDeadline(contentId, roundId));
+        engine.finalizeRevealFailedRound(contentId, roundId);
 
         RoundLib.Round memory failedRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(failedRound.state), uint256(RoundLib.RoundState.RevealFailed));
