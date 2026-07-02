@@ -498,7 +498,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             return requestedDeadline > decisionDeadline ? requestedDeadline : decisionDeadline;
         }
 
-        if (startTime != 0 && state == RoundLib.RoundState.Open) {
+        if (startTime != 0 && (state == RoundLib.RoundState.Open || state == RoundLib.RoundState.SettlementPending)) {
             return type(uint256).max;
         }
 

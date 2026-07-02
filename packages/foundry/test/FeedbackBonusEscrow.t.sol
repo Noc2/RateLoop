@@ -17,6 +17,7 @@ import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
@@ -822,6 +823,41 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(voter1), 1_010e6);
     }
 
+    function testSettlementPendingFeedbackBonusCannotForfeitBeforeRbtsSettlement() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 requestedDeadline = block.timestamp + 1;
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
+        uint256 roundId = _moveRoundToSettlementPendingWithPublishedFeedback(
+            _threeVoters(), contentId, _directions(true, true, false)
+        );
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+
+        assertGt(block.timestamp, requestedDeadline);
+        assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), type(uint256).max);
+
+        vm.prank(funder);
+        vm.expectRevert("Round not settled");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        vm.expectRevert("Not expired");
+        feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, roundId, round.revealedCount);
+        (,,,,,, uint48 settledAt,) = votingEngine.roundCore(contentId, roundId);
+        uint256 awardDeadline = uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS();
+        assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), awardDeadline);
+
+        vm.warp(awardDeadline);
+        vm.prank(funder);
+        assertEq(feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6), 10e6);
+
+        vm.warp(awardDeadline + 1);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+        assertEq(forfeitedAmount, 90e6);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + 90e6);
+    }
+
     function testAwardRejectsAfterMinimumDecisionWindowAndForfeits() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
@@ -1450,6 +1486,39 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         }
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+    }
+
+    function _moveRoundToSettlementPendingWithPublishedFeedback(
+        address[] memory voters,
+        uint256 contentId,
+        bool[] memory directions
+    ) internal returns (uint256 roundId) {
+        bytes32[] memory salts = new bytes32[](voters.length);
+        bytes32[] memory commitKeys = new bytes32[](voters.length);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            (salts[i], commitKeys[i]) = _commitFeedbackVote(voters[i], contentId, directions[i], i, address(0));
+        }
+
+        roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        for (uint256 i = 0; i < voters.length; i++) {
+            vm.prank(voters[i]);
+            feedbackRegistry.publishFeedback(
+                contentId, roundId, commitKeys[i], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+            );
+        }
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
+        }
+
+        _ensureTestClusterPayoutOracle(votingEngine);
+        vm.roll(block.number + 1);
+        votingEngine.settleRound(contentId, roundId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.SettlementPending));
     }
 
     function _commitFeedbackVote(address voter, uint256 contentId, bool isUp, uint256 index, address frontend)

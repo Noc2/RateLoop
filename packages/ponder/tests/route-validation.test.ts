@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { encodePacked, keccak256 } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolvePonderProtocolDeploymentMetadata } from "../src/protocol-deployment.js";
@@ -5065,7 +5066,7 @@ describe("registerKeeperRoutes", () => {
     expect(serializedWhere).toContain("round.voteCount");
   });
 
-  it("filters feedback bonus forfeits to expired pools that are not started open rounds", async () => {
+  it("filters feedback bonus forfeits to expired pools that are not started open or settlement-pending rounds", async () => {
     const { queryBuilders } = mockPonderModules([], [[], [], []]);
     const { registerKeeperRoutes } = await import(
       "../src/api/routes/keeper-routes.js"
@@ -5090,6 +5091,7 @@ describe("registerKeeperRoutes", () => {
     expect(serializedWhere).toContain("feedbackBonusPool.awardDeadline");
     expect(serializedWhere).toContain("round.contentId");
     expect(serializedWhere).toContain("round.state");
+    expect(serializedWhere).toContain(String(ROUND_STATE.SettlementPending));
     expect(serializedWhere).toContain("round.startTime");
     expect(serializedWhere).toContain("<");
 

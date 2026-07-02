@@ -237,7 +237,10 @@ export function registerKeeperRoutes(app: ApiApp) {
           or(
             sql`${round.contentId} is null`,
             sql`not (
-              ${round.state} = ${ROUND_STATE.Open}
+              (
+                ${round.state} = ${ROUND_STATE.Open}
+                or ${round.state} = ${ROUND_STATE.SettlementPending}
+              )
               and ${round.startTime} is not null
               and ${round.startTime} > 0
             )`,
