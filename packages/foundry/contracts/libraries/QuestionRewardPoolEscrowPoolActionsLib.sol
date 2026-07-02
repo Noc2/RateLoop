@@ -285,6 +285,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             roundIds,
             PAYOUT_DOMAIN_QUESTION_REWARD
         );
+        if (rewardPool.pendingPreQualificationRejectedRounds != 0) return 0;
         if (
             !inactive
                 && (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded)
@@ -579,7 +580,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         }
 
         rewardPool.pendingPreQualificationRejectedRounds = pendingPreQualificationRejectedRounds.toUint32();
-        _requireNoPendingPreQualificationRejectedRounds(rewardPool);
     }
 
     function _hasRecoveredReplacementSnapshot(

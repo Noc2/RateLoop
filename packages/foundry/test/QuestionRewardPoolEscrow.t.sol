@@ -4067,6 +4067,53 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
     }
 
+    function testPreQualificationRejectedRoundsCanBeAbandonedInBatches() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + 3 days;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory firstWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, firstRoundId, 0);
+        bytes32 firstRoot = oracle.payoutWeightLeaf(firstWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, firstRoundId, 3, 30_000, firstWeight.effectiveWeight, firstRoot
+        );
+        bytes32 firstSnapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, firstRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(firstSnapshotKey, keccak256("batch-reject-first"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, firstRoundId);
+
+        vm.warp(block.timestamp + 25 hours);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory secondWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, secondRoundId, 0);
+        bytes32 secondRoot = oracle.payoutWeightLeaf(secondWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, secondRoundId, 3, 30_000, secondWeight.effectiveWeight, secondRoot
+        );
+        bytes32 secondSnapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, secondRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(secondSnapshotKey, keccak256("batch-reject-second"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, secondRoundId);
+
+        vm.warp(expiresAt + 1);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 firstRefund =
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(firstRoundId), false);
+        assertEq(firstRefund, 0, "partial batch only clears progress");
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore, "partial batch does not transfer funds");
+
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+
+        uint256 secondRefund =
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(secondRoundId), false);
+        assertGt(secondRefund, 0);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + secondRefund);
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, firstRoundId));
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, secondRoundId));
+    }
+
     function testPreQualificationParentRejectedClusterSnapshotRoundCanBeSkippedAndRefunded() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
