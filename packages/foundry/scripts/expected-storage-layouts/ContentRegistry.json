@@ -159,23 +159,29 @@
     {
       "slot": 26,
       "offset": 0,
+      "label": "nextRatingSnapshotRoundId",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 27,
+      "offset": 0,
       "label": "contentSlashConfigSnapshot",
       "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
     },
     {
-      "slot": 27,
+      "slot": 28,
       "offset": 0,
       "label": "submissionMediaValidator",
       "type": "t_contract(SubmissionMediaValidator)"
     },
     {
-      "slot": 28,
+      "slot": 29,
       "offset": 0,
       "label": "questionBundleRoundObserverByContent",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 29,
+      "slot": 30,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -191,8 +197,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[37]",
-      "numberOfBytes": "1184",
+      "label": "uint256[36]",
+      "numberOfBytes": "1152",
       "base": "t_uint256"
     },
     {
