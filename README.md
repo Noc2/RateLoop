@@ -37,11 +37,11 @@ Key pieces:
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
 - **Crowd Forecast Voting** — the core input is a binary signal plus a 0-100% population prediction, scored against revealed peer signals
 - **Starter Reputation** — raters can submit zero-LREP advisory ratings in rounds that already have a staked vote; they do not count toward settlement quorum, but eligible settled advisory rounds can earn launch credits, and open raters can later unlock their full earned cap by verifying the same wallet
-- **LREP Locks** — useful staked reports score above the stake-weighted mean, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
+- **LREP Locks** — useful staked reports score above the effective-weighted RBTS benchmark, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and USDC Bounties and Feedback Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and the fresh redeploy uses one question duration for the blind window, bounty eligibility, and Feedback Bonus close; wallet-call asks keep bounty and bonus in the same asset, while USDC remains the x402-compatible public agent payment lane with one-shot bounty plus bonus funding
-- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds, and the same roots now carry surprise-weighted (accuracy-linked) bounty claim weights for USDC rounds in addition to cluster caps
+- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, USDC payouts, and launch LREP payouts across rounds; USDC bounty roots also carry surprise-weighted claim weights
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
@@ -52,6 +52,7 @@ LREP transferability is intentional: it makes governance and protocol reputation
 RateLoop does not treat raw token balance as enough to earn or control outcomes. Prediction score, effective-unit
 weighting, verified-human launch anchors, correlation epoch snapshots, governance locks, proposal/quorum floors, and hard
 minimums for submission bounties are the main mitigations.
+These mitigations reduce visible herding and detectable cluster economics, but the current single-task RBTS mechanism is not collusion-proof: truthfulness is an independent-rater Bayes-Nash guarantee, and undetected coordinated blocs remain a residual signal risk.
 
 Live protocol and product documentation is maintained in the Next.js docs routes, with deployment and audit notes under
 [docs](docs). Start with [docs/env-parity.md](docs/env-parity.md) for service environment checks.

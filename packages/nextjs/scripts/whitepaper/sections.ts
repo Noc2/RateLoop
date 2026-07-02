@@ -321,7 +321,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Sybil resistance from LREP cost, calibration, per-round stake caps, optional credentials, and public behavior history.",
               "Cryptographic hiding during the blind phase through tlock and drand.",
-              "Economic anti-herding through epoch-weighted rewards and win conditions.",
+              "Economic anti-herding through blind commit-reveal, epoch-weighted rewards, correlation-adjusted RBTS/public-rating weights, and surprise-weighted bounty claims.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
               "Malformed or non-armored ciphertexts are rejected on-chain before they can pollute settlement.",
               "Public on-chain history and frontend-backed challengeable payout roots make suspicious funding, timing, and prediction patterns auditable by the community.",
@@ -399,7 +399,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `RBTS settlement stores each revealed report's scoreBps, computes a leave-one-out benchmark for each staked report from the stake-weighted scores of the other score-eligible revealed reports, and compares the report with that benchmark. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. The benefit is that stake rewards follow relative predictive quality rather than raw popularity, so raters have a reason to report independently instead of copying visible momentum; leave-one-out also prevents a large staker from pulling its own payout benchmark toward its score. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `RBTS settlement stores each revealed report's scoreBps, computes a leave-one-out benchmark for each staked report from the effective-weighted scores of the other score-eligible revealed reports, and compares the report with that benchmark. When the cluster oracle is configured, a finalized RBTS settlement snapshot can reduce each report's reward weight for detected clusters before score-spread rewards and forfeits are computed. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} effective score-eligible participant units are present. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. The benefit is that stake rewards follow relative predictive quality rather than raw popularity, so raters have a reason to report independently instead of copying visible momentum; leave-one-out also prevents a large staker from pulling its own payout benchmark toward its score. This is an independent-rater Bayes-Nash incentive claim, not a proof that truthful reporting is dominant-strategy or uniquely payoff-maximizing against undetected coordination. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move.`,
           },
           {
             type: "sub_heading",
@@ -407,11 +407,11 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "formula",
-            latex: String.raw`b_i = \frac{\sum_j k_j\, s_j - k_i\,s_i}{\sum_j k_j - k_i} \qquad d_i = s_i - b_i`,
+            latex: String.raw`b_i = \frac{\sum_j w_j\, s_j - w_i\,s_i}{\sum_j w_j - w_i} \qquad d_i = s_i - b_i`,
           },
           {
             type: "formula",
-            latex: String.raw`f_i = \begin{cases} \min\!\left(k_i\,\lambda\,\dfrac{\lvert d_i\rvert}{100},\; 0.5\,k_i\right) & d_i < 0 \;\text{ and }\; n \ge ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} \\[6pt] 0 & \text{otherwise} \end{cases}`,
+            latex: String.raw`f_i = \begin{cases} \min\!\left(k_i\,\lambda\,\dfrac{\lvert d_i\rvert}{100},\; 0.5\,k_i\right) & d_i < 0 \;\text{ and score-spread mode is active} \\[6pt] 0 & \text{otherwise} \end{cases}`,
           },
           {
             type: "formula",
@@ -419,7 +419,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "formula",
-            latex: String.raw`r_i = 0.96\, F' \cdot \frac{k_i\, d_i}{\sum_{d_j > 0} k_j\, d_j}`,
+            latex: String.raw`r_i = 0.96\, F' \cdot \frac{w_i\, d_i}{\sum_{d_j > 0} w_j\, d_j}`,
           },
           {
             type: "formula",
@@ -427,7 +427,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "Here k_i is the LREP stake on report i, s_i is the revealed RBTS score, b_i is report i's leave-one-out benchmark, lambda is the governance-set forfeit intensity, n is the number of score-eligible revealed voters, and F' is the forfeited pool after the settlement-caller cut.",
+            text: "Here k_i is the LREP stake on report i, w_i is the effective RBTS reward weight after any finalized settlement snapshot, s_i is the revealed RBTS score, b_i is report i's leave-one-out benchmark, lambda is the governance-set forfeit intensity, and F' is the forfeited pool after the settlement-caller cut.",
           },
         ],
       },
@@ -462,7 +462,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "A_R is the round allocation, w_i is the finalized claim weight, w_i^base is the surprise-weighted base weight from the snapshot, and ind_i is the independence multiplier in basis points from the correlation scorer. The benefit is a bounty rule that buys scarce, informative judgment instead of rewarding only participation or raw majority alignment.",
+            text: "A_R is the round allocation, w_i is the finalized claim weight, w_i^base is the surprise-weighted base weight from the snapshot, and ind_i is the independence multiplier in basis points from the correlation scorer. The benefit is a bounty rule that buys scarce, informative judgment instead of rewarding only participation or raw majority alignment. Surprise weighting is a bounty-payout rule, not a standalone truthfulness proof; it is strongest when paired with the independence multiplier and public auditability.",
           },
         ],
       },
@@ -724,6 +724,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "RateLoop returns public rating judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
+              "The current single-task RBTS mechanism is Bayes-Nash truthful under independent-rater assumptions, but not collusion-proof; undetected coordinated blocs remain a residual signal risk despite correlation and surprise-weighting mitigations.",
               "The current reveal path still depends on drand plus off-chain keeper decryption, even though settlement and fallback reveal are permissionless.",
               "Private-context asks are operator-trust by design: wallet-signed terms, watermarks, access logs, optional bonds, and identity bans deter leaks, but they do not stop an eligible rater, the serving operator, or compromised infrastructure from seeing the material.",
               "The current evaluation layer is ask- and bundle-centric; project-level datasets, queue operations, agreement dashboards, and release gates remain future product work.",

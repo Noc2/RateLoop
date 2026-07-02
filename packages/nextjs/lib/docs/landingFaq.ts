@@ -67,7 +67,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Why Is Voting Blind?",
     answer:
-      "Blind voting hides directions until the phase ends, which reduces herding and rewards independent judgment.",
+      "Blind voting hides directions until the phase ends, which reduces visible copycat herding; correlation snapshots and reward weights further reduce detectable cluster economics.",
     learnMoreHref: "/docs/how-it-works#blind-voting",
     learnMoreLabel: "Blind Voting",
   },

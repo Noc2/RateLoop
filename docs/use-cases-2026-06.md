@@ -57,7 +57,7 @@ slot ERC-8004 deliberately left open.
 | Private context | **Live end-to-end**: hosted-only gated context, wallet-signed terms (server-recorded, content-commitment-bound), sharp watermark + HMAC view tokens + access logs, append-only daily log-root artifacts with anchoring-required cron publication, artifact-bound breach evidence, bond escrow (1–100 USDC default cap, 0 allowed), breach tab + slash/ban governance actions, disclosure-after-settlement or private-forever. Gaps: no gated bundles; mainnet anchor key/role still needs operational verification; **gated rounds are human-credential-only (AI raters excluded)** |
 | Targeting | Validated taxonomy + `rateloop_list_audience_options` + submit-UI picker + indexed `targetAudience` + `targetAudienceMatch` in results + 7-day cooldown + payout-artifact claim-weight enforcement. Still self-reported; consistency probes/verified tiers pending (`audience-targeting-plan-2026-06.md`) |
 | Rater pool | Humans (World ID-gateable via credential masks) and AI raters (first-class `RaterType`, normal stake+vote, bounty-eligible when eligibility is open). **No AI-only eligibility mask** — pure-AI rounds are achievable socially, not enforced. Legacy contributors seeded as verified humans (supply bootstrap) |
-| Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline (herding finding mitigated); score-spread forfeits require ≥8 reveals; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
+| Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline and help mitigate visible herding; score-spread forfeits require ≥8 effective score-eligible units; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
 | Liveness/trust | RevealFailed refunds stakes; 24× reveal-failed grace; permissionless snapshot recovery; settlement-caller incentive; oracle challenger rewards from slash proceeds |
 | Agent integration | MCP (incl. confidentiality terms tool, audience options, gated context fetch), dry-run sandbox, signed public webhooks, x402-bound asks; SDK/agents packages built **but still 404 on npm** |
 
@@ -144,7 +144,7 @@ failure that killed Google Answers.
 
 **What changed:** Fast AI rounds add a triage tier (cheap minutes-scale AI read, escalate to
 verified humans for the calls that matter), and surprise-weighted bounty income strengthens the
-honest-effort story. The cap is unchanged: embryonic buyer side, and "useful human answer for
+honest-effort story without making the mechanism collusion-proof. The cap is unchanged: embryonic buyer side, and "useful human answer for
 $3" must beat "agent searches more" often enough to retain callers.
 
 ### 4. LLM-judge calibration sets + confidential AI eval (PMF 6.5–7)
