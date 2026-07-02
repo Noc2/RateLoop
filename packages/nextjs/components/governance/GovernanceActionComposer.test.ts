@@ -9,6 +9,8 @@ import {
 } from "./GovernanceActionComposer";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { encodeFunctionData } from "viem";
+import { contracts } from "~~/utils/scaffold-eth/contract";
 
 test("governance action composer exposes confidentiality breach proposal templates", () => {
   const templates = new Map(getGovernanceActionTemplateSummaries().map(template => [template.id, template]));
@@ -75,6 +77,23 @@ test("governance action composer exposes oracle finality timing with veto window
     label: "Set oracle timing",
     mode: "proposal",
   });
+});
+
+test("governance oracle timing template encodes with resolved contract metadata", () => {
+  const oracleContracts = Object.values(contracts ?? {})
+    .map(chainContracts => chainContracts.ClusterPayoutOracle)
+    .filter(Boolean);
+  assert.ok(oracleContracts.length > 0, "ClusterPayoutOracle deployment metadata is required");
+  const oracleContract = oracleContracts[0];
+  assert.ok(oracleContract, "ClusterPayoutOracle deployment metadata is required");
+
+  const data = encodeFunctionData({
+    abi: oracleContract.abi,
+    functionName: "setOracleTimingConfig",
+    args: [900n, 900n],
+  });
+
+  assert.match(data, /^0x[0-9a-f]+$/u);
 });
 
 test("oracle timing preview warns above the one-hour launch budget", () => {
