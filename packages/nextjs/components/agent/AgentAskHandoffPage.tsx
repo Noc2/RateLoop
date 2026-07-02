@@ -1624,7 +1624,7 @@ async function applyDraftQuestion(
   if (!title) throw new Error(`Question ${index + 1} needs a title.`);
   if (!categoryId) throw new Error(`Question ${index + 1} needs a category.`);
   if (tags.length === 0 || tags.length > 3) {
-    throw new Error(`Question ${index + 1} needs one to three categories.`);
+    throw new Error(`Question ${index + 1} needs one to three tags.`);
   }
 
   const nextQuestion: JsonRecord = {
