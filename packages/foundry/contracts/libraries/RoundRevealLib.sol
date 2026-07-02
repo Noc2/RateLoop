@@ -17,11 +17,6 @@ library RoundRevealLib {
     uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
     uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
     uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
-    uint256 internal constant RBTS_SEED_BLOCK_FLAG = 1 << 255;
-    uint256 internal constant RBTS_SEED_TIMESTAMP_SHIFT = 64;
-    uint256 internal constant RBTS_SEED_ORIGINAL_BLOCK_SHIFT = 112;
-    uint256 internal constant RBTS_SEED_BLOCK_MASK = uint256(type(uint64).max);
-    uint256 internal constant RBTS_SEED_EXPIRY_BLOCKS = 8191;
 
     error RoundNotOpen();
     error NoCommit();
@@ -29,7 +24,6 @@ library RoundRevealLib {
     error EpochNotEnded();
     error HashMismatch();
     error NotEnoughVotes();
-    error RevealGraceActive();
 
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
 
@@ -163,6 +157,8 @@ library RoundRevealLib {
         uint256 revealedCount;
         uint16 minParticipants;
         bytes32 settlementEntropy;
+        bytes32 scoringSetHash;
+        uint256 scoringSetCount;
         uint48 thresholdReachedAt;
     }
 
@@ -187,27 +183,10 @@ library RoundRevealLib {
         // current-epoch commits that are allowed to settle/refund cannot grind reward draws.
         // The engine rejects reveals after closure, keeping the sampler index space stable
         // between seed capture and final settlement.
-        uint256 committedCount = commitKeys.length;
-        bytes32[] memory revealedKeysMem = new bytes32[](committedCount);
-        bytes32 scoringSetHash;
-        uint256 revealedBuildIdx;
+        (bytes32[] memory revealedKeysMem, uint256 revealedBuildIdx) =
+            _rbtsScoringSet(commitKeys, roundCommits, commitRbtsWeight, params.minParticipants);
+        if (params.scoringSetCount != revealedBuildIdx) revert NotEnoughVotes();
         RbtsRoundTotals memory totals;
-        for (uint256 i = 0; i < committedCount;) {
-            bytes32 commitKey = commitKeys[i];
-            RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
-            if (revealedCommit.revealed && commitRbtsWeight[commitKey] > 0) {
-                bytes32 drawKey = _rbtsDrawKey(roundCommits, commitIdentityKey, commitKey);
-                scoringSetHash = keccak256(abi.encode(scoringSetHash, commitKey, drawKey));
-                revealedKeysMem[revealedBuildIdx] = commitKey;
-                unchecked {
-                    ++revealedBuildIdx;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
         if (params.settlementEntropy == bytes32(0)) {
             _returnScoredStakes(
@@ -216,9 +195,9 @@ library RoundRevealLib {
             return result;
         }
 
-        // Seed combines delayed closure entropy with the settlement-closed scoring set.
+        // Seed combines voter precommitted reveal entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
-            params.contentId, params.roundId, revealedBuildIdx, scoringSetHash, params.settlementEntropy
+            params.contentId, params.roundId, revealedBuildIdx, params.scoringSetHash, params.settlementEntropy
         );
         (uint256 weightedScoreSum, uint256 scoreWeightSum) = _scoreRbtsRevealedSet(
             roundCommits,
@@ -288,41 +267,19 @@ library RoundRevealLib {
 
     function captureRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        mapping(uint256 => mapping(uint256 => uint48)) storage roundRbtsScoringClosedAt,
         uint256 contentId,
         uint256 roundId
     ) external {
-        _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+        _captureRbtsSeed(roundRbtsSeedEntropy, roundRbtsScoringClosedAt, contentId, roundId);
     }
 
     function finalizeRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
         uint256 roundId
-    ) external returns (bytes32 settlementEntropy, bool ready) {
+    ) external view returns (bytes32 settlementEntropy, bool ready) {
         settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
-        uint256 seedWord = uint256(settlementEntropy);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return (settlementEntropy, true);
-
-        uint256 seedBlock = uint64(seedWord);
-        if (block.number <= seedBlock) revert RevealGraceActive();
-        if (block.number > seedBlock + RBTS_SEED_EXPIRY_BLOCKS) {
-            _refreshRbtsSeedBlock(roundRbtsSeedEntropy, contentId, roundId, seedWord);
-            return (bytes32(0), false);
-        }
-        uint64 originalBlock = uint64(seedWord >> RBTS_SEED_ORIGINAL_BLOCK_SHIFT);
-        uint48 capturedAt = uint48(seedWord >> RBTS_SEED_TIMESTAMP_SHIFT);
-        settlementEntropy = keccak256(
-            abi.encode(
-                "rateloop.rbts.revealed-set-seed.v1",
-                block.chainid,
-                address(this),
-                contentId,
-                roundId,
-                originalBlock,
-                capturedAt
-            )
-        );
-        emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
         return (settlementEntropy, true);
     }
 
@@ -334,27 +291,16 @@ library RoundRevealLib {
 
     function _captureRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        mapping(uint256 => mapping(uint256 => uint48)) storage roundRbtsScoringClosedAt,
         uint256 contentId,
         uint256 roundId
     ) private {
-        bytes32 seedBlockMarker = bytes32(
-            RBTS_SEED_BLOCK_FLAG | (uint256(block.timestamp.toUint48()) << RBTS_SEED_TIMESTAMP_SHIFT)
-                | (uint256(block.number.toUint64()) << RBTS_SEED_ORIGINAL_BLOCK_SHIFT)
-                | uint256(block.number.toUint64())
-        );
-        roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
-        emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
-    }
-
-    function _refreshRbtsSeedBlock(
-        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
-        uint256 contentId,
-        uint256 roundId,
-        uint256 previousMarker
-    ) private {
-        bytes32 seedBlockMarker = bytes32((previousMarker & ~RBTS_SEED_BLOCK_MASK) | uint256(block.number.toUint64()));
-        roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
-        emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
+        bytes32 closureMarker =
+            keccak256(abi.encode("rateloop.rbts.scoring-closed.v1", block.chainid, address(this), contentId, roundId));
+        if (closureMarker == bytes32(0)) closureMarker = bytes32(uint256(1));
+        roundRbtsSeedEntropy[contentId][roundId] = closureMarker;
+        roundRbtsScoringClosedAt[contentId][roundId] = block.timestamp.toUint48();
+        emit RbtsSeedCaptured(contentId, roundId, closureMarker);
     }
 
     function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
@@ -516,6 +462,30 @@ library RoundRevealLib {
         }
     }
 
+    function _rbtsScoringSet(
+        bytes32[] storage commitKeys,
+        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
+        mapping(bytes32 => uint256) storage commitRbtsWeight,
+        uint16 minParticipants
+    ) private view returns (bytes32[] memory revealedKeysMem, uint256 revealedBuildIdx) {
+        uint256 committedCount = commitKeys.length;
+        revealedKeysMem = new bytes32[](committedCount);
+        for (uint256 i = 0; i < committedCount;) {
+            bytes32 commitKey = commitKeys[i];
+            RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
+            if (revealedCommit.revealed && commitRbtsWeight[commitKey] > 0) {
+                revealedKeysMem[revealedBuildIdx] = commitKey;
+                unchecked {
+                    ++revealedBuildIdx;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        if (revealedBuildIdx < minParticipants) revert NotEnoughVotes();
+    }
+
     function _scoreRbtsCommitAt(
         mapping(bytes32 => RoundLib.Commit) storage roundCommits,
         mapping(bytes32 => uint16) storage commitPredictedUpBps,
@@ -566,11 +536,10 @@ library RoundRevealLib {
     ///      - `scoringSetCount` and `scoringSetHash` (the settlement-closed RBTS
     ///        scoring set in commit order, excluding unrevealed current-epoch commits that are
     ///        allowed to settle/refund),
-    ///      - `settlementEntropy`, captured when settlement closes the scoring set so
-    ///        neither the last committer nor the settlement caller can overwrite the entropy while
-    ///        choosing whether to proceed.
-    ///      Together the delayed entropy and closed scoring set make the seed fixed after closure
-    ///      and invariant to non-scoring commits.
+    ///      - `settlementEntropy`, captured when settlement closes the scoring set as a stable
+    ///        closure marker.
+    ///      Together the precommitted reveal entropy in `scoringSetHash` and the closed scoring set
+    ///      make the seed fixed after closure and invariant to non-scoring commits.
     function _rbtsScoreSeed(
         uint256 contentId,
         uint256 roundId,

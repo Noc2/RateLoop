@@ -199,6 +199,7 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
             commitRbtsStakeReturned[contentId][roundId],
             commitRbtsForfeitedStake[contentId][roundId],
             commitIdentityKey[contentId][roundId],
+            commitRevealEntropy[contentId][roundId],
             RoundRbtsSettlementSnapshotLib.ScoreParams({
                 contentId: contentId,
                 roundId: roundId,

@@ -922,7 +922,7 @@ contract RoundVotingEngine is
             upWins = round.upPool < round.downPool;
         }
         if (!scoringClosed) {
-            RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+            RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, roundRbtsScoringClosedAt, contentId, roundId);
             address rbtsSettlementOracle = protocolConfig.clusterPayoutOracle();
             if (rbtsSettlementOracle == address(0)) revert InvalidAddress();
             roundRbtsSettlementOracle[contentId][roundId] = rbtsSettlementOracle;
@@ -1007,7 +1007,7 @@ contract RoundVotingEngine is
             lrepToken,
             protocolConfig,
             accountedLrepBalance,
-            uint48(uint256(roundRbtsSeedEntropy[contentId][roundId]) >> 64),
+            roundRbtsScoringClosedAt[contentId][roundId],
             msg.sender,
             startIndex,
             count
@@ -1309,6 +1309,8 @@ contract RoundVotingEngine is
                 countForSettlement: true
             })
         );
+        commitRevealEntropy[contentId][roundId][commitKey] =
+            keccak256(abi.encode("rateloop.rbts.reveal-entropy.v1", commitKey, salt));
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
         if (thresholdBlock == 0 && round.thresholdReachedAt != 0) {

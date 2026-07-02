@@ -311,14 +311,14 @@ contract SelectiveRevelationTest is VotingTestBase {
         bytes32 actualSeed = _scoreSeedFromLogs(logs, contentId, roundId);
         bytes32 settlementEntropy = _settlementEntropyFromLogs(logs, contentId, roundId);
 
-        bytes32 scoringSetHash = _scoringSetHash(contentId, roundId, commitKeys, 8);
+        bytes32 scoringSetHash = _scoringSetHash(contentId, roundId, commitKeys, salts, 8);
         bytes32 expectedSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(8), scoringSetHash, settlementEntropy
             )
         );
 
-        bytes32 pollutedSetHash = _scoringSetHash(contentId, roundId, commitKeys, 10);
+        bytes32 pollutedSetHash = _scoringSetHash(contentId, roundId, commitKeys, salts, 10);
         bytes32 pollutedSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(10), pollutedSetHash, settlementEntropy
@@ -329,7 +329,13 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertNotEq(actualSeed, pollutedSeed, "unrevealed commits must not perturb seed after grace");
     }
 
-    function _scoringSetHash(uint256 contentId, uint256 roundId, bytes32[10] memory commitKeys, uint256 count)
+    function _scoringSetHash(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32[10] memory commitKeys,
+        bytes32[10] memory salts,
+        uint256 count
+    )
         internal
         view
         returns (bytes32 hash)
@@ -340,8 +346,12 @@ contract SelectiveRevelationTest is VotingTestBase {
                 RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKeys[i]);
                 drawKey = VotePreflightLib.addressIdentityKey(commit.voter);
             }
-            hash = keccak256(abi.encode(hash, commitKeys[i], drawKey));
+            hash = keccak256(abi.encode(hash, commitKeys[i], drawKey, _rbtsRevealEntropy(commitKeys[i], salts[i])));
         }
+    }
+
+    function _rbtsRevealEntropy(bytes32 commitKey, bytes32 salt) internal pure returns (bytes32) {
+        return keccak256(abi.encode("rateloop.rbts.reveal-entropy.v1", commitKey, salt));
     }
 
     function test_SingleDuration_UnrevealedAfterGraceDoesNotCreateSubsidy() public {

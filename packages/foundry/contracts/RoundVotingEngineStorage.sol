@@ -81,6 +81,8 @@ abstract contract RoundVotingEngineStorage {
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) internal pendingBundleObserverReplay;
     mapping(uint256 => mapping(uint256 => uint16)) internal roundHumanVerifiedCommitCount;
     mapping(uint256 => mapping(uint256 => bytes32)) internal roundRbtsSeedEntropy;
+    mapping(uint256 => mapping(uint256 => uint48)) internal roundRbtsScoringClosedAt;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) internal commitRevealEntropy;
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
     uint256 internal _pendingTreasuryForfeitLrep;
@@ -90,5 +92,5 @@ abstract contract RoundVotingEngineStorage {
     mapping(uint256 => mapping(uint256 => address)) internal roundConfidentialityEscrowSnapshot;
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingRatingSettlementReplay;
     address internal rbtsSettlementModule;
-    uint256[14] private __gap;
+    uint256[12] private __gap;
 }

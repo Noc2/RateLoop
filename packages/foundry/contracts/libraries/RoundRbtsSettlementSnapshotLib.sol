@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { RoundLib } from "./RoundLib.sol";
 import { RoundRevealLib } from "./RoundRevealLib.sol";
+import { VotePreflightLib } from "./VotePreflightLib.sol";
 
 /// @title RoundRbtsSettlementSnapshotLib
 /// @notice Validates oracle-backed independence weights before RBTS LREP settlement.
@@ -13,6 +14,7 @@ library RoundRbtsSettlementSnapshotLib {
     uint32 internal constant MIN_EFFECTIVE_FORFEIT_UNITS = 8 * uint32(BPS_DENOMINATOR);
 
     error InvalidState();
+    error MissingRevealEntropy();
 
     struct SnapshotResult {
         bytes32 snapshotKey;
@@ -127,11 +129,15 @@ library RoundRbtsSettlementSnapshotLib {
         mapping(bytes32 => uint256) storage commitRbtsStakeReturned,
         mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
         mapping(bytes32 => bytes32) storage commitIdentityKey,
+        mapping(bytes32 => bytes32) storage commitRevealEntropy,
         ScoreParams memory params
     ) external returns (RoundRevealLib.ScoreRbtsResult memory result, bool seedReady) {
         (bytes32 settlementEntropy, bool ready) =
             RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, params.contentId, params.roundId);
         if (!ready) return (result, false);
+        (bytes32 scoringSetHash, uint256 scoringSetCount) = _rbtsScoringSetHash(
+            commitKeys, roundCommits, commitRbtsWeight, commitIdentityKey, commitRevealEntropy, params.minParticipants
+        );
         result = RoundRevealLib.scoreRbtsRewards(
             commitKeys,
             roundCommits,
@@ -148,10 +154,43 @@ library RoundRbtsSettlementSnapshotLib {
                 revealedCount: params.revealedCount,
                 minParticipants: params.minParticipants,
                 settlementEntropy: settlementEntropy,
+                scoringSetHash: scoringSetHash,
+                scoringSetCount: scoringSetCount,
                 thresholdReachedAt: params.thresholdReachedAt
             })
         );
         seedReady = true;
+    }
+
+    function _rbtsScoringSetHash(
+        bytes32[] storage commitKeys,
+        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
+        mapping(bytes32 => uint256) storage commitRbtsWeight,
+        mapping(bytes32 => bytes32) storage commitIdentityKey,
+        mapping(bytes32 => bytes32) storage commitRevealEntropy,
+        uint16 minParticipants
+    ) private view returns (bytes32 scoringSetHash, uint256 scoringSetCount) {
+        uint256 committedCount = commitKeys.length;
+        for (uint256 i = 0; i < committedCount;) {
+            bytes32 commitKey = commitKeys[i];
+            RoundLib.Commit storage commit = roundCommits[commitKey];
+            if (commit.revealed && commitRbtsWeight[commitKey] > 0) {
+                bytes32 identityKey = commitIdentityKey[commitKey];
+                bytes32 drawKey = identityKey == bytes32(0)
+                    ? VotePreflightLib.addressIdentityKey(commit.voter)
+                    : identityKey;
+                bytes32 revealEntropy = commitRevealEntropy[commitKey];
+                if (revealEntropy == bytes32(0)) revert MissingRevealEntropy();
+                scoringSetHash = keccak256(abi.encode(scoringSetHash, commitKey, drawKey, revealEntropy));
+                unchecked {
+                    ++scoringSetCount;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        if (scoringSetCount < minParticipants) revert InvalidState();
     }
 
     function returnRbtsStakes(

@@ -393,53 +393,65 @@
     {
       "slot": 65,
       "offset": 0,
-      "label": "roundClusterPayoutReadyAt",
+      "label": "roundRbtsScoringClosedAt",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint48))"
     },
     {
       "slot": 66,
       "offset": 0,
+      "label": "commitRevealEntropy",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bytes32)))"
+    },
+    {
+      "slot": 67,
+      "offset": 0,
+      "label": "roundClusterPayoutReadyAt",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint48))"
+    },
+    {
+      "slot": 68,
+      "offset": 0,
       "label": "_pendingTreasuryForfeitLrep",
       "type": "t_uint256"
     },
     {
-      "slot": 67,
+      "slot": 69,
       "offset": 0,
       "label": "commitCredentialMask",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
     },
     {
-      "slot": 68,
+      "slot": 70,
       "offset": 0,
       "label": "commitFreshCredentialMask",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
     },
     {
-      "slot": 69,
+      "slot": 71,
       "offset": 0,
       "label": "roundContentDormantCountSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint8))"
     },
     {
-      "slot": 70,
+      "slot": 72,
       "offset": 0,
       "label": "roundConfidentialityEscrowSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
     },
     {
-      "slot": 71,
+      "slot": 73,
       "offset": 0,
       "label": "pendingRatingSettlementReplay",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 72,
+      "slot": 74,
       "offset": 0,
       "label": "rbtsSettlementModule",
       "type": "t_address"
     },
     {
-      "slot": 73,
+      "slot": 75,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -462,8 +474,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[14]",
-      "numberOfBytes": "448",
+      "label": "uint256[12]",
+      "numberOfBytes": "384",
       "base": "t_uint256"
     },
     {
