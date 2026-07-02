@@ -1065,6 +1065,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     {
         bytes memory data;
         (ok, data) = source.staticcall(abi.encodeCall(IRoundClusterReadyAtSource.roundCore, (contentId, roundId)));
+        // `settledAt` is output index 6 in the canonical 8-word RoundVotingEngine.roundCore tuple.
         if (!ok || data.length < 224) return (false, 0);
         uint256 rawSettledAt;
         assembly ("memory-safe") {

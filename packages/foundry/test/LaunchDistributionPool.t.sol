@@ -3256,8 +3256,12 @@ contract MockAlwaysReadyClusterSource {
         return (0, 0, 0, 1);
     }
 
-    function roundCore(uint256, uint256) external pure returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
-        return (1, 1, 0, 0, 0, 0, 1);
+    function roundCore(uint256, uint256)
+        external
+        pure
+        returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48, uint8)
+    {
+        return (1, 1, 0, 0, 0, 0, 1, 0);
     }
 
     function protocolConfig() external view returns (address) {
@@ -3310,8 +3314,12 @@ contract MockConfiguredClusterSource {
         return (0, 0, 0, 1);
     }
 
-    function roundCore(uint256, uint256) external pure returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
-        return (1, 1, 0, 0, 0, 0, 1);
+    function roundCore(uint256, uint256)
+        external
+        pure
+        returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48, uint8)
+    {
+        return (1, 1, 0, 0, 0, 0, 1, 0);
     }
 
     function protocolConfig() external view returns (address) {
@@ -3343,8 +3351,12 @@ contract MockGraceClusterSource {
         return (0, 0, 0, settledAt);
     }
 
-    function roundCore(uint256, uint256) external view returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
-        return (1, 1, 0, 0, 0, 0, settledAt);
+    function roundCore(uint256, uint256)
+        external
+        view
+        returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48, uint8)
+    {
+        return (1, 1, 0, 0, 0, 0, settledAt, 0);
     }
 
     function protocolConfig() external view returns (address) {

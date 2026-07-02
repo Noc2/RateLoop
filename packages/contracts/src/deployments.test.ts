@@ -267,6 +267,26 @@ test("cluster payout oracle ABI exposes metadata and root rejection functions", 
   );
 });
 
+test("round voting engine ABI keeps canonical roundCore tuple shape", () => {
+  const roundCore = generatedAbis.RoundVotingEngineAbi.find(
+    (item) => item.type === "function" && item.name === "roundCore",
+  );
+
+  assert.deepEqual(
+    roundCore?.outputs.map((output) => [output.name, output.type]),
+    [
+      ["startTime", "uint48"],
+      ["state", "uint8"],
+      ["voteCount", "uint16"],
+      ["revealedCount", "uint16"],
+      ["totalStake", "uint64"],
+      ["thresholdReachedAt", "uint48"],
+      ["settledAt", "uint48"],
+      ["upWins", "uint8"],
+    ],
+  );
+});
+
 test("question reward pool escrow ABI exposes snapshot consumer view", () => {
   const consumerView = generatedAbis.QuestionRewardPoolEscrowAbi.find(
     (item) =>

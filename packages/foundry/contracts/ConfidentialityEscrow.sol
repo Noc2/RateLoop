@@ -31,7 +31,8 @@ interface IConfidentialityRoundState {
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
+            uint8 upWins
         );
 }
 
@@ -553,7 +554,7 @@ contract ConfidentialityEscrow is
         try IConfidentialityRoundState(engine).currentRoundId(contentId) returns (uint256 roundId) {
             if (roundId == 0) return false;
             try IConfidentialityRoundState(engine).roundCore(contentId, roundId) returns (
-                uint48, RoundLib.RoundState state, uint16 voteCount, uint16, uint64 totalStake, uint48, uint48
+                uint48, RoundLib.RoundState state, uint16 voteCount, uint16, uint64 totalStake, uint48, uint48, uint8
             ) {
                 if (state == RoundLib.RoundState.Open && voteCount == 0 && totalStake == 0) return true;
                 return state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Cancelled
@@ -587,7 +588,7 @@ contract ConfidentialityEscrow is
         try IConfidentialityRoundState(engine).currentRoundId(contentId) returns (uint256 roundId) {
             if (roundId == 0) return false;
             try IConfidentialityRoundState(engine).roundCore(contentId, roundId) returns (
-                uint48, RoundLib.RoundState state, uint16 voteCount, uint16, uint64 totalStake, uint48, uint48
+                uint48, RoundLib.RoundState state, uint16 voteCount, uint16, uint64 totalStake, uint48, uint48, uint8
             ) {
                 return state == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
             } catch {

@@ -28,7 +28,8 @@ interface IRoundClusterReadyAtSource {
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
+            uint8 upWins
         );
     function protocolConfig() external view returns (IRevealGraceConfig);
 }
