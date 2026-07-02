@@ -765,17 +765,13 @@ function normalizeSubmissionRewardAsset(
   throw new Error("bounty.asset must be USDC or LREP.");
 }
 
-function feedbackBonusPaymentAmount(request: AskHumansRequest): bigint {
+function sameAssetFeedbackBonusPaymentAmount(request: AskHumansRequest): bigint {
   const bonus = request.feedbackBonus;
   if (!bonus) return 0n;
   assertSingleQuestionFeedbackBonus(request);
   const bountyAsset = normalizeSubmissionRewardAsset(request.bounty.asset);
   const bonusAsset = normalizeFeedbackBonusAsset(bonus.asset ?? bountyAsset);
-  if (bonusAsset !== bountyAsset) {
-    throw new Error(
-      "Feedback Bonus funding must use the same asset as the bounty.",
-    );
-  }
+  if (bonusAsset !== bountyAsset) return 0n;
   return normalizeBigInt(bonus.amount, "feedbackBonus.amount");
 }
 
@@ -821,11 +817,6 @@ function normalizeLocalSignerFeedbackBonus(
   }
   const bountyAsset = normalizeSubmissionRewardAsset(request.bounty.asset);
   const asset = normalizeFeedbackBonusAsset(bonus.asset ?? bountyAsset);
-  if (asset !== bountyAsset) {
-    throw new Error(
-      "Feedback Bonus funding must use the same asset as the bounty.",
-    );
-  }
   const amount = normalizeBigInt(bonus.amount, "feedbackBonus.amount");
   if (amount <= 0n) {
     throw new Error("feedbackBonus.amount must be greater than zero.");
@@ -858,7 +849,7 @@ function assertWithinMaxPaymentAmount(request: AskHumansRequest): bigint {
   const cap = parseMaxPaymentAmount(request.maxPaymentAmount);
   const total =
     normalizeBigInt(request.bounty.amount, "bounty.amount") +
-    feedbackBonusPaymentAmount(request);
+    sameAssetFeedbackBonusPaymentAmount(request);
   if (total > cap) {
     throw new Error("Quoted payment exceeds maxPaymentAmount.");
   }

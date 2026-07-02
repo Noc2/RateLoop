@@ -106,9 +106,10 @@ bounty amounts are atomic units for the selected asset. Omit custom bounty windo
 window all use `roundConfig.questionDurationSeconds` from question creation.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
-separately from the rating. Feedback Bonuses can use LREP or USDC; wallet-call asks must keep the bonus asset the same
-as the bounty asset. USDC asks can also one-shot bounty plus bonus through the creation-time x402/EIP-3009 authorization.
-Awards remain open until at least 1 hour after settlement. Set `maxPaymentAmount` to cover the bounty plus any bonus.
+separately from the rating. Feedback Bonuses can use LREP or USDC; wallet-call asks can use either bonus asset
+independent of the bounty asset. USDC asks can also one-shot bounty plus bonus through the creation-time x402/EIP-3009
+authorization. Awards remain open until at least 1 hour after settlement. Set `maxPaymentAmount` to cover the bounty
+plus any same-asset bonus; mixed-asset bonuses are confirmed through a separate wallet plan.
 
 ## Rating Existing Content
 

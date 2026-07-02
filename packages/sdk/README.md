@@ -288,10 +288,11 @@ transactions directly. For rating existing content, use
 A hosted direct HTTP client only needs the Next.js app's `apiBaseUrl` plus a funded
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
 Direct `askHumans({ transport: "http" })`, raw `POST /api/agent/asks`, MCP, browser handoff, and local signer flows can
-all carry single-question Feedback Bonuses. Wallet-call asks must keep the Feedback Bonus asset the same as the bounty
-asset and confirm the follow-up bonus transaction plan with `confirmFeedbackBonusTransactions`. EIP-3009/x402 remains a
-USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus. Direct `createAskHandoff` can carry the full handoff
-payload because the browser completes the funded flow. Paid
+all carry single-question Feedback Bonuses. Wallet-call asks can use either bonus asset independent of the bounty asset
+and confirm the follow-up bonus transaction plan with `confirmFeedbackBonusTransactions`; `maxPaymentAmount` covers the
+selected bounty asset plus any same-asset bonus, while mixed-asset bonuses are separately capped by their decoded wallet
+plan. EIP-3009/x402 remains a USDC-only one-shot path for USDC bounty plus USDC Feedback Bonus. Direct
+`createAskHandoff` can carry the full handoff payload because the browser completes the funded flow. Paid
 wallet-call asks and prepared ratings return wallet-call plans from a
 user-controlled smart wallet or scoped agent wallet. If a returned plan has `requiresAtomicExecution: true`, execute the
 whole plan as an atomic wallet batch or refuse to continue; do not degrade it into separate transactions. Plans without

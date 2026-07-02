@@ -1412,36 +1412,81 @@ describe("local signer", () => {
     ).toThrow(/does not match local signer/);
   });
 
-  it("rejects mixed-asset Feedback Bonuses before asking the agent", async () => {
+  it("executes mixed-asset wallet-call Feedback Bonus plans", async () => {
     const payload = feedbackBonusAskPayload({ asset: "LREP" });
+    payload.maxPaymentAmount = X402_AMOUNT;
+    payload.paymentMode = "wallet_calls";
+    const askResponse = walletCallsResponse();
+    const confirmationResponse = feedbackBonusPlanResponse(payload);
+    const transactions = {
+      ask: [`0x${"a".repeat(64)}`],
+      feedback_bonus: [`0x${"b".repeat(64)}`, `0x${"c".repeat(64)}`],
+    } as const;
+    const confirmed: unknown[] = [];
     const agent = {
-      askHumans: async () => {
-        throw new Error("askHumans should not run");
+      askHumans: async () => askResponse,
+      confirmAskTransactions: async (request) => {
+        confirmed.push({ plan: "ask", request });
+        return confirmationResponse;
       },
-      confirmAskTransactions: async () => {
-        throw new Error("confirmAskTransactions should not run");
+      confirmFeedbackBonusTransactions: async (request) => {
+        confirmed.push({ plan: "feedback_bonus", request });
+        return {
+          ...confirmationResponse,
+          feedbackBonus: {
+            ...confirmationResponse.feedbackBonus!,
+            status: "funded",
+            transactionHashes: request.transactionHashes,
+          },
+        };
       },
     } satisfies Pick<
       RateLoopAgentClient,
       "askHumans" | "confirmAskTransactions"
-    >;
+    > &
+      Partial<Pick<RateLoopAgentClient, "confirmFeedbackBonusTransactions">>;
 
-    await expect(
-      askHumansWithLocalSigner({
-        account,
-        agent,
-        config: {
-          ...validationConfig(),
-          chainId: 480,
-          chainName: "test",
-          pollingIntervalMs: 1,
-          receiptTimeoutMs: 1,
+    const result = await askHumansWithLocalSigner({
+      account,
+      agent,
+      config: {
+        ...validationConfig(),
+        chainId: 480,
+        chainName: "test",
+        pollingIntervalMs: 1,
+        receiptTimeoutMs: 1,
+      },
+      executeTransactionPlan: async ({ calls, plan }) => {
+        expect(calls).toHaveLength(plan === "feedback_bonus" ? 2 : 3);
+        if (plan === "feedback_bonus") {
+          expect(calls[0].phase).toBe("approve_feedback_bonus_lrep");
+        }
+        return { transactionHashes: [...transactions[plan]] };
+      },
+      payload,
+    });
+
+    expect(confirmed).toEqual([
+      {
+        plan: "ask",
+        request: {
+          operationKey: operationKeyFor(payload),
+          transactionHashes: [...transactions.ask],
         },
-        payload,
-      }),
-    ).rejects.toThrow(
-      /Feedback Bonus funding must use the same asset as the bounty/,
-    );
+      },
+      {
+        plan: "feedback_bonus",
+        request: {
+          operationKey: operationKeyFor(payload),
+          transactionHashes: [...transactions.feedback_bonus],
+        },
+      },
+    ]);
+    expect(result.feedbackBonusConfirmed?.feedbackBonus?.asset).toBe("LREP");
+    expect(result.feedbackBonusConfirmed?.feedbackBonus?.status).toBe("funded");
+    expect(result.feedbackBonusTransactions?.transactionHashes).toEqual([
+      ...transactions.feedback_bonus,
+    ]);
   });
 
   it("still requires cap room for same-asset Feedback Bonuses", async () => {
