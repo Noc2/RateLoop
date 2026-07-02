@@ -412,6 +412,54 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("too-late-at-deadline"));
     }
 
+    function test_RoundPayoutSnapshotOutsideVetoWindowWaitsForParentEpochVetoDeadline() public {
+        oracle.setOracleTimingConfig(1 hours, 2 hours);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory epochProposal = oracle.correlationEpochSnapshot(1);
+        vm.warp(uint256(epochProposal.proposedAt) + 1 hours);
+        oracle.finalizeCorrelationEpoch(1);
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory finalizedEpoch = oracle.correlationEpochSnapshot(1);
+        uint256 parentVetoDeadline = oracle.correlationEpochVetoDeadline(1);
+
+        oracle.setOracleTimingConfig(15 minutes, 15 minutes);
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposed.proposedAt) + 15 minutes);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        uint256 childVetoDeadline =
+            oracle.roundPayoutSnapshotVetoDeadline(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertLt(childVetoDeadline, parentVetoDeadline);
+        assertEq(parentVetoDeadline, uint256(finalizedEpoch.finalizedAt) + 2 hours);
+
+        vm.warp(childVetoDeadline);
+        assertFalse(
+            oracle.isRoundPayoutSnapshotOutsideVetoWindow(
+                input.domain, input.rewardPoolId, input.contentId, input.roundId
+            )
+        );
+
+        vm.warp(parentVetoDeadline);
+        assertTrue(
+            oracle.isRoundPayoutSnapshotOutsideVetoWindow(
+                input.domain, input.rewardPoolId, input.contentId, input.roundId
+            )
+        );
+    }
+
     function test_CorrelationEpochKeepsProposalChallengeTermsWhenConfigShrinks() public {
         oracle.proposeCorrelationEpoch(
             1,

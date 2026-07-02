@@ -1763,6 +1763,23 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
     }
 
+    function test_RbtsSettlementTimeoutRevertsWhenMalformedLiveSnapshotExists() public {
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+
+        engine.settleRound(contentId, roundId);
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        oracle.configureRbtsSnapshotStatus(
+            contentId, roundId, 7, 70_000, 70_000, IClusterPayoutOracle.SnapshotStatus.Proposed
+        );
+        vm.warp(block.timestamp + 1 hours);
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.SnapshotAvailable.selector);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+    }
+
     function test_ReplayBundleObserverNotify_ReplaysFailedSettledNotification() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
         RevertingBundleObserver observer = new RevertingBundleObserver();

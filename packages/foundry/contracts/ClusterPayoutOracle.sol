@@ -11,6 +11,22 @@ import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
+interface IRbtsSettlementSnapshotConsumerView {
+    function roundCore(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint48 startTime,
+            uint8 state,
+            uint16 voteCount,
+            uint16 revealedCount,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt,
+            uint8 upWins
+        );
+}
+
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round effective weights.
 /// @dev Fully bonded frontend operators can propose deterministic scorer outputs. Finalized roots gate
@@ -655,6 +671,36 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         _rejectRoundPayoutSnapshot(snapshotKey, reasonHash, true);
     }
 
+    /// @notice Permissionlessly clear an RBTS settlement snapshot that is objectively unusable
+    ///         for the consumer's current pinned round state.
+    function invalidateObjectivelyInvalidRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
+        external
+        nonReentrant
+    {
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        RoundPayoutSnapshot storage snapshot = proposal.snapshot;
+        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        if (!_isLiveRoundPayoutStatus(snapshot.status)) revert SnapshotNotFinalizable();
+        if (snapshot.domain != PAYOUT_DOMAIN_RBTS_SETTLEMENT) revert InvalidSnapshot();
+        if (snapshot.status == SnapshotStatus.Finalized) {
+            (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(proposal);
+            if (!consumedKnown) revert SnapshotNotFinalizable();
+            if (consumed) revert SnapshotConsumed();
+        }
+        if (!_isLiveCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId)) {
+            revert SnapshotNotFinalizable();
+        }
+        if (!_isObjectivelyInvalidRbtsSettlementSnapshot(proposal)) revert InvalidSnapshot();
+
+        proposal.snapshot.status = SnapshotStatus.Rejected;
+        rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
+        address challenger = proposal.challenger;
+        uint256 bond = proposal.bond;
+        proposal.bond = 0;
+        if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
+    }
+
     function _rejectRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash, bool rejectRoot) private {
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
@@ -794,7 +840,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (!_isCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId)) {
             return false;
         }
-        return block.timestamp >= _roundPayoutSnapshotVetoDeadline(proposal);
+        CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[proposal.snapshot.correlationEpochId];
+        return block.timestamp >= _roundPayoutSnapshotVetoDeadline(proposal)
+            && block.timestamp >= _correlationEpochVetoDeadline(epoch);
     }
 
     function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -976,6 +1024,33 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             return (isConsumed, true);
         } catch {
             return (true, false);
+        }
+    }
+
+    function _isObjectivelyInvalidRbtsSettlementSnapshot(RoundPayoutProposal storage proposal)
+        private
+        view
+        returns (bool)
+    {
+        RoundPayoutSnapshot storage snapshot = proposal.snapshot;
+        try IRoundPayoutSnapshotConsumer(proposal.consumer)
+            .roundPayoutSnapshotSourceReadyAt(
+                snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+            ) returns (
+            uint64 sourceReadyAt
+        ) {
+            if (sourceReadyAt == 0 || uint256(sourceReadyAt) > block.timestamp) return true;
+        } catch {
+            return true;
+        }
+
+        try IRbtsSettlementSnapshotConsumerView(proposal.consumer)
+            .roundCore(snapshot.contentId, snapshot.roundId) returns (
+            uint48, uint8, uint16, uint16 revealedCount, uint64, uint48, uint48, uint8
+        ) {
+            return snapshot.rawEligibleVoters != revealedCount;
+        } catch {
+            return true;
         }
     }
 

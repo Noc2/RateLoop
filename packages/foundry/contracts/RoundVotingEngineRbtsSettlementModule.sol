@@ -130,21 +130,17 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         );
     }
 
-    function _hasLiveRbtsSettlementSnapshot(
-        address oracleAddress,
-        uint256 contentId,
-        uint256 roundId,
-        uint16 revealedCount
-    ) internal view returns (bool) {
+    function _hasLiveRbtsSettlementSnapshot(address oracleAddress, uint256 contentId, uint256 roundId, uint16)
+        internal
+        view
+        returns (bool)
+    {
         if (oracleAddress == address(0)) return false;
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
         try oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId) returns (
             IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
         ) {
-            if (
-                !_isLiveRbtsSettlementSnapshotStatus(snapshot.status) || snapshot.rawEligibleVoters != revealedCount
-                    || snapshot.totalClaimWeight == 0 || snapshot.weightRoot == bytes32(0)
-            ) {
+            if (!_isLiveRbtsSettlementSnapshotStatus(snapshot.status)) {
                 return false;
             }
         } catch {
