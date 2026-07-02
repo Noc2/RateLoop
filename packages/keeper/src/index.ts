@@ -10,6 +10,7 @@
  *   npx tsx watch src/index.ts  # restart on file changes (dev)
  */
 import { zeroAddress } from "viem";
+import { ClusterPayoutOracleAbi } from "@rateloop/contracts/abis";
 import { config } from "./config.js";
 import { createLogger } from "./logger.js";
 import {
@@ -34,12 +35,59 @@ import {
   recordRun,
   recordMainLoopLockSkip,
   recordError,
+  recordCorrelationSnapshotResult,
+  incrementCounter,
   setGauge,
   setWalletBalanceWei,
   getConsecutiveErrors,
 } from "./metrics.js";
 
 const logger = createLogger(config.logFormat);
+const LOCAL_CHAIN_IDS = new Set([31337]);
+const LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS = 60 * 60;
+
+async function validatePayoutFinalityLaunchBudget() {
+  if (!config.correlationSnapshots.enabled) return;
+
+  const [challengeWindow, finalizationVetoWindow] = await Promise.all([
+    publicClient.readContract({
+      address: config.contracts.clusterPayoutOracle,
+      abi: ClusterPayoutOracleAbi,
+      functionName: "challengeWindow",
+    }) as Promise<bigint>,
+    publicClient.readContract({
+      address: config.contracts.clusterPayoutOracle,
+      abi: ClusterPayoutOracleAbi,
+      functionName: "FINALIZATION_VETO_WINDOW",
+    }) as Promise<bigint>,
+  ]);
+  const opsLagBudget = BigInt(config.payoutFinality.opsLagBudgetSeconds);
+  const challengeMultiplier = config.payoutFinality.overlapProof ? 1n : 2n;
+  const configuredBudget =
+    challengeWindow * challengeMultiplier + finalizationVetoWindow + opsLagBudget;
+  const budgetData = {
+    formula: config.payoutFinality.overlapProof
+      ? "challengeWindow + finalizationVetoWindow + opsLagBudget"
+      : "2 * challengeWindow + finalizationVetoWindow + opsLagBudget",
+    challengeWindowSeconds: challengeWindow.toString(),
+    finalizationVetoWindowSeconds: finalizationVetoWindow.toString(),
+    opsLagBudgetSeconds: opsLagBudget.toString(),
+    overlapProof: config.payoutFinality.overlapProof,
+    configuredBudgetSeconds: configuredBudget.toString(),
+    launchBudgetSeconds: LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS,
+  };
+  logger.info("Payout finality launch budget checked", budgetData);
+
+  if (
+    !LOCAL_CHAIN_IDS.has(config.chainId) &&
+    configuredBudget > BigInt(LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS)
+  ) {
+    incrementCounter("keeper_payout_finality_sla_breaches_total");
+    throw new Error(
+      `Configured payout finality budget exceeds launch policy: ${configuredBudget}s > ${LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS}s`,
+    );
+  }
+}
 
 function emptyKeeperResult(): KeeperResult {
   return {
@@ -99,6 +147,7 @@ async function main() {
     );
   }
   logger.info("Keeper contract connectivity verified");
+  await validatePayoutFinalityLaunchBudget();
 
   const walletClient = getWalletClient();
 
@@ -226,6 +275,9 @@ async function main() {
       const { result, frontendFeeResult, correlationSnapshotResult } = mainLoopResult;
       const duration = Date.now() - start;
       recordRun(result, duration);
+      if (correlationSnapshotResult) {
+        recordCorrelationSnapshotResult(correlationSnapshotResult);
+      }
 
       // Log summary only when something happened — include every KeeperResult counter
       // so ticks that only finalize reveal-failed rounds or process cleanup batches

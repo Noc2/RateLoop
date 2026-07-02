@@ -1165,7 +1165,8 @@ describe("correlation snapshot publisher", () => {
         if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
         if (functionName === "getRoundPayoutSnapshot")
           return { status: 3, finalizedAt: 100n };
-        if (functionName === "FINALIZATION_VETO_WINDOW") return 0n;
+        if (functionName === "isRoundPayoutSnapshotOutsideVetoWindow")
+          return true;
         if (functionName === "roundLifecycleState")
           return { cleanupRemaining: 0n };
         if (functionName === "isRoundPayoutSnapshotConsumed") return false;

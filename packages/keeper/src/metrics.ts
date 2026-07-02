@@ -36,6 +36,14 @@ const counters: Record<string, number> = {
   keeper_reward_pool_qualification_cursor_advances_total: 0,
   keeper_reward_pool_qualification_cursor_advance_failures_total: 0,
   keeper_bundle_terminal_sync_failures_total: 0,
+  keeper_correlation_epoch_proposed_total: 0,
+  keeper_correlation_epoch_finalized_total: 0,
+  keeper_round_payout_snapshot_proposed_total: 0,
+  keeper_round_payout_snapshot_finalized_total: 0,
+  keeper_rating_snapshot_applied_total: 0,
+  keeper_rbts_settlement_snapshot_applied_total: 0,
+  keeper_payout_finality_sla_breaches_total: 0,
+  keeper_artifact_cache_or_fetch_failure_total: 0,
 };
 
 // --- Gauges ---
@@ -60,6 +68,10 @@ const gauges: Record<string, number> = {
   keeper_settlement_backlog_oldest_seconds: -1,
   keeper_work_discovery_reward_pool_qualification_candidates: 0,
   keeper_work_discovery_bundle_terminal_sync_candidates: 0,
+  keeper_correlation_source_ready_backlog_oldest_seconds: -1,
+  keeper_correlation_epoch_finalization_backlog_oldest_seconds: -1,
+  keeper_round_payout_finalization_backlog_oldest_seconds: -1,
+  keeper_round_payout_apply_backlog_oldest_seconds: -1,
 };
 
 const startTime = Date.now();
@@ -86,6 +98,27 @@ export function setGauge(name: string, value: number) {
   if (name in gauges) {
     gauges[name] = value;
   }
+}
+
+export interface CorrelationSnapshotMetricsResult {
+  epochsProposed: number;
+  epochsFinalized: number;
+  roundSnapshotsProposed: number;
+  roundSnapshotsFinalized: number;
+  ratingSnapshotsApplied: number;
+  rbtsSettlementSnapshotsApplied: number;
+}
+
+export function recordCorrelationSnapshotResult(result: CorrelationSnapshotMetricsResult) {
+  incrementCounter("keeper_correlation_epoch_proposed_total", result.epochsProposed);
+  incrementCounter("keeper_correlation_epoch_finalized_total", result.epochsFinalized);
+  incrementCounter("keeper_round_payout_snapshot_proposed_total", result.roundSnapshotsProposed);
+  incrementCounter("keeper_round_payout_snapshot_finalized_total", result.roundSnapshotsFinalized);
+  incrementCounter("keeper_rating_snapshot_applied_total", result.ratingSnapshotsApplied);
+  incrementCounter(
+    "keeper_rbts_settlement_snapshot_applied_total",
+    result.rbtsSettlementSnapshotsApplied,
+  );
 }
 
 /**
@@ -179,6 +212,14 @@ function renderMetrics(): string {
     keeper_reward_pool_qualification_cursor_advance_failures_total:
       "Total unexpected reward pool qualification cursor advance failures",
     keeper_bundle_terminal_sync_failures_total: "Total unexpected question bundle terminal sync failures",
+    keeper_correlation_epoch_proposed_total: "Total correlation epoch snapshots proposed by keeper",
+    keeper_correlation_epoch_finalized_total: "Total correlation epoch snapshots finalized by keeper",
+    keeper_round_payout_snapshot_proposed_total: "Total round payout snapshots proposed by keeper",
+    keeper_round_payout_snapshot_finalized_total: "Total round payout snapshots finalized by keeper",
+    keeper_rating_snapshot_applied_total: "Total finalized public rating payout snapshots applied by keeper",
+    keeper_rbts_settlement_snapshot_applied_total: "Total finalized RBTS settlement snapshots applied by keeper",
+    keeper_payout_finality_sla_breaches_total: "Total healthy unchallenged payout-finality paths observed past the one-hour SLA",
+    keeper_artifact_cache_or_fetch_failure_total: "Total correlation artifact cache or fetch failures observed by keeper",
   };
 
   for (const [name, value] of Object.entries(counters)) {
@@ -216,6 +257,14 @@ function renderMetrics(): string {
       "Reward pool qualification candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_bundle_terminal_sync_candidates:
       "Question bundle terminal sync candidates returned by the last keeper work discovery phase",
+    keeper_correlation_source_ready_backlog_oldest_seconds:
+      "Age in seconds of the oldest source-ready correlation source without a round payout proposal (-1 = none)",
+    keeper_correlation_epoch_finalization_backlog_oldest_seconds:
+      "Age in seconds of the oldest proposed correlation epoch not finalized yet (-1 = none)",
+    keeper_round_payout_finalization_backlog_oldest_seconds:
+      "Age in seconds of the oldest proposed round payout snapshot not finalized yet (-1 = none)",
+    keeper_round_payout_apply_backlog_oldest_seconds:
+      "Age in seconds of the oldest finalized round payout snapshot past veto but not consumed/applied (-1 = none)",
   };
 
   for (const [name, value] of Object.entries(gauges)) {

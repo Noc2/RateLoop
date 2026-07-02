@@ -81,6 +81,10 @@ function encodeAddressCallData(selector, addresses = []) {
   return `${selector}${addresses.map((address) => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
 }
 
+function encodeUint256(value) {
+  return `0x${BigInt(value).toString(16).padStart(64, "0")}`;
+}
+
 function selectorBytecode() {
   return `0x${[
     ...REQUIRED_SELECTOR_CHECKS.flatMap((check) => check.selectors),
@@ -150,6 +154,12 @@ function handleWiringCall(call, deploymentAddresses, overrides = {}) {
           deploymentAddresses.get(consumerCheck.expectedContractName),
       );
     }
+  }
+  if (oracleAddress && call.to === oracleAddress) {
+    const data = call.data.toLowerCase();
+    if (data === "0x861a1412") return encodeUint256(15 * 60);
+    if (data === "0xf25cb0ca") return encodeUint256(15 * 60);
+    if (data === "0x967dd972") return encodeUint256(60 * 60);
   }
   return undefined;
 }
@@ -779,6 +789,75 @@ test("validateLiveReadiness retries transient RPC HTTP rate limits", async () =>
 
     assert.equal(result.ok, true, result.failures.join("\n"));
     assert.equal(chainIdAttempts, 2);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("validateLiveReadiness rejects payout finality budgets above one hour", async () => {
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const clusterPayoutOracleAddress = deploymentAddresses.get("ClusterPayoutOracle");
+  const submissionMediaValidatorAddress = addressFor(102);
+  const restoreFetch = mockRpc((method, params) => {
+    if (method === "eth_chainId") return "0x12c1";
+    if (method === "eth_call") {
+      if (
+        params[0].to === contentRegistryAddress &&
+        params[0].data === "0x738dbaa0"
+      ) {
+        return encodeStorageAddress(submissionMediaValidatorAddress);
+      }
+      if (
+        params[0].to === submissionMediaValidatorAddress &&
+        params[0].data === "0xb717bbbd"
+      ) {
+        return encodeStorageAddress(contentRegistryAddress);
+      }
+      if (
+        params[0].to === clusterPayoutOracleAddress &&
+        params[0].data.toLowerCase() === "0x861a1412"
+      ) {
+        return encodeUint256(60 * 60);
+      }
+      if (
+        params[0].to === clusterPayoutOracleAddress &&
+        params[0].data.toLowerCase() === "0xf25cb0ca"
+      ) {
+        return encodeUint256(15 * 60);
+      }
+      if (
+        params[0].to === clusterPayoutOracleAddress &&
+        params[0].data.toLowerCase() === "0x967dd972"
+      ) {
+        return encodeUint256(60 * 60);
+      }
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses);
+      if (wiringResult) return wiringResult;
+      throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
+    }
+    if (method === "eth_getStorageAt") {
+      assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
+      return encodeStorageAddress(addressFor(0));
+    }
+    if (method === "eth_getCode") return selectorBytecode();
+    throw new Error(`Unexpected RPC method ${method}`);
+  });
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      rpcUrl: "https://rpc.example",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes("payout finality budget 8100s <= 3600s"),
+      ),
+      result.failures.join("\n"),
+    );
   } finally {
     restoreFetch();
   }

@@ -32,6 +32,7 @@ import {
 import { writeContractAndConfirm } from "./keeper.js";
 import { readRoundLifecycleState } from "./contract-reads.js";
 import { getRevertReason } from "./revert-utils.js";
+import { incrementCounter } from "./metrics.js";
 
 interface CorrelationSnapshotPublishOptions {
   ponderNowSeconds?: bigint;
@@ -258,6 +259,7 @@ const ClusterPayoutOracleStatusReadAbi = [
           { name: "toRoundId", type: "uint64" },
           { name: "proposedAt", type: "uint64" },
           { name: "challengeWindowAtProposal", type: "uint64" },
+          { name: "finalizationVetoWindowAtProposal", type: "uint64" },
           { name: "finalizedAt", type: "uint64" },
           { name: "proposer", type: "address" },
           { name: "frontendOperator", type: "address" },
@@ -268,6 +270,8 @@ const ClusterPayoutOracleStatusReadAbi = [
           { name: "artifactURI", type: "string" },
           { name: "status", type: "uint8" },
           { name: "bond", type: "uint256" },
+          { name: "challengeBondAtProposal", type: "uint256" },
+          { name: "proposalTimeSnapshotProposer", type: "address" },
         ],
       },
     ],
@@ -303,6 +307,7 @@ const ClusterPayoutOracleStatusReadAbi = [
           },
           { name: "proposedAt", type: "uint64" },
           { name: "challengeWindowAtProposal", type: "uint64" },
+          { name: "finalizationVetoWindowAtProposal", type: "uint64" },
           { name: "consumer", type: "address" },
           { name: "proposer", type: "address" },
           { name: "frontendOperator", type: "address" },
@@ -310,6 +315,9 @@ const ClusterPayoutOracleStatusReadAbi = [
           { name: "artifactHash", type: "bytes32" },
           { name: "artifactURI", type: "string" },
           { name: "bond", type: "uint256" },
+          { name: "challengeBondAtProposal", type: "uint256" },
+          { name: "correlationEpochDigest", type: "bytes32" },
+          { name: "proposalTimeSnapshotProposer", type: "address" },
         ],
       },
     ],
@@ -379,6 +387,44 @@ async function readRoundPayoutSnapshotSummary(
     }
     throw error;
   }
+}
+
+async function readRoundPayoutSnapshotVetoDeadline(
+  publicClient: PublicClient,
+  source: RoundPayoutSnapshotSource,
+): Promise<bigint> {
+  const rewardPoolId = normalizeBigIntValue(source.rewardPoolId);
+  const contentId = normalizeBigIntValue(source.contentId);
+  const roundId = normalizeBigIntValue(source.roundId);
+  if (rewardPoolId === null || contentId === null || roundId === null) {
+    throw new Error("Round payout snapshot source contains invalid identifiers");
+  }
+
+  return (await publicClient.readContract({
+    address: config.contracts.clusterPayoutOracle,
+    abi: ClusterPayoutOracleAbi,
+    functionName: "roundPayoutSnapshotVetoDeadline",
+    args: [source.domain, rewardPoolId, contentId, roundId],
+  })) as bigint;
+}
+
+async function isRoundPayoutSnapshotOutsideVetoWindow(
+  publicClient: PublicClient,
+  source: RoundPayoutSnapshotSource,
+): Promise<boolean> {
+  const rewardPoolId = normalizeBigIntValue(source.rewardPoolId);
+  const contentId = normalizeBigIntValue(source.contentId);
+  const roundId = normalizeBigIntValue(source.roundId);
+  if (rewardPoolId === null || contentId === null || roundId === null) {
+    throw new Error("Round payout snapshot source contains invalid identifiers");
+  }
+
+  return (await publicClient.readContract({
+    address: config.contracts.clusterPayoutOracle,
+    abi: ClusterPayoutOracleAbi,
+    functionName: "isRoundPayoutSnapshotOutsideVetoWindow",
+    args: [source.domain, rewardPoolId, contentId, roundId],
+  })) as boolean;
 }
 
 function artifactSnapshotSource(snapshot: RoundPayoutSnapshotArtifact): RoundPayoutSnapshotSource {
@@ -569,14 +615,19 @@ async function readPublicCorrelationArtifact(
   snapshot: Pick<RoundPayoutSnapshotArtifact, "artifactHash" | "artifactURI">,
 ): Promise<PublicCorrelationArtifactWithWeights | null> {
   const canonical = await readArtifactCanonicalJson(snapshot.artifactURI);
-  if (!canonical) return null;
+  if (!canonical) {
+    incrementCounter("keeper_artifact_cache_or_fetch_failure_total");
+    return null;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(canonical);
   } catch {
+    incrementCounter("keeper_artifact_cache_or_fetch_failure_total");
     return null;
   }
   if (canonicalJsonHash(parsed).toLowerCase() !== snapshot.artifactHash.toLowerCase()) {
+    incrementCounter("keeper_artifact_cache_or_fetch_failure_total");
     return null;
   }
   return parsed && typeof parsed === "object"
@@ -774,30 +825,26 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
     });
 
     let status: number = STATUS.None;
-    let finalizedAt = 0n;
     try {
       const existing = await readRoundPayoutSnapshotSummary(
         publicClient,
         artifactSnapshotSource(snapshot),
       );
       status = existing.status;
-      finalizedAt = existing.finalizedAt;
     } catch {
       continue;
     }
     if (status !== STATUS.Finalized) continue;
 
-    const [block, vetoWindow] = await Promise.all([
-      publicClient.getBlock(),
-      publicClient.readContract({
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "FINALIZATION_VETO_WINDOW",
-      }) as Promise<bigint>,
-    ]);
-    if (block.timestamp <= finalizedAt + vetoWindow) {
+    const source = artifactSnapshotSource(snapshot);
+    if (!(await isRoundPayoutSnapshotOutsideVetoWindow(publicClient, source))) {
+      const vetoDeadline = await readRoundPayoutSnapshotVetoDeadline(
+        publicClient,
+        source,
+      ).catch(() => null);
       logger.debug("Skipping rating snapshot apply until veto window elapses", {
         snapshotKey,
+        vetoDeadline: vetoDeadline?.toString(),
       });
       continue;
     }
@@ -890,30 +937,26 @@ async function applyFinalizedRbtsSettlementSnapshotsFromArtifact(
     });
 
     let status: number = STATUS.None;
-    let finalizedAt = 0n;
     try {
       const existing = await readRoundPayoutSnapshotSummary(
         publicClient,
         artifactSnapshotSource(snapshot),
       );
       status = existing.status;
-      finalizedAt = existing.finalizedAt;
     } catch {
       continue;
     }
     if (status !== STATUS.Finalized) continue;
 
-    const [block, vetoWindow] = await Promise.all([
-      publicClient.getBlock(),
-      publicClient.readContract({
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "FINALIZATION_VETO_WINDOW",
-      }) as Promise<bigint>,
-    ]);
-    if (block.timestamp <= finalizedAt + vetoWindow) {
+    const source = artifactSnapshotSource(snapshot);
+    if (!(await isRoundPayoutSnapshotOutsideVetoWindow(publicClient, source))) {
+      const vetoDeadline = await readRoundPayoutSnapshotVetoDeadline(
+        publicClient,
+        source,
+      ).catch(() => null);
       logger.debug("Skipping RBTS settlement snapshot apply until veto window elapses", {
         snapshotKey,
+        vetoDeadline: vetoDeadline?.toString(),
       });
       continue;
     }

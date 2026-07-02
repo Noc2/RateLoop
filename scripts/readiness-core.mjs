@@ -27,6 +27,10 @@ const EIP1967_IMPLEMENTATION_SLOT =
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
 const SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR = "0xb717bbbd";
 const ROUND_PAYOUT_SNAPSHOT_CONSUMER_SELECTOR = "0x2fc1e72a";
+const CHALLENGE_WINDOW_SELECTOR = "0x861a1412";
+const FINALIZATION_VETO_WINDOW_SELECTOR = "0xf25cb0ca";
+const LAUNCH_PAYOUT_FINALITY_BUDGET_SELECTOR = "0x967dd972";
+const DEFAULT_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS = 15 * 60;
 const ADDRESS_WORD_RE = /^[a-fA-F0-9]{64}$/;
 export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6773a34f", // validateContextSubmission(string,string[],string,string,string,bool)
@@ -970,6 +974,13 @@ function parseAddressResult(value, outputIndex = 0) {
   return parseAddressWords(value)[outputIndex];
 }
 
+function parseUint256Result(value) {
+  if (typeof value !== "string" || !/^0x[a-fA-F0-9]{64}$/u.test(value)) {
+    return undefined;
+  }
+  return BigInt(value);
+}
+
 function encodeAddressArgument(value) {
   return value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
 }
@@ -1143,6 +1154,83 @@ async function validateLiveClusterPayoutOracleConsumers({
   }
 }
 
+async function readClusterPayoutOracleUint256(rpcUrl, deploymentAddresses, selector) {
+  const oracleAddress = deploymentAddresses.get("ClusterPayoutOracle");
+  if (!oracleAddress) return undefined;
+  const result = await rpc(rpcUrl, "eth_call", [
+    {
+      to: oracleAddress,
+      data: selector,
+    },
+    "latest",
+  ]);
+  return parseUint256Result(result);
+}
+
+async function validateLivePayoutFinalityBudget({
+  checks,
+  deploymentAddresses,
+  failures,
+  readinessConfig,
+  rpcUrl,
+}) {
+  const [challengeWindow, finalizationVetoWindow, launchBudget] =
+    await Promise.all([
+      readClusterPayoutOracleUint256(
+        rpcUrl,
+        deploymentAddresses,
+        CHALLENGE_WINDOW_SELECTOR,
+      ),
+      readClusterPayoutOracleUint256(
+        rpcUrl,
+        deploymentAddresses,
+        FINALIZATION_VETO_WINDOW_SELECTOR,
+      ),
+      readClusterPayoutOracleUint256(
+        rpcUrl,
+        deploymentAddresses,
+        LAUNCH_PAYOUT_FINALITY_BUDGET_SELECTOR,
+      ),
+    ]);
+  const configuredOpsLagBudget = Number(
+    process.env.PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS ?? "",
+  );
+  const opsLagBudget = BigInt(
+    Number.isFinite(configuredOpsLagBudget) && configuredOpsLagBudget >= 0
+      ? Math.trunc(configuredOpsLagBudget)
+      : DEFAULT_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS,
+  );
+  const overlapProof = isTruthyEnvValue(
+    process.env.PAYOUT_FINALITY_OVERLAP_PROOF ?? "",
+  );
+  const challengeMultiplier = overlapProof ? 1n : 2n;
+  const configuredBudget =
+    challengeWindow === undefined || finalizationVetoWindow === undefined
+      ? undefined
+      : challengeWindow * challengeMultiplier + finalizationVetoWindow + opsLagBudget;
+  const maxBudget = launchBudget ?? 3600n;
+  const formula = overlapProof
+    ? "challengeWindow + finalizationVetoWindow + opsLagBudget"
+    : "2 * challengeWindow + finalizationVetoWindow + opsLagBudget";
+
+  addCheck(
+    checks,
+    failures,
+    challengeWindow !== undefined && finalizationVetoWindow !== undefined,
+    "ClusterPayoutOracle timing windows are readable",
+  );
+  addCheck(
+    checks,
+    failures,
+    configuredBudget !== undefined && configuredBudget <= maxBudget,
+    `${readinessConfig.label} payout finality budget ${
+      configuredBudget?.toString() ?? "unknown"
+    }s <= ${maxBudget.toString()}s (${formula}; challenge=${
+      challengeWindow?.toString() ?? "unknown"
+    }s, veto=${finalizationVetoWindow?.toString() ?? "unknown"}s, ops=${opsLagBudget.toString()}s, overlapProof=${overlapProof})`,
+  );
+}
+
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
@@ -1226,6 +1314,13 @@ export async function validateLiveReadiness({
         checks,
         deploymentAddresses,
         failures,
+        rpcUrl,
+      });
+      await validateLivePayoutFinalityBudget({
+        checks,
+        deploymentAddresses,
+        failures,
+        readinessConfig,
         rpcUrl,
       });
 

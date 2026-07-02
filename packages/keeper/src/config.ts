@@ -731,6 +731,19 @@ function loadConfig() {
         errors,
       ),
     },
+    payoutFinality: {
+      opsLagBudgetSeconds: readNonNegativeIntEnv(
+        "KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS",
+        "900",
+        errors,
+      ),
+      overlapProof: parseBooleanEnv(
+        readEnv("KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF"),
+        false,
+        "KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF",
+        errors,
+      ),
+    },
     feedbackBonusForfeits: {
       enabled: feedbackBonusForfeitsEnabled,
       maxPoolsPerTick: readNonNegativeIntEnv(
