@@ -1717,7 +1717,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
     }
 
-    function test_PartialLaunchCreditFinalizationAllowsVetoWindowRootReplacement() public {
+    function test_PartialLaunchCreditFinalizationBlocksPostVetoRootReplacement() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
         bytes32 aliceCommitKey = _commitKey(1);
         bytes32 bobCommitKey = keccak256(abi.encode("bob", uint256(1)));
@@ -1762,13 +1762,8 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-partial-root"));
-
-        IClusterPayoutOracle.PayoutWeight memory bobPayout =
-            _launchPayoutWeight(1, bobCommitKey, bob, 2_500, keccak256("bob-clustered"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, bobPayout, keccak256("epoch-artifact"));
-        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, bobCommitKey, bobPayout, new bytes32[](0)), 0);
-        assertTrue(pool.earnedRewardCreditFinalized(1, 1, bobCommitKey));
 
         // M-Funds-3: finalize clears `pendingEarnedRaterCredits`, so a re-finalize attempt
         // now hits the `!pending.pending` guard (InvalidAmount) before reaching the
