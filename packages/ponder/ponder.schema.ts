@@ -471,6 +471,29 @@ export const questionRewardPoolRound = onchainTable(
   }),
 );
 
+export const questionRewardPoolPreQualificationSkip = onchainTable(
+  "question_reward_pool_prequalification_skip",
+  (t) => ({
+    id: t.text().primaryKey(), // `${rewardPoolId}-${roundId}`
+    rewardPoolId: t.bigint().notNull(),
+    contentId: t.bigint().notNull(),
+    roundId: t.bigint().notNull(),
+    kind: t.text().notNull(), // "snapshotless_cluster" or "rejected_snapshot"
+    snapshotDigest: t.hex(),
+    weightRoot: t.hex(),
+    blockNumber: t.bigint().notNull(),
+    logIndex: t.integer().notNull(),
+    transactionHash: t.hex(),
+    skippedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    rewardPoolIdx: index().on(table.rewardPoolId),
+    contentRoundIdx: index().on(table.contentId, table.roundId),
+    kindIdx: index().on(table.kind),
+    skippedAtIdx: index().on(table.skippedAt),
+  }),
+);
+
 export const correlationEpochSnapshot = onchainTable(
   "correlation_epoch_snapshot",
   (t) => ({

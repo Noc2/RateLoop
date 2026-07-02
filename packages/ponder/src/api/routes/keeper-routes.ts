@@ -1,5 +1,9 @@
 import type { Context } from "hono";
-import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
+import {
+  PAYOUT_DOMAIN,
+  REVEAL_FAILED_GRACE_MULTIPLIER,
+  ROUND_STATE,
+} from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
@@ -8,8 +12,10 @@ import {
   questionBundleQuestion,
   questionBundleReward,
   questionRewardPool,
+  questionRewardPoolPreQualificationSkip,
   questionRewardPoolRound,
   round,
+  roundPayoutSnapshot,
   vote,
 } from "ponder:schema";
 import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
@@ -21,6 +27,7 @@ const DEFAULT_KEEPER_WORK_LIMIT = 500;
 const MAX_KEEPER_WORK_LIMIT = 2_000;
 const MAX_DORMANT_CANDIDATE_LIMIT = 500;
 const MAX_ROUND_OPEN_CANDIDATE_LIMIT = 25;
+const SNAPSHOT_STATUS_FINALIZED = 3;
 
 function safeNonNegativeBigIntParam(value: string | undefined): bigint | null {
   if (value === undefined) return null;
@@ -265,6 +272,26 @@ export function registerKeeperRoutes(app: ApiApp) {
           eq(questionRewardPoolRound.roundId, round.roundId),
         ),
       )
+      .leftJoin(
+        questionRewardPoolPreQualificationSkip,
+        and(
+          eq(
+            questionRewardPoolPreQualificationSkip.rewardPoolId,
+            questionRewardPool.id,
+          ),
+          eq(questionRewardPoolPreQualificationSkip.roundId, round.roundId),
+        ),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN.QuestionReward),
+          eq(roundPayoutSnapshot.rewardPoolId, questionRewardPool.id),
+          eq(roundPayoutSnapshot.contentId, questionRewardPool.contentId),
+          eq(roundPayoutSnapshot.roundId, round.roundId),
+          eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
+        ),
+      )
       .where(
         and(
           eq(questionRewardPool.refunded, false),
@@ -273,6 +300,10 @@ export function registerKeeperRoutes(app: ApiApp) {
           sql`${round.settledAt} is not null`,
           sql`${round.settledAt} > 0`,
           sql`${questionRewardPoolRound.id} is null`,
+          or(
+            sql`${questionRewardPoolPreQualificationSkip.id} is null`,
+            sql`${roundPayoutSnapshot.id} is not null`,
+          ),
           sql`(
             ${questionRewardPool.bountyClosesAt} = 0
             or ${round.startTime} <= ${questionRewardPool.bountyClosesAt}

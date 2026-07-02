@@ -511,6 +511,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
     questionRewardPoolRound: {
       allocation: "questionRewardPoolRound.allocation",
       correlationWeightRoot: "questionRewardPoolRound.correlationWeightRoot",
+      id: "questionRewardPoolRound.id",
       rewardPoolId: "questionRewardPoolRound.rewardPoolId",
       eligibleVoters: "questionRewardPoolRound.eligibleVoters",
       rawEligibleVoters: "questionRewardPoolRound.rawEligibleVoters",
@@ -518,6 +519,12 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
         "questionRewardPoolRound.effectiveParticipantUnits",
       totalClaimWeight: "questionRewardPoolRound.totalClaimWeight",
       roundId: "questionRewardPoolRound.roundId",
+    },
+    questionRewardPoolPreQualificationSkip: {
+      contentId: "questionRewardPoolPreQualificationSkip.contentId",
+      id: "questionRewardPoolPreQualificationSkip.id",
+      rewardPoolId: "questionRewardPoolPreQualificationSkip.rewardPoolId",
+      roundId: "questionRewardPoolPreQualificationSkip.roundId",
     },
     roundPayoutSnapshot: {
       artifactUri: "roundPayoutSnapshot.artifactUri",
@@ -5048,6 +5055,52 @@ describe("registerKeeperRoutes", () => {
     );
     expect(serializedOrderBy).toContain("feedbackBonusPool.awardDeadline");
     expect(serializedOrderBy).toContain("feedbackBonusPool.id");
+  });
+
+  it("filters skipped reward-pool qualification rounds unless a finalized replacement snapshot exists", async () => {
+    const { queryBuilders } = mockPonderModules([], [[], [], [], [], []]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+    );
+
+    expect(response.status).toBe(200);
+    const rewardPoolBuilder = queryBuilders.find((builder) =>
+      serializeExpression(builder.leftJoin.mock.calls).includes(
+        "questionRewardPoolPreQualificationSkip.rewardPoolId",
+      ),
+    );
+    expect(rewardPoolBuilder).toBeDefined();
+    const serializedJoins = serializeExpression(
+      rewardPoolBuilder!.leftJoin.mock.calls,
+    );
+    expect(serializedJoins).toContain(
+      "questionRewardPoolPreQualificationSkip.rewardPoolId",
+    );
+    expect(serializedJoins).toContain(
+      "questionRewardPoolPreQualificationSkip.roundId",
+    );
+    expect(serializedJoins).toContain("roundPayoutSnapshot.domain");
+    expect(serializedJoins).toContain("roundPayoutSnapshot.rewardPoolId");
+    expect(serializedJoins).toContain("roundPayoutSnapshot.contentId");
+    expect(serializedJoins).toContain("roundPayoutSnapshot.roundId");
+    expect(serializedJoins).toContain("roundPayoutSnapshot.status");
+
+    const serializedWhere = serializeExpression(
+      rewardPoolBuilder!.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("questionRewardPoolRound.id");
+    expect(serializedWhere).toContain(
+      "questionRewardPoolPreQualificationSkip.id",
+    );
+    expect(serializedWhere).toContain("roundPayoutSnapshot.id");
+    expect(serializedWhere).toContain("is null");
+    expect(serializedWhere).toContain("is not null");
   });
 
   it("uses voteCount quorum for reveal_failed keeper hints", async () => {

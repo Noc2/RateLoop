@@ -37,6 +37,8 @@ vi.mock("ponder:schema", () => ({
   questionBundleTerminalSkip: "questionBundleTerminalSkip",
   questionRewardPool: "questionRewardPool",
   questionRewardPoolClaim: "questionRewardPoolClaim",
+  questionRewardPoolPreQualificationSkip:
+    "questionRewardPoolPreQualificationSkip",
   questionRewardPoolRound: "questionRewardPoolRound",
 }));
 
@@ -725,6 +727,86 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         values: expect.objectContaining({ lastActivityAt: 2_200n }),
       }),
     );
+  });
+
+  it("indexes snapshotless prequalification skips", async () => {
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:PreQualificationSnapshotlessClusterRoundSkipped",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+        },
+        block: { number: 17n, timestamp: 2_400n },
+        log: { logIndex: 4 },
+        transaction: { hash: `0x${"4".repeat(64)}` },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "questionRewardPoolPreQualificationSkip",
+      values: {
+        id: "7-3",
+        rewardPoolId: 7n,
+        contentId: 1n,
+        roundId: 3n,
+        kind: "snapshotless_cluster",
+        snapshotDigest: null,
+        weightRoot: null,
+        blockNumber: 17n,
+        logIndex: 4,
+        transactionHash: `0x${"4".repeat(64)}`,
+        skippedAt: 2_400n,
+      },
+    });
+  });
+
+  it("indexes rejected-snapshot prequalification skips", async () => {
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const snapshotDigest = `0x${"5".repeat(64)}`;
+    const weightRoot = `0x${"6".repeat(64)}`;
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:PreQualificationRejectedSnapshotRoundSkipped",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          snapshotDigest,
+          weightRoot,
+        },
+        block: { number: 18n, timestamp: 2_500n },
+        log: { logIndex: 5 },
+        transaction: { hash: `0x${"7".repeat(64)}` },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "questionRewardPoolPreQualificationSkip",
+      values: {
+        id: "7-3",
+        rewardPoolId: 7n,
+        contentId: 1n,
+        roundId: 3n,
+        kind: "rejected_snapshot",
+        snapshotDigest,
+        weightRoot,
+        blockNumber: 18n,
+        logIndex: 5,
+        transactionHash: `0x${"7".repeat(64)}`,
+        skippedAt: 2_500n,
+      },
+    });
   });
 
   it("does not double-count duplicate question reward claims", async () => {

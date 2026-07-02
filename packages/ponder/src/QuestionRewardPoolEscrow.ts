@@ -9,6 +9,7 @@ import {
   questionBundleTerminalSkip,
   questionRewardPool,
   questionRewardPoolClaim,
+  questionRewardPoolPreQualificationSkip,
   questionRewardPoolRound,
 } from "ponder:schema";
 
@@ -432,6 +433,55 @@ ponder.on(
         lastActivityAt: event.block.timestamp,
       });
     }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:PreQualificationSnapshotlessClusterRoundSkipped",
+  async ({ event, context }) => {
+    const { rewardPoolId, contentId, roundId } = event.args;
+
+    await context.db
+      .insert(questionRewardPoolPreQualificationSkip)
+      .values({
+        id: `${rewardPoolId}-${roundId}`,
+        rewardPoolId,
+        contentId,
+        roundId,
+        kind: "snapshotless_cluster",
+        snapshotDigest: null,
+        weightRoot: null,
+        blockNumber: event.block.number,
+        logIndex: Number(event.log?.logIndex ?? 0),
+        transactionHash: event.transaction?.hash ?? null,
+        skippedAt: event.block.timestamp,
+      })
+      .onConflictDoNothing();
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:PreQualificationRejectedSnapshotRoundSkipped",
+  async ({ event, context }) => {
+    const { rewardPoolId, contentId, roundId, snapshotDigest, weightRoot } =
+      event.args;
+
+    await context.db
+      .insert(questionRewardPoolPreQualificationSkip)
+      .values({
+        id: `${rewardPoolId}-${roundId}`,
+        rewardPoolId,
+        contentId,
+        roundId,
+        kind: "rejected_snapshot",
+        snapshotDigest,
+        weightRoot,
+        blockNumber: event.block.number,
+        logIndex: Number(event.log?.logIndex ?? 0),
+        transactionHash: event.transaction?.hash ?? null,
+        skippedAt: event.block.timestamp,
+      })
+      .onConflictDoNothing();
   },
 );
 
