@@ -314,6 +314,11 @@ export const RoundVotingEngineRbtsSettlementModuleAbi = [
   },
   {
     "type": "error",
+    "name": "SnapshotAvailable",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "UnrevealedPastEpochVotes",
     "inputs": []
   }

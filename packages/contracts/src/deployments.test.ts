@@ -339,6 +339,53 @@ test("question reward pool escrow ABI exposes snapshotless recovery surface", ()
   );
 });
 
+test("question reward pool escrow ABI exposes recovered-pool refund exits", () => {
+  const refundExpiredRecovered = generatedAbis.QuestionRewardPoolEscrowAbi.find(
+    (item) =>
+      item.type === "function" &&
+      item.name === "refundExpiredRecoveredRewardPool",
+  );
+  const refundInactiveRecovered =
+    generatedAbis.QuestionRewardPoolEscrowAbi.find(
+      (item) =>
+        item.type === "function" &&
+        item.name === "refundInactiveRecoveredRewardPool",
+    );
+  const abandonedEvent = generatedAbis.QuestionRewardPoolEscrowAbi.find(
+    (item) =>
+      item.type === "event" &&
+      item.name === "RecoveredSnapshotRoundAbandoned",
+  );
+
+  for (const refundFunction of [
+    refundExpiredRecovered,
+    refundInactiveRecovered,
+  ]) {
+    assert.deepEqual(
+      refundFunction?.inputs.map((input) => input.type),
+      ["uint256", "uint256[]"],
+    );
+    assert.deepEqual(
+      refundFunction?.outputs.map((output) => output.type),
+      ["uint256"],
+    );
+  }
+
+  assert.deepEqual(
+    abandonedEvent?.inputs.map((input) => [
+      input.name,
+      input.type,
+      input.indexed,
+    ]),
+    [
+      ["rewardPoolId", "uint256", true],
+      ["contentId", "uint256", true],
+      ["roundId", "uint256", true],
+      ["allocation", "uint256", false],
+    ],
+  );
+});
+
 test("question reward pool escrow ABI keeps indexer event schemas stable", () => {
   const eventInputs = new Map(
     generatedAbis.QuestionRewardPoolEscrowAbi.filter(
