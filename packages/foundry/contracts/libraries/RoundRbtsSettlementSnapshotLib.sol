@@ -135,6 +135,11 @@ library RoundRbtsSettlementSnapshotLib {
         (bytes32 settlementEntropy, bool ready) =
             RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, params.contentId, params.roundId);
         if (!ready) return (result, false);
+        if (settlementEntropy == bytes32(0)) {
+            result =
+                RoundRevealLib.returnRbtsStakes(commitKeys, roundCommits, commitRbtsWeight, commitRbtsStakeReturned);
+            return (result, true);
+        }
         (bytes32 scoringSetHash, uint256 scoringSetCount) = _rbtsScoringSetHash(
             commitKeys, roundCommits, commitRbtsWeight, commitIdentityKey, commitRevealEntropy, params.minParticipants
         );

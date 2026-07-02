@@ -1396,23 +1396,23 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     function _settleAfterRbtsSeed(RoundVotingEngine engine, uint256 contentId, uint256 roundId) internal {
         _ensureTestClusterPayoutOracle(engine);
-        uint256 seedBlock = block.number + 1;
-        vm.roll(seedBlock);
+        uint256 settlementBlock = block.number + 1;
+        vm.roll(settlementBlock);
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         if (round.state == RoundLib.RoundState.SettlementPending) {
             _processUnrevealedBeforeRbtsSettlement(engine, contentId, roundId, round);
-            vm.roll(seedBlock + 1);
+            _rollPastRbtsSeedBlock(settlementBlock + 1);
             _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, round.revealedCount);
             return;
         }
         if (round.state != RoundLib.RoundState.Open) return;
-        vm.roll(seedBlock + 1);
+        vm.roll(settlementBlock + 1);
         engine.settleRound(contentId, roundId);
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         if (round.state == RoundLib.RoundState.SettlementPending) {
             _processUnrevealedBeforeRbtsSettlement(engine, contentId, roundId, round);
-            vm.roll(seedBlock + 2);
+            _rollPastRbtsSeedBlock(settlementBlock + 2);
             _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, round.revealedCount);
         }
     }
@@ -1432,6 +1432,11 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         if (round.voteCount > round.revealedCount) {
             engine.processUnrevealedVotes(contentId, roundId, 0, 0);
         }
+    }
+
+    function _rollPastRbtsSeedBlock(uint256 seedBlock) internal {
+        vm.roll(seedBlock + 1);
+        vm.setBlockhash(seedBlock, keccak256(abi.encode("rateloop.rbts.seed-block", seedBlock)));
     }
 
     function _ensureTestClusterPayoutOracle(RoundVotingEngine engine) internal {

@@ -841,29 +841,29 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _settleRoundAfterRbtsSeed(uint256 contentId, uint256 roundId) internal {
-        uint256 seedBlock = block.number + 1;
-        vm.roll(seedBlock);
+        uint256 settlementBlock = block.number + 1;
+        vm.roll(settlementBlock);
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         if (round.state == RoundLib.RoundState.SettlementPending) {
-            vm.roll(seedBlock + 1);
+            _rollPastRbtsSeedBlock(settlementBlock + 1);
             _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
             return;
         }
         if (round.state != RoundLib.RoundState.Open) return;
-        vm.roll(seedBlock + 1);
+        vm.roll(settlementBlock + 1);
         engine.settleRound(contentId, roundId);
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         if (round.state == RoundLib.RoundState.SettlementPending) {
-            vm.roll(seedBlock + 2);
+            _rollPastRbtsSeedBlock(settlementBlock + 2);
             _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         }
     }
 
-    function _rbtsEntropyFromLogs(Vm.Log[] memory logs, uint256 contentId, uint256 roundId)
+    function _rbtsSeedBlockFromLogs(Vm.Log[] memory logs, uint256 contentId, uint256 roundId)
         internal
         view
-        returns (bytes32 settlementEntropy)
+        returns (uint256 seedBlock)
     {
         bytes32 expectedTopic = keccak256("RbtsSeedCaptured(uint256,uint256,bytes32)");
         for (uint256 i = 0; i < logs.length; i++) {
@@ -871,15 +871,33 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                 logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
                     && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
             ) {
-                settlementEntropy = abi.decode(logs[i].data, (bytes32));
+                seedBlock = uint256(abi.decode(logs[i].data, (bytes32)));
             }
         }
-        if (settlementEntropy != bytes32(0)) return settlementEntropy;
+        if (seedBlock != 0) return seedBlock;
         revert("RbtsSeedCaptured event not emitted");
     }
 
-    function _rbtsClosureMarker(uint256 contentId, uint256 roundId) internal view returns (bytes32) {
-        return keccak256(abi.encode("rateloop.rbts.scoring-closed.v1", block.chainid, address(engine), contentId, roundId));
+    function _rbtsFutureBlockEntropy(uint256 contentId, uint256 roundId, uint256 seedBlock, bytes32 blockEntropy)
+        internal
+        view
+        returns (bytes32 settlementEntropy)
+    {
+        uint256 entropy = uint256(
+            keccak256(
+                abi.encode(
+                    "rateloop.rbts.future-block-seed.v1",
+                    block.chainid,
+                    address(engine),
+                    contentId,
+                    roundId,
+                    seedBlock,
+                    blockEntropy
+                )
+            )
+        ) & ((uint256(1) << 255) - 1);
+        settlementEntropy = bytes32(entropy);
+        if (settlementEntropy == bytes32(0)) settlementEntropy = bytes32(uint256(1));
     }
 
     function _installRaterRegistry() internal returns (RaterRegistry raterRegistry) {
@@ -1875,7 +1893,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         }
 
         engine.settleRound(contentId, roundId);
-        vm.roll(block.number + 1);
+        _rollPastRbtsSeedBlock(block.number + 1);
 
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
         vm.startPrank(keeper);
@@ -1898,45 +1916,54 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_RbtsSeedReadyAtSettlementClosure() public {
+    function test_RbtsSeedWaitsForFutureBlockAfterSettlementClosure() public {
         (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(
             uint256(pendingRound.state),
             uint256(RoundLib.RoundState.SettlementPending),
-            "first call captures seed and waits for snapshot"
+            "first call closes scoring and waits for snapshot"
         );
 
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.SettlementPending), "seed block not ready");
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "RBTS not scored before seed block");
+
+        _rollPastRbtsSeedBlock(seedBlock);
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "future block entropy scores RBTS");
     }
 
-    function test_RbtsSeedPastNativeWindowSettlesWithStableClosureEntropy() public {
+    function test_RbtsSeedPastNativeWindowWithoutHistoryReturnsStakes() public {
         (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
             _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
-        uint256 seedBlock = block.number;
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stable closure entropy finalizes RBTS accounting");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "stable entropy produces sampler seed");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stake-return fallback finalizes accounting");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy skips RBTS scoring");
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "no RBTS reward without entropy");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "ck1 stake accounted");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[1]), 0, "ck2 stake accounted");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[2]), 0, "ck3 stake accounted");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[3]), 0, "ck4 stake accounted");
     }
 
-    function test_RbtsSeedPastNativeWindowIgnoresEip2935History() public {
+    function test_RbtsSeedPastNativeWindowUsesEip2935History() public {
         (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
-        uint256 seedBlock = block.number;
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
         _installMockEip2935History(keccak256("rbts-eip2935-history"));
@@ -1944,14 +1971,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stable entropy finalizes RBTS accounting");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "stable entropy produces sampler seed");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "EIP-2935 entropy finalizes RBTS accounting");
+        assertNotEq(
+            _roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "history entropy produces sampler seed"
+        );
     }
 
-    function test_RbtsLongDelayedSettlementScoresWithoutRearm() public {
+    function test_RbtsLongDelayedSettlementReturnsStakesWithoutRearm() public {
         (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
-        uint256 seedBlock = block.number;
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 8192);
 
@@ -1960,8 +1989,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "long-delayed settlement succeeds");
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "closure marker remains ready");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "sampler seed produced");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stake returns finalize once");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "no rearmed sampler seed");
     }
 
     function test_RbtsLongDelayedSettlementCanSettleOnlyOnce() public {
@@ -1972,7 +2001,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.roll(block.number + 8192);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement finalizes once");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "score seed captured");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy skips RBTS scoring");
 
         _expectFullWeightRbtsSettlementSnapshotRevert(contentId, roundId, RoundVotingEngine.RoundNotOpen.selector);
 
@@ -2036,7 +2065,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             roundId,
             commitKeys
         );
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement scores");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement finalizes");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy returns stakes");
     }
 
     function test_AdvisoryLaunchCreditLongDelayedRbtsSettlementScoresBeforeClaim() public {
@@ -2063,9 +2093,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         }
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
 
-        uint256 seedBlock = block.number;
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
-        vm.roll(seedBlock + 8192);
+        vm.roll(seedBlock + 8191);
+        _installMockEip2935History(keccak256("advisory-rbts-eip2935-history"));
 
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement scores RBTS");
@@ -2179,34 +2210,19 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_RbtsLongDelayedSettlementDoesNotUsePrevrandaoFallback() public {
-        (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys, bytes32[8] memory salts) =
+        (uint256 contentId, uint256 roundId,,) =
             _setupEconomicPredictionRoundWithSalts(_fiveUpThreeDownDirections(), address(0));
 
-        uint256 seedBlock = block.number;
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 8192);
 
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement scores");
-
-        bytes32 revealedSetHash = _revealedSetHash(contentId, roundId, commitKeys, salts);
-        bytes32 fallbackScoreSeed = keccak256(
-            abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(8), revealedSetHash, settlementPrevrandao
-            )
-        );
-        bytes32 expectedScoreSeed = keccak256(
-            abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(8), revealedSetHash,
-                _rbtsClosureMarker(contentId, roundId)
-            )
-        );
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), expectedScoreSeed, "score seed uses closure marker");
-        assertNotEq(
-            _roundRbtsScoreSeed(engine, contentId, roundId), fallbackScoreSeed, "score seed must not use fallback"
-        );
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed settlement finalizes");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "prevrandao is not fallback entropy");
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "no RBTS reward without block entropy");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
@@ -2214,11 +2230,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _setupEconomicPredictionRoundWithSalts(_fiveUpThreeDownDirections(), address(0));
 
         vm.recordLogs();
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
+        _rollPastRbtsSeedBlock(seedBlock);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 settlementEntropy = _rbtsEntropyFromLogs(logs, contentId, roundId);
-        assertEq(settlementEntropy, _rbtsClosureMarker(contentId, roundId), "closure marker captured");
+        assertEq(_rbtsSeedBlockFromLogs(logs, contentId, roundId), seedBlock, "seed block captured");
+        bytes32 settlementEntropy = _rbtsFutureBlockEntropy(contentId, roundId, seedBlock, blockhash(seedBlock));
 
         bytes32 revealedSetHash = _revealedSetHash(contentId, roundId, commitKeys, salts);
         bytes32 expectedSeed = keccak256(
@@ -2259,13 +2277,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _setupEconomicPredictionRoundWithSalts(_fiveUpThreeDownDirections(), address(0));
 
         vm.recordLogs();
+        uint256 seedBlock = block.number + 1;
         engine.settleRound(contentId, roundId);
+        _rollPastRbtsSeedBlock(seedBlock);
 
         bytes32 settlementPrevrandao = keccak256("settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 capturedEntropy = _rbtsEntropyFromLogs(logs, contentId, roundId);
+        assertEq(_rbtsSeedBlockFromLogs(logs, contentId, roundId), seedBlock, "seed block captured");
+        bytes32 capturedEntropy = _rbtsFutureBlockEntropy(contentId, roundId, seedBlock, blockhash(seedBlock));
 
         bytes32 revealedSetHash = _revealedSetHash(contentId, roundId, commitKeys, salts);
         bytes32 expectedSeed = keccak256(
@@ -5390,23 +5411,23 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(newRoundId, roundId + 1);
     }
 
-    function test_RbtsSeedSettlesAfterExplicitBlockWindowWithoutRearm() public {
+    function test_RbtsSeedMissedExplicitBlockWindowReturnsStakesWithoutRearm() public {
         (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
             _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
-        uint256 seedBlock = block.number + 1;
-        vm.roll(seedBlock);
+        uint256 settlementBlock = block.number + 1;
+        vm.roll(settlementBlock);
         engine.settleRound(contentId, roundId);
         assertFalse(_roundRbtsScored(engine, contentId, roundId), "first call only captures seed");
 
-        vm.roll(seedBlock + 8192);
+        vm.roll(settlementBlock + 8193);
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed seed finalizes scoring");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "score seed captured");
-        assertGt(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "RBTS reward paid");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "long-delayed seed finalizes accounting");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "missed entropy has no score seed");
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "RBTS reward skipped without entropy");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "revealed stake accounted");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[1]), 0, "revealed stake accounted");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[2]), 0, "revealed stake accounted");
