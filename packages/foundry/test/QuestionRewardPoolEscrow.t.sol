@@ -4115,6 +4115,61 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, secondRoundId));
     }
 
+    function testPreQualificationRejectedPartialAbandonBeforeExpiryRevertsAndPreservesOldestReplacement() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + 3 days;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory firstWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, firstRoundId, 0);
+        bytes32 firstRoot = oracle.payoutWeightLeaf(firstWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, firstRoundId, 3, 30_000, firstWeight.effectiveWeight, firstRoot
+        );
+        bytes32 firstSnapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, firstRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(firstSnapshotKey, keccak256("pre-expiry-reject-first"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, firstRoundId);
+
+        vm.warp(block.timestamp + 25 hours);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory secondWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, secondRoundId, 0);
+        bytes32 secondRoot = oracle.payoutWeightLeaf(secondWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, secondRoundId, 3, 30_000, secondWeight.effectiveWeight, secondRoot
+        );
+        bytes32 secondSnapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, secondRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(secondSnapshotKey, keccak256("pre-expiry-reject-second"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, secondRoundId);
+
+        vm.expectRevert("Not expired");
+        rewardPoolEscrow.refundPreQualificationRejectedRewardPool(
+            rewardPoolId, _singleRoundIds(firstRoundId), false
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory firstReplacementWeight = firstWeight;
+        firstReplacementWeight.reasonHash = keccak256("pre-expiry-preserved-replacement");
+        bytes32 firstReplacementRoot = oracle.payoutWeightLeaf(firstReplacementWeight);
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            firstRoundId,
+            uint64(firstRoundId),
+            3,
+            30_000,
+            firstReplacementWeight.effectiveWeight,
+            firstReplacementRoot
+        );
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, firstRoundId);
+        RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, firstRoundId);
+        assertTrue(replacementSnapshot.qualified);
+        assertEq(replacementSnapshot.clusterWeightRoot, firstReplacementRoot);
+    }
+
     function testPreQualificationParentRejectedClusterSnapshotRoundCanBeSkippedAndRefunded() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         oracle.setOracleTimingConfig(1 hours, 2 hours);
@@ -4433,6 +4488,53 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
 
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertTrue(replacementSnapshot.qualified);
+        assertEq(replacementSnapshot.clusterWeightRoot, replacementRoot);
+    }
+
+    function testPreQualificationReplacementInsideVetoBlocksRefundRace() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        oracle.setOracleTimingConfig(15 minutes, 5 days);
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + 3 days;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-before-in-veto-replacement"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, roundId);
+
+        IClusterPayoutOracle.PayoutWeight memory replacementWeight = payoutWeight;
+        replacementWeight.reasonHash = keccak256("prequalification-replacement-in-veto");
+        bytes32 replacementRoot = oracle.payoutWeightLeaf(replacementWeight);
+        _finalizeClusterRoundPayoutSnapshotWithRootNoVetoWait(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            uint64(roundId),
+            3,
+            30_000,
+            replacementWeight.effectiveWeight,
+            replacementRoot
+        );
+
+        vm.warp(expiresAt + 1);
+        vm.expectRevert(
+            QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedReplacementSnapshotAvailable.selector
+        );
+        rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
+
+        _warpPastQuestionRewardSnapshotVeto(oracle, rewardPoolId, contentId, roundId);
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
         assertTrue(replacementSnapshot.qualified);

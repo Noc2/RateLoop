@@ -286,6 +286,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         if (inactive) {
             require(!registry.isContentActive(rewardPool.contentId), "Content active");
             require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
+        } else {
+            _requireExpiredPreQualificationRefund(votingEngine, rewardPool);
         }
         _abandonPreQualificationRejectedRounds(
             rewardPool,
@@ -307,9 +309,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
         }
 
-        QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
-            votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
-        );
         if (!inactive) {
             (bool expired, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.rewardPoolExpired(rewardPool);
             require(expired, "Not expired");
@@ -636,18 +635,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     ) private view returns (bool) {
         if (oracleAddr == address(0) || pinnedAt == 0) return false;
 
-        (, bool canQualify,,,,) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            rewardPoolClusterPayoutOracle,
-            rewardPoolClusterPayoutOraclePinnedAt,
-            votingEngine,
-            rewardPool,
-            roundId,
-            payoutDomain
-        );
-        if (!canQualify) return false;
-
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot;
         try oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) returns (
@@ -657,7 +644,11 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         } catch {
             return false;
         }
-        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) return false;
+        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Proposed
+            && snapshot.status != IClusterPayoutOracle.SnapshotStatus.Challenged
+            && snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) {
+            return false;
+        }
 
         uint64 proposedAt =
             oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
@@ -680,7 +671,34 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             )) {
             return false;
         }
+        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) return true;
+        if (!oracle.isRoundPayoutSnapshotOutsideVetoWindow(payoutDomain, rewardPoolId, rewardPool.contentId, roundId)) {
+            return true;
+        }
+
+        (, bool canQualify,,,,) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
+            rewardPool,
+            roundId,
+            payoutDomain
+        );
+        if (!canQualify) return false;
         return true;
+    }
+
+    function _requireExpiredPreQualificationRefund(RoundVotingEngine votingEngine, RewardPool storage rewardPool)
+        private
+    {
+        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) return;
+        QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
+            votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
+        );
+        (bool expired,) = QuestionRewardPoolEscrowWindowLib.rewardPoolExpired(rewardPool);
+        require(expired, "Not expired");
     }
 
     function _refundCompleteRewardPool(

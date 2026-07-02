@@ -1517,6 +1517,8 @@ contract QuestionRewardPoolEscrow is
         }
         if (reopened) {
             _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
+        } else if (preQualificationSkipped) {
+            preQualificationRejectedRound[rewardPoolId][roundId] = false;
         }
     }
 
