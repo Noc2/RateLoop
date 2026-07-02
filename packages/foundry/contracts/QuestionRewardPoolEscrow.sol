@@ -211,6 +211,9 @@ contract QuestionRewardPoolEscrow is
     event RecoveredSnapshotRoundReopened(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
+    event RecoveredSnapshotRoundAbandoned(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocation
+    );
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
     );
@@ -1142,6 +1145,44 @@ contract QuestionRewardPoolEscrow is
     function refundInactiveRewardPool(uint256 rewardPoolId) external nonReentrant returns (uint256 refundAmount) {
         return QuestionRewardPoolEscrowPoolActionsLib.refundInactiveRewardPool(
             rewardPools, registry, votingEngine, lrepToken, usdcToken, rewardPoolId
+        );
+    }
+
+    function refundExpiredRecoveredRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds)
+        external
+        nonReentrant
+        returns (uint256 refundAmount)
+    {
+        return QuestionRewardPoolEscrowPoolActionsLib.refundExpiredRecoveredRewardPool(
+            rewardPools,
+            roundSnapshots,
+            rejectedRecoveredRound,
+            reopenedRecoveredRound,
+            votingEngine,
+            lrepToken,
+            usdcToken,
+            rewardPoolId,
+            roundIds,
+            BUNDLE_CLAIM_GRACE
+        );
+    }
+
+    function refundInactiveRecoveredRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds)
+        external
+        nonReentrant
+        returns (uint256 refundAmount)
+    {
+        return QuestionRewardPoolEscrowPoolActionsLib.refundInactiveRecoveredRewardPool(
+            rewardPools,
+            roundSnapshots,
+            rejectedRecoveredRound,
+            reopenedRecoveredRound,
+            registry,
+            votingEngine,
+            lrepToken,
+            usdcToken,
+            rewardPoolId,
+            roundIds
         );
     }
 

@@ -18,6 +18,9 @@ import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.
 import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {
+    QuestionRewardPoolEscrowPoolActionsLib
+} from "../contracts/libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
@@ -4416,9 +4419,92 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
     }
 
+    function testRefundExpiredRecoveredRewardPool_AllowsExitAfterGraceWithoutReplacement() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-for-recovered-refund"));
+
+        vm.prank(voter2);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+        assertTrue(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
+
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.RecoveredRoundPending.selector);
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+
+        uint256[] memory roundIds = _singleRoundIds(roundId);
+        vm.expectRevert("Grace");
+        rewardPoolEscrow.refundExpiredRecoveredRewardPool(rewardPoolId, roundIds);
+
+        vm.warp(uint256(rewardPoolEscrow.rewardPoolRefundEligibleAt(rewardPoolId)) + 1);
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 refundAmount = rewardPoolEscrow.refundExpiredRecoveredRewardPool(rewardPoolId, roundIds);
+
+        assertEq(refundAmount, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + REWARD_POOL_AMOUNT);
+        assertFalse(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
+        assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+        RoundSnapshot memory cleared = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(cleared.allocation, 0);
+        vm.expectRevert("Bounty refunded");
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+    }
+
+    function testRefundInactiveRecoveredRewardPool_AllowsExitWithoutReplacement() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-for-inactive-recovered-refund"));
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        vm.warp(block.timestamp + 31 days);
+        registry.markDormant(contentId);
+        vm.warp(block.timestamp + 2 days);
+
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.RecoveredRoundPending.selector);
+        rewardPoolEscrow.refundInactiveRewardPool(rewardPoolId);
+
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 refundAmount =
+            rewardPoolEscrow.refundInactiveRecoveredRewardPool(rewardPoolId, _singleRoundIds(roundId));
+
+        assertEq(refundAmount, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + REWARD_POOL_AMOUNT);
+        assertFalse(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
+        RoundSnapshot memory cleared = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(cleared.allocation, 0);
+    }
+
     event RecoveredSnapshotRoundReopened(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
+
+    function _singleRoundIds(uint256 roundId) internal pure returns (uint256[] memory roundIds) {
+        roundIds = new uint256[](1);
+        roundIds[0] = roundId;
+    }
 
     function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidClusterRootAndDigest() public {
         uint256 contentId = _submitQuestion("");
@@ -6987,8 +7073,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 secondRevealable = _lastCommitRevealableAfter(votingEngine, second.contentId, second.roundId);
         _warpPastTlockRevealTime(firstRevealable > secondRevealable ? firstRevealable : secondRevealable);
 
-        _revealAndSettleCommittedRound(first, directions, syncBundle);
-        _revealAndSettleCommittedRound(second, directions, syncBundle);
+        _revealCommittedVotes(first, directions, directions.length);
+        _revealCommittedVotes(second, directions, directions.length);
+        _settleCommittedRound(first, syncBundle);
+        _settleCommittedRound(second, syncBundle);
         return (first.roundId, second.roundId);
     }
 
@@ -7003,8 +7091,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 secondRevealable = _lastCommitRevealableAfter(votingEngine, second.contentId, second.roundId);
         _warpPastTlockRevealTime(firstRevealable > secondRevealable ? firstRevealable : secondRevealable);
 
-        _revealAndSettleCommittedRound(first, firstDirections, syncBundle);
-        _revealAndSettleCommittedRound(second, secondDirections, syncBundle);
+        _revealCommittedVotes(first, firstDirections, firstDirections.length);
+        _revealCommittedVotes(second, secondDirections, secondDirections.length);
+        _settleCommittedRound(first, syncBundle);
+        _settleCommittedRound(second, syncBundle);
     }
 
     function _commitBundleQuestionRound(
@@ -7049,7 +7139,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         internal
     {
         _revealCommittedVotes(committed, directions, directions.length);
+        _settleCommittedRound(committed, syncBundle);
+    }
 
+    function _settleCommittedRound(CommittedRound memory committed, bool syncBundle) internal {
         _settleAfterRbtsSeed(votingEngine, committed.contentId, committed.roundId);
         if (syncBundle) {
             rewardPoolEscrow.syncBundleQuestionTerminal(committed.contentId, committed.roundId);

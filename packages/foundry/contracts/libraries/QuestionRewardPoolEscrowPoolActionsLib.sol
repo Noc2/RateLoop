@@ -14,7 +14,7 @@ import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowT
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 import { QuestionRewardParticipantFloorLib } from "./QuestionRewardParticipantFloorLib.sol";
-import { RewardPool, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
+import { RewardPool, RoundSnapshot, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
 import { RoundLib } from "./RoundLib.sol";
 
 library QuestionRewardPoolEscrowPoolActionsLib {
@@ -58,6 +58,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     );
     event RewardPoolEligibilitySet(uint256 indexed rewardPoolId, uint8 indexed bountyEligibility);
     event RewardPoolClusterPayoutOracleSnapshotted(uint256 indexed rewardPoolId, address indexed clusterPayoutOracle);
+    event RecoveredSnapshotRoundAbandoned(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocation
+    );
 
     function createRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
@@ -155,6 +158,53 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         _requireNoPendingRecoveredRounds(rewardPool);
         require(!registry.isContentActive(rewardPool.contentId), "Content active");
         require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
+        QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
+            votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
+        );
+        return _refundUnallocatedRewardPool(
+            votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, rewardPool.bountyClosesAt
+        );
+    }
+
+    function refundExpiredRecoveredRewardPool(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
+        mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId,
+        uint256[] calldata roundIds,
+        uint256 claimGrace
+    ) external returns (uint256 refundAmount) {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        _requireRecoveredRefundGrace(rewardPool, claimGrace);
+        _abandonRecoveredRounds(
+            rewardPool, roundSnapshots, rejectedRecoveredRound, reopenedRecoveredRound, rewardPoolId, roundIds
+        );
+        rewardPool.unallocatedAmount = 0;
+        return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace);
+    }
+
+    function refundInactiveRecoveredRewardPool(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
+        mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId,
+        uint256[] calldata roundIds
+    ) external returns (uint256 refundAmount) {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        require(!registry.isContentActive(rewardPool.contentId), "Content active");
+        require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
+        _abandonRecoveredRounds(
+            rewardPool, roundSnapshots, rejectedRecoveredRound, reopenedRecoveredRound, rewardPoolId, roundIds
+        );
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
             votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
         );
@@ -345,6 +395,47 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _requireNoPendingRecoveredRounds(RewardPool storage rewardPool) private view {
         if (rewardPool.pendingRecoveredRounds != 0) revert RecoveredRoundPending();
+    }
+
+    function _requireRecoveredRefundGrace(RewardPool storage rewardPool, uint256 claimGrace) private view {
+        uint256 claimDeadline = rewardPool.claimDeadline;
+        require(claimDeadline != 0, "Grace");
+        require(block.timestamp > claimDeadline + claimGrace, "Grace");
+    }
+
+    function _abandonRecoveredRounds(
+        RewardPool storage rewardPool,
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(
+            uint256 => mapping(uint256 => bool)
+        ) storage rejectedRecoveredRound,
+        mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        uint256 rewardPoolId,
+        uint256[] calldata roundIds
+    ) private {
+        uint256 pendingRecoveredRounds = rewardPool.pendingRecoveredRounds;
+        require(pendingRecoveredRounds != 0, "Recovered round pending");
+        require(roundIds.length != 0, "Round required");
+
+        for (uint256 i = 0; i < roundIds.length;) {
+            uint256 roundId = roundIds[i];
+            require(rejectedRecoveredRound[rewardPoolId][roundId], "Round not recovered");
+            RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
+            require(!snapshot.qualified, "Round qualified");
+            uint256 allocation = snapshot.allocation;
+
+            delete roundSnapshots[rewardPoolId][roundId];
+            rejectedRecoveredRound[rewardPoolId][roundId] = false;
+            reopenedRecoveredRound[rewardPoolId][roundId] = false;
+            unchecked {
+                --pendingRecoveredRounds;
+                ++i;
+            }
+            emit RecoveredSnapshotRoundAbandoned(rewardPoolId, rewardPool.contentId, roundId, allocation);
+        }
+
+        rewardPool.pendingRecoveredRounds = pendingRecoveredRounds.toUint32();
+        _requireNoPendingRecoveredRounds(rewardPool);
     }
 
     function _refundCompleteRewardPool(
