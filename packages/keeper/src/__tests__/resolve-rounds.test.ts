@@ -350,6 +350,7 @@ function makeHarness(options: {
   onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
   commitRevealDataErrorFor?: readonly `0x${string}`[];
   revealVoteErrorFor?: readonly `0x${string}`[];
+  qualifyRoundErrors?: Record<string, string>;
   settleRoundResultState?: RoundStateValue;
   estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
 }) {
@@ -371,6 +372,7 @@ function makeHarness(options: {
   const commits = options.commits ?? {};
   const commitRevealDataErrorFor = new Set(options.commitRevealDataErrorFor ?? []);
   const revealVoteErrorFor = new Set(options.revealVoteErrorFor ?? []);
+  const qualifyRoundErrors = options.qualifyRoundErrors ?? {};
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
   const advisoryCommits = options.advisoryCommits ?? {};
@@ -605,7 +607,16 @@ function makeHarness(options: {
         }
 
         if (functionName === "qualifyRound") {
+          const key = `${String(args[0])}:${String(args[1])}`;
+          const error = qualifyRoundErrors[key];
+          if (error) {
+            throw new Error(error);
+          }
           return "0xqualify";
+        }
+
+        if (functionName === "advanceQualificationCursor") {
+          return "0xadvancequalificationcursor";
         }
 
         if (functionName === "syncQuestionBundleTerminals") {
@@ -925,6 +936,152 @@ describe("resolveRounds", () => {
         args: [42n, 3n],
       }),
     );
+  });
+
+  it("advances non-qualifying reward pool cursor rounds before later candidates", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      qualifyRoundErrors: {
+        "42:3": "Too few eligible voters",
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              reason: "reward_pool_qualification",
+            },
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "4",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(1);
+    const rewardPoolWrites = walletClient.writeContract.mock.calls.map(
+      ([request]) => ({
+        functionName: request.functionName,
+        args: request.args,
+      }),
+    );
+    expect(rewardPoolWrites).toEqual([
+      { functionName: "qualifyRound", args: [42n, 3n] },
+      { functionName: "qualifyRound", args: [42n, 3n] },
+      { functionName: "qualifyRound", args: [42n, 3n] },
+      { functionName: "advanceQualificationCursor", args: [42n, 1n] },
+      { functionName: "qualifyRound", args: [42n, 4n] },
+    ]);
+  });
+
+  it("treats pending cluster snapshots as expected qualification waits", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      qualifyRoundErrors: {
+        "42:3": "Cluster snapshot pending",
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(0);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "qualifyRound",
+        args: [42n, 3n],
+      }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "advanceQualificationCursor",
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("syncs bounded question bundle terminals returned by Ponder work discovery", async () => {

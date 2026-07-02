@@ -32,6 +32,9 @@ const counters: Record<string, number> = {
   keeper_feedback_bonus_forfeits_total: 0,
   keeper_feedback_bonus_forfeit_failures_total: 0,
   keeper_reward_pool_qualification_failures_total: 0,
+  keeper_reward_pool_qualification_cursor_advance_attempts_total: 0,
+  keeper_reward_pool_qualification_cursor_advances_total: 0,
+  keeper_reward_pool_qualification_cursor_advance_failures_total: 0,
   keeper_bundle_terminal_sync_failures_total: 0,
 };
 
@@ -169,6 +172,12 @@ function renderMetrics(): string {
     keeper_feedback_bonus_forfeits_total: "Total expired Feedback Bonus pools forfeited by keeper",
     keeper_feedback_bonus_forfeit_failures_total: "Total unexpected Feedback Bonus forfeit failures",
     keeper_reward_pool_qualification_failures_total: "Total unexpected reward pool qualification failures",
+    keeper_reward_pool_qualification_cursor_advance_attempts_total:
+      "Total reward pool qualification cursor advance attempts",
+    keeper_reward_pool_qualification_cursor_advances_total:
+      "Total successful reward pool qualification cursor advance transactions",
+    keeper_reward_pool_qualification_cursor_advance_failures_total:
+      "Total unexpected reward pool qualification cursor advance failures",
     keeper_bundle_terminal_sync_failures_total: "Total unexpected question bundle terminal sync failures",
   };
 

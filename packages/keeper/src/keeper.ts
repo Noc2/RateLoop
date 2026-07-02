@@ -1955,6 +1955,7 @@ function isExpectedRewardPoolQualificationRevert(reason: string): boolean {
     "No allocation",
     "Small allocation",
     "Cluster snapshot unavailable",
+    "Cluster snapshot pending",
     "Cluster source stale",
     "SnapshotConsumed",
     "EnforcedPause",
@@ -1962,6 +1963,60 @@ function isExpectedRewardPoolQualificationRevert(reason: string): boolean {
   ];
   const lower = reason.toLowerCase();
   return benign.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
+
+function isRewardPoolCursorAdvanceReason(reason: string): boolean {
+  const cursorAdvanceReasons = ["Too few eligible voters", "Bounty not started"];
+  const lower = reason.toLowerCase();
+  return cursorAdvanceReasons.some((phrase) =>
+    lower.includes(phrase.toLowerCase()),
+  );
+}
+
+async function _advanceRewardPoolQualificationCursor(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  escrow: `0x${string}`,
+  candidate: KeeperWorkRewardPoolQualificationCandidate,
+  triggerReason: string,
+): Promise<void> {
+  incrementCounter(
+    "keeper_reward_pool_qualification_cursor_advance_attempts_total",
+  );
+  try {
+    await writeContractAndConfirm(publicClient, walletClient, {
+      chain,
+      account,
+      address: escrow,
+      abi: QuestionRewardPoolEscrowAbi,
+      functionName: "advanceQualificationCursor",
+      args: [candidate.rewardPoolId, 1n],
+    });
+    incrementCounter(
+      "keeper_reward_pool_qualification_cursor_advances_total",
+    );
+    logger.info("Advanced reward pool qualification cursor", {
+      rewardPoolId: candidate.rewardPoolId.toString(),
+      contentId: candidate.contentId.toString(),
+      roundId: candidate.roundId.toString(),
+      triggerError: triggerReason,
+    });
+  } catch (err: unknown) {
+    const reason = getRevertReason(err);
+    incrementCounter(
+      "keeper_reward_pool_qualification_cursor_advance_failures_total",
+    );
+    logger.warn("Failed to advance reward pool qualification cursor", {
+      rewardPoolId: candidate.rewardPoolId.toString(),
+      contentId: candidate.contentId.toString(),
+      roundId: candidate.roundId.toString(),
+      triggerError: triggerReason,
+      error: reason,
+    });
+  }
 }
 
 async function _qualifyRewardPoolRounds(
@@ -2013,6 +2068,25 @@ async function _qualifyRewardPoolRounds(
       });
     } catch (err: unknown) {
       const reason = getRevertReason(err);
+      if (isRewardPoolCursorAdvanceReason(reason)) {
+        await _advanceRewardPoolQualificationCursor(
+          publicClient,
+          walletClient,
+          chain,
+          account,
+          logger,
+          escrow,
+          candidate,
+          reason,
+        );
+        logger.debug("Skipped reward pool qualification candidate", {
+          rewardPoolId: candidate.rewardPoolId.toString(),
+          contentId: candidate.contentId.toString(),
+          roundId: candidate.roundId.toString(),
+          error: reason,
+        });
+        continue;
+      }
       if (isExpectedRewardPoolQualificationRevert(reason)) {
         logger.debug("Skipped reward pool qualification candidate", {
           rewardPoolId: candidate.rewardPoolId.toString(),
