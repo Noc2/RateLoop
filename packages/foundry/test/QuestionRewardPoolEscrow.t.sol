@@ -4201,6 +4201,71 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
     }
 
+    function testPreQualificationSkippedRoundMustQualifyBeforeLaterRoundCanComplete() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+
+        uint256 skippedRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory skippedWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, skippedRoundId, 0);
+        bytes32 skippedRoot = oracle.payoutWeightLeaf(skippedWeight);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, rewardPoolId, contentId, skippedRoundId, 3, 30_000, skippedWeight.effectiveWeight, skippedRoot
+        );
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, skippedRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-before-later-round"));
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotRound(rewardPoolId, skippedRoundId);
+
+        vm.warp(block.timestamp + 25 hours);
+        uint256 laterRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory laterWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, laterRoundId, 0);
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle,
+            rewardPoolId,
+            contentId,
+            laterRoundId,
+            3,
+            30_000,
+            laterWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(laterWeight)
+        );
+
+        assertEq(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, laterRoundId, voter1, laterWeight, new bytes32[](0)
+            ),
+            0
+        );
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, laterRoundId);
+        vm.prank(voter1);
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, laterRoundId, laterWeight, new bytes32[](0));
+
+        IClusterPayoutOracle.PayoutWeight memory replacementWeight = skippedWeight;
+        replacementWeight.reasonHash = keccak256("prequalification-priority-replacement");
+        bytes32 replacementRoot = oracle.payoutWeightLeaf(replacementWeight);
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            skippedRoundId,
+            uint64(skippedRoundId),
+            3,
+            30_000,
+            replacementWeight.effectiveWeight,
+            replacementRoot
+        );
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, skippedRoundId);
+        RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, skippedRoundId);
+        assertTrue(replacementSnapshot.qualified);
+        assertEq(replacementSnapshot.clusterWeightRoot, replacementRoot);
+    }
+
     function testPreQualificationRejectedReplacementBlocksRefundRace() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
@@ -5409,7 +5474,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(reward, 0);
     }
 
-    function testGovernanceCanSkipSnapshotlessClusterRoundAndRefundExpiredPool() public {
+    function testPermissionlessSkipSnapshotlessClusterRoundAndRefundExpiredPool() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
@@ -5422,10 +5487,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
 
         vm.prank(voter1);
-        vm.expectRevert();
-        rewardPoolEscrow.skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId);
-
-        vm.prank(owner);
         rewardPoolEscrow.skipPreQualificationSnapshotlessClusterRound(rewardPoolId, roundId);
 
         RoundSnapshot memory skippedSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);

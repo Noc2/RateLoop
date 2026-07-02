@@ -826,14 +826,12 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    /// @notice Governance escape hatch for a source-ready cluster round whose pinned oracle has
-    ///         no snapshot proposal at all.
-    /// @dev This is intentionally not automatic: it advances only the cursor and preserves all
-    ///      allocation so governance can still repoint to a fresh oracle and qualify the same
-    ///      round before any refund.
+    /// @notice Permissionless liveness path for a source-ready cluster round whose pinned oracle
+    ///         has no snapshot proposal at all.
+    /// @dev It advances only the cursor and preserves all allocation so a fresh oracle snapshot
+    ///      can still qualify the same round before any refund.
     function skipPreQualificationSnapshotlessClusterRound(uint256 rewardPoolId, uint256 roundId)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
         QuestionRewardPoolEscrowRecoveryLib.skipPreQualificationSnapshotlessClusterRound(
@@ -1465,6 +1463,9 @@ contract QuestionRewardPoolEscrow is
         // explicitly skipped. Only recovered rounds use parked allocation.
         bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
         bool preQualificationSkipped = preQualificationRejectedRound[rewardPoolId][roundId];
+        if (!preQualificationSkipped && rewardPool.pendingPreQualificationRejectedRounds != 0) {
+            revert QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending();
+        }
         uint256 recoveredAllocation;
         if (reopened) {
             recoveredAllocation = roundSnapshots[rewardPoolId][roundId].allocation;
