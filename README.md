@@ -26,22 +26,22 @@ AI agents are increasingly good at drafting, searching, and planning, but they s
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
-2. **Fund** — attach a non-refundable LREP or USDC bounty, and optionally add a LREP or USDC Feedback Bonus at question creation; everyone can answer, while the bounty can optionally pay either everyone or verified humans.
+2. **Fund** — attach a non-refundable LREP or USDC bounty, and optionally add a LREP or USDC Feedback Bonus at question creation; everyone can answer, while small bounties can stay open and recapture-sized bounties require Proof-of-Human claim eligibility.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
-4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
-5. **Finalize payouts** — USDC bounties and launch LREP credits wait for challengeable correlation epoch snapshots, while the public result is already readable.
-6. **Use** — agents, apps, and frontends read the settled score, revealed votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
+4. **Reveal and close** — commit-reveal keeps predictions private until reveal, then the public verdict closes on-chain.
+5. **Finalize rewards** — RBTS stake rewards, USDC bounties, and launch LREP credits wait for challengeable correlation snapshots; non-tied rounds remain visibly pending until reward settlement completes.
+6. **Use** — agents, apps, and frontends read the final score, revealed votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
 
 Key pieces:
 
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
 - **Crowd Forecast Voting** — the core input is a binary signal plus a 0-100% population prediction, scored against revealed peer signals
 - **Starter Reputation** — raters can submit zero-LREP advisory ratings in rounds that already have a staked vote; they do not count toward settlement quorum, but eligible settled advisory rounds can earn launch credits, and open raters can later unlock their full earned cap by verifying the same wallet
-- **LREP Locks** — useful staked reports score above the effective-weighted RBTS benchmark, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
+- **LREP Locks** — useful staked reports score above the correlation-adjusted RBTS benchmark, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and USDC Bounties and Feedback Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and the fresh redeploy uses one question duration for the blind window, bounty eligibility, and Feedback Bonus close; wallet-call asks keep bounty and bonus in the same asset, while USDC remains the x402-compatible public agent payment lane with one-shot bounty plus bonus funding
-- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, USDC payouts, and launch LREP payouts across rounds; artifacts carry settlement-time input snapshots so challengers recompute the same roots
+- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, USDC payouts, and launch LREP payouts across rounds; artifacts carry source-event input snapshots so challengers recompute the same roots
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
@@ -167,7 +167,7 @@ the same production flow.
 
 ### Run the Keeper
 
-The keeper is a standalone service that settles eligible rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. Settlement itself is permissionless — any user or operator can call `RoundVotingEngine.settleRound(contentId, roundId)` once reveal conditions are met — but production should still run multiple keeper replicas and page on `keeper_settlement_backlog_oldest_seconds`. In production the keeper depends on Ponder for work discovery and may use Postgres advisory locks for correlation snapshot publication; see [`packages/keeper/README.md`](packages/keeper/README.md) for persistence, lock, and multi-replica guidance.
+The keeper is a standalone service that settles eligible rounds, cancels expired rounds, marks dormant content, and publishes correlation snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. Round closure itself is permissionless — any user or operator can call `RoundVotingEngine.settleRound(contentId, roundId)` once reveal conditions are met — but a non-tied round now enters RBTS settlement pending until the finalized correlation root is applied. Production should run multiple keeper replicas and page on `keeper_settlement_backlog_oldest_seconds` plus RBTS settlement-pending age. In production the keeper depends on Ponder for work discovery and may use Postgres advisory locks for correlation snapshot publication; see [`packages/keeper/README.md`](packages/keeper/README.md) for persistence, lock, and multi-replica guidance.
 
 **Configure** by copying `.env.example` and setting an RPC URL, `CHAIN_ID`, and keeper wallet:
 

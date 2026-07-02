@@ -52,7 +52,7 @@ export const FEATURE_BENEFITS: {
   {
     title: "Honest and Quick",
     achievedBy:
-      "Commit-reveal voting, Bayesian Truth Serum-style split reports, and LREP staking make dishonest or losing votes costly while keeping useful signal to one blind round. Round length is asker-set, so fast rounds can settle in minutes.",
+      "Commit-reveal voting, Bayesian Truth Serum-style split reports, correlation-adjusted RBTS settlement, and LREP staking make below-benchmark reports costly while keeping useful signal to one blind round. Round length is asker-set, so fast rounds can close public verdicts in minutes.",
     links: [
       { label: "Commit-reveal", href: "/docs/tech-stack#commit-reveal-voting" },
       { label: "Bayesian Truth Serum", href: "/docs/tech-stack#bayesian-truth-serum" },

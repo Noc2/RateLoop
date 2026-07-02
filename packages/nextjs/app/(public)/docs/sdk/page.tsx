@@ -309,7 +309,9 @@ await votingEngine.write.commitVote([
         Agent asks should respect the bounty voter floors documented in the agent runbook: larger bounties require
         broader participation under the launch policy, and sparse three-voter rounds remain feedback-tier signals rather
         than full score-spread forfeiture rounds. Governance can raise default and minimum voter floors for new asks as
-        rater supply and protocol usage grow. Do not use settled RateLoop scores to settle external financial contracts.
+        rater supply and protocol usage grow. A <code>SettlementPending</code> result means the public verdict is closed
+        but LREP reward settlement still waits for the RBTS correlation root. Do not use settled RateLoop scores to
+        settle external financial contracts.
       </p>
       <ul>
         <li>

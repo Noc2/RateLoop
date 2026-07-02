@@ -127,7 +127,7 @@ export const protocolDocFacts = {
   usdcBountyPayoutMinimumDelayLabel: formatDurationLabel(USDC_BOUNTY_PAYOUT_MINIMUM_DELAY_SECONDS),
   usdcBountyPayoutHappyPathMaxDelayLabel: "4 hours",
   usdcBountyPayoutTimingTooltip:
-    "USDC bounty claims wait for finalized payout roots after settlement: minimum 2 hours when the correlation epoch is already finalized, normally up to 4 hours if both oracle layers still need their 2-hour challenge windows. Keeper polling, transactions, and artifact availability can add a little; challenged roots wait for arbiter resolution.",
+    "LREP stake rewards wait for the finalized RBTS settlement root after the public verdict closes. USDC bounty claims wait for finalized payout roots too: minimum 2 hours when the correlation epoch is already finalized, normally up to 4 hours if both oracle layers still need their 2-hour challenge windows. Keeper polling, transactions, and artifact availability can add a little; challenged roots wait for arbiter resolution.",
 } as const;
 
 export const whitepaperSettlementConfigRows: string[][] = [

@@ -57,10 +57,11 @@ const HowItWorks: NextPage = () => {
         </li>
         <li>
           <strong>Settle:</strong> once reveal conditions and the selected rater threshold are met, the round resolves.
-          The keeper normally calls settlement, but any user or operator can self-settle an eligible round on-chain if
-          automation is delayed. Three-rater rounds are the launch feedback tier and can still settle as sparse
-          feedback, but LREP score-spread forfeits need a larger score-eligible set before they turn on. Governance can
-          raise new-round voter floors as usage grows.
+          The keeper normally closes the public verdict, but any user or operator can self-settle an eligible round
+          on-chain if automation is delayed. Non-tied rounds then wait in RBTS settlement pending until the finalized
+          correlation root supplies effective stake-settlement weights. Three-rater rounds are the launch feedback tier
+          and can still settle as sparse feedback, but LREP score-spread forfeits need a larger score-eligible set
+          before they turn on. Governance can raise new-round voter floors as usage grows.
         </li>
       </ol>
 
@@ -87,19 +88,22 @@ const HowItWorks: NextPage = () => {
         <a href={robustBtsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           Robust Bayesian Truth Serum (RBTS)
         </a>{" "}
-        compares every revealed staked report with a leave-one-out benchmark: the stake-weighted score of the other
-        score-eligible revealed reports. A report&apos;s score spread is its own score minus that benchmark. Stakes
+        compares every revealed staked report with a leave-one-out benchmark: the effective-weighted RBTS score of the
+        other score-eligible revealed reports. The RBTS settlement snapshot path supplies those effective weights before
+        rewards become claimable, capping detected clusters so a dense bloc shares no more RBTS settlement weight than
+        the strongest member in that cluster. A report&apos;s score spread is its own score minus that benchmark. Stakes
         settle against that spread: below-benchmark reports forfeit, above-benchmark reports split the forfeited pool.
-        Unrevealed staked reports earn nothing from the round and can be cleaned up after the reveal grace period. The
-        benefit is that stake rewards follow relative predictive quality rather than raw popularity, giving raters a
-        reason to report independently instead of copying visible momentum.
+        Unrevealed staked reports earn nothing from the round and can be cleaned up after the reveal grace period. If
+        the RBTS snapshot times out, revealed stake is returned without score-spread rewards or forfeits. The benefit is
+        that stake rewards follow relative predictive quality rather than raw popularity, giving raters a reason to
+        report independently instead of copying visible momentum.
       </p>
       <FormulaCard
         title="RBTS Score-Spread Settlement"
         formulas={[
           {
             label: "Benchmark & spread",
-            tex: String.raw`b_i = \frac{\sum_j k_j\, s_j - k_i\,s_i}{\sum_j k_j - k_i} \qquad d_i = s_i - b_i`,
+            tex: String.raw`b_i = \frac{\sum_j w_j\, s_j - w_i\,s_i}{\sum_j w_j - w_i} \qquad d_i = s_i - b_i`,
           },
           {
             label: "Forfeit (below benchmark)",
@@ -107,7 +111,7 @@ const HowItWorks: NextPage = () => {
           },
           {
             label: "Reward (above benchmark)",
-            tex: String.raw`r_i = 0.96\, F' \cdot \frac{k_i\, d_i}{\sum_{d_j > 0} k_j\, d_j} \qquad F' = \sum_i f_i - \min\!\left(0.01 \textstyle\sum_i f_i,\; 1\right)`,
+            tex: String.raw`r_i = 0.96\, F' \cdot \frac{w_i\, d_i}{\sum_{d_j > 0} w_j\, d_j} \qquad F' = \sum_i f_i - \min\!\left(0.01 \textstyle\sum_i f_i,\; 1\right)`,
           },
           {
             label: "Final claim",
@@ -173,17 +177,18 @@ const HowItWorks: NextPage = () => {
       <div className="not-prose my-4 rounded-lg bg-warning/10 p-4 text-sm text-base-content">
         <p className="font-semibold text-warning">USDC payout timing</p>
         <p className="mt-1 text-base-content/75">
-          USDC bounty claims usually unlock <strong>2-4 hours</strong> after settlement while payout roots pass oracle
-          challenge windows; challenged roots, missing-proposer recovery, or governance-runbook recovery take longer.
+          LREP stake rewards become claimable after the RBTS settlement snapshot is applied. USDC bounty claims usually
+          unlock <strong>2-4 hours</strong> after the public verdict closes while payout roots pass oracle challenge
+          windows; challenged snapshots, missing-proposer recovery, or governance-runbook recovery take longer.
         </p>
       </div>
       <p>
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
         question in the claimed round set. USDC claim weights come from the finalized{" "}
         <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link>, and equal-weight
-        rounds use one unit per eligible revealed rater. Those snapshot artifacts commit to the settlement-time scoring
-        inputs, so later credential, ban, or voting-history changes cannot alter an old root. The full
-        surprise-weighting chain behind <TexFormula tex={String.raw`w_i`} /> is on the{" "}
+        rounds use one unit per eligible revealed rater. Those snapshot artifacts commit to source-event scoring inputs,
+        so later credential, ban, or voting-history changes cannot alter an old root. The full surprise-weighting chain
+        behind <TexFormula tex={String.raw`w_i`} /> is on the{" "}
         <Link href="/docs/tech-stack#bounties" className="link link-primary">
           Surprise-Weighted Bounties
         </Link>{" "}
@@ -201,7 +206,7 @@ const HowItWorks: NextPage = () => {
           },
           {
             label: "Claim weight",
-            tex: String.raw`w_i = w_i^{\mathrm{base}} \cdot \frac{\mathrm{ind}_i}{10\,000} \qquad w_i^{\mathrm{base}} \in [10\,000,\; 20\,000]\ \mathrm{bps}`,
+            tex: String.raw`w_i = \mathrm{clusterBudget}_{c,s}\!\left(w_i^{\mathrm{base}}\right) \cdot \frac{\mathrm{ind}_i}{10\,000} \qquad w_i^{\mathrm{base}} = 10\,000 + \mathrm{anchor}_{s}\cdot\mathrm{ind}_i\cdot\frac{\mathrm{rawSurprise}_i - 10\,000}{10^8}`,
           },
         ]}
         where={[
@@ -209,7 +214,18 @@ const HowItWorks: NextPage = () => {
             symbol: String.raw`A_R`,
             meaning: "round allocation: funded amount / required rounds (the last round takes the remainder)",
           },
-          { symbol: String.raw`w_i^{\mathrm{base}}`, meaning: "surprise-weighted base weight from the snapshot" },
+          {
+            symbol: String.raw`\mathrm{clusterBudget}`,
+            meaning: "same-side detected-cluster cap on aggregate surprise bonus",
+          },
+          {
+            symbol: String.raw`\mathrm{anchor}_{s}`,
+            meaning: "side-level verified/high-independence anchor factor (bps)",
+          },
+          {
+            symbol: String.raw`w_i^{\mathrm{base}}`,
+            meaning: "anchored surprise-weighted base weight from the snapshot",
+          },
           { symbol: String.raw`\mathrm{ind}_i`, meaning: "independence multiplier (bps) from the correlation scorer" },
         ]}
       />

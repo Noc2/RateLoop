@@ -8,14 +8,14 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 2. The asker funds a non-refundable bounty in LREP or USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
-5. The revealed set closes and settlement records the public result state on-chain. Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 effective score-eligible participant units before they turn on. Governance can raise new-round voter floors as usage grows.
-6. Registered frontend operators propose correlation payout snapshots, then finalized roots set RBTS effective settlement weights, public-rating evidence weights, USDC and launch LREP claim weights; USDC weights are surprise-weighted, launch-credit weights stay flat.
+5. The revealed set closes and records the public verdict on-chain. Non-tied rounds then enter RBTS settlement pending until the finalized correlation root supplies effective stake-settlement weights. Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 effective score-eligible participant units before they turn on. Governance can raise new-round voter floors as usage grows.
+6. Registered frontend operators propose correlation payout snapshots, then finalized roots set RBTS effective settlement weights, public-rating evidence weights, USDC and launch LREP claim weights; USDC weights are surprise-weighted with per-cluster bonus budgets, launch-credit weights stay flat.
 7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful public feedback from revealed raters.
 8. Eligible voters claim rewards and agents read the public result package. Gated context is either disclosed after settlement or kept private forever according to the ask's disclosure policy.
 
 ## USDC Bounty Payout Timing
 
-USDC bounty claims usually unlock 2-4 hours after settlement while payout roots pass oracle challenge windows; challenged roots, missing-proposer recovery, or governance-runbook recovery take longer.
+LREP stake rewards are claimable only after the RBTS settlement snapshot is applied. USDC bounty claims usually unlock 2-4 hours after the public verdict closes while payout roots pass oracle challenge windows; challenged snapshots, missing-proposer recovery, or governance-runbook recovery take longer.
 
 ## Feedback Bonus Payout Timing
 
@@ -77,7 +77,7 @@ The result package can include:
 
 LREP is the public reputation and staking token used by open raters. Zero-LREP advisory votes can participate in rounds that already have a staked vote, do not count toward settlement quorum, and can qualify for launch credits in eligible settled rounds. Only votes with LREP stake create normal economic settlement upside and downside from RBTS score-spread rewards and forfeiture risk.
 
-RBTS settlement keeps each revealed report's `scoreBps`, computes a leave-one-out benchmark for each rater from the effective-weighted scores of the other score-eligible revealed reports, and compares the rater's score with that benchmark. When the cluster oracle is configured, a finalized RBTS settlement snapshot can reduce each report's reward weight for detected clusters before score-spread rewards and forfeits are computed. The settlement caller first receives 1% of scored forfeits, capped at 1 LREP. Positive spreads recover full stake and share the 96% voter share of the remaining forfeited negative-spread stake; the rest of that remaining pool routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the leave-one-out benchmark, with no revealed-loser rebate for RBTS settlement. Score-spread LREP forfeits are disabled below 8 effective score-eligible participant units and capped at 50% of each report's stake once active.
+RBTS settlement keeps each revealed report's `scoreBps`, waits for a finalized RBTS settlement snapshot, computes a leave-one-out benchmark for each rater from the effective-weighted scores of the other score-eligible revealed reports, and compares the rater's score with that benchmark. The snapshot caps detected clusters so a dense bloc shares no more effective RBTS settlement weight than the strongest member in that cluster. The settlement caller first receives 1% of scored forfeits, capped at 1 LREP. Positive spreads recover full stake and share the 96% voter share of the remaining forfeited negative-spread stake; the rest of that remaining pool routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the leave-one-out benchmark, with no revealed-loser rebate for RBTS settlement. Score-spread LREP forfeits are disabled below 8 effective score-eligible participant units and capped at 50% of each report's stake once active. If the RBTS snapshot times out, the timeout path returns revealed stake without score-spread rewards or forfeits.
 
 ```
 benchmark_i = (sum(weight_j * score_j) - weight_i * score_i) / (sum(weight_j) - weight_i)
@@ -95,23 +95,26 @@ raw rating evidence is 3.3 up units versus 1.3 down units. If the public-rating
 snapshot leaves those weights unchanged, the applied rating is about `7.2/10`;
 if it discounts a detected cluster, the adjusted evidence can move less. USDC
 bounty and launch LREP claims still wait for their own correlation payout
-snapshots. The keeper normally calls settlement once reveal conditions are met,
+snapshots. The keeper normally closes the public verdict once reveal conditions are met,
 but any user or operator can self-settle an eligible round on-chain if automation
-is delayed. With the current oracle default, USDC bounty payout takes at least 2
-hours after settlement and normally up to 4 hours on the happy path if both
+is delayed. Non-tied rounds then wait for the RBTS settlement snapshot before LREP
+stake rewards are claimable. With the current oracle default, USDC bounty payout takes at least 2
+hours after the public verdict closes and normally up to 4 hours on the happy path if both
 oracle layers still need to finalize.
 
 For USDC bounties, the finalized correlation payout snapshot sets each rater's
-claim weight: a surprise-weighted base weight (10,000-20,000 bps, higher when
-the rater's answer was surprisingly common versus the trailing base rate) times
-an independence multiplier. Artifacts commit to the settlement-time scoring
-input snapshots, so later credential, ban, or voting-history changes cannot
-alter an old root. It is not the rater's LREP stake amount.
+claim weight: a surprise-weighted base weight, reduced by weak verified-anchor
+support when a side floods above its trailing base rate, capped per detected
+same-side cluster, and then multiplied by an independence multiplier. Artifacts
+commit to source-event input snapshots, so later credential, ban,
+or voting-history changes cannot alter an old root. It is not the rater's LREP
+stake amount.
 
 ```
-payout_i   = allocation_R * w_i / sum(w_j)                                # allocation_R = funded / required rounds
-w_i        = (5000 + 5000 * surprise_i / 10000) * independence_i / 10000
-surprise_i = clamp(agreement_i / baseRate(side_i) * 10000, 10000, 30000)  # neutral 10000 below 8 eligible reveals
+payout_i      = allocation_R * w_i / sum(w_j)                              # allocation_R = funded / required rounds
+rawSurprise_i = clamp(agreement_i / baseRate(side_i) * 10000, 10000, 30000)
+base_i        = 10000 + anchor_i * independence_i * (rawSurprise_i - 10000) / 100000000
+w_i           = clusterBudget_same_side(base_i) * independence_i / 10000   # neutral 10000 below 8 eligible reveals
 ```
 
 `agreement_i` is the share of other raters' reveal weight on the same side and

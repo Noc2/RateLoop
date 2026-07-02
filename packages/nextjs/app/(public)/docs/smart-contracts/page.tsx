@@ -76,14 +76,24 @@ const SmartContracts: NextPage = () => {
               <td className="font-mono text-primary">ClusterPayoutOracle</td>
               <td>
                 Governance-managed optimistic correlation epoch and round payout snapshots proposed by bonded frontend
-                operators for USDC and launch LREP claims, with USDC challenge bonds
+                operators for RBTS settlement weights, public-rating evidence, USDC claims, and launch LREP credits,
+                with USDC challenge bonds
               </td>
               <td>No</td>
             </tr>
             <tr>
               <td className="font-mono text-primary">RoundVotingEngine</td>
-              <td>Core voting: tlock commit-reveal voting, epoch-weighted rewards, deterministic settlement</td>
+              <td>
+                Core voting: tlock commit-reveal voting, public verdict closure, and RBTS snapshot-gated settlement
+              </td>
               <td>Transparent</td>
+            </tr>
+            <tr>
+              <td className="font-mono text-primary">RoundVotingEngineRbtsSettlementModule</td>
+              <td>
+                Delegatecall module that verifies finalized RBTS settlement snapshots and completes LREP accounting
+              </td>
+              <td>No</td>
             </tr>
             <tr>
               <td className="font-mono text-primary">RoundRewardDistributor</td>
@@ -318,8 +328,9 @@ const SmartContracts: NextPage = () => {
           <code>contentHash</code> and emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks
           use the same function after the user or scoped agent wallet executes the returned funding and submission
           calls. <code>rewardTerms</code> also commits to bounty eligibility: everyone or Proof of Human for the v3
-          launch. <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled
-          qualifying round is also bounty-qualifying, and bounty size can raise the required participant floor.
+          launch, with Proof of Human required for non-refundable bounties at or above 500 USDC/LREP atomic units.{" "}
+          <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled qualifying
+          round is also bounty-qualifying, and bounty size can raise the required participant floor.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
@@ -478,13 +489,14 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
-          <code>minVoters</code> votes from the round snapshot are revealed and all past-epoch votes have been revealed
-          (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). The round snapshot is
-          guarded at creation so <code>minVoters</code> cannot fall below the three-participant RBTS floor. Determines
-          winners based on epoch-weighted stakes, scores rating rewards from the signal and crowd forecast, and records
-          pending public-rating evidence from bounded binary signal evidence. The visible rating moves after the
-          finalized public-rating snapshot and veto window; bounty, launch-LREP, and public-rating correlation caps use
-          the ClusterPayoutOracle domains for their respective paths.
+          <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
+          revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). The round
+          snapshot is guarded at creation so <code>minVoters</code> cannot fall below the three-participant RBTS floor.
+          Determines the public verdict from epoch-weighted binary signal pools and puts non-tied rounds into{" "}
+          <code>SettlementPending</code> until a finalized <code>PAYOUT_DOMAIN_RBTS_SETTLEMENT</code> snapshot supplies
+          effective RBTS weights. The visible rating moves after the finalized public-rating snapshot and veto window;
+          bounty, launch-LREP, public-rating, and RBTS settlement correlation caps use the ClusterPayoutOracle domains
+          for their respective paths.
         </li>
         <li>
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> &mdash; Frontend operators
@@ -497,11 +509,11 @@ const SmartContracts: NextPage = () => {
           Claim the USDC-backed bounty for a revealed voter after the round has a finalized correlation payout snapshot.
           Snapshot roots are proposed through <code>ClusterPayoutOracle</code> by registered frontend operators bonded
           with 1,000 LREP, either directly or through assigned keeper wallets, then finalized after the challenge
-          window. The public v3 artifact commits to settlement-time scoring input snapshots as part of the epoch
-          parameter hash. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to 5 USDC
-          (5_000_000 atomic units). New bounties default to a 3% frontend-operator share, attributed from the vote
-          commit; unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps gate
-          this payout path, while a separate public-rating oracle domain controls visible rating movement from pending
+          window. The public v3 artifact commits to source-event scoring input snapshots as part of the epoch parameter
+          hash. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to 5 USDC (5_000_000
+          atomic units). New bounties default to a 3% frontend-operator share, attributed from the vote commit;
+          unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps gate this
+          payout path, while a separate public-rating oracle domain controls visible rating movement from pending
           settlement evidence.
         </li>
         <li>
@@ -800,13 +812,16 @@ const SmartContracts: NextPage = () => {
       <ul>
         <li>
           RBTS score-spread settlement compares each revealed report&apos;s scoreBps with a leave-one-out benchmark from
-          the other score-eligible revealed reports. Positive spreads receive full stake plus the 96% voter share of
+          the other effective-weighted score-eligible revealed reports. Finalized RBTS settlement snapshots cap detected
+          clusters before this benchmark and spread math runs; if the snapshot times out, revealed stake is returned
+          without score-spread rewards or forfeits. Positive spreads receive full stake plus the 96% voter share of
           forfeited stake remaining after the settlement-caller incentive; negative spreads forfeit without a
           revealed-loser rebate. {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward
-          from the content-specific pool. 100% of the voter share goes to the content-specific pool.
+          helper retained for legacy/content-specific pools. Current LREP stake settlement uses RBTS score-spread
+          accounting, not a binary-majority losing pool.
         </li>
         <li>
           <code>calculateRating(totalUpStake, totalDownStake)</code> &mdash; Legacy deployments use this smoothed
@@ -817,8 +832,8 @@ const SmartContracts: NextPage = () => {
       </ul>
       <h3>RoundLib</h3>
       <p>
-        Helpers for round state management: tracks round lifecycle (Open, Settled, Cancelled, Tied, RevealFailed) and
-        settlement logic.
+        Helpers for round state management: tracks round lifecycle (Open, SettlementPending, Settled, Cancelled, Tied,
+        RevealFailed) and settlement logic.
       </p>
     </article>
   );

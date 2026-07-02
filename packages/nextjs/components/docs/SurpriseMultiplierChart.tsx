@@ -23,7 +23,7 @@ export function SurpriseMultiplierChart() {
   return (
     <DocsDiagramFrame
       title="Surprise Multiplier Shape"
-      description="Answers that merely match the prior pay the flat floor; answers that predict peers better than the trailing base rate earn up to the 3.0x cap."
+      description="Raw surprise starts at the flat floor and can reach the 3.0x cap; detected cluster budgets and weak-anchor checks can reduce that bonus before payout weights finalize."
     >
       <svg
         viewBox="0 0 460 200"

@@ -136,7 +136,7 @@ test("whitepaper includes how-it-works formulas as rendered formula blocks", () 
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{claim}_i`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{credit}_r`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{payout}`)));
-  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`w_i = w_i^{\mathrm{base}}`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`w_i = \mathrm{clusterBudget}_{c,s}`)));
   assert.match(whitepaperText, /stake rewards follow relative predictive quality rather than raw popularity/i);
   assert.match(whitepaperText, /buys scarce, informative judgment/i);
 });

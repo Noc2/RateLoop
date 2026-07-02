@@ -388,9 +388,15 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, and optional <code>bountyEligibility</code> (
           <code>0</code> everyone, <code>8</code> Proof of Human). If a custom <code>roundConfig</code> is supplied,{" "}
           <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch policy, use
-          at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000
-          USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8
+          Proof of Human bounty eligibility for non-refundable bounties at or above 500 USDC/LREP atomic units, at least
+          5 voters for bounties at or above 1000 USDC, and at least 8 voters for bounties at or above 10000 USDC.
+          Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8
           score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
+        </li>
+        <li>
+          Settlement status: a round can close the public verdict before rewards are ready. Treat{" "}
+          <code>SettlementPending</code> and pending result packages as non-final for LREP reward claims until the RBTS
+          settlement snapshot is applied; USDC bounty claims also wait for finalized payout roots.
         </li>
         <li>
           Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it

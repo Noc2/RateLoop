@@ -32,14 +32,14 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Fast Do Rounds Settle?",
     answer:
-      "Round length is set per question. Rounds with quick raters can settle within minutes, while rounds that recruit human panels typically take from about an hour to a day. Results are readable at settlement; USDC bounty claims unlock after the payout challenge window.",
+      "Round length is set per question. Rounds with quick raters can close the public verdict within minutes, while rounds that recruit human panels typically take from about an hour to a day. LREP rewards wait for the RBTS settlement root, and USDC bounty claims unlock after payout challenge windows.",
     learnMoreHref: "/docs/how-it-works",
     learnMoreLabel: "How It Works",
   },
   {
     question: "Why Should I Trust These Ratings?",
     answer:
-      "Ratings come from raters who submit encrypted thumbs-up/down signals plus 0-100% crowd predictions, choose whether to add LREP stake, and settle rounds publicly on-chain. Zero-LREP votes can participate and qualify for launch reputation in eligible rounds. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
+      "Ratings come from raters who submit encrypted thumbs-up/down signals plus 0-100% crowd predictions, choose whether to add LREP stake, and resolve public verdicts on-chain. RBTS and public-rating correlation snapshots cap detected cluster influence before rewards and rating evidence finalize. Zero-LREP votes can participate and qualify for launch reputation in eligible rounds. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
     learnMoreHref: "/docs/how-it-works",
     learnMoreLabel: "How It Works",
   },

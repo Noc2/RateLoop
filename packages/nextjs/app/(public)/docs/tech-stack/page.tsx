@@ -150,9 +150,11 @@ const TechStackPage: NextPage = () => {
           Robust Bayesian Truth Serum (RBTS)
         </a>{" "}
         design. Each sealed report contains the rater&apos;s own thumbs-up/down signal and a 0-100% prediction of how
-        many revealed raters will vote up. The binary signal drives the public rating while the peer prediction produces
-        an RBTS scoreBps used for competitive score-spread settlement. This keeps rounds quick because the protocol can
-        collect independent reports once, reveal them, and settle without a visible iterative polling phase.
+        many revealed raters will vote up. The binary signal closes the public verdict while the peer prediction
+        produces an RBTS scoreBps used for competitive score-spread settlement. A finalized RBTS settlement snapshot
+        supplies effective reward weights before LREP rewards become claimable, capping detected clusters before the
+        score-spread math runs. This keeps reporting to one blind round while making reward readiness wait for the
+        challengeable correlation root.
       </p>
 
       <h2 id="lrep-staking">LREP Staking</h2>
@@ -182,19 +184,20 @@ const TechStackPage: NextPage = () => {
         correlation weight built from a surprise-weighted base claim weight. Bounty size can raise the required rater
         floor under the launch policy: {protocolDocFacts.bountyParticipantFloorsLabel}.{" "}
         {protocolDocFacts.quorumRatchetPolicyLabel} With the current oracle default, USDC bounty claims have a{" "}
-        <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
-        correlation epoch is already finalized, or about{" "}
+        <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum delay after the public verdict
+        closes when the correlation epoch is already finalized, or about{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
         oracle layers still need to finalize. Challenges, missing-proposer recovery, or governed snapshot recovery are
         exceptional paths and can take longer; they do not change the normal claim timing.
       </p>
       <p>
         For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: an answer that merely matches the
-        prior pays the flat floor, while an answer that predicts peers better than the trailing base rate earns up to
-        the cap; launch-credit weights stay flat. The correlation snapshot then applies an independence multiplier, and
-        the resulting claim weights split the bounty: a 30 USDC rater allocation across effective weights of 20,000,
-        10,000, and 10,000 pays 15 USDC, 7.5 USDC, and 7.5 USDC. All arithmetic is integer math in basis points with
-        floor division, recomputable from on-chain events by any challenger.
+        prior pays the flat floor, while an answer that predicts peers better than the trailing base rate can earn extra
+        weight. That bonus is reduced when an overrepresented side lacks verified or high-independence anchor support,
+        capped per detected same-side cluster, and then multiplied by independence; launch-credit weights stay flat. The
+        resulting claim weights split the bounty: a 30 USDC rater allocation across effective weights of 20,000, 10,000,
+        and 10,000 pays 15 USDC, 7.5 USDC, and 7.5 USDC. All arithmetic is integer math in basis points with floor
+        division, recomputable from on-chain events by any challenger.
       </p>
       <FormulaCard
         title="Surprise-Weighted Claim Weights"
@@ -205,7 +208,11 @@ const TechStackPage: NextPage = () => {
           },
           {
             label: "Claim weight",
-            tex: String.raw`w_i = \left(5\,000 + 5\,000\cdot\frac{\sigma_i}{10\,000}\right)\cdot\frac{\mathrm{ind}_i}{10\,000}`,
+            tex: String.raw`w_i = \mathrm{clusterBudget}_{c,s}\!\left(b_i\right)\cdot\frac{\mathrm{ind}_i}{10\,000}`,
+          },
+          {
+            label: "Anchored base weight",
+            tex: String.raw`b_i = 10\,000 + \mathrm{anchor}_{s}\cdot\mathrm{ind}_i\cdot\frac{\sigma_i - 10\,000}{10^8}`,
           },
           {
             label: "Surprise multiplier",
@@ -225,6 +232,14 @@ const TechStackPage: NextPage = () => {
             symbol: String.raw`\sigma_i`,
             meaning: "surprise multiplier; neutral (10\u202f000) below 8 eligible reveals",
           },
+          {
+            symbol: String.raw`\mathrm{clusterBudget}`,
+            meaning: "same-side detected-cluster cap on aggregate surprise bonus",
+          },
+          {
+            symbol: String.raw`\mathrm{anchor}_{s}`,
+            meaning: "side-level verified/high-independence anchor factor (bps)",
+          },
           { symbol: String.raw`\mathrm{ind}_i`, meaning: "independence multiplier (bps) from the correlation scorer" },
           { symbol: String.raw`a_i`, meaning: "share of other raters' reveal weight on your side" },
           { symbol: String.raw`v_i`, meaning: "your epoch-weighted reveal weight" },
@@ -238,7 +253,7 @@ const TechStackPage: NextPage = () => {
         ]}
       />
       <p>
-        Defaults come from the normative spec (scorer rateloop-correlation-epoch-v3); parameters and pinned input
+        Defaults come from the normative spec (scorer rateloop-correlation-epoch-v4); parameters and pinned input
         snapshot references are committed via the snapshot parameterHash.
       </p>
       <SurpriseMultiplierChart />
@@ -259,10 +274,11 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>
       <p>
-        RateLoop uses challengeable correlation snapshots for payout accounting and public-rating effective weights.
-        Settlement records pending raw rating evidence first; then the visible rating, USDC bounty claims, and earned
-        launch LREP credits wait for the matching finalized Merkle roots. This delays both payout finality and visible
-        rating movement until the relevant snapshot has cleared its challenge window.
+        RateLoop uses challengeable correlation snapshots for RBTS stake settlement, payout accounting, and
+        public-rating effective weights. Settlement records the public verdict and any pending raw rating evidence
+        first; then RBTS stake rewards, the visible rating evidence update, USDC bounty claims, and earned launch LREP
+        credits wait for the matching finalized Merkle roots. This delays reward finality and visible rating movement
+        until the relevant snapshot has cleared its challenge window.
       </p>
       <p>
         Effective correlation weight is the payout weight left after applying an independence multiplier to the

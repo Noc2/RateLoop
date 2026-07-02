@@ -134,7 +134,7 @@ For confidential written context, use RateLoop-hosted gated details/images only:
 
 ## Minimal MCP/Handoff Ask Shape
 
-Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set one shared `roundConfig.questionDurationSeconds`; the bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that duration from question creation. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For same-asset wallet-call Feedback Bonuses, include bounty plus bonus in `maxPaymentAmount`; mixed-asset wallet-call bonuses are confirmed through a separate wallet plan.
+Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set one shared `roundConfig.questionDurationSeconds`; the bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that duration from question creation. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use Proof of Human bounty eligibility for non-refundable bounties at or above 500 USDC/LREP atomic units, at least 5 voters for bounties at or above 1000 USDC, and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For same-asset wallet-call Feedback Bonuses, include bounty plus bonus in `maxPaymentAmount`; mixed-asset wallet-call bonuses are confirmed through a separate wallet plan.
 
 ```json
 {
@@ -184,6 +184,8 @@ the hashes. Use `paymentMode: "x402_authorization"` only when the agent wallet s
 before RateLoop prepares the transaction plan.
 
 Three-voter rounds are the launch feedback tier: they can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of stake once active. Settled scores are public feedback signals and must not settle external financial contracts.
+
+A round can close its public verdict before rewards are ready. Treat `SettlementPending` results as non-final for LREP reward claims until the RBTS settlement snapshot is applied; USDC bounty claims also wait for finalized payout roots.
 
 `feedbackBonus` is optional on MCP, browser handoff, SDK HTTP, and advanced raw asks. Use a Feedback Bonus when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can be LREP or USDC; wallet-call asks can use either bonus asset, independent of the bounty asset, while EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus. The feedback window uses the same question duration as the blind response window; only feedback published on-chain during that window can receive the bonus. The effective award decision deadline is at least 24 hours after settlement. For same-asset wallet-call bonuses, the approved `maxPaymentAmount` should cover the bounty plus bonus; mixed-asset bonuses are confirmed through a separate wallet plan.
 

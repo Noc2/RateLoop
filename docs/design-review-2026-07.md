@@ -140,9 +140,10 @@ Mechanism as implemented: a binary Robust Bayesian Truth Serum (RBTS) turned int
 ### H-1 (incentives). RBTS and public-rating cluster protection depends on live correlation snapshots
 
 - **Severity:** High if the snapshot path is disabled or unavailable; otherwise Medium residual risk; confidence High.
-- **Mechanism:** the current design can put a round into `SettlementPending`, require a finalized `PAYOUT_DOMAIN_RBTS_SETTLEMENT` root, replace each revealed report's RBTS weight with the oracle's effective independence weight, and enable forfeits only after at least 8 effective participant units. Separately, `PAYOUT_DOMAIN_PUBLIC_RATING` applies adjusted up/down evidence before the canonical rating moves. This directly addresses the original "raw-stake sybil bloc sets the benchmark and rating" concern for detectable clusters.
+- **Redeploy status:** implemented as the intended production path for the fresh deployment. Non-tied rounds enter `SettlementPending`; LREP stake accounting waits for finalized `PAYOUT_DOMAIN_RBTS_SETTLEMENT` weights; public rating movement waits for `PAYOUT_DOMAIN_PUBLIC_RATING`; docs, keeper, Ponder, API, and UI surfaces now expose the pending state instead of implying instant reward finality.
+- **Mechanism:** the design puts a round into `SettlementPending`, requires a finalized `PAYOUT_DOMAIN_RBTS_SETTLEMENT` root, replaces each revealed report's RBTS weight with the oracle's effective independence weight, and enables forfeits only after at least 8 effective participant units. Separately, `PAYOUT_DOMAIN_PUBLIC_RATING` applies adjusted up/down evidence before the canonical rating moves. This directly addresses the original "raw-stake sybil bloc sets the benchmark and rating" concern for detectable clusters.
 - **Residual attack:** a bloc that is genuinely independent by the observable features, or that successfully avoids the scorer's cluster features, still looks like independent agreement. In that case the RBTS benchmark, public-rating evidence, and bounty weights can still be moved by coordinated reports. The protocol can reduce detectable cluster economics; it cannot prove that reports were independently generated.
-- **Timeout/liveness caveat:** `finalizeRbtsSettlementWithoutSnapshot` returns stakes and completes settlement after the timeout, so it prevents indefinite lockup but also removes score-spread forfeiture/reward economics for that round. This is a safety valve, not an equivalent incentive layer.
+- **Timeout/liveness caveat:** after the RBTS snapshot timeout, `applyRbtsSettlementSnapshot(contentId, roundId, [], [])` returns revealed stakes and completes settlement without score-spread rewards or forfeits. This prevents indefinite lockup, but it is a safety valve, not an equivalent incentive layer.
 - **Refs:** `RoundVotingEngine.applyRbtsSettlementSnapshot`; `RoundRbtsSettlementSnapshotLib.applySnapshotWeights`; `ContentRegistryRatingSnapshotLib.applyRatingPayoutSnapshot`; `correlationScoring.scoreRoundRatingWeights`; `correlationScoring.scoreRoundPayoutWeights`.
 - **Remediation:** keep RBTS/public-rating snapshot publication on the critical path for production, alert on `SettlementPending` age and timeout fallback, pin canonical correlation inputs, and make large-value bounty policies require finalized correlation roots. Treat scorer-feature expansion and verified-human floors as governance-tunable mitigations, not proofs of independence.
 
@@ -158,17 +159,18 @@ Mechanism as implemented: a binary Robust Bayesian Truth Serum (RBTS) turned int
 ### M-1 (incentives). Asker recaptures a "non-refundable" bounty via unlinked alt wallets
 
 - **Severity:** Medium–High; confidence High.
+- **Status as of July 2, 2026:** remediated for the fresh redeploy path by requiring `BOUNTY_ELIGIBILITY_VERIFIED_HUMAN` on non-refundable bounties at or above the 500 USDC/LREP atomic-unit recapture threshold across direct, escrow, bundle, x402, agent, and UI submission paths. Everyone can still answer; the restriction is on bounty-claim eligibility.
 - **Mechanism:** `VotePreflightLib._validateVoterAndContent` (102–108) blocks self-voting only when the actor address, resolved identity holder, or submitter identity key matches; a fresh wallet with no credential and no linked identity matches none. The claim path excludes only funder/submitter identity. So an asker funds M alt wallets, votes to satisfy the participant floor (`QuestionRewardParticipantFloorLib` 3/5/8), and claims shares.
 - **Numbers:** 500 USDC bounty, equal-share, `MIN_REWARD_POOL_PARTICIPANTS = 3` ⇒ 3 alts recapture ~100% minus frontend fee (≤5%) and gas. Cluster-gated pools *may* discount them only if the alts share detectable correlation features; independent-looking fresh wallets get full weight. **LREP bounties and any pool without a cluster oracle have no such protection.**
 - **Refs:** `VotePreflightLib.sol` 99–109; `QuestionRewardParticipantFloorLib.sol` 13–17; `QuestionRewardPoolEscrowClaimLib._isExcludedClaimant` (funder/submitter identity only).
-- **Remediation:** require verified-human eligibility (or a minimum verified-anchor count) for bounty claims above a threshold; make cluster-oracle gating mandatory (not per-pool optional) for USDC pools above some size; link submitter payment wallet → identity at content creation.
+- **Residual:** verified-human eligibility reduces cheap unlinked recapture without adding wait time, but it is still a claimant-policy mitigation rather than cryptographic proof that the asker did not coordinate with eligible humans.
 
 ### M-2 (incentives). Surprise-weighting rewards coordinated flooding of low-base-rate sides
 
 - **Severity:** Medium; confidence Medium.
-- **Mechanism:** `surpriseBpsForVotes` (497–547) sets `surprise = agreement / baseRate` (cap 30000 bps) ⇒ `baseWeight = 5000 + 5000·surprise/10000` (up to 2×). A bloc voting the side rare in the trailing-100-round base rate but common this round makes every member "surprisingly popular" ⇒ all hit the 2× cap, doubling the bloc's claim weight against the honest minority. Only the independence/cluster discount brakes this, and the bloc evades it by not sharing features. An attacker controlling enough rounds can also drift the trailing base rate (`baseRateWindowRounds = 100`, clamped `[500, 9500]`).
-- **Refs:** `correlationScoring.ts` 497–573.
-- **Remediation:** cap aggregate surprise weight per detected cluster; combine surprise with independence multiplicatively *before* the cap; down-weight surprise when a side's within-round share greatly exceeds its share among verified-human voters.
+- **Status as of July 2, 2026:** remediated for the fresh redeploy path in `rateloop-correlation-epoch-v4`. The scorer now scales surprise bonus by independence, applies a verified/high-independence anchor factor when a side floods above its trailing base rate, and caps each detected same-side cluster's aggregate surprise bonus to one independent-vote budget.
+- **Original mechanism:** the old `surprise = agreement / baseRate` rule could let a bloc voting the side rare in the trailing-100-round base rate but common this round make every member "surprisingly popular" and all hit the cap.
+- **Residual:** genuinely independent-looking or undetected coordinated voters can still earn surprise weight, and an attacker controlling enough rounds can still drift the trailing base rate (`baseRateWindowRounds = 100`, clamped `[500, 9500]`). This is a scoring hardening, not a collusion-proof truthfulness guarantee.
 
 ### M-3 (incentives). Governance capture via cheap LREP relative to a 0.1% quorum floor
 
@@ -179,7 +181,7 @@ Mechanism as implemented: a binary Robust Bayesian Truth Serum (RBTS) turned int
 
 ### Low / Informational (incentives)
 
-- **L (parimutuel vestigial):** `binaryLosingPool`/`upWins` is computed at settlement but used **only** in the `RoundSettled` event; it drives no forfeiture. The docs' "weighted majority wins, prevents late herding" narrative no longer maps to any payout. The actual anti-herding / anti-cluster levers are blind commit-reveal, epoch-weighting, RBTS/public-rating snapshot weights, and bounty/launch independence weights. Reconcile docs vs. implementation.
+- **L (parimutuel vestigial):** `binaryLosingPool`/`upWins` is computed for public-verdict telemetry but drives no forfeiture. The redeploy docs and contract comments now separate public verdict closure from RBTS score-spread LREP accounting. The actual anti-herding / anti-cluster levers are blind commit-reveal, epoch-weighting, RBTS/public-rating snapshot weights, and bounty/launch independence weights.
 - **L (dead economic zone):** `minSettlementVoters ≥ 3` but forfeits require ≥ 8 reveals. Rounds with 3–7 revealers settle, move the public rating, and consume bounties, but produce **zero forfeits and zero RBTS rewards** — no incentive to stake accurately in exactly the thin rounds where manipulation is cheapest.
 - **L (weak PRNG pairing):** reference/peer draws come from a delayed-blockhash seed. On Base's centralized sequencer, the block producer can bias *pairings* (hence the RBTS reward split, not the rating outcome). Value at stake per round is tiny; the pairing sensitivity slightly amplifies H-1.
 - **L (advisory/launch farming):** throttled (3 unverified credits/round, 25 raters/anchor, ≥2 anchors, score ≥7000 bps, first-100 cap 500 LREP ⇒ ≤125 LREP for an unverified sybil) but not eliminated — two colluding verified humans can run a slow farm. Referral farming is genuinely gated by World ID nullifier uniqueness (`MAX_REFERRAL_REWARD_PER_REFERRER = 10,000 LREP`), which is good.
@@ -273,13 +275,13 @@ function independenceForVote(
 
 ## Prioritized recommendations
 
-1. **Keep RBTS/public-rating correlation snapshots mandatory and monitored (H-1 / incentives-open-Q1).** The key signal-integrity lever is no longer "add cluster weights"; it is making sure the configured oracle path, canonical input snapshots, alerts, and timeout runbook are production-grade.
-2. **Done for fresh redeploy: pin correlation scoring inputs to the source event (M-1 off-chain).** Keep artifact v3 and Ponder snapshot persistence as required deployment gates.
+1. **Keep RBTS/public-rating correlation snapshots mandatory and monitored (H-1 / incentives-open-Q1).** Implemented for the fresh redeploy; the remaining work is making sure the configured oracle path, canonical input snapshots, alerts, and timeout runbook are production-grade.
+2. **Done for fresh redeploy: pin correlation scoring inputs to the source event (M-1 off-chain).** Keep artifact v3, scorer v4, and Ponder snapshot persistence as required deployment gates.
 3. **Document that RBTS truthfulness is BNE-only after mitigations (H-2).** Correlation snapshots and surprise-weighted bounties help materially; undetected coordinated blocs remain an accepted residual risk, with multi-task/DMI/CA as the upgrade path.
-4. **Close the alt-wallet bounty-recapture path (M-1 incentives):** mandatory cluster gating and/or verified-human floors on USDC pools above a size threshold.
-5. **Operate the cluster-pinned-pool zero-proposer runbook (M-1 contracts)** and keep fork-test invariants for the quorum coupling (L-5) and `roundCore` ABI coupling (L-2) in CI.
-6. **Reconcile docs with implementation:** the vestigial parimutuel "majority wins" narrative and the "mean prediction" vs. "mean RBTS score" phrasing.
-7. **Operational hardening:** ≥2 keeper replicas with separate keys, settlement/reward-qualification backlog alerting, treasury-rotation log monitoring, and clear escalation for challenged payout roots. Do not increase normal-path challenge windows unless governance later decides the extra user wait is worth it.
+4. **Done for fresh redeploy: close the alt-wallet bounty-recapture path (M-1 incentives):** verified-human claim eligibility is required for threshold-sized non-refundable USDC/LREP bounties.
+5. **Write the cluster-pinned-pool zero-proposer runbook now (M-1 contracts)** and add the fork-test invariants for the quorum coupling (L-5) and `roundCore` ABI coupling (L-2).
+6. **Done for fresh redeploy: reconcile docs with implementation:** public verdict, RBTS score-spread settlement, and pending reward finality are now documented separately.
+7. **Operational hardening:** keep ≥2 keeper replicas with separate keys, `keeper_settlement_backlog_oldest_seconds` alerting, treasury-rotation log monitoring, and clear escalation for challenged payout roots. Do not increase normal-path challenge windows unless governance later decides the extra user wait is worth it.
 
 ---
 
