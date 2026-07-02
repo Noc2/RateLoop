@@ -339,6 +339,91 @@ test("question reward pool escrow ABI exposes snapshotless recovery surface", ()
   );
 });
 
+test("question reward pool escrow ABI keeps indexer event schemas stable", () => {
+  const eventInputs = new Map(
+    generatedAbis.QuestionRewardPoolEscrowAbi.filter(
+      (item) =>
+        item.type === "event" &&
+        [
+          "RewardPoolCreated",
+          "RewardPoolRoundQualified",
+          "RewardPoolRoundEffectiveUnits",
+          "QuestionRewardClaimed",
+          "QuestionBundleRoundSetQualified",
+          "QuestionBundleRewardClaimed",
+        ].includes(item.name),
+    ).map((item) => [item.name, item.inputs.map((input) => input.type)]),
+  );
+
+  assert.deepEqual(eventInputs.get("RewardPoolCreated"), [
+    "uint256",
+    "uint256",
+    "address",
+    "bytes32",
+    "address",
+    "bytes32",
+    "address",
+    "bytes32",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint8",
+    "uint8",
+    "bytes32",
+    "bool",
+  ]);
+  assert.deepEqual(eventInputs.get("RewardPoolRoundQualified"), [
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+  ]);
+  assert.deepEqual(eventInputs.get("RewardPoolRoundEffectiveUnits"), [
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+  ]);
+  assert.deepEqual(eventInputs.get("QuestionRewardClaimed"), [
+    "uint256",
+    "uint256",
+    "uint256",
+    "address",
+    "bytes32",
+    "uint256",
+    "address",
+    "address",
+    "uint256",
+    "uint256",
+  ]);
+  assert.deepEqual(eventInputs.get("QuestionBundleRoundSetQualified"), [
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint256",
+  ]);
+  assert.deepEqual(eventInputs.get("QuestionBundleRewardClaimed"), [
+    "uint256",
+    "uint256",
+    "address",
+    "bytes32",
+    "uint256",
+    "address",
+    "address",
+    "uint256",
+    "uint256",
+  ]);
+});
+
 test("question reward pool escrow ABI exposes bundle recovery monitoring events", () => {
   const bundleEvents = new Map(
     generatedAbis.QuestionRewardPoolEscrowAbi.filter(
