@@ -7,10 +7,12 @@ import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ClusterPayoutOracle } from "../../contracts/ClusterPayoutOracle.sol";
 import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
 import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
+import { RoundVotingEngineRbtsSettlementModule } from "../../contracts/RoundVotingEngineRbtsSettlementModule.sol";
 import { IConfidentialityEscrow } from "../../contracts/interfaces/IConfidentialityEscrow.sol";
 import { IClusterPayoutOracle } from "../../contracts/interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "../../contracts/interfaces/IFrontendRegistry.sol";
@@ -64,6 +66,10 @@ contract TestClusterPayoutOracle {
         frontendRegistry = IFrontendRegistry(frontendRegistry_);
     }
 
+    function setFrontendRegistry(address frontendRegistry_) external {
+        frontendRegistry = IFrontendRegistry(frontendRegistry_);
+    }
+
     function setRoundPayoutSnapshotConsumer(uint8 domain, address consumer) external {
         roundPayoutSnapshotConsumer[domain] = consumer;
     }
@@ -109,9 +115,8 @@ contract TestClusterPayoutOracle {
         view
         returns (bool)
     {
-        return
-            snapshots[roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)].status
-                == IClusterPayoutOracle.SnapshotStatus.Finalized;
+        return snapshots[roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId)].status
+            == IClusterPayoutOracle.SnapshotStatus.Finalized;
     }
 
     function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -130,11 +135,7 @@ contract TestClusterPayoutOracle {
         return false;
     }
 
-    function roundPayoutSnapshotConsumerFor(uint8 domain, uint256, uint256, uint256)
-        external
-        view
-        returns (address)
-    {
+    function roundPayoutSnapshotConsumerFor(uint8 domain, uint256, uint256, uint256) external view returns (address) {
         return roundPayoutSnapshotConsumer[domain];
     }
 
@@ -167,6 +168,40 @@ contract TestClusterPayoutOracle {
 
 interface ITestClusterPayoutOracleConsumerSetter {
     function setRoundPayoutSnapshotConsumer(uint8 domain, address consumer) external;
+}
+
+interface ITestClusterPayoutOracleFrontendSetter {
+    function setFrontendRegistry(address frontendRegistry) external;
+}
+
+interface ITestClusterPayoutOracleSnapshotFinalizer {
+    function setFinalizedRoundPayoutSnapshot(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) external returns (bytes32 snapshotKey);
+}
+
+interface ITestRbtsSettlementSnapshotFinalizer {
+    function configureFinalizedRbtsSnapshot(
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) external;
+}
+
+interface ITestLaunchDistributionPoolClusterOracleSetter {
+    function setClusterPayoutOracle(address newOracle) external;
+}
+
+interface ITestLaunchDistributionPoolClusterOracleView {
+    function clusterPayoutOracle() external view returns (IClusterPayoutOracle);
 }
 
 abstract contract ContentSubmissionTestBase {
@@ -766,12 +801,12 @@ abstract contract ContentSubmissionTestBase {
         ProtocolConfig registryConfig = ProtocolConfig(registry.protocolConfig());
         address clusterOracle = registryConfig.clusterPayoutOracle();
         if (clusterOracle != address(0)) {
-            try ITestClusterPayoutOracleConsumerSetter(clusterOracle).setRoundPayoutSnapshotConsumer(
-                1, address(mockRewardPoolEscrow)
-            ) { } catch { }
-            try ITestClusterPayoutOracleConsumerSetter(clusterOracle).setRoundPayoutSnapshotConsumer(
-                4, address(mockRewardPoolEscrow)
-            ) { } catch { }
+            try ITestClusterPayoutOracleConsumerSetter(clusterOracle)
+                .setRoundPayoutSnapshotConsumer(1, address(mockRewardPoolEscrow)) { }
+                catch { }
+            try ITestClusterPayoutOracleConsumerSetter(clusterOracle)
+                .setRoundPayoutSnapshotConsumer(4, address(mockRewardPoolEscrow)) { }
+                catch { }
         }
         bytes32 configRole = keccak256("CONFIG_ROLE");
         address[8] memory candidates = [
@@ -1360,6 +1395,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         if (round.state == RoundLib.RoundState.SettlementPending) {
+            _processUnrevealedBeforeRbtsSettlement(engine, contentId, roundId, round);
             vm.roll(seedBlock + 1);
             _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, round.revealedCount);
             return;
@@ -1369,18 +1405,43 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         engine.settleRound(contentId, roundId);
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         if (round.state == RoundLib.RoundState.SettlementPending) {
+            _processUnrevealedBeforeRbtsSettlement(engine, contentId, roundId, round);
             vm.roll(seedBlock + 2);
             _applyIdentityRbtsSettlementSnapshot(engine, contentId, roundId, round.revealedCount);
         }
     }
 
+    function _captureRbtsSeedForCleanup(RoundVotingEngine engine, uint256 contentId, uint256 roundId) internal {
+        _ensureTestClusterPayoutOracle(engine);
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+    }
+
+    function _processUnrevealedBeforeRbtsSettlement(
+        RoundVotingEngine engine,
+        uint256 contentId,
+        uint256 roundId,
+        RoundLib.Round memory round
+    ) internal {
+        if (round.voteCount > round.revealedCount) {
+            engine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        }
+    }
+
     function _ensureTestClusterPayoutOracle(RoundVotingEngine engine) internal {
+        _ensureTestRbtsSettlementModule(engine);
         ProtocolConfig config = engine.protocolConfig();
-        if (config.clusterPayoutOracle() != address(0)) return;
+        address currentOracle = config.clusterPayoutOracle();
+        if (currentOracle != address(0) && _testClusterPayoutOracleMatches(currentOracle, config, engine)) return;
 
         (address registryAddress,,) = engine.rewardDistributorConfigShape();
         address frontendRegistryAddress = config.frontendRegistry();
         TestClusterPayoutOracle testOracle = new TestClusterPayoutOracle(frontendRegistryAddress);
+        address launchPool = config.launchDistributionPool();
+        if (launchPool != address(0)) {
+            testOracle.setRoundPayoutSnapshotConsumer(2, launchPool);
+            _setTestLaunchPoolClusterOracle(launchPool, address(testOracle));
+        }
         testOracle.setRoundPayoutSnapshotConsumer(3, registryAddress);
         testOracle.setRoundPayoutSnapshotConsumer(5, address(engine));
         if (registryAddress != address(0)) {
@@ -1403,6 +1464,91 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
             }
         }
         revert("Cluster oracle not set");
+    }
+
+    function _testClusterPayoutOracleMatches(address oracle, ProtocolConfig config, RoundVotingEngine engine)
+        internal
+        view
+        returns (bool)
+    {
+        (address registryAddress,,) = engine.rewardDistributorConfigShape();
+        try IClusterPayoutOracle(oracle).frontendRegistry() returns (IFrontendRegistry oracleFrontendRegistry) {
+            if (address(oracleFrontendRegistry) != config.frontendRegistry()) return false;
+        } catch {
+            return false;
+        }
+        if (!_testClusterPayoutOracleConsumerMatches(oracle, 3, registryAddress)) return false;
+        if (!_testClusterPayoutOracleConsumerMatches(oracle, 5, address(engine))) return false;
+
+        address launchPool = config.launchDistributionPool();
+        if (launchPool != address(0)) {
+            if (!_testClusterPayoutOracleConsumerMatches(oracle, 2, launchPool)) return false;
+            try ITestLaunchDistributionPoolClusterOracleView(launchPool).clusterPayoutOracle() returns (
+                IClusterPayoutOracle poolOracle
+            ) {
+                if (address(poolOracle) != oracle) return false;
+            } catch {
+                return false;
+            }
+        }
+
+        if (registryAddress != address(0)) {
+            address rewardEscrow = ContentRegistry(registryAddress).questionRewardPoolEscrow();
+            if (rewardEscrow != address(0)) {
+                if (!_testClusterPayoutOracleConsumerMatches(oracle, 1, rewardEscrow)) return false;
+                if (!_testClusterPayoutOracleConsumerMatches(oracle, 4, rewardEscrow)) return false;
+            }
+        }
+        return true;
+    }
+
+    function _testClusterPayoutOracleConsumerMatches(address oracle, uint8 domain, address expectedConsumer)
+        internal
+        view
+        returns (bool)
+    {
+        try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(domain) returns (address consumer) {
+            return consumer == expectedConsumer;
+        } catch {
+            return false;
+        }
+    }
+
+    function _setTestLaunchPoolClusterOracle(address launchPool, address oracle) internal {
+        address[8] memory candidates = [
+            address(this), address(1), address(2), address(0xA), address(0xB), address(0xAA), address(0xBB), address(10)
+        ];
+        for (uint256 i = 0; i < candidates.length; i++) {
+            HEVM.prank(candidates[i]);
+            try ITestLaunchDistributionPoolClusterOracleSetter(launchPool).setClusterPayoutOracle(oracle) {
+                return;
+            } catch {
+                continue;
+            }
+        }
+    }
+
+    function _setTestClusterPayoutOracleFrontendRegistry(RoundVotingEngine engine, address frontendRegistryAddress)
+        internal
+    {
+        address oracle = engine.protocolConfig().clusterPayoutOracle();
+        if (oracle == address(0)) return;
+        try ITestClusterPayoutOracleFrontendSetter(oracle).setFrontendRegistry(frontendRegistryAddress) { } catch { }
+    }
+
+    function _ensureTestRbtsSettlementModule(RoundVotingEngine engine) internal {
+        address[8] memory candidates = [
+            address(this), address(1), address(2), address(0xA), address(0xB), address(0xAA), address(0xBB), address(10)
+        ];
+        for (uint256 i = 0; i < candidates.length; i++) {
+            RoundVotingEngineRbtsSettlementModule module = new RoundVotingEngineRbtsSettlementModule();
+            HEVM.prank(candidates[i]);
+            try engine.setRbtsSettlementModule(address(module)) {
+                return;
+            } catch {
+                continue;
+            }
+        }
     }
 
     function _applyIdentityRbtsSettlementSnapshot(
@@ -1442,12 +1588,125 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         _sortPayoutWeightsByCommitKey(weights);
 
         address oracle = address(engine.protocolConfig().clusterPayoutOracle());
-        TestClusterPayoutOracle(oracle).setFinalizedRoundPayoutSnapshot(
-            5, 0, contentId, roundId, uint32(weightCount), uint32(weightCount * 10_000), totalClaimWeight
+        bytes32[][] memory proofs = _configureRbtsSettlementSnapshot(
+            oracle, contentId, roundId, weights, uint32(weightCount), uint32(weightCount * 10_000), totalClaimWeight
         );
-        bytes32[][] memory proofs = new bytes32[][](weightCount);
-        vm.prank(oracle);
         engine.applyRbtsSettlementSnapshot(contentId, roundId, weights, proofs);
+    }
+
+    function _configureRbtsSettlementSnapshot(
+        address oracle,
+        uint256 contentId,
+        uint256 roundId,
+        IClusterPayoutOracle.PayoutWeight[] memory weights,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) internal returns (bytes32[][] memory proofs) {
+        if (_tryConfigureMockRbtsSettlementSnapshot(
+                oracle, contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
+            )) {
+            return new bytes32[][](weights.length);
+        }
+        return _finalizeRealRbtsSettlementSnapshot(
+            ClusterPayoutOracle(oracle),
+            contentId,
+            roundId,
+            weights,
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight
+        );
+    }
+
+    function _tryConfigureMockRbtsSettlementSnapshot(
+        address oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) internal returns (bool) {
+        try ITestClusterPayoutOracleSnapshotFinalizer(oracle)
+            .setFinalizedRoundPayoutSnapshot(
+                5, 0, contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
+            ) returns (
+            bytes32
+        ) {
+            return true;
+        } catch { }
+        try ITestRbtsSettlementSnapshotFinalizer(oracle)
+            .configureFinalizedRbtsSnapshot(
+                contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
+            ) {
+            return true;
+        } catch { }
+        return false;
+    }
+
+    function _finalizeRealRbtsSettlementSnapshot(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        IClusterPayoutOracle.PayoutWeight[] memory weights,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) internal returns (bytes32[][] memory proofs) {
+        bytes32[] memory leaves = new bytes32[](weights.length);
+        for (uint256 i = 0; i < weights.length; i++) {
+            leaves[i] = oracle.payoutWeightLeaf(weights[i]);
+        }
+        bytes32 weightRoot = _testMerkleRoot(leaves);
+        uint64 correlationEpochId = _rbtsSettlementCorrelationEpochId(contentId, roundId);
+        bytes32 artifactHash = keccak256(abi.encode("test-rbts-settlement-artifact", contentId, roundId, weightRoot));
+
+        IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources =
+            new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+        sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+            domain: 5, rewardPoolId: 0, contentId: contentId, roundId: roundId
+        });
+        oracle.proposeCorrelationEpoch(
+            correlationEpochId,
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("test-rbts-cluster-root", weightRoot)),
+            keccak256("test-rbts-parameters"),
+            artifactHash,
+            "ipfs://test-rbts-settlement",
+            sources
+        );
+        vm.warp(block.timestamp + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeCorrelationEpoch(correlationEpochId);
+
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: 5,
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: correlationEpochId,
+                rawEligibleVoters: rawEligibleVoters,
+                effectiveParticipantUnits: effectiveParticipantUnits,
+                totalClaimWeight: totalClaimWeight,
+                weightRoot: weightRoot,
+                reasonRoot: keccak256("test-rbts-reasons"),
+                artifactHash: artifactHash,
+                artifactURI: "ipfs://test-rbts-settlement"
+            })
+        );
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(5, 0, contentId, roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+        vm.warp(block.timestamp + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        return _testMerkleProofs(leaves);
+    }
+
+    function _rbtsSettlementCorrelationEpochId(uint256 contentId, uint256 roundId) internal view returns (uint64) {
+        uint64 epochId = uint64(uint256(keccak256(abi.encode("test-rbts-settlement", contentId, roundId))));
+        if (epochId == 0) return uint64(block.timestamp) | 1;
+        return epochId;
     }
 
     function _sortPayoutWeightsByCommitKey(IClusterPayoutOracle.PayoutWeight[] memory weights) internal pure {
@@ -1459,6 +1718,80 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
                 j--;
             }
             weights[j] = current;
+        }
+    }
+
+    function _testMerkleRoot(bytes32[] memory leaves) internal pure returns (bytes32) {
+        bytes32[] memory level = _testSortedLeaves(leaves);
+        while (level.length > 1) {
+            level = _testNextMerkleLevel(level);
+        }
+        return level.length == 0 ? bytes32(0) : level[0];
+    }
+
+    function _testMerkleProofs(bytes32[] memory leaves) internal pure returns (bytes32[][] memory proofs) {
+        proofs = new bytes32[][](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            proofs[i] = _testMerkleProof(leaves, leaves[i]);
+        }
+    }
+
+    function _testMerkleProof(bytes32[] memory leaves, bytes32 leaf) internal pure returns (bytes32[] memory proof) {
+        bytes32[] memory level = _testSortedLeaves(leaves);
+        uint256 leafIndex = _testFindLeafIndex(level, leaf);
+        proof = new bytes32[](_testMerkleDepth(level.length));
+        uint256 proofIndex;
+
+        while (level.length > 1) {
+            uint256 siblingIndex = leafIndex % 2 == 0 ? leafIndex + 1 : leafIndex - 1;
+            proof[proofIndex++] = siblingIndex < level.length ? level[siblingIndex] : level[leafIndex];
+            leafIndex = leafIndex / 2;
+            level = _testNextMerkleLevel(level);
+        }
+    }
+
+    function _testSortedLeaves(bytes32[] memory leaves) internal pure returns (bytes32[] memory sorted) {
+        sorted = new bytes32[](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            sorted[i] = leaves[i];
+        }
+        for (uint256 i = 0; i < sorted.length; i++) {
+            for (uint256 j = i + 1; j < sorted.length; j++) {
+                if (uint256(sorted[j]) < uint256(sorted[i])) {
+                    bytes32 current = sorted[i];
+                    sorted[i] = sorted[j];
+                    sorted[j] = current;
+                }
+            }
+        }
+    }
+
+    function _testNextMerkleLevel(bytes32[] memory level) internal pure returns (bytes32[] memory next) {
+        next = new bytes32[]((level.length + 1) / 2);
+        for (uint256 i = 0; i < level.length; i += 2) {
+            bytes32 right = i + 1 < level.length ? level[i + 1] : level[i];
+            next[i / 2] = _testHashSortedPair(level[i], right);
+        }
+    }
+
+    function _testHashSortedPair(bytes32 left, bytes32 right) internal pure returns (bytes32) {
+        return
+            uint256(left) <= uint256(right)
+                ? keccak256(bytes.concat(left, right))
+                : keccak256(bytes.concat(right, left));
+    }
+
+    function _testFindLeafIndex(bytes32[] memory level, bytes32 leaf) internal pure returns (uint256) {
+        for (uint256 i = 0; i < level.length; i++) {
+            if (level[i] == leaf) return i;
+        }
+        revert("leaf not found");
+    }
+
+    function _testMerkleDepth(uint256 leafCount) internal pure returns (uint256 depth) {
+        while (leafCount > 1) {
+            leafCount = (leafCount + 1) / 2;
+            depth++;
         }
     }
 
