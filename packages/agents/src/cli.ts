@@ -10,6 +10,7 @@ import {
   readHandoffGeneratedImageFiles,
   type HandoffGeneratedImageFile,
 } from "./handoffImages";
+import { shouldKeepHandoffFinding } from "./handoffLint";
 import {
   DEFAULT_HANDOFF_API_BASE_URL,
   createAskHandoffWithStagedImageUploads,
@@ -30,7 +31,6 @@ import {
 } from "./localSigner";
 import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
-import type { QuestionLintFinding } from "./questions/types";
 import { normalizeInferredHeadToHeadAbRequestBody } from "./voteUi";
 
 type CliOptionValue = string | boolean | string[];
@@ -370,18 +370,6 @@ function withDryRunOptions(
   };
 }
 
-function shouldKeepHandoffFinding(
-  finding: QuestionLintFinding,
-  hasGeneratedImages: boolean,
-) {
-  if (!hasGeneratedImages) return true;
-  return !(
-    finding.level === "error" &&
-    finding.path === "question.contextUrl" &&
-    finding.message === "Context URL, image URL, or video URL is required."
-  );
-}
-
 async function main() {
   const { command, options } = parseArgs(process.argv.slice(2));
 
@@ -475,7 +463,10 @@ async function main() {
         ),
       );
       const findings = lintAgentAskRequest(payload).filter((finding) =>
-        shouldKeepHandoffFinding(finding, generatedImages.length > 0),
+        shouldKeepHandoffFinding(finding, {
+          hasGeneratedImages: generatedImages.length > 0,
+          payload,
+        }),
       );
       if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
