@@ -29,6 +29,40 @@ function jsonResponse(body: unknown) {
   });
 }
 
+function inputSnapshotFromVoteUrl(url: URL, domain = 1) {
+  return {
+    domain,
+    rewardPoolId:
+      domain === 2 || domain === 3
+        ? "0"
+        : (url.searchParams.get("rewardPoolId") ?? "0"),
+    contentId: url.searchParams.get("contentId") ?? "0",
+    roundId: url.searchParams.get("roundId") ?? "0",
+    sourceBlockNumber: "123456",
+    sourceLogIndex: 7,
+    sourceTimestamp: "1710000000",
+    sourceTransactionHash: `0x${"e".repeat(64)}`,
+  };
+}
+
+function roundVotesResponse(
+  url: URL,
+  body: Record<string, unknown>,
+  domain = 1,
+) {
+  const roundContext =
+    body.roundContext && typeof body.roundContext === "object"
+      ? (body.roundContext as Record<string, unknown>)
+      : {};
+  return jsonResponse({
+    ...body,
+    roundContext: {
+      ...roundContext,
+      inputSnapshot: inputSnapshotFromVoteUrl(url, domain),
+    },
+  });
+}
+
 function fullVotePageResponse() {
   return jsonResponse({
     items: Array.from({ length: 1_000 }, () => ({
@@ -112,31 +146,35 @@ describe("automatic correlation artifact builder", () => {
       }
       if (route === "/correlation/round-votes") {
         expect(url.searchParams.get("rewardPoolId")).toBe("7");
-        return jsonResponse({ items: [voteItem(1)] });
+        return roundVotesResponse(url, { items: [voteItem(1)] });
       }
       if (route === "/correlation/bundle-round-votes") {
         expect(url.searchParams.get("rewardPoolId")).toBe("11");
-        return jsonResponse({ items: [voteItem(2)] });
+        return roundVotesResponse(url, { items: [voteItem(2)] }, 4);
       }
       if (route === "/correlation/launch-round-votes") {
         expect(url.searchParams.has("rewardPoolId")).toBe(false);
-        return jsonResponse({
-          items: [
-            {
-              ...voteItem(4),
-              identityKey: `0x${"0".repeat(64)}`,
-              isUp: null,
-              revealWeight: null,
-              stake: null,
-              epochIndex: null,
-              features: [`launch-anchor:0x${"4".repeat(64)}`],
-            },
-          ],
-        });
+        return roundVotesResponse(
+          url,
+          {
+            items: [
+              {
+                ...voteItem(4),
+                identityKey: `0x${"0".repeat(64)}`,
+                isUp: null,
+                revealWeight: null,
+                stake: null,
+                epochIndex: null,
+                features: [`launch-anchor:0x${"4".repeat(64)}`],
+              },
+            ],
+          },
+          2,
+        );
       }
       if (route === "/correlation/rating-round-votes") {
         expect(url.searchParams.has("rewardPoolId")).toBe(false);
-        return jsonResponse({ items: [voteItem(3)] });
+        return roundVotesResponse(url, { items: [voteItem(3)] }, 3);
       }
       return new Response("not found", { status: 404 });
     });
@@ -189,7 +227,7 @@ describe("automatic correlation artifact builder", () => {
         }
         if (url.pathname === "/correlation/round-votes") {
           expect(url.searchParams.get("rewardPoolId")).toBe("7");
-          return jsonResponse({
+          return roundVotesResponse(url, {
             roundContext: {
               trailingBaseRateUpBps: 2_000,
               baseRateWindowRounds: 100,
@@ -275,7 +313,7 @@ describe("automatic correlation artifact builder", () => {
       artifact.roundPayoutSnapshots![0]!.artifactURI,
     );
     expect(publicArtifact.artifactVersion).toBe(
-      "rateloop-correlation-artifact-v2",
+      "rateloop-correlation-artifact-v3",
     );
     expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v3");
     expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(
@@ -352,7 +390,7 @@ describe("automatic correlation artifact builder", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
       if (url.pathname === "/correlation/round-votes") {
-        return jsonResponse({
+        return roundVotesResponse(url, {
           items: [
             {
               account: "0x0000000000000000000000000000000000000001",
@@ -418,7 +456,7 @@ describe("automatic correlation artifact builder", () => {
         });
       }
       if (url.pathname === "/correlation/round-votes") {
-        return jsonResponse({
+        return roundVotesResponse(url, {
           items: [
             {
               account: "0x0000000000000000000000000000000000000001",
@@ -512,25 +550,29 @@ describe("automatic correlation artifact builder", () => {
         expect(url.searchParams.get("rewardPoolId")).toBe("11");
         expect(url.searchParams.get("contentId")).toBe("11");
         expect(url.searchParams.get("roundId")).toBe("1");
-        return jsonResponse({
-          roundContext: {
-            trailingBaseRateUpBps: 2_000,
-            baseRateWindowRounds: 100,
-            settledRoundsInWindow: 40,
+        return roundVotesResponse(
+          url,
+          {
+            roundContext: {
+              trailingBaseRateUpBps: 2_000,
+              baseRateWindowRounds: 100,
+              settledRoundsInWindow: 40,
+            },
+            items: [1, 2, 3].map((index) => ({
+              account: `0x000000000000000000000000000000000000000${index}`,
+              identityKey: `0x${String(index).repeat(64)}`,
+              commitKey: `0x${String(index + 3).repeat(64)}`,
+              isUp: index < 3,
+              stake: "10000000",
+              epochIndex: 0,
+              revealWeight: "10000",
+              verifiedHuman: true,
+              historicalVoteCount: 12,
+              features: [`identity:0x${String(index).repeat(64)}`],
+            })),
           },
-          items: [1, 2, 3].map((index) => ({
-            account: `0x000000000000000000000000000000000000000${index}`,
-            identityKey: `0x${String(index).repeat(64)}`,
-            commitKey: `0x${String(index + 3).repeat(64)}`,
-            isUp: index < 3,
-            stake: "10000000",
-            epochIndex: 0,
-            revealWeight: "10000",
-            verifiedHuman: true,
-            historicalVoteCount: 12,
-            features: [`identity:0x${String(index).repeat(64)}`],
-          })),
-        });
+          4,
+        );
       }
       return new Response("not found", { status: 404 });
     });
@@ -595,22 +637,26 @@ describe("automatic correlation artifact builder", () => {
         expect(url.searchParams.has("rewardPoolId")).toBe(false);
         expect(url.searchParams.get("contentId")).toBe("9");
         expect(url.searchParams.get("roundId")).toBe("2");
-        return jsonResponse({
-          items: [
-            {
-              account: "0x0000000000000000000000000000000000000001",
-              identityKey: `0x${"a".repeat(64)}`,
-              commitKey: `0x${"b".repeat(64)}`,
-              isUp: true,
-              stake: "10000000",
-              epochIndex: 0,
-              revealWeight: "10000",
-              verifiedHuman: true,
-              historicalVoteCount: 12,
-              features: [`identity:0x${"a".repeat(64)}`],
-            },
-          ],
-        });
+        return roundVotesResponse(
+          url,
+          {
+            items: [
+              {
+                account: "0x0000000000000000000000000000000000000001",
+                identityKey: `0x${"a".repeat(64)}`,
+                commitKey: `0x${"b".repeat(64)}`,
+                isUp: true,
+                stake: "10000000",
+                epochIndex: 0,
+                revealWeight: "10000",
+                verifiedHuman: true,
+                historicalVoteCount: 12,
+                features: [`identity:0x${"a".repeat(64)}`],
+              },
+            ],
+          },
+          3,
+        );
       }
       if (url.pathname === "/correlation/round-votes") {
         return new Response("wrong endpoint", { status: 500 });
@@ -683,22 +729,26 @@ describe("automatic correlation artifact builder", () => {
         expect(url.searchParams.has("rewardPoolId")).toBe(false);
         expect(url.searchParams.get("contentId")).toBe("9");
         expect(url.searchParams.get("roundId")).toBe("2");
-        return jsonResponse({
-          items: [
-            {
-              account: "0x0000000000000000000000000000000000000001",
-              identityKey: `0x${"0".repeat(64)}`,
-              commitKey: `0x${"b".repeat(64)}`,
-              isUp: null,
-              stake: null,
-              epochIndex: null,
-              revealWeight: null,
-              verifiedHuman: true,
-              historicalVoteCount: 12,
-              features: [`launch-anchor:0x${"a".repeat(64)}`],
-            },
-          ],
-        });
+        return roundVotesResponse(
+          url,
+          {
+            items: [
+              {
+                account: "0x0000000000000000000000000000000000000001",
+                identityKey: `0x${"0".repeat(64)}`,
+                commitKey: `0x${"b".repeat(64)}`,
+                isUp: null,
+                stake: null,
+                epochIndex: null,
+                revealWeight: null,
+                verifiedHuman: true,
+                historicalVoteCount: 12,
+                features: [`launch-anchor:0x${"a".repeat(64)}`],
+              },
+            ],
+          },
+          2,
+        );
       }
       if (url.pathname === "/correlation/round-votes") {
         return new Response("wrong endpoint", { status: 500 });
@@ -845,7 +895,7 @@ describe("automatic correlation artifact builder", () => {
         });
       }
       if (url.pathname === "/correlation/round-votes") {
-        return jsonResponse({
+        return roundVotesResponse(url, {
           roundContext: {
             trailingBaseRateUpBps: 2_000,
             baseRateWindowRounds: 100,
@@ -879,7 +929,7 @@ describe("automatic correlation artifact builder", () => {
     const snapshot = publicArtifact.roundPayoutSnapshots[0];
 
     expect(publicArtifact.artifactVersion).toBe(
-      "rateloop-correlation-artifact-v2",
+      "rateloop-correlation-artifact-v3",
     );
     expect(snapshot.trailingBaseRateUpBps).toBe(2_000);
     // Five UP votes clear the 8-reveal floor and beat the 20% trailing base
@@ -946,8 +996,9 @@ describe("automatic correlation artifact builder", () => {
         });
       }
       if (url.pathname === "/correlation/round-votes") {
-        // Legacy Ponder response: no roundContext, no isUp/revealWeight.
-        return jsonResponse({
+        // Minimal Ponder response: no surprise fields, but still pinned to
+        // the settlement-time input snapshot.
+        return roundVotesResponse(url, {
           items: [1, 2, 3].map((index) => ({
             account: `0x000000000000000000000000000000000000000${index}`,
             identityKey: `0x${String(index).repeat(64)}`,
@@ -1010,7 +1061,7 @@ describe("automatic correlation artifact builder", () => {
         });
       }
       if (url.pathname === "/correlation/round-votes") {
-        return jsonResponse({ items: [] });
+        return roundVotesResponse(url, { items: [] });
       }
       if (isSupplementalCandidateEndpoint(url.pathname))
         return jsonResponse({ items: [] });
@@ -1226,9 +1277,9 @@ describe("automatic correlation artifact builder", () => {
         expect(url.searchParams.get("limit")).toBe("1");
         expect(url.searchParams.get("offset")).toBe(String(page));
         if (page < 50) {
-          return jsonResponse({ items: [voteItem] });
+          return roundVotesResponse(url, { items: [voteItem] });
         }
-        return jsonResponse({ items: [] });
+        return roundVotesResponse(url, { items: [] });
       });
       vi.stubGlobal("fetch", fetchMock);
 

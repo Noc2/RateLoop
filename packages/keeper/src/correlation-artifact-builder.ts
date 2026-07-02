@@ -1,5 +1,6 @@
 import { buildPonderRequestHeaders } from "./ponder-headers.js";
 import {
+  CORRELATION_ARTIFACT_VERSION,
   CORRELATION_VOTE_PAGE_SIZE,
   MAX_CORRELATION_VOTE_PAGES,
   PAYOUT_DOMAIN_LAUNCH_CREDIT,
@@ -7,12 +8,14 @@ import {
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
   PONDER_HTTP_FETCH_TIMEOUT_MS,
+  correlationEpochParameterHash,
   correlationParameterHash,
   correlationVotesPathForDomain,
   defaultCorrelationScoringParams,
   merkleProof,
   scoreRoundPayoutWeights,
   scoreRoundRatingWeights,
+  type CorrelationInputSnapshotRef,
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
 import {
@@ -53,6 +56,7 @@ interface VoteResponse {
 
 interface RoundVotesPage {
   excludedVotes: PublicExcludedCorrelationVote[];
+  inputSnapshot: CorrelationInputSnapshotRef;
   questionMetadataRef: PublicQuestionMetadataRef;
   votes: CorrelationVoteInput[];
   /** Null when Ponder omits or malforms the round context (neutral fallback). */
@@ -88,6 +92,7 @@ interface PublicRoundPayoutSnapshot {
   totalClaimWeight: string;
   weightRoot: Hex;
   reasonRoot: Hex;
+  inputSnapshot: CorrelationInputSnapshotRef;
   questionMetadataRef: PublicQuestionMetadataRef;
   trailingBaseRateUpBps: number | null;
   eligibleVotes: PublicCorrelationVoteInput[];
@@ -219,12 +224,17 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
-    const { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps } =
-      await fetchRoundVotes(
-        config.ponderBaseUrl,
-        candidate,
-        options.ponderNowSeconds,
-      );
+    const {
+      excludedVotes,
+      inputSnapshot,
+      questionMetadataRef,
+      votes,
+      trailingBaseRateUpBps,
+    } = await fetchRoundVotes(
+      config.ponderBaseUrl,
+      candidate,
+      options.ponderNowSeconds,
+    );
 
     const scored =
       candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
@@ -260,6 +270,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       totalClaimWeight: scored.totalClaimWeight.toString(),
       weightRoot: scored.weightRoot,
       reasonRoot: scored.reasonRoot,
+      inputSnapshot,
       questionMetadataRef,
       trailingBaseRateUpBps,
       eligibleVotes: votes.map(
@@ -319,10 +330,9 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   }
 
   const params = defaultCorrelationScoringParams();
-  const parameterHash = correlationParameterHash(params);
-  const publicEpochs = buildPublicEpochs(publicRounds, parameterHash);
+  const publicEpochs = buildPublicEpochs(publicRounds, params);
   const stored = await storeCorrelationArtifact({
-    artifactVersion: "rateloop-correlation-artifact-v2",
+    artifactVersion: CORRELATION_ARTIFACT_VERSION,
     chainId: config.chainId,
     oracleAddress: config.contracts.clusterPayoutOracle,
     scorerVersion: params.scorerVersion,
@@ -496,7 +506,7 @@ function summarizeArtifactUri(artifactURI: string) {
 
 function buildPublicEpochs(
   rounds: readonly PublicRoundPayoutSnapshot[],
-  parameterHash: Hex,
+  params: ReturnType<typeof defaultCorrelationScoringParams>,
 ) {
   const byEpoch = new Map<string, PublicRoundPayoutSnapshot[]>();
   for (const round of rounds) {
@@ -516,6 +526,8 @@ function buildPublicEpochs(
         value > max ? value : max,
       );
 
+      const inputSnapshots = epochRounds.map((round) => round.inputSnapshot);
+
       return {
         epochId,
         fromRoundId: fromRoundId.toString(),
@@ -530,7 +542,7 @@ function buildPublicEpochs(
             reasonRoot: round.reasonRoot,
           })),
         ),
-        parameterHash,
+        parameterHash: correlationEpochParameterHash(params, inputSnapshots),
         roundSnapshotCount: epochRounds.length,
       };
     });
@@ -628,6 +640,7 @@ async function fetchRoundVotes(
   const excludedVotes: PublicExcludedCorrelationVote[] = [];
   const excludedVoteKeys = new Set<string>();
   const votes: CorrelationVoteInput[] = [];
+  let inputSnapshot: CorrelationInputSnapshotRef | null = null;
   let questionMetadataRef = emptyQuestionMetadataRef();
   let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
@@ -665,6 +678,10 @@ async function fetchRoundVotes(
       response.roundContext,
     );
     if (page === 0) {
+      inputSnapshot = parseRoundContextInputSnapshot(
+        response.roundContext,
+        candidate,
+      );
       questionMetadataRef = parseRoundContextQuestionMetadataRef(
         response.roundContext,
       );
@@ -679,8 +696,14 @@ async function fetchRoundVotes(
     }
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
+      if (inputSnapshot === null) {
+        throw new Error(
+          `Ponder omitted correlation input snapshot for rewardPoolId=${candidate.rewardPoolId} contentId=${candidate.contentId} roundId=${candidate.roundId}`,
+        );
+      }
       return {
         excludedVotes,
+        inputSnapshot,
         questionMetadataRef,
         votes,
         trailingBaseRateUpBps,
@@ -799,6 +822,65 @@ function parseRoundContextTrailingBaseRateUpBps(value: unknown): number | null {
     return null;
   }
   return parsed;
+}
+
+function parseRoundContextInputSnapshot(
+  value: unknown,
+  candidate: CorrelationRoundCandidate,
+): CorrelationInputSnapshotRef | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const raw = (value as Record<string, unknown>).inputSnapshot;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const domain = requireNonNegativeNumber(record.domain, "inputSnapshot.domain");
+  const rewardPoolId = requireNonNegativeBigInt(
+    record.rewardPoolId,
+    "inputSnapshot.rewardPoolId",
+  );
+  const contentId = requirePositiveBigInt(
+    record.contentId,
+    "inputSnapshot.contentId",
+  );
+  const roundId = requirePositiveBigInt(
+    record.roundId,
+    "inputSnapshot.roundId",
+  );
+  if (
+    domain !== candidate.domain ||
+    rewardPoolId !== candidate.rewardPoolId ||
+    contentId !== candidate.contentId ||
+    roundId !== candidate.roundId
+  ) {
+    throw new Error(
+      `Ponder input snapshot does not match candidate rewardPoolId=${candidate.rewardPoolId} contentId=${candidate.contentId} roundId=${candidate.roundId}`,
+    );
+  }
+  return {
+    domain,
+    rewardPoolId,
+    contentId,
+    roundId,
+    sourceBlockNumber: requireNonNegativeBigInt(
+      record.sourceBlockNumber,
+      "inputSnapshot.sourceBlockNumber",
+    ),
+    sourceLogIndex: requireNonNegativeNumber(
+      record.sourceLogIndex,
+      "inputSnapshot.sourceLogIndex",
+    ),
+    sourceTimestamp: requireNonNegativeBigInt(
+      record.sourceTimestamp,
+      "inputSnapshot.sourceTimestamp",
+    ),
+    sourceTransactionHash: requireHex(
+      record.sourceTransactionHash,
+      "inputSnapshot.sourceTransactionHash",
+    ),
+  };
 }
 
 function emptyQuestionMetadataRef(): PublicQuestionMetadataRef {

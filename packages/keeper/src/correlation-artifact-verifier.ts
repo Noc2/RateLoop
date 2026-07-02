@@ -2,11 +2,13 @@ import { readFile } from "node:fs/promises";
 import {
   PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_PUBLIC_RATING,
+  correlationEpochParameterHash,
   correlationParameterHash,
   defaultCorrelationScoringParams,
   merkleProof,
   scoreRoundPayoutWeights,
   scoreRoundRatingWeights,
+  type CorrelationInputSnapshotRef,
   type CorrelationScoringParams,
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
@@ -50,6 +52,7 @@ interface NormalizedRoundSnapshot {
   totalClaimWeight: bigint;
   weightRoot: Hex;
   reasonRoot: Hex;
+  inputSnapshot: CorrelationInputSnapshotRef;
   trailingBaseRateUpBps: number | null;
   eligibleVotes: CorrelationVoteInput[];
   payoutWeights: NormalizedPayoutWeight[];
@@ -125,8 +128,8 @@ export function verifyCorrelationArtifact(
     "correlationEpochs",
     errors,
   );
-  if (parameterHash) {
-    verifyEpochs(epochs, rounds, parameterHash, errors);
+  if (params) {
+    verifyEpochs(epochs, rounds, params, errors);
   }
 
   return {
@@ -252,6 +255,11 @@ function readRoundSnapshot(
     32,
     errors,
   );
+  const inputSnapshot = readInputSnapshotRef(
+    record.inputSnapshot,
+    `${label}.inputSnapshot`,
+    errors,
+  );
   const trailingBaseRateUpBps = readTrailingBaseRateUpBps(
     record.trailingBaseRateUpBps,
     `${label}.trailingBaseRateUpBps`,
@@ -268,8 +276,18 @@ function readRoundSnapshot(
     effectiveParticipantUnits === null ||
     totalClaimWeight === null ||
     !weightRoot ||
-    !reasonRoot
+    !reasonRoot ||
+    inputSnapshot === null
   ) {
+    return null;
+  }
+  if (
+    inputSnapshot.domain !== domain ||
+    inputSnapshot.rewardPoolId !== rewardPoolId ||
+    inputSnapshot.contentId !== contentId ||
+    inputSnapshot.roundId !== roundId
+  ) {
+    errors.push(`${label}.inputSnapshot must match the round snapshot key`);
     return null;
   }
 
@@ -284,6 +302,7 @@ function readRoundSnapshot(
     totalClaimWeight,
     weightRoot,
     reasonRoot,
+    inputSnapshot,
     trailingBaseRateUpBps,
     eligibleVotes,
     payoutWeights,
@@ -307,6 +326,75 @@ function readTrailingBaseRateUpBps(
     return null;
   }
   return parsed;
+}
+
+function readInputSnapshotRef(
+  value: unknown,
+  label: string,
+  errors: string[],
+): CorrelationInputSnapshotRef | null {
+  const record = requireRecord(value, label, errors);
+  if (!record) return null;
+  const domain = readNonNegativeInteger(record.domain, `${label}.domain`, errors);
+  const rewardPoolId = readRewardPoolId(
+    record.rewardPoolId,
+    `${label}.rewardPoolId`,
+    domain,
+    errors,
+  );
+  const contentId = readPositiveBigInt(
+    record.contentId,
+    `${label}.contentId`,
+    errors,
+  );
+  const roundId = readPositiveBigInt(
+    record.roundId,
+    `${label}.roundId`,
+    errors,
+  );
+  const sourceBlockNumber = readNonNegativeBigInt(
+    record.sourceBlockNumber,
+    `${label}.sourceBlockNumber`,
+    errors,
+  );
+  const sourceLogIndex = readNonNegativeInteger(
+    record.sourceLogIndex,
+    `${label}.sourceLogIndex`,
+    errors,
+  );
+  const sourceTimestamp = readNonNegativeBigInt(
+    record.sourceTimestamp,
+    `${label}.sourceTimestamp`,
+    errors,
+  );
+  const sourceTransactionHash = readHex(
+    record.sourceTransactionHash,
+    `${label}.sourceTransactionHash`,
+    32,
+    errors,
+  );
+  if (
+    domain === null ||
+    rewardPoolId === null ||
+    contentId === null ||
+    roundId === null ||
+    sourceBlockNumber === null ||
+    sourceLogIndex === null ||
+    sourceTimestamp === null ||
+    !sourceTransactionHash
+  ) {
+    return null;
+  }
+  return {
+    domain,
+    rewardPoolId,
+    contentId,
+    roundId,
+    sourceBlockNumber,
+    sourceLogIndex,
+    sourceTimestamp,
+    sourceTransactionHash,
+  };
 }
 
 function readEligibleVote(
@@ -663,7 +751,7 @@ function verifyLaunchCreditSnapshotShape(
 function verifyEpochs(
   epochs: unknown[],
   rounds: NormalizedRoundSnapshot[],
-  parameterHash: Hex,
+  params: CorrelationScoringParams,
   errors: string[],
 ) {
   for (let index = 0; index < epochs.length; index += 1) {
@@ -688,15 +776,19 @@ function verifyEpochs(
       errors,
     );
     if (epochId === null || !clusterRoot || !epochParameterHash) continue;
+    const epochRounds = rounds.filter(
+      (round) => round.correlationEpochId === epochId,
+    );
+    const expectedParameterHash = correlationEpochParameterHash(
+      params,
+      epochRounds.map((round) => round.inputSnapshot),
+    );
     compareValue(
       label,
       "parameterHash",
       epochParameterHash.toLowerCase(),
-      parameterHash.toLowerCase(),
+      expectedParameterHash.toLowerCase(),
       errors,
-    );
-    const epochRounds = rounds.filter(
-      (round) => round.correlationEpochId === epochId,
     );
     const expectedClusterRoot = hashJson(
       epochRounds.map((round) => ({
