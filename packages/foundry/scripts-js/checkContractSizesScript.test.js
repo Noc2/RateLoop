@@ -1,11 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 test("contract size gate includes linked libraries", () => {
   const script = readFileSync(
-    join("packages", "foundry", "scripts", "check-contract-sizes.sh"),
+    join(packageRoot, "scripts", "check-contract-sizes.sh"),
     "utf8"
   );
 
@@ -25,14 +28,14 @@ test("contract size gate includes linked libraries", () => {
 
 test("contract size gate validates deploy-profile artifacts", () => {
   const script = readFileSync(
-    join("packages", "foundry", "scripts", "check-contract-sizes.sh"),
+    join(packageRoot, "scripts", "check-contract-sizes.sh"),
     "utf8"
   );
   const packageJson = JSON.parse(
-    readFileSync(join("packages", "foundry", "package.json"), "utf8")
+    readFileSync(join(packageRoot, "package.json"), "utf8")
   );
   const makefile = readFileSync(
-    join("packages", "foundry", "Makefile"),
+    join(packageRoot, "Makefile"),
     "utf8"
   );
 

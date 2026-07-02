@@ -28,10 +28,10 @@ function findPackageJson(start) {
   return null;
 }
 
-function resolveImportModule(name, files = []) {
+function resolveImportModule(name, files = [], cwd = process.cwd()) {
   const packageJsonCandidates = [
     ...files.map(file => findPackageJson(file)).filter(Boolean),
-    join(process.cwd(), "package.json"),
+    join(cwd, "package.json"),
     join(repoRoot, "package.json"),
   ];
 
@@ -50,7 +50,7 @@ function collectTests(root, results) {
   const stats = statSync(root);
   if (stats.isFile()) {
     if (TEST_FILE_RE.test(root)) {
-      results.push(relative(process.cwd(), root));
+      results.push(root);
     }
     return;
   }
@@ -68,9 +68,25 @@ function collectTests(root, results) {
     }
 
     if (TEST_FILE_RE.test(entry.name)) {
-      results.push(relative(process.cwd(), join(dir, entry.name)));
+      results.push(join(dir, entry.name));
     }
   }
+}
+
+function getTestCwd(file) {
+  const packageJson = findPackageJson(file);
+  return packageJson === null ? repoRoot : dirname(packageJson);
+}
+
+function groupTestsByCwd(files) {
+  const groups = new Map();
+  for (const file of files) {
+    const cwd = getTestCwd(file);
+    const group = groups.get(cwd) ?? [];
+    group.push(file);
+    groups.set(cwd, group);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
 const roots = process.argv.slice(2);
@@ -91,20 +107,31 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const nodeArgs = ["--import", preloadModule];
-if (files.some(file => TS_TEST_FILE_RE.test(file))) {
-  nodeArgs.push("--import", resolveImportModule("tsx", files));
+let exitCode = 0;
+
+for (const [cwd, groupFiles] of groupTestsByCwd(files)) {
+  groupFiles.sort();
+
+  const nodeArgs = ["--import", preloadModule];
+  if (groupFiles.some(file => TS_TEST_FILE_RE.test(file))) {
+    nodeArgs.push("--import", resolveImportModule("tsx", groupFiles, cwd));
+  }
+  nodeArgs.push("--test", ...groupFiles.map(file => relative(cwd, file)));
+
+  const result = spawnSync(process.execPath, nodeArgs, {
+    stdio: "inherit",
+    cwd,
+  });
+
+  if (result.error) {
+    console.error(result.error);
+    exitCode = 1;
+    continue;
+  }
+
+  if (result.status !== 0) {
+    exitCode = result.status ?? 1;
+  }
 }
-nodeArgs.push("--test", ...files);
 
-const result = spawnSync(process.execPath, nodeArgs, {
-  stdio: "inherit",
-  cwd: process.cwd(),
-});
-
-if (result.error) {
-  console.error(result.error);
-  process.exit(1);
-}
-
-process.exit(result.status ?? 1);
+process.exit(exitCode);
