@@ -8,6 +8,7 @@ import {
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
   correlationEpochParameterHash,
   correlationInputSnapshotDigest,
   correlationParameterHash,
@@ -17,6 +18,7 @@ import {
   merkleProof,
   merkleRoot,
   payoutWeightLeaf,
+  scoreRbtsSettlementWeights,
   scoreRoundPayoutWeights,
   scoreRoundRatingWeights,
   type CorrelationVoteInput,
@@ -210,12 +212,14 @@ function surpriseVote(
   byte: string,
   isUp: boolean | null,
   revealWeight: bigint | null,
+  features: readonly string[] = [],
 ): CorrelationVoteInput {
   return vote({
     account: address(byte),
     identityKey: hex(byte),
     commitKey: hex(byte),
     verifiedHuman: true,
+    features,
     isUp,
     revealWeight,
   });
@@ -322,6 +326,88 @@ test("manufactured surprise clamps at surpriseCapBps", () => {
   );
 });
 
+test("rare-side surprise bonus is capped per detected cluster", () => {
+  const votes = [
+    surpriseVote("a1", false, 10_000n, ["device:cluster"]),
+    surpriseVote("b2", false, 10_000n, ["device:cluster"]),
+    surpriseVote("c3", false, 10_000n, ["device:cluster"]),
+    surpriseVote("d4", true, 10_000n),
+  ];
+
+  const result = scoreQuestionRound({
+    votes,
+    trailingBaseRateUpBps: 9_500,
+    params: { surpriseMinReveals: 4 },
+  });
+
+  assert.deepEqual(
+    result.leaves.slice(0, 3).map((leaf) => leaf.surpriseBps),
+    [16_666, 16_666, 16_666],
+  );
+  assert.deepEqual(
+    result.leaves.slice(0, 3).map((leaf) => leaf.baseWeight),
+    [13_333n, 13_333n, 13_333n],
+  );
+  assert.ok(
+    result.leaves[0]!.reasons.some(
+      (reason) =>
+        reason.startsWith("surprise_cluster_budget_bps=") &&
+        reason !== "surprise_cluster_budget_bps=10000",
+    ),
+  );
+});
+
+test("rare-side surprise bonus needs verified or high-independence anchor support", () => {
+  const unverifiedFreshVotes = [
+    surpriseVote("a1", false, 10_000n),
+    surpriseVote("b2", false, 10_000n),
+    surpriseVote("c3", true, 10_000n),
+  ].map((input, index) =>
+    index < 2 ? { ...input, verifiedHuman: false, historicalVoteCount: 0 } : input,
+  );
+
+  const unanchored = scoreQuestionRound({
+    votes: unverifiedFreshVotes,
+    trailingBaseRateUpBps: 9_500,
+    params: { surpriseMinReveals: 3 },
+  });
+  assert.deepEqual(
+    unanchored.leaves.slice(0, 2).map((leaf) => leaf.surpriseBps),
+    [10_000, 10_000],
+  );
+
+  const anchored = scoreQuestionRound({
+    votes: [
+      { ...unverifiedFreshVotes[0]!, verifiedHuman: true },
+      { ...unverifiedFreshVotes[1]!, verifiedHuman: true },
+      unverifiedFreshVotes[2]!,
+    ],
+    trailingBaseRateUpBps: 9_500,
+    params: { surpriseMinReveals: 3 },
+  });
+  assert.deepEqual(
+    anchored.leaves.slice(0, 2).map((leaf) => leaf.surpriseBps),
+    [30_000, 30_000],
+  );
+});
+
+test("independent verified surprise remains uncapped by cluster budget", () => {
+  const result = scoreQuestionRound({
+    votes: [
+      { ...surpriseVote("a1", true, 10_000n), verifiedHuman: true },
+      { ...surpriseVote("b2", true, 10_000n), verifiedHuman: true },
+      surpriseVote("c3", false, 10_000n),
+    ],
+    trailingBaseRateUpBps: 2_000,
+    params: { surpriseMinReveals: 3 },
+  });
+
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.surpriseBps),
+    [25_000, 25_000, 10_000],
+  );
+});
+
 test("missing surprise inputs fall back to the neutral multiplier", () => {
   const fullVotes = [
     surpriseVote("a1", true, 10_000n),
@@ -397,10 +483,10 @@ test("surprise bonuses stay neutral below the minimum reveal floor", () => {
 
 test("correlationParameterHash commits to the surprise parameters", () => {
   const params = defaultCorrelationScoringParams();
-  assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v3");
+  assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v4");
   assert.equal(
     correlationParameterHash(params),
-    "0x9bb6d25c925611f3478fd37800106da145f0c8f19d0b6dcf63b5ebb6148c874b",
+    "0xb04f6aad8d689e576d302319021d1dc2c0ca145d638bfdaac6bf0b8310deb6bd",
   );
 
   const defaultHash = correlationParameterHash(params);
@@ -430,6 +516,18 @@ test("correlationParameterHash commits to the surprise parameters", () => {
   );
   assert.notEqual(
     correlationParameterHash({ ...params, surpriseMinReveals: 3 }),
+    defaultHash,
+  );
+  assert.notEqual(
+    correlationParameterHash({ ...params, surpriseClusterBudgetBps: 5_000 }),
+    defaultHash,
+  );
+  assert.notEqual(
+    correlationParameterHash({ ...params, surpriseVerifiedAnchorMinBps: 5_000 }),
+    defaultHash,
+  );
+  assert.notEqual(
+    correlationParameterHash({ ...params, surpriseFloodDivergenceBps: 1_000 }),
     defaultHash,
   );
   assert.notEqual(
@@ -610,6 +708,57 @@ test("launch-credit domain keeps flat baseWeights and no surprise", () => {
   );
 });
 
+test("RBTS settlement domain caps correlated reveal weights by cluster", () => {
+  const result = scoreRbtsSettlementWeights({
+    chainId: CHAIN_ID,
+    oracleAddress: ORACLE,
+    contentId: 42n,
+    roundId: 3n,
+    votes: [
+      vote({
+        account: address("a1"),
+        identityKey: hex("a1"),
+        commitKey: hex("11"),
+        features: ["identity:shared"],
+        revealWeight: 1_000n,
+      }),
+      vote({
+        account: address("b2"),
+        identityKey: hex("b2"),
+        commitKey: hex("22"),
+        features: ["identity:shared"],
+        revealWeight: 3_000n,
+      }),
+      vote({
+        account: address("c3"),
+        identityKey: hex("c3"),
+        commitKey: hex("33"),
+        features: [],
+        revealWeight: 4_000n,
+      }),
+    ],
+  });
+
+  assert.equal(result.rawEligibleVoters, 3);
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.domain),
+    [
+      PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+      PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+      PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+    ],
+  );
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.baseWeight),
+    [1_000n, 3_000n, 4_000n],
+  );
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.effectiveWeight),
+    [750n, 2_250n, 4_000n],
+  );
+  assert.equal(result.totalClaimWeight, 7_000n);
+});
+
 test("payoutWeightLeaf commits to every payout field", () => {
   const payout = {
     domain: PAYOUT_DOMAIN_QUESTION_REWARD,
@@ -651,7 +800,7 @@ test("correlationParameterHash pins spec versions and canonical params", () => {
 
   assert.equal(
     correlationParameterHash(params),
-    "0x9bb6d25c925611f3478fd37800106da145f0c8f19d0b6dcf63b5ebb6148c874b",
+    "0xb04f6aad8d689e576d302319021d1dc2c0ca145d638bfdaac6bf0b8310deb6bd",
   );
   assert.notEqual(
     correlationParameterHash({
@@ -680,6 +829,12 @@ test("scoreRoundPayoutWeights rejects invalid parameters", () => {
 
   for (const params of [
     { surpriseCapBps: 9_999 },
+    { surpriseClusterBudgetBps: 0 },
+    { surpriseClusterBudgetBps: 10_001 },
+    { surpriseVerifiedAnchorMinBps: 0 },
+    { surpriseVerifiedAnchorMinBps: 10_001 },
+    { surpriseFloodDivergenceBps: -1 },
+    { surpriseFloodDivergenceBps: 10_001 },
     { baseWeightFloorBps: -1 },
     { baseWeightBonusBps: -1 },
     { surpriseMinReveals: 0 },
@@ -719,6 +874,10 @@ test("correlation vote pagination helpers route by domain and scale scan budget"
   assert.equal(
     correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD),
     "/correlation/bundle-round-votes",
+  );
+  assert.equal(
+    correlationVotesPathForDomain(PAYOUT_DOMAIN_RBTS_SETTLEMENT),
+    "/correlation/rbts-settlement-round-votes",
   );
   assert.equal(
     correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_REWARD),

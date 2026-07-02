@@ -8,6 +8,7 @@ import {
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
 } from "@rateloop/node-utils/correlationScoring";
 import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import { and, asc, desc, eq, or, sql } from "ponder";
@@ -235,12 +236,21 @@ function questionMetadataRef(
 async function getRoundContext(args: {
   contentId: bigint;
   domain: number;
+  expectedRoundState?: number | null;
   inputSnapshotSource?: InputSnapshotSource | null;
   rewardPoolId: bigint;
   roundId: bigint;
   snapshotContentId?: bigint;
   snapshotRoundId?: bigint;
 }) {
+  const expectedRoundState = args.expectedRoundState ?? ROUND_STATE.Settled;
+  const requestedRoundPredicates = [
+    eq(round.contentId, args.contentId),
+    eq(round.roundId, args.roundId),
+  ];
+  if (expectedRoundState !== null) {
+    requestedRoundPredicates.push(eq(round.state, expectedRoundState));
+  }
   const [requestedRound] = await db
     .select({
       questionMetadataHash: content.questionMetadataHash,
@@ -253,21 +263,33 @@ async function getRoundContext(args: {
     })
     .from(round)
     .innerJoin(content, eq(content.id, round.contentId))
-    .where(
-      and(
-        eq(round.contentId, args.contentId),
-        eq(round.roundId, args.roundId),
-        eq(round.state, ROUND_STATE.Settled),
-      ),
-    )
+    .where(and(...requestedRoundPredicates))
     .limit(1);
 
   const settledAt = requestedRound?.settledAt ?? null;
+  const source =
+    args.inputSnapshotSource ??
+    (requestedRound
+      ? {
+          sourceBlockNumber: requestedRound.settledBlockNumber,
+          sourceTxHash: normalizeHex32(requestedRound.settledTxHash),
+          sourceLogIndex: requestedRound.settledLogIndex,
+          sourceTimestamp: requestedRound.settledAt,
+        }
+      : null);
+  const inputSnapshot = buildInputSnapshotRef({
+    contentId: args.snapshotContentId ?? args.contentId,
+    domain: args.domain,
+    rewardPoolId: args.rewardPoolId,
+    roundId: args.snapshotRoundId ?? args.roundId,
+    source,
+  });
   if (settledAt === null) {
     return {
       trailingBaseRateUpBps: BASE_RATE_NEUTRAL_BPS,
       baseRateWindowRounds: BASE_RATE_WINDOW_ROUNDS,
       questionMetadataRef: questionMetadataRef(requestedRound ?? null),
+      ...(inputSnapshot ? { inputSnapshot } : {}),
       settledRoundsInWindow: 0,
     };
   }
@@ -302,20 +324,6 @@ async function getRoundContext(args: {
       BASE_RATE_MAX_BPS,
     );
   }
-
-  const inputSnapshot = buildInputSnapshotRef({
-    contentId: args.snapshotContentId ?? args.contentId,
-    domain: args.domain,
-    rewardPoolId: args.rewardPoolId,
-    roundId: args.snapshotRoundId ?? args.roundId,
-    source:
-      args.inputSnapshotSource ?? {
-        sourceBlockNumber: requestedRound.settledBlockNumber,
-        sourceTxHash: normalizeHex32(requestedRound.settledTxHash),
-        sourceLogIndex: requestedRound.settledLogIndex,
-        sourceTimestamp: requestedRound.settledAt,
-      },
-  });
 
   return {
     trailingBaseRateUpBps,
@@ -352,7 +360,7 @@ function formatCorrelationVoteRow(
     stake: bigint;
     epochIndex: number;
     revealWeight: bigint | null;
-    baseWeight: bigint;
+    baseWeight: bigint | null;
     verifiedHuman: boolean | null;
     historicalVoteCount: number | null;
   },
@@ -385,7 +393,7 @@ function formatCorrelationVoteRow(
     stake: row.stake,
     epochIndex: row.epochIndex,
     revealWeight: row.revealWeight ?? null,
-    baseWeight: row.baseWeight,
+    baseWeight: row.baseWeight ?? row.revealWeight ?? 0n,
     verifiedHuman: row.verifiedHuman === true,
     historicalVoteCount: row.historicalVoteCount ?? 0,
     payoutEligible: true,
@@ -777,6 +785,51 @@ export function registerCorrelationRoutes(app: ApiApp) {
             sql`${roundPayoutSnapshot.id} is null`,
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_REJECTED),
+          ),
+        ),
+      )
+      .orderBy(desc(round.roundId), asc(round.contentId))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items: rows });
+  });
+
+  app.get("/correlation/rbts-settlement-round-candidates", async (c) => {
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const rows = await db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_RBTS_SETTLEMENT}`,
+        rewardPoolId: sql<bigint>`0`,
+        contentId: round.contentId,
+        roundId: round.roundId,
+        rbtsSettlementStatus: round.rbtsSettlementStatus,
+        rbtsSettlementReadyAt: round.rbtsSettlementReadyAt,
+        revealedCount: round.revealedCount,
+        snapshotStatus: roundPayoutSnapshot.status,
+      })
+      .from(round)
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_RBTS_SETTLEMENT),
+          eq(roundPayoutSnapshot.rewardPoolId, 0n),
+          eq(roundPayoutSnapshot.contentId, round.contentId),
+          eq(roundPayoutSnapshot.roundId, round.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(round.state, ROUND_STATE.SettlementPending),
+          eq(round.rbtsSettlementStatus, "pending"),
+          sql`${round.revealedCount} > 0`,
+          or(
+            sql`${roundPayoutSnapshot.id} is null`,
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_REJECTED),
           ),
         ),
@@ -1556,6 +1609,154 @@ export function registerCorrelationRoutes(app: ApiApp) {
     const roundContext = await getRoundContext({
       contentId,
       domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+      rewardPoolId: 0n,
+      roundId,
+    });
+    return jsonBig(c, {
+      excludedVotes,
+      items,
+      roundContext,
+      truncated,
+    });
+  });
+
+  app.get("/correlation/rbts-settlement-round-votes", async (c) => {
+    const contentId = validPositiveBigIntParam(c.req.query("contentId"));
+    const roundId = validPositiveBigIntParam(c.req.query("roundId"));
+    const limit = safeLimit(c.req.query("limit"), 500, 1000);
+    const offset = safeOffset(c.req.query("offset"));
+
+    if (contentId === null || roundId === null) {
+      return c.json(
+        { error: "contentId and roundId must be positive integers" },
+        400,
+      );
+    }
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (resolveApiNowSeconds(c.req.query("now")) === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
+
+    const [roundRow] = await db
+      .select({
+        rbtsSettlementPendingBlockNumber:
+          round.rbtsSettlementPendingBlockNumber,
+        rbtsSettlementPendingTxHash: round.rbtsSettlementPendingTxHash,
+        rbtsSettlementPendingLogIndex: round.rbtsSettlementPendingLogIndex,
+        rbtsSettlementPendingAt: round.rbtsSettlementPendingAt,
+        rbtsSettlementReadyAt: round.rbtsSettlementReadyAt,
+      })
+      .from(round)
+      .where(
+        and(
+          eq(round.contentId, contentId),
+          eq(round.roundId, roundId),
+          eq(round.state, ROUND_STATE.SettlementPending),
+          eq(round.rbtsSettlementStatus, "pending"),
+        ),
+      )
+      .limit(1);
+
+    if (!roundRow) {
+      return jsonBig(c, {
+        excludedVotes: [],
+        items: [],
+        roundContext: null,
+        truncated: false,
+      });
+    }
+
+    const settlementInputSnapshotSource = {
+      sourceBlockNumber: roundRow.rbtsSettlementPendingBlockNumber,
+      sourceTxHash: normalizeHex32(roundRow.rbtsSettlementPendingTxHash),
+      sourceLogIndex: roundRow.rbtsSettlementPendingLogIndex,
+      sourceTimestamp: roundRow.rbtsSettlementPendingAt,
+    };
+
+    const loadVoteRows = (scanLimit: number, scanOffset: number) =>
+      db
+        .select({
+          account: vote.identityHolder,
+          voter: vote.voter,
+          identityKey: vote.identityKey,
+          commitKey: vote.commitKey,
+          isUp: vote.isUp,
+          stake: vote.stake,
+          epochIndex: vote.epochIndex,
+          revealWeight: vote.rbtsWeight,
+          baseWeight: vote.rbtsWeight,
+          verifiedHuman: vote.correlationVerifiedHuman,
+          historicalVoteCount: vote.correlationHistoricalVoteCount,
+          banReasons: vote.correlationBanReasons,
+        })
+        .from(vote)
+        .where(
+          and(
+            eq(vote.contentId, contentId),
+            eq(vote.roundId, roundId),
+            eq(vote.revealed, true),
+            sql`${vote.identityKey} is not null`,
+            sql`${vote.identityHolder} is not null`,
+            sql`${vote.identityKey} != ${zeroHash}`,
+            sql`${vote.rbtsWeight} is not null`,
+            sql`${vote.rbtsWeight} > 0`,
+          ),
+        )
+        .orderBy(
+          asc(vote.commitBlockNumber),
+          asc(vote.commitLogIndex),
+          asc(vote.id),
+        )
+        .limit(scanLimit)
+        .offset(scanOffset);
+
+    const items: ReturnType<typeof formatCorrelationVoteRow>["item"][] = [];
+    const excludedVotes: NonNullable<
+      ReturnType<typeof formatCorrelationVoteRow>["excludedVote"]
+    >[] = [];
+    let eligibleSeen = 0;
+    let scanOffset = 0;
+    let endedNaturally = false;
+    const scanPageBudget = correlationVoteScanPageBudget(offset);
+    for (let page = 0; page < scanPageBudget; page += 1) {
+      const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
+      if (rows.some((row) => !hasPinnedVoteSnapshot(row))) {
+        return missingInputSnapshotResponse(c);
+      }
+      for (const row of rows) {
+        const formatted = formatCorrelationVoteRow(row);
+        if (formatted.excludedVote) {
+          excludedVotes.push(formatted.excludedVote);
+          continue;
+        }
+        if (formatted.item && eligibleSeen >= offset && items.length < limit) {
+          items.push(formatted.item);
+        }
+        eligibleSeen += 1;
+      }
+      scanOffset += rows.length;
+      if (rows.length < CORRELATION_VOTE_PAGE_SIZE) {
+        endedNaturally = true;
+        break;
+      }
+    }
+    if (!endedNaturally) {
+      const probeRows = await loadVoteRows(1, scanOffset);
+      if (probeRows.length === 0) {
+        endedNaturally = true;
+      }
+    }
+    const truncated = isCorrelationVoteScanTruncated({
+      endedNaturally,
+      eligibleSeen,
+      offset,
+    });
+
+    const roundContext = await getRoundContext({
+      contentId,
+      domain: PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+      expectedRoundState: ROUND_STATE.SettlementPending,
+      inputSnapshotSource: settlementInputSnapshotSource,
       rewardPoolId: 0n,
       roundId,
     });

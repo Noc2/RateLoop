@@ -370,6 +370,13 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
     humanVerifiedCommitCount: round.humanVerifiedCommitCount,
     lastCommitRevealableAfter: round.lastCommitRevealableAfter,
     revealGracePeriod: round.revealGracePeriod,
+    rbtsSettlementStatus: round.rbtsSettlementStatus,
+    rbtsSettlementOracle: round.rbtsSettlementOracle,
+    rbtsSettlementPendingAt: round.rbtsSettlementPendingAt,
+    rbtsSettlementReadyAt: round.rbtsSettlementReadyAt,
+    rbtsSettlementSnapshotDigest: round.rbtsSettlementSnapshotDigest,
+    rbtsSettlementAppliedAt: round.rbtsSettlementAppliedAt,
+    rbtsSettlementTimedOutAt: round.rbtsSettlementTimedOutAt,
   };
 
   const openRounds = await db
@@ -456,6 +463,13 @@ export function formatRoundSummary(row: {
   humanVerifiedCommitCount: number;
   lastCommitRevealableAfter: bigint | null;
   revealGracePeriod: bigint | null;
+  rbtsSettlementStatus?: string | null;
+  rbtsSettlementOracle?: `0x${string}` | null;
+  rbtsSettlementPendingAt?: bigint | null;
+  rbtsSettlementReadyAt?: bigint | null;
+  rbtsSettlementSnapshotDigest?: `0x${string}` | null;
+  rbtsSettlementAppliedAt?: bigint | null;
+  rbtsSettlementTimedOutAt?: bigint | null;
 }) {
   return {
     id: row.id,
@@ -502,6 +516,13 @@ export function formatRoundSummary(row: {
     ),
     lastCommitRevealableAfter: row.lastCommitRevealableAfter,
     revealGracePeriod: row.revealGracePeriod,
+    rbtsSettlementStatus: row.rbtsSettlementStatus,
+    rbtsSettlementOracle: row.rbtsSettlementOracle,
+    rbtsSettlementPendingAt: row.rbtsSettlementPendingAt,
+    rbtsSettlementReadyAt: row.rbtsSettlementReadyAt,
+    rbtsSettlementSnapshotDigest: row.rbtsSettlementSnapshotDigest,
+    rbtsSettlementAppliedAt: row.rbtsSettlementAppliedAt,
+    rbtsSettlementTimedOutAt: row.rbtsSettlementTimedOutAt,
     scoreSpreadEconomics: {
       forfeitMinReveals: SCORE_SPREAD_POLICY.forfeitMinReveals,
       maxForfeitBps: SCORE_SPREAD_POLICY.maxForfeitBps,

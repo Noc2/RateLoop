@@ -7,6 +7,7 @@ import {
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
   PONDER_HTTP_FETCH_TIMEOUT_MS,
   correlationEpochParameterHash,
   correlationParameterHash,
@@ -15,6 +16,7 @@ import {
   merkleProof,
   scoreRoundPayoutWeights,
   scoreRoundRatingWeights,
+  scoreRbtsSettlementWeights,
   type CorrelationInputSnapshotRef,
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
@@ -245,6 +247,14 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
             roundId: candidate.roundId,
             votes,
           })
+        : candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT
+          ? scoreRbtsSettlementWeights({
+              chainId: BigInt(config.chainId),
+              oracleAddress: config.contracts.clusterPayoutOracle,
+              contentId: candidate.contentId,
+              roundId: candidate.roundId,
+              votes,
+            })
         : scoreRoundPayoutWeights({
             chainId: BigInt(config.chainId),
             oracleAddress: config.contracts.clusterPayoutOracle,
@@ -559,6 +569,7 @@ async function fetchRoundCandidateWindow(
     "/correlation/launch-round-candidates",
     "/correlation/bundle-round-candidates",
     "/correlation/rating-round-candidates",
+    "/correlation/rbts-settlement-round-candidates",
   ];
   for (const pathname of endpoints) {
     const endpointCandidates: CorrelationRoundCandidate[] = [];
@@ -651,7 +662,8 @@ async function fetchRoundVotes(
     );
     if (
       candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING &&
-      candidate.domain !== PAYOUT_DOMAIN_LAUNCH_CREDIT
+      candidate.domain !== PAYOUT_DOMAIN_LAUNCH_CREDIT &&
+      candidate.domain !== PAYOUT_DOMAIN_RBTS_SETTLEMENT
     ) {
       url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
     }
@@ -750,6 +762,9 @@ function parseCandidateDomain(value: unknown) {
   }
   if (parsed === BigInt(PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD)) {
     return PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;
+  }
+  if (parsed === BigInt(PAYOUT_DOMAIN_RBTS_SETTLEMENT)) {
+    return PAYOUT_DOMAIN_RBTS_SETTLEMENT;
   }
   return PAYOUT_DOMAIN_QUESTION_REWARD;
 }

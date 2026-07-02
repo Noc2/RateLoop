@@ -1,5 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { PAYOUT_DOMAIN_PUBLIC_RATING } from "@rateloop/node-utils/correlationScoring";
+import {
+  PAYOUT_DOMAIN_PUBLIC_RATING,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+} from "@rateloop/node-utils/correlationScoring";
 import { verifyCorrelationArtifact } from "./correlation-artifact-verifier.js";
 import { resolveAllowedArtifactUri } from "./artifact-uri.js";
 import { readBoundedResponseText } from "./bounded-response.js";
@@ -50,6 +53,7 @@ interface CorrelationSnapshotPublisherResult {
   roundSnapshotsProposed: number;
   roundSnapshotsFinalized: number;
   ratingSnapshotsApplied: number;
+  rbtsSettlementSnapshotsApplied: number;
 }
 
 export interface CorrelationEpochArtifact {
@@ -148,6 +152,7 @@ function emptyResult(): CorrelationSnapshotPublisherResult {
     roundSnapshotsProposed: 0,
     roundSnapshotsFinalized: 0,
     ratingSnapshotsApplied: 0,
+    rbtsSettlementSnapshotsApplied: 0,
   };
 }
 
@@ -167,6 +172,49 @@ const ContentRegistryRatingSnapshotAbi = [
   {
     type: "function",
     name: "applyRatingPayoutSnapshot",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+      {
+        name: "payoutWeights",
+        type: "tuple[]",
+        components: [
+          { name: "domain", type: "uint8" },
+          { name: "rewardPoolId", type: "uint256" },
+          { name: "contentId", type: "uint256" },
+          { name: "roundId", type: "uint256" },
+          { name: "commitKey", type: "bytes32" },
+          { name: "identityKey", type: "bytes32" },
+          { name: "account", type: "address" },
+          { name: "baseWeight", type: "uint256" },
+          { name: "independenceBps", type: "uint16" },
+          { name: "effectiveWeight", type: "uint256" },
+          { name: "reasonHash", type: "bytes32" },
+        ],
+      },
+      { name: "proofs", type: "bytes32[][]" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+const RoundVotingEngineRbtsSnapshotAbi = [
+  {
+    type: "function",
+    name: "isRoundPayoutSnapshotConsumed",
+    stateMutability: "view",
+    inputs: [
+      { name: "domain", type: "uint8" },
+      { name: "rewardPoolId", type: "uint256" },
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "applyRbtsSettlementSnapshot",
     stateMutability: "nonpayable",
     inputs: [
       { name: "contentId", type: "uint256" },
@@ -574,9 +622,10 @@ async function readArtifactCanonicalJson(uri: string): Promise<string | null> {
   }
 }
 
-function ratingSnapshotWithWeights(
+function roundSnapshotWithWeights(
   artifact: PublicCorrelationArtifactWithWeights,
   snapshot: RoundPayoutSnapshotArtifact,
+  expectedDomain: number,
 ): PublicRoundPayoutSnapshotWithWeights | null {
   if (!Array.isArray(artifact.roundPayoutSnapshots)) return null;
   return (
@@ -584,7 +633,7 @@ function ratingSnapshotWithWeights(
       if (!entry || typeof entry !== "object") return false;
       const record = entry as PublicRoundPayoutSnapshotWithWeights;
       return (
-        normalizeNumber(record.domain) === PAYOUT_DOMAIN_PUBLIC_RATING &&
+        normalizeNumber(record.domain) === expectedDomain &&
         normalizeBigIntString(record.rewardPoolId) === "0" &&
         normalizeBigIntString(record.contentId) === BigInt(snapshot.contentId).toString() &&
         normalizeBigIntString(record.roundId) === BigInt(snapshot.roundId).toString()
@@ -593,11 +642,11 @@ function ratingSnapshotWithWeights(
   );
 }
 
-function ratingPayoutWeightArgs(round: PublicRoundPayoutSnapshotWithWeights) {
+function payoutWeightArgs(round: PublicRoundPayoutSnapshotWithWeights, expectedDomain: number) {
   if (!Array.isArray(round.payoutWeights)) return null;
   const normalized = round.payoutWeights
-    .map((entry) => normalizeRatingPayoutWeight(entry))
-    .filter((entry): entry is NonNullable<ReturnType<typeof normalizeRatingPayoutWeight>> => entry !== null)
+    .map((entry) => normalizePayoutWeight(entry, expectedDomain))
+    .filter((entry): entry is NonNullable<ReturnType<typeof normalizePayoutWeight>> => entry !== null)
     .sort((left, right) => left.payoutWeight.commitKey.localeCompare(right.payoutWeight.commitKey));
   if (normalized.length !== round.payoutWeights.length) return null;
   return {
@@ -606,7 +655,7 @@ function ratingPayoutWeightArgs(round: PublicRoundPayoutSnapshotWithWeights) {
   };
 }
 
-function normalizeRatingPayoutWeight(value: unknown) {
+function normalizePayoutWeight(value: unknown, expectedDomain: number) {
   if (!value || typeof value !== "object") return null;
   const record = value as PublicRatingPayoutWeight;
   const domain = normalizeNumber(record.domain);
@@ -622,7 +671,7 @@ function normalizeRatingPayoutWeight(value: unknown) {
   const reasonHash = normalizeHex(record.reasonHash, 32);
   const proof = normalizeHexArray(record.proof);
   if (
-    domain !== PAYOUT_DOMAIN_PUBLIC_RATING ||
+    domain !== expectedDomain ||
     rewardPoolId !== "0" ||
     contentId === null ||
     roundId === null ||
@@ -789,8 +838,8 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
       continue;
     }
 
-    const publicRound = ratingSnapshotWithWeights(publicArtifact, snapshot);
-    const args = publicRound ? ratingPayoutWeightArgs(publicRound) : null;
+    const publicRound = roundSnapshotWithWeights(publicArtifact, snapshot, PAYOUT_DOMAIN_PUBLIC_RATING);
+    const args = publicRound ? payoutWeightArgs(publicRound, PAYOUT_DOMAIN_PUBLIC_RATING) : null;
     if (!args) {
       logger.warn("Skipping rating snapshot application because payout weights are missing or malformed", {
         snapshotKey,
@@ -812,6 +861,122 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
       logger.info("Applied finalized rating payout snapshot", { snapshotKey });
     } catch (error) {
       logger.debug("Rating payout snapshot not applicable yet", {
+        snapshotKey,
+        error: getRevertReason(error),
+      });
+    }
+  }
+  return applied;
+}
+
+async function applyFinalizedRbtsSettlementSnapshotsFromArtifact(
+  artifact: CorrelationSnapshotArtifactFile,
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+): Promise<number> {
+  let applied = 0;
+  const parsedArtifactByHash = new Map<string, PublicCorrelationArtifactWithWeights | null>();
+  for (const snapshot of artifact.roundPayoutSnapshots ?? []) {
+    if (snapshot.domain !== PAYOUT_DOMAIN_RBTS_SETTLEMENT || BigInt(snapshot.rewardPoolId) !== 0n) continue;
+
+    const snapshotKey = await publicClient.readContract({
+      address: config.contracts.clusterPayoutOracle,
+      abi: ClusterPayoutOracleAbi,
+      functionName: "roundPayoutSnapshotKey",
+      args: [snapshot.domain, 0n, BigInt(snapshot.contentId), BigInt(snapshot.roundId)],
+    });
+
+    let status: number = STATUS.None;
+    let finalizedAt = 0n;
+    try {
+      const existing = await readRoundPayoutSnapshotSummary(
+        publicClient,
+        artifactSnapshotSource(snapshot),
+      );
+      status = existing.status;
+      finalizedAt = existing.finalizedAt;
+    } catch {
+      continue;
+    }
+    if (status !== STATUS.Finalized) continue;
+
+    const [block, vetoWindow] = await Promise.all([
+      publicClient.getBlock(),
+      publicClient.readContract({
+        address: config.contracts.clusterPayoutOracle,
+        abi: ClusterPayoutOracleAbi,
+        functionName: "FINALIZATION_VETO_WINDOW",
+      }) as Promise<bigint>,
+    ]);
+    if (block.timestamp <= finalizedAt + vetoWindow) {
+      logger.debug("Skipping RBTS settlement snapshot apply until veto window elapses", {
+        snapshotKey,
+      });
+      continue;
+    }
+
+    const lifecycle = await readRoundLifecycleState(
+      publicClient,
+      config.contracts.votingEngine,
+      BigInt(snapshot.contentId),
+      BigInt(snapshot.roundId),
+    );
+    if (lifecycle.cleanupRemaining !== 0n) {
+      logger.debug("Skipping RBTS settlement snapshot apply until cleanup completes", {
+        snapshotKey,
+        cleanupRemaining: lifecycle.cleanupRemaining.toString(),
+      });
+      continue;
+    }
+
+    const consumed = (await publicClient.readContract({
+      address: config.contracts.votingEngine,
+      abi: RoundVotingEngineRbtsSnapshotAbi,
+      functionName: "isRoundPayoutSnapshotConsumed",
+      args: [PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0n, BigInt(snapshot.contentId), BigInt(snapshot.roundId)],
+    })) as boolean;
+    if (consumed) continue;
+
+    const artifactKey = snapshot.artifactHash.toLowerCase();
+    let publicArtifact = parsedArtifactByHash.get(artifactKey);
+    if (publicArtifact === undefined) {
+      publicArtifact = await readPublicCorrelationArtifact(snapshot);
+      parsedArtifactByHash.set(artifactKey, publicArtifact);
+    }
+    if (!publicArtifact) {
+      logger.warn("Skipping RBTS settlement snapshot application because artifact could not be read or verified", {
+        snapshotKey,
+        artifactHash: snapshot.artifactHash,
+      });
+      continue;
+    }
+
+    const publicRound = roundSnapshotWithWeights(publicArtifact, snapshot, PAYOUT_DOMAIN_RBTS_SETTLEMENT);
+    const args = publicRound ? payoutWeightArgs(publicRound, PAYOUT_DOMAIN_RBTS_SETTLEMENT) : null;
+    if (!args) {
+      logger.warn("Skipping RBTS settlement snapshot application because payout weights are missing or malformed", {
+        snapshotKey,
+        artifactHash: snapshot.artifactHash,
+      });
+      continue;
+    }
+
+    try {
+      await writeContractAndConfirm(publicClient, walletClient, {
+        account,
+        chain,
+        address: config.contracts.votingEngine,
+        abi: RoundVotingEngineRbtsSnapshotAbi,
+        functionName: "applyRbtsSettlementSnapshot",
+        args: [BigInt(snapshot.contentId), BigInt(snapshot.roundId), args.payoutWeights, args.proofs],
+      });
+      applied += 1;
+      logger.info("Applied finalized RBTS settlement snapshot", { snapshotKey });
+    } catch (error) {
+      logger.debug("RBTS settlement snapshot not applicable yet", {
         snapshotKey,
         error: getRevertReason(error),
       });
@@ -1143,7 +1308,7 @@ async function preflightAutomaticCorrelationSnapshots(
           args: [snapshotKey],
         });
         result.roundSnapshotsFinalized += 1;
-        if (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+        if (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING || candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT) {
           needsArtifactBuild = true;
         }
         logger.info("Finalized round payout snapshot", { snapshotKey });
@@ -1157,7 +1322,10 @@ async function preflightAutomaticCorrelationSnapshots(
       logger.debug("Skipping challenged round payout snapshot", {
         snapshotKey,
       });
-    } else if (roundStatus === STATUS.Finalized && candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+    } else if (
+      roundStatus === STATUS.Finalized &&
+      (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING || candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT)
+    ) {
       needsArtifactBuild = true;
     }
   }
@@ -1425,6 +1593,14 @@ async function publishCorrelationSnapshotArtifact(
   }
 
   result.ratingSnapshotsApplied += await applyFinalizedRatingSnapshotsFromArtifact(
+    artifact,
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+  );
+  result.rbtsSettlementSnapshotsApplied += await applyFinalizedRbtsSettlementSnapshotsFromArtifact(
     artifact,
     publicClient,
     walletClient,

@@ -162,7 +162,7 @@ export const round = onchainTable(
     id: t.text().primaryKey(), // `${contentId}-${roundId}`
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
-    state: t.integer().notNull(), // 0=Open, 1=Settled, 2=Cancelled, 3=Tied, 4=RevealFailed
+    state: t.integer().notNull(), // 0=Open, 1=Settled, 2=Cancelled, 3=Tied, 4=RevealFailed, 5=SettlementPending
     voteCount: t.integer().notNull(), // total commits
     revealedCount: t.integer().notNull().default(0), // revealed votes
     totalStake: t.bigint().notNull(),
@@ -197,6 +197,16 @@ export const round = onchainTable(
     rbtsMeanScoreBps: t.integer(),
     rbtsForfeitedPool: t.bigint(),
     rbtsForfeitClaimants: t.integer(),
+    rbtsSettlementStatus: t.text().notNull().default("not_started"),
+    rbtsSettlementOracle: t.hex(),
+    rbtsSettlementPendingAt: t.bigint(),
+    rbtsSettlementReadyAt: t.bigint(),
+    rbtsSettlementPendingBlockNumber: t.bigint(),
+    rbtsSettlementPendingTxHash: t.hex(),
+    rbtsSettlementPendingLogIndex: t.integer(),
+    rbtsSettlementSnapshotDigest: t.hex(),
+    rbtsSettlementAppliedAt: t.bigint(),
+    rbtsSettlementTimedOutAt: t.bigint(),
     startTime: t.bigint(),
     settledAt: t.bigint(),
     settledBlockNumber: t.bigint(),
@@ -211,6 +221,8 @@ export const round = onchainTable(
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     stateIdx: index().on(table.state),
+    rbtsSettlementStatusIdx: index().on(table.rbtsSettlementStatus),
+    rbtsSettlementReadyAtIdx: index().on(table.rbtsSettlementReadyAt),
     stateContentRoundIdx: index().on(
       table.state,
       table.contentId,

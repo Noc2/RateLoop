@@ -4,6 +4,7 @@ import {
   MAX_CORRELATION_VOTE_PAGES,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
   PONDER_HTTP_FETCH_TIMEOUT_MS,
   correlationVotesPathForDomain,
 } from "@rateloop/node-utils/correlationScoring";
@@ -77,7 +78,10 @@ function buildCorrelationVotesUrl(
   ponderNowSeconds?: bigint,
 ): URL {
   const url = buildPonderUrl(ponderBaseUrl, correlationVotesPathForDomain(candidate.domain));
-  if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
+  if (
+    candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING &&
+    candidate.domain !== PAYOUT_DOMAIN_RBTS_SETTLEMENT
+  ) {
     url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
   }
   url.searchParams.set("contentId", candidate.contentId.toString());
@@ -227,11 +231,12 @@ export async function areCorrelationCandidatesPonderFresh(
         });
         return false;
       }
-      if (
-        chainRound.state === ROUND_STATE.Settled &&
-        ponderRound.state !== ROUND_STATE.Settled
-      ) {
-        logger.debug("Deferring correlation artifact build until Ponder marks round settled", {
+      const expectedRoundState =
+        candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT
+          ? ROUND_STATE.SettlementPending
+          : ROUND_STATE.Settled;
+      if (chainRound.state === expectedRoundState && ponderRound.state !== expectedRoundState) {
+        logger.debug("Deferring correlation artifact build until Ponder marks round source-ready", {
           contentId: candidate.contentId.toString(),
           roundId: candidate.roundId.toString(),
           chainState: chainRound.state,
@@ -262,7 +267,7 @@ export async function areCorrelationCandidatesPonderFresh(
       }
 
       roundFreshness = {
-        requiresEligibleVoteIndexing: chainRound.state === ROUND_STATE.Settled && chainRound.revealedCount > 0n,
+        requiresEligibleVoteIndexing: chainRound.state === expectedRoundState && chainRound.revealedCount > 0n,
       };
       checkedRounds.set(roundKey, roundFreshness);
     }

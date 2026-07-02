@@ -33,7 +33,7 @@ function inputSnapshotFromVoteUrl(url: URL, domain = 1) {
   return {
     domain,
     rewardPoolId:
-      domain === 2 || domain === 3
+      domain === 2 || domain === 3 || domain === 5
         ? "0"
         : (url.searchParams.get("rewardPoolId") ?? "0"),
     contentId: url.searchParams.get("contentId") ?? "0",
@@ -81,7 +81,8 @@ function isSupplementalCandidateEndpoint(pathname: string) {
   return (
     pathname === "/correlation/launch-round-candidates" ||
     pathname === "/correlation/bundle-round-candidates" ||
-    pathname === "/correlation/rating-round-candidates"
+    pathname === "/correlation/rating-round-candidates" ||
+    pathname === "/correlation/rbts-settlement-round-candidates"
   );
 }
 
@@ -144,6 +145,9 @@ describe("automatic correlation artifact builder", () => {
           ],
         });
       }
+      if (route === "/correlation/rbts-settlement-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
       if (route === "/correlation/round-votes") {
         expect(url.searchParams.get("rewardPoolId")).toBe("7");
         return roundVotesResponse(url, { items: [voteItem(1)] });
@@ -199,6 +203,7 @@ describe("automatic correlation artifact builder", () => {
         "/indexer/correlation/launch-round-candidates",
         "/indexer/correlation/bundle-round-candidates",
         "/indexer/correlation/rating-round-candidates",
+        "/indexer/correlation/rbts-settlement-round-candidates",
         "/indexer/correlation/round-votes",
         "/indexer/correlation/launch-round-votes",
         "/indexer/correlation/bundle-round-votes",
@@ -315,7 +320,7 @@ describe("automatic correlation artifact builder", () => {
     expect(publicArtifact.artifactVersion).toBe(
       "rateloop-correlation-artifact-v3",
     );
-    expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v3");
+    expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v4");
     expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(
       2_000,
     );
@@ -546,6 +551,9 @@ describe("automatic correlation artifact builder", () => {
       if (url.pathname === "/correlation/rating-round-candidates") {
         return jsonResponse({ items: [] });
       }
+      if (url.pathname === "/correlation/rbts-settlement-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
       if (url.pathname === "/correlation/bundle-round-votes") {
         expect(url.searchParams.get("rewardPoolId")).toBe("11");
         expect(url.searchParams.get("contentId")).toBe("11");
@@ -633,6 +641,9 @@ describe("automatic correlation artifact builder", () => {
           ],
         });
       }
+      if (url.pathname === "/correlation/rbts-settlement-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
       if (url.pathname === "/correlation/rating-round-votes") {
         expect(url.searchParams.has("rewardPoolId")).toBe(false);
         expect(url.searchParams.get("contentId")).toBe("9");
@@ -716,6 +727,9 @@ describe("automatic correlation artifact builder", () => {
         return jsonResponse({ items: [] });
       }
       if (url.pathname === "/correlation/rating-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/rbts-settlement-round-candidates") {
         return jsonResponse({ items: [] });
       }
       if (url.pathname === "/correlation/launch-round-candidates") {
@@ -842,6 +856,9 @@ describe("automatic correlation artifact builder", () => {
           ],
         });
       }
+      if (url.pathname === "/correlation/rbts-settlement-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
       return new Response("round votes should not be requested", {
         status: 500,
       });
@@ -864,6 +881,7 @@ describe("automatic correlation artifact builder", () => {
     expect(seenPathnames).toContain("/correlation/launch-round-candidates");
     expect(seenPathnames).toContain("/correlation/bundle-round-candidates");
     expect(seenPathnames).toContain("/correlation/rating-round-candidates");
+    expect(seenPathnames).toContain("/correlation/rbts-settlement-round-candidates");
     expect(seenPathnames.some((pathname) => pathname.endsWith("-votes"))).toBe(
       false,
     );
@@ -1132,7 +1150,7 @@ describe("automatic correlation artifact builder", () => {
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
 
     expect(artifact).toEqual({});
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(logger.warn).toHaveBeenCalledWith(
       "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
       expect.objectContaining({

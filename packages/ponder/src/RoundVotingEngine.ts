@@ -240,6 +240,46 @@ function positiveBigIntOrNull(value: unknown): bigint | null {
   }
 }
 
+async function resolveRoundLifecycleState(params: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+}) {
+  const engineAddress = firstContractAddress(
+    params.context.contracts?.RoundVotingEngine?.address,
+  );
+  if (!params.context.client?.readContract || !engineAddress) {
+    return null;
+  }
+
+  const lifecycleResult = await tryContractRead(() =>
+    params.context.client.readContract({
+      abi: RoundVotingEngineAbi,
+      address: engineAddress,
+      functionName: "roundLifecycleState",
+      args: [params.contentId, params.roundId],
+    }),
+  );
+  if (!lifecycleResult.ok) return null;
+  const lifecycle = lifecycleResult.value as Record<string, unknown> | unknown[];
+  if (Array.isArray(lifecycle)) {
+    return {
+      revealGracePeriod: positiveBigIntOrNull(lifecycle[0]),
+      lastCommitRevealableAfter: positiveBigIntOrNull(lifecycle[1]),
+      cleanupRemaining: positiveBigIntOrNull(lifecycle[2]) ?? 0n,
+      clusterPayoutReadyAt: positiveBigIntOrNull(lifecycle[3]),
+    };
+  }
+  return {
+    revealGracePeriod: positiveBigIntOrNull(lifecycle?.revealGracePeriod),
+    lastCommitRevealableAfter: positiveBigIntOrNull(
+      lifecycle?.lastRevealableAfter,
+    ),
+    cleanupRemaining: positiveBigIntOrNull(lifecycle?.cleanupRemaining) ?? 0n,
+    clusterPayoutReadyAt: positiveBigIntOrNull(lifecycle?.clusterPayoutReadyAt),
+  };
+}
+
 async function resolveRoundVoteabilityStateAtCommit(params: {
   context: any;
   contentId: bigint;
@@ -997,6 +1037,108 @@ ponder.on("RoundVotingEngine:RbtsVoteRevealed", async ({ event, context }) => {
     revealedAt: event.block.timestamp,
   });
 });
+
+ponder.on(
+  "RoundVotingEngine:RbtsSettlementPending",
+  async ({ event, context }) => {
+    const { contentId, roundId, oracle } = event.args as {
+      contentId: bigint;
+      roundId: bigint;
+      oracle: `0x${string}`;
+    };
+    const roundKey = `${contentId}-${roundId}`;
+    const lifecycle = await resolveRoundLifecycleState({
+      context,
+      contentId,
+      roundId,
+    });
+
+    const update: Record<string, unknown> = {
+      state: ROUND_STATE.SettlementPending,
+      rbtsSettlementStatus: "pending",
+      rbtsSettlementOracle: normalizeAddress(oracle) ?? oracle,
+      rbtsSettlementPendingAt: event.block.timestamp,
+      rbtsSettlementReadyAt: lifecycle?.clusterPayoutReadyAt ?? null,
+      rbtsSettlementPendingBlockNumber: event.block.number,
+      rbtsSettlementPendingTxHash: event.transaction.hash,
+      rbtsSettlementPendingLogIndex: Number(event.log?.logIndex ?? 0),
+    };
+    if (lifecycle?.lastCommitRevealableAfter !== null && lifecycle?.lastCommitRevealableAfter !== undefined) {
+      update.lastCommitRevealableAfter = lifecycle.lastCommitRevealableAfter;
+    }
+    if (lifecycle?.revealGracePeriod !== null && lifecycle?.revealGracePeriod !== undefined) {
+      update.revealGracePeriod = lifecycle.revealGracePeriod;
+    }
+    const existingRound = await context.db.find(round, { id: roundKey });
+    if (existingRound) {
+      await context.db.update(round, { id: roundKey }).set(update);
+      return;
+    }
+
+    await context.db.insert(round).values({
+      id: roundKey,
+      contentId,
+      roundId,
+      state: ROUND_STATE.SettlementPending,
+      voteCount: 0,
+      revealedCount: 0,
+      totalStake: 0n,
+      upPool: 0n,
+      downPool: 0n,
+      upCount: 0,
+      downCount: 0,
+      referenceRatingBps: 5000,
+      ratingBps: 5000,
+      conservativeRatingBps: 5000,
+      confidenceMass: 0n,
+      effectiveEvidence: 0n,
+      upEvidence: 0n,
+      downEvidence: 0n,
+      settledRounds: 0,
+      lowSince: 0n,
+      ...defaultRoundConfigFields(),
+      ...update,
+    });
+  },
+);
+
+ponder.on(
+  "RoundVotingEngine:RbtsSettlementSnapshotApplied",
+  async ({ event, context }) => {
+    const { contentId, roundId, snapshotDigest } = event.args as {
+      contentId: bigint;
+      roundId: bigint;
+      snapshotDigest: `0x${string}`;
+    };
+    const roundKey = `${contentId}-${roundId}`;
+    const existingRound = await context.db.find(round, { id: roundKey });
+    if (existingRound) {
+      await context.db.update(round, { id: roundKey }).set({
+        rbtsSettlementStatus: "applied",
+        rbtsSettlementSnapshotDigest: snapshotDigest,
+        rbtsSettlementAppliedAt: event.block.timestamp,
+      });
+    }
+  },
+);
+
+ponder.on(
+  "RoundVotingEngine:RbtsSettlementSnapshotTimedOut",
+  async ({ event, context }) => {
+    const { contentId, roundId } = event.args as {
+      contentId: bigint;
+      roundId: bigint;
+    };
+    const roundKey = `${contentId}-${roundId}`;
+    const existingRound = await context.db.find(round, { id: roundKey });
+    if (existingRound) {
+      await context.db.update(round, { id: roundKey }).set({
+        rbtsSettlementStatus: "timed_out",
+        rbtsSettlementTimedOutAt: event.block.timestamp,
+      });
+    }
+  },
+);
 
 ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
   const {

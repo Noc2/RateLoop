@@ -1567,6 +1567,13 @@ export function registerContentRoutes(app: ApiApp) {
         maxDuration: round.maxDuration,
         minVoters: round.minVoters,
         maxVoters: round.maxVoters,
+        rbtsSettlementStatus: round.rbtsSettlementStatus,
+        rbtsSettlementOracle: round.rbtsSettlementOracle,
+        rbtsSettlementPendingAt: round.rbtsSettlementPendingAt,
+        rbtsSettlementReadyAt: round.rbtsSettlementReadyAt,
+        rbtsSettlementSnapshotDigest: round.rbtsSettlementSnapshotDigest,
+        rbtsSettlementAppliedAt: round.rbtsSettlementAppliedAt,
+        rbtsSettlementTimedOutAt: round.rbtsSettlementTimedOutAt,
         ...confidentialityContentSelectFields(),
         title: content.title,
         description: content.description,
@@ -1596,6 +1603,13 @@ export function registerContentRoutes(app: ApiApp) {
     return jsonBig(c, {
       items: items.map(item => ({
         ...formatConfidentialContentPreview(item),
+        rbtsSettlementStatus: item.rbtsSettlementStatus,
+        rbtsSettlementOracle: item.rbtsSettlementOracle,
+        rbtsSettlementPendingAt: item.rbtsSettlementPendingAt,
+        rbtsSettlementReadyAt: item.rbtsSettlementReadyAt,
+        rbtsSettlementSnapshotDigest: item.rbtsSettlementSnapshotDigest,
+        rbtsSettlementAppliedAt: item.rbtsSettlementAppliedAt,
+        rbtsSettlementTimedOutAt: item.rbtsSettlementTimedOutAt,
         humanVerifiedCommitQuorumMet: humanVerifiedCommitQuorumMet(
           item.humanVerifiedCommitCount,
           item.minVoters,

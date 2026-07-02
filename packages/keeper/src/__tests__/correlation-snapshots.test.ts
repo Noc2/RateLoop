@@ -303,6 +303,7 @@ describe("correlation snapshot publisher", () => {
       roundSnapshotsProposed: 0,
       roundSnapshotsFinalized: 0,
       ratingSnapshotsApplied: 0,
+      rbtsSettlementSnapshotsApplied: 0,
     });
     expect(
       buildConfiguredCorrelationSnapshotArtifactForCandidates,
@@ -766,6 +767,7 @@ describe("correlation snapshot publisher", () => {
       roundSnapshotsProposed: 0,
       roundSnapshotsFinalized: 0,
       ratingSnapshotsApplied: 0,
+      rbtsSettlementSnapshotsApplied: 0,
     });
     expect(secondResult).toEqual(firstResult);
     expect(
@@ -939,6 +941,7 @@ describe("correlation snapshot publisher", () => {
       roundSnapshotsProposed: 1,
       roundSnapshotsFinalized: 0,
       ratingSnapshotsApplied: 0,
+      rbtsSettlementSnapshotsApplied: 0,
     });
     expect(publisher.readContract).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1016,6 +1019,7 @@ describe("correlation snapshot publisher", () => {
       roundSnapshotsProposed: 1,
       roundSnapshotsFinalized: 0,
       ratingSnapshotsApplied: 0,
+      rbtsSettlementSnapshotsApplied: 0,
     });
     expect(publisher.writeContract).toHaveBeenCalledTimes(2);
     expect(publisher.writeContract).toHaveBeenNthCalledWith(
@@ -1049,6 +1053,7 @@ describe("correlation snapshot publisher", () => {
       roundSnapshotsProposed: 0,
       roundSnapshotsFinalized: 0,
       ratingSnapshotsApplied: 0,
+      rbtsSettlementSnapshotsApplied: 0,
     });
     expect(publisher.writeContract).not.toHaveBeenCalled();
     expect(publisher.logger.warn).toHaveBeenCalledWith(
@@ -1081,6 +1086,7 @@ describe("correlation snapshot publisher", () => {
       roundSnapshotsProposed: 0,
       roundSnapshotsFinalized: 1,
       ratingSnapshotsApplied: 0,
+      rbtsSettlementSnapshotsApplied: 0,
     });
     expect(publisher.writeContract).toHaveBeenNthCalledWith(
       1,

@@ -2,12 +2,14 @@ import { readFile } from "node:fs/promises";
 import {
   PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_PUBLIC_RATING,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
   correlationEpochParameterHash,
   correlationParameterHash,
   defaultCorrelationScoringParams,
   merkleProof,
   scoreRoundPayoutWeights,
   scoreRoundRatingWeights,
+  scoreRbtsSettlementWeights,
   type CorrelationInputSnapshotRef,
   type CorrelationScoringParams,
   type CorrelationVoteInput,
@@ -583,6 +585,15 @@ function verifyRoundSnapshot(
             votes: round.eligibleVotes,
             params,
           })
+        : round.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT
+          ? scoreRbtsSettlementWeights({
+              chainId,
+              oracleAddress,
+              contentId: round.contentId,
+              roundId: round.roundId,
+              votes: round.eligibleVotes,
+              params,
+            })
         : scoreRoundPayoutWeights({
             chainId,
             oracleAddress,
@@ -906,13 +917,16 @@ function readRewardPoolId(
   }
   if (
     domain === PAYOUT_DOMAIN_PUBLIC_RATING ||
-    domain === PAYOUT_DOMAIN_LAUNCH_CREDIT
+    domain === PAYOUT_DOMAIN_LAUNCH_CREDIT ||
+    domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT
   ) {
     if (parsed !== 0n) {
       const domainLabel =
         domain === PAYOUT_DOMAIN_PUBLIC_RATING
           ? "public-rating"
-          : "launch-credit";
+          : domain === PAYOUT_DOMAIN_LAUNCH_CREDIT
+            ? "launch-credit"
+            : "rbts-settlement";
       errors.push(`${label} must be 0 for ${domainLabel} snapshots`);
       return null;
     }

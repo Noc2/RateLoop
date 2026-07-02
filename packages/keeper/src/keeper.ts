@@ -305,7 +305,8 @@ function isCleanupEligibleRoundState(state: number): boolean {
   return (
     state === RoundState.Settled ||
     state === RoundState.Tied ||
-    state === RoundState.RevealFailed
+    state === RoundState.RevealFailed ||
+    state === RoundState.SettlementPending
   );
 }
 
@@ -1525,6 +1526,12 @@ export async function resolveRounds(
                 contentId: contentId.toString(),
                 roundId: Number(activeRoundId),
               });
+            } else if (round.state === RoundState.SettlementPending) {
+              logger.info("Round awaiting RBTS settlement snapshot", {
+                contentId: contentId.toString(),
+                roundId: Number(activeRoundId),
+              });
+              enqueueRoundForCleanup(contentId, activeRoundId);
             } else if (
               round.state === RoundState.Settled ||
               round.state === RoundState.Tied

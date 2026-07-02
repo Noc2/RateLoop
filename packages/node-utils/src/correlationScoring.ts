@@ -13,6 +13,7 @@ export const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 export const PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
 export const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 export const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
+export const PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
 export const CORRELATION_VOTE_PAGE_SIZE = 1_000;
 export const MAX_CORRELATION_VOTE_PAGES = 51;
 export const BASE_CORRELATION_VOTE_SCAN_PAGES = 50;
@@ -42,6 +43,9 @@ export function correlationVotesPathForDomain(domain: number): string {
   if (domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD) {
     return "/correlation/bundle-round-votes";
   }
+  if (domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT) {
+    return "/correlation/rbts-settlement-round-votes";
+  }
   return "/correlation/round-votes";
 }
 
@@ -64,6 +68,9 @@ export interface CorrelationScoringParams {
   verifiedFloorBps: number;
   maxClusterSizeWithoutDiscount: number;
   surpriseCapBps: number;
+  surpriseClusterBudgetBps: number;
+  surpriseVerifiedAnchorMinBps: number;
+  surpriseFloodDivergenceBps: number;
   baseWeightFloorBps: number;
   baseWeightBonusBps: number;
   surpriseMinReveals: number;
@@ -189,13 +196,16 @@ export function defaultCorrelationScoringParams(): CorrelationScoringParams {
     verifiedFloorBps: 6_000,
     maxClusterSizeWithoutDiscount: 1,
     surpriseCapBps: 30_000,
+    surpriseClusterBudgetBps: 10_000,
+    surpriseVerifiedAnchorMinBps: 6_000,
+    surpriseFloodDivergenceBps: 2_500,
     baseWeightFloorBps: 5_000,
     baseWeightBonusBps: 5_000,
     surpriseMinReveals: 8,
     baseRateWindowRounds: 100,
     baseRateMinBps: 500,
     baseRateMaxBps: 9_500,
-    scorerVersion: "rateloop-correlation-epoch-v3",
+    scorerVersion: "rateloop-correlation-epoch-v4",
     eligibilitySpecVersion: CORRELATION_ELIGIBILITY_SPEC_VERSION,
     canonicalJsonVersion: CORRELATION_CANONICAL_JSON_VERSION,
     featureSpecVersion: CORRELATION_FEATURE_SPEC_VERSION,
@@ -221,6 +231,9 @@ export function correlationParameterHash(
     scorerVersion: params.scorerVersion,
     surpriseMinReveals: params.surpriseMinReveals,
     surpriseCapBps: params.surpriseCapBps,
+    surpriseClusterBudgetBps: params.surpriseClusterBudgetBps,
+    surpriseVerifiedAnchorMinBps: params.surpriseVerifiedAnchorMinBps,
+    surpriseFloodDivergenceBps: params.surpriseFloodDivergenceBps,
     unverifiedFloorBps: params.unverifiedFloorBps,
     verifiedFloorBps: params.verifiedFloorBps,
   });
@@ -289,28 +302,50 @@ export function scoreRoundPayoutWeights(args: {
   const params = { ...defaultCorrelationScoringParams(), ...args.params };
   validateParams(params);
   const clusters = buildClusters(args.votes);
-  const clusterSizes = new Map<number, number>();
+  const membersByCluster = new Map<number, number[]>();
   for (let index = 0; index < args.votes.length; index++) {
     const root = clusters.find(index);
-    clusterSizes.set(root, (clusterSizes.get(root) ?? 0) + 1);
+    const members = membersByCluster.get(root) ?? [];
+    members.push(index);
+    membersByCluster.set(root, members);
   }
-  const surpriseBpsByVote = surpriseBpsForVotes(
+
+  const independenceBpsByVote = Array<number>(args.votes.length).fill(0);
+  const independenceReasonsByVote = Array<readonly string[]>(args.votes.length).fill([]);
+  for (let index = 0; index < args.votes.length; index++) {
+    const clusterRoot = clusters.find(index);
+    const clusterSize = membersByCluster.get(clusterRoot)?.length ?? 1;
+    const { independenceBps, reasons } = independenceForVote(
+      args.votes[index]!,
+      clusterSize,
+      params,
+    );
+    independenceBpsByVote[index] = independenceBps;
+    independenceReasonsByVote[index] = reasons;
+  }
+
+  const surpriseByVote = surpriseBpsForVotes(
     args.domain,
     args.votes,
     args.trailingBaseRateUpBps,
     params,
+    clusters,
+    independenceBpsByVote,
   );
 
   const leaves = args.votes.map((vote, index) => {
     const clusterRoot = clusters.find(index);
-    const clusterSize = clusterSizes.get(clusterRoot) ?? 1;
     const clusterId = clusterIdFor(args.votes, clusters, clusterRoot);
-    const { independenceBps, reasons } = independenceForVote(
-      vote,
-      clusterSize,
-      params,
-    );
-    const surpriseBps = surpriseBpsByVote[index] ?? NEUTRAL_SURPRISE_BPS;
+    const independenceBps = independenceBpsByVote[index] ?? 0;
+    const surprise = surpriseByVote[index] ?? {
+      surpriseBps: NEUTRAL_SURPRISE_BPS,
+      reasons: [],
+    };
+    const surpriseBps = surprise.surpriseBps;
+    const reasons = [
+      ...(independenceReasonsByVote[index] ?? []),
+      ...surprise.reasons,
+    ];
     const baseWeight = baseWeightForVote(args.domain, surpriseBps, params);
     const effectiveWeight =
       (baseWeight * BigInt(independenceBps)) / BPS_DENOMINATOR;
@@ -458,6 +493,106 @@ export function scoreRoundRatingWeights(args: {
   };
 }
 
+export function scoreRbtsSettlementWeights(args: {
+  chainId: bigint;
+  oracleAddress: Address;
+  contentId: bigint;
+  roundId: bigint;
+  votes: readonly CorrelationVoteInput[];
+  params?: Partial<CorrelationScoringParams>;
+}): RoundPayoutScoringResult {
+  const params = { ...defaultCorrelationScoringParams(), ...args.params };
+  validateParams(params);
+  const clusters = buildClusters(args.votes);
+  const membersByCluster = new Map<number, number[]>();
+  for (let index = 0; index < args.votes.length; index++) {
+    const root = clusters.find(index);
+    const members = membersByCluster.get(root) ?? [];
+    members.push(index);
+    membersByCluster.set(root, members);
+  }
+
+  const baseWeightByVote = args.votes.map((vote, index) =>
+    rbtsSettlementBaseWeightForVote(vote, index),
+  );
+  const effectiveWeightByVote = Array<bigint>(args.votes.length).fill(0n);
+  const independenceBpsByVote = Array<number>(args.votes.length).fill(0);
+  const reasonsByVote = Array<readonly string[]>(args.votes.length).fill([]);
+
+  for (const [, memberIndexes] of membersByCluster.entries()) {
+    let clusterBaseWeight = 0n;
+    let clusterBudget = 0n;
+    for (const index of memberIndexes) {
+      const baseWeight = baseWeightByVote[index] ?? 0n;
+      clusterBaseWeight += baseWeight;
+      if (baseWeight > clusterBudget) clusterBudget = baseWeight;
+    }
+
+    for (const index of memberIndexes) {
+      const baseWeight = baseWeightByVote[index] ?? 0n;
+      const effectiveWeight =
+        clusterBaseWeight > 0n
+          ? (baseWeight * clusterBudget) / clusterBaseWeight
+          : 0n;
+      const independenceBps =
+        baseWeight > 0n
+          ? Number((effectiveWeight * BPS_DENOMINATOR) / baseWeight)
+          : 0;
+      effectiveWeightByVote[index] = effectiveWeight;
+      independenceBpsByVote[index] = Math.min(10_000, independenceBps);
+      reasonsByVote[index] = [
+        `rbts_settlement_domain=true`,
+        `cluster_size=${memberIndexes.length}`,
+        `cluster_base_weight=${clusterBaseWeight}`,
+        `cluster_effective_cap=${clusterBudget}`,
+      ];
+    }
+  }
+
+  const leaves = args.votes.map((vote, index) => {
+    const clusterRoot = clusters.find(index);
+    const clusterId = clusterIdFor(args.votes, clusters, clusterRoot);
+    const reasons = reasonsByVote[index] ?? [];
+    const payout: PayoutWeightLeafInput = {
+      domain: PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+      rewardPoolId: 0n,
+      contentId: args.contentId,
+      roundId: args.roundId,
+      commitKey: vote.commitKey,
+      identityKey: vote.identityKey,
+      account: vote.account,
+      baseWeight: baseWeightByVote[index] ?? 0n,
+      independenceBps: independenceBpsByVote[index] ?? 0,
+      effectiveWeight: effectiveWeightByVote[index] ?? 0n,
+      reasonHash: keccak256(toBytes(reasons.join("|"))),
+    };
+    return {
+      ...payout,
+      clusterId,
+      verifiedHuman: vote.verifiedHuman,
+      surpriseBps: NEUTRAL_SURPRISE_BPS,
+      leaf: payoutWeightLeaf(args.chainId, args.oracleAddress, payout),
+      reasons,
+    };
+  });
+
+  return {
+    rawEligibleVoters: leaves.length,
+    effectiveParticipantUnits: leaves.reduce(
+      (sum, leaf) => sum + leaf.independenceBps,
+      0,
+    ),
+    totalClaimWeight: leaves.reduce(
+      (sum, leaf) => sum + leaf.effectiveWeight,
+      0n,
+    ),
+    weightRoot: merkleRoot(leaves.map((leaf) => leaf.leaf)),
+    reasonRoot: merkleRoot(leaves.map((leaf) => leaf.reasonHash)),
+    leaves,
+    parameterHash: correlationParameterHash(params),
+  };
+}
+
 export function payoutWeightLeaf(
   chainId: bigint,
   oracleAddress: Address,
@@ -555,19 +690,30 @@ function buildClusters(votes: readonly CorrelationVoteInput[]): DisjointSet {
  * launch-credit domain requires flat weights and stays neutral. All math is
  * integer bps with floor division, mirroring the normative spec exactly.
  */
+type SurpriseScore = {
+  surpriseBps: number;
+  reasons: readonly string[];
+};
+
 function surpriseBpsForVotes(
   domain: number,
   votes: readonly CorrelationVoteInput[],
   trailingBaseRateUpBps: number | null | undefined,
   params: CorrelationScoringParams,
-): number[] {
+  clusters: DisjointSet,
+  independenceBpsByVote: readonly number[],
+): SurpriseScore[] {
+  const neutral = (reason: string): SurpriseScore => ({
+    surpriseBps: NEUTRAL_SURPRISE_BPS,
+    reasons: [`surprise_neutral_reason=${reason}`],
+  });
   if (
     !isSurpriseWeightedBountyDomain(domain) ||
     trailingBaseRateUpBps === null ||
     trailingBaseRateUpBps === undefined ||
     !Number.isSafeInteger(trailingBaseRateUpBps)
   ) {
-    return votes.map(() => NEUTRAL_SURPRISE_BPS);
+    return votes.map(() => neutral("unsupported_or_missing_base_rate"));
   }
   const baseRateUpBps = BigInt(
     Math.min(
@@ -586,25 +732,156 @@ function surpriseBpsForVotes(
     if (vote.isUp) upWeight += vote.revealWeight;
   }
   if (surpriseRevealCount < params.surpriseMinReveals) {
-    return votes.map(() => NEUTRAL_SURPRISE_BPS);
+    return votes.map(() => neutral("below_min_reveals"));
   }
 
-  return votes.map((vote) => {
-    if (!hasSurpriseInputs(vote)) return NEUTRAL_SURPRISE_BPS;
+  const sideStats = buildSurpriseSideStats(
+    votes,
+    independenceBpsByVote,
+    totalWeight,
+    upWeight,
+    Number(baseRateUpBps),
+    params,
+  );
+  const rawScores = votes.map((vote, index) => {
+    if (!hasSurpriseInputs(vote)) return neutral("missing_vote_inputs");
     const otherWeight = totalWeight - vote.revealWeight;
-    if (otherWeight <= 0n) return NEUTRAL_SURPRISE_BPS;
+    if (otherWeight <= 0n) return neutral("no_other_weight");
     const sideWeight = vote.isUp ? upWeight : totalWeight - upWeight;
     const agreementBps =
       ((sideWeight - vote.revealWeight) * BPS_DENOMINATOR) / otherWeight;
     const baseRateBps = vote.isUp
       ? baseRateUpBps
       : BPS_DENOMINATOR - baseRateUpBps;
-    const surpriseBps = (agreementBps * BPS_DENOMINATOR) / baseRateBps;
+    const rawSurpriseBps = (agreementBps * BPS_DENOMINATOR) / baseRateBps;
     const cap = BigInt(params.surpriseCapBps);
-    if (surpriseBps < BigInt(NEUTRAL_SURPRISE_BPS)) return NEUTRAL_SURPRISE_BPS;
-    if (surpriseBps > cap) return params.surpriseCapBps;
-    return Number(surpriseBps);
+    const cappedSurpriseBps =
+      rawSurpriseBps < BigInt(NEUTRAL_SURPRISE_BPS)
+        ? BigInt(NEUTRAL_SURPRISE_BPS)
+        : rawSurpriseBps > cap
+          ? cap
+          : rawSurpriseBps;
+    const rawBonusBps = Number(cappedSurpriseBps - BigInt(NEUTRAL_SURPRISE_BPS));
+    const independenceBps = independenceBpsByVote[index] ?? 0;
+    const sideKey = vote.isUp ? "up" : "down";
+    const side = sideStats.get(sideKey) ?? {
+      shareBps: 0,
+      baseRateBps: 0,
+      anchorBps: 10_000,
+      anchorShareBps: 10_000,
+    };
+    const independenceScaledBonusBps = Math.floor((rawBonusBps * independenceBps) / 10_000);
+    const anchoredBonusBps = Math.floor((independenceScaledBonusBps * side.anchorBps) / 10_000);
+    return {
+      surpriseBps: NEUTRAL_SURPRISE_BPS + anchoredBonusBps,
+      reasons: [
+        `surprise_raw_bps=${rawSurpriseBps}`,
+        `surprise_capped_bps=${cappedSurpriseBps}`,
+        `surprise_independence_scaled_bonus_bps=${independenceScaledBonusBps}`,
+        `surprise_side=${sideKey}`,
+        `surprise_side_share_bps=${side.shareBps}`,
+        `surprise_side_base_rate_bps=${side.baseRateBps}`,
+        `surprise_anchor_share_bps=${side.anchorShareBps}`,
+        `surprise_anchor_bps=${side.anchorBps}`,
+      ],
+    };
   });
+
+  return applySurpriseClusterBudgets(votes, clusters, rawScores, params);
+}
+
+function buildSurpriseSideStats(
+  votes: readonly CorrelationVoteInput[],
+  independenceBpsByVote: readonly number[],
+  totalWeight: bigint,
+  upWeight: bigint,
+  baseRateUpBps: number,
+  params: CorrelationScoringParams,
+) {
+  const stats = new Map<
+    "up" | "down",
+    { shareBps: number; baseRateBps: number; anchorBps: number; anchorShareBps: number }
+  >();
+  for (const side of [true, false] as const) {
+    const sideWeight = side ? upWeight : totalWeight - upWeight;
+    const sideKey = side ? "up" : "down";
+    const shareBps = totalWeight > 0n ? Number((sideWeight * BPS_DENOMINATOR) / totalWeight) : 0;
+    const baseRateBps = side ? baseRateUpBps : 10_000 - baseRateUpBps;
+    let anchorWeight = 0n;
+    for (let index = 0; index < votes.length; index++) {
+      const vote = votes[index]!;
+      if (!hasSurpriseInputs(vote) || vote.isUp !== side) continue;
+      const independenceBps = independenceBpsByVote[index] ?? 0;
+      if (vote.verifiedHuman || independenceBps >= params.verifiedFloorBps) {
+        anchorWeight += vote.revealWeight;
+      }
+    }
+    const anchorShareBps = sideWeight > 0n ? Number((anchorWeight * BPS_DENOMINATOR) / sideWeight) : 10_000;
+    const divergenceBps = Math.max(0, shareBps - baseRateBps);
+    const anchorBps =
+      divergenceBps > params.surpriseFloodDivergenceBps
+        ? Math.min(10_000, Math.floor((anchorShareBps * 10_000) / params.surpriseVerifiedAnchorMinBps))
+        : 10_000;
+    stats.set(sideKey, { shareBps, baseRateBps, anchorBps, anchorShareBps });
+  }
+  return stats;
+}
+
+function applySurpriseClusterBudgets(
+  votes: readonly CorrelationVoteInput[],
+  clusters: DisjointSet,
+  rawScores: readonly SurpriseScore[],
+  params: CorrelationScoringParams,
+): SurpriseScore[] {
+  const maxBonusBps = BigInt(params.surpriseCapBps - NEUTRAL_SURPRISE_BPS);
+  if (maxBonusBps <= 0n) return [...rawScores];
+
+  const indexesByClusterSide = new Map<string, number[]>();
+  for (let index = 0; index < votes.length; index++) {
+    const vote = votes[index]!;
+    if (!hasSurpriseInputs(vote)) continue;
+    const side = vote.isUp ? "up" : "down";
+    const key = `${clusters.find(index)}:${side}`;
+    const indexes = indexesByClusterSide.get(key) ?? [];
+    indexes.push(index);
+    indexesByClusterSide.set(key, indexes);
+  }
+
+  const adjusted = rawScores.map((score) => ({
+    surpriseBps: score.surpriseBps,
+    reasons: [...score.reasons],
+  }));
+  for (const indexes of indexesByClusterSide.values()) {
+    let weightedBonus = 0n;
+    let maxRevealWeight = 0n;
+    for (const index of indexes) {
+      const vote = votes[index]!;
+      const revealWeight = typeof vote.revealWeight === "bigint" ? vote.revealWeight : 0n;
+      const bonusBps = BigInt(
+        Math.max(0, (rawScores[index]?.surpriseBps ?? NEUTRAL_SURPRISE_BPS) - NEUTRAL_SURPRISE_BPS),
+      );
+      weightedBonus += revealWeight * bonusBps;
+      if (revealWeight > maxRevealWeight) maxRevealWeight = revealWeight;
+    }
+    const budget =
+      (maxRevealWeight * maxBonusBps * BigInt(params.surpriseClusterBudgetBps)) / BPS_DENOMINATOR;
+    const budgetBps =
+      weightedBonus > 0n && weightedBonus > budget
+        ? Number((budget * BPS_DENOMINATOR) / weightedBonus)
+        : 10_000;
+
+    for (const index of indexes) {
+      const score = adjusted[index]!;
+      const bonusBps = Math.max(0, score.surpriseBps - NEUTRAL_SURPRISE_BPS);
+      const finalBonusBps = Math.floor((bonusBps * budgetBps) / 10_000);
+      score.surpriseBps = NEUTRAL_SURPRISE_BPS + finalBonusBps;
+      score.reasons.push(
+        `surprise_cluster_size=${indexes.length}`,
+        `surprise_cluster_budget_bps=${budgetBps}`,
+      );
+    }
+  }
+  return adjusted;
 }
 
 function hasSurpriseInputs(
@@ -663,6 +940,18 @@ function ratingEvidenceForVote(
     RATING_EVIDENCE_STAKE_BONUS_CAP;
   const rawEvidence = RATING_EVIDENCE_BASE_UNIT + stakeBonus;
   return epochIndex === 0 ? rawEvidence : rawEvidence / 4n;
+}
+
+function rbtsSettlementBaseWeightForVote(
+  vote: CorrelationVoteInput,
+  index: number,
+): bigint {
+  if (typeof vote.revealWeight !== "bigint" || vote.revealWeight <= 0n) {
+    throw new Error(
+      `RBTS settlement vote ${index} requires a positive revealWeight.`,
+    );
+  }
+  return vote.revealWeight;
 }
 
 function minBigInt(left: bigint, right: bigint): bigint {
@@ -773,6 +1062,12 @@ function validateParams(params: CorrelationScoringParams): void {
     params.verifiedFloorBps > 10_000 ||
     params.maxClusterSizeWithoutDiscount <= 0 ||
     params.surpriseCapBps < NEUTRAL_SURPRISE_BPS ||
+    params.surpriseClusterBudgetBps <= 0 ||
+    params.surpriseClusterBudgetBps > 10_000 ||
+    params.surpriseVerifiedAnchorMinBps <= 0 ||
+    params.surpriseVerifiedAnchorMinBps > 10_000 ||
+    params.surpriseFloodDivergenceBps < 0 ||
+    params.surpriseFloodDivergenceBps > 10_000 ||
     params.baseWeightFloorBps < 0 ||
     params.baseWeightBonusBps < 0 ||
     params.surpriseMinReveals <= 0 ||
