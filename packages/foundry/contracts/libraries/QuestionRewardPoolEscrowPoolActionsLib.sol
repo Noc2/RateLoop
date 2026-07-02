@@ -25,6 +25,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
     uint256 internal constant BPS_SCALE = 10_000;
+    uint256 internal constant CLAIM_GRACE = 7 days;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
@@ -134,14 +135,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         RoundVotingEngine votingEngine,
         IERC20 lrepToken,
         IERC20 usdcToken,
-        uint256 rewardPoolId,
-        uint256 claimGrace
+        uint256 rewardPoolId
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
         _requireNoPendingRecoveredRounds(rewardPool);
         _requireNoPendingPreQualificationRejectedRounds(rewardPool);
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) {
-            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace);
+            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
         }
 
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
@@ -185,14 +185,12 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 rewardPoolId,
-        uint256[] calldata roundIds,
-        uint256 claimGrace,
-        uint8 payoutDomain
+        uint256[] calldata roundIds
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
         bool completeRecoveredExit = uint256(rewardPool.qualifiedRounds) + uint256(rewardPool.pendingRecoveredRounds)
                 >= uint256(rewardPool.requiredSettledRounds) || rewardPool.unallocatedRefunded;
-        _requireRecoveredRefundGrace(rewardPool, claimGrace);
+        _requireRecoveredRefundGrace(rewardPool, CLAIM_GRACE);
         _abandonRecoveredRounds(
             rewardPool,
             roundSnapshots,
@@ -203,12 +201,12 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             votingEngine,
             rewardPoolId,
             roundIds,
-            claimGrace,
-            payoutDomain
+            CLAIM_GRACE,
+            PAYOUT_DOMAIN_QUESTION_REWARD
         );
         if (completeRecoveredExit) {
             rewardPool.unallocatedAmount = 0;
-            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace);
+            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
         }
 
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
@@ -232,9 +230,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 rewardPoolId,
-        uint256[] calldata roundIds,
-        uint256 claimGrace,
-        uint8 payoutDomain
+        uint256[] calldata roundIds
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
         require(!registry.isContentActive(rewardPool.contentId), "Content active");
@@ -249,8 +245,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             votingEngine,
             rewardPoolId,
             roundIds,
-            claimGrace,
-            payoutDomain
+            CLAIM_GRACE,
+            PAYOUT_DOMAIN_QUESTION_REWARD
         );
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
             votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
@@ -260,47 +256,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         );
     }
 
-    function refundExpiredPreQualificationRejectedRewardPool(
-        mapping(uint256 => RewardPool) storage rewardPools,
-        mapping(uint256 => mapping(uint256 => bool)) storage preQualificationRejectedRound,
-        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
-        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
-        RoundVotingEngine votingEngine,
-        IERC20 lrepToken,
-        IERC20 usdcToken,
-        uint256 rewardPoolId,
-        uint256[] calldata roundIds,
-        uint256 claimGrace,
-        uint8 payoutDomain
-    ) external returns (uint256 refundAmount) {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
-        _requireNoPendingRecoveredRounds(rewardPool);
-        _abandonPreQualificationRejectedRounds(
-            rewardPool,
-            preQualificationRejectedRound,
-            rewardPoolClusterPayoutOracle,
-            rewardPoolClusterPayoutOraclePinnedAt,
-            votingEngine,
-            rewardPoolId,
-            roundIds,
-            payoutDomain
-        );
-        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) {
-            return _refundCompleteRewardPool(
-                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace
-            );
-        }
-
-        QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
-            votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
-        );
-        (bool expired, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.rewardPoolExpired(rewardPool);
-        require(expired, "Not expired");
-        return
-            _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, bountyClosesAt);
-    }
-
-    function refundInactivePreQualificationRejectedRewardPool(
+    function refundPreQualificationRejectedRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => mapping(uint256 => bool)) storage preQualificationRejectedRound,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
@@ -311,12 +267,14 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         IERC20 usdcToken,
         uint256 rewardPoolId,
         uint256[] calldata roundIds,
-        uint8 payoutDomain
+        bool inactive
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
         _requireNoPendingRecoveredRounds(rewardPool);
-        require(!registry.isContentActive(rewardPool.contentId), "Content active");
-        require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
+        if (inactive) {
+            require(!registry.isContentActive(rewardPool.contentId), "Content active");
+            require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
+        }
         _abandonPreQualificationRejectedRounds(
             rewardPool,
             preQualificationRejectedRound,
@@ -325,11 +283,24 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             votingEngine,
             rewardPoolId,
             roundIds,
-            payoutDomain
+            PAYOUT_DOMAIN_QUESTION_REWARD
         );
+        if (!inactive && (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded)) {
+            return _refundCompleteRewardPool(
+                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE
+            );
+        }
+
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
             votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
         );
+        if (!inactive) {
+            (bool expired, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.rewardPoolExpired(rewardPool);
+            require(expired, "Not expired");
+            return _refundUnallocatedRewardPool(
+                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, bountyClosesAt
+            );
+        }
         return _refundUnallocatedRewardPool(
             votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, rewardPool.bountyClosesAt
         );

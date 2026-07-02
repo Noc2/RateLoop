@@ -4103,7 +4103,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
         uint256 refundAmount =
-            rewardPoolEscrow.refundExpiredPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId));
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
 
         assertGt(refundAmount, 0);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
@@ -4148,7 +4148,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
         uint256 refundAmount =
-            rewardPoolEscrow.refundExpiredPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId));
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
 
         assertGt(refundAmount, 0);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
@@ -4181,7 +4181,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
         uint256 refundAmount =
-            rewardPoolEscrow.refundInactivePreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId));
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), true);
 
         assertGt(refundAmount, 0);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
@@ -4283,7 +4283,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(
             QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedReplacementSnapshotAvailable.selector
         );
-        rewardPoolEscrow.refundExpiredPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId));
+        rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
@@ -5479,7 +5479,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(skippedSnapshot.qualified);
 
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
-        uint256 refund = rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+        vm.expectRevert(QuestionRewardPoolEscrowPoolActionsLib.PreQualificationRejectedRoundPending.selector);
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+        uint256 refund =
+            rewardPoolEscrow.refundPreQualificationRejectedRewardPool(rewardPoolId, _singleRoundIds(roundId), false);
         assertEq(refund, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refund);
 

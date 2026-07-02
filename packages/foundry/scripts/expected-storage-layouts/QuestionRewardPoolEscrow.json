@@ -921,6 +921,12 @@
           "offset": 0,
           "label": "pendingRecoveredRounds",
           "type": "t_uint32"
+        },
+        {
+          "slot": 15,
+          "offset": 4,
+          "label": "pendingPreQualificationRejectedRounds",
+          "type": "t_uint32"
         }
       ]
     },

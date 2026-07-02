@@ -1170,7 +1170,7 @@ contract QuestionRewardPoolEscrow is
 
     function refundExpiredRewardPool(uint256 rewardPoolId) external nonReentrant returns (uint256 refundAmount) {
         return QuestionRewardPoolEscrowPoolActionsLib.refundExpiredRewardPool(
-            rewardPools, votingEngine, lrepToken, usdcToken, rewardPoolId, BUNDLE_CLAIM_GRACE
+            rewardPools, votingEngine, lrepToken, usdcToken, rewardPoolId
         );
     }
 
@@ -1196,9 +1196,7 @@ contract QuestionRewardPoolEscrow is
             lrepToken,
             usdcToken,
             rewardPoolId,
-            roundIds,
-            BUNDLE_CLAIM_GRACE,
-            PAYOUT_DOMAIN_QUESTION_REWARD
+            roundIds
         );
     }
 
@@ -1219,38 +1217,20 @@ contract QuestionRewardPoolEscrow is
             lrepToken,
             usdcToken,
             rewardPoolId,
-            roundIds,
-            BUNDLE_CLAIM_GRACE,
-            PAYOUT_DOMAIN_QUESTION_REWARD
+            roundIds
         );
     }
 
-    function refundExpiredPreQualificationRejectedRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds)
+    function refundPreQualificationRejectedRewardPool(
+        uint256 rewardPoolId,
+        uint256[] calldata roundIds,
+        bool inactive
+    )
         external
         nonReentrant
         returns (uint256 refundAmount)
     {
-        return QuestionRewardPoolEscrowPoolActionsLib.refundExpiredPreQualificationRejectedRewardPool(
-            rewardPools,
-            preQualificationRejectedRound,
-            rewardPoolClusterPayoutOracle,
-            rewardPoolClusterPayoutOraclePinnedAt,
-            votingEngine,
-            lrepToken,
-            usdcToken,
-            rewardPoolId,
-            roundIds,
-            BUNDLE_CLAIM_GRACE,
-            PAYOUT_DOMAIN_QUESTION_REWARD
-        );
-    }
-
-    function refundInactivePreQualificationRejectedRewardPool(uint256 rewardPoolId, uint256[] calldata roundIds)
-        external
-        nonReentrant
-        returns (uint256 refundAmount)
-    {
-        return QuestionRewardPoolEscrowPoolActionsLib.refundInactivePreQualificationRejectedRewardPool(
+        return QuestionRewardPoolEscrowPoolActionsLib.refundPreQualificationRejectedRewardPool(
             rewardPools,
             preQualificationRejectedRound,
             rewardPoolClusterPayoutOracle,
@@ -1261,7 +1241,7 @@ contract QuestionRewardPoolEscrow is
             usdcToken,
             rewardPoolId,
             roundIds,
-            PAYOUT_DOMAIN_QUESTION_REWARD
+            inactive
         );
     }
 
@@ -1511,7 +1491,7 @@ contract QuestionRewardPoolEscrow is
             if (reopened) {
                 _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
             } else if (preQualificationSkipped) {
-                _finishPreQualificationRejectedRoundQualification(rewardPoolId, roundId);
+                _finishPreQualificationRejectedRoundQualification(rewardPool, rewardPoolId, roundId);
             }
             return;
         }
@@ -1536,7 +1516,7 @@ contract QuestionRewardPoolEscrow is
         if (reopened) {
             _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
         } else if (preQualificationSkipped) {
-            _finishPreQualificationRejectedRoundQualification(rewardPoolId, roundId);
+            _finishPreQualificationRejectedRoundQualification(rewardPool, rewardPoolId, roundId);
         }
 
         emit RewardPoolRoundQualified(
@@ -1662,8 +1642,11 @@ contract QuestionRewardPoolEscrow is
         rejectedRecoveredRound[rewardPoolId][roundId] = false;
     }
 
-    function _finishPreQualificationRejectedRoundQualification(uint256 rewardPoolId, uint256 roundId) private {
-        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+    function _finishPreQualificationRejectedRoundQualification(
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId
+    ) private {
         require(rewardPool.pendingPreQualificationRejectedRounds > 0, "Prequalification round pending");
         unchecked {
             rewardPool.pendingPreQualificationRejectedRounds -= 1;
