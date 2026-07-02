@@ -1289,9 +1289,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         directions = [true, true, true, true, true, true, true, true];
     }
 
-    function _revealedSetHash(bytes32[8] memory commitKeys) internal pure returns (bytes32 hash) {
+    function _revealedSetHash(uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys)
+        internal
+        view
+        returns (bytes32 hash)
+    {
         for (uint256 i = 0; i < commitKeys.length; i++) {
-            hash = keccak256(abi.encodePacked(hash, commitKeys[i]));
+            bytes32 drawKey = _commitIdentityKey(engine, contentId, roundId, commitKeys[i]);
+            if (drawKey == bytes32(0)) {
+                RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKeys[i]);
+                drawKey = VotePreflightLib.addressIdentityKey(commit.voter);
+            }
+            hash = keccak256(abi.encode(hash, commitKeys[i], drawKey));
         }
     }
 
@@ -1894,7 +1903,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_RbtsSeedPastNativeWindowWithoutHistoryDoesNotSettleScoreless() public {
+    function test_RbtsSeedPastNativeWindowSettlesWithStableClosureEntropy() public {
         (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
             _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
@@ -1902,20 +1911,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
-        _expectFullWeightRbtsSettlementSnapshotRevert(contentId, roundId, RoundVotingEngine.RevealGraceActive.selector);
-        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.SettlementPending));
-        assertFalse(_roundRbtsScored(engine, contentId, roundId), "missing history does not finalize RBTS accounting");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "no sampler seed without history");
-        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "no RBTS rewards without settlement");
-        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "no RBTS forfeits without settlement");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "ck1 stake remains pending");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[1]), 0, "ck2 stake remains pending");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[2]), 0, "ck3 stake remains pending");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[3]), 0, "ck4 stake remains pending");
+        _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stable closure entropy finalizes RBTS accounting");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "stable entropy produces sampler seed");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "ck1 stake accounted");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[1]), 0, "ck2 stake accounted");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[2]), 0, "ck3 stake accounted");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[3]), 0, "ck4 stake accounted");
     }
 
-    function test_RbtsSeedPastNativeWindowUsesEip2935History() public {
+    function test_RbtsSeedPastNativeWindowIgnoresEip2935History() public {
         (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         uint256 seedBlock = block.number;
@@ -1926,8 +1933,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _applyFullWeightRbtsSettlementSnapshot(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "history finalizes RBTS accounting");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "history produces sampler seed");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "stable entropy finalizes RBTS accounting");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "stable entropy produces sampler seed");
     }
 
     function test_RbtsExpiredSeedRearmsBeforeSettlement() public {
@@ -2210,7 +2217,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(_roundRbtsScored(engine, contentId, roundId), "expired seed refreshes without scoring");
         assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "expired seed does not score");
 
-        bytes32 revealedSetHash = _revealedSetHash(commitKeys);
+        bytes32 revealedSetHash = _revealedSetHash(contentId, roundId, commitKeys);
         bytes32 fallbackScoreSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(8), revealedSetHash, settlementPrevrandao
@@ -2236,7 +2243,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes32 settlementEntropy = _rbtsEntropyFromLogs(logs, contentId, roundId);
 
-        bytes32 revealedSetHash = _revealedSetHash(commitKeys);
+        bytes32 revealedSetHash = _revealedSetHash(contentId, roundId, commitKeys);
         bytes32 expectedSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(8), revealedSetHash, settlementEntropy
@@ -2275,7 +2282,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes32 capturedEntropy = _rbtsEntropyFromLogs(logs, contentId, roundId);
 
-        bytes32 revealedSetHash = _revealedSetHash(commitKeys);
+        bytes32 revealedSetHash = _revealedSetHash(contentId, roundId, commitKeys);
         bytes32 expectedSeed = keccak256(
             abi.encode(block.chainid, address(engine), contentId, roundId, uint256(8), revealedSetHash, capturedEntropy)
         );

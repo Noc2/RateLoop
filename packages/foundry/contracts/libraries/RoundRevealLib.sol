@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Blockhash } from "@openzeppelin/contracts/utils/Blockhash.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { RobustBtsMath } from "./RobustBtsMath.sol";
@@ -197,7 +196,8 @@ library RoundRevealLib {
             bytes32 commitKey = commitKeys[i];
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
             if (revealedCommit.revealed && commitRbtsWeight[commitKey] > 0) {
-                scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, commitKey));
+                bytes32 drawKey = _rbtsDrawKey(roundCommits, commitIdentityKey, commitKey);
+                scoringSetHash = keccak256(abi.encode(scoringSetHash, commitKey, drawKey));
                 revealedKeysMem[revealedBuildIdx] = commitKey;
                 unchecked {
                     ++revealedBuildIdx;
@@ -309,17 +309,17 @@ library RoundRevealLib {
             _refreshRbtsSeedBlock(roundRbtsSeedEntropy, contentId, roundId, seedWord);
             return (bytes32(0), false);
         }
-        bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
-        if (seedBlockhash == bytes32(0)) revert RevealGraceActive();
+        uint64 originalBlock = uint64(seedWord >> RBTS_SEED_ORIGINAL_BLOCK_SHIFT);
+        uint48 capturedAt = uint48(seedWord >> RBTS_SEED_TIMESTAMP_SHIFT);
         settlementEntropy = keccak256(
             abi.encode(
-                "rateloop.rbts.delayed-seed.v1",
+                "rateloop.rbts.revealed-set-seed.v1",
                 block.chainid,
                 address(this),
                 contentId,
                 roundId,
-                seedBlock,
-                seedBlockhash
+                originalBlock,
+                capturedAt
             )
         );
         emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
