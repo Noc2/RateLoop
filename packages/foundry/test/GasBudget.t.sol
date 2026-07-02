@@ -149,6 +149,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         _commitAllThenReveal(voters, contentId, directions, STAKE);
         uint256 roundId = _getActiveOrLatestRoundId(contentId);
 
+        _installAndAssertRoundIntegrationClusterPayoutOracle();
         vm.roll(block.number + 1);
         gasUsed =
             _measureCall(address(votingEngine), abi.encodeCall(RoundVotingEngine.settleRound, (contentId, roundId)));
@@ -316,6 +317,7 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         uint256 maxEpochEnd = uint256(round.startTime) + 5 minutes;
         vm.warp(maxEpochEnd + config.revealGracePeriod() + 1);
+        _installAndAssertRoundIntegrationClusterPayoutOracle();
         vm.roll(block.number + 1);
 
         uint256 gasUsed =
@@ -349,7 +351,9 @@ contract GasBudgetTest is RoundIntegrationTest {
             _lastCommitRevealableAfter(votingEngine, contentId, roundId)
                 + ProtocolConfig(address(votingEngine.protocolConfig())).revealGracePeriod() + 1
         );
-        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+        _installAndAssertRoundIntegrationClusterPayoutOracle();
+        vm.roll(block.number + 1);
+        votingEngine.settleRound(contentId, roundId);
 
         uint256 gasUsed = _measureCall(
             address(votingEngine), abi.encodeCall(RoundVotingEngine.processUnrevealedVotes, (contentId, roundId, 0, 10))

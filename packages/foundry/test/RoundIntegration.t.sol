@@ -278,6 +278,12 @@ contract RoundIntegrationTest is VotingTestBase {
         ProtocolConfig(protocolConfig).setClusterPayoutOracle(address(clusterPayoutOracle));
     }
 
+    function _installAndAssertRoundIntegrationClusterPayoutOracle() internal {
+        _installRoundIntegrationClusterPayoutOracle();
+        address oracle = ProtocolConfig(address(votingEngine.protocolConfig())).clusterPayoutOracle();
+        assertTrue(oracle != address(0), "cluster payout oracle not configured");
+    }
+
     function _assertPublicRatingSourceReadyForPinnedOracle(uint256 contentId, uint256 roundId) internal {
         assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
         address oracle = ProtocolConfig(address(votingEngine.protocolConfig())).clusterPayoutOracle();
