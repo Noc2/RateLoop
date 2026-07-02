@@ -68,7 +68,7 @@ import {
 } from "./contract-reads.js";
 import { config } from "./config.js";
 import type { Logger } from "./logger.js";
-import { incrementCounter, setGauge } from "./metrics.js";
+import { incrementCounter, recordCorrelationFinalitySlaMetrics, setGauge } from "./metrics.js";
 import { buildPonderUrl } from "./ponder-url.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
@@ -782,6 +782,7 @@ function inspectKeeperWorkHealth(payload: unknown, logger: Logger): void {
   if (!payload || typeof payload !== "object") return;
   const health = (payload as Record<string, unknown>).health;
   if (!health || typeof health !== "object") return;
+  recordCorrelationFinalitySlaMetrics((health as Record<string, unknown>).correlationFinality);
   const humanVerifiedCommitCount = (health as Record<string, unknown>).humanVerifiedCommitCount;
   if (!humanVerifiedCommitCount || typeof humanVerifiedCommitCount !== "object") return;
 

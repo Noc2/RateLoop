@@ -8,6 +8,7 @@ import {
   getHealthSnapshot,
   incrementCounter,
   getMetricsText,
+  recordCorrelationFinalitySlaMetrics,
   setHealthThreshold,
   setGauge,
   setWalletBalanceWei,
@@ -172,6 +173,31 @@ describe("metrics", () => {
       revealGraceSecondsRemainingMin: 120,
       settlementBacklogOldestSeconds: -1,
     });
+  });
+
+  it("records and clears correlation finality backlog gauges", () => {
+    recordCorrelationFinalitySlaMetrics({
+      phases: [
+        { domain: 1, phase: "source_ready_unproposed", oldestAgeSeconds: 120 },
+        { domain: "correlation_epoch", phase: "challenge_window", oldestAgeSeconds: 240 },
+        { domain: "correlation_epoch", phase: "finalization_veto", oldestAgeSeconds: 300 },
+        { domain: 5, phase: "finalization_veto", oldestAgeSeconds: 360 },
+        { domain: 3, phase: "ready_for_consumer", oldestAgeSeconds: 480 },
+      ],
+    });
+
+    let metricsBody = getMetricsText();
+    expect(metricsBody).toContain("keeper_correlation_source_ready_backlog_oldest_seconds 120");
+    expect(metricsBody).toContain("keeper_correlation_epoch_finalization_backlog_oldest_seconds 300");
+    expect(metricsBody).toContain("keeper_round_payout_finalization_backlog_oldest_seconds 360");
+    expect(metricsBody).toContain("keeper_round_payout_apply_backlog_oldest_seconds 480");
+
+    recordCorrelationFinalitySlaMetrics({ phases: [] });
+    metricsBody = getMetricsText();
+    expect(metricsBody).toContain("keeper_correlation_source_ready_backlog_oldest_seconds -1");
+    expect(metricsBody).toContain("keeper_correlation_epoch_finalization_backlog_oldest_seconds -1");
+    expect(metricsBody).toContain("keeper_round_payout_finalization_backlog_oldest_seconds -1");
+    expect(metricsBody).toContain("keeper_round_payout_apply_backlog_oldest_seconds -1");
   });
 
   it("reports -1 for the grace gauge when no round is at risk", () => {

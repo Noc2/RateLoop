@@ -109,6 +109,57 @@ export interface CorrelationSnapshotMetricsResult {
   rbtsSettlementSnapshotsApplied: number;
 }
 
+const CORRELATION_BACKLOG_GAUGES = [
+  "keeper_correlation_source_ready_backlog_oldest_seconds",
+  "keeper_correlation_epoch_finalization_backlog_oldest_seconds",
+  "keeper_round_payout_finalization_backlog_oldest_seconds",
+  "keeper_round_payout_apply_backlog_oldest_seconds",
+] as const;
+
+function readPhaseAgeSeconds(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function setMaxGauge(name: (typeof CORRELATION_BACKLOG_GAUGES)[number], value: number) {
+  gauges[name] = Math.max(gauges[name], value);
+}
+
+export function recordCorrelationFinalitySlaMetrics(payload: unknown) {
+  for (const gauge of CORRELATION_BACKLOG_GAUGES) {
+    gauges[gauge] = -1;
+  }
+  if (!payload || typeof payload !== "object") return;
+  const phases = (payload as Record<string, unknown>).phases;
+  if (!Array.isArray(phases)) return;
+
+  for (const phase of phases) {
+    if (!phase || typeof phase !== "object") continue;
+    const record = phase as Record<string, unknown>;
+    const phaseName = typeof record.phase === "string" ? record.phase : "";
+    const age = readPhaseAgeSeconds(record.oldestAgeSeconds);
+    if (age === null) continue;
+
+    if (phaseName === "source_ready_unproposed") {
+      setMaxGauge("keeper_correlation_source_ready_backlog_oldest_seconds", age);
+      continue;
+    }
+
+    if (record.domain === "correlation_epoch") {
+      if (phaseName === "challenge_window" || phaseName === "disputed" || phaseName === "finalization_veto") {
+        setMaxGauge("keeper_correlation_epoch_finalization_backlog_oldest_seconds", age);
+      }
+      continue;
+    }
+
+    if (phaseName === "challenge_window" || phaseName === "disputed" || phaseName === "finalization_veto") {
+      setMaxGauge("keeper_round_payout_finalization_backlog_oldest_seconds", age);
+    } else if (phaseName === "ready_for_consumer") {
+      setMaxGauge("keeper_round_payout_apply_backlog_oldest_seconds", age);
+    }
+  }
+}
+
 export function recordCorrelationSnapshotResult(result: CorrelationSnapshotMetricsResult) {
   incrementCounter("keeper_correlation_epoch_proposed_total", result.epochsProposed);
   incrementCounter("keeper_correlation_epoch_finalized_total", result.epochsFinalized);
@@ -260,9 +311,9 @@ function renderMetrics(): string {
     keeper_correlation_source_ready_backlog_oldest_seconds:
       "Age in seconds of the oldest source-ready correlation source without a round payout proposal (-1 = none)",
     keeper_correlation_epoch_finalization_backlog_oldest_seconds:
-      "Age in seconds of the oldest proposed correlation epoch not finalized yet (-1 = none)",
+      "Age in seconds of the oldest correlation epoch still in challenge, dispute, or finalization veto (-1 = none)",
     keeper_round_payout_finalization_backlog_oldest_seconds:
-      "Age in seconds of the oldest proposed round payout snapshot not finalized yet (-1 = none)",
+      "Age in seconds of the oldest round payout snapshot still in challenge, dispute, or finalization veto (-1 = none)",
     keeper_round_payout_apply_backlog_oldest_seconds:
       "Age in seconds of the oldest finalized round payout snapshot past veto but not consumed/applied (-1 = none)",
   };

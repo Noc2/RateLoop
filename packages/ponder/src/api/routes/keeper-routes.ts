@@ -18,6 +18,7 @@ import {
   roundPayoutSnapshot,
   vote,
 } from "ponder:schema";
+import { buildCorrelationFinalitySla } from "../correlation-finality-sla.js";
 import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
@@ -352,12 +353,15 @@ export function registerKeeperRoutes(app: ApiApp) {
       )
       .limit(limit);
 
+    const correlationFinality = await buildCorrelationFinalitySla(now);
+
     return jsonBig(c, {
       now,
       limit,
       source: "ponder",
       health: {
         humanVerifiedCommitCount,
+        correlationFinality,
       },
       roundOpenRequests,
       openRounds,
