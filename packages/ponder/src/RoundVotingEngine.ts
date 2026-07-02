@@ -1,6 +1,11 @@
 import { ponder } from "ponder:registry";
 import { asc, eq, and } from "ponder";
-import { encodePacked, isAddress, keccak256, zeroAddress } from "viem";
+import {
+  encodePacked,
+  isAddress,
+  keccak256,
+  zeroAddress,
+} from "viem";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { buildCommitKey } from "@rateloop/contracts/votingCore";
 import {
@@ -29,6 +34,10 @@ import {
 import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bonus-deadlines.js";
 import { tryContractRead } from "./contract-read.js";
 import { addressIdentityKey } from "@rateloop/node-utils/identityKeys";
+import {
+  loadCorrelationBanStateAt,
+  snapshotCorrelationInputForAccount,
+} from "./correlation-input-snapshot.js";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
@@ -1221,6 +1230,8 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
 ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
   const { contentId, roundId, upWins, losingPool } = event.args;
   const roundKey = `${contentId}-${roundId}`;
+  const settledLogIndex = Number(event.log?.logIndex ?? 0);
+  const settledTxHash = event.transaction?.hash ?? ZERO_BYTES32;
 
   const existingRound = await context.db.find(round, { id: roundKey });
   if (existingRound) {
@@ -1229,6 +1240,9 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       upWins,
       losingPool,
       settledAt: event.block.timestamp,
+      settledBlockNumber: event.block.number,
+      settledTxHash,
+      settledLogIndex,
     });
   } else {
     await context.db.insert(round).values({
@@ -1255,6 +1269,9 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       upWins,
       losingPool,
       settledAt: event.block.timestamp,
+      settledBlockNumber: event.block.number,
+      settledTxHash,
+      settledLogIndex,
       ...defaultRoundConfigFields(),
     });
   }
@@ -1316,8 +1333,47 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
   );
 
   const categoryId = contentRecord?.categoryId ?? 0n;
+  const banState = await loadCorrelationBanStateAt(
+    context,
+    event.block.timestamp,
+  );
+  const preSettlementStatsByIdentity = new Map<string, any | null>();
+  const loadPreSettlementVoterStats = async (identityHolder: `0x${string}`) => {
+    const key = identityHolder.toLowerCase();
+    if (!preSettlementStatsByIdentity.has(key)) {
+      preSettlementStatsByIdentity.set(
+        key,
+        await context.db.find(voterStats, { voter: identityHolder }),
+      );
+    }
+    return preSettlementStatsByIdentity.get(key) ?? null;
+  };
 
   for (const v of roundVotes) {
+    const identityHolder = voteIdentity(v);
+    const existingVoterStats =
+      await loadPreSettlementVoterStats(identityHolder);
+    const correlationSnapshot = await snapshotCorrelationInputForAccount({
+      account: identityHolder,
+      banState,
+      context,
+      historicalVotes: existingVoterStats?.totalSettledVotes ?? 0,
+      identityKey: v.identityKey,
+      timestamp: event.block.timestamp,
+      voter: v.voter,
+    });
+    await context.db.update(vote, { id: v.id }).set({
+      correlationVerifiedHuman: correlationSnapshot.verifiedHuman,
+      correlationHistoricalVoteCount:
+        correlationSnapshot.historicalVoteCount,
+      correlationCredentialProvider: correlationSnapshot.credentialProvider,
+      correlationCredentialNullifierHash:
+        correlationSnapshot.credentialNullifierHash,
+      correlationCredentialVerifiedAt: correlationSnapshot.credentialVerifiedAt,
+      correlationCredentialExpiresAt: correlationSnapshot.credentialExpiresAt,
+      correlationBanReasons: JSON.stringify(correlationSnapshot.banReasons),
+    });
+
     if (v.isUp === null) continue; // skip unrevealed
     const won = rbtsRound ? (v.rbtsRewardWeight ?? 0n) > 0n : v.isUp === upWins;
     const stakeWon = rbtsRound
@@ -1348,15 +1404,10 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
     // left untouched. Legacy (non-RBTS) rounds keep the binary outcome.
     const lost = rbtsRound ? !won && stakeLost > 0n : !won;
 
-    const identityHolder = voteIdentity(v);
-
     // globalStats.totalVoterIds counts distinct voter identities with at
     // least one settled vote. A voterStats row is created exactly once per
     // identity (here, on its first settled vote), so increment when the row
     // does not exist yet.
-    const existingVoterStats = await context.db.find(voterStats, {
-      voter: identityHolder,
-    });
     if (!existingVoterStats) {
       await context.db
         .insert(globalStats)

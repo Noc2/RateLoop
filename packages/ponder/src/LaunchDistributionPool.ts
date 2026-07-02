@@ -7,6 +7,10 @@ import {
   profile,
   rewardClaim,
 } from "ponder:schema";
+import {
+  loadCorrelationBanStateAt,
+  snapshotCorrelationInputForAccount,
+} from "./correlation-input-snapshot.js";
 
 const CURRENT_LAUNCH_REWARD_POLICY_ID = "current";
 
@@ -84,6 +88,44 @@ async function creditLaunchReward(
     .onConflictDoUpdate((row: any) => ({
       totalRewardsClaimed: row.totalRewardsClaimed + amount,
     }));
+}
+
+async function buildLaunchCreditCorrelationFields(args: {
+  context: any;
+  event: {
+    block: { number: bigint; timestamp: bigint };
+    transaction: { hash: `0x${string}` };
+    log?: { logIndex?: number | bigint | null } | null;
+  };
+  rater: `0x${string}`;
+}) {
+  const banState = await loadCorrelationBanStateAt(
+    args.context,
+    args.event.block.timestamp,
+  );
+  const snapshot = await snapshotCorrelationInputForAccount({
+    account: args.rater,
+    banState,
+    context: args.context,
+    identityKey: null,
+    includeLaunchIdentityBan: true,
+    timestamp: args.event.block.timestamp,
+    voter: args.rater,
+  });
+
+  return {
+    sourceBlockNumber: args.event.block.number,
+    sourceTxHash: args.event.transaction.hash,
+    sourceLogIndex: Number(args.event.log?.logIndex ?? 0),
+    sourceTimestamp: args.event.block.timestamp,
+    correlationVerifiedHuman: snapshot.verifiedHuman,
+    correlationHistoricalVoteCount: snapshot.historicalVoteCount,
+    correlationCredentialProvider: snapshot.credentialProvider,
+    correlationCredentialNullifierHash: snapshot.credentialNullifierHash,
+    correlationCredentialVerifiedAt: snapshot.credentialVerifiedAt,
+    correlationCredentialExpiresAt: snapshot.credentialExpiresAt,
+    correlationBanReasons: JSON.stringify(snapshot.banReasons),
+  };
 }
 
 ponder.on(
@@ -343,6 +385,11 @@ ponder.on(
   "LaunchDistributionPool:EarnedRaterRewardCreditPending",
   async ({ event, context }) => {
     const { rater, contentId, roundId, commitKey, scoreBps } = event.args;
+    const correlationFields = await buildLaunchCreditCorrelationFields({
+      context,
+      event,
+      rater,
+    });
 
     await context.db
       .insert(launchEarnedRaterCredit)
@@ -359,6 +406,7 @@ ponder.on(
         effectiveCreditBps: null,
         qualifyingCreditBps: null,
         recordedAt: event.block.timestamp,
+        ...correlationFields,
         finalizedAt: null,
         cancelledAt: null,
         updatedAt: event.block.timestamp,
@@ -375,6 +423,7 @@ ponder.on(
         effectiveCreditBps: null,
         qualifyingCreditBps: null,
         recordedAt: event.block.timestamp,
+        ...correlationFields,
         finalizedAt: null,
         cancelledAt: null,
         updatedAt: event.block.timestamp,
@@ -511,6 +560,11 @@ ponder.on(
   "LaunchDistributionPool:StalePendingEarnedRaterCreditRescued",
   async ({ event, context }) => {
     const { rater, contentId, roundId, commitKey } = event.args;
+    const correlationFields = await buildLaunchCreditCorrelationFields({
+      context,
+      event,
+      rater,
+    });
 
     await context.db
       .insert(launchEarnedRaterCredit)
@@ -527,11 +581,12 @@ ponder.on(
         effectiveCreditBps: null,
         qualifyingCreditBps: null,
         recordedAt: event.block.timestamp,
+        ...correlationFields,
         finalizedAt: null,
         cancelledAt: null,
         updatedAt: event.block.timestamp,
       })
-      .onConflictDoUpdate({
+      .onConflictDoUpdate((row: any) => ({
         rater,
         contentId,
         roundId,
@@ -540,8 +595,33 @@ ponder.on(
         finalized: false,
         cancelled: false,
         cancelledAt: null,
+        sourceBlockNumber:
+          row.sourceBlockNumber ?? correlationFields.sourceBlockNumber,
+        sourceTxHash: row.sourceTxHash ?? correlationFields.sourceTxHash,
+        sourceLogIndex: row.sourceLogIndex ?? correlationFields.sourceLogIndex,
+        sourceTimestamp: row.sourceTimestamp ?? correlationFields.sourceTimestamp,
+        correlationVerifiedHuman:
+          row.correlationVerifiedHuman ??
+          correlationFields.correlationVerifiedHuman,
+        correlationHistoricalVoteCount:
+          row.correlationHistoricalVoteCount ??
+          correlationFields.correlationHistoricalVoteCount,
+        correlationCredentialProvider:
+          row.correlationCredentialProvider ??
+          correlationFields.correlationCredentialProvider,
+        correlationCredentialNullifierHash:
+          row.correlationCredentialNullifierHash ??
+          correlationFields.correlationCredentialNullifierHash,
+        correlationCredentialVerifiedAt:
+          row.correlationCredentialVerifiedAt ??
+          correlationFields.correlationCredentialVerifiedAt,
+        correlationCredentialExpiresAt:
+          row.correlationCredentialExpiresAt ??
+          correlationFields.correlationCredentialExpiresAt,
+        correlationBanReasons:
+          row.correlationBanReasons ?? correlationFields.correlationBanReasons,
         updatedAt: event.block.timestamp,
-      });
+      }));
   },
 );
 

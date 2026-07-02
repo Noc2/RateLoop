@@ -10,7 +10,7 @@ import {
   PAYOUT_DOMAIN_QUESTION_REWARD,
 } from "@rateloop/node-utils/correlationScoring";
 import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
-import { and, asc, desc, eq, inArray, or, sql } from "ponder";
+import { and, asc, desc, eq, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
   content,
@@ -22,10 +22,7 @@ import {
   questionRewardPool,
   round,
   roundPayoutSnapshot,
-  raterHumanCredential,
-  raterIdentityBan,
   vote,
-  voterStats,
 } from "ponder:schema";
 import type { ApiApp } from "../shared.js";
 import {
@@ -40,7 +37,6 @@ import {
   isCorrelationVoteScanTruncated,
 } from "../correlation-vote-scan.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
-import { addressIdentityKey } from "@rateloop/node-utils/identityKeys";
 
 const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_FINALIZED = 3;
@@ -80,17 +76,6 @@ function normalizeString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function credentialIdentityKey(provider: number, nullifierHash: `0x${string}`) {
-  if (provider === HUMAN_CREDENTIAL_PROVIDER_NONE || nullifierHash === zeroHash)
-    return zeroHash;
-  return keccak256(
-    encodeAbiParameters(
-      [{ type: "string" }, { type: "uint8" }, { type: "bytes32" }],
-      ["rateloop.human-identity-v1", provider, nullifierHash],
-    ),
-  );
-}
-
 function launchHumanIdentityKey(
   provider: number,
   nullifierHash: `0x${string}`,
@@ -116,145 +101,118 @@ function launchHumanIdentityKey(
   );
 }
 
-function identityBanSourceKey(provider: number, nullifierHash: `0x${string}`) {
-  return `${provider}:${nullifierHash.toLowerCase()}`;
-}
-
-type ActiveCorrelationIdentityBanState = {
-  addressIdentityKeys: Set<string>;
-  identityKeys: Set<string>;
-  launchIdentityKeys: Set<string>;
+type InputSnapshotSource = {
+  sourceBlockNumber: bigint | null;
+  sourceTxHash: `0x${string}` | null;
+  sourceLogIndex: number | null;
+  sourceTimestamp: bigint | null;
 };
 
-type CorrelationIdentityBanSource = {
-  provider: number;
-  nullifierHash: `0x${string}`;
-};
-
-async function loadActiveCorrelationIdentityBanState(
-  nowSeconds: bigint,
-): Promise<ActiveCorrelationIdentityBanState> {
-  const activeBans = await db
-    .select({
-      provider: raterIdentityBan.provider,
-      nullifierHash: raterIdentityBan.nullifierHash,
-    })
-    .from(raterIdentityBan)
-    .where(
-      and(
-        eq(raterIdentityBan.active, true),
-        or(
-          eq(raterIdentityBan.permanent, true),
-          sql`${raterIdentityBan.expiresAt} > ${nowSeconds}`,
-        ),
-      ),
-    );
-
-  const identityKeys = new Set<string>();
-  const launchIdentityKeys = new Set<string>();
-  const sourceKeys = new Set<string>();
-  const nullifierHashes: `0x${string}`[] = [];
-  const seenNullifierHashes = new Set<string>();
-  for (const ban of activeBans) {
-    const nullifierHash = normalizeHex32(ban.nullifierHash);
-    if (nullifierHash === null) continue;
-    const provider = Number(ban.provider);
-    const identityKey = credentialIdentityKey(provider, nullifierHash);
-    if (identityKey !== zeroHash) identityKeys.add(identityKey.toLowerCase());
-    const launchIdentityKey = launchHumanIdentityKey(provider, nullifierHash);
-    if (launchIdentityKey !== zeroHash)
-      launchIdentityKeys.add(launchIdentityKey.toLowerCase());
-    sourceKeys.add(identityBanSourceKey(provider, nullifierHash));
-    if (!seenNullifierHashes.has(nullifierHash)) {
-      seenNullifierHashes.add(nullifierHash);
-      nullifierHashes.push(nullifierHash);
-    }
+function parseStoredBanReasons(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed
+          .filter((reason): reason is string => typeof reason === "string")
+          .sort()
+      : [];
+  } catch {
+    return [];
   }
-
-  const addressIdentityKeys = new Set<string>();
-  if (nullifierHashes.length > 0) {
-    const credentialRows = await db
-      .select({
-        rater: raterHumanCredential.rater,
-        provider: raterHumanCredential.provider,
-        nullifierHash: raterHumanCredential.nullifierHash,
-      })
-      .from(raterHumanCredential)
-      .where(inArray(raterHumanCredential.nullifierHash, nullifierHashes));
-
-    for (const credential of credentialRows) {
-      const nullifierHash = normalizeHex32(credential.nullifierHash);
-      if (nullifierHash === null) continue;
-      if (
-        !sourceKeys.has(
-          identityBanSourceKey(Number(credential.provider), nullifierHash),
-        )
-      )
-        continue;
-      addressIdentityKeys.add(
-        addressIdentityKey(credential.rater).toLowerCase(),
-      );
-    }
-  }
-
-  return { addressIdentityKeys, identityKeys, launchIdentityKeys };
 }
 
-function collectLaunchIdentityBanSources(
-  credits: readonly LaunchCreditRow[],
-  anchors: readonly LaunchAnchorVoteRow[],
-) {
-  const sources: CorrelationIdentityBanSource[] = [];
-  const seen = new Set<string>();
-  const addSource = (
-    provider: number | null | undefined,
-    value: `0x${string}` | null | undefined,
-  ) => {
-    if (provider === null || provider === undefined) return;
-    const nullifierHash = normalizeHex32(value);
-    if (nullifierHash === null || nullifierHash === zeroHash) return;
-    const key = identityBanSourceKey(provider, nullifierHash);
-    if (seen.has(key)) return;
-    seen.add(key);
-    sources.push({ provider, nullifierHash });
-  };
-
-  for (const credit of credits) {
-    addSource(credit.raterCredentialProvider, credit.raterCredentialNullifierHash);
-  }
-  for (const anchor of anchors) {
-    addSource(anchor.provider, anchor.nullifierHash);
-  }
-
-  return sources;
-}
-
-async function loadLatestRelevantIdentityBanUpdatedAt(
-  sources: readonly CorrelationIdentityBanSource[],
-  updatedAfter: bigint,
-) {
-  if (sources.length === 0) return null;
-  const sourcePredicates = sources.map((source) =>
-    and(
-      eq(raterIdentityBan.provider, source.provider),
-      eq(raterIdentityBan.nullifierHash, source.nullifierHash),
-    ),
+function hasPinnedVoteSnapshot(row: {
+  banReasons: string | null;
+  historicalVoteCount: number | null;
+  verifiedHuman: boolean | null;
+}) {
+  return (
+    (row.verifiedHuman === true || row.verifiedHuman === false) &&
+    row.historicalVoteCount !== null &&
+    Number.isSafeInteger(row.historicalVoteCount) &&
+    row.historicalVoteCount >= 0 &&
+    typeof row.banReasons === "string"
   );
-  const [latestBan] = await db
-    .select({ updatedAt: raterIdentityBan.updatedAt })
-    .from(raterIdentityBan)
-    .where(
-      and(
-        sql`${raterIdentityBan.updatedAt} > ${updatedAfter}`,
-        sourcePredicates.length === 1
-          ? sourcePredicates[0]!
-          : or(...sourcePredicates),
-      ),
-    )
-    .orderBy(desc(raterIdentityBan.updatedAt))
-    .limit(1);
+}
 
-  return latestBan?.updatedAt ?? null;
+function hasPinnedLaunchCreditSnapshot(row: LaunchCreditRow) {
+  return hasPinnedVoteSnapshot({
+    banReasons: row.banReasons,
+    historicalVoteCount: row.historicalVoteCount,
+    verifiedHuman: row.verifiedHuman,
+  });
+}
+
+function hasPinnedLaunchAnchorSnapshot(row: LaunchAnchorVoteRow) {
+  return hasPinnedVoteSnapshot({
+    banReasons: row.banReasons,
+    historicalVoteCount: row.historicalVoteCount,
+    verifiedHuman: row.verifiedHuman,
+  });
+}
+
+function missingInputSnapshotResponse(c: any) {
+  return c.json(
+    {
+      error:
+        "Correlation input snapshot fields are missing; rebuild Ponder from the redeployed contracts before publishing the artifact.",
+      reason: "correlation_input_snapshot_missing",
+    },
+    409,
+  );
+}
+
+function latestInputSnapshotSource(
+  sources: readonly InputSnapshotSource[],
+): InputSnapshotSource | null {
+  const complete = sources.filter(
+    (source) =>
+      source.sourceBlockNumber !== null &&
+      source.sourceTxHash !== null &&
+      source.sourceLogIndex !== null &&
+      source.sourceTimestamp !== null,
+  );
+  if (complete.length === 0) return null;
+  return complete.reduce((latest, source) => {
+    if (source.sourceBlockNumber! > latest.sourceBlockNumber!) return source;
+    if (
+      source.sourceBlockNumber === latest.sourceBlockNumber &&
+      source.sourceLogIndex! > latest.sourceLogIndex!
+    ) {
+      return source;
+    }
+    return latest;
+  });
+}
+
+function buildInputSnapshotRef(args: {
+  contentId: bigint;
+  domain: number;
+  rewardPoolId: bigint;
+  roundId: bigint;
+  source: InputSnapshotSource | null;
+}) {
+  const source = args.source;
+  if (
+    source?.sourceBlockNumber === null ||
+    source?.sourceBlockNumber === undefined ||
+    source.sourceTxHash === null ||
+    source.sourceLogIndex === null ||
+    source.sourceTimestamp === null
+  ) {
+    return null;
+  }
+  return {
+    domain: args.domain,
+    rewardPoolId: args.rewardPoolId.toString(),
+    contentId: args.contentId.toString(),
+    roundId: args.roundId.toString(),
+    sourceBlockNumber: source.sourceBlockNumber.toString(),
+    sourceLogIndex: source.sourceLogIndex,
+    sourceTimestamp: source.sourceTimestamp.toString(),
+    sourceTransactionHash: source.sourceTxHash,
+  };
 }
 
 function questionMetadataRef(
@@ -274,20 +232,31 @@ function questionMetadataRef(
   };
 }
 
-async function getRoundContext(contentId: bigint, roundId: bigint) {
+async function getRoundContext(args: {
+  contentId: bigint;
+  domain: number;
+  inputSnapshotSource?: InputSnapshotSource | null;
+  rewardPoolId: bigint;
+  roundId: bigint;
+  snapshotContentId?: bigint;
+  snapshotRoundId?: bigint;
+}) {
   const [requestedRound] = await db
     .select({
       questionMetadataHash: content.questionMetadataHash,
       questionMetadataUri: content.questionMetadataUri,
       resultSpecHash: content.resultSpecHash,
       settledAt: round.settledAt,
+      settledBlockNumber: round.settledBlockNumber,
+      settledTxHash: round.settledTxHash,
+      settledLogIndex: round.settledLogIndex,
     })
     .from(round)
     .innerJoin(content, eq(content.id, round.contentId))
     .where(
       and(
-        eq(round.contentId, contentId),
-        eq(round.roundId, roundId),
+        eq(round.contentId, args.contentId),
+        eq(round.roundId, args.roundId),
         eq(round.state, ROUND_STATE.Settled),
       ),
     )
@@ -310,7 +279,7 @@ async function getRoundContext(contentId: bigint, roundId: bigint) {
       and(
         eq(round.state, ROUND_STATE.Settled),
         sql`${round.settledAt} is not null`,
-        sql`(${round.settledAt}, ${round.contentId}, ${round.roundId}) < (${settledAt}, ${contentId}, ${roundId})`,
+        sql`(${round.settledAt}, ${round.contentId}, ${round.roundId}) < (${settledAt}, ${args.contentId}, ${args.roundId})`,
       ),
     )
     .orderBy(desc(round.settledAt), desc(round.contentId), desc(round.roundId))
@@ -334,10 +303,25 @@ async function getRoundContext(contentId: bigint, roundId: bigint) {
     );
   }
 
+  const inputSnapshot = buildInputSnapshotRef({
+    contentId: args.snapshotContentId ?? args.contentId,
+    domain: args.domain,
+    rewardPoolId: args.rewardPoolId,
+    roundId: args.snapshotRoundId ?? args.roundId,
+    source:
+      args.inputSnapshotSource ?? {
+        sourceBlockNumber: requestedRound.settledBlockNumber,
+        sourceTxHash: normalizeHex32(requestedRound.settledTxHash),
+        sourceLogIndex: requestedRound.settledLogIndex,
+        sourceTimestamp: requestedRound.settledAt,
+      },
+  });
+
   return {
     trailingBaseRateUpBps,
     baseRateWindowRounds: BASE_RATE_WINDOW_ROUNDS,
     questionMetadataRef: questionMetadataRef(requestedRound),
+    ...(inputSnapshot ? { inputSnapshot } : {}),
     settledRoundsInWindow: windowRounds.length,
   };
 }
@@ -360,6 +344,7 @@ function optionalNonNegativeNumberParam(
 function formatCorrelationVoteRow(
   row: {
     account: `0x${string}` | null;
+    banReasons: string | null;
     voter: `0x${string}`;
     identityKey: `0x${string}` | null;
     commitKey: `0x${string}`;
@@ -368,30 +353,13 @@ function formatCorrelationVoteRow(
     epochIndex: number;
     revealWeight: bigint | null;
     baseWeight: bigint;
-    verifiedHuman: boolean;
-    historicalVoteCount: number;
+    verifiedHuman: boolean | null;
+    historicalVoteCount: number | null;
   },
-  banState?: ActiveCorrelationIdentityBanState,
 ) {
   const account = row.account ?? row.voter;
   const identityKey = row.identityKey ?? zeroHash;
-  const excludedReasons: string[] = [];
-  if (banState?.identityKeys.has(identityKey.toLowerCase())) {
-    excludedReasons.push("identity_banned");
-  }
-  if (
-    banState?.addressIdentityKeys.has(
-      addressIdentityKey(row.voter).toLowerCase(),
-    )
-  ) {
-    excludedReasons.push("voter_address_banned");
-  }
-  if (
-    account.toLowerCase() !== row.voter.toLowerCase() &&
-    banState?.addressIdentityKeys.has(addressIdentityKey(account).toLowerCase())
-  ) {
-    excludedReasons.push("holder_address_banned");
-  }
+  const excludedReasons = parseStoredBanReasons(row.banReasons);
 
   if (excludedReasons.length > 0) {
     return {
@@ -418,8 +386,8 @@ function formatCorrelationVoteRow(
     epochIndex: row.epochIndex,
     revealWeight: row.revealWeight ?? null,
     baseWeight: row.baseWeight,
-    verifiedHuman: row.verifiedHuman,
-    historicalVoteCount: row.historicalVoteCount,
+    verifiedHuman: row.verifiedHuman === true,
+    historicalVoteCount: row.historicalVoteCount ?? 0,
     payoutEligible: true,
     features: [
       row.identityKey ? `identity:${row.identityKey.toLowerCase()}` : null,
@@ -436,46 +404,33 @@ type LaunchCreditRow = {
   rater: `0x${string}`;
   commitKey: `0x${string}`;
   recordedAt: bigint;
-  historicalVoteCount: number;
-  raterVerified: boolean | null;
-  raterRevoked: boolean | null;
-  raterCredentialProvider: number | null;
-  raterCredentialNullifierHash: `0x${string}` | null;
-  raterCredentialExpiresAt: bigint | null;
-  raterCredentialUpdatedAt: bigint | null;
+  sourceBlockNumber: bigint | null;
+  sourceTxHash: `0x${string}` | null;
+  sourceLogIndex: number | null;
+  sourceTimestamp: bigint | null;
+  historicalVoteCount: number | null;
+  verifiedHuman: boolean | null;
+  credentialProvider: number | null;
+  credentialNullifierHash: `0x${string}` | null;
+  credentialVerifiedAt: bigint | null;
+  credentialExpiresAt: bigint | null;
+  banReasons: string | null;
 };
 
 type LaunchAnchorVoteRow = {
   account: `0x${string}` | null;
   voter: `0x${string}`;
-  provider: number | null;
-  nullifierHash: `0x${string}` | null;
-  verified: boolean | null;
-  revoked: boolean | null;
-  verifiedAt: bigint | null;
-  expiresAt: bigint | null;
-  credentialUpdatedAt: bigint | null;
+  historicalVoteCount: number | null;
+  verifiedHuman: boolean | null;
+  credentialProvider: number | null;
+  credentialNullifierHash: `0x${string}` | null;
+  credentialVerifiedAt: bigint | null;
+  credentialExpiresAt: bigint | null;
+  banReasons: string | null;
 };
 
-function isActiveRoundHumanCredential(
-  credential: {
-    verified: boolean | null;
-    revoked: boolean | null;
-    expiresAt: bigint | null;
-  },
-  roundStartTime: bigint,
-) {
-  return (
-    credential.verified === true &&
-    credential.revoked !== true &&
-    credential.expiresAt !== null &&
-    credential.expiresAt > roundStartTime
-  );
-}
-
-function collectCurrentLaunchAnchorFeatures(args: {
+function collectPinnedLaunchAnchorFeatures(args: {
   anchorRows: readonly LaunchAnchorVoteRow[];
-  banState: ActiveCorrelationIdentityBanState;
   minAnchorCredentialAgeSeconds: number;
   rewardRecipient: `0x${string}`;
   roundStartTime: bigint;
@@ -494,34 +449,36 @@ function collectCurrentLaunchAnchorFeatures(args: {
       normalizedAccount === submitterIdentity
     )
       continue;
+    const banReasons = parseStoredBanReasons(row.banReasons);
     if (
-      !isActiveRoundHumanCredential(
-        {
-          verified: row.verified,
-          revoked: row.revoked,
-          expiresAt: row.expiresAt,
-        },
-        args.roundStartTime,
-      ) ||
-      row.verifiedAt === null ||
-      row.provider === null
-    ) {
-      continue;
-    }
-    const nullifierHash = normalizeHex32(row.nullifierHash);
-    if (nullifierHash === null || nullifierHash === zeroHash) continue;
-    if (row.verifiedAt + minCredentialAge > args.roundStartTime) continue;
-
-    const anchorId = launchHumanIdentityKey(row.provider, nullifierHash);
-    if (anchorId === zeroHash) continue;
-    if (args.banState.launchIdentityKeys.has(anchorId.toLowerCase())) continue;
-    if (
-      args.banState.addressIdentityKeys.has(
-        addressIdentityKey(account).toLowerCase(),
+      banReasons.some((reason) =>
+        [
+          "holder_address_banned",
+          "identity_banned",
+          "launch_identity_banned",
+          "voter_address_banned",
+        ].includes(reason),
       )
     ) {
       continue;
     }
+    if (
+      row.verifiedHuman !== true ||
+      row.credentialVerifiedAt === null ||
+      row.credentialProvider === null
+    ) {
+      continue;
+    }
+    const nullifierHash = normalizeHex32(row.credentialNullifierHash);
+    if (nullifierHash === null || nullifierHash === zeroHash) continue;
+    if (row.credentialVerifiedAt + minCredentialAge > args.roundStartTime)
+      continue;
+
+    const anchorId = launchHumanIdentityKey(
+      row.credentialProvider,
+      nullifierHash,
+    );
+    if (anchorId === zeroHash) continue;
     const normalizedAnchorId = anchorId.toLowerCase();
     if (seenAnchors.has(normalizedAnchorId)) continue;
     seenAnchors.add(normalizedAnchorId);
@@ -532,19 +489,16 @@ function collectCurrentLaunchAnchorFeatures(args: {
 
 function formatLaunchCreditRow(args: {
   anchorFeatures: readonly string[];
-  banState: ActiveCorrelationIdentityBanState;
   credit: LaunchCreditRow;
   minVerifiedHumans: number;
   roundStartTime: bigint;
 }) {
-  const excludedReasons: string[] = [];
-  if (
-    args.banState.addressIdentityKeys.has(
-      addressIdentityKey(args.credit.rater).toLowerCase(),
-    )
-  ) {
-    excludedReasons.push("rater_address_banned");
-  }
+  const excludedReasons = parseStoredBanReasons(args.credit.banReasons).map(
+    (reason) =>
+      reason === "voter_address_banned" || reason === "holder_address_banned"
+        ? "rater_address_banned"
+        : reason,
+  );
   if (args.anchorFeatures.length < args.minVerifiedHumans) {
     excludedReasons.push("launch_anchor_threshold");
   }
@@ -576,15 +530,8 @@ function formatLaunchCreditRow(args: {
       epochIndex: null,
       revealWeight: null,
       baseWeight: 10_000n,
-      verifiedHuman: isActiveRoundHumanCredential(
-        {
-          verified: args.credit.raterVerified,
-          revoked: args.credit.raterRevoked,
-          expiresAt: args.credit.raterCredentialExpiresAt,
-        },
-        args.roundStartTime,
-      ),
-      historicalVoteCount: args.credit.historicalVoteCount,
+      verifiedHuman: args.credit.verifiedHuman === true,
+      historicalVoteCount: args.credit.historicalVoteCount ?? 0,
       payoutEligible: true,
       features: args.anchorFeatures,
     },
@@ -858,8 +805,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
-    if (nowSeconds === null) {
+    if (resolveApiNowSeconds(c.req.query("now")) === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
 
@@ -875,8 +821,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
           epochIndex: vote.epochIndex,
           revealWeight: vote.rbtsWeight,
           baseWeight: sql<bigint>`10000`,
-          verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
-          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+          verifiedHuman: vote.correlationVerifiedHuman,
+          historicalVoteCount: vote.correlationHistoricalVoteCount,
+          banReasons: vote.correlationBanReasons,
         })
         .from(vote)
         .innerJoin(
@@ -894,19 +841,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
           ),
         )
         .innerJoin(content, eq(content.id, vote.contentId))
-        .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
-        .leftJoin(
-          raterHumanCredential,
-          and(
-            eq(raterHumanCredential.rater, vote.identityHolder),
-            eq(raterHumanCredential.verified, true),
-            eq(raterHumanCredential.revoked, false),
-            sql`(
-              ${raterHumanCredential.expiresAt} = 0
-              or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
-            )`,
-          ),
-        )
         .where(
           and(
             eq(vote.contentId, contentId),
@@ -945,7 +879,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
               and(
                 sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN}) != 0`,
                 sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG}) = 0`,
-                sql`${raterHumanCredential.rater} is not null`,
+                eq(vote.correlationVerifiedHuman, true),
               ),
             ),
           ),
@@ -965,15 +899,14 @@ export function registerCorrelationRoutes(app: ApiApp) {
     let eligibleSeen = 0;
     let scanOffset = 0;
     let endedNaturally = false;
-    let banState: ActiveCorrelationIdentityBanState | null = null;
     const scanPageBudget = correlationVoteScanPageBudget(offset);
     for (let page = 0; page < scanPageBudget; page += 1) {
       const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
-      if (banState === null && rows.length > 0) {
-        banState = await loadActiveCorrelationIdentityBanState(nowSeconds);
+      if (rows.some((row) => !hasPinnedVoteSnapshot(row))) {
+        return missingInputSnapshotResponse(c);
       }
       for (const row of rows) {
-        const formatted = formatCorrelationVoteRow(row, banState ?? undefined);
+        const formatted = formatCorrelationVoteRow(row);
         if (formatted.excludedVote) {
           excludedVotes.push(formatted.excludedVote);
           continue;
@@ -1001,7 +934,12 @@ export function registerCorrelationRoutes(app: ApiApp) {
       offset,
     });
 
-    const roundContext = await getRoundContext(contentId, roundId);
+    const roundContext = await getRoundContext({
+      contentId,
+      domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+      rewardPoolId,
+      roundId,
+    });
 
     return jsonBig(c, {
       excludedVotes,
@@ -1024,8 +962,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
-    if (nowSeconds === null) {
+    if (resolveApiNowSeconds(c.req.query("now")) === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
 
@@ -1084,23 +1021,24 @@ export function registerCorrelationRoutes(app: ApiApp) {
           rater: launchEarnedRaterCredit.rater,
           commitKey: launchEarnedRaterCredit.commitKey,
           recordedAt: launchEarnedRaterCredit.recordedAt,
-          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
-          raterVerified: raterHumanCredential.verified,
-          raterRevoked: raterHumanCredential.revoked,
-          raterCredentialProvider: raterHumanCredential.provider,
-          raterCredentialNullifierHash: raterHumanCredential.nullifierHash,
-          raterCredentialExpiresAt: raterHumanCredential.expiresAt,
-          raterCredentialUpdatedAt: raterHumanCredential.updatedAt,
+          sourceBlockNumber: launchEarnedRaterCredit.sourceBlockNumber,
+          sourceTxHash: launchEarnedRaterCredit.sourceTxHash,
+          sourceLogIndex: launchEarnedRaterCredit.sourceLogIndex,
+          sourceTimestamp: launchEarnedRaterCredit.sourceTimestamp,
+          historicalVoteCount:
+            launchEarnedRaterCredit.correlationHistoricalVoteCount,
+          verifiedHuman: launchEarnedRaterCredit.correlationVerifiedHuman,
+          credentialProvider:
+            launchEarnedRaterCredit.correlationCredentialProvider,
+          credentialNullifierHash:
+            launchEarnedRaterCredit.correlationCredentialNullifierHash,
+          credentialVerifiedAt:
+            launchEarnedRaterCredit.correlationCredentialVerifiedAt,
+          credentialExpiresAt:
+            launchEarnedRaterCredit.correlationCredentialExpiresAt,
+          banReasons: launchEarnedRaterCredit.correlationBanReasons,
         })
         .from(launchEarnedRaterCredit)
-        .leftJoin(
-          voterStats,
-          eq(voterStats.voter, launchEarnedRaterCredit.rater),
-        )
-        .leftJoin(
-          raterHumanCredential,
-          eq(raterHumanCredential.rater, launchEarnedRaterCredit.rater),
-        )
         .where(
           and(
             eq(launchEarnedRaterCredit.contentId, contentId),
@@ -1118,19 +1056,15 @@ export function registerCorrelationRoutes(app: ApiApp) {
         .select({
           account: vote.identityHolder,
           voter: vote.voter,
-          provider: raterHumanCredential.provider,
-          nullifierHash: raterHumanCredential.nullifierHash,
-          verified: raterHumanCredential.verified,
-          revoked: raterHumanCredential.revoked,
-          verifiedAt: raterHumanCredential.verifiedAt,
-          expiresAt: raterHumanCredential.expiresAt,
-          credentialUpdatedAt: raterHumanCredential.updatedAt,
+          historicalVoteCount: vote.correlationHistoricalVoteCount,
+          verifiedHuman: vote.correlationVerifiedHuman,
+          credentialProvider: vote.correlationCredentialProvider,
+          credentialNullifierHash: vote.correlationCredentialNullifierHash,
+          credentialVerifiedAt: vote.correlationCredentialVerifiedAt,
+          credentialExpiresAt: vote.correlationCredentialExpiresAt,
+          banReasons: vote.correlationBanReasons,
         })
         .from(vote)
-        .leftJoin(
-          raterHumanCredential,
-          eq(raterHumanCredential.rater, vote.identityHolder),
-        )
         .where(
           and(
             eq(vote.contentId, contentId),
@@ -1145,16 +1079,14 @@ export function registerCorrelationRoutes(app: ApiApp) {
         ),
     ]);
 
-    const banState =
-      creditRows.length > 0 || anchorRows.length > 0
-        ? await loadActiveCorrelationIdentityBanState(nowSeconds)
-        : {
-            addressIdentityKeys: new Set<string>(),
-            identityKeys: new Set<string>(),
-            launchIdentityKeys: new Set<string>(),
-          };
     const typedCreditRows = creditRows as LaunchCreditRow[];
     const typedAnchorRows = anchorRows as LaunchAnchorVoteRow[];
+    if (
+      typedCreditRows.some((row) => !hasPinnedLaunchCreditSnapshot(row)) ||
+      typedAnchorRows.some((row) => !hasPinnedLaunchAnchorSnapshot(row))
+    ) {
+      return missingInputSnapshotResponse(c);
+    }
     const earliestRecordedAt = typedCreditRows.reduce<bigint | null>(
       (earliest, credit) =>
         earliest === null || credit.recordedAt < earliest
@@ -1176,57 +1108,14 @@ export function registerCorrelationRoutes(app: ApiApp) {
         409,
       );
     }
-    if (
-      earliestRecordedAt !== null &&
-      typedCreditRows.some(
-        (credit) =>
-          credit.raterCredentialUpdatedAt !== null &&
-          credit.raterCredentialUpdatedAt > credit.recordedAt,
-      )
-    ) {
-      return c.json(
-        {
-          error:
-            "Rater credential state changed after a pending credit was recorded; use a manually verified artifact.",
-          reason: "launch_rater_credential_drift",
-        },
-        409,
-      );
-    }
-    if (
-      earliestRecordedAt !== null &&
-      typedAnchorRows.some(
-        (row) =>
-          row.credentialUpdatedAt !== null &&
-          row.credentialUpdatedAt > earliestRecordedAt,
-      )
-    ) {
-      return c.json(
-        {
-          error:
-            "Anchor credential state changed after a pending credit was recorded; use a manually verified artifact.",
-          reason: "launch_anchor_credential_drift",
-        },
-        409,
-      );
-    }
-    const latestRelevantIdentityBanUpdatedAt =
-      earliestRecordedAt === null
-        ? null
-        : await loadLatestRelevantIdentityBanUpdatedAt(
-            collectLaunchIdentityBanSources(typedCreditRows, typedAnchorRows),
-            earliestRecordedAt,
-          );
-    if (latestRelevantIdentityBanUpdatedAt !== null) {
-      return c.json(
-        {
-          error:
-            "Identity ban state changed after a pending credit was recorded; use a manually verified artifact.",
-          reason: "launch_identity_ban_drift",
-        },
-        409,
-      );
-    }
+    const launchInputSnapshotSource = latestInputSnapshotSource(
+      typedCreditRows.map((credit) => ({
+        sourceBlockNumber: credit.sourceBlockNumber,
+        sourceTxHash: normalizeHex32(credit.sourceTxHash),
+        sourceLogIndex: credit.sourceLogIndex,
+        sourceTimestamp: credit.sourceTimestamp,
+      })),
+    );
     const items: ReturnType<typeof formatLaunchCreditRow>["item"][] = [];
     const excludedVotes: NonNullable<
       ReturnType<typeof formatLaunchCreditRow>["excludedVote"]
@@ -1234,9 +1123,8 @@ export function registerCorrelationRoutes(app: ApiApp) {
     let eligibleSeen = 0;
 
     for (const credit of typedCreditRows) {
-      const anchorFeatures = collectCurrentLaunchAnchorFeatures({
+      const anchorFeatures = collectPinnedLaunchAnchorFeatures({
         anchorRows: typedAnchorRows,
-        banState,
         minAnchorCredentialAgeSeconds,
         rewardRecipient: credit.rater,
         roundStartTime: roundRow.startTime,
@@ -1244,7 +1132,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
       });
       const formatted = formatLaunchCreditRow({
         anchorFeatures,
-        banState,
         credit,
         minVerifiedHumans,
         roundStartTime: roundRow.startTime,
@@ -1259,7 +1146,13 @@ export function registerCorrelationRoutes(app: ApiApp) {
       eligibleSeen += 1;
     }
 
-    const roundContext = await getRoundContext(contentId, roundId);
+    const roundContext = await getRoundContext({
+      contentId,
+      domain: PAYOUT_DOMAIN_LAUNCH_CREDIT,
+      inputSnapshotSource: launchInputSnapshotSource,
+      rewardPoolId: 0n,
+      roundId,
+    });
 
     return jsonBig(c, {
       excludedVotes,
@@ -1292,8 +1185,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
-    if (nowSeconds === null) {
+    if (resolveApiNowSeconds(c.req.query("now")) === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
     if (roundId > BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -1332,8 +1224,19 @@ export function registerCorrelationRoutes(app: ApiApp) {
         contentId: questionBundleRound.contentId,
         roundId: questionBundleRound.roundId,
         bundleIndex: questionBundleRound.bundleIndex,
+        sourceBlockNumber: round.settledBlockNumber,
+        sourceTxHash: round.settledTxHash,
+        sourceLogIndex: round.settledLogIndex,
+        sourceTimestamp: round.settledAt,
       })
       .from(questionBundleRound)
+      .innerJoin(
+        round,
+        and(
+          eq(round.contentId, questionBundleRound.contentId),
+          eq(round.roundId, questionBundleRound.roundId),
+        ),
+      )
       .where(
         and(
           eq(questionBundleRound.bundleId, rewardPoolId),
@@ -1353,10 +1256,23 @@ export function registerCorrelationRoutes(app: ApiApp) {
 
     const firstBundleRound =
       bundleRounds.find((row) => row.bundleIndex === 0) ?? bundleRounds[0]!;
-    const roundContext = await getRoundContext(
-      firstBundleRound.contentId,
-      firstBundleRound.roundId,
+    const bundleInputSnapshotSource = latestInputSnapshotSource(
+      bundleRounds.map((row) => ({
+        sourceBlockNumber: row.sourceBlockNumber,
+        sourceTxHash: normalizeHex32(row.sourceTxHash),
+        sourceLogIndex: row.sourceLogIndex,
+        sourceTimestamp: row.sourceTimestamp,
+      })),
     );
+    const roundContext = await getRoundContext({
+      contentId: firstBundleRound.contentId,
+      domain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+      inputSnapshotSource: bundleInputSnapshotSource,
+      rewardPoolId,
+      roundId: firstBundleRound.roundId,
+      snapshotContentId: contentId,
+      snapshotRoundId: roundId,
+    });
     const roundKeyToBundleIndex = new Map(
       bundleRounds.map((row) => [
         `${row.contentId.toString()}-${row.roundId.toString()}`,
@@ -1385,8 +1301,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
           epochIndex: vote.epochIndex,
           revealWeight: vote.rbtsWeight,
           baseWeight: sql<bigint>`10000`,
-          verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
-          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+          verifiedHuman: vote.correlationVerifiedHuman,
+          historicalVoteCount: vote.correlationHistoricalVoteCount,
+          banReasons: vote.correlationBanReasons,
           commitBlockNumber: vote.commitBlockNumber,
           commitLogIndex: vote.commitLogIndex,
           voteId: vote.id,
@@ -1400,19 +1317,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
           ),
         )
         .innerJoin(content, eq(content.id, vote.contentId))
-        .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
-        .leftJoin(
-          raterHumanCredential,
-          and(
-            eq(raterHumanCredential.rater, vote.identityHolder),
-            eq(raterHumanCredential.verified, true),
-            eq(raterHumanCredential.revoked, false),
-            sql`(
-            ${raterHumanCredential.expiresAt} = 0
-            or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
-          )`,
-          ),
-        )
         .where(
           and(
             roundFilter,
@@ -1450,7 +1354,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
               and(
                 sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN}) != 0`,
                 sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG}) = 0`,
-                sql`${raterHumanCredential.rater} is not null`,
+                eq(vote.correlationVerifiedHuman, true),
               ),
             ),
           ),
@@ -1475,6 +1379,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
     );
     for (let page = 0; page < scanPageBudget; page += 1) {
       const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
+      if (rows.some((row) => !hasPinnedVoteSnapshot(row))) {
+        return missingInputSnapshotResponse(c);
+      }
       for (const row of rows) {
         const bundleIndex = roundKeyToBundleIndex.get(
           `${row.contentId.toString()}-${row.roundId.toString()}`,
@@ -1516,17 +1423,13 @@ export function registerCorrelationRoutes(app: ApiApp) {
       )
       .map((entry) => entry.firstVote);
 
-    const banState =
-      firstVotes.length > 0
-        ? await loadActiveCorrelationIdentityBanState(nowSeconds)
-        : null;
     const items: ReturnType<typeof formatCorrelationVoteRow>["item"][] = [];
     const excludedVotes: NonNullable<
       ReturnType<typeof formatCorrelationVoteRow>["excludedVote"]
     >[] = [];
     let eligibleSeen = 0;
     for (const row of firstVotes) {
-      const formatted = formatCorrelationVoteRow(row, banState ?? undefined);
+      const formatted = formatCorrelationVoteRow(row);
       if (formatted.excludedVote) {
         excludedVotes.push(formatted.excludedVote);
         continue;
@@ -1564,8 +1467,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
-    if (nowSeconds === null) {
+    if (resolveApiNowSeconds(c.req.query("now")) === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
 
@@ -1581,8 +1483,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
           epochIndex: vote.epochIndex,
           revealWeight: vote.rbtsWeight,
           baseWeight: sql<bigint>`10000`,
-          verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
-          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+          verifiedHuman: vote.correlationVerifiedHuman,
+          historicalVoteCount: vote.correlationHistoricalVoteCount,
+          banReasons: vote.correlationBanReasons,
         })
         .from(vote)
         .innerJoin(
@@ -1590,19 +1493,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
           and(
             eq(round.contentId, vote.contentId),
             eq(round.roundId, vote.roundId),
-          ),
-        )
-        .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
-        .leftJoin(
-          raterHumanCredential,
-          and(
-            eq(raterHumanCredential.rater, vote.identityHolder),
-            eq(raterHumanCredential.verified, true),
-            eq(raterHumanCredential.revoked, false),
-            sql`(
-            ${raterHumanCredential.expiresAt} = 0
-            or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
-          )`,
           ),
         )
         .where(
@@ -1628,15 +1518,14 @@ export function registerCorrelationRoutes(app: ApiApp) {
     let eligibleSeen = 0;
     let scanOffset = 0;
     let endedNaturally = false;
-    let banState: ActiveCorrelationIdentityBanState | null = null;
     const scanPageBudget = correlationVoteScanPageBudget(offset);
     for (let page = 0; page < scanPageBudget; page += 1) {
       const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
-      if (banState === null && rows.length > 0) {
-        banState = await loadActiveCorrelationIdentityBanState(nowSeconds);
+      if (rows.some((row) => !hasPinnedVoteSnapshot(row))) {
+        return missingInputSnapshotResponse(c);
       }
       for (const row of rows) {
-        const formatted = formatCorrelationVoteRow(row, banState ?? undefined);
+        const formatted = formatCorrelationVoteRow(row);
         if (formatted.excludedVote) {
           excludedVotes.push(formatted.excludedVote);
           continue;
@@ -1664,7 +1553,12 @@ export function registerCorrelationRoutes(app: ApiApp) {
       offset,
     });
 
-    const roundContext = await getRoundContext(contentId, roundId);
+    const roundContext = await getRoundContext({
+      contentId,
+      domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+      rewardPoolId: 0n,
+      roundId,
+    });
     return jsonBig(c, {
       excludedVotes,
       items,

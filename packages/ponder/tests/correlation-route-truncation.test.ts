@@ -18,6 +18,7 @@ function createVoteRow(index: number) {
     baseWeight: 10000n,
     verifiedHuman: true,
     historicalVoteCount: 0,
+    banReasons: "[]",
     features: "",
   };
 }
@@ -120,6 +121,9 @@ function mockCorrelationVoteScan(results: unknown[]) {
       startTime: "round.startTime",
       state: "round.state",
       upPool: "round.upPool",
+      settledBlockNumber: "round.settledBlockNumber",
+      settledLogIndex: "round.settledLogIndex",
+      settledTxHash: "round.settledTxHash",
     },
     vote: {
       commitBlockNumber: "vote.commitBlockNumber",
@@ -139,6 +143,14 @@ function mockCorrelationVoteScan(results: unknown[]) {
       contentId: "vote.contentId",
       epochIndex: "vote.epochIndex",
       stake: "vote.stake",
+      correlationBanReasons: "vote.correlationBanReasons",
+      correlationCredentialExpiresAt: "vote.correlationCredentialExpiresAt",
+      correlationCredentialNullifierHash:
+        "vote.correlationCredentialNullifierHash",
+      correlationCredentialProvider: "vote.correlationCredentialProvider",
+      correlationCredentialVerifiedAt: "vote.correlationCredentialVerifiedAt",
+      correlationHistoricalVoteCount: "vote.correlationHistoricalVoteCount",
+      correlationVerifiedHuman: "vote.correlationVerifiedHuman",
       voter: "vote.voter",
     },
     voterStats: {
@@ -157,7 +169,6 @@ function buildScanResults(probeRowCount: number) {
   const scanPages = correlationVoteScanPageBudget(0);
   return [
     fullPage,
-    [],
     ...Array.from({ length: scanPages - 1 }, () => fullPage),
     probeRowCount > 0 ? [createVoteRow(9999)] : [],
     [

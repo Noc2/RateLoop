@@ -35,6 +35,9 @@ vi.mock("ponder", () => ({
   and: vi.fn(() => "and"),
   asc: vi.fn((expr: unknown) => ({ kind: "asc", expr })),
   eq: vi.fn(() => "eq"),
+  inArray: vi.fn(() => "inArray"),
+  or: vi.fn(() => "or"),
+  sql: vi.fn(() => "sql"),
 }));
 
 vi.mock("ponder:schema", () => ({
@@ -44,6 +47,22 @@ vi.mock("ponder:schema", () => ({
   feedbackBonusPool: "feedbackBonusPool",
   globalStats: "globalStats",
   profile: "profile",
+  raterHumanCredential: {
+    expiresAt: "raterHumanCredential.expiresAt",
+    nullifierHash: "raterHumanCredential.nullifierHash",
+    provider: "raterHumanCredential.provider",
+    rater: "raterHumanCredential.rater",
+    revoked: "raterHumanCredential.revoked",
+    verified: "raterHumanCredential.verified",
+    verifiedAt: "raterHumanCredential.verifiedAt",
+  },
+  raterIdentityBan: {
+    active: "raterIdentityBan.active",
+    expiresAt: "raterIdentityBan.expiresAt",
+    nullifierHash: "raterIdentityBan.nullifierHash",
+    permanent: "raterIdentityBan.permanent",
+    provider: "raterIdentityBan.provider",
+  },
   rewardClaim: "rewardClaim",
   round: "round",
   vote: "vote",

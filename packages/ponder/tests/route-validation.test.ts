@@ -19,6 +19,59 @@ function testAddressIdentityKey(account: `0x${string}`) {
   );
 }
 
+function pinnedCorrelationVoteRow(overrides: Record<string, unknown>) {
+  return {
+    account: "0x0000000000000000000000000000000000000001",
+    voter: "0x0000000000000000000000000000000000000001",
+    identityKey: `0x${"a".repeat(64)}`,
+    commitKey: `0x${"b".repeat(64)}`,
+    isUp: true,
+    stake: 25000000n,
+    epochIndex: 0,
+    revealWeight: 25000000n,
+    baseWeight: 10000n,
+    verifiedHuman: true,
+    historicalVoteCount: 0,
+    banReasons: "[]",
+    ...overrides,
+  };
+}
+
+function pinnedLaunchCreditRow(overrides: Record<string, unknown>) {
+  return {
+    rater: "0x0000000000000000000000000000000000000001",
+    commitKey: `0x${"b".repeat(64)}`,
+    recordedAt: 1200n,
+    sourceBlockNumber: 12n,
+    sourceTxHash: `0x${"1".repeat(64)}`,
+    sourceLogIndex: 3,
+    sourceTimestamp: 1200n,
+    verifiedHuman: true,
+    historicalVoteCount: 4,
+    credentialProvider: 1,
+    credentialNullifierHash: `0x${"9".repeat(64)}`,
+    credentialVerifiedAt: 100n,
+    credentialExpiresAt: 2000n,
+    banReasons: "[]",
+    ...overrides,
+  };
+}
+
+function pinnedLaunchAnchorRow(overrides: Record<string, unknown>) {
+  return {
+    account: "0x00000000000000000000000000000000000000aa",
+    voter: "0x00000000000000000000000000000000000000aa",
+    verifiedHuman: true,
+    historicalVoteCount: 8,
+    credentialProvider: 1,
+    credentialNullifierHash: `0x${"a".repeat(64)}`,
+    credentialVerifiedAt: 100n,
+    credentialExpiresAt: 2000n,
+    banReasons: "[]",
+    ...overrides,
+  };
+}
+
 function createQueryBuilder<T>(result: T) {
   const builder = {
     from: vi.fn(() => builder),
@@ -214,6 +267,20 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       cancelledAt: "launchEarnedRaterCredit.cancelledAt",
       commitKey: "launchEarnedRaterCredit.commitKey",
       contentId: "launchEarnedRaterCredit.contentId",
+      correlationBanReasons:
+        "launchEarnedRaterCredit.correlationBanReasons",
+      correlationCredentialExpiresAt:
+        "launchEarnedRaterCredit.correlationCredentialExpiresAt",
+      correlationCredentialNullifierHash:
+        "launchEarnedRaterCredit.correlationCredentialNullifierHash",
+      correlationCredentialProvider:
+        "launchEarnedRaterCredit.correlationCredentialProvider",
+      correlationCredentialVerifiedAt:
+        "launchEarnedRaterCredit.correlationCredentialVerifiedAt",
+      correlationHistoricalVoteCount:
+        "launchEarnedRaterCredit.correlationHistoricalVoteCount",
+      correlationVerifiedHuman:
+        "launchEarnedRaterCredit.correlationVerifiedHuman",
       effectiveCreditBps: "launchEarnedRaterCredit.effectiveCreditBps",
       finalized: "launchEarnedRaterCredit.finalized",
       finalizedAt: "launchEarnedRaterCredit.finalizedAt",
@@ -224,6 +291,10 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       recordedAt: "launchEarnedRaterCredit.recordedAt",
       roundId: "launchEarnedRaterCredit.roundId",
       scoreBps: "launchEarnedRaterCredit.scoreBps",
+      sourceBlockNumber: "launchEarnedRaterCredit.sourceBlockNumber",
+      sourceLogIndex: "launchEarnedRaterCredit.sourceLogIndex",
+      sourceTimestamp: "launchEarnedRaterCredit.sourceTimestamp",
+      sourceTxHash: "launchEarnedRaterCredit.sourceTxHash",
       updatedAt: "launchEarnedRaterCredit.updatedAt",
     },
     raterFollow: {
@@ -503,6 +574,9 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       referenceRatingBps: "round.referenceRatingBps",
       revealGracePeriod: "round.revealGracePeriod",
       settledAt: "round.settledAt",
+      settledBlockNumber: "round.settledBlockNumber",
+      settledLogIndex: "round.settledLogIndex",
+      settledTxHash: "round.settledTxHash",
       settledRounds: "round.settledRounds",
       startTime: "round.startTime",
       state: "round.state",
@@ -532,6 +606,14 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       revealedAt: "vote.revealedAt",
       roundId: "vote.roundId",
       stake: "vote.stake",
+      correlationBanReasons: "vote.correlationBanReasons",
+      correlationCredentialExpiresAt: "vote.correlationCredentialExpiresAt",
+      correlationCredentialNullifierHash:
+        "vote.correlationCredentialNullifierHash",
+      correlationCredentialProvider: "vote.correlationCredentialProvider",
+      correlationCredentialVerifiedAt: "vote.correlationCredentialVerifiedAt",
+      correlationHistoricalVoteCount: "vote.correlationHistoricalVoteCount",
+      correlationVerifiedHuman: "vote.correlationVerifiedHuman",
       rbtsForfeitedStake: "vote.rbtsForfeitedStake",
       rbtsRewardWeight: "vote.rbtsRewardWeight",
       rbtsScoreBps: "vote.rbtsScoreBps",
@@ -3581,7 +3663,7 @@ describe("registerCorrelationRoutes", () => {
   it("returns eligible revealed vote inputs for correlation scoring", async () => {
     const { db, queryBuilder } = mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: "0x0000000000000000000000000000000000000001",
           voter: "0x0000000000000000000000000000000000000001",
           identityKey: `0x${"a".repeat(64)}`,
@@ -3594,8 +3676,8 @@ describe("registerCorrelationRoutes", () => {
           verifiedHuman: true,
           historicalVoteCount: 0,
           features: "",
-        },
-        {
+        }),
+        pinnedCorrelationVoteRow({
           account: "0x0000000000000000000000000000000000000002",
           voter: "0x0000000000000000000000000000000000000002",
           identityKey: `0x${"c".repeat(64)}`,
@@ -3608,10 +3690,9 @@ describe("registerCorrelationRoutes", () => {
           verifiedHuman: false,
           historicalVoteCount: 3,
           features: "",
-        },
+        }),
       ],
       [
-        [],
         [
           {
             questionMetadataHash: `0x${"2".repeat(64)}`,
@@ -3640,7 +3721,7 @@ describe("registerCorrelationRoutes", () => {
 
     expect(response.status).toBe(200);
     expect(queryBuilder.innerJoin).toHaveBeenCalled();
-    expect(queryBuilder.leftJoin).toHaveBeenCalled();
+    expect(queryBuilder.leftJoin).not.toHaveBeenCalled();
     const body = await response.json();
     expect(body.items[0]).toMatchObject({
       account: "0x0000000000000000000000000000000000000001",
@@ -3679,8 +3760,9 @@ describe("registerCorrelationRoutes", () => {
     });
     const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
     expect(selection).toContain("historicalVoteCount");
-    expect(selection).toContain("totalSettledVotes");
-    expect(selection).toContain("- 1");
+    expect(selection).toContain("vote.correlationHistoricalVoteCount");
+    expect(selection).toContain("vote.correlationVerifiedHuman");
+    expect(selection).toContain("vote.correlationBanReasons");
     expect(selection).toContain("vote.isUp");
     expect(selection).toContain("vote.stake");
     expect(selection).toContain("vote.epochIndex");
@@ -3697,18 +3779,8 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("questionRewardPool.submitterIdentityKey");
     expect(serialized).not.toContain("questionRewardPool.funderIdentityKey");
     expect(serialized).not.toContain("content.submitter");
-    expect(serialized).toContain("raterHumanCredential.rater");
-    const serializedJoins = queryBuilder.leftJoin.mock.calls.map((call) =>
-      serializeExpression(call),
-    );
-    expect(
-      serializedJoins.some((join) =>
-        join.includes("raterHumanCredential.expiresAt"),
-      ),
-    ).toBe(true);
-    expect(
-      serializedJoins.some((join) => join.includes("round.settledAt")),
-    ).toBe(true);
+    expect(serialized).toContain("vote.correlationVerifiedHuman");
+    expect(queryBuilder.leftJoin).not.toHaveBeenCalled();
   });
 
   it("paginates launch-credit votes without marking normal next pages as truncated", async () => {
@@ -3730,41 +3802,29 @@ describe("registerCorrelationRoutes", () => {
           },
         ],
         [
-          {
+          pinnedLaunchCreditRow({
             rater: "0x0000000000000000000000000000000000000001",
             commitKey: `0x${"b".repeat(64)}`,
             recordedAt: 1200n,
             historicalVoteCount: 4,
-            raterVerified: true,
-            raterRevoked: false,
-            raterCredentialExpiresAt: 2000n,
-            raterCredentialUpdatedAt: 1100n,
-          },
-          {
+          }),
+          pinnedLaunchCreditRow({
             rater: "0x0000000000000000000000000000000000000002",
             commitKey: `0x${"c".repeat(64)}`,
             recordedAt: 1210n,
+            sourceBlockNumber: 13n,
+            sourceTxHash: `0x${"2".repeat(64)}`,
+            sourceLogIndex: 4,
+            sourceTimestamp: 1210n,
             historicalVoteCount: 5,
-            raterVerified: true,
-            raterRevoked: false,
-            raterCredentialExpiresAt: 2000n,
-            raterCredentialUpdatedAt: 1100n,
-          },
+          }),
         ],
         [
-          {
+          pinnedLaunchAnchorRow({
             account: "0x00000000000000000000000000000000000000aa",
             voter: "0x00000000000000000000000000000000000000aa",
-            provider: 1,
-            nullifierHash: `0x${"a".repeat(64)}`,
-            verified: true,
-            revoked: false,
-            verifiedAt: 100n,
-            expiresAt: 2000n,
-            credentialUpdatedAt: 1100n,
-          },
+          }),
         ],
-        [],
         [
           {
             questionMetadataHash: `0x${"2".repeat(64)}`,
@@ -3858,31 +3918,19 @@ describe("registerCorrelationRoutes", () => {
           },
         ],
         [
-          {
+          pinnedLaunchCreditRow({
             rater: "0x0000000000000000000000000000000000000001",
             commitKey: `0x${"b".repeat(64)}`,
             recordedAt: 1200n,
             historicalVoteCount: 4,
-            raterVerified: true,
-            raterRevoked: false,
-            raterCredentialExpiresAt: 2000n,
-            raterCredentialUpdatedAt: 1100n,
-          },
+          }),
         ],
         [
-          {
+          pinnedLaunchAnchorRow({
             account: rawSubmitter,
             voter: rawSubmitter,
-            provider: 1,
-            nullifierHash: `0x${"a".repeat(64)}`,
-            verified: true,
-            revoked: false,
-            verifiedAt: 100n,
-            expiresAt: 2000n,
-            credentialUpdatedAt: 1100n,
-          },
+          }),
         ],
-        [],
         [
           {
             questionMetadataHash: `0x${"2".repeat(64)}`,
@@ -3933,31 +3981,19 @@ describe("registerCorrelationRoutes", () => {
           },
         ],
         [
-          {
+          pinnedLaunchCreditRow({
             rater: "0x0000000000000000000000000000000000000001",
             commitKey: `0x${"b".repeat(64)}`,
             recordedAt: 1200n,
             historicalVoteCount: 4,
-            raterVerified: true,
-            raterRevoked: false,
-            raterCredentialExpiresAt: 2000n,
-            raterCredentialUpdatedAt: 1100n,
-          },
+          }),
         ],
         [
-          {
+          pinnedLaunchAnchorRow({
             account: submitterIdentity,
             voter: submitterIdentity,
-            provider: 1,
-            nullifierHash: `0x${"a".repeat(64)}`,
-            verified: true,
-            revoked: false,
-            verifiedAt: 100n,
-            expiresAt: 2000n,
-            credentialUpdatedAt: 1100n,
-          },
+          }),
         ],
-        [],
         [
           {
             questionMetadataHash: `0x${"2".repeat(64)}`,
@@ -4015,29 +4051,18 @@ describe("registerCorrelationRoutes", () => {
           },
         ],
         [
-          {
+          pinnedLaunchCreditRow({
             rater: "0x0000000000000000000000000000000000000001",
             commitKey: `0x${"b".repeat(64)}`,
             recordedAt: 1200n,
             historicalVoteCount: 4,
-            raterVerified: true,
-            raterRevoked: false,
-            raterCredentialExpiresAt: 2000n,
-            raterCredentialUpdatedAt: 1100n,
-          },
+          }),
         ],
         [
-          {
+          pinnedLaunchAnchorRow({
             account: "0x00000000000000000000000000000000000000aa",
             voter: "0x00000000000000000000000000000000000000aa",
-            provider: 1,
-            nullifierHash: `0x${"a".repeat(64)}`,
-            verified: true,
-            revoked: false,
-            verifiedAt: 100n,
-            expiresAt: 2000n,
-            credentialUpdatedAt: 1100n,
-          },
+          }),
         ],
         [],
       ],
@@ -4059,9 +4084,8 @@ describe("registerCorrelationRoutes", () => {
     });
   });
 
-  it("fails closed when a relevant inactive launch ban changed after credit record time", async () => {
-    const nullifierHash = `0x${"9".repeat(64)}` as const;
-    const { queryBuilders } = mockPonderModules(
+  it("excludes launch credits with a stored launch identity ban reason", async () => {
+    mockPonderModules(
       [
         {
           startTime: 1000n,
@@ -4079,29 +4103,22 @@ describe("registerCorrelationRoutes", () => {
           },
         ],
         [
-          {
+          pinnedLaunchCreditRow({
             rater: "0x0000000000000000000000000000000000000001",
             commitKey: `0x${"b".repeat(64)}`,
             recordedAt: 1200n,
             historicalVoteCount: 4,
-            raterVerified: true,
-            raterRevoked: false,
-            raterCredentialProvider: 2,
-            raterCredentialNullifierHash: nullifierHash,
-            raterCredentialExpiresAt: 2000n,
-            raterCredentialUpdatedAt: 1100n,
-          },
+            credentialProvider: 2,
+            credentialNullifierHash: `0x${"9".repeat(64)}`,
+            banReasons: JSON.stringify(["launch_identity_banned"]),
+          }),
         ],
-        [],
-        [],
         [
-          {
-            active: false,
-            expiresAt: 0n,
-            permanent: false,
-            updatedAt: 1300n,
-          },
+          pinnedLaunchAnchorRow({}),
         ],
+        [],
+        [{ settledAt: 1500n }],
+        [],
       ],
     );
     const { registerCorrelationRoutes } = await import(
@@ -4115,20 +4132,20 @@ describe("registerCorrelationRoutes", () => {
       "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
     );
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      reason: "launch_identity_ban_drift",
+      items: [],
+      excludedVotes: [
+        {
+          account: "0x0000000000000000000000000000000000000001",
+          commitKey: `0x${"b".repeat(64)}`,
+          reasons: ["launch_identity_banned"],
+        },
+      ],
     });
-    const driftWhere = serializeExpression(
-      queryBuilders[5]?.where.mock.calls[0]?.[0],
-    );
-    expect(driftWhere).toContain("raterIdentityBan.updatedAt");
-    expect(driftWhere).toContain("raterIdentityBan.provider");
-    expect(driftWhere).toContain("raterIdentityBan.nullifierHash");
-    expect(driftWhere).not.toContain("raterIdentityBan.active");
   });
 
-  it("fails closed when a relevant expired launch ban changed after credit record time", async () => {
+  it("fails closed when launch input snapshots are missing", async () => {
     const nullifierHash = `0x${"8".repeat(64)}` as const;
     mockPonderModules(
       [
@@ -4198,18 +4215,17 @@ describe("registerCorrelationRoutes", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
-      reason: "launch_identity_ban_drift",
+      reason: "correlation_input_snapshot_missing",
     });
   });
 
   it("excludes raw-address banned voters from correlation scoring inputs", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
-    const nullifierHash = `0x${"1".repeat(64)}` as const;
     const unrelatedIdentityKey = `0x${"a".repeat(64)}` as const;
     expect(unrelatedIdentityKey).not.toBe(testAddressIdentityKey(voter));
-    const { queryBuilders } = mockPonderModules(
+    mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: voter,
           voter,
           identityKey: unrelatedIdentityKey,
@@ -4221,23 +4237,11 @@ describe("registerCorrelationRoutes", () => {
           baseWeight: 10000n,
           verifiedHuman: true,
           historicalVoteCount: 0,
+          banReasons: JSON.stringify(["voter_address_banned"]),
           features: "",
-        },
+        }),
       ],
       [
-        [
-          {
-            provider: 2,
-            nullifierHash,
-          },
-        ],
-        [
-          {
-            rater: voter,
-            provider: 2,
-            nullifierHash,
-          },
-        ],
         [{ settledAt: 777n }],
         [],
       ],
@@ -4267,24 +4271,17 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    expect(
-      serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]),
-    ).toContain("raterIdentityBan.active");
-    expect(
-      serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0]),
-    ).toContain("raterHumanCredential.nullifierHash");
   });
 
   it("excludes holder-address banned voters from correlation scoring inputs", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const holder = "0x0000000000000000000000000000000000000002";
-    const nullifierHash = `0x${"2".repeat(64)}` as const;
     const unrelatedIdentityKey = `0x${"c".repeat(64)}` as const;
     expect(unrelatedIdentityKey).not.toBe(testAddressIdentityKey(voter));
     expect(unrelatedIdentityKey).not.toBe(testAddressIdentityKey(holder));
-    const { queryBuilders } = mockPonderModules(
+    mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: holder,
           voter,
           identityKey: unrelatedIdentityKey,
@@ -4296,23 +4293,11 @@ describe("registerCorrelationRoutes", () => {
           baseWeight: 10000n,
           verifiedHuman: true,
           historicalVoteCount: 0,
+          banReasons: JSON.stringify(["holder_address_banned"]),
           features: "",
-        },
+        }),
       ],
       [
-        [
-          {
-            provider: 2,
-            nullifierHash,
-          },
-        ],
-        [
-          {
-            rater: holder,
-            provider: 2,
-            nullifierHash,
-          },
-        ],
         [{ settledAt: 777n }],
         [],
       ],
@@ -4342,23 +4327,15 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    expect(
-      serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]),
-    ).toContain("raterIdentityBan.active");
-    expect(
-      serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0]),
-    ).toContain("raterHumanCredential.nullifierHash");
   });
 
   it("reports both voter and holder address ban reasons for delegated correlation votes", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const holder = "0x0000000000000000000000000000000000000002";
-    const voterNullifierHash = `0x${"1".repeat(64)}` as const;
-    const holderNullifierHash = `0x${"2".repeat(64)}` as const;
     const unrelatedIdentityKey = `0x${"e".repeat(64)}` as const;
-    const { queryBuilders } = mockPonderModules(
+    mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: holder,
           voter,
           identityKey: unrelatedIdentityKey,
@@ -4370,18 +4347,14 @@ describe("registerCorrelationRoutes", () => {
           baseWeight: 10000n,
           verifiedHuman: true,
           historicalVoteCount: 0,
+          banReasons: JSON.stringify([
+            "voter_address_banned",
+            "holder_address_banned",
+          ]),
           features: "",
-        },
+        }),
       ],
       [
-        [
-          { provider: 2, nullifierHash: voterNullifierHash },
-          { provider: 2, nullifierHash: holderNullifierHash },
-        ],
-        [
-          { rater: voter, provider: 2, nullifierHash: voterNullifierHash },
-          { rater: holder, provider: 2, nullifierHash: holderNullifierHash },
-        ],
         [{ settledAt: 777n }],
         [],
       ],
@@ -4407,31 +4380,21 @@ describe("registerCorrelationRoutes", () => {
         commitKey: `0x${"f".repeat(64)}`,
         cooldownSeconds: null,
         profileUpdatedAt: null,
-        reasons: ["voter_address_banned", "holder_address_banned"],
+        reasons: ["holder_address_banned", "voter_address_banned"],
         roundOpenTime: null,
       },
     ]);
-    const banWhere = serializeExpression(
-      queryBuilders[1]?.where.mock.calls[0]?.[0],
-    );
-    expect(banWhere).toContain("raterIdentityBan.active");
-    expect(banWhere).toContain("raterIdentityBan.permanent");
-    expect(banWhere).toContain("raterIdentityBan.expiresAt");
-    expect(
-      serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0]),
-    ).toContain("raterHumanCredential.nullifierHash");
   });
 
   it("does not count holder-address banned votes against round-vote pagination", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const holder = "0x0000000000000000000000000000000000000002";
     const eligible = "0x0000000000000000000000000000000000000003";
-    const holderNullifierHash = `0x${"2".repeat(64)}` as const;
     const excludedIdentityKey = `0x${"a".repeat(64)}` as const;
     const eligibleIdentityKey = `0x${"b".repeat(64)}` as const;
     mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: holder,
           voter,
           identityKey: excludedIdentityKey,
@@ -4443,9 +4406,10 @@ describe("registerCorrelationRoutes", () => {
           baseWeight: 10000n,
           verifiedHuman: true,
           historicalVoteCount: 0,
+          banReasons: JSON.stringify(["holder_address_banned"]),
           features: "",
-        },
-        {
+        }),
+        pinnedCorrelationVoteRow({
           account: eligible,
           voter: eligible,
           identityKey: eligibleIdentityKey,
@@ -4458,14 +4422,9 @@ describe("registerCorrelationRoutes", () => {
           verifiedHuman: true,
           historicalVoteCount: 2,
           features: "",
-        },
+        }),
       ],
-      [
-        [{ provider: 2, nullifierHash: holderNullifierHash }],
-        [{ rater: holder, provider: 2, nullifierHash: holderNullifierHash }],
-        [{ settledAt: 777n }],
-        [],
-      ],
+      [[{ settledAt: 777n }], []],
     );
     const { registerCorrelationRoutes } = await import(
       "../src/api/routes/correlation-routes.js"
@@ -4504,7 +4463,7 @@ describe("registerCorrelationRoutes", () => {
     const cooldown = 7 * 24 * 60 * 60;
     mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: "0x0000000000000000000000000000000000000001",
           voter: "0x0000000000000000000000000000000000000001",
           identityKey: `0x${"a".repeat(64)}`,
@@ -4527,8 +4486,8 @@ describe("registerCorrelationRoutes", () => {
             languages: ["de"],
             roles: ["engineer"],
           }),
-        },
-        {
+        }),
+        pinnedCorrelationVoteRow({
           account: "0x0000000000000000000000000000000000000002",
           voter: "0x0000000000000000000000000000000000000002",
           identityKey: `0x${"c".repeat(64)}`,
@@ -4551,8 +4510,8 @@ describe("registerCorrelationRoutes", () => {
             languages: ["de"],
             roles: ["engineer"],
           }),
-        },
-        {
+        }),
+        pinnedCorrelationVoteRow({
           account: "0x0000000000000000000000000000000000000003",
           voter: "0x0000000000000000000000000000000000000003",
           identityKey: `0x${"e".repeat(64)}`,
@@ -4575,7 +4534,7 @@ describe("registerCorrelationRoutes", () => {
             languages: ["de"],
             roles: ["engineer"],
           }),
-        },
+        }),
       ],
       [[], [{ settledAt: 777n }], []],
     );
@@ -4836,11 +4795,10 @@ describe("registerCorrelationRoutes", () => {
 
   it("excludes voter-address banned voters from rating correlation scoring inputs", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
-    const nullifierHash = `0x${"2".repeat(64)}` as const;
     const unrelatedIdentityKey = `0x${"a".repeat(64)}` as const;
-    const { queryBuilders } = mockPonderModules(
+    mockPonderModules(
       [
-        {
+        pinnedCorrelationVoteRow({
           account: voter,
           voter,
           identityKey: unrelatedIdentityKey,
@@ -4852,25 +4810,10 @@ describe("registerCorrelationRoutes", () => {
           baseWeight: 10000n,
           verifiedHuman: true,
           historicalVoteCount: 0,
-        },
+          banReasons: JSON.stringify(["voter_address_banned"]),
+        }),
       ],
-      [
-        [
-          {
-            provider: 2,
-            nullifierHash,
-          },
-        ],
-        [
-          {
-            rater: voter,
-            provider: 2,
-            nullifierHash,
-          },
-        ],
-        [{ settledAt: 777n }],
-        [],
-      ],
+      [[{ settledAt: 777n }], []],
     );
     const { registerCorrelationRoutes } = await import(
       "../src/api/routes/correlation-routes.js"
@@ -4897,9 +4840,6 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    expect(
-      serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]),
-    ).toContain("raterIdentityBan.active");
   });
 });
 
