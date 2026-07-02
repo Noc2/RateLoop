@@ -1291,6 +1291,67 @@ contract ClusterPayoutOracleTest is Test {
         assertFalse(oracle.verifyPayoutWeight(payout, proof));
     }
 
+    function test_FinalizedCorrelationEpochRejectRevertsWhenChildSnapshotConsumed() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+            domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
+            rewardPoolId: 7,
+            contentId: 42,
+            roundId: 3,
+            commitKey: keccak256("commit"),
+            identityKey: keccak256("identity"),
+            account: address(0xBEEF),
+            baseWeight: 10_000,
+            independenceBps: 2_500,
+            effectiveWeight: 2_500,
+            reasonHash: keccak256("reason")
+        });
+        bytes32 leaf = oracle.payoutWeightLeaf(payout);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = IClusterPayoutOracle.RoundPayoutSnapshotInput({
+            domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
+            rewardPoolId: 7,
+            contentId: 42,
+            roundId: 3,
+            correlationEpochId: 1,
+            rawEligibleVoters: 4,
+            effectiveParticipantUnits: 25_000,
+            totalClaimWeight: 2_500,
+            weightRoot: leaf,
+            reasonRoot: keccak256("reason-root"),
+            artifactHash: keccak256("epoch-artifact"),
+            artifactURI: "ipfs://round"
+        });
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        vm.warp(block.timestamp + 2 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        questionConsumer.setConsumed(true);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(address(questionConsumer));
+        assertTrue(oracle.verifyPayoutWeight(payout, proof));
+    }
+
     function test_StaleFinalizedRoundPayoutSnapshotCanBeReplacedWhenUnconsumed() public {
         oracle.proposeCorrelationEpoch(
             1,

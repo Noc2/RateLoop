@@ -48,12 +48,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint256 public constant MAX_CHALLENGE_BOND = 100e6;
     uint256 public constant MAX_CORRELATION_EPOCH_SOURCES = 256;
     uint256 public constant MAX_ARTIFACT_URI_LENGTH = 2048;
-    /// @dev Window after a round payout snapshot is finalized during which the arbiter can still
-    ///      reject it, even if a consumer has already paid one or more claims against the cached
-    ///      merkle root. Existing paid leaves stay paid (the consumer flips a `qualified` /
-    ///      `earnedRewardCreditRecorded` flag); the rejection blocks all FUTURE claims because
-    ///      the consumers' per-claim path calls `verifyPayoutWeight`, which returns false once the
-    ///      snapshot status moves off `Finalized`. M-Oracle-2 from 2026-05-16 audit.
+    /// @dev Window after a round payout snapshot or its parent correlation epoch is finalized
+    ///      during which the arbiter can still reject it. Once the proposal-time consumer reports
+    ///      that a child root was consumed, the root stays pinned so already-paid and future
+    ///      claimants see one finalized root. M-Oracle-2 from 2026-05-16 audit.
     uint64 public constant FINALIZATION_VETO_WINDOW = 7 days;
 
     error InvalidAddress();
@@ -118,6 +116,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     mapping(uint256 => CorrelationEpochSnapshot) private correlationEpochSnapshots;
     mapping(bytes32 => RoundPayoutProposal) private roundPayoutProposals;
+    mapping(uint256 => bytes32[]) private correlationEpochSnapshotKeys;
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(uint256 => bytes32) public correlationEpochCoverageDigest;
     mapping(uint256 => bytes32) public correlationEpochSourceSetDigest;
@@ -418,9 +417,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp > uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW)) {
             revert SnapshotNotFinalizable();
         }
+        bytes32 correlationEpochDigest = _correlationEpochDigest(snapshot);
+        _revertIfAnyConsumedChildSnapshot(epochId, correlationEpochDigest);
 
         snapshot.status = SnapshotStatus.Rejected;
-        rejectedCorrelationEpochSnapshotDigests[epochId][_correlationEpochDigest(snapshot)] = true;
+        rejectedCorrelationEpochSnapshotDigests[epochId][correlationEpochDigest] = true;
         if (rejectRoot) {
             _rejectCorrelationEpochRoot(snapshot);
         }
@@ -900,6 +901,24 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         );
     }
 
+    function _revertIfAnyConsumedChildSnapshot(uint64 epochId, bytes32 correlationEpochDigest) private view {
+        bytes32[] storage snapshotKeys = correlationEpochSnapshotKeys[epochId];
+        uint256 length = snapshotKeys.length;
+        for (uint256 i; i < length;) {
+            RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKeys[i]];
+            if (
+                proposal.snapshot.status == SnapshotStatus.Finalized && proposal.snapshot.correlationEpochId == epochId
+                    && proposal.correlationEpochDigest == correlationEpochDigest
+            ) {
+                (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(proposal);
+                if (consumedKnown && consumed) revert SnapshotConsumed();
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function _roundPayoutSnapshotConsumptionStatus(RoundPayoutProposal storage proposal)
         private
         view
@@ -1004,6 +1023,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint256 sourceCount = sourceRefs.length;
         if (sourceCount == 0 || sourceCount > MAX_CORRELATION_EPOCH_SOURCES) revert InvalidSnapshot();
 
+        delete correlationEpochSnapshotKeys[epochId];
         bytes32[] memory snapshotKeys = new bytes32[](sourceCount);
 
         for (uint256 i; i < sourceCount;) {
@@ -1045,7 +1065,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             }
         }
         for (uint256 i; i < sourceCount;) {
-            correlationEpochSnapshotCoverageDigest[epochId][snapshotKeys[i]] = coverageDigest;
+            bytes32 snapshotKey = snapshotKeys[i];
+            correlationEpochSnapshotCoverageDigest[epochId][snapshotKey] = coverageDigest;
+            correlationEpochSnapshotKeys[epochId].push(snapshotKey);
             unchecked {
                 ++i;
             }
