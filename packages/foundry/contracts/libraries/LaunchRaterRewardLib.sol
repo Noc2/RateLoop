@@ -2,12 +2,44 @@
 pragma solidity ^0.8.34;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RaterRegistry } from "../RaterRegistry.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 
 /// @notice Linked helper for launch-distribution rater reward qualification.
 library LaunchRaterRewardLib {
+    function launchPayoutSnapshotOutsideVetoWindow(
+        IClusterPayoutOracle oracle,
+        uint8 payoutDomain,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (bool) {
+        try oracle.getRoundPayoutSnapshot(payoutDomain, 0, contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
+        ) {
+            return snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+                && block.timestamp > uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+        } catch {
+            return false;
+        }
+    }
+
+    function roundPayoutSnapshotProposedAfter(
+        IClusterPayoutOracle oracle,
+        uint8 payoutDomain,
+        uint256 contentId,
+        uint256 roundId,
+        uint64 readyAt
+    ) external view returns (bool) {
+        if (readyAt == 0) return false;
+        try oracle.roundPayoutSnapshotProposedAt(payoutDomain, 0, contentId, roundId) returns (uint64 proposedAt) {
+            return proposedAt >= readyAt;
+        } catch {
+            return false;
+        }
+    }
+
     function collectAnchorIds(
         ProtocolConfig config,
         RoundVotingEngine votingEngine,
