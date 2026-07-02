@@ -48,6 +48,12 @@ const {
       maxPerTick: 2,
       recentSeconds: 6n * 60n * 60n,
     },
+    rewardPoolQualifications: {
+      enabled: true,
+      maxRoundsPerTick: 25,
+      maxBundleSyncsPerTick: 10,
+      bundleMaxRoundsPerSync: 25,
+    },
     feedbackBonusForfeits: {
       enabled: true,
       maxPoolsPerTick: 25,
@@ -598,6 +604,14 @@ function makeHarness(options: {
           return "0xsync";
         }
 
+        if (functionName === "qualifyRound") {
+          return "0xqualify";
+        }
+
+        if (functionName === "syncQuestionBundleTerminals") {
+          return "0xbundlesync";
+        }
+
         if (functionName === "openRound") {
           return "0xopenround";
         }
@@ -652,6 +666,10 @@ describe("resolveRounds", () => {
     mockConfig.proactiveRoundOpening.enabled = false;
     mockConfig.proactiveRoundOpening.maxPerTick = 2;
     mockConfig.proactiveRoundOpening.recentSeconds = 6n * 60n * 60n;
+    mockConfig.rewardPoolQualifications.enabled = true;
+    mockConfig.rewardPoolQualifications.maxRoundsPerTick = 25;
+    mockConfig.rewardPoolQualifications.maxBundleSyncsPerTick = 10;
+    mockConfig.rewardPoolQualifications.bundleMaxRoundsPerSync = 25;
     mockConfig.feedbackBonusForfeits.enabled = true;
     mockConfig.feedbackBonusForfeits.maxPoolsPerTick = 25;
     mockConfig.feedbackBonusForfeits.minAgeSeconds = 60;
@@ -844,6 +862,132 @@ describe("resolveRounds", () => {
       expect.objectContaining({
         functionName: "openRound",
         args: [1n],
+      }),
+    );
+  });
+
+  it("qualifies reward pool rounds returned by Ponder work discovery", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "qualifyRound",
+        args: [42n, 3n],
+      }),
+    );
+  });
+
+  it("syncs bounded question bundle terminals returned by Ponder work discovery", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+    mockConfig.rewardPoolQualifications.maxBundleSyncsPerTick = 1;
+    mockConfig.rewardPoolQualifications.bundleMaxRoundsPerSync = 9;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [],
+          bundleTerminalSyncs: [
+            { bundleId: "31", reason: "bundle_terminal_sync" },
+            { bundleId: "32", reason: "bundle_terminal_sync" },
+          ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.questionBundleTerminalSyncs).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "syncQuestionBundleTerminals",
+        args: [31n, 9n],
+      }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "syncQuestionBundleTerminals",
+        args: [32n, 9n],
       }),
     );
   });

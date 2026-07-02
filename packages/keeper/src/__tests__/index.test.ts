@@ -59,6 +59,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
             advisoryVotesRevealed: 0,
             advisoryLaunchCreditsClaimed: 0,
             cleanupBatchesProcessed: 0,
+            rewardPoolRoundsQualified: 0,
+            questionBundleTerminalSyncs: 0,
             contentMarkedDormant: 0,
             feedbackBonusPoolsForfeited: 0,
             roundsAwaitingRevealQuorum: 0,

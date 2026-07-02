@@ -115,6 +115,12 @@ describe("keeper config", () => {
       maxPerTick: 2,
       recentSeconds: 21_600n,
     });
+    expect(config.rewardPoolQualifications).toEqual({
+      enabled: true,
+      maxRoundsPerTick: 25,
+      maxBundleSyncsPerTick: 10,
+      bundleMaxRoundsPerSync: 25,
+    });
     expect(config.frontendFees.enabled).toBe(false);
     expect(config.persistence).toEqual({
       databaseUrl: null,
@@ -134,6 +140,22 @@ describe("keeper config", () => {
       enabled: true,
       maxPerTick: 3,
       recentSeconds: 900n,
+    });
+  });
+
+  it("loads reward pool qualification sweep settings", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_REWARD_POOL_QUALIFICATIONS_ENABLED: "false",
+      KEEPER_REWARD_POOL_QUALIFICATIONS_PER_TICK: "7",
+      KEEPER_BUNDLE_TERMINAL_SYNCS_PER_TICK: "3",
+      KEEPER_BUNDLE_TERMINAL_SYNC_MAX_ROUNDS: "11",
+    });
+
+    expect(config.rewardPoolQualifications).toEqual({
+      enabled: false,
+      maxRoundsPerTick: 7,
+      maxBundleSyncsPerTick: 3,
+      bundleMaxRoundsPerSync: 11,
     });
   });
 

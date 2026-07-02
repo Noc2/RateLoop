@@ -30,6 +30,8 @@ function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
     advisoryVotesRevealed: 0,
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
+    rewardPoolRoundsQualified: 0,
+    questionBundleTerminalSyncs: 0,
     contentMarkedDormant: 0,
     feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
@@ -133,6 +135,8 @@ describe("metrics", () => {
       makeResult({
         roundsRevealFailedFinalized: 2,
         cleanupBatchesProcessed: 3,
+        rewardPoolRoundsQualified: 4,
+        questionBundleTerminalSyncs: 6,
         feedbackBonusPoolsForfeited: 5,
         roundsAwaitingRevealQuorum: 4,
         minRevealGraceSecondsRemaining: 120,
@@ -144,6 +148,8 @@ describe("metrics", () => {
     const metricsBody = getMetricsText();
     expect(metricsBody).toContain("keeper_rounds_reveal_failed_finalized_total 2");
     expect(metricsBody).toContain("keeper_unrevealed_cleanup_batches_total 3");
+    expect(metricsBody).toContain("keeper_reward_pool_rounds_qualified_total 4");
+    expect(metricsBody).toContain("keeper_bundle_terminal_syncs_total 6");
     expect(metricsBody).toContain("keeper_feedback_bonus_forfeits_total 5");
     expect(metricsBody).toContain("keeper_wallet_balance_wei 4000000000000");
     expect(metricsBody).toContain("keeper_rounds_awaiting_reveal_quorum 4");
@@ -158,6 +164,8 @@ describe("metrics", () => {
     expect(JSON.parse(health.body)).toMatchObject({
       roundsRevealFailedFinalized: 2,
       cleanupBatchesProcessed: 3,
+      rewardPoolRoundsQualified: 4,
+      questionBundleTerminalSyncs: 6,
       feedbackBonusPoolsForfeited: 5,
       walletBalanceWei: "4000000000000",
       roundsAwaitingRevealQuorum: 4,

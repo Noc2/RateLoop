@@ -708,6 +708,29 @@ function loadConfig() {
         errors,
       )),
     },
+    rewardPoolQualifications: {
+      enabled: parseBooleanEnv(
+        readEnv("KEEPER_REWARD_POOL_QUALIFICATIONS_ENABLED"),
+        true,
+        "KEEPER_REWARD_POOL_QUALIFICATIONS_ENABLED",
+        errors,
+      ),
+      maxRoundsPerTick: readNonNegativeIntEnv(
+        "KEEPER_REWARD_POOL_QUALIFICATIONS_PER_TICK",
+        "25",
+        errors,
+      ),
+      maxBundleSyncsPerTick: readNonNegativeIntEnv(
+        "KEEPER_BUNDLE_TERMINAL_SYNCS_PER_TICK",
+        "10",
+        errors,
+      ),
+      bundleMaxRoundsPerSync: readNonNegativeIntEnv(
+        "KEEPER_BUNDLE_TERMINAL_SYNC_MAX_ROUNDS",
+        "25",
+        errors,
+      ),
+    },
     feedbackBonusForfeits: {
       enabled: feedbackBonusForfeitsEnabled,
       maxPoolsPerTick: readNonNegativeIntEnv(

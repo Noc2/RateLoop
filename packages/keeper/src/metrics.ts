@@ -17,6 +17,8 @@ const counters: Record<string, number> = {
   keeper_advisory_votes_revealed_total: 0,
   keeper_advisory_launch_credits_claimed_total: 0,
   keeper_unrevealed_cleanup_batches_total: 0,
+  keeper_reward_pool_rounds_qualified_total: 0,
+  keeper_bundle_terminal_syncs_total: 0,
   keeper_content_marked_dormant_total: 0,
   keeper_runs_total: 0,
   keeper_errors_total: 0,
@@ -29,6 +31,8 @@ const counters: Record<string, number> = {
   keeper_main_loop_lock_skips_total: 0,
   keeper_feedback_bonus_forfeits_total: 0,
   keeper_feedback_bonus_forfeit_failures_total: 0,
+  keeper_reward_pool_qualification_failures_total: 0,
+  keeper_bundle_terminal_sync_failures_total: 0,
 };
 
 // --- Gauges ---
@@ -51,6 +55,8 @@ const gauges: Record<string, number> = {
   keeper_work_discovery_feedback_bonus_forfeit_candidates: 0,
   // -1 means no settle-ready backlog was observed in the last work discovery.
   keeper_settlement_backlog_oldest_seconds: -1,
+  keeper_work_discovery_reward_pool_qualification_candidates: 0,
+  keeper_work_discovery_bundle_terminal_sync_candidates: 0,
 };
 
 const startTime = Date.now();
@@ -104,6 +110,8 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   counters.keeper_advisory_votes_revealed_total += result.advisoryVotesRevealed;
   counters.keeper_advisory_launch_credits_claimed_total += result.advisoryLaunchCreditsClaimed;
   counters.keeper_unrevealed_cleanup_batches_total += result.cleanupBatchesProcessed;
+  counters.keeper_reward_pool_rounds_qualified_total += result.rewardPoolRoundsQualified;
+  counters.keeper_bundle_terminal_syncs_total += result.questionBundleTerminalSyncs;
   counters.keeper_content_marked_dormant_total += result.contentMarkedDormant;
   counters.keeper_feedback_bonus_forfeits_total += result.feedbackBonusPoolsForfeited;
   gauges.keeper_rounds_awaiting_reveal_quorum = result.roundsAwaitingRevealQuorum;
@@ -142,6 +150,8 @@ function renderMetrics(): string {
     keeper_advisory_votes_revealed_total: "Total advisory votes revealed by keeper",
     keeper_advisory_launch_credits_claimed_total: "Total advisory launch credits claimed by keeper",
     keeper_unrevealed_cleanup_batches_total: "Total unrevealed-vote cleanup batches processed by keeper",
+    keeper_reward_pool_rounds_qualified_total: "Total question reward pool rounds qualified by keeper",
+    keeper_bundle_terminal_syncs_total: "Total question bundle terminal sync transactions sent by keeper",
     keeper_content_marked_dormant_total: "Total content items marked dormant",
     keeper_runs_total: "Total keeper run cycles",
     keeper_errors_total: "Total keeper run errors",
@@ -158,6 +168,8 @@ function renderMetrics(): string {
     keeper_main_loop_lock_skips_total: "Total keeper runs skipped because another keeper held the main loop lock",
     keeper_feedback_bonus_forfeits_total: "Total expired Feedback Bonus pools forfeited by keeper",
     keeper_feedback_bonus_forfeit_failures_total: "Total unexpected Feedback Bonus forfeit failures",
+    keeper_reward_pool_qualification_failures_total: "Total unexpected reward pool qualification failures",
+    keeper_bundle_terminal_sync_failures_total: "Total unexpected question bundle terminal sync failures",
   };
 
   for (const [name, value] of Object.entries(counters)) {
@@ -191,6 +203,10 @@ function renderMetrics(): string {
       "Expired Feedback Bonus pool candidates returned by the last keeper work discovery phase",
     keeper_settlement_backlog_oldest_seconds:
       "Age in seconds of the oldest settle-ready round returned by keeper work discovery (-1 = none)",
+    keeper_work_discovery_reward_pool_qualification_candidates:
+      "Reward pool qualification candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_bundle_terminal_sync_candidates:
+      "Question bundle terminal sync candidates returned by the last keeper work discovery phase",
   };
 
   for (const [name, value] of Object.entries(gauges)) {
@@ -227,6 +243,8 @@ function renderHealth(): { status: number; body: string } {
     roundsOpened: counters.keeper_rounds_opened_total,
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,
+    rewardPoolRoundsQualified: counters.keeper_reward_pool_rounds_qualified_total,
+    questionBundleTerminalSyncs: counters.keeper_bundle_terminal_syncs_total,
     feedbackBonusPoolsForfeited: counters.keeper_feedback_bonus_forfeits_total,
     decryptFailures: counters.keeper_decrypt_failures_total,
     roundsAwaitingRevealQuorum: gauges.keeper_rounds_awaiting_reveal_quorum,
@@ -241,6 +259,10 @@ function renderHealth(): { status: number; body: string } {
       gauges.keeper_work_discovery_feedback_bonus_forfeit_candidates,
     settlementBacklogOldestSeconds:
       gauges.keeper_settlement_backlog_oldest_seconds,
+    rewardPoolQualificationCandidates:
+      gauges.keeper_work_discovery_reward_pool_qualification_candidates,
+    bundleTerminalSyncCandidates:
+      gauges.keeper_work_discovery_bundle_terminal_sync_candidates,
     walletBalanceWei: (walletBalanceWei ?? 0n).toString(),
   });
   return { status: healthy ? 200 : 503, body };

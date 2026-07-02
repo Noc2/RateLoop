@@ -51,6 +51,8 @@ function emptyKeeperResult(): KeeperResult {
     advisoryVotesRevealed: 0,
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
+    rewardPoolRoundsQualified: 0,
+    questionBundleTerminalSyncs: 0,
     contentMarkedDormant: 0,
     feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
@@ -237,6 +239,8 @@ async function main() {
         result.advisoryVotesRevealed +
         result.advisoryLaunchCreditsClaimed +
         result.cleanupBatchesProcessed +
+        result.rewardPoolRoundsQualified +
+        result.questionBundleTerminalSyncs +
         result.contentMarkedDormant +
         result.feedbackBonusPoolsForfeited;
       if (total > 0) {

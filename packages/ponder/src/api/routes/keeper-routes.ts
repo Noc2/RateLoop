@@ -2,7 +2,16 @@ import type { Context } from "hono";
 import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
-import { content, feedbackBonusPool, round, vote } from "ponder:schema";
+import {
+  content,
+  feedbackBonusPool,
+  questionBundleQuestion,
+  questionBundleReward,
+  questionRewardPool,
+  questionRewardPoolRound,
+  round,
+  vote,
+} from "ponder:schema";
 import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
@@ -233,6 +242,81 @@ export function registerKeeperRoutes(app: ApiApp) {
       .limit(limit);
 
     const humanVerifiedCommitCount = await inspectHumanVerifiedCommitCountHealth();
+    const rewardPoolQualifications = await db
+      .select({
+        rewardPoolId: questionRewardPool.id,
+        contentId: questionRewardPool.contentId,
+        roundId: round.roundId,
+        reason: sql<string>`'reward_pool_qualification'`,
+      })
+      .from(questionRewardPool)
+      .innerJoin(
+        round,
+        and(
+          eq(round.contentId, questionRewardPool.contentId),
+          eq(round.state, ROUND_STATE.Settled),
+          sql`${round.roundId} >= ${questionRewardPool.startRoundId}`,
+        ),
+      )
+      .leftJoin(
+        questionRewardPoolRound,
+        and(
+          eq(questionRewardPoolRound.rewardPoolId, questionRewardPool.id),
+          eq(questionRewardPoolRound.roundId, round.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(questionRewardPool.refunded, false),
+          sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
+          sql`${questionRewardPool.unallocatedAmount} > 0`,
+          sql`${round.settledAt} is not null`,
+          sql`${round.settledAt} > 0`,
+          sql`${questionRewardPoolRound.id} is null`,
+          sql`(
+            ${questionRewardPool.bountyClosesAt} = 0
+            or ${round.startTime} <= ${questionRewardPool.bountyClosesAt}
+          )`,
+        ),
+      )
+      .orderBy(
+        asc(questionRewardPool.bountyClosesAt),
+        asc(questionRewardPool.id),
+        asc(round.roundId),
+      )
+      .limit(limit);
+
+    const bundleTerminalSyncs = await db
+      .select({
+        bundleId: questionBundleReward.id,
+        reason: sql<string>`'bundle_terminal_sync'`,
+      })
+      .from(questionBundleReward)
+      .where(
+        and(
+          eq(questionBundleReward.failed, false),
+          eq(questionBundleReward.refunded, false),
+          sql`${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}`,
+          sql`${questionBundleReward.bountyOpensAt} <= ${now}`,
+          sql`exists (
+            select 1
+            from ${questionBundleQuestion}
+            join ${round} on ${round.contentId} = ${questionBundleQuestion.contentId}
+            where ${questionBundleQuestion.bundleId} = ${questionBundleReward.id}
+              and ${round.state} in (
+                ${ROUND_STATE.Settled},
+                ${ROUND_STATE.Cancelled},
+                ${ROUND_STATE.Tied},
+                ${ROUND_STATE.RevealFailed}
+              )
+          )`,
+        ),
+      )
+      .orderBy(
+        asc(questionBundleReward.bountyClosesAt),
+        asc(questionBundleReward.id),
+      )
+      .limit(limit);
 
     return jsonBig(c, {
       now,
@@ -246,6 +330,8 @@ export function registerKeeperRoutes(app: ApiApp) {
       cleanupRounds,
       dormantContent,
       feedbackBonusForfeits,
+      rewardPoolQualifications,
+      bundleTerminalSyncs,
     });
   });
 }

@@ -82,6 +82,8 @@ export interface KeeperResult {
   advisoryVotesRevealed: number;
   advisoryLaunchCreditsClaimed: number;
   cleanupBatchesProcessed: number;
+  rewardPoolRoundsQualified: number;
+  questionBundleTerminalSyncs: number;
   contentMarkedDormant: number;
   feedbackBonusPoolsForfeited: number;
   /** Open rounds with commit quorum but reveal quorum still unmet this tick. */
@@ -118,6 +120,16 @@ interface KeeperWorkFeedbackBonusForfeitCandidate {
   remainingAmount?: bigint;
   reason?: string;
 }
+interface KeeperWorkRewardPoolQualificationCandidate {
+  rewardPoolId: bigint;
+  contentId: bigint;
+  roundId: bigint;
+  reason?: string;
+}
+interface KeeperWorkBundleTerminalSyncCandidate {
+  bundleId: bigint;
+  reason?: string;
+}
 interface KeeperWorkDiscovery {
   source: "ponder" | "chain";
   contentIds: bigint[];
@@ -126,6 +138,8 @@ interface KeeperWorkDiscovery {
   cleanupRounds: KeeperWorkRoundCandidate[];
   dormantContent: KeeperWorkContentCandidate[];
   feedbackBonusForfeits: KeeperWorkFeedbackBonusForfeitCandidate[];
+  rewardPoolQualifications: KeeperWorkRewardPoolQualificationCandidate[];
+  bundleTerminalSyncs: KeeperWorkBundleTerminalSyncCandidate[];
 }
 interface PonderDeploymentMetadata {
   chainId?: unknown;
@@ -161,6 +175,8 @@ function emptyResult(): KeeperResult {
     advisoryVotesRevealed: 0,
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
+    rewardPoolRoundsQualified: 0,
+    questionBundleTerminalSyncs: 0,
     contentMarkedDormant: 0,
     feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
@@ -345,6 +361,19 @@ function markCleanupCompleted(contentId: bigint, roundId: bigint): void {
  * for bundles where the round set is not yet complete. Failures are logged but do not
  * propagate, since the keeper has already produced its primary settle effect.
  */
+async function _readQuestionRewardPoolEscrow(
+  publicClient: Pick<PublicClient, "readContract">,
+  registryAddr: `0x${string}`,
+): Promise<`0x${string}` | null> {
+  const escrow = (await publicClient.readContract({
+    address: registryAddr,
+    abi: ContentRegistryAbi,
+    functionName: "questionRewardPoolEscrow",
+    args: [],
+  })) as `0x${string}`;
+  return escrow === zeroAddress ? null : escrow;
+}
+
 async function _syncBundleQuestionTerminal(
   publicClient: PublicClient,
   walletClient: WalletClient,
@@ -356,13 +385,8 @@ async function _syncBundleQuestionTerminal(
   logger: Logger,
 ): Promise<void> {
   try {
-    const escrow = (await publicClient.readContract({
-      address: registryAddr,
-      abi: ContentRegistryAbi,
-      functionName: "questionRewardPoolEscrow",
-      args: [],
-    })) as `0x${string}`;
-    if (escrow === "0x0000000000000000000000000000000000000000") return;
+    const escrow = await _readQuestionRewardPoolEscrow(publicClient, registryAddr);
+    if (!escrow) return;
 
     await writeContractAndConfirm(publicClient, walletClient, {
       chain,
@@ -544,6 +568,8 @@ async function discoverKeeperWorkCandidates(
         cleanupRounds: [],
         dormantContent: [],
         feedbackBonusForfeits: [],
+        rewardPoolQualifications: [],
+        bundleTerminalSyncs: [],
       };
     }
   }
@@ -579,6 +605,14 @@ async function discoverKeeperWorkCandidates(
   setGauge(
     "keeper_settlement_backlog_oldest_seconds",
     oldestSettlementBacklogSeconds(discovery.openRounds, now),
+  );
+  setGauge(
+    "keeper_work_discovery_reward_pool_qualification_candidates",
+    discovery.rewardPoolQualifications.length,
+  );
+  setGauge(
+    "keeper_work_discovery_bundle_terminal_sync_candidates",
+    discovery.bundleTerminalSyncs.length,
   );
 
   return discovery;
@@ -770,13 +804,22 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
   const feedbackBonusForfeits = parseKeeperWorkFeedbackBonusForfeitArray(
     record.feedbackBonusForfeits ?? [],
   );
+  const rewardPoolQualifications =
+    parseKeeperWorkRewardPoolQualificationArray(
+      record.rewardPoolQualifications ?? [],
+    );
+  const bundleTerminalSyncs = parseKeeperWorkBundleTerminalSyncArray(
+    record.bundleTerminalSyncs ?? [],
+  );
 
   if (
     !roundOpenRequests ||
     !openRounds ||
     !cleanupRounds ||
     !dormantContent ||
-    !feedbackBonusForfeits
+    !feedbackBonusForfeits ||
+    !rewardPoolQualifications ||
+    !bundleTerminalSyncs
   ) {
     return null;
   }
@@ -786,6 +829,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     ...openRounds.map((candidate) => candidate.contentId),
     ...cleanupRounds.map((candidate) => candidate.contentId),
     ...dormantContent.map((candidate) => candidate.contentId),
+    ...rewardPoolQualifications.map((candidate) => candidate.contentId),
   ]);
 
   return {
@@ -796,6 +840,8 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     cleanupRounds,
     dormantContent,
     feedbackBonusForfeits,
+    rewardPoolQualifications,
+    bundleTerminalSyncs,
   };
 }
 
@@ -858,6 +904,59 @@ function parseKeeperWorkFeedbackBonusForfeitArray(
     });
   }
   return candidates;
+}
+
+function parseKeeperWorkRewardPoolQualificationArray(
+  value: unknown,
+): KeeperWorkRewardPoolQualificationCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkRewardPoolQualificationCandidate[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const rewardPoolId = parsePositiveBigInt(record.rewardPoolId);
+    const contentId = parsePositiveBigInt(record.contentId);
+    const roundId = parsePositiveBigInt(record.roundId);
+    if (rewardPoolId === null || contentId === null || roundId === null) {
+      return null;
+    }
+    const key = `${rewardPoolId.toString()}:${roundId.toString()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      rewardPoolId,
+      contentId,
+      roundId,
+      reason: typeof record.reason === "string" ? record.reason : undefined,
+    });
+  }
+  return candidates.sort((a, b) => {
+    const poolOrder = compareBigInt(a.rewardPoolId, b.rewardPoolId);
+    return poolOrder !== 0 ? poolOrder : compareBigInt(a.roundId, b.roundId);
+  });
+}
+
+function parseKeeperWorkBundleTerminalSyncArray(
+  value: unknown,
+): KeeperWorkBundleTerminalSyncCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkBundleTerminalSyncCandidate[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const bundleId = parsePositiveBigInt(record.bundleId);
+    if (bundleId === null) return null;
+    const key = bundleId.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      bundleId,
+      reason: typeof record.reason === "string" ? record.reason : undefined,
+    });
+  }
+  return candidates.sort((a, b) => compareBigInt(a.bundleId, b.bundleId));
 }
 
 function parseKeeperWorkRound(value: unknown): KeeperWorkRoundCandidate | null {
@@ -1723,6 +1822,26 @@ export async function resolveRounds(
     engineAddr,
   );
 
+  result.rewardPoolRoundsQualified += await _qualifyRewardPoolRounds(
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    registryAddr,
+    discovery.rewardPoolQualifications,
+  );
+
+  result.questionBundleTerminalSyncs += await _syncQuestionBundleTerminals(
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    registryAddr,
+    discovery.bundleTerminalSyncs,
+  );
+
   result.feedbackBonusPoolsForfeited += await _forfeitExpiredFeedbackBonuses(
     publicClient,
     walletClient,
@@ -1814,6 +1933,182 @@ async function _openRequestedRounds(
   }
 
   return opened;
+}
+
+function isExpectedRewardPoolQualificationRevert(reason: string): boolean {
+  const benign = [
+    "RewardPoolNotFound",
+    "Round qualified",
+    "Round too early",
+    "Round out of order",
+    "Bounty not started",
+    "Round not settled",
+    "Too few eligible voters",
+    "Cleanup pending",
+    "No allocation",
+    "Small allocation",
+    "Cluster snapshot unavailable",
+    "Cluster source stale",
+    "SnapshotConsumed",
+    "EnforcedPause",
+    "Pausable",
+  ];
+  const lower = reason.toLowerCase();
+  return benign.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
+
+async function _qualifyRewardPoolRounds(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  registryAddr: `0x${string}`,
+  candidates: readonly KeeperWorkRewardPoolQualificationCandidate[],
+): Promise<number> {
+  const rewardPoolQualifications = config.rewardPoolQualifications ?? {
+    enabled: true,
+    maxRoundsPerTick: 25,
+    maxBundleSyncsPerTick: 10,
+    bundleMaxRoundsPerSync: 25,
+  };
+  if (
+    !rewardPoolQualifications.enabled ||
+    rewardPoolQualifications.maxRoundsPerTick <= 0 ||
+    candidates.length === 0
+  ) {
+    return 0;
+  }
+
+  const escrow = await _readQuestionRewardPoolEscrow(publicClient, registryAddr);
+  if (!escrow) return 0;
+
+  let qualified = 0;
+  for (const candidate of candidates.slice(
+    0,
+    rewardPoolQualifications.maxRoundsPerTick,
+  )) {
+    try {
+      await writeContractAndConfirm(publicClient, walletClient, {
+        chain,
+        account,
+        address: escrow,
+        abi: QuestionRewardPoolEscrowAbi,
+        functionName: "qualifyRound",
+        args: [candidate.rewardPoolId, candidate.roundId],
+      });
+      qualified++;
+      logger.info("Qualified reward pool round", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        reason: candidate.reason,
+      });
+    } catch (err: unknown) {
+      const reason = getRevertReason(err);
+      if (isExpectedRewardPoolQualificationRevert(reason)) {
+        logger.debug("Skipped reward pool qualification candidate", {
+          rewardPoolId: candidate.rewardPoolId.toString(),
+          contentId: candidate.contentId.toString(),
+          roundId: candidate.roundId.toString(),
+          error: reason,
+        });
+        continue;
+      }
+
+      incrementCounter("keeper_reward_pool_qualification_failures_total");
+      logger.warn("Failed to qualify reward pool round", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        error: reason,
+      });
+    }
+  }
+
+  return qualified;
+}
+
+function isExpectedBundleTerminalSyncRevert(reason: string): boolean {
+  const benign = [
+    "BundleRewardNotFound",
+    "No rounds",
+    "EnforcedPause",
+    "Pausable",
+  ];
+  const lower = reason.toLowerCase();
+  return benign.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
+
+async function _syncQuestionBundleTerminals(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  registryAddr: `0x${string}`,
+  candidates: readonly KeeperWorkBundleTerminalSyncCandidate[],
+): Promise<number> {
+  const rewardPoolQualifications = config.rewardPoolQualifications ?? {
+    enabled: true,
+    maxRoundsPerTick: 25,
+    maxBundleSyncsPerTick: 10,
+    bundleMaxRoundsPerSync: 25,
+  };
+  if (
+    !rewardPoolQualifications.enabled ||
+    rewardPoolQualifications.maxBundleSyncsPerTick <= 0 ||
+    rewardPoolQualifications.bundleMaxRoundsPerSync <= 0 ||
+    candidates.length === 0
+  ) {
+    return 0;
+  }
+
+  const escrow = await _readQuestionRewardPoolEscrow(publicClient, registryAddr);
+  if (!escrow) return 0;
+
+  let synced = 0;
+  for (const candidate of candidates.slice(
+    0,
+    rewardPoolQualifications.maxBundleSyncsPerTick,
+  )) {
+    try {
+      await writeContractAndConfirm(publicClient, walletClient, {
+        chain,
+        account,
+        address: escrow,
+        abi: QuestionRewardPoolEscrowAbi,
+        functionName: "syncQuestionBundleTerminals",
+        args: [
+          candidate.bundleId,
+          BigInt(rewardPoolQualifications.bundleMaxRoundsPerSync),
+        ],
+      });
+      synced++;
+      logger.info("Synced question bundle terminals", {
+        bundleId: candidate.bundleId.toString(),
+        maxRounds: rewardPoolQualifications.bundleMaxRoundsPerSync,
+        reason: candidate.reason,
+      });
+    } catch (err: unknown) {
+      const reason = getRevertReason(err);
+      if (isExpectedBundleTerminalSyncRevert(reason)) {
+        logger.debug("Skipped question bundle terminal sync candidate", {
+          bundleId: candidate.bundleId.toString(),
+          error: reason,
+        });
+        continue;
+      }
+
+      incrementCounter("keeper_bundle_terminal_sync_failures_total");
+      logger.warn("Failed to sync question bundle terminals", {
+        bundleId: candidate.bundleId.toString(),
+        error: reason,
+      });
+    }
+  }
+
+  return synced;
 }
 
 function isExpectedFeedbackBonusForfeitRevert(reason: string): boolean {
