@@ -1,4 +1,9 @@
-import { RATELOOP_SOURCE_URL_WARNING, RATELOOP_UNTRUSTED_DATA_WARNING, buildAgentResultPackage } from "./resultPackage";
+import {
+  NORMAL_PAYOUT_FINALITY_MAX_DELAY_SECONDS,
+  RATELOOP_SOURCE_URL_WARNING,
+  RATELOOP_UNTRUSTED_DATA_WARNING,
+  buildAgentResultPackage,
+} from "./resultPackage";
 import { listAgentResultTemplates } from "./templates";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { PROFILE_SELF_REPORT_NOTICE } from "@rateloop/node-utils/profileSelfReport";
@@ -520,6 +525,12 @@ test("buildAgentResultPackage keeps open rounds pending", () => {
 
   assert.equal(result.ready, false);
   assert.equal(result.answer, "pending");
+  assert.equal(result.finalityStatus, "waiting_for_round_close");
+  assert.equal(result.blockedReason, "round_not_closed");
+  assert.equal(result.normalMaxDelaySeconds, NORMAL_PAYOUT_FINALITY_MAX_DELAY_SECONDS);
+  assert.equal(result.includesVetoWindow, true);
+  assert.equal(result.estimatedReadyAt, null);
+  assert.equal(result.stalled, false);
   assert.deepEqual(result.liveAskGuidance, {
     lowResponseRisk: "high",
     reasonCodes: ["quorum_not_reached", "low_response_persisting", "bounty_below_healthy_target"],
@@ -559,7 +570,48 @@ test("buildAgentResultPackage keeps RBTS settlement-pending rounds non-final", (
   assert.equal(result.recommendedNextAction, "wait_for_settlement");
   assert.equal(result.distribution.stateLabel, "SettlementPending");
   assert.equal(result.protocolState.latestRound?.state, ROUND_STATE.SettlementPending);
+  assert.equal(result.finalityStatus, "normal_finality");
+  assert.equal(result.blockedReason, "normal_payout_finality");
+  assert.equal(result.normalMaxDelaySeconds, NORMAL_PAYOUT_FINALITY_MAX_DELAY_SECONDS);
+  assert.equal(result.includesVetoWindow, true);
+  assert.equal(result.estimatedReadyAt, null);
+  assert.equal(result.stalled, false);
   assert.ok(result.limitations.some(item => item.includes("not final")));
+  assert.ok(result.limitations.some(item => item.includes("normal one-hour path")));
+});
+
+test("buildAgentResultPackage flags settlement-pending rounds past the one-hour finality target", () => {
+  const result = buildAgentResultPackage({
+    audienceContext: null,
+    content: content({
+      ratingBps: 6500,
+      ratingSettledRounds: 0,
+    }),
+    feedback: [],
+    latestRound: {
+      downCount: 2,
+      downPool: "300",
+      revealedCount: 8,
+      roundId: "2",
+      settledAt: "1",
+      state: ROUND_STATE.SettlementPending,
+      totalStake: "1000",
+      upCount: 6,
+      upPool: "700",
+      upWins: true,
+      voteCount: 8,
+    },
+    publicUrl: "https://rateloop.ai/rate?content=123",
+  });
+
+  assert.equal(result.ready, false);
+  assert.equal(result.answer, "pending");
+  assert.equal(result.recommendedNextAction, "wait_for_settlement");
+  assert.equal(result.finalityStatus, "stalled");
+  assert.equal(result.blockedReason, "payout_finality_sla_exceeded");
+  assert.equal(result.estimatedReadyAt, String(1 + NORMAL_PAYOUT_FINALITY_MAX_DELAY_SECONDS));
+  assert.equal(result.stalled, true);
+  assert.ok(result.limitations.some(item => item.includes("past the one-hour healthy-path finality target")));
 });
 
 test("buildAgentResultPackage prefers the latest round rating over stale content aggregates", () => {
