@@ -830,6 +830,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           or(
             sql`${roundPayoutSnapshot.id} is null`,
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_REJECTED),
           ),
         ),

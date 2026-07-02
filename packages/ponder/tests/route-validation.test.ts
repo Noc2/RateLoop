@@ -580,6 +580,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       ratingBps: "round.ratingBps",
       referenceRatingBps: "round.referenceRatingBps",
       revealGracePeriod: "round.revealGracePeriod",
+      rbtsSettlementStatus: "round.rbtsSettlementStatus",
       settledAt: "round.settledAt",
       settledBlockNumber: "round.settledBlockNumber",
       settledLogIndex: "round.settledLogIndex",
@@ -3665,6 +3666,48 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("roundPayoutSnapshot.id");
     expect(serialized).toContain("round.revealedCount");
     expect(serialized).toContain("questionRewardPool.requiredVoters");
+  });
+
+  it("keeps finalized RBTS settlement snapshots discoverable until they are applied", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        domain: 5,
+        rewardPoolId: 0n,
+        contentId: 9n,
+        roundId: 2n,
+        rbtsSettlementStatus: "pending",
+        rbtsSettlementReadyAt: 123n,
+        revealedCount: 3,
+        snapshotStatus: 3,
+      },
+    ]);
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/rbts-settlement-round-candidates?limit=25",
+    );
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.leftJoin).toHaveBeenCalled();
+    expect(queryBuilder.limit).toHaveBeenCalledWith(25);
+    const serialized = serializeExpression(queryBuilder.where.mock.calls[0]?.[0]);
+    expect(serialized).toContain("round.state");
+    expect(serialized).toContain("round.rbtsSettlementStatus");
+    expect(serialized).toContain("roundPayoutSnapshot.id");
+    expect(serialized).toContain('["roundPayoutSnapshot.status",3]');
+
+    const body = await response.json();
+    expect(body.items[0]).toMatchObject({
+      contentId: "9",
+      roundId: "2",
+      rbtsSettlementStatus: "pending",
+      snapshotStatus: 3,
+    });
   });
 
   it("returns eligible revealed vote inputs for correlation scoring", async () => {
