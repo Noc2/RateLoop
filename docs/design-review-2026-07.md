@@ -101,11 +101,11 @@ keeper automation, and governance recovery runbooks instead of making users wait
 - **Scenario:** The first claimant on a 200-voter round pays full qualification cost inside `claimQuestionReward`. Fine on a cheap L2; near an L1-style 30M gas limit a large bundle could make first-claim/refund un-mineable.
 - **Status:** Operational fix implemented without changing voter caps. Ponder `/keeper/work` now surfaces bounded `rewardPoolQualifications` and `bundleTerminalSyncs`; the keeper proactively calls `qualifyRound` and `syncQuestionBundleTerminals` with per-tick gas controls and metrics.
 
-### L-5 (contracts). `finalizeRevealFailedRound` quorum coupling with `ProtocolConfig` bounds is load-bearing but only enforced by a comment
+### L-5 (contracts). `finalizeRevealFailedRound` quorum coupling with `ProtocolConfig` bounds was load-bearing
 
 - **Severity:** Low (acknowledged in code; re-flagged as a governance tripwire).
 - **Where:** `RoundVotingEngine.sol` 985–999 uses raw `roundCfg.minVoters` as reveal quorum, safe only because `ProtocolConfig._validateRoundConfigBounds` enforces `minSettlementVoters >= 3 == MIN_RBTS_PARTICIPANTS`. If governance relaxes that bound without touching the engine, rounds with `revealedCount ∈ [minVoters, 3)` get permanently stuck (`ThresholdReached` here while RBTS scoring rejects settlement), locking stakes.
-- **Status:** Fixed structurally for the next deployment. `RoundVotingEngine` derives reveal quorum as `max(roundCfg.minVoters, MIN_RBTS_PARTICIPANTS)` in settlement, reveal-failed finalization, HRC commit checks, and cancel lockout.
+- **Status:** Fixed for the next deployment without raising the normal quorum. `ProtocolConfig` still refuses `minSettlementVoters < 3`, and `RoundCreationLib.snapshotRoundVotingConfig` now refuses to snapshot any content round config below the RBTS participant floor before stake can enter a round. The engine keeps the size-safe raw `minVoters` hot path because every reachable round snapshot is now guaranteed to satisfy `minVoters >= MIN_RBTS_PARTICIPANTS`.
 
 ### L-6 (contracts). Arbiter rejection of a partially-claimed snapshot permanently strands remaining claimants' shares
 
@@ -126,7 +126,7 @@ keeper automation, and governance recovery runbooks instead of making users wait
 1. **Ban-check quadruplication:** the snapshot-registry-then-current-registry ban check with fail-open `catch` is copy-pasted in ≥4 places (`QuestionRewardPoolEscrow.sol` ~661–692, `QualificationLib` ~666–686, `BundleActionsLib` ~1418–1440, reward distributor). Identical today; any change must touch all copies. Consolidate into a shared library on a future upgrade.
 2. **`"rateloop.address-identity-v1"` domain string** is independently re-derived in `QuestionRewardPoolEscrow`, `...VoterLib`, and `RaterRegistry`; `ProfileRegistry._validateRaterRegistry` validates against the literal. Consistent; a constants library would remove drift risk.
 3. **"Failed window" encoding** (`bountyOpensAt > bountyClosesAt`) is an implicit protocol-wide convention (`WindowLib.activateRewardPoolWindowForRound` 55–69). Document it in `QuestionRewardPoolEscrowTypes.sol`.
-4. **Quorum constant coupling:** four independent `3`s (`MIN_EFFECTIVE_PARTICIPANT_UNITS`, `MIN_REQUIRED_VOTERS`, engine `MIN_RBTS_PARTICIPANTS`, `ProtocolConfig.minSettlementVoters >= 3`) must move together (see L-5).
+4. **Quorum constant coupling:** five independent `3`s (`MIN_EFFECTIVE_PARTICIPANT_UNITS`, `MIN_REQUIRED_VOTERS`, engine `MIN_RBTS_PARTICIPANTS`, `ProtocolConfig.minSettlementVoters >= 3`, and `RoundCreationLib.MIN_RBTS_PARTICIPANTS`) must move together; the next deployment adds a round-snapshot guard so below-floor configs fail before a voting round opens (see L-5).
 5. **Stale-engine/escrow guards are consistent** with the `AGENTS.md` governance-rotation model — escrow/bonus/oracle pins all fail closed on rotation, matching the "coordinated redeploy, not registry-only rotation" runbook.
 
 ---

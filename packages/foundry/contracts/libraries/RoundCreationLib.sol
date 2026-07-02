@@ -13,6 +13,10 @@ import { RoundLib } from "./RoundLib.sol";
 library RoundCreationLib {
     using SafeCast for uint256;
 
+    uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+
+    error InvalidRoundConfigSnapshot();
+
     event RoundReferenceSnapshotted(uint256 indexed contentId, uint256 indexed roundId, uint16 roundReferenceRatingBps);
     event RoundConfigSnapshotted(
         uint256 indexed contentId,
@@ -34,6 +38,7 @@ library RoundCreationLib {
         uint256 roundId
     ) external {
         RoundLib.RoundConfig memory roundCfg = registry.getContentRoundConfig(contentId);
+        if (roundCfg.minVoters < MIN_RBTS_PARTICIPANTS) revert InvalidRoundConfigSnapshot();
         roundConfigSnapshot[contentId][roundId] = roundCfg;
         roundRatingConfigSnapshot[contentId][roundId] = protocolConfig.getRatingConfig();
         // FV-1 (2026-05-20 follow-up audit): reject snapshots of a zero-rating content so the

@@ -12,6 +12,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundCreationLib } from "../contracts/libraries/RoundCreationLib.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
@@ -880,16 +881,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         return revealBase + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24;
     }
 
-    function _forceRoundConfigSnapshot(
-        uint256 contentId,
-        uint256 roundId,
-        RoundLib.RoundConfig memory roundConfig
-    ) internal {
-        bytes32 contentSlot = keccak256(abi.encode(contentId, uint256(31)));
-        bytes32 roundSlot = keccak256(abi.encode(roundId, contentSlot));
+    function _forceContentRoundConfig(uint256 contentId, RoundLib.RoundConfig memory roundConfig) internal {
+        bytes32 contentSlot = keccak256(abi.encode(contentId, uint256(15)));
         uint256 packed = uint256(roundConfig.epochDuration) | (uint256(roundConfig.maxDuration) << 32)
             | (uint256(roundConfig.minVoters) << 64) | (uint256(roundConfig.maxVoters) << 80);
-        vm.store(address(engine), roundSlot, bytes32(packed));
+        vm.store(address(registry), contentSlot, bytes32(packed));
     }
 
     function _expectAdvisoryRevert(address voter, uint256 contentId, string memory saltTag, bytes4 selector) internal {
@@ -3764,35 +3760,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(failedRound.state), uint256(RoundLib.RoundState.RevealFailed));
     }
 
-    function test_RbtsRevealQuorumUsesStructuralMinimumWhenSnapshotMinVotersIsLowered() public {
+    function test_RoundCreationRejectsSnapshotBelowRbtsParticipantFloor() public {
         uint256 contentId = _submitContent();
 
-        mockRaterIdentityRegistry.setHolder(voter1);
-        mockRaterIdentityRegistry.setHolder(voter2);
-        mockRaterIdentityRegistry.setHolder(voter3);
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
-        _commit(voter3, contentId, true, STAKE);
-
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        RoundLib.RoundConfig memory lowered = RoundEngineReadHelpers.roundConfig(engine, contentId, roundId);
-        lowered.minVoters = 2;
-        _forceRoundConfigSnapshot(contentId, roundId, lowered);
-        assertEq(RoundEngineReadHelpers.roundConfig(engine, contentId, roundId).minVoters, 2);
-
-        _warpPastTlockRevealTime(uint256(round.startTime) + uint256(lowered.epochDuration));
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+        _settleRoundAfterRbtsSeed(contentId, roundId);
 
-        vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        engine.settleRound(contentId, roundId);
+        RoundLib.RoundConfig memory lowered = registry.getContentRoundConfig(contentId);
+        lowered.minVoters = 2;
+        _forceContentRoundConfig(contentId, lowered);
+        assertEq(registry.getContentRoundConfig(contentId).minVoters, 2);
 
-        vm.warp(_revealFailedFinalDeadline(contentId, roundId));
-        engine.finalizeRevealFailedRound(contentId, roundId);
-
-        RoundLib.Round memory failedRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(failedRound.state), uint256(RoundLib.RoundState.RevealFailed));
+        vm.expectRevert(RoundCreationLib.InvalidRoundConfigSnapshot.selector);
+        engine.openRound(contentId);
     }
 
     function test_FinalizeRevealFailed_AllSybilQuorum_StaysCancellable() public {

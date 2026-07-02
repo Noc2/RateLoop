@@ -83,7 +83,7 @@ export const protocolDocFacts = {
   maxVotersLabel: DEFAULT_ROUND_CONFIG.maxVoters.toLocaleString(),
   launchFeedbackQuorumLabel: `${DEFAULT_ROUND_CONFIG.minVoters}-rater launch default`,
   quorumRatchetPolicyLabel:
-    "Governance can raise the default settlement voter count and the allowed minimum for new rounds as rater supply, bounty value, and attack pressure grow; already-created questions and already-open rounds keep their snapshotted configuration.",
+    "Governance can raise the default settlement voter count and the allowed minimum for new rounds as rater supply, bounty value, and attack pressure grow; the minimum remains at least 3 because RBTS settlement needs three participants. Already-created questions and already-open rounds keep their snapshotted configuration.",
   minQuestionDurationLabel: formatDurationLabel(MIN_QUESTION_DURATION_SECONDS),
   maxQuestionDurationLabel: formatDurationLabel(MAX_QUESTION_DURATION_SECONDS),
   minSettlementVotersLabel: String(ROUND_CONFIG_BOUNDS.minSettlementVoters),

@@ -35,10 +35,10 @@ Several production contracts run close to the limit. Run `yarn workspace @ratelo
 
 | Contract                   | Size (B) | Headroom (B) |
 | -------------------------- | -------- | ------------ |
-| `LaunchDistributionPool`   | 24,561   | 15           |
-| `ContentRegistry`          | 24,501   | 75           |
-| `QuestionRewardPoolEscrow` | 24,516   | 60           |
-| `RoundVotingEngine`        | 24,383   | 193          |
+| `LaunchDistributionPool`   | 24,503   | 73           |
+| `ContentRegistry`          | 24,202   | 374          |
+| `QuestionRewardPoolEscrow` | 23,415   | 1,161        |
+| `RoundVotingEngine`        | 24,562   | 14           |
 | `RaterRegistry`            | 22,900   | 1,676        |
 
 `ContentRegistry.repointPendingRatingClusterPayoutOracle` is exposed via a thin `CONFIG_ROLE` wrapper; dormancy lifecycle and engine-probing helpers live in `ContentRegistryDormancyLib` to preserve EIP-170 headroom.

@@ -478,8 +478,9 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
-          <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
-          revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). Determines
+          <code>minVoters</code> votes from the round snapshot are revealed and all past-epoch votes have been revealed
+          (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). The round snapshot is
+          guarded at creation so <code>minVoters</code> cannot fall below the three-participant RBTS floor. Determines
           winners based on epoch-weighted stakes, scores rating rewards from the signal and crowd forecast, and records
           pending public-rating evidence from bounded binary signal evidence. The visible rating moves after the
           finalized public-rating snapshot and veto window; bounty, launch-LREP, and public-rating correlation caps use

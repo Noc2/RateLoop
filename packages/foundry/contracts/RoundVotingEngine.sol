@@ -982,7 +982,10 @@ contract RoundVotingEngine is
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg);
+        // L-5: `RoundCreationLib.snapshotRoundVotingConfig` refuses to snapshot a
+        // below-RBTS quorum config, so the engine can use the stored minVoters directly
+        // without re-deriving max(minVoters, MIN_RBTS_PARTICIPANTS) on the hot path.
+        uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.voteCount < rbtsRevealQuorum) revert NotEnoughVotes();
         if (round.revealedCount >= rbtsRevealQuorum) revert ThresholdReached();
         if (!_canFinalizeRevealFailedRound(contentId, roundId, round)) revert RevealGraceActive();
@@ -1024,7 +1027,7 @@ contract RoundVotingEngine is
         _requireRoundContentLifecycleActive(contentId, roundId);
 
         // Must have enough revealed votes for both the round config and Robust BTS.
-        if (round.revealedCount < _rbtsRevealQuorum(roundCfg)) revert NotEnoughVotes();
+        if (round.revealedCount < roundCfg.minVoters) revert NotEnoughVotes();
 
         uint256 unrevealedPastEpochCount;
         bool scoringClosed = roundRbtsSeedEntropy[contentId][roundId] != bytes32(0);
@@ -1366,7 +1369,7 @@ contract RoundVotingEngine is
         returns (bool)
     {
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        if (roundHumanVerifiedCommitCount[contentId][roundId] < _rbtsRevealQuorum(roundCfg)) return false;
+        if (roundHumanVerifiedCommitCount[contentId][roundId] < roundCfg.minVoters) return false;
         return RoundCleanupLib.canFinalizeRevealFailedRound(
             round,
             roundConfigSnapshot[contentId],
@@ -1385,14 +1388,11 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg
     ) internal view returns (bool) {
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) return false;
-        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg);
+        // L-5: snapshot-time validation keeps minVoters >= MIN_RBTS_PARTICIPANTS.
+        uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.revealedCount >= rbtsRevealQuorum) return false;
         return
             round.voteCount < rbtsRevealQuorum || roundHumanVerifiedCommitCount[contentId][roundId] < rbtsRevealQuorum;
-    }
-
-    function _rbtsRevealQuorum(RoundLib.RoundConfig memory roundCfg) private pure returns (uint16) {
-        return roundCfg.minVoters < MIN_RBTS_PARTICIPANTS ? MIN_RBTS_PARTICIPANTS : roundCfg.minVoters;
     }
 
     function _isSettlementRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
