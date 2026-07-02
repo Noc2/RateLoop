@@ -3,7 +3,7 @@ pragma solidity ^0.8.34;
 
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { TestClusterPayoutOracle, VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
@@ -733,7 +733,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(voter1);
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _completeOneUnrevealedRbtsSettlement(contentId, roundId);
 
         vm.prank(voter1);
         uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
@@ -745,10 +745,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
 
-        vm.expectRevert("Cleanup pending");
+        vm.expectRevert("Round not settled");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
 
-        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _completeOneUnrevealedRbtsSettlement(contentId, roundId);
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
@@ -761,10 +761,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
 
         vm.warp(expiresAt + BUNDLE_CLAIM_GRACE + 1);
-        vm.expectRevert("Cleanup pending");
+        vm.expectRevert("Round not settled");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
 
-        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _completeOneUnrevealedRbtsSettlement(contentId, roundId);
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
 
         vm.expectRevert("Grace");
@@ -993,7 +993,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             MIN_VERY_HIGH_VALUE_PARTICIPANTS,
             block.timestamp + 1 hours,
             1 hours,
-            0
+            BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
         );
         assertEq(bundleId, 2);
     }
@@ -3627,6 +3627,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         replacementOracle.setRoundPayoutSnapshotConsumer(
             replacementOracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry)
         );
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), address(votingEngine)
+        );
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(replacementOracle));
 
@@ -3683,6 +3686,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.clearMockedCalls();
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
         assertGt(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, roundId, 3);
 
         vm.expectRevert("Cluster source stale");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -3712,6 +3716,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
         vm.clearMockedCalls();
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, roundId, 3);
 
         (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 0);
@@ -3728,6 +3733,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
 
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, roundId, 3);
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
@@ -4569,6 +4575,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         replacementOracle.setRoundPayoutSnapshotConsumer(
             replacementOracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry)
+        );
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), address(votingEngine)
         );
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(replacementOracle));
@@ -7378,8 +7387,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         }
 
         vm.warp(round.startTime + 7 days + protocolConfig.revealGracePeriod() + 1);
-        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+        _captureRbtsSeedForCleanup(votingEngine, contentId, roundId);
         assertEq(_roundUnrevealedCleanupRemaining(votingEngine, contentId, roundId), 1);
+    }
+
+    function _completeOneUnrevealedRbtsSettlement(uint256 contentId, uint256 roundId) internal {
+        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, contentId, roundId, 3);
     }
 
     function _revealThresholdWithOneUnrevealed(uint256 contentId) internal returns (uint256 roundId) {
@@ -7761,8 +7775,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         _settleAfterRbtsSeed(votingEngine, contentIds[0], firstRoundId);
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
-        votingEngine.processUnrevealedVotes(contentIds[0], firstRoundId, 0, 0);
-        votingEngine.processUnrevealedVotes(contentIds[1], secondRoundId, 0, 0);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
@@ -8050,6 +8062,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, false);
         _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
 
+        TestClusterPayoutOracle testOracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        testOracle.setRoundPayoutSnapshotConsumer(1, address(rewardPoolEscrow));
+        testOracle.setRoundPayoutSnapshotConsumer(4, address(rewardPoolEscrow));
+
         vm.startPrank(owner);
         registry.pause();
         registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
@@ -8099,7 +8115,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testBundleRefund_LateQualificationStartsClaimGraceAfterRefundGrace() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
-        uint256 bountyClosesAt = block.timestamp + EPOCH_DURATION;
+        uint256 bountyClosesAt = block.timestamp + _defaultBundleWindowSeconds(contentIds);
 
         vm.warp(bountyClosesAt - 1);
         address[] memory firstVoters = _fourVoters();
@@ -8118,15 +8134,16 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _revealCommittedVotes(second, directions, voters.length);
         uint256 cleanupReadyAt = firstRevealable + protocolConfig.revealGracePeriod() + 1;
         if (block.timestamp < cleanupReadyAt) vm.warp(cleanupReadyAt);
-        _settleAfterRbtsSeed(votingEngine, first.contentId, first.roundId);
+        _captureRbtsSeedForCleanup(votingEngine, first.contentId, first.roundId);
         _settleAfterRbtsSeed(votingEngine, second.contentId, second.roundId);
         assertEq(_roundUnrevealedCleanupRemaining(votingEngine, first.contentId, first.roundId), 1);
 
         vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
-        vm.expectRevert("Cleanup pending");
+        vm.expectRevert("Sync pending");
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
         votingEngine.processUnrevealedVotes(contentIds[0], first.roundId, 0, 0);
+        _applyIdentityRbtsSettlementSnapshot(votingEngine, first.contentId, first.roundId, 3);
         assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
 
         vm.warp(block.timestamp + 30 days);
