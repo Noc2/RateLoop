@@ -9,6 +9,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
@@ -310,19 +311,14 @@ contract SelectiveRevelationTest is VotingTestBase {
         bytes32 actualSeed = _scoreSeedFromLogs(logs, contentId, roundId);
         bytes32 settlementEntropy = _settlementEntropyFromLogs(logs, contentId, roundId);
 
-        bytes32 scoringSetHash;
-        for (uint256 i = 0; i < 8; i++) {
-            scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, commitKeys[i]));
-        }
+        bytes32 scoringSetHash = _scoringSetHash(contentId, roundId, commitKeys, 8);
         bytes32 expectedSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(8), scoringSetHash, settlementEntropy
             )
         );
 
-        bytes32 pollutedSetHash = scoringSetHash;
-        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, commitKeys[8]));
-        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, commitKeys[9]));
+        bytes32 pollutedSetHash = _scoringSetHash(contentId, roundId, commitKeys, 10);
         bytes32 pollutedSeed = keccak256(
             abi.encode(
                 block.chainid, address(engine), contentId, roundId, uint256(10), pollutedSetHash, settlementEntropy
@@ -331,6 +327,21 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         assertEq(actualSeed, expectedSeed, "score seed only includes threshold scoring set");
         assertNotEq(actualSeed, pollutedSeed, "unrevealed commits must not perturb seed after grace");
+    }
+
+    function _scoringSetHash(uint256 contentId, uint256 roundId, bytes32[10] memory commitKeys, uint256 count)
+        internal
+        view
+        returns (bytes32 hash)
+    {
+        for (uint256 i = 0; i < count; i++) {
+            bytes32 drawKey = _commitIdentityKey(engine, contentId, roundId, commitKeys[i]);
+            if (drawKey == bytes32(0)) {
+                RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKeys[i]);
+                drawKey = VotePreflightLib.addressIdentityKey(commit.voter);
+            }
+            hash = keccak256(abi.encode(hash, commitKeys[i], drawKey));
+        }
     }
 
     function test_SingleDuration_UnrevealedAfterGraceDoesNotCreateSubsidy() public {
