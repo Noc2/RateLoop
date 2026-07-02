@@ -61,12 +61,14 @@ export async function main() {
     amount: bountyAmount,
     requiredVoters: "3",
   };
+  const chainId = 84532;
+  const roundConfig = { questionDurationSeconds };
 
   const quote = await agent.quoteQuestion({
     clientRequestId,
-    chainId: 84532,
+    chainId,
     bounty,
-    roundConfig: { questionDurationSeconds },
+    roundConfig,
     question,
     walletAddress,
   });
@@ -75,8 +77,10 @@ export async function main() {
 
   const askPayload = {
     clientRequestId,
+    chainId,
     maxPaymentAmount: quote.payment?.amount ?? bounty.amount,
     bounty,
+    roundConfig,
     question,
     walletAddress,
   };

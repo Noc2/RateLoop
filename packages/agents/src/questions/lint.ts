@@ -33,6 +33,7 @@ import {
 } from "@rateloop/node-utils/submissionValidation";
 import {
   X402_CONFIDENTIALITY_BOND_UINT64_MAX,
+  X402_MAX_QUESTION_BUNDLE_COUNT,
   isAllowedX402HostedDetailsUrl,
   isAllowedX402UploadedImageUrl,
 } from "../x402QuestionPayload.js";
@@ -494,6 +495,9 @@ export function lintAgentQuestion(
   } else if (hasContextUrl && looksLikeDirectImageUrl(question.contextUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a page URL. Upload images through imageUrls.");
   }
+  if (hasImageUrls && hasVideoUrl) {
+    pushFinding(findings, "error", `${path}.imageUrls`, "Use imageUrls or videoUrl, not both.");
+  }
   if (question.categoryId === undefined || question.categoryId === null || String(question.categoryId).trim() === "") {
     pushFinding(findings, "error", `${path}.categoryId`, "Category id is required.");
   }
@@ -700,6 +704,9 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
   if (questions.length === 0) {
     pushFinding(findings, "error", "question", "Provide question or questions.");
   }
+  if (questions.length > X402_MAX_QUESTION_BUNDLE_COUNT) {
+    pushFinding(findings, "error", "questions", `At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`);
+  }
   if (request.question && request.questions) {
     pushFinding(findings, "error", "questions", "Use either question or questions, not both.");
   }
@@ -715,7 +722,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     );
   });
 
-  if (findings.length === 0 && questions.length > 1 && request.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID) {
+  if (questions.length > 1 && request.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID) {
     pushFinding(
       findings,
       "error",
@@ -723,7 +730,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
       "head_to_head_ab supports exactly one question. Use ranked_option_member bundles for 3+ options or per-option scoring.",
     );
   }
-  if (findings.length === 0 && questions.length > 1) {
+  if (questions.length > 1 && request.templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) {
     questions.forEach((question, index) => {
       const templateId = question.templateId ?? request.templateId;
       if (templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) return;

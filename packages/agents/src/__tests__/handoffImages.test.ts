@@ -86,4 +86,12 @@ describe("handoff generated image files", () => {
       /exceeds RateLoop's .* byte generated-image limit/,
     );
   });
+
+  it("rejects files whose extension is image-like but bytes are not", async () => {
+    const path = await writeTempFile("not-an-image.png", Buffer.from("plain text"));
+
+    await expect(readHandoffGeneratedImageFile(path)).rejects.toThrow(
+      /Unsupported image bytes/,
+    );
+  });
 });

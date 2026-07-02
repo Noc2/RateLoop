@@ -1,22 +1,12 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { basename, extname, resolve } from "node:path";
+import { basename, resolve } from "node:path";
 
 export const MAX_HANDOFF_GENERATED_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_HANDOFF_GENERATED_IMAGES = 4;
 
 const RECOMMENDED_GENERATED_IMAGE_ASPECT_RATIO = 16 / 9;
 const RECOMMENDED_GENERATED_IMAGE_ASPECT_RATIO_TOLERANCE = 0.03;
-
-const MIME_BY_EXTENSION: Record<
-  string,
-  "image/jpeg" | "image/png" | "image/webp"
-> = {
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-};
 
 export type HandoffGeneratedImage = {
   filename: string;
@@ -73,11 +63,8 @@ function detectImageMimeType(
     return "image/webp";
   }
 
-  const extensionMime = MIME_BY_EXTENSION[extname(path).toLowerCase()];
-  if (extensionMime) return extensionMime;
-
   throw new Error(
-    `Unsupported image type for ${path}. Use a PNG, JPG, JPEG, or WEBP file.`,
+    `Unsupported image bytes for ${path}. Use a valid PNG, JPG, JPEG, or WEBP file.`,
   );
 }
 

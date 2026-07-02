@@ -174,7 +174,11 @@ yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
-Production asks use Base mainnet (`8453`). Local signer examples and `examples/questions/*.json` should continue to default to Base Sepolia (`84532`) so generated test wallets stay on testnet assets. For Base Sepolia Feedback Bonus staging, use same-asset wallet calls for LREP or USDC bonuses; use USDC x402 one-shot bounty plus bonus only after `yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
+Production asks use Base mainnet (`8453`). Local signer examples should continue to default to Base Sepolia (`84532`)
+so generated test wallets stay on testnet assets; public browser-handoff examples may use Base mainnet when they are
+intended to exercise the production handoff service. For Base Sepolia Feedback Bonus staging, use same-asset wallet
+calls for LREP or USDC bonuses; use USDC x402 one-shot bounty plus bonus only after
+`yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
 
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.

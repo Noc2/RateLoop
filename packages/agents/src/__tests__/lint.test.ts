@@ -160,6 +160,28 @@ describe("agent question linting", () => {
     });
   });
 
+  it("rejects public asks that mix image and video context", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: undefined,
+        imageUrls: [UPLOADED_IMAGE_URL],
+        videoUrl: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Use imageUrls or videoUrl, not both.",
+          path: "question.imageUrls",
+        }),
+      ]),
+    );
+  });
+
   it("accepts gated hosted context and warns about public titles", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
@@ -446,6 +468,30 @@ describe("agent question linting", () => {
           level: "error",
           message: "At most 3 tags are supported.",
           path: "question.tags",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects bundles with more than ten questions", () => {
+    const questions = Array.from({ length: 11 }, (_, index) => ({
+      ...VALID_REQUEST.question,
+      title: `Is option ${index + 1} ready for review?`,
+    }));
+
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: undefined,
+      questions,
+      templateId: "ranked_option_member",
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "At most 10 questions are supported.",
+          path: "questions",
         }),
       ]),
     );
@@ -924,6 +970,45 @@ describe("round config voter alignment linting", () => {
       expect.arrayContaining([
         expect.objectContaining({
           level: "error",
+          path: "questions.0.templateId",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects bundled head-to-head asks even when other warnings are present", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      questions: [
+        {
+          ...VALID_REQUEST.question,
+          description: "Choose one option from the comparison.",
+          templateId: "head_to_head_ab",
+          title: "Do you prefer A = Codex or B = Claude?",
+          templateInputs: {
+            optionAKey: "A",
+            optionALabel: "Codex",
+            optionBKey: "B",
+            optionBLabel: "Claude",
+          },
+        },
+        {
+          ...VALID_REQUEST.question,
+          title: "Should this agent proceed with the fallback plan?",
+        },
+      ],
+      question: undefined,
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warning",
+          path: "questions.0.description",
+        }),
+        expect.objectContaining({
+          level: "error",
+          message: expect.stringContaining("head_to_head_ab"),
           path: "questions.0.templateId",
         }),
       ]),
