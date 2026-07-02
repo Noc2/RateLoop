@@ -15,6 +15,10 @@ on:
         description: Run live RPC, Ponder, and app probes when environment variables are configured
         required: false
         default: "false"
+      strict_one_shot_feedback_bonus_x402:
+        description: Require one-shot Feedback Bonus x402 readiness after a fresh Base Sepolia redeploy
+        required: false
+        default: "false"
 
 permissions:
   contents: read
@@ -88,4 +92,9 @@ jobs:
           METRICS_AUTH_TOKEN: ${{ secrets.METRICS_AUTH_TOKEN }}
           PONDER_METADATA_SYNC_TOKEN: ${{ secrets.PONDER_METADATA_SYNC_TOKEN }}
           PONDER_KEEPER_WORK_TOKEN: ${{ secrets.PONDER_KEEPER_WORK_TOKEN }}
-        run: node scripts/check-base-sepolia-readiness.mjs --live --require-live-targets --require-one-shot-feedback-bonus-x402
+        run: |
+          args=(--live --require-live-targets)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.strict_one_shot_feedback_bonus_x402 }}" == "true" ]]; then
+            args+=(--require-one-shot-feedback-bonus-x402)
+          fi
+          node scripts/check-base-sepolia-readiness.mjs "${args[@]}"

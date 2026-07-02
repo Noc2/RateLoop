@@ -84,6 +84,7 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
   assert.match(workflow, /^  pull_request:/m);
   assert.match(workflow, /^  schedule:/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
+  assert.match(workflow, /strict_one_shot_feedback_bonus_x402:/);
   assert.match(
     workflow,
     /BASE_SEPOLIA_NEXT_ENV_FILE: docs\/testing\/base-sepolia-next-env\.fixture/,
@@ -117,6 +118,22 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
   assert.match(liveJob, /KEEPER_DATABASE_URL: \$\{\{ secrets\.KEEPER_DATABASE_URL \}\}/);
   assert.match(liveJob, /METRICS_AUTH_TOKEN: \$\{\{ secrets\.METRICS_AUTH_TOKEN \}\}/);
   assert.match(
+    liveJob,
+    /args=\(--live --require-live-targets\)/,
+  );
+  assert.match(
+    liveJob,
+    /github\.event\.inputs\.strict_one_shot_feedback_bonus_x402/,
+  );
+  assert.match(
+    liveJob,
+    /args\+=\(--require-one-shot-feedback-bonus-x402\)/,
+  );
+  assert.match(
+    liveJob,
+    /node scripts\/check-base-sepolia-readiness\.mjs "\$\{args\[@\]\}"/,
+  );
+  assert.doesNotMatch(
     liveJob,
     /node scripts\/check-base-sepolia-readiness\.mjs --live --require-live-targets --require-one-shot-feedback-bonus-x402/,
   );
