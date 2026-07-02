@@ -1182,7 +1182,8 @@ contract QuestionRewardPoolEscrow is
             lrepToken,
             usdcToken,
             rewardPoolId,
-            roundIds
+            roundIds,
+            BUNDLE_CLAIM_GRACE
         );
     }
 

@@ -143,11 +143,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         );
 
         (bool roundSettled, bool canQualify,,,) = _snapshotlessRoundStatus(
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            votingEngine,
-            rewardPool,
-            roundId
+            rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, votingEngine, rewardPool, roundId
         );
         require(roundSettled, "Round not settled");
         require(canQualify, "Too few eligible voters");
@@ -271,6 +267,9 @@ library QuestionRewardPoolEscrowRecoveryLib {
 
         if (roundId + 1 == rewardPool.nextRoundToEvaluate) {
             rewardPool.nextRoundToEvaluate = uint64(roundId);
+        }
+        if (block.timestamp > rewardPool.claimDeadline) {
+            rewardPool.claimDeadline = block.timestamp.toUint64();
         }
         reopenedRecoveredRound[rewardPoolId][roundId] = true;
 
