@@ -3697,6 +3697,89 @@ describe("registerCorrelationRoutes", () => {
     );
   });
 
+  it("summarizes unproposed source-ready work and filters stale consumed snapshots", async () => {
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          id: `0x${"c".repeat(64)}`,
+          domain: 1,
+          status: 3,
+          proposedAt: 100n,
+          challengeEndsAt: 200n,
+          finalizedAt: 300n,
+          vetoEndsAt: 400n,
+          consumedAt: 500n,
+          updatedAt: 500n,
+        },
+        {
+          id: `0x${"d".repeat(64)}`,
+          domain: 1,
+          status: 1,
+          proposedAt: 5_500n,
+          challengeEndsAt: 6_400n,
+          finalizedAt: null,
+          vetoEndsAt: null,
+          consumedAt: null,
+          updatedAt: 5_500n,
+        },
+      ],
+      [
+        [],
+        [{ domain: 1, sourceReadyAt: 1_000n }],
+        [],
+        [],
+        [],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/finality-sla?now=6000",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      status: "degraded",
+      breachCount: 1,
+    });
+    expect(body.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: 1,
+          phase: "challenge_window",
+          count: 1,
+          oldestAgeSeconds: 500,
+        }),
+        expect.objectContaining({
+          domain: 1,
+          phase: "source_ready_unproposed",
+          count: 1,
+          oldestAgeSeconds: 5000,
+        }),
+      ]),
+    );
+    expect(body.phases).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: "consumed",
+        }),
+      ]),
+    );
+
+    const roundSnapshotWhere = serializeExpression(
+      queryBuilders[0]?.where.mock.calls[0]?.[0],
+    );
+    expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.consumedAt");
+    expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.vetoEndsAt");
+  });
+
   it("lists settled reward rounds that still need payout snapshots", async () => {
     const { queryBuilder } = mockPonderModules([
       {

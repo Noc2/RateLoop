@@ -173,9 +173,14 @@ app.get("/health/indexer", async (c) => {
   const degraded =
     humanVerifiedCommitCount.status === "warning" ||
     correlationFinality.status === "degraded";
+  const status = degraded
+    ? "degraded"
+    : correlationFinality.status === "attention"
+      ? "attention"
+      : "ok";
 
   return c.json({
-    status: degraded ? "degraded" : "ok",
+    status,
     checks: {
       humanVerifiedCommitCount,
       correlationFinality,

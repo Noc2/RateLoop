@@ -1,9 +1,23 @@
-import { inArray } from "ponder";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import {
+  PAYOUT_DOMAIN_LAUNCH_CREDIT,
+  PAYOUT_DOMAIN_PUBLIC_RATING,
+  PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+  PAYOUT_DOMAIN_QUESTION_REWARD,
+  PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+} from "@rateloop/node-utils/correlationScoring";
+import { and, asc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
   correlationEpochSnapshot,
+  launchEarnedRaterCredit,
+  questionBundleRound,
+  questionBundleReward,
+  questionRewardPool,
+  round,
   roundPayoutSnapshot,
 } from "ponder:schema";
+import { questionRewardPoolHasValidBountyWindowExpression } from "./shared.js";
 
 const SNAPSHOT_STATUS = {
   Proposed: 1,
@@ -14,8 +28,10 @@ const SNAPSHOT_STATUS = {
 
 const NORMAL_MAX_DELAY_SECONDS = 60 * 60;
 const SLA_ROW_LIMIT = 1_000;
+const RATING_REVIEW_STATUS_PENDING = 1;
 
 type SnapshotRow = Record<string, unknown>;
+type SourceReadyRow = Record<string, unknown>;
 
 interface PhaseBucket {
   domain: number | "correlation_epoch";
@@ -82,15 +98,6 @@ function classifySnapshot(row: SnapshotRow, now: bigint) {
     };
   }
   if (status === SNAPSHOT_STATUS.Finalized) {
-    const consumedAt = toBigInt(row.consumedAt);
-    if (consumedAt !== null) {
-      return {
-        phase: "consumed",
-        since: consumedAt,
-        estimatedReadyAt: consumedAt,
-        normalPath: false,
-      };
-    }
     const vetoEndsAt = toBigInt(row.vetoEndsAt);
     if (vetoEndsAt !== null && now < vetoEndsAt) {
       return {
@@ -100,6 +107,8 @@ function classifySnapshot(row: SnapshotRow, now: bigint) {
         normalPath: true,
       };
     }
+    const consumedAt = toBigInt(row.consumedAt);
+    if (consumedAt !== null) return null;
     return {
       phase: "ready_for_consumer",
       since: vetoEndsAt ?? row.finalizedAt ?? row.updatedAt,
@@ -170,21 +179,248 @@ function summarizeRows(
   return { buckets, normalBreaches, disputedCount, rejectedCount };
 }
 
+function summarizeSourceReadyRows(now: bigint, rows: SourceReadyRow[]) {
+  const agesByBucket = new Map<string, number[]>();
+  const normalBreaches: Array<{ domain: number; phase: string }> = [];
+
+  for (const row of rows) {
+    const domain = typeof row.domain === "number" ? row.domain : null;
+    if (domain === null) continue;
+    const readyAt = toBigInt(row.sourceReadyAt);
+    if (readyAt === null) continue;
+    const phase = "source_ready_unproposed";
+    const age = ageSeconds(now, readyAt);
+    const key = bucketKey(domain, phase);
+    agesByBucket.set(key, [...(agesByBucket.get(key) ?? []), age]);
+    if (age >= NORMAL_MAX_DELAY_SECONDS) {
+      normalBreaches.push({ domain, phase });
+    }
+  }
+
+  const buckets: PhaseBucket[] = [];
+  for (const [key, ages] of agesByBucket.entries()) {
+    const [domainPart, phase] = key.split(":");
+    buckets.push({
+      domain: Number(domainPart),
+      phase: phase ?? "source_ready_unproposed",
+      count: ages.length,
+      oldestAgeSeconds: Math.max(...ages),
+      p95AgeSeconds: percentile95(ages),
+      oldestEstimatedReadyAt: null,
+    });
+  }
+
+  return { buckets, normalBreaches };
+}
+
+async function loadSourceReadyUnproposedRows() {
+  const bundleSourceReadyAt = sql<bigint>`max(${questionBundleRound.updatedAt})`;
+  const launchSourceReadyAt = sql<bigint>`case when max(${launchEarnedRaterCredit.recordedAt}) > ${round.settledAt} then max(${launchEarnedRaterCredit.recordedAt}) else ${round.settledAt} end`;
+  const [
+    questionRewardRows,
+    launchRows,
+    bundleRows,
+    ratingRows,
+    rbtsRows,
+  ] = await Promise.all([
+    db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_QUESTION_REWARD}`,
+        sourceReadyAt: round.settledAt,
+      })
+      .from(questionRewardPool)
+      .innerJoin(round, eq(round.contentId, questionRewardPool.contentId))
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_QUESTION_REWARD),
+          eq(roundPayoutSnapshot.rewardPoolId, questionRewardPool.id),
+          eq(roundPayoutSnapshot.contentId, questionRewardPool.contentId),
+          eq(roundPayoutSnapshot.roundId, round.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(questionRewardPool.refunded, false),
+          sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
+          eq(round.state, ROUND_STATE.Settled),
+          sql`${round.roundId} >= ${questionRewardPool.startRoundId}`,
+          sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
+          questionRewardPoolHasValidBountyWindowExpression(),
+          sql`${round.settledAt} is not null`,
+          sql`${roundPayoutSnapshot.id} is null`,
+        ),
+      )
+      .orderBy(asc(round.settledAt), asc(questionRewardPool.id))
+      .limit(SLA_ROW_LIMIT),
+    db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_LAUNCH_CREDIT}`,
+        sourceReadyAt: launchSourceReadyAt,
+      })
+      .from(launchEarnedRaterCredit)
+      .innerJoin(
+        round,
+        and(
+          eq(round.contentId, launchEarnedRaterCredit.contentId),
+          eq(round.roundId, launchEarnedRaterCredit.roundId),
+        ),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_LAUNCH_CREDIT),
+          eq(roundPayoutSnapshot.rewardPoolId, 0n),
+          eq(roundPayoutSnapshot.contentId, launchEarnedRaterCredit.contentId),
+          eq(roundPayoutSnapshot.roundId, launchEarnedRaterCredit.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(launchEarnedRaterCredit.pending, true),
+          eq(launchEarnedRaterCredit.finalized, false),
+          eq(launchEarnedRaterCredit.cancelled, false),
+          eq(round.state, ROUND_STATE.Settled),
+          sql`${round.settledAt} is not null`,
+          sql`${roundPayoutSnapshot.id} is null`,
+        ),
+      )
+      .groupBy(
+        launchEarnedRaterCredit.contentId,
+        launchEarnedRaterCredit.roundId,
+        round.settledAt,
+      )
+      .orderBy(asc(launchSourceReadyAt), asc(launchEarnedRaterCredit.contentId))
+      .limit(SLA_ROW_LIMIT),
+    db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD}`,
+        sourceReadyAt: bundleSourceReadyAt,
+      })
+      .from(questionBundleRound)
+      .innerJoin(
+        questionBundleReward,
+        eq(questionBundleReward.id, questionBundleRound.bundleId),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD),
+          eq(roundPayoutSnapshot.rewardPoolId, questionBundleReward.id),
+          eq(roundPayoutSnapshot.contentId, questionBundleReward.id),
+          sql`${roundPayoutSnapshot.roundId} = ${questionBundleRound.roundSetIndex} + 1`,
+        ),
+      )
+      .where(
+        and(
+          eq(questionBundleReward.failed, false),
+          eq(questionBundleReward.refunded, false),
+          sql`${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}`,
+          sql`${questionBundleRound.roundSetIndex} < ${questionBundleReward.requiredSettledRounds}`,
+          sql`(
+            ${questionBundleReward.bountyClosesAt} != 0
+            and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
+          )`,
+          sql`${roundPayoutSnapshot.id} is null`,
+        ),
+      )
+      .groupBy(
+        questionBundleReward.id,
+        questionBundleRound.roundSetIndex,
+        questionBundleReward.questionCount,
+      )
+      .having(
+        sql`count(distinct ${questionBundleRound.bundleIndex}) >= ${questionBundleReward.questionCount}`,
+      )
+      .orderBy(asc(bundleSourceReadyAt), asc(questionBundleReward.id))
+      .limit(SLA_ROW_LIMIT),
+    db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_PUBLIC_RATING}`,
+        sourceReadyAt: round.settledAt,
+      })
+      .from(round)
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_PUBLIC_RATING),
+          eq(roundPayoutSnapshot.rewardPoolId, 0n),
+          eq(roundPayoutSnapshot.contentId, round.contentId),
+          eq(roundPayoutSnapshot.roundId, round.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(round.state, ROUND_STATE.Settled),
+          eq(round.ratingReviewStatus, RATING_REVIEW_STATUS_PENDING),
+          sql`${round.revealedCount} > 0`,
+          sql`${round.settledAt} is not null`,
+          sql`${roundPayoutSnapshot.id} is null`,
+        ),
+      )
+      .orderBy(asc(round.settledAt), asc(round.contentId))
+      .limit(SLA_ROW_LIMIT),
+    db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_RBTS_SETTLEMENT}`,
+        sourceReadyAt: round.rbtsSettlementReadyAt,
+      })
+      .from(round)
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_RBTS_SETTLEMENT),
+          eq(roundPayoutSnapshot.rewardPoolId, 0n),
+          eq(roundPayoutSnapshot.contentId, round.contentId),
+          eq(roundPayoutSnapshot.roundId, round.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(round.state, ROUND_STATE.SettlementPending),
+          eq(round.rbtsSettlementStatus, "pending"),
+          sql`${round.revealedCount} > 0`,
+          sql`${round.rbtsSettlementReadyAt} is not null`,
+          sql`${roundPayoutSnapshot.id} is null`,
+        ),
+      )
+      .orderBy(asc(round.rbtsSettlementReadyAt), asc(round.contentId))
+      .limit(SLA_ROW_LIMIT),
+  ]);
+
+  return [
+    ...questionRewardRows,
+    ...launchRows,
+    ...bundleRows,
+    ...ratingRows,
+    ...rbtsRows,
+  ] as SourceReadyRow[];
+}
+
 export async function buildCorrelationFinalitySla(
   nowSeconds = BigInt(Math.floor(Date.now() / 1000)),
 ) {
-  const [roundRows, epochRows] = await Promise.all([
+  const [roundRows, epochRows, sourceReadyRows] = await Promise.all([
     db
       .select()
       .from(roundPayoutSnapshot)
       .where(
-        inArray(roundPayoutSnapshot.status, [
-          SNAPSHOT_STATUS.Proposed,
-          SNAPSHOT_STATUS.Challenged,
-          SNAPSHOT_STATUS.Finalized,
-          SNAPSHOT_STATUS.Rejected,
-        ]),
+        or(
+          inArray(roundPayoutSnapshot.status, [
+            SNAPSHOT_STATUS.Proposed,
+            SNAPSHOT_STATUS.Challenged,
+            SNAPSHOT_STATUS.Rejected,
+          ]),
+          and(
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Finalized),
+            or(
+              sql`${roundPayoutSnapshot.consumedAt} is null`,
+              sql`${roundPayoutSnapshot.vetoEndsAt} > ${nowSeconds}`,
+            ),
+          ),
+        ),
       )
+      .orderBy(asc(roundPayoutSnapshot.updatedAt), asc(roundPayoutSnapshot.id))
       .limit(SLA_ROW_LIMIT),
     db
       .select()
@@ -197,7 +433,12 @@ export async function buildCorrelationFinalitySla(
           SNAPSHOT_STATUS.Rejected,
         ]),
       )
+      .orderBy(
+        asc(correlationEpochSnapshot.updatedAt),
+        asc(correlationEpochSnapshot.id),
+      )
       .limit(SLA_ROW_LIMIT),
+    loadSourceReadyUnproposedRows(),
   ]);
   const roundSummary = summarizeRows(
     nowSeconds,
@@ -209,9 +450,14 @@ export async function buildCorrelationFinalitySla(
     epochRows as SnapshotRow[],
     "correlation_epoch",
   );
+  const sourceReadySummary = summarizeSourceReadyRows(
+    nowSeconds,
+    sourceReadyRows,
+  );
   const normalBreaches = [
     ...roundSummary.normalBreaches,
     ...epochSummary.normalBreaches,
+    ...sourceReadySummary.normalBreaches,
   ];
   const disputedCount = roundSummary.disputedCount + epochSummary.disputedCount;
   const rejectedCount = roundSummary.rejectedCount + epochSummary.rejectedCount;
@@ -230,7 +476,11 @@ export async function buildCorrelationFinalitySla(
     breachCount: normalBreaches.length,
     disputedCount,
     rejectedCount,
-    phases: [...roundSummary.buckets, ...epochSummary.buckets].sort((a, b) =>
+    phases: [
+      ...sourceReadySummary.buckets,
+      ...roundSummary.buckets,
+      ...epochSummary.buckets,
+    ].sort((a, b) =>
       String(a.domain).localeCompare(String(b.domain)) ||
       a.phase.localeCompare(b.phase),
     ),
