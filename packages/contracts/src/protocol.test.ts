@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
-  NON_REFUNDABLE_BOUNTY_RECAPTURE_PROTECTION_AMOUNT,
   QUESTION_REWARD_PARTICIPANT_FLOORS,
   SCORE_SPREAD_POLICY,
   USDC_BY_CHAIN_ID,
@@ -10,7 +8,6 @@ import {
   WORLD_ID_V3_ROUTER_BY_CHAIN_ID,
   getUsdcEip712DomainName,
   requiredQuestionRewardParticipants,
-  requiresVerifiedHumanBountyEligibility,
 } from "./protocol";
 
 test("score-spread policy exposes low-turnout forfeiture guardrails", () => {
@@ -44,14 +41,5 @@ test("requiredQuestionRewardParticipants maps reward amount tiers", () => {
   assert.equal(
     requiredQuestionRewardParticipants(BigInt(QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueAmount)),
     8,
-  );
-});
-
-test("recapture-sized non-refundable bounty threshold requires Proof of Human", () => {
-  assert.equal(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN, 8);
-  assert.equal(requiresVerifiedHumanBountyEligibility(499_999_999), false);
-  assert.equal(
-    requiresVerifiedHumanBountyEligibility(NON_REFUNDABLE_BOUNTY_RECAPTURE_PROTECTION_AMOUNT),
-    true,
   );
 });

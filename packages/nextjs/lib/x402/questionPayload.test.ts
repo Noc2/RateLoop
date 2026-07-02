@@ -853,7 +853,7 @@ test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
   assert.equal(payload.roundConfig.minVoters, 8n);
 });
 
-test("parseX402QuestionRequest protects recapture-sized bounties with Proof of Human", () => {
+test("parseX402QuestionRequest defaults large bounties to open eligibility", () => {
   const defaulted = parseX402QuestionRequest({
     ...VALID_REQUEST,
     bounty: {
@@ -861,20 +861,17 @@ test("parseX402QuestionRequest protects recapture-sized bounties with Proof of H
       amount: "500000000",
     },
   });
-  assert.equal(defaulted.bounty.bountyEligibility, 8);
+  assert.equal(defaulted.bounty.bountyEligibility, 0);
 
-  assert.throws(
-    () =>
-      parseX402QuestionRequest({
-        ...VALID_REQUEST,
-        bounty: {
-          ...VALID_REQUEST.bounty,
-          amount: "500000000",
-          bountyEligibility: "0",
-        },
-      }),
-    /bountyEligibility must be 8/,
-  );
+  const explicitOpen = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      amount: "500000000",
+      bountyEligibility: "0",
+    },
+  });
+  assert.equal(explicitOpen.bounty.bountyEligibility, 0);
 
   const explicitHuman = parseX402QuestionRequest({
     ...VALID_REQUEST,

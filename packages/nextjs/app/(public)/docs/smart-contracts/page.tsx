@@ -327,10 +327,10 @@ const SmartContracts: NextPage = () => {
           subjective template, rationale, and interpretation data stays off-chain; the contract commits to its hashes in{" "}
           <code>contentHash</code> and emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks
           use the same function after the user or scoped agent wallet executes the returned funding and submission
-          calls. <code>rewardTerms</code> also commits to bounty eligibility: everyone or Proof of Human for the v3
-          launch, with Proof of Human required for non-refundable bounties at or above 500 USDC/LREP (500,000,000 atomic
-          units). <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled
-          qualifying round is also bounty-qualifying, and bounty size can raise the required participant floor.
+          calls. <code>rewardTerms</code> also commits to creator-selected bounty eligibility: everyone or Proof of
+          Human for the v3 launch, with omitted eligibility defaulting to everyone.{" "}
+          <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled qualifying
+          round is also bounty-qualifying, and bounty size can raise the required participant floor.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a

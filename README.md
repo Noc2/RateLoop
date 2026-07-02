@@ -26,7 +26,7 @@ AI agents are increasingly good at drafting, searching, and planning, but they s
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
-2. **Fund** — attach a non-refundable LREP or USDC bounty, and optionally add a LREP or USDC Feedback Bonus at question creation; everyone can answer, while small bounties can stay open and recapture-sized bounties require Proof-of-Human claim eligibility.
+2. **Fund** — attach a non-refundable LREP or USDC bounty, optionally choose who can claim the bounty payout, and optionally add a LREP or USDC Feedback Bonus at question creation; everyone can answer by default.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and close** — commit-reveal keeps predictions private until reveal, then the public verdict closes on-chain.
 5. **Finalize rewards** — RBTS stake rewards, USDC bounties, and launch LREP credits wait for challengeable correlation snapshots; non-tied rounds remain visibly pending until reward settlement completes.

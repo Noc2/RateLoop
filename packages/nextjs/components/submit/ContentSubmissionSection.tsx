@@ -60,9 +60,7 @@ import {
 import {
   BOUNTY_ELIGIBILITY_CREDENTIAL_OPTIONS,
   BOUNTY_ELIGIBILITY_OPEN,
-  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
   buildBountyEligibility,
-  requiresVerifiedHumanBountyEligibility,
 } from "~~/lib/bountyEligibility";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
@@ -1481,17 +1479,8 @@ export function ContentSubmissionSection() {
     effectiveBountyWindowSeconds === null || effectiveBountyStartByWindowSeconds === null
       ? "Choose a question duration."
       : null;
-  const bountyRequiresVerifiedHuman =
-    selectedRewardAmount !== null && requiresVerifiedHumanBountyEligibility(selectedRewardAmount);
-  useEffect(() => {
-    if (!bountyRequiresVerifiedHuman || (bountyEligibility & BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) !== 0) return;
-    setBountyEligibility(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
-  }, [bountyEligibility, bountyRequiresVerifiedHuman]);
-  const effectiveBountyEligibility = bountyRequiresVerifiedHuman
-    ? bountyEligibility | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-    : bountyEligibility;
   const selectedBountyEligibility = {
-    mode: buildBountyEligibility(effectiveBountyEligibility, false),
+    mode: buildBountyEligibility(bountyEligibility, false),
   };
   const bountySettingsValid =
     rewardRequiredVotersValidationError === null &&
@@ -3338,17 +3327,15 @@ export function ContentSubmissionSection() {
             <input
               type="checkbox"
               className="checkbox checkbox-primary checkbox-sm shrink-0"
-              checked={effectiveBountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
-              disabled={bountyRequiresVerifiedHuman}
+              checked={bountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
               onChange={() => {
-                if (bountyRequiresVerifiedHuman) return;
                 setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
               }}
             />
             <span className="font-medium">Everyone</span>
           </label>
           {BOUNTY_ELIGIBILITY_CREDENTIAL_OPTIONS.map(option => {
-            const checked = (effectiveBountyEligibility & option.bit) !== 0;
+            const checked = (bountyEligibility & option.bit) !== 0;
             return (
               <label
                 key={option.kind}
@@ -3360,9 +3347,7 @@ export function ContentSubmissionSection() {
                   type="checkbox"
                   className="checkbox checkbox-primary checkbox-sm shrink-0"
                   checked={checked}
-                  disabled={bountyRequiresVerifiedHuman && option.bit === BOUNTY_ELIGIBILITY_VERIFIED_HUMAN}
                   onChange={event => {
-                    if (bountyRequiresVerifiedHuman && option.bit === BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) return;
                     const nextEligibility = event.target.checked
                       ? bountyEligibility | option.bit
                       : bountyEligibility & ~option.bit;
@@ -3374,11 +3359,6 @@ export function ContentSubmissionSection() {
             );
           })}
         </div>
-        {bountyRequiresVerifiedHuman ? (
-          <p className="text-sm text-base-content/70">
-            Proof-of-Human is required for bounties of 500 USDC/LREP or more.
-          </p>
-        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

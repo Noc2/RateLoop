@@ -95,12 +95,6 @@ export function requiredQuestionRewardParticipants(amountAtomic: bigint | number
 
 export const BOUNTY_ELIGIBILITY_OPEN = 0 as const;
 export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1 << 3;
-export const NON_REFUNDABLE_BOUNTY_RECAPTURE_PROTECTION_AMOUNT = 500_000_000;
-
-export function requiresVerifiedHumanBountyEligibility(amountAtomic: bigint | number): boolean {
-  const amount = typeof amountAtomic === "bigint" ? amountAtomic : BigInt(amountAtomic);
-  return amount >= BigInt(NON_REFUNDABLE_BOUNTY_RECAPTURE_PROTECTION_AMOUNT);
-}
 
 export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1 as const;
 

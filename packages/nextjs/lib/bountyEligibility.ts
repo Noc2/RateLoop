@@ -1,7 +1,6 @@
 import {
   BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
   BOUNTY_ELIGIBILITY_VERIFIED_HUMAN as PROTOCOL_BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
-  requiresVerifiedHumanBountyEligibility,
 } from "@rateloop/contracts/protocol";
 import {
   WORLD_CREDENTIAL_BOUNTY_OPTIONS,
@@ -12,7 +11,6 @@ import {
 } from "~~/lib/world-id/credentials";
 
 export { BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG };
-export { requiresVerifiedHumanBountyEligibility };
 
 export const BOUNTY_ELIGIBILITY_OPEN = 0;
 export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = PROTOCOL_BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;

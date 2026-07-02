@@ -29,10 +29,6 @@ library ContentRegistryRewardLib {
             requiredVoters >= QuestionRewardParticipantFloorLib.requiredParticipantFloorForAmount(amount),
             "High-value floor"
         );
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isRecaptureProtectedPolicy(amount, true, bountyEligibility),
-            "Verified bounty required"
-        );
         require(amount >= REQUIRED_SUBMISSION_REWARD_SETTLED_ROUNDS * requiredVoters, "Reward too small");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
     }

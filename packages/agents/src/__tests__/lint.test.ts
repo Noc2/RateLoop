@@ -695,7 +695,7 @@ describe("agent question linting", () => {
 });
 
 describe("round config voter alignment linting", () => {
-  it("flags explicit open eligibility for recapture-sized bounties", () => {
+  it("accepts explicit open eligibility for large bounties", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
       bounty: {
@@ -705,18 +705,10 @@ describe("round config voter alignment linting", () => {
       },
     });
 
-    expect(findings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          level: "error",
-          path: "bounty.bountyEligibility",
-        }),
-      ]),
-    );
-    expect(summarizeLintFindings(findings).ok).toBe(false);
+    expect(summarizeLintFindings(findings).ok).toBe(true);
   });
 
-  it("accepts omitted eligibility for recapture-sized bounties because the parser defaults it", () => {
+  it("accepts omitted eligibility for large bounties", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
       bounty: {

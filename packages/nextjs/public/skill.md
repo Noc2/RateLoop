@@ -131,7 +131,7 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 
 Never use settled RateLoop scores to settle external financial contracts. Three-voter rounds are the launch feedback tier. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active. Treat `SettlementPending` as not final for reward claims: the public verdict is closed, but LREP rewards wait for the RBTS settlement snapshot and USDC bounties wait for finalized payout roots.
 
-For non-refundable bounties at or above 500 USDC/LREP (500,000,000 atomic units), use Proof of Human bounty eligibility (`bountyEligibility: 8`). Smaller asks can remain `0` for everyone when the product needs the lowest-friction path.
+Use `bountyEligibility: 0` when bounty claims should be open to everyone, or `bountyEligibility: 8` when the asker explicitly wants Proof of Human claim eligibility. Omitted eligibility defaults to `0`.
 
 Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, mixed-asset Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Wallet-call Feedback Bonuses are confirmed after the ask transaction with `rateloop_confirm_feedback_bonus_transactions`. Browser handoffs and direct MCP can use `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses; `paymentMode: "x402_authorization"` remains a legacy alias.
 

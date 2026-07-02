@@ -156,12 +156,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
         require(params.requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredCompleters >= _requiredParticipantFloorForAmount(params.amount), "High-value floor");
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isRecaptureProtectedPolicy(
-                params.amount, true, params.bountyEligibility
-            ),
-            "Verified bounty required"
-        );
         require(params.requiredSettledRounds == 1, "One round only");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         _requireCompletersMatchSettlementVoters(registry, params.contentIds, params.requiredCompleters);

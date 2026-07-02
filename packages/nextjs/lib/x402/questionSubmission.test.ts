@@ -551,6 +551,42 @@ test("prepareAgentWalletQuestionSubmissionRequest stores a direct wallet plan wi
   assert.equal(record?.paymentAmount, payload.bounty.amount.toString());
 });
 
+test("prepareAgentWalletQuestionSubmissionRequest accepts large open bounty eligibility", async () => {
+  const basePayload = buildPayload("wallet-plan-large-open-bounty");
+  const payload = {
+    ...basePayload,
+    bounty: {
+      ...basePayload.bounty,
+      amount: 500_000_000n,
+      bountyEligibility: 0,
+    },
+  };
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+
+  const prepared = await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const body = prepared.body as {
+    bounty: { amount: string; bountyEligibility: string };
+    payment: { amount: string };
+    status: string;
+  };
+
+  assert.equal(prepared.status, 202);
+  assert.equal(body.status, "awaiting_wallet_signature");
+  assert.equal(body.bounty.amount, "500000000");
+  assert.equal(body.bounty.bountyEligibility, "0");
+  assert.equal(body.payment.amount, "500000000");
+
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.equal(record?.paymentAmount, "500000000");
+});
+
 test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls", async () => {
   setDefaultTestOverrides({
     buildAgentWalletQuestionSubmissionPlan: undefined as never,

@@ -5,12 +5,7 @@ import {
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
-import {
-  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
-  ROUND_STATE,
-  getUsdcEip712DomainName,
-  requiresVerifiedHumanBountyEligibility,
-} from "@rateloop/contracts/protocol";
+import { ROUND_STATE, getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
@@ -1495,15 +1490,6 @@ async function assertBountyMeetsProtocolMinimum(params: {
 
   if (params.payload.bounty.requiredVoters !== params.payload.roundConfig.minVoters) {
     throw new X402QuestionConflictError("Bounty voter requirement must match the selected round settlement voters.");
-  }
-
-  if (
-    requiresVerifiedHumanBountyEligibility(params.payload.bounty.amount) &&
-    (params.payload.bounty.bountyEligibility & BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) === 0
-  ) {
-    throw new X402QuestionConflictError(
-      "Bounties of 500000000 atomic units or more must use Proof-of-Human bounty eligibility.",
-    );
   }
 
   if (params.payload.bounty.requiredVoters > params.payload.roundConfig.maxVoters) {

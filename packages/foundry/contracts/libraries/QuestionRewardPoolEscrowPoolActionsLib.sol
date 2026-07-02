@@ -285,10 +285,11 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             roundIds,
             PAYOUT_DOMAIN_QUESTION_REWARD
         );
-        if (!inactive && (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded)) {
-            return _refundCompleteRewardPool(
-                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE
-            );
+        if (
+            !inactive
+                && (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded)
+        ) {
+            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
         }
 
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
@@ -408,12 +409,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         if (params.nonRefundable) require(params.bountyWindowSeconds != 0, "Bounty window required");
         require(params.requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredVoters >= _requiredParticipantFloorForAmount(fundedAmount), "High-value floor");
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isRecaptureProtectedPolicy(
-                fundedAmount, params.nonRefundable, params.bountyEligibility
-            ),
-            "Verified bounty required"
-        );
         require(params.requiredSettledRounds == MIN_REQUIRED_SETTLED_ROUNDS, "One round only");
         RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(params.contentId);
         require(params.requiredVoters == contentCfg.minVoters, "Voters mismatch");
@@ -570,11 +565,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         for (uint256 i; i < roundIds.length;) {
             uint256 roundId = roundIds[i];
             require(preQualificationRejectedRound[rewardPoolId][roundId], "Round not skipped");
-            if (
-                _hasRecoveredReplacementSnapshot(
+            if (_hasRecoveredReplacementSnapshot(
                     oracleAddr, pinnedAt, votingEngine, rewardPool, rewardPoolId, roundId, payoutDomain
-                )
-            ) {
+                )) {
                 revert PreQualificationRejectedReplacementSnapshotAvailable();
             }
             preQualificationRejectedRound[rewardPoolId][roundId] = false;

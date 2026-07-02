@@ -81,7 +81,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     uint256 public constant T0 = 1000;
     uint256 public constant STAKE = 5e6;
-    uint256 internal constant RECAPTURE_PROTECTION_THRESHOLD = 500e6;
+    uint256 internal constant LARGE_OPEN_BOUNTY_AMOUNT = 500e6;
 
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
     event TreasuryUpdated(address treasury);
@@ -1286,17 +1286,17 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(mockQuestionRewardPoolEscrow.lastFeedbackWindowSeconds(), roundConfig.maxDuration, "feedback window");
     }
 
-    function test_SubmitQuestionWithReward_RejectsRecaptureSizedOpenBounty() public {
-        string memory contextUrl = "https://example.com/recapture-sized-open-bounty";
-        string memory title = "Can unlinked wallets recapture this bounty?";
-        string memory description = "High-value non-refundable bounties require Proof-of-Human payout eligibility.";
+    function test_SubmitQuestionWithReward_AllowsLargeOpenBountyEligibility() public {
+        string memory contextUrl = "https://example.com/large-open-bounty";
+        string memory title = "Can this bounty stay open to everyone?";
+        string memory description = "Creators choose bounty payout eligibility without a protocol threshold.";
         string memory tags = "Products,Bounty";
         uint256 categoryId = 1;
-        bytes32 salt = keccak256("recapture-sized-open-bounty");
+        bytes32 salt = keccak256("large-open-bounty");
         string[] memory imageUrls = _emptyImageUrls();
         ContentRegistry.SubmissionRewardTerms memory openRewardTerms = ContentRegistry.SubmissionRewardTerms({
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            amount: RECAPTURE_PROTECTION_THRESHOLD,
+            amount: LARGE_OPEN_BOUNTY_AMOUNT,
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             bountyEligibility: 0
         });
@@ -1308,7 +1308,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         });
 
         vm.startPrank(submitter);
-        lrepToken.approve(address(mockQuestionRewardPoolEscrow), RECAPTURE_PROTECTION_THRESHOLD);
+        lrepToken.approve(address(mockQuestionRewardPoolEscrow), LARGE_OPEN_BOUNTY_AMOUNT);
         _reserveQuestionSubmissionWithRewardTermsAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1323,7 +1323,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             roundConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Verified bounty required");
         registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1339,6 +1338,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _defaultConfidentialityConfig()
         );
         vm.stopPrank();
+
+        assertEq(mockQuestionRewardPoolEscrow.lastAmount(), LARGE_OPEN_BOUNTY_AMOUNT);
+        assertEq(mockQuestionRewardPoolEscrow.lastBountyEligibility(), 0);
     }
 
     function test_SubmitQuestionWithReward_UsesAgentWalletAsEscrowFunder() public {

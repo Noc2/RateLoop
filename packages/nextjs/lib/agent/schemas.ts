@@ -232,7 +232,7 @@ const agentBountyInputSchema = {
     },
     bountyEligibility: {
       description:
-        "Bounty payout scope bitmask: 0 everyone or 8 Proof of Human. Omit to use RateLoop's launch default, which remains open below the recapture threshold and selects Proof of Human at or above 500000000 atomic units. Everyone can still answer; this only scopes bounty payouts.",
+        "Bounty payout scope bitmask: 0 everyone or 8 Proof of Human. Omit to use RateLoop's launch default of 0 for everyone. Everyone can still answer; this only scopes bounty payouts.",
       enum: [0, 8, "0", "8"],
       type: ["integer", "string"],
     },

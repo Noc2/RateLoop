@@ -4,7 +4,6 @@ import {
   MIN_NONZERO_CONFIDENTIALITY_BOND,
   USDC_BY_CHAIN_ID,
   BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
-  requiresVerifiedHumanBountyEligibility,
   requiredQuestionRewardParticipants,
 } from "@rateloop/contracts/protocol";
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
@@ -863,11 +862,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   const hasExplicitBountyEligibility = value.bountyEligibility !== undefined && value.bountyEligibility !== null;
   const bountyEligibility = Number(
     parseNonNegativeInteger(
-      hasExplicitBountyEligibility
-        ? value.bountyEligibility
-        : requiresVerifiedHumanBountyEligibility(amount)
-          ? X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN
-          : 0n,
+      hasExplicitBountyEligibility ? value.bountyEligibility : 0n,
       "bounty.bountyEligibility",
     ),
   );
@@ -891,14 +886,6 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   if (!isSupportedBountyEligibility(bountyEligibility)) {
     throw new X402QuestionInputError(
       "bounty.bountyEligibility must be 0 for everyone or 8 for Proof of Human.",
-    );
-  }
-  if (
-    requiresVerifiedHumanBountyEligibility(amount) &&
-    (bountyEligibility & X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN) === 0
-  ) {
-    throw new X402QuestionInputError(
-      "bounty.bountyEligibility must be 8 for Proof of Human on non-refundable bounties of 500000000 atomic units or more.",
     );
   }
   return {

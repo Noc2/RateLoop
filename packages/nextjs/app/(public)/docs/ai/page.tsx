@@ -386,12 +386,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, and optional <code>bountyEligibility</code> (
-          <code>0</code> everyone, <code>8</code> Proof of Human). If a custom <code>roundConfig</code> is supplied,{" "}
-          <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch policy, use
-          Proof of Human bounty eligibility for non-refundable bounties at or above 500 USDC/LREP (500,000,000 atomic
-          units), at least 5 voters for bounties at or above 1000 USDC, and at least 8 voters for bounties at or above
-          10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8
-          score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
+          <code>0</code> everyone, <code>8</code> Proof of Human). Omitted <code>bountyEligibility</code> defaults to{" "}
+          <code>0</code>, and either choice is allowed at any bounty size. If a custom <code>roundConfig</code> is
+          supplied, <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch
+          policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or
+          above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled
+          below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
         </li>
         <li>
           Settlement status: a round can close the public verdict before rewards are ready. Treat{" "}

@@ -4,13 +4,10 @@ pragma solidity ^0.8.34;
 import {
     BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
     BOUNTY_ELIGIBILITY_OPEN,
-    BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
-    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+    BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
 } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowEligibilityLib {
-    uint256 internal constant NON_REFUNDABLE_RECAPTURE_PROTECTION_THRESHOLD = 500e6;
-
     function isValidPolicy(uint8 bountyEligibility) internal pure returns (bool) {
         uint8 unsupportedBits =
             bountyEligibility & ~(BOUNTY_ELIGIBILITY_CREDENTIAL_MASK | BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG);
@@ -34,15 +31,6 @@ library QuestionRewardPoolEscrowEligibilityLib {
             return (credentialMask & freshCredentialMask & requiredMask) != 0;
         }
         return true;
-    }
-
-    function isRecaptureProtectedPolicy(uint256 amount, bool nonRefundable, uint8 bountyEligibility)
-        internal
-        pure
-        returns (bool)
-    {
-        if (!nonRefundable || amount < NON_REFUNDABLE_RECAPTURE_PROTECTION_THRESHOLD) return true;
-        return (_credentialMask(bountyEligibility) & BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) != 0;
     }
 
     function eligibilityDataHash() internal pure returns (bytes32) {

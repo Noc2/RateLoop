@@ -30,6 +30,7 @@ import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingE
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import {
+    BOUNTY_ELIGIBILITY_OPEN,
     BOUNTY_ELIGIBILITY_PASSPORT,
     BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
     BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
@@ -94,7 +95,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
-    uint256 internal constant RECAPTURE_PROTECTION_THRESHOLD = 500e6;
+    uint256 internal constant LARGE_OPEN_BOUNTY_AMOUNT = 500e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD = 10_000e6;
     uint256 internal constant MIN_VERY_HIGH_VALUE_PARTICIPANTS = 8;
@@ -517,36 +518,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    function testSubmissionBundleAtRecaptureThresholdRequiresVerifiedHumanEligibility() public {
+    function testSubmissionBundleAllowsLargeOpenBountyEligibility() public {
         uint256[] memory contentIds = _submitBundleQuestions();
-        uint256 questionDurationSeconds = _defaultBundleWindowSeconds(contentIds);
-        uint256 bountyClosesAt = block.timestamp + questionDurationSeconds;
-
-        vm.prank(funder);
-        usdc.approve(address(rewardPoolEscrow), RECAPTURE_PROTECTION_THRESHOLD);
-        vm.expectRevert("Verified bounty required");
-        vm.prank(address(registry));
-        rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            1,
-            contentIds,
-            funder,
-            REWARD_ASSET_USDC,
-            RECAPTURE_PROTECTION_THRESHOLD,
-            3,
-            bountyClosesAt,
-            questionDurationSeconds,
-            0
-        );
 
         uint256 bundleId = _createSubmissionBundleWithEligibility(
-            contentIds,
-            funder,
-            REWARD_ASSET_USDC,
-            RECAPTURE_PROTECTION_THRESHOLD,
-            3,
-            BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+            contentIds, funder, REWARD_ASSET_USDC, LARGE_OPEN_BOUNTY_AMOUNT, 3, 0
         );
         assertEq(bundleId, 1);
+        (uint8 bountyEligibility,) = rewardPoolEscrow.getQuestionBundleEligibility(bundleId);
+        assertEq(bountyEligibility, BOUNTY_ELIGIBILITY_OPEN);
     }
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
@@ -565,9 +545,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             contentId, funder, address(0), REWARD_ASSET_USDC, highValueAmount, 3, bountyClosesAt, EPOCH_DURATION, 0
         );
 
-        uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-        );
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, 0);
 
         assertGt(rewardPoolId, 0);
     }
@@ -597,37 +576,19 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             0
         );
 
-        uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-        );
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS, 0);
 
         assertGt(rewardPoolId, 0);
     }
 
-    function testNonRefundableRewardPoolAtRecaptureThresholdRequiresVerifiedHumanEligibility() public {
-        uint256 contentId = _submitQuestion("recapture-threshold");
-        uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
+    function testNonRefundableRewardPoolAllowsLargeOpenBountyEligibility() public {
+        uint256 contentId = _submitQuestion("large-open-bounty");
 
-        vm.prank(funder);
-        usdc.approve(address(rewardPoolEscrow), RECAPTURE_PROTECTION_THRESHOLD);
-        vm.expectRevert("Verified bounty required");
-        vm.prank(address(registry));
-        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            RECAPTURE_PROTECTION_THRESHOLD,
-            3,
-            bountyClosesAt,
-            EPOCH_DURATION,
-            0
-        );
-
-        uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, RECAPTURE_PROTECTION_THRESHOLD, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-        );
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(contentId, LARGE_OPEN_BOUNTY_AMOUNT, 3, 0);
         assertGt(rewardPoolId, 0);
+        (uint8 bountyEligibility,) = rewardPoolEscrow.getRewardPoolEligibility(rewardPoolId);
+        assertEq(bountyEligibility, BOUNTY_ELIGIBILITY_OPEN);
     }
 
     function testOpenWalletCanClaimQuestionRewardWithoutRaterIdentity() public {
@@ -685,9 +646,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testMissingBundleRewardUsesTypedError() public {
         uint256 missingBundleId = 405;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(QuestionRewardPoolEscrow.BundleRewardNotFound.selector, missingBundleId)
-        );
+        vm.expectRevert(abi.encodeWithSelector(QuestionRewardPoolEscrow.BundleRewardNotFound.selector, missingBundleId));
         rewardPoolEscrow.getQuestionBundleEligibility(missingBundleId);
     }
 
@@ -3911,9 +3870,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(
-            oracle, rewardPoolId, contentId, roundId, 3, 0, 0, bytes32(0)
-        );
+        _finalizeClusterPayoutSnapshotWithRootNoVetoWait(oracle, rewardPoolId, contentId, roundId, 3, 0, 0, bytes32(0));
         IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot =
             oracle.getRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId);
 
@@ -4823,11 +4780,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         roundIds[0] = roundId;
     }
 
-    function _singleRoundSetIndexes(uint256 roundSetIndex)
-        internal
-        pure
-        returns (uint256[] memory roundSetIndexes)
-    {
+    function _singleRoundSetIndexes(uint256 roundSetIndex) internal pure returns (uint256[] memory roundSetIndexes) {
         roundSetIndexes = new uint256[](1);
         roundSetIndexes[0] = roundSetIndex;
     }
@@ -6984,8 +6937,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 contentId,
         uint256 roundId
     ) internal {
-        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
-            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), rewardPoolId, contentId, roundId);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot = oracle.getRoundPayoutSnapshot(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), rewardPoolId, contentId, roundId
+        );
         vm.warp(uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
     }
 
@@ -7102,13 +7056,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes32 weightRoot
     ) internal {
         _finalizeBundleClusterPayoutSnapshotWithRootNoVetoWait(
-            oracle,
-            bundleId,
-            roundSetIndex,
-            rawEligibleVoters,
-            effectiveParticipantUnits,
-            totalClaimWeight,
-            weightRoot
+            oracle, bundleId, roundSetIndex, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight, weightRoot
         );
         _warpPastBundleRewardSnapshotVeto(oracle, bundleId, roundSetIndex);
     }

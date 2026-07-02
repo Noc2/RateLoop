@@ -44,8 +44,8 @@ const VALID_REQUEST = {
   },
 };
 
-describe("x402 question bounty recapture protection", () => {
-  it("defaults recapture-sized bounties to Proof of Human eligibility", () => {
+describe("x402 question bounty eligibility", () => {
+  it("defaults large bounties to open eligibility", () => {
     const payload = parseX402QuestionRequest({
       ...VALID_REQUEST,
       bounty: {
@@ -54,20 +54,20 @@ describe("x402 question bounty recapture protection", () => {
       },
     });
 
-    expect(payload.bounty.bountyEligibility).toBe(8);
+    expect(payload.bounty.bountyEligibility).toBe(0);
   });
 
-  it("rejects explicit open eligibility for recapture-sized bounties", () => {
-    expect(() =>
-      parseX402QuestionRequest({
-        ...VALID_REQUEST,
-        bounty: {
-          ...VALID_REQUEST.bounty,
-          amount: "500000000",
-          bountyEligibility: "0",
-        },
-      }),
-    ).toThrow(/Proof of Human/);
+  it("accepts explicit open eligibility for large bounties", () => {
+    const payload = parseX402QuestionRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: "500000000",
+        bountyEligibility: "0",
+      },
+    });
+
+    expect(payload.bounty.bountyEligibility).toBe(0);
   });
 });
 
