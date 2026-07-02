@@ -8,6 +8,8 @@ import {
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
+  correlationEpochParameterHash,
+  correlationInputSnapshotDigest,
   correlationParameterHash,
   correlationVoteScanPageBudget,
   correlationVotesPathForDomain,
@@ -398,7 +400,7 @@ test("correlationParameterHash commits to the surprise parameters", () => {
   assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v3");
   assert.equal(
     correlationParameterHash(params),
-    "0x82bea57cf43fad8c239e80d082e8609c61668d75a7bf5d52193539812ce43c6e",
+    "0x9bb6d25c925611f3478fd37800106da145f0c8f19d0b6dcf63b5ebb6148c874b",
   );
 
   const defaultHash = correlationParameterHash(params);
@@ -429,6 +431,56 @@ test("correlationParameterHash commits to the surprise parameters", () => {
   assert.notEqual(
     correlationParameterHash({ ...params, surpriseMinReveals: 3 }),
     defaultHash,
+  );
+  assert.notEqual(
+    correlationParameterHash({
+      ...params,
+      inputSnapshotSpecVersion: "rateloop-correlation-input-snapshot-v2",
+    }),
+    defaultHash,
+  );
+});
+
+test("correlation epoch parameter hash commits to source input snapshots", () => {
+  const params = defaultCorrelationScoringParams();
+  const first = {
+    domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+    rewardPoolId: 7n,
+    contentId: 42n,
+    roundId: 3n,
+    sourceBlockNumber: 100n,
+    sourceLogIndex: 5,
+    sourceTimestamp: 1_700_000_000n,
+    sourceTransactionHash: hex("11"),
+  };
+  const second = {
+    domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+    rewardPoolId: 0n,
+    contentId: 42n,
+    roundId: 3n,
+    sourceBlockNumber: 101n,
+    sourceLogIndex: 2,
+    sourceTimestamp: 1_700_000_002n,
+    sourceTransactionHash: hex("22"),
+  };
+  const defaultHash = correlationParameterHash(params);
+  const epochHash = correlationEpochParameterHash(params, [first, second]);
+
+  assert.equal(
+    correlationEpochParameterHash(params, [second, first]),
+    epochHash,
+  );
+  assert.notEqual(epochHash, defaultHash);
+  assert.equal(
+    correlationInputSnapshotDigest(first),
+    "0x2505388cff88e6429cb0c6b7e87d29135d21bada47cc5e68208aeccb06a782d0",
+  );
+  assert.notEqual(
+    correlationEpochParameterHash(params, [
+      { ...first, sourceBlockNumber: 102n },
+      second,
+    ]),
+    epochHash,
   );
 });
 
@@ -599,12 +651,12 @@ test("correlationParameterHash pins spec versions and canonical params", () => {
 
   assert.equal(
     correlationParameterHash(params),
-    "0x82bea57cf43fad8c239e80d082e8609c61668d75a7bf5d52193539812ce43c6e",
+    "0x9bb6d25c925611f3478fd37800106da145f0c8f19d0b6dcf63b5ebb6148c874b",
   );
   assert.notEqual(
     correlationParameterHash({
       ...params,
-      eligibilitySpecVersion: "rateloop-correlation-eligibility-v2",
+      eligibilitySpecVersion: "rateloop-correlation-eligibility-v3",
     }),
     correlationParameterHash(params),
   );

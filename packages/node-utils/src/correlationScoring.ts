@@ -18,11 +18,14 @@ export const MAX_CORRELATION_VOTE_PAGES = 51;
 export const BASE_CORRELATION_VOTE_SCAN_PAGES = 50;
 export const MAX_CORRELATION_VOTE_SCAN_PAGE_BUDGET = 200;
 export const PONDER_HTTP_FETCH_TIMEOUT_MS = 15_000;
+export const CORRELATION_ARTIFACT_VERSION = "rateloop-correlation-artifact-v3";
 export const CORRELATION_CANONICAL_JSON_VERSION = "rateloop-canonical-json-v1";
 export const CORRELATION_ELIGIBILITY_SPEC_VERSION =
-  "rateloop-correlation-eligibility-v1";
+  "rateloop-correlation-eligibility-v2";
 export const CORRELATION_FEATURE_SPEC_VERSION =
   "rateloop-correlation-features-v1";
+export const CORRELATION_INPUT_SNAPSHOT_SPEC_VERSION =
+  "rateloop-correlation-input-snapshot-v1";
 export const PAYOUT_WEIGHT_DOMAIN = keccak256(
   toBytes("rateloop.correlation.payout-weight.v1"),
 );
@@ -71,6 +74,18 @@ export interface CorrelationScoringParams {
   eligibilitySpecVersion: string;
   canonicalJsonVersion: string;
   featureSpecVersion: string;
+  inputSnapshotSpecVersion: string;
+}
+
+export interface CorrelationInputSnapshotRef {
+  domain: number;
+  rewardPoolId: bigint;
+  contentId: bigint;
+  roundId: bigint;
+  sourceBlockNumber: bigint;
+  sourceLogIndex: number;
+  sourceTimestamp: bigint;
+  sourceTransactionHash: Hex;
 }
 
 export interface CorrelationVoteInput {
@@ -184,6 +199,7 @@ export function defaultCorrelationScoringParams(): CorrelationScoringParams {
     eligibilitySpecVersion: CORRELATION_ELIGIBILITY_SPEC_VERSION,
     canonicalJsonVersion: CORRELATION_CANONICAL_JSON_VERSION,
     featureSpecVersion: CORRELATION_FEATURE_SPEC_VERSION,
+    inputSnapshotSpecVersion: CORRELATION_INPUT_SNAPSHOT_SPEC_VERSION,
   };
 }
 
@@ -199,6 +215,7 @@ export function correlationParameterHash(
     canonicalJsonVersion: params.canonicalJsonVersion,
     eligibilitySpecVersion: params.eligibilitySpecVersion,
     featureSpecVersion: params.featureSpecVersion,
+    inputSnapshotSpecVersion: params.inputSnapshotSpecVersion,
     maxClusterSizeWithoutDiscount: params.maxClusterSizeWithoutDiscount,
     minUnverifiedMaturityVotes: params.minUnverifiedMaturityVotes,
     scorerVersion: params.scorerVersion,
@@ -207,6 +224,50 @@ export function correlationParameterHash(
     unverifiedFloorBps: params.unverifiedFloorBps,
     verifiedFloorBps: params.verifiedFloorBps,
   });
+}
+
+export function correlationInputSnapshotDigest(
+  ref: CorrelationInputSnapshotRef,
+  specVersion = CORRELATION_INPUT_SNAPSHOT_SPEC_VERSION,
+): Hex {
+  return canonicalJsonHash({
+    version: specVersion,
+    ...normalizeCorrelationInputSnapshotRef(ref),
+  });
+}
+
+export function correlationEpochParameterHash(
+  params: CorrelationScoringParams,
+  inputSnapshots: readonly CorrelationInputSnapshotRef[],
+): Hex {
+  return canonicalJsonHash({
+    parameterHash: correlationParameterHash(params),
+    inputSnapshotSpecVersion: params.inputSnapshotSpecVersion,
+    inputSnapshots: normalizeCorrelationInputSnapshotRefs(inputSnapshots),
+  });
+}
+
+export function normalizeCorrelationInputSnapshotRef(
+  ref: CorrelationInputSnapshotRef,
+) {
+  return {
+    domain: ref.domain,
+    rewardPoolId: ref.rewardPoolId.toString(),
+    contentId: ref.contentId.toString(),
+    roundId: ref.roundId.toString(),
+    sourceBlockNumber: ref.sourceBlockNumber.toString(),
+    sourceLogIndex: ref.sourceLogIndex,
+    sourceTimestamp: ref.sourceTimestamp.toString(),
+    sourceTransactionHash: ref.sourceTransactionHash.toLowerCase() as Hex,
+  };
+}
+
+export function normalizeCorrelationInputSnapshotRefs(
+  refs: readonly CorrelationInputSnapshotRef[],
+) {
+  return refs
+    .map(normalizeCorrelationInputSnapshotRef)
+    .sort(compareCorrelationInputSnapshotRefs);
 }
 
 export function scoreRoundPayoutWeights(args: {
@@ -668,6 +729,41 @@ function compareHex(left: Hex, right: Hex): number {
   return left.toLowerCase().localeCompare(right.toLowerCase());
 }
 
+function compareCorrelationInputSnapshotRefs(
+  left: ReturnType<typeof normalizeCorrelationInputSnapshotRef>,
+  right: ReturnType<typeof normalizeCorrelationInputSnapshotRef>,
+) {
+  const domainCompare = left.domain - right.domain;
+  if (domainCompare !== 0) return domainCompare;
+  const rewardPoolCompare = compareBigIntString(
+    left.rewardPoolId,
+    right.rewardPoolId,
+  );
+  if (rewardPoolCompare !== 0) return rewardPoolCompare;
+  const contentCompare = compareBigIntString(left.contentId, right.contentId);
+  if (contentCompare !== 0) return contentCompare;
+  const roundCompare = compareBigIntString(left.roundId, right.roundId);
+  if (roundCompare !== 0) return roundCompare;
+  const blockCompare = compareBigIntString(
+    left.sourceBlockNumber,
+    right.sourceBlockNumber,
+  );
+  if (blockCompare !== 0) return blockCompare;
+  const txCompare = left.sourceTransactionHash.localeCompare(
+    right.sourceTransactionHash,
+  );
+  if (txCompare !== 0) return txCompare;
+  return left.sourceLogIndex - right.sourceLogIndex;
+}
+
+function compareBigIntString(left: string, right: string) {
+  const leftValue = BigInt(left);
+  const rightValue = BigInt(right);
+  if (leftValue < rightValue) return -1;
+  if (leftValue > rightValue) return 1;
+  return 0;
+}
+
 function validateParams(params: CorrelationScoringParams): void {
   if (
     params.minUnverifiedMaturityVotes <= 0 ||
@@ -687,7 +783,8 @@ function validateParams(params: CorrelationScoringParams): void {
     !params.scorerVersion ||
     !params.eligibilitySpecVersion ||
     !params.canonicalJsonVersion ||
-    !params.featureSpecVersion
+    !params.featureSpecVersion ||
+    !params.inputSnapshotSpecVersion
   ) {
     throw new Error("Invalid correlation scoring parameters");
   }
