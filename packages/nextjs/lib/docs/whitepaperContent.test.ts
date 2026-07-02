@@ -146,7 +146,13 @@ test("whitepaper documents pinned correlation artifact inputs", () => {
 
   assert.match(whitepaperText, /pinned source-event input snapshots/i);
   assert.match(whitepaperText, /artifact v3 commits each epoch parameter hash/i);
+  assert.match(
+    whitepaperText,
+    /governance can still reject a consumed root until the finalization veto window elapses/i,
+  );
+  assert.match(whitepaperText, /shorter windows improve claim speed but narrow the review period/i);
   assert.doesNotMatch(whitepaperText, /rateloop-correlation-epoch-v2/i);
+  assert.doesNotMatch(whitepaperText, /consumed root cannot be rejected through the veto path/i);
 });
 
 test("whitepaper executive summary centers the agent-first thesis", () => {

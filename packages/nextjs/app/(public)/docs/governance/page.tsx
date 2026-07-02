@@ -128,15 +128,17 @@ const GovernanceDocs: NextPage = () => {
       </p>
       <OracleChallengeFlowDiagram />
       <p>
-        Governance controls oracle configuration, including the challenge window, challenger bond, frontend registry,
-        and fallback bond recipient. It can also arbitrate challenged roots through proposals that either finalize a
-        correct challenged root or reject an invalid one with a public reason hash, and can slash the proposing frontend
-        through the FrontendRegistry if the on-chain-data computation was wrong. When a slash follows a rejected root,
-        governance can use <code>slashFrontendWithBounty</code> to route a fixed 50% of everything confiscated — the
-        stake cut, accrued fees, and any pending fee withdrawal — to the recorded challenger, so a correct challenge is
-        directly profitable rather than just bond-neutral. Finalized payout roots remain rejectable during the veto
-        period even after configured consumers first consume them; after the veto window, consumed roots are final for
-        that consumer path.
+        Governance controls oracle configuration, including the challenge window, finalization veto window, challenger
+        bond, frontend registry, and fallback bond recipient. It can also arbitrate challenged roots through proposals
+        that either finalize a correct challenged root or reject an invalid one with a public reason hash, and can slash
+        the proposing frontend through the FrontendRegistry if the on-chain-data computation was wrong. When a slash
+        follows a rejected root, governance can use <code>slashFrontendWithBounty</code> to route a fixed 50% of
+        everything confiscated — the stake cut, accrued fees, and any pending fee withdrawal — to the recorded
+        challenger, so a correct challenge is directly profitable rather than just bond-neutral. Finalized payout roots
+        remain rejectable during the veto period even after configured consumers first consume them; after the veto
+        window, consumed roots are final for that consumer path. Longer challenge and veto windows increase public
+        review time but slow healthy payout finality, while shorter windows improve claim speed and narrow the review
+        period.
       </p>
       <p>
         The intended security model is optimistic rather than fully per-snapshot economically secured on-chain. Public
