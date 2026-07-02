@@ -21,10 +21,12 @@ const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "ac
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
 const MAX_PUBLIC_TAGS = 3;
+const MAX_QUESTION_IMAGE_URLS = 4;
 import {
   MIN_NONZERO_CONFIDENTIALITY_BOND,
   requiredQuestionRewardParticipants,
 } from "@rateloop/contracts/protocol";
+import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import {
   findBlockedContentTags,
   getContentTitleValidationError,
@@ -32,6 +34,7 @@ import {
 import {
   X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   X402_MAX_QUESTION_BUNDLE_COUNT,
+  X402_PURE_AGENT_FAST_ROUND_PRESET_ID,
   isAllowedX402HostedDetailsUrl,
   isAllowedX402UploadedImageUrl,
 } from "../x402QuestionPayload.js";
@@ -310,9 +313,74 @@ function lintBoundedInteger(
   maxValue: bigint,
   findings: QuestionLintFinding[],
 ) {
-  const parsed = parseLintVoterCount(value);
-  if (parsed === null || parsed <= maxValue) return;
+  if (value === undefined || value === null) return;
+  const raw = readLintIntegerString(value);
+  if (raw === null || !/^\d+$/.test(raw)) {
+    pushFinding(findings, "error", path, `${path} must be a non-negative integer.`);
+    return;
+  }
+  const parsed = BigInt(raw);
+  if (parsed <= maxValue) return;
   pushFinding(findings, "error", path, `${path} must be at most ${maxValue}.`);
+}
+
+function lintRoundPreset(
+  value: unknown,
+  path: string,
+  findings: QuestionLintFinding[],
+) {
+  if (value === undefined || value === null || value === "") return;
+  if (typeof value !== "string") {
+    pushFinding(findings, "error", path, `${path} must be a string.`);
+    return;
+  }
+  const normalized = value.trim().replace(/[-\s]+/g, "_").toLowerCase();
+  if (
+    !normalized ||
+    normalized === "default" ||
+    normalized === "standard" ||
+    normalized === X402_PURE_AGENT_FAST_ROUND_PRESET_ID ||
+    normalized === "agent_fast"
+  ) {
+    return;
+  }
+  pushFinding(findings, "error", path, `${path} must be pure_agent_fast or default.`);
+}
+
+function lintRequestRoundPreset(
+  request: Partial<AgentAskExample>,
+  findings: QuestionLintFinding[],
+) {
+  const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
+  const presetPath = request.roundPreset !== undefined ? "roundPreset" : "question.roundPreset";
+  const presetValue = request.roundPreset ?? (isObject(firstQuestion) ? firstQuestion.roundPreset : undefined);
+  lintRoundPreset(presetValue, presetPath, findings);
+  if (presetValue !== undefined && presetValue !== null && presetValue !== "" && getRequestRoundConfig(request)) {
+    pushFinding(
+      findings,
+      "error",
+      presetPath,
+      `${presetPath} cannot be combined with roundConfig.`,
+    );
+  }
+}
+
+function lintTargetAudience(
+  value: unknown,
+  path: string,
+  findings: QuestionLintFinding[],
+) {
+  if (value === undefined || value === null) return;
+  try {
+    normalizeTargetAudience(value, { fieldPrefix: path });
+  } catch (error) {
+    pushFinding(
+      findings,
+      "error",
+      path,
+      error instanceof Error ? error.message : `${path} is invalid.`,
+    );
+  }
 }
 
 function lintRoundConfigAbiBounds(
@@ -630,10 +698,18 @@ export function lintAgentQuestion(
       `${path}.imageUrls`,
       "Image URLs must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
     );
+  } else if (Array.isArray(question.imageUrls) && question.imageUrls.length > MAX_QUESTION_IMAGE_URLS) {
+    pushFinding(
+      findings,
+      "error",
+      `${path}.imageUrls`,
+      `imageUrls supports at most ${MAX_QUESTION_IMAGE_URLS} images.`,
+    );
   }
   if (question.videoUrl && !looksLikeYouTubeVideoUrl(question.videoUrl)) {
     pushFinding(findings, "error", `${path}.videoUrl`, "Video URL must be a supported YouTube HTTPS URL.");
   }
+  lintTargetAudience(question.targetAudience, `${path}.targetAudience`, findings);
 
   return findings;
 }
@@ -695,6 +771,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
   }
 
   lintRoundConfigAbiBounds(request, findings);
+  lintRequestRoundPreset(request, findings);
   lintRoundConfigSingleDuration(request, findings);
   lintRoundConfigVoterAlignment(request, findings);
 

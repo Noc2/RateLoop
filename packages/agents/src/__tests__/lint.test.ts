@@ -383,6 +383,27 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects more than four uploaded image URLs", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: undefined,
+        imageUrls: [UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL],
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "imageUrls supports at most 4 images.",
+          path: "question.imageUrls",
+        }),
+      ]),
+    );
+  });
+
   it("rejects direct image file context URLs", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
@@ -851,7 +872,7 @@ describe("round config voter alignment linting", () => {
     );
   });
 
-  it("ignores omitted roundConfig and non-numeric voter values", () => {
+  it("accepts omitted roundConfig values", () => {
     expect(
       summarizeLintFindings(
         lintAgentAskRequest({
@@ -860,15 +881,73 @@ describe("round config voter alignment linting", () => {
         }),
       ).ok,
     ).toBe(true);
+  });
 
-    expect(
-      summarizeLintFindings(
-        lintAgentAskRequest({
-          ...VALID_REQUEST,
-          roundConfig: { minVoters: "not-a-number" },
+  it("flags non-numeric roundConfig voter values", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      roundConfig: { minVoters: "not-a-number" },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "roundConfig.minVoters",
         }),
-      ).ok,
-    ).toBe(true);
+      ]),
+    );
+  });
+
+  it("rejects unsupported round presets and roundPreset plus roundConfig", () => {
+    const invalidPresetFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      roundPreset: "slow_review",
+    });
+    expect(invalidPresetFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "roundPreset",
+        }),
+      ]),
+    );
+
+    const combinedPresetFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        roundPreset: "pure_agent_fast",
+      },
+      roundConfig: { minVoters: "3" },
+    });
+    expect(combinedPresetFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.roundPreset",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects invalid structured target audience values", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        targetAudience: { roles: ["developer"] },
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.targetAudience",
+        }),
+      ]),
+    );
   });
 
   it("accepts a valid head-to-head A/B ask", () => {
