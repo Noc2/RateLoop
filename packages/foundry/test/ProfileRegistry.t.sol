@@ -533,21 +533,15 @@ contract ProfileRegistryTest is Test {
 
     // --- Fuzz Tests ---
 
-    function testFuzz_SetProfileValidName(string memory name) public {
-        // Bound the name to valid length
-        vm.assume(bytes(name).length >= 3);
-        vm.assume(bytes(name).length <= 20);
-
-        // Check all characters are valid
-        bytes memory nameBytes = bytes(name);
-        for (uint256 i = 0; i < nameBytes.length; i++) {
-            bytes1 char = nameBytes[i];
-            bool isLowercase = (char >= 0x61 && char <= 0x7A);
-            bool isUppercase = (char >= 0x41 && char <= 0x5A);
-            bool isDigit = (char >= 0x30 && char <= 0x39);
-            bool isUnderscore = (char == 0x5F);
-            vm.assume(isLowercase || isUppercase || isDigit || isUnderscore);
+    function testFuzz_SetProfileValidName(bytes32 seed, uint8 rawLength) public {
+        uint256 nameLength = bound(uint256(rawLength), 3, 20);
+        bytes memory alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+        bytes memory nameBytes = new bytes(nameLength);
+        for (uint256 i = 0; i < nameLength; i++) {
+            bytes32 charSeed = keccak256(abi.encode(seed, i));
+            nameBytes[i] = alphabet[uint256(uint8(charSeed[0])) % alphabet.length];
         }
+        string memory name = string(nameBytes);
 
         vm.prank(user1);
         registry.setProfile(name, "");
