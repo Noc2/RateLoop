@@ -75,6 +75,12 @@ function expectedPonderDatabaseSchema(readinessConfig, deploymentAddresses) {
   return `rateloop_deployment_${hash}`;
 }
 
+function normalizePonderHealthStatus(value) {
+  const status = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (status === "ok" || status === "attention" || status === "degraded") return status;
+  return null;
+}
+
 function isRecentPastDate(value, maxAgeMs = 2 * 60 * 60 * 1000) {
   if (typeof value !== "string") return false;
   const time = Date.parse(value);
@@ -465,6 +471,50 @@ function isAddress(value) {
 function addCheck(checks, failures, ok, message) {
   checks.push({ ok, message });
   if (!ok) failures.push(message);
+}
+
+export function formatReadinessResult(title, result) {
+  return { title, ...result };
+}
+
+export function printReadinessResult(title, result, json = false) {
+  if (json) {
+    console.log(JSON.stringify(formatReadinessResult(title, result), null, 2));
+    return;
+  }
+
+  console.log(`\n${title}`);
+  for (const check of result.checks) {
+    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.message}`);
+  }
+  for (const warning of result.warnings ?? []) {
+    console.log(`WARN ${warning}`);
+  }
+}
+
+export function printReadinessResults({
+  json = false,
+  liveResult = null,
+  liveTitle,
+  offlineResult,
+  offlineTitle,
+}) {
+  if (json && liveResult) {
+    console.log(
+      JSON.stringify(
+        {
+          offline: formatReadinessResult(offlineTitle, offlineResult),
+          live: formatReadinessResult(liveTitle, liveResult),
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  printReadinessResult(offlineTitle, offlineResult, json);
+  if (liveResult) printReadinessResult(liveTitle, liveResult, json);
 }
 
 function readRuntimeEnv(env, name) {
@@ -1247,6 +1297,7 @@ export async function validateLiveReadiness({
 }) {
   const checks = [];
   const failures = [];
+  const warnings = [];
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
 
   validateOffchainRuntimeEnv({ checks, failures, requireTargets });
@@ -1525,6 +1576,35 @@ export async function validateLiveReadiness({
         `Ponder /question-metadata auth reaches JSON validation (HTTP ${metadataSyncResponse.status})`,
       );
 
+      const indexerHealthResponse = await fetchWithTimeout(
+        buildPonderUrl(ponderUrl, "/health/indexer"),
+      );
+      addCheck(
+        checks,
+        failures,
+        indexerHealthResponse.ok,
+        `Ponder /health/indexer returns HTTP ${indexerHealthResponse.status}`,
+      );
+      if (indexerHealthResponse.ok) {
+        const indexerHealth = await indexerHealthResponse.json().catch(() => null);
+        const indexerHealthStatus = normalizePonderHealthStatus(
+          indexerHealth?.status,
+        );
+        const healthOk =
+          indexerHealthStatus === "ok" || indexerHealthStatus === "attention";
+        addCheck(
+          checks,
+          failures,
+          healthOk,
+          `Ponder /health/indexer reports status ${indexerHealthStatus ?? "unknown"}`,
+        );
+        if (indexerHealthStatus === "attention") {
+          warnings.push(
+            "Ponder /health/indexer reports attention; review challenged or rejected payout-finality states before deploy.",
+          );
+        }
+      }
+
       if (requireTargets) {
         const keeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
         if (keeperWorkToken) {
@@ -1731,5 +1811,5 @@ export async function validateLiveReadiness({
     );
   }
 
-  return { ok: failures.length === 0, checks, failures };
+  return { ok: failures.length === 0, checks, failures, warnings };
 }

@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import {
   loadOfflineInputs,
+  printReadinessResults,
   validateLiveReadiness,
   validateOfflineReadiness,
   WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
@@ -16,18 +17,6 @@ function parseArgs(argv) {
   };
 }
 
-function printResult(title, result, json = false) {
-  if (json) {
-    console.log(JSON.stringify({ title, ...result }, null, 2));
-    return;
-  }
-
-  console.log(`\n${title}`);
-  for (const check of result.checks) {
-    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.message}`);
-  }
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const offlineInputs = loadOfflineInputs(
@@ -37,11 +26,6 @@ async function main() {
   const offlineResult = validateOfflineReadiness(
     offlineInputs,
     WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
-  );
-  printResult(
-    "World Chain Sepolia offline readiness",
-    offlineResult,
-    args.json,
   );
 
   let liveResult = { ok: true, checks: [], failures: [] };
@@ -55,8 +39,15 @@ async function main() {
       requireTargets: args.requireLiveTargets,
       rpcUrl: process.env.WORLDCHAIN_SEPOLIA_RPC_URL,
     });
-    printResult("World Chain Sepolia live readiness", liveResult, args.json);
   }
+
+  printReadinessResults({
+    json: args.json,
+    liveResult: args.live ? liveResult : null,
+    liveTitle: "World Chain Sepolia live readiness",
+    offlineResult,
+    offlineTitle: "World Chain Sepolia offline readiness",
+  });
 
   if (!offlineResult.ok || !liveResult.ok) {
     process.exitCode = 1;

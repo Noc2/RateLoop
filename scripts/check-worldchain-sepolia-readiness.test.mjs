@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { dirname } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   PONDER_INDEXED_CONTRACTS,
   REQUIRED_ADDRESS_WIRING_CHECKS,
@@ -26,6 +29,8 @@ import {
   resolveBaseSepoliaNextEnvFilePath,
   validateBaseSepoliaOfflineReadiness,
 } from "./check-base-sepolia-readiness.mjs";
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 function addressFor(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
@@ -105,6 +110,13 @@ function expectedDeploymentKeyFor(deploymentJson, chainId = 4801) {
 
 function expectedDatabaseSchemaFor(deploymentJson, chainId = 4801) {
   return `rateloop_deployment_${createHash("sha256").update(expectedDeploymentKeyFor(deploymentJson, chainId)).digest("hex").slice(0, 16)}`;
+}
+
+function indexerHealthResponse(status = "ok") {
+  return new Response(JSON.stringify({ status }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function handleWiringCall(call, deploymentAddresses, overrides = {}) {
@@ -949,6 +961,45 @@ test("buildReadinessUrl preserves path-prefixed app readiness URLs", () => {
   );
 });
 
+test("readiness scripts print one JSON document when live mode is enabled", () => {
+  const scripts = [
+    "scripts/check-worldchain-sepolia-readiness.mjs",
+    "scripts/check-base-sepolia-readiness.mjs",
+    "scripts/check-base-mainnet-readiness.mjs",
+  ];
+  const env = {
+    ...process.env,
+    BASE_APP_URL: "",
+    BASE_KEEPER_URL: "",
+    BASE_PONDER_URL: "",
+    BASE_RPC_URL: "",
+    BASE_SEPOLIA_APP_URL: "",
+    BASE_SEPOLIA_KEEPER_URL: "",
+    BASE_SEPOLIA_PONDER_URL: "",
+    BASE_SEPOLIA_RPC_URL: "",
+    WORLDCHAIN_SEPOLIA_APP_URL: "",
+    WORLDCHAIN_SEPOLIA_KEEPER_URL: "",
+    WORLDCHAIN_SEPOLIA_PONDER_URL: "",
+    WORLDCHAIN_SEPOLIA_RPC_URL: "",
+  };
+
+  for (const script of scripts) {
+    const result = spawnSync(
+      process.execPath,
+      [script, "--json", "--live"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env,
+      },
+    );
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(typeof parsed.offline?.title, "string", script);
+    assert.equal(typeof parsed.live?.title, "string", script);
+    assert.equal(result.stdout.trim().split(/\n(?=\{)/u).length, 1, script);
+  }
+});
+
 test("validateLiveReadiness preserves path-prefixed app probe URLs", async () => {
   const previousFetch = globalThis.fetch;
   const requestedUrls = [];
@@ -1021,6 +1072,9 @@ test("validateLiveReadiness rejects stale Ponder deployment metadata", async () 
         headers: { "content-type": "application/json" },
       });
     }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse();
+    }
     throw new Error(`Unexpected fetch ${urlString}`);
   };
 
@@ -1082,6 +1136,9 @@ test("validateLiveReadiness rejects stale Ponder database schema metadata", asyn
         status: 400,
         headers: { "content-type": "application/json" },
       });
+    }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse();
     }
     throw new Error(`Unexpected fetch ${urlString}`);
   };
@@ -1147,6 +1204,9 @@ test("validateLiveReadiness sends metadata sync bearer token to Ponder", async (
         headers: { "content-type": "application/json" },
       });
     }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse();
+    }
     throw new Error(`Unexpected fetch ${urlString}`);
   };
 
@@ -1208,6 +1268,9 @@ test("validateLiveReadiness rejects metadata sync auth failures", async () => {
         },
       );
     }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse();
+    }
     throw new Error(`Unexpected fetch ${urlString}`);
   };
 
@@ -1232,6 +1295,126 @@ test("validateLiveReadiness rejects metadata sync auth failures", async () => {
     } else {
       process.env.PONDER_METADATA_SYNC_TOKEN = previousToken;
     }
+  }
+});
+
+test("validateLiveReadiness rejects degraded Ponder indexer health", async () => {
+  const previousFetch = globalThis.fetch;
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          databaseSchema: expectedDatabaseSchemaFor(deploymentJson),
+          databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
+          deploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/question-metadata")) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse("degraded");
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes("Ponder /health/indexer reports status degraded"),
+      ),
+      result.failures.join("\n"),
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("validateLiveReadiness warns on attention Ponder indexer health", async () => {
+  const previousFetch = globalThis.fetch;
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          databaseSchema: expectedDatabaseSchemaFor(deploymentJson),
+          databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
+          deploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/question-metadata")) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse("attention");
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+    });
+
+    assert.equal(result.ok, true, result.failures.join("\n"));
+    assert(
+      result.checks.some(
+        (check) =>
+          check.ok &&
+          check.message.includes("Ponder /health/indexer reports status attention"),
+      ),
+    );
+    assert.match(result.warnings?.[0] ?? "", /reports attention/);
+  } finally {
+    globalThis.fetch = previousFetch;
   }
 });
 
@@ -1291,6 +1474,9 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
         status: 400,
         headers: { "content-type": "application/json" },
       });
+    }
+    if (urlString.endsWith("/health/indexer")) {
+      return indexerHealthResponse();
     }
     if (urlString.includes("/keeper/work?")) {
       keeperAuthorization = init?.headers?.authorization ?? null;

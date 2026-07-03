@@ -5,6 +5,7 @@ import {
   addBasePreconfirmationEnvChecks,
   buildDeploymentAddressMap,
   loadOfflineInputs,
+  printReadinessResults,
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./readiness-core.mjs";
@@ -39,21 +40,6 @@ function parseArgs(argv) {
     ),
     requireLiveTargets: argv.includes("--require-live-targets"),
   };
-}
-
-function printResult(title, result, json = false) {
-  if (json) {
-    console.log(JSON.stringify({ title, ...result }, null, 2));
-    return;
-  }
-
-  console.log(`\n${title}`);
-  for (const check of result.checks) {
-    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.message}`);
-  }
-  for (const warning of result.warnings ?? []) {
-    console.log(`WARN ${warning}`);
-  }
 }
 
 function addCheck(result, ok, message) {
@@ -155,7 +141,6 @@ async function main() {
   const offlineResult = validateBaseSepoliaOfflineReadiness(offlineInputs, {
     requireOneShotFeedbackBonusX402: args.requireOneShotFeedbackBonusX402,
   });
-  printResult("Base Sepolia offline readiness", offlineResult, args.json);
 
   let liveResult = { ok: true, checks: [], failures: [] };
   if (args.live) {
@@ -175,8 +160,15 @@ async function main() {
       sourceLabel: "live environment",
     });
     liveResult.ok = liveResult.failures.length === 0;
-    printResult("Base Sepolia live readiness", liveResult, args.json);
   }
+
+  printReadinessResults({
+    json: args.json,
+    liveResult: args.live ? liveResult : null,
+    liveTitle: "Base Sepolia live readiness",
+    offlineResult,
+    offlineTitle: "Base Sepolia offline readiness",
+  });
 
   if (!offlineResult.ok || !liveResult.ok) {
     process.exitCode = 1;

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   addBasePreconfirmationEnvChecks,
   loadOfflineInputs,
+  printReadinessResults,
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./readiness-core.mjs";
@@ -46,18 +47,6 @@ function envSourceHasAssignment(source, key, expectedValue) {
   return source
     .split(/\r?\n/)
     .some((line) => line.trim() === `${key}=${expectedValue}`);
-}
-
-function printResult(title, result, json = false) {
-  if (json) {
-    console.log(JSON.stringify({ title, ...result }, null, 2));
-    return;
-  }
-
-  console.log(`\n${title}`);
-  for (const check of result.checks) {
-    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.message}`);
-  }
 }
 
 export function baseMainnetNotDeployedMessage() {
@@ -154,11 +143,6 @@ async function main() {
   }
 
   const offlineResult = validateBaseMainnetOfflineReadiness(offlineInputs);
-  printResult(
-    "Base mainnet production offline readiness",
-    offlineResult,
-    args.json,
-  );
 
   let liveResult = { ok: true, checks: [], failures: [] };
   if (args.live) {
@@ -179,12 +163,15 @@ async function main() {
     });
     validateBaseMainnetLiveEnvironment(liveResult);
     liveResult.ok = liveResult.failures.length === 0;
-    printResult(
-      "Base mainnet production live readiness",
-      liveResult,
-      args.json,
-    );
   }
+
+  printReadinessResults({
+    json: args.json,
+    liveResult: args.live ? liveResult : null,
+    liveTitle: "Base mainnet production live readiness",
+    offlineResult,
+    offlineTitle: "Base mainnet production offline readiness",
+  });
 
   if (!offlineResult.ok || !liveResult.ok) {
     process.exitCode = 1;
