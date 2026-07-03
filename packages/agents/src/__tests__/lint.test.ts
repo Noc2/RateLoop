@@ -580,7 +580,13 @@ describe("agent question linting", () => {
     });
 
     expect(findings).toEqual(
-      expect.arrayContaining([expect.objectContaining({ level: "error", path: "question.contextUrl" })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Context URL, RateLoop-hosted details URL, image URL, or video URL is required.",
+          path: "question.contextUrl",
+        }),
+      ]),
     );
   });
 

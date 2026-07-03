@@ -607,7 +607,12 @@ export function lintAgentQuestion(
     pushFinding(findings, "error", `${path}.confidentiality.bond`, "Bonds are only supported for gated private context.");
   }
   if (!hasContextUrl && !hasImageUrls && !hasVideoUrl && !(isGated && detailsUrl)) {
-    pushFinding(findings, "error", `${path}.contextUrl`, "Context URL, image URL, or video URL is required.");
+    pushFinding(
+      findings,
+      "error",
+      `${path}.contextUrl`,
+      "Context URL, RateLoop-hosted details URL, image URL, or video URL is required.",
+    );
   } else if (hasContextUrl && !looksLikeHttpsUrl(question.contextUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a public HTTPS URL.");
   } else if (hasContextUrl && looksLikeDirectImageUrl(question.contextUrl)) {

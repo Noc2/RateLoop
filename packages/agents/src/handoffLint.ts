@@ -1,6 +1,6 @@
 import type { QuestionLintFinding } from "./questions/types.js";
 
-const MISSING_CONTEXT_MESSAGE = "Context URL, image URL, or video URL is required.";
+const MISSING_CONTEXT_MESSAGE = "Context URL, RateLoop-hosted details URL, image URL, or video URL is required.";
 const GENERATED_IMAGE_SINGLE_QUESTION_MESSAGE = "generatedImages currently support single-question handoffs.";
 
 function isRecord(value: unknown): value is Record<string, unknown> {

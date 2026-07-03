@@ -7,7 +7,7 @@ import type { QuestionLintFinding } from "../questions/types.js";
 
 const missingContextFinding = (path: string): QuestionLintFinding => ({
   level: "error",
-  message: "Context URL, image URL, or video URL is required.",
+  message: "Context URL, RateLoop-hosted details URL, image URL, or video URL is required.",
   path,
 });
 
