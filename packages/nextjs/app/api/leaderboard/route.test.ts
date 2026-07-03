@@ -8,7 +8,7 @@ const originalNodeEnv = env.NODE_ENV;
 const originalTrustedHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
-const TEST_CHAIN_ID = 4801;
+const TEST_CHAIN_ID = 84532;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type RouteModule = typeof import("./route");

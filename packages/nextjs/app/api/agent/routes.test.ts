@@ -53,7 +53,7 @@ type UrlSafetyModule = typeof import("~~/utils/urlSafety");
 type McpToolTestOverrides = NonNullable<Parameters<McpToolsModule["__setMcpToolTestOverridesForTests"]>[0]>;
 
 const OPERATION_KEY = `0x${"1".repeat(64)}` as const;
-const HANDOFF_CHAIN_ID = 4801;
+const HANDOFF_CHAIN_ID = 84532;
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
   "base64",
@@ -2655,7 +2655,7 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
 
   assert.equal(prepareResponse.status, 409);
-  assert.match(String(prepareBody.message), /handoff is for chain 4801/);
+  assert.match(String(prepareBody.message), /handoff is for chain 84532/);
   assert.match(String(prepareBody.message), /requested for chain 480/);
 
   const statusResponse = await handoffRoute.GET(
