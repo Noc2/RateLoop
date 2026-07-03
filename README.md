@@ -45,7 +45,7 @@ Key pieces:
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
-- **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive, and operator fee withdrawals wait out a 1-hour slashable review window so earned-but-undelivered fees back the operator's payout-root accountability while the separate stake exit still waits 14 days; successful payout-root challengers receive a fixed 50% share of slash proceeds
+- **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive, and operator fee withdrawals wait out a 1-hour review window; the 1,000 LREP bond and 14-day stake exit are the primary backing for fresh payout-root offenses, while fees remain slashable only while still escrowed or withdrawal-pending; successful payout-root challengers receive a fixed 50% share of slash proceeds
 - **Security Guardrails** — calibration, reveal reliability, verified-human launch anchors, duplicate checks, correlation caps, and governance parameters keep the surface narrow
 
 LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
@@ -53,6 +53,7 @@ RateLoop does not treat raw token balance as enough to earn or control outcomes.
 weighting, verified-human launch anchors, correlation epoch snapshots, governance locks, proposal/quorum floors, and hard
 minimums for submission bounties are the main mitigations.
 These mitigations reduce visible herding and detectable cluster economics, but the current single-task RBTS mechanism is not collusion-proof: truthfulness is an independent-rater Bayes-Nash guarantee, and undetected coordinated blocs remain a residual signal risk.
+Open-eligibility bounties are a creator-selected tradeoff: a creator can route independent-looking wallets through their own bonded frontend and recapture more of a bounty, while participant floors raise the required wallet count rather than the marginal cost per dollar; creators who need stronger claimant assurance should choose verified-human payout eligibility.
 The fresh redeploy requires RBTS reference/peer pairings to avoid depending on an L2 sequencer-provided future blockhash; the remediation plan uses precommitted reveal entropy bound to the closed scoring set without adding another user wait.
 
 Live protocol and product documentation is maintained in the Next.js docs routes, with deployment and audit notes under

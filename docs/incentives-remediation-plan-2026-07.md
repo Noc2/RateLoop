@@ -17,6 +17,7 @@ If the fresh-deployment branch includes the `PAYOUT_DOMAIN_RBTS_SETTLEMENT` / do
 - **Frontend, SDK, and agent plan:** update submit UI, browser handoff, MCP, SDK, and x402 validation so omitted `bountyEligibility` defaults to `0` for everyone and explicit `0` is accepted at any bounty size. Result packages should still distinguish "all answers" from "bounty-eligible answers" so askers see the full crowd and any selected payout scope.
 - **Tests:** Foundry tests for direct `ContentRegistry`, escrow, and bundle creation preserving high-value open bounties; existing credential-gated qualifying/paying tests; payer/submitter identity exclusion; and bundle parity. TypeScript tests for agent/schema/UI/SDK defaults and explicit open eligibility.
 - **Why this does not make users wait longer:** the protocol no longer adds a credentialing task at a bounty threshold. Creators may still select Proof of Human when they want that payout scope.
+- **Accepted residual economics:** large open-eligibility bounties remain recapture-exposed by design. A creator can register a bonded frontend and route independent-looking wallets through it to recover more of the bounty and, after the 1-hour fee withdrawal window, even the frontend fee; participant floors raise the number of wallets needed, not the marginal cost per bounty dollar.
 
 ## Commit 2 — Fix M-2: make surprise weighting cluster- and anchor-aware
 
