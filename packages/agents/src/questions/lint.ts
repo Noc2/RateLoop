@@ -45,6 +45,11 @@ const SURVEY_STYLE_PATTERN =
 const HIDDEN_CHOICE_TITLE_PATTERN = /\bwhich\s+(option|variant|candidate|direction|price|pricing|range)\b/i;
 const VS_TITLE_PATTERN = /\b(vs\.?|versus)\b/i;
 
+export type AgentAskLintOptions = {
+  requireChainId?: boolean;
+  requireMaxPaymentAmount?: boolean;
+};
+
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -187,6 +192,25 @@ function parseLintNonNegativeInteger(value: unknown): bigint | null {
   const raw = readLintIntegerString(value);
   if (raw === null) return null;
   return /^\d+$/.test(raw) ? BigInt(raw) : null;
+}
+
+function lintRequiredSafeChainId(value: unknown, path: string, findings: QuestionLintFinding[]) {
+  const parsed = parseLintPositiveInteger(value);
+  if (parsed === null) {
+    pushFinding(findings, "error", path, `${path} must be a positive base-10 safe integer.`);
+    return;
+  }
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    pushFinding(findings, "error", path, `${path} must be a positive base-10 safe integer.`);
+  }
+}
+
+function lintOptionalSafeNonNegativeInteger(value: unknown, path: string, findings: QuestionLintFinding[]) {
+  if (value === undefined || value === null) return;
+  const parsed = parseLintNonNegativeInteger(value);
+  if (parsed === null || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    pushFinding(findings, "error", path, `${path} must be a safe non-negative atomic integer.`);
+  }
 }
 
 function lintOptionalRewardAsset(value: unknown, path: string, findings: QuestionLintFinding[]) {
@@ -727,18 +751,33 @@ export function lintAgentQuestion(
   return findings;
 }
 
-export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
+export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions = {}): QuestionLintFinding[] {
   const findings: QuestionLintFinding[] = [];
   if (!isObject(input)) {
     return [{ level: "error", path: "$", message: "Ask payload must be a JSON object." }];
   }
 
   const request = input as Partial<AgentAskExample>;
+  const requireChainId = options.requireChainId ?? true;
   const clientRequestId = typeof request.clientRequestId === "string" ? request.clientRequestId.trim() : "";
   if (!clientRequestId) {
     pushFinding(findings, "error", "clientRequestId", "clientRequestId is required for idempotent agent asks.");
   } else if (!CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
     pushFinding(findings, "error", "clientRequestId", "clientRequestId must be 4-160 URL-safe characters.");
+  }
+
+  if (requireChainId || request.chainId !== undefined) {
+    lintRequiredSafeChainId(request.chainId, "chainId", findings);
+  }
+  if (options.requireMaxPaymentAmount && (request.maxPaymentAmount === undefined || request.maxPaymentAmount === null)) {
+    pushFinding(
+      findings,
+      "error",
+      "maxPaymentAmount",
+      "maxPaymentAmount is required before an agent can spend.",
+    );
+  } else {
+    lintOptionalSafeNonNegativeInteger(request.maxPaymentAmount, "maxPaymentAmount", findings);
   }
 
   if (!isObject(request.bounty)) {

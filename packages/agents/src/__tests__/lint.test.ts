@@ -14,6 +14,7 @@ const VALID_REQUEST = {
     amount: "1000000",
     requiredVoters: "3",
   },
+  chainId: 84532,
   clientRequestId: "landing-pitch-demo",
   question: {
     categoryId: "1",
@@ -50,6 +51,68 @@ describe("agent question linting", () => {
       ok: true,
       warningCount: 0,
     });
+  });
+
+  it("rejects missing or unsafe chain ids before quote or submission", () => {
+    const { chainId: _chainId, ...withoutChainId } = VALID_REQUEST;
+
+    expect(lintAgentAskRequest(withoutChainId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "chainId must be a positive base-10 safe integer.",
+          path: "chainId",
+        }),
+      ]),
+    );
+
+    for (const chainId of [0, Number.NaN, Number.MAX_SAFE_INTEGER + 1, "84532abc"]) {
+      const findings = lintAgentAskRequest({ ...VALID_REQUEST, chainId });
+      expect(findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            level: "error",
+            path: "chainId",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("validates maxPaymentAmount when present and requires it for spend paths", () => {
+    expect(
+      lintAgentAskRequest(VALID_REQUEST, { requireMaxPaymentAmount: true }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "maxPaymentAmount is required before an agent can spend.",
+          path: "maxPaymentAmount",
+        }),
+      ]),
+    );
+
+    const invalidFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      maxPaymentAmount: Number.MAX_SAFE_INTEGER + 1,
+    });
+    expect(invalidFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "maxPaymentAmount",
+        }),
+      ]),
+    );
+
+    expect(
+      summarizeLintFindings(
+        lintAgentAskRequest({
+          ...VALID_REQUEST,
+          maxPaymentAmount: "1000000",
+        }, { requireMaxPaymentAmount: true }),
+      ).ok,
+    ).toBe(true);
   });
 
   it("accepts supported reward assets while preserving defaulted blanks", () => {

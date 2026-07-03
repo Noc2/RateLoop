@@ -26,7 +26,7 @@ Use browser handoff when a human should fund or approve the ask. Use the local s
 funded encrypted wallet:
 
 ```bash
-export RATELOOP_API_BASE_URL="https://www.rateloop.ai"
+export RATELOOP_API_BASE_URL="https://staging.rateloop.example"
 export RATELOOP_RPC_URL="https://sepolia.base.org"
 export RATELOOP_CHAIN_ID=84532
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
@@ -38,8 +38,9 @@ yarn workspace @rateloop/agents local-ask --file ./ask.json
 ```
 
 The local signer never prints the private key. Fund the printed signer address with Base Sepolia USDC before the first
-paid ask. Bearer tokens are optional; use `generic-remote-mcp.json` with narrow scopes and small budget caps only when
-you want RateLoop-enforced policy limits, callbacks, or managed audit exports.
+paid ask. For production, use `https://www.rateloop.ai`, a Base mainnet RPC, `RATELOOP_CHAIN_ID=8453`, and Base mainnet
+USDC. Bearer tokens are optional; use `generic-remote-mcp.json` with narrow scopes and small budget caps only when you
+want RateLoop-enforced policy limits, callbacks, or managed audit exports.
 
 ## Loop
 

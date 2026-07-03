@@ -412,6 +412,12 @@ async function main() {
       const payload = options["dry-run"]
         ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
         : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
+      const findings = lintAgentAskRequest(payload);
+      if (findings.some((finding) => finding.level === "error")) {
+        printJson({ findings, ...summarizeLintFindings(findings) });
+        process.exitCode = 1;
+        return;
+      }
       printJson(await agent.quoteQuestion(payload as never));
       return;
     }
@@ -425,7 +431,9 @@ async function main() {
         command === "sandbox" || options["dry-run"]
           ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
           : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
-      const findings = lintAgentAskRequest(payload);
+      const findings = lintAgentAskRequest(payload, {
+        requireMaxPaymentAmount: command === "ask" && !options["dry-run"],
+      });
       if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;
@@ -449,12 +457,13 @@ async function main() {
           resolveCliInputPath(path, "Handoff image"),
         ),
       );
-      const findings = lintAgentAskRequest(payload).filter((finding) =>
-        shouldKeepHandoffFinding(finding, {
-          hasGeneratedImages: generatedImages.length > 0,
-          payload,
-        }),
-      );
+      const findings = lintAgentAskRequest(payload, { requireMaxPaymentAmount: true })
+        .filter((finding) =>
+          shouldKeepHandoffFinding(finding, {
+            hasGeneratedImages: generatedImages.length > 0,
+            payload,
+          }),
+        );
       if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;
@@ -522,7 +531,7 @@ async function main() {
         payload,
         wallet.account.address,
       );
-      const findings = lintAgentAskRequest(payloadWithWallet);
+      const findings = lintAgentAskRequest(payloadWithWallet, { requireMaxPaymentAmount: true });
       if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;

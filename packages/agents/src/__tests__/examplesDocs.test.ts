@@ -37,4 +37,21 @@ describe("agent public examples and docs", () => {
     expect(readme).toContain("Node 24 runtime");
     expect(readme).not.toContain("any Node runtime");
   });
+
+  it("does not pair production examples with Base Sepolia asks", () => {
+    const openclaw = readPackageFile("examples/openclaw.md");
+    const landingPitch = readPackageFile("examples/landing-pitch-review.ts");
+
+    expect(openclaw).toContain('RATELOOP_API_BASE_URL="https://staging.rateloop.example"');
+    expect(openclaw).toContain("RATELOOP_CHAIN_ID=84532");
+    expect(openclaw).toContain("RATELOOP_CHAIN_ID=8453");
+    expect(openclaw).not.toMatch(
+      /RATELOOP_API_BASE_URL="https:\/\/www\.rateloop\.ai"[\s\S]{0,200}RATELOOP_CHAIN_ID=84532/,
+    );
+
+    expect(landingPitch).toContain("PRODUCTION_API_BASE_URL");
+    expect(landingPitch).toContain("BASE_MAINNET_CHAIN_ID");
+    expect(landingPitch).toContain("BASE_SEPOLIA_CHAIN_ID");
+    expect(landingPitch).toContain("production RateLoop host only accepts Base mainnet asks");
+  });
 });

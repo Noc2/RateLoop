@@ -131,7 +131,7 @@ economics; undetected coordinated blocs remain a residual signal risk.
 
 Score-spread example once the economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. Their leave-one-out benchmarks are 77.00, 83.66, and 92.33. At 1.5 intensity, Carol forfeits 2.12475 LREP; 2.019362 LREP is the voter share after the caller cut. Alice claims 11.693923 LREP, Bob claims 5.325438 LREP, and Carol claims 2.87525 LREP.
 
-Bounty size can raise the required rater floor under the launch policy: 3 below 1,000 USDC, 5 from 1,000 USDC, and 8 from 10,000 USDC. Three-rater rounds are the cold-start feedback tier, not the permanent security target. Governance can raise the default quorum, allowed minimum, and amount-based floors for new asks as rater supply, bounty value, and attack pressure grow; already-created questions and open rounds keep their snapshotted configuration.
+Bounty size can raise the required rater floor under the launch policy. Amount tiers are evaluated in the selected bounty asset's atomic units: 3 below 1,000,000,000 atomic units, 5 from 1,000,000,000 atomic units, and 8 from 10,000,000,000 atomic units. Three-rater rounds are the cold-start feedback tier, not the permanent security target. Governance can raise the default quorum, allowed minimum, and amount-based floors for new asks as rater supply, bounty value, and attack pressure grow; already-created questions and open rounds keep their snapshotted configuration.
 
 Settled RateLoop scores are public feedback signals, not objective truth. Do not use them to settle external financial contracts.
 

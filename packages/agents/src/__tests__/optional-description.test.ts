@@ -8,6 +8,7 @@ describe("agent ask optional descriptions", () => {
         amount: "1000000",
         requiredVoters: "3",
       },
+      chainId: 84532,
       clientRequestId: "optional-description-demo",
       question: {
         categoryId: "1",

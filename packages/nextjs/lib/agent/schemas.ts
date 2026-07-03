@@ -238,7 +238,7 @@ const agentBountyInputSchema = {
     },
     requiredVoters: {
       description:
-        "Minimum eligible voters required by the bounty. Must match roundConfig.minVoters when provided. Launch amount tiers require at least 5 voters for bounties at or above 1000 USDC and 8 voters at or above 10000 USDC; governance can raise these floors for new asks as usage grows.",
+        "Minimum eligible voters required by the bounty. Must match roundConfig.minVoters when provided. Launch amount tiers are evaluated in the selected bounty asset's atomic units: at least 5 voters at or above 1,000,000,000 atomic units and 8 voters at or above 10,000,000,000 atomic units; governance can raise these floors for new asks as usage grows.",
       type: ["integer", "string"],
     },
   },
