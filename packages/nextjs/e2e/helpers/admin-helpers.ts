@@ -536,7 +536,10 @@ async function resolveTlockCommitRuntime(
   contentId: bigint,
   commitRoundId: bigint,
   epochDurationSeconds?: number,
-): Promise<{ targetRound: bigint }> {
+): Promise<{
+  targetRound: bigint;
+  drandConfig: { chainHash: `0x${string}`; genesisTime: bigint; period: bigint };
+}> {
   const latestBlock = await readLatestBlockSnapshot();
   const currentRoundId = await readCurrentRoundId(votingEngineAddress, contentId, latestBlock.blockTag);
   const roundEpochDurationSeconds =
@@ -560,7 +563,7 @@ async function resolveTlockCommitRuntime(
     roundStartTimeSeconds,
   });
 
-  return { targetRound };
+  return { targetRound, drandConfig };
 }
 
 async function readPreviewCommitContext(
@@ -1691,6 +1694,9 @@ export async function commitVoteDirect(
         },
         {
           targetRound: tlockRuntime.targetRound,
+          drandChainHash: tlockRuntime.drandConfig.chainHash,
+          drandGenesisTimeSeconds: tlockRuntime.drandConfig.genesisTime,
+          drandPeriodSeconds: tlockRuntime.drandConfig.period,
         },
       );
 
