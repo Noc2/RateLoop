@@ -1,18 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function frontendRegistrySlots() {
   const layout = JSON.parse(
     readFileSync(
-      join(
-        "packages",
-        "foundry",
-        "scripts",
-        "expected-storage-layouts",
-        "FrontendRegistry.json"
-      ),
+      join(__dirname, "..", "scripts", "expected-storage-layouts", "FrontendRegistry.json"),
       "utf8"
     )
   );
