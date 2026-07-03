@@ -121,6 +121,32 @@ export async function ensureLocalHumanCredentials(): Promise<void> {
   console.log(`  ✓ Refreshed ${expiredAccounts.length} local human credential(s)`);
 }
 
+const ANVIL_ETH_TOP_UP_WEI = 10n * 10n ** 18n;
+
+async function ensureAnvilEthBalance(address: string): Promise<void> {
+  const [{ createPublicClient, http }, { foundry }] = await Promise.all([import("viem"), import("viem/chains")]);
+  const publicClient = createPublicClient({ chain: foundry, transport: http(E2E_RPC_URL) });
+  const balance = await publicClient.getBalance({ address: address as `0x${string}` });
+  if (balance >= 10n ** 17n) return;
+
+  const response = await fetch(E2E_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "anvil_setBalance",
+      params: [address, `0x${ANVIL_ETH_TOP_UP_WEI.toString(16)}`],
+      id: 1,
+    }),
+  });
+  const json = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+  if (!response.ok || json?.error) {
+    throw new Error(
+      `Failed to fund ${address} with Anvil ETH: ${json?.error?.message ?? `HTTP ${response.status}`}`,
+    );
+  }
+}
+
 async function resolveCategoryIdBySlug(slug: string): Promise<bigint> {
   const cached = categoryIdBySlug.get(slug);
   if (cached !== undefined) return cached;
@@ -339,6 +365,17 @@ const BASELINE_COMMITS = [
   },
 ] as const;
 
+async function ensureBaselineAccountEthBalances(): Promise<void> {
+  const addresses = new Set<string>([
+    ...BASELINE_CONTENT.map(item => item.submitter),
+    ...BASELINE_COMMITS.map(commit => commit.voter),
+  ]);
+
+  for (const address of addresses) {
+    await ensureAnvilEthBalance(address);
+  }
+}
+
 async function getBaselineContentByTitle(): Promise<Map<string, { id: string; title: string }>> {
   const { items } = await getContentList({ status: "all", limit: 500 });
   return new Map(items.map(item => [item.title, { id: item.id, title: item.title }]));
@@ -405,17 +442,13 @@ async function ensureBaselineContentSettled(contentId: bigint, seededCommits: Se
   }
 }
 
-export async function ensureBaselineSeedData(): Promise<void> {
-  const baselineTitles = new Set(BASELINE_CONTENT.map(item => item.title));
-  const existing = await getContentList({ status: "all", limit: 500 });
-  const existingTitles = new Set(existing.items.map(item => item.title));
-  const missingContent = BASELINE_CONTENT.filter(item => !existingTitles.has(item.title));
+async function seedMissingBaselineContent(
+  items: ReadonlyArray<(typeof BASELINE_CONTENT)[number]>,
+): Promise<void> {
+  if (items.length === 0) return;
 
-  if (missingContent.length > 0) {
-    console.log(`  ⓘ Seeding ${missingContent.length} baseline content item(s) for E2E...`);
-  }
-
-  for (const item of missingContent) {
+  console.log(`  ⓘ Seeding ${items.length} baseline content item(s) for E2E...`);
+  for (const item of items) {
     const categoryId = await resolveCategoryIdBySlug(item.categorySlug);
     const approved = await approveLREP(
       CONTRACT_ADDRESSES.ContentRegistry,
@@ -443,20 +476,31 @@ export async function ensureBaselineSeedData(): Promise<void> {
     }
   }
 
-  if (missingContent.length > 0) {
-    const contentIndexed = await waitForPonderIndexed(
-      async () => {
-        const indexedByTitle = await getBaselineContentByTitle();
-        return [...baselineTitles].every(title => indexedByTitle.has(title));
-      },
-      120_000,
-      2_000,
-      "seedBaselineContent",
-    );
-    if (!contentIndexed) {
-      throw new Error("Baseline content did not finish indexing in Ponder");
-    }
+  const titles = new Set(items.map(item => item.title));
+  const contentIndexed = await waitForPonderIndexed(
+    async () => {
+      const indexedByTitle = await getBaselineContentByTitle();
+      return [...titles].every(title => indexedByTitle.has(title));
+    },
+    120_000,
+    2_000,
+    "seedBaselineContent",
+  );
+  if (!contentIndexed) {
+    throw new Error("Baseline content did not finish indexing in Ponder");
   }
+}
+
+export async function ensureBaselineSeedData(): Promise<void> {
+  await ensureBaselineAccountEthBalances();
+
+  const votePrerequisiteTitles = new Set<string>(BASELINE_COMMITS.map(vote => vote.title));
+  const votePrerequisiteContent = BASELINE_CONTENT.filter(item => votePrerequisiteTitles.has(item.title));
+  const existing = await getContentList({ status: "all", limit: 500 });
+  const existingTitles = new Set(existing.items.map(item => item.title));
+  const missingVotePrerequisiteContent = votePrerequisiteContent.filter(item => !existingTitles.has(item.title));
+
+  await seedMissingBaselineContent(missingVotePrerequisiteContent);
 
   const contentByTitle = await getBaselineContentByTitle();
   const voteTargetsByTitle = new Map<string, bigint>();
@@ -495,7 +539,14 @@ export async function ensureBaselineSeedData(): Promise<void> {
     const settledContent = contentByTitle.get(BASELINE_SETTLED_CONTENT_TITLE);
     if (!settledContent) throw new Error(`Missing baseline settled content: ${BASELINE_SETTLED_CONTENT_TITLE}`);
     await ensureBaselineContentSettled(BigInt(settledContent.id), []);
-    console.log(`  ✓ Baseline seed data already present (${existing.total} content items indexed)`);
+
+    const missingRemainingContent = BASELINE_CONTENT.filter(
+      item => !existingTitles.has(item.title) && !votePrerequisiteTitles.has(item.title),
+    );
+    await seedMissingBaselineContent(missingRemainingContent);
+
+    const refreshed = await getContentList({ status: "all", limit: 500 });
+    console.log(`  ✓ Baseline seed data already present (${refreshed.total} content items indexed)`);
     return;
   }
 
@@ -563,6 +614,11 @@ export async function ensureBaselineSeedData(): Promise<void> {
   const settledContent = contentByTitle.get(BASELINE_SETTLED_CONTENT_TITLE);
   if (!settledContent) throw new Error(`Missing baseline settled content: ${BASELINE_SETTLED_CONTENT_TITLE}`);
   await ensureBaselineContentSettled(BigInt(settledContent.id), seededCommits);
+
+  const missingRemainingContent = BASELINE_CONTENT.filter(
+    item => !existingTitles.has(item.title) && !votePrerequisiteTitles.has(item.title),
+  );
+  await seedMissingBaselineContent(missingRemainingContent);
 
   console.log(`  ✓ Seeded ${BASELINE_CONTENT.length} baseline content items and ${BASELINE_COMMITS.length} commits`);
 }
