@@ -1950,6 +1950,77 @@ contract RaterRegistryTest is Test {
         registry.acceptDelegateWithSig(holder, deadline, signature);
     }
 
+    function test_SignedDelegationStaleAuthorizationCannotEvictActiveDelegate() public {
+        uint256 holderKey = 0xA11CE20;
+        address holder = vm.addr(holderKey);
+        address staleDelegate = address(0x6D12);
+        address activeDelegate = address(0x6D13);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory staleSignature = _signDelegateAuthorization(registry, holderKey, holder, staleDelegate, deadline);
+
+        vm.prank(holder);
+        registry.setDelegate(activeDelegate);
+        vm.prank(activeDelegate);
+        registry.acceptDelegate();
+
+        assertEq(registry.delegateTo(holder), activeDelegate);
+        assertEq(registry.delegateAuthorizationNonces(holder), 2);
+
+        vm.prank(staleDelegate);
+        vm.expectRevert(RaterRegistry.InvalidSignature.selector);
+        registry.acceptDelegateWithSig(holder, deadline, staleSignature);
+
+        assertEq(registry.delegateTo(holder), activeDelegate);
+        assertEq(registry.delegateOf(activeDelegate), holder);
+        assertEq(registry.delegateOf(staleDelegate), address(0));
+    }
+
+    function test_SignedDelegationCurrentAuthorizationCannotReplaceActiveDelegate() public {
+        uint256 holderKey = 0xA11CE21;
+        address holder = vm.addr(holderKey);
+        address activeDelegate = address(0x6D13);
+        address replacementDelegate = address(0x6D14);
+
+        vm.prank(holder);
+        registry.setDelegate(activeDelegate);
+        vm.prank(activeDelegate);
+        registry.acceptDelegate();
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory replacementSignature =
+            _signDelegateAuthorization(registry, holderKey, holder, replacementDelegate, deadline);
+
+        vm.prank(replacementDelegate);
+        vm.expectRevert(RaterRegistry.DelegateAlreadyAssigned.selector);
+        registry.acceptDelegateWithSig(holder, deadline, replacementSignature);
+
+        assertEq(registry.delegateTo(holder), activeDelegate);
+        assertEq(registry.delegateOf(activeDelegate), holder);
+        assertEq(registry.delegateOf(replacementDelegate), address(0));
+    }
+
+    function test_SignedDelegationStaleAuthorizationInvalidatedByDelegateRemoval() public {
+        uint256 holderKey = 0xA11CE22;
+        address holder = vm.addr(holderKey);
+        address activeDelegate = address(0x6D13);
+        address futureDelegate = address(0x6D14);
+
+        vm.prank(holder);
+        registry.setDelegate(activeDelegate);
+        vm.prank(activeDelegate);
+        registry.acceptDelegate();
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature = _signDelegateAuthorization(registry, holderKey, holder, futureDelegate, deadline);
+
+        vm.prank(holder);
+        registry.removeDelegate();
+
+        vm.prank(futureDelegate);
+        vm.expectRevert(RaterRegistry.InvalidSignature.selector);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
+    }
+
     function test_SignedDelegationRejectsSignatureForDifferentDelegate() public {
         uint256 holderKey = 0xA11CE3;
         address holder = vm.addr(holderKey);

@@ -802,6 +802,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
         _clearInboundDelegation(msg.sender);
         _clearPendingDelegateRequest(msg.sender);
+        _advanceDelegateAuthorizationNonce(msg.sender);
 
         pendingDelegateTo[msg.sender] = delegate;
         pendingDelegateOf[delegate] = msg.sender;
@@ -825,7 +826,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bytes32 digest = delegateAuthorizationDigest(holder, msg.sender, nonce, deadline);
         if (ECDSA.recover(digest, signature) != holder) revert InvalidSignature();
 
-        delegateAuthorizationNonces[holder] = nonce + 1;
         _validateDelegateActivation(holder, msg.sender);
         _activateDelegate(holder, msg.sender);
     }
@@ -846,24 +846,28 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (oldDelegate != address(0)) {
             delete delegateTo[msg.sender];
             delete delegateOf[oldDelegate];
+            _advanceDelegateAuthorizationNonce(msg.sender);
             emit DelegateRemoved(msg.sender, oldDelegate);
         }
 
         if (pendingDelegate != address(0)) {
             delete pendingDelegateTo[msg.sender];
             delete pendingDelegateOf[pendingDelegate];
+            _advanceDelegateAuthorizationNonce(msg.sender);
             emit PendingDelegateRemoved(msg.sender, pendingDelegate);
         }
 
         if (pendingDelegator != address(0)) {
             delete pendingDelegateOf[msg.sender];
             delete pendingDelegateTo[pendingDelegator];
+            _advanceDelegateAuthorizationNonce(pendingDelegator);
             emit PendingDelegateRemoved(pendingDelegator, msg.sender);
         }
 
         if (activeDelegator != address(0)) {
             delete delegateOf[msg.sender];
             delete delegateTo[activeDelegator];
+            _advanceDelegateAuthorizationNonce(activeDelegator);
             emit DelegateRemoved(activeDelegator, msg.sender);
         }
     }
@@ -1538,6 +1542,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (delegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (delegateTo[holder] != address(0)) revert DelegateAlreadyAssigned();
+        address pendingDelegate = pendingDelegateTo[holder];
+        if (pendingDelegate != address(0) && pendingDelegate != delegate) revert DelegateAlreadyAssigned();
         if (delegateOf[holder] != address(0)) revert CallerIsDelegate();
         if (pendingDelegateOf[holder] != address(0)) revert CallerIsDelegate();
 
@@ -1556,8 +1563,15 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
         delegateTo[holder] = delegate;
         delegateOf[delegate] = holder;
+        _advanceDelegateAuthorizationNonce(holder);
 
         emit DelegateSet(holder, delegate);
+    }
+
+    function _advanceDelegateAuthorizationNonce(address holder) private {
+        unchecked {
+            delegateAuthorizationNonces[holder]++;
+        }
     }
 
     function _clearPendingDelegateRequest(address holder) internal {
@@ -1574,6 +1588,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (activeDelegator != address(0)) {
             delete delegateOf[account];
             delete delegateTo[activeDelegator];
+            _advanceDelegateAuthorizationNonce(activeDelegator);
             emit DelegateRemoved(activeDelegator, account);
         }
 
@@ -1581,6 +1596,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (pendingDelegator != address(0)) {
             delete pendingDelegateOf[account];
             delete pendingDelegateTo[pendingDelegator];
+            _advanceDelegateAuthorizationNonce(pendingDelegator);
             emit PendingDelegateRemoved(pendingDelegator, account);
         }
     }
