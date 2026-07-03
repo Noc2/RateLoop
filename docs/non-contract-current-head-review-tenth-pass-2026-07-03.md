@@ -216,7 +216,7 @@ Mark the package-publication statements as snapshot-time historical, or update t
 
 - The second-pass worktree findings around `slashFrontendWithBounty`, deregistration dispute freezes, and unknown dispute status are resolved in current source. Focused tests for the governance composer, frontend registration dispute state, and frontend fee withdrawal plan passed.
 - Prior latest-head findings around standalone Ponder keeper work, MCP unsafe numeric coercion, unreadable public artifacts, prefixed hosted attachment URLs, cleanup cron scheduling, keeper Railway liveness, Gemini MCP headers, keeper Railway watch patterns, Ponder health wording, agents Node compatibility, and generic bounty copy are fixed or explicitly documented in current source.
-- Historical reports under `docs/` still contain older "Open" findings by design. They were not treated as current evidence unless the underlying source or public docs still showed the issue.
+- Older non-contract report text was treated as historical review input, not current evidence, unless the underlying source or public docs still showed the issue.
 
 ## Verification
 
