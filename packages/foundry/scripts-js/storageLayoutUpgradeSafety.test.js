@@ -90,6 +90,7 @@ test("FrontendRegistry appends access-recorder state into the reserved gap", () 
     {
       accessRecorderForFrontend: slots.get("accessRecorderForFrontend"),
       frontendForAccessRecorder: slots.get("frontendForAccessRecorder"),
+      openSnapshotDisputeCount: slots.get("openSnapshotDisputeCount"),
       gap: slots.get("__gap"),
     },
     {
@@ -105,8 +106,14 @@ test("FrontendRegistry appends access-recorder state into the reserved gap", () 
         label: "frontendForAccessRecorder",
         type: "t_mapping(t_address,t_address)",
       },
-      gap: {
+      openSnapshotDisputeCount: {
         slot: 17,
+        offset: 0,
+        label: "openSnapshotDisputeCount",
+        type: "t_mapping(t_address,t_uint256)",
+      },
+      gap: {
+        slot: 18,
         offset: 0,
         label: "__gap",
         type: "t_array(t_uint256)",
