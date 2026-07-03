@@ -877,7 +877,7 @@ function inferMediaTypeFromHost(urlHost: string): "image" | "video" {
 }
 
 const UPLOADED_IMAGE_ATTACHMENT_URL_PATTERN =
-  /^https:\/\/[^/\s]+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
+  /^https:\/\/[^/\s]+(?:\/[^?#\s]*)?\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
 
 function isFallbackMediaUrl(item: { url?: string; urlHost?: string }) {
   if (!item.url) return false;

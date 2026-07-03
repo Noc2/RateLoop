@@ -17,7 +17,8 @@ const CONFIDENTIALITY_HELPER_FIELDS = [
   "questionMetadata",
 ] as const;
 
-const HOSTED_ATTACHMENT_URL_PATTERN = /^https:\/\/[^/\s]+\/api\/attachments\/(?:details|images)\//i;
+const HOSTED_ATTACHMENT_URL_PATTERN =
+  /^https:\/\/[^/\s]+(?:\/[^?#\s]*)?\/api\/attachments\/(?:details|images)\//i;
 
 export function confidentialityContentSelectFields() {
   return {

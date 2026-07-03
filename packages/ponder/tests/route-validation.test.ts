@@ -1762,6 +1762,9 @@ describe("registerContentRoutes", () => {
           confidentialityPublishedAt: null,
           questionMetadata: canonicalJson(questionMetadata),
           title: "Public-safe prototype title",
+          url: "https://www.rateloop.ai/rateloop/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x1111111111111111111111111111111111111111111111111111111111111111",
+          canonicalUrl:
+            "https://www.rateloop.ai/rateloop/api/attachments/details/det_abcdefghijklmnop",
         },
       ],
       [
@@ -1798,6 +1801,8 @@ describe("registerContentRoutes", () => {
       detailsHash: null,
       detailsUrl: null,
       media: [],
+      url: "",
+      canonicalUrl: "",
       confidentiality: {
         bondAmount: "2500000",
         bondAsset: "USDC",
@@ -1806,6 +1811,48 @@ describe("registerContentRoutes", () => {
         visibility: "gated",
       },
     });
+  });
+
+  it("uses prefixed uploaded image attachment URLs as fallback content media", async () => {
+    const imageUrl =
+      "https://www.rateloop.ai/rateloop/api/attachments/images/att_prefixedimage001.webp#sha256=0x2222222222222222222222222222222222222222222222222222222222222222";
+    mockPonderModules(
+      [
+        {
+          id: 44n,
+          description: "Public image attachment question.",
+          gated: false,
+          questionMetadata: null,
+          title: "Public image attachment",
+          url: imageUrl,
+          canonicalUrl: imageUrl,
+          urlHost: "www.rateloop.ai",
+        },
+      ],
+      [[], [{ count: 1 }]],
+    );
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?limit=5");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0].media).toEqual([
+      {
+        canonicalUrl: imageUrl,
+        index: 0,
+        mediaIndex: 0,
+        mediaType: "image",
+        url: imageUrl,
+        urlHost: "www.rateloop.ai",
+      },
+    ]);
   });
 
   it("redacts context when gating comes only from indexed escrow events", async () => {
