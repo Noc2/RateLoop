@@ -56,18 +56,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint8 public constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
     uint8 public constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     uint8 public constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
-    uint64 public constant DEFAULT_CHALLENGE_WINDOW = 15 minutes;
-    uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
-    uint64 public constant DEFAULT_FINALIZATION_VETO_WINDOW = 15 minutes;
-    uint64 public constant MAX_FINALIZATION_VETO_WINDOW = 7 days;
+    uint64 internal constant DEFAULT_CHALLENGE_WINDOW = 15 minutes;
+    uint64 internal constant MAX_CHALLENGE_WINDOW = 3 days;
+    uint64 internal constant DEFAULT_FINALIZATION_VETO_WINDOW = 15 minutes;
+    uint64 internal constant MAX_FINALIZATION_VETO_WINDOW = 7 days;
     uint64 public constant LAUNCH_PAYOUT_FINALITY_BUDGET = 1 hours;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND = 1e6;
     /// @dev Challenge bonds are anti-spam only, not payout-value coverage. Keep governance
     ///      rotations bounded so a bad config cannot price honest challengers out.
-    uint256 public constant MAX_CHALLENGE_BOND = 100e6;
+    uint256 internal constant MAX_CHALLENGE_BOND = 100e6;
     uint256 public constant MAX_CORRELATION_EPOCH_SOURCES = 256;
-    uint256 public constant MAX_ARTIFACT_URI_LENGTH = 2048;
+    uint256 internal constant MAX_ARTIFACT_URI_LENGTH = 2048;
     error InvalidAddress();
     error InvalidBond();
     error InvalidSnapshot();

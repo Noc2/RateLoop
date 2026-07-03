@@ -229,7 +229,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_ProposeCorrelationEpochRejectsOverlongArtifactURI() public {
-        string memory artifactURI = new string(oracle.MAX_ARTIFACT_URI_LENGTH() + 1);
+        string memory artifactURI = new string(2048 + 1);
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
@@ -301,20 +301,20 @@ contract ClusterPayoutOracleTest is Test {
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
-        input.artifactURI = new string(oracle.MAX_ARTIFACT_URI_LENGTH() + 1);
+        input.artifactURI = new string(2048 + 1);
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeRoundPayoutSnapshot(input);
     }
 
     function test_ChallengeWindowCannotOutliveFrontendUnbondingBuffer() public {
-        uint64 maxChallengeWindow = oracle.MAX_CHALLENGE_WINDOW();
+        uint64 maxChallengeWindow = 3 days;
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.setOracleConfig(maxChallengeWindow + 1, CHALLENGE_BOND, address(this));
     }
 
     function test_ChallengeBondCannotExceedAntiSpamCap() public {
-        uint256 maxChallengeBond = oracle.MAX_CHALLENGE_BOND();
+        uint256 maxChallengeBond = 100e6;
         oracle.setOracleConfig(2 hours, maxChallengeBond, address(this));
         assertEq(oracle.challengeBond(), maxChallengeBond);
 
@@ -337,7 +337,7 @@ contract ClusterPayoutOracleTest is Test {
         vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
         oracle.setOracleBondConfig(10e6, address(0));
 
-        uint256 aboveMaxChallengeBond = oracle.MAX_CHALLENGE_BOND() + 1;
+        uint256 aboveMaxChallengeBond = 100e6 + 1;
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
         oracle.setOracleBondConfig(aboveMaxChallengeBond, newRecipient);
     }
@@ -349,8 +349,7 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(freshOracle.challengeWindow(), 15 minutes);
         assertEq(freshOracle.finalizationVetoWindow(), 15 minutes);
         assertEq(freshOracle.FINALIZATION_VETO_WINDOW(), 15 minutes);
-        assertEq(freshOracle.DEFAULT_FINALIZATION_VETO_WINDOW(), 15 minutes);
-        assertEq(freshOracle.MAX_FINALIZATION_VETO_WINDOW(), 7 days);
+        assertEq(freshOracle.finalizationVetoWindow(), 15 minutes);
         assertEq(freshOracle.LAUNCH_PAYOUT_FINALITY_BUDGET(), 1 hours);
     }
 

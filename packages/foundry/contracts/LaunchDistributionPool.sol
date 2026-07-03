@@ -59,7 +59,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint32 public constant MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 days;
     uint16 public constant LEGACY_IMMEDIATE_BPS = 100;
     uint64 public constant LEGACY_VESTING_DURATION = 730 days;
-    uint64 public constant LEGACY_CLAIM_GRACE_PERIOD = 91 days;
+    uint64 internal constant LEGACY_CLAIM_GRACE_PERIOD = 91 days;
     uint64 public constant LEGACY_CLAIM_DURATION = LEGACY_VESTING_DURATION + LEGACY_CLAIM_GRACE_PERIOD;
     uint64 public constant STALE_PENDING_EARNED_RATER_CREDIT_DELAY = 30 days;
 
@@ -1451,10 +1451,18 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     }
 
     function _isVerifiedAnchorBanned(bytes32 anchorId) private view returns (bool banned) {
-        (bool ok, bytes memory data) =
-            address(raterRegistry).staticcall(abi.encodeCall(RaterRegistry.isIdentityKeyBanned, (anchorId)));
-        if (!ok || data.length != 32) revert InvalidAddress();
-        return abi.decode(data, (bool));
+        address registry = address(raterRegistry);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xf8e0a2d6))
+            mstore(add(ptr, 0x04), anchorId)
+            let ok := staticcall(gas(), registry, ptr, 0x24, ptr, 0x20)
+            if iszero(and(ok, eq(returndatasize(), 0x20))) {
+                mstore(0x00, shl(224, 0xe6c4247b))
+                revert(0x00, 0x04)
+            }
+            banned := iszero(iszero(mload(ptr)))
+        }
     }
 
     function _hasActiveHumanCredential(address rater) internal view returns (bool) {

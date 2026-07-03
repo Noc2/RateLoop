@@ -139,32 +139,6 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
-    "name": "DEFAULT_CHALLENGE_WINDOW",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "DEFAULT_FINALIZATION_VETO_WINDOW",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "FINALIZATION_VETO_WINDOW",
     "inputs": [],
     "outputs": [
@@ -191,45 +165,6 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
-    "name": "MAX_ARTIFACT_URI_LENGTH",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_CHALLENGE_BOND",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_CHALLENGE_WINDOW",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MAX_CORRELATION_EPOCH_SOURCES",
     "inputs": [],
     "outputs": [
@@ -237,19 +172,6 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_FINALIZATION_VETO_WINDOW",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"

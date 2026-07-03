@@ -87,19 +87,6 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
-    "name": "LEGACY_CLAIM_GRACE_PERIOD",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "LEGACY_CONTRIBUTOR_POOL_AMOUNT",
     "inputs": [],
     "outputs": [
