@@ -39,6 +39,7 @@ import {
 } from "../correlation-vote-scan.js";
 import { buildCorrelationFinalitySla } from "../correlation-finality-sla.js";
 import {
+  parseStrictPositiveBigInt,
   parseStrictUnsignedInteger,
   safeBigInt,
   safeLimit,
@@ -341,9 +342,7 @@ async function getRoundContext(args: {
 }
 
 function validPositiveBigIntParam(value: string | undefined): bigint | null {
-  if (!value) return null;
-  const parsed = safeBigInt(value);
-  return parsed !== null && parsed > 0n ? parsed : null;
+  return parseStrictPositiveBigInt(value);
 }
 
 function optionalNonNegativeNumberParam(

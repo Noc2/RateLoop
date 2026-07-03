@@ -22,7 +22,7 @@ import { buildCorrelationFinalitySla } from "../correlation-finality-sla.js";
 import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
-import { safeBigInt, safeLimit } from "../utils.js";
+import { parseStrictUnsignedBigInt, safeLimit } from "../utils.js";
 
 const DEFAULT_KEEPER_WORK_LIMIT = 500;
 const MAX_KEEPER_WORK_LIMIT = 2_000;
@@ -32,8 +32,7 @@ const SNAPSHOT_STATUS_FINALIZED = 3;
 
 function safeNonNegativeBigIntParam(value: string | undefined): bigint | null {
   if (value === undefined) return null;
-  const parsed = safeBigInt(value);
-  return parsed !== null && parsed >= 0n ? parsed : null;
+  return parseStrictUnsignedBigInt(value);
 }
 
 function authorizeKeeperWork(c: Context) {

@@ -77,9 +77,22 @@ if (rateLimitMisconfigured) {
 // uncounted. Surface this at boot so it cannot be silently misconfigured; opt-in via
 // PONDER_REPLICA_COUNT > 1 (or RATE_LIMIT_BACKEND=memory to acknowledge the trade-off).
 {
-  const replicaCount = parseStrictUnsignedInteger(process.env.PONDER_REPLICA_COUNT ?? "1");
+  const replicaCountRaw = process.env.PONDER_REPLICA_COUNT;
+  const hasReplicaCount = replicaCountRaw !== undefined && replicaCountRaw.trim() !== "";
+  const replicaCount = hasReplicaCount
+    ? parseStrictUnsignedInteger(replicaCountRaw)
+    : 1;
   const backendAcknowledged = process.env.RATE_LIMIT_BACKEND === "memory";
-  if (isProduction && replicaCount !== null && replicaCount > 1 && !backendAcknowledged) {
+  if (
+    isProduction &&
+    hasReplicaCount &&
+    (replicaCount === null || replicaCount < 1)
+  ) {
+    console.warn(
+      `[ponder] WARNING: Invalid PONDER_REPLICA_COUNT=${JSON.stringify(replicaCountRaw)}; ` +
+      "expected a positive base-10 integer. Rate-limit replica diagnostics will assume one replica.",
+    );
+  } else if (isProduction && replicaCount !== null && replicaCount > 1 && !backendAcknowledged) {
     console.warn(
       `[ponder] WARNING: in-memory rate limiter is running with ${replicaCount} replicas; ` +
       "the effective per-IP limit divides by replica count. Migrate to a shared store " +

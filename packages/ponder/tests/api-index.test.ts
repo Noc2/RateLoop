@@ -94,6 +94,9 @@ describe("ponder api bootstrap", () => {
     const response = await app.request("https://ponder.rateloop.ai/content");
 
     expect(response.status).toBe(404);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid PONDER_REPLICA_COUNT"),
+    );
     expect(warnSpy).not.toHaveBeenCalledWith(
       expect.stringContaining("in-memory rate limiter is running with 2 replicas"),
     );

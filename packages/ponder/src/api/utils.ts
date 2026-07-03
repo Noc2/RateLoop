@@ -1,8 +1,16 @@
 import { getUrlLookupCandidates } from "../urlCanonicalization.js";
-import { parseStrictUnsignedInteger } from "../numberParsing.js";
+import {
+  parseStrictPositiveBigInt,
+  parseStrictUnsignedBigInt,
+  parseStrictUnsignedInteger,
+} from "../numberParsing.js";
 
 export { getCanonicalUrlParts, getUrlLookupCandidates } from "../urlCanonicalization.js";
-export { parseStrictUnsignedInteger } from "../numberParsing.js";
+export {
+  parseStrictPositiveBigInt,
+  parseStrictUnsignedBigInt,
+  parseStrictUnsignedInteger,
+} from "../numberParsing.js";
 
 export const MAX_PAGINATION_OFFSET = 50_000;
 const MIN_CONTENT_SEARCH_QUERY_LENGTH = 3;
@@ -11,11 +19,7 @@ const LIKELY_URL_SEARCH_PATTERN = /^[a-z0-9.-]+\.[a-z]{2,}(?:[/?#:].*)?$/i;
 
 /** Safely parse a BigInt from a query/path parameter, returning null on invalid input. */
 export function safeBigInt(value: string): bigint | null {
-  try {
-    return BigInt(value);
-  } catch {
-    return null;
-  }
+  return parseStrictUnsignedBigInt(value);
 }
 
 /** Safely parse pagination limit with defaults and clamping. */

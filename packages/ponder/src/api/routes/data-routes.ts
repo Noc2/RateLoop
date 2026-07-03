@@ -66,6 +66,7 @@ import {
 } from "../reputation-utils.js";
 import {
   isValidAddress,
+  parseStrictPositiveBigInt,
   parseStrictUnsignedInteger,
   safeBigInt,
   safeLimit,
@@ -304,7 +305,7 @@ async function mapWithConcurrency<T, R>(
 
 export function registerDataRoutes(app: ApiApp) {
   app.get("/feedback-bonus-pools", async (c) => {
-    const contentId = safeBigInt(c.req.query("contentId") ?? "");
+    const contentId = parseStrictPositiveBigInt(c.req.query("contentId"));
     const roundId = c.req.query("roundId")
       ? safeBigInt(c.req.query("roundId") ?? "")
       : null;
@@ -357,7 +358,7 @@ export function registerDataRoutes(app: ApiApp) {
   });
 
   app.get("/feedback-bonus-awards", async (c) => {
-    const contentId = safeBigInt(c.req.query("contentId") ?? "");
+    const contentId = parseStrictPositiveBigInt(c.req.query("contentId"));
     const roundId = c.req.query("roundId")
       ? safeBigInt(c.req.query("roundId") ?? "")
       : null;
@@ -406,7 +407,7 @@ export function registerDataRoutes(app: ApiApp) {
   });
 
   app.get("/content-feedback", async (c) => {
-    const contentId = safeBigInt(c.req.query("contentId") ?? "");
+    const contentId = parseStrictPositiveBigInt(c.req.query("contentId"));
     const roundId = c.req.query("roundId")
       ? safeBigInt(c.req.query("roundId") ?? "")
       : null;

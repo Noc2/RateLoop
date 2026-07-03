@@ -2812,6 +2812,33 @@ describe("registerDataRoutes", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it("rejects non-decimal feedback bonus content identifiers before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    for (const url of [
+      "http://localhost/feedback-bonus-pools",
+      "http://localhost/feedback-bonus-pools?contentId=",
+      "http://localhost/feedback-bonus-pools?contentId=0",
+      "http://localhost/feedback-bonus-pools?contentId=0x10",
+      "http://localhost/feedback-bonus-pools?contentId=+1",
+      "http://localhost/feedback-bonus-pools?contentId=-1",
+      "http://localhost/feedback-bonus-pools?contentId=1.5",
+      "http://localhost/feedback-bonus-pools?contentId=1abc",
+    ]) {
+      const response = await app.request(url);
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "Invalid contentId" });
+    }
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("lists active feedback bonus pools for an awarder", async () => {
     const { queryBuilder } = mockPonderModules([
       {
@@ -5228,14 +5255,23 @@ describe("registerCorrelationRoutes", () => {
     const app = new Hono();
     registerCorrelationRoutes(app);
 
-    const response = await app.request(
-      "http://localhost/correlation/round-votes?rewardPoolId=0&contentId=9&roundId=2",
-    );
+    for (const query of [
+      "rewardPoolId=0&contentId=9&roundId=2",
+      "rewardPoolId=0x7&contentId=9&roundId=2",
+      "rewardPoolId=7&contentId=+9&roundId=2",
+      "rewardPoolId=7&contentId=-9&roundId=2",
+      "rewardPoolId=7&contentId=9&roundId=2abc",
+      "rewardPoolId=7&contentId=9&roundId=1.5",
+    ]) {
+      const response = await app.request(
+        `http://localhost/correlation/round-votes?${query}`,
+      );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error: "rewardPoolId, contentId, and roundId must be positive integers",
-    });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: "rewardPoolId, contentId, and roundId must be positive integers",
+      });
+    }
   });
 
   it("excludes voter-address banned voters from rating correlation scoring inputs", async () => {
@@ -5302,14 +5338,21 @@ describe("registerKeeperRoutes", () => {
     const app = new Hono();
     registerKeeperRoutes(app);
 
-    const response = await app.request(
-      "http://localhost/keeper/work?now=abc&dormancyPeriod=60",
-    );
+    for (const query of [
+      "now=abc&dormancyPeriod=60",
+      "now=0x10&dormancyPeriod=60",
+      "now=+1&dormancyPeriod=60",
+      "now=-1&dormancyPeriod=60",
+      "now=1.5&dormancyPeriod=60",
+      "now=100&dormancyPeriod=60abc",
+    ]) {
+      const response = await app.request(`http://localhost/keeper/work?${query}`);
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "now and dormancyPeriod must be non-negative integer seconds",
-    });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: "now and dormancyPeriod must be non-negative integer seconds",
+      });
+    }
   });
 
   it("requires keeper work token in production when PONDER_KEEPER_WORK_TOKEN is unset", async () => {

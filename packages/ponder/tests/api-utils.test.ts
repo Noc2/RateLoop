@@ -6,6 +6,8 @@ import {
   isLikelyUrlSearchQuery,
   isValidAddress,
   normalizeContentSearchQuery,
+  parseStrictPositiveBigInt,
+  parseStrictUnsignedBigInt,
   parseStrictUnsignedInteger,
   safeBigInt,
   safeLimit,
@@ -21,24 +23,40 @@ describe("safeBigInt", () => {
     expect(safeBigInt("0")).toBe(0n);
   });
 
-  it("parses negative integer", () => {
-    expect(safeBigInt("-42")).toBe(-42n);
-  });
-
   it("parses very large numbers", () => {
     expect(safeBigInt("999999999999999999999")).toBe(999999999999999999999n);
   });
 
-  it("returns null for non-numeric string", () => {
-    expect(safeBigInt("abc")).toBeNull();
+  it("rejects blank, signed, hex, fractional, and partial strings", () => {
+    for (const value of ["", "   ", "-42", "+42", "0x10", "1.5", "42abc", "abc"]) {
+      expect(safeBigInt(value)).toBeNull();
+    }
+  });
+});
+
+describe("parseStrictUnsignedBigInt", () => {
+  it("parses unsigned decimal BigInts", () => {
+    expect(parseStrictUnsignedBigInt("0")).toBe(0n);
+    expect(parseStrictUnsignedBigInt("42")).toBe(42n);
   });
 
-  it("parses empty string as 0n", () => {
-    expect(safeBigInt("")).toBe(0n);
+  it("rejects non-decimal BigInt input", () => {
+    for (const value of ["", " ", " 42 ", "-1", "+1", "0x10", "1.5", "10abc", undefined]) {
+      expect(parseStrictUnsignedBigInt(value)).toBeNull();
+    }
+  });
+});
+
+describe("parseStrictPositiveBigInt", () => {
+  it("parses positive decimal BigInts", () => {
+    expect(parseStrictPositiveBigInt("1")).toBe(1n);
+    expect(parseStrictPositiveBigInt("999999999999999999999")).toBe(999999999999999999999n);
   });
 
-  it("returns null for float", () => {
-    expect(safeBigInt("1.5")).toBeNull();
+  it("rejects zero and non-decimal BigInt input", () => {
+    for (const value of ["0", "", "-1", "+1", "0x10", "1.5", "10abc", undefined]) {
+      expect(parseStrictPositiveBigInt(value)).toBeNull();
+    }
   });
 });
 
