@@ -20,6 +20,8 @@ function baseState(overrides: Partial<HandoffWebMcpState> = {}): HandoffWebMcpSt
     draftError: null,
     error: null,
     feedbackBonusLabel: "Not included",
+    feedbackBonusNeedsConfirmation: false,
+    feedbackBonusStatus: null,
     handoffId: "ahf_test",
     hasConnectedWallet: true,
     hasTransactionPlan: false,
@@ -76,6 +78,17 @@ test("summarizes the next handoff browser action", () => {
     getHandoffWebMcpNextAction(baseState({ hasTransactionPlan: true })),
     "Approve the prepared wallet calls in the browser.",
   );
+  assert.equal(
+    getHandoffWebMcpNextAction(
+      baseState({
+        feedbackBonusNeedsConfirmation: true,
+        feedbackBonusStatus: "failed_confirmation",
+        isTerminalStatus: true,
+        status: "submitted",
+      }),
+    ),
+    "Retry Feedback Bonus confirmation with the stored bonus transaction hashes.",
+  );
 });
 
 test("creates read-only handoff WebMCP tools", () => {
@@ -96,6 +109,8 @@ test("creates read-only handoff WebMCP tools", () => {
     connectedChainId: 480,
     connectedWallet: "0x1111111111111111111111111111111111111111",
     feedbackBonusLabel: "Not included",
+    feedbackBonusNeedsConfirmation: false,
+    feedbackBonusStatus: null,
     handoffId: "ahf_test",
     nextAction: "Prepare the ask in the browser, then approve the wallet calls.",
     questionCount: 1,

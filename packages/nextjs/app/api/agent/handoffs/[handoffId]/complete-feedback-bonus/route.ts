@@ -4,6 +4,7 @@ import {
   buildAgentAskHandoffResponse,
   listAgentAskHandoffAssets,
   loadAgentAskHandoffByToken,
+  updateAgentAskHandoffFeedbackBonusStatus,
 } from "~~/lib/agent/handoffs";
 import {
   AGENT_WRITE_RATE_LIMIT,
@@ -44,17 +45,43 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         throw new AgentAskHandoffError("Prepare this handoff before completing its Feedback Bonus.");
       }
 
-      const result = (await callPublicRateLoopMcpTool({
-        arguments: {
-          operationKey: handoff.operationKey,
+      await updateAgentAskHandoffFeedbackBonusStatus({
+        error: null,
+        handoffId,
+        status: "pending_confirmation",
+        transactionHashes,
+      });
+
+      let result: JsonObject;
+      try {
+        result = (await callPublicRateLoopMcpTool({
+          arguments: {
+            operationKey: handoff.operationKey,
+            transactionHashes,
+          },
+          name: "rateloop_confirm_feedback_bonus_transactions",
+          requestUrl: request.url,
+        })) as JsonObject;
+      } catch (error) {
+        await updateAgentAskHandoffFeedbackBonusStatus({
+          error: error instanceof Error ? error.message : String(error),
+          handoffId,
+          status: "failed_confirmation",
           transactionHashes,
-        },
-        name: "rateloop_confirm_feedback_bonus_transactions",
-        requestUrl: request.url,
-      })) as JsonObject;
-      const assets = await listAgentAskHandoffAssets(handoff.id);
+        });
+        throw error;
+      }
+
+      await updateAgentAskHandoffFeedbackBonusStatus({
+        error: null,
+        handoffId,
+        status: "confirmed",
+        transactionHashes,
+      });
+      const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
+      const assets = await listAgentAskHandoffAssets(updatedHandoff.id);
       return {
-        ...buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true }),
+        ...buildAgentAskHandoffResponse({ assets, handoff: updatedHandoff, includeImageData: true }),
         ask: result,
         publicUrl: typeof result.publicUrl === "string" ? result.publicUrl : null,
       };

@@ -26,6 +26,8 @@ type AgentAsksAuditRouteModule = typeof import("./asks/[operationKey]/audit/rout
 type AgentAsksExportRouteModule = typeof import("./asks/export/route");
 type AgentAsksOperationRouteModule = typeof import("./asks/[operationKey]/route");
 type AgentAsksRouteModule = typeof import("./asks/route");
+type AgentHandoffCompleteFeedbackBonusRouteModule =
+  typeof import("./handoffs/[handoffId]/complete-feedback-bonus/route");
 type AgentHandoffCompleteRouteModule = typeof import("./handoffs/[handoffId]/complete/route");
 type AgentHandoffPrepareRouteModule = typeof import("./handoffs/[handoffId]/prepare/route");
 type AgentHandoffRouteModule = typeof import("./handoffs/[handoffId]/route");
@@ -75,6 +77,7 @@ let callbackLifecycleModule: CallbackLifecycleModule;
 let callbackRegistryModule: CallbackRegistryModule;
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
+let handoffCompleteFeedbackBonusRoute: AgentHandoffCompleteFeedbackBonusRouteModule;
 let handoffCompleteRoute: AgentHandoffCompleteRouteModule;
 let handoffPrepareRoute: AgentHandoffPrepareRouteModule;
 let handoffRoute: AgentHandoffRouteModule;
@@ -414,6 +417,18 @@ function installAskOverrides(overrides: McpToolTestOverrides = {}) {
       },
       status: 200,
     }),
+    confirmFeedbackBonusQuestionSubmissionRequest: async params => ({
+      body: {
+        feedbackBonus: {
+          enabled: true,
+          status: "funded",
+          transactionHashes: params.transactionHashes,
+        },
+        operationKey: params.operationKey,
+        status: "submitted",
+      },
+      status: 200,
+    }),
     prepareNativeX402QuestionSubmissionRequest: async params => ({
       body: {
         clientRequestId: "mcp:ask-http",
@@ -555,6 +570,7 @@ before(async () => {
   callbackEventsModule = await import("~~/lib/agent-callbacks/events");
   callbackLifecycleModule = await import("~~/lib/agent-callbacks/lifecycle");
   callbackRegistryModule = await import("~~/lib/agent-callbacks/registry");
+  handoffCompleteFeedbackBonusRoute = await import("./handoffs/[handoffId]/complete-feedback-bonus/route");
   handoffCompleteRoute = await import("./handoffs/[handoffId]/complete/route");
   handoffPrepareRoute = await import("./handoffs/[handoffId]/prepare/route");
   handoffRoute = await import("./handoffs/[handoffId]/route");
@@ -582,6 +598,7 @@ beforeEach(async () => {
   callbackLifecycleModule.__setAgentLifecycleTestOverridesForTests(null);
   handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
   handoffsModule.__resetAgentAskHandoffAssetPositionSchemaReadyForTests();
+  handoffsModule.__resetAgentAskHandoffFeedbackBonusRecoverySchemaReadyForTests();
   await dbModule.dbClient.execute("DELETE FROM agent_callback_events");
   await dbModule.dbClient.execute("DELETE FROM agent_callback_subscriptions");
   await dbModule.dbClient.execute("DELETE FROM api_rate_limits");
@@ -601,6 +618,7 @@ after(() => {
   mcpToolsModule.__setMcpToolTestOverridesForTests(null);
   handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
   handoffsModule.__resetAgentAskHandoffAssetPositionSchemaReadyForTests();
+  handoffsModule.__resetAgentAskHandoffFeedbackBonusRecoverySchemaReadyForTests();
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("RATELOOP_MCP_AGENTS", originalAgents);
   restoreEnv("APP_URL", originalAppUrl);
@@ -2299,6 +2317,111 @@ test("agent ask handoff route retries completion with stored transaction hashes"
   assert.equal(retriedCompleteBody.status, "submitted");
   assert.deepEqual(retriedCompleteBody.transactionHashes, [transactionHash]);
   assert.equal(confirmCalls, 2);
+});
+
+test("agent ask handoff route retries Feedback Bonus completion with stored bonus transaction hashes", async () => {
+  let bonusConfirmCalls = 0;
+  const mainTransactionHash = `0x${"4".repeat(64)}` as const;
+  const bonusTransactionHash = `0x${"5".repeat(64)}` as const;
+  installAskOverrides({
+    confirmFeedbackBonusQuestionSubmissionRequest: async params => {
+      bonusConfirmCalls += 1;
+      if (bonusConfirmCalls === 1) {
+        throw new Error("transient feedback bonus confirm failure");
+      }
+      return {
+        body: {
+          feedbackBonus: {
+            enabled: true,
+            status: "funded",
+            transactionHashes: params.transactionHashes,
+          },
+          operationKey: params.operationKey,
+          status: "submitted",
+        },
+        status: 200,
+      };
+    },
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-feedback-bonus-retry"),
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+        },
+        maxPaymentAmount: "3500000",
+        paymentMode: "wallet_calls",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  const completeResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [mainTransactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(completeResponse.status, 200);
+
+  const failedBonusResponse = await handoffCompleteFeedbackBonusRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+      token,
+      transactionHashes: [bonusTransactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const failedBonusBody = (await failedBonusResponse.json()) as Record<string, unknown>;
+  assert.equal(failedBonusResponse.status, 500);
+  assert.match(String(failedBonusBody.message), /transient feedback bonus confirm failure/);
+  assert.equal(bonusConfirmCalls, 1);
+
+  const readAfterFailedBonus = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readAfterFailedBonusBody = (await readAfterFailedBonus.json()) as Record<string, unknown>;
+  assert.equal(readAfterFailedBonusBody.status, "submitted");
+  assert.equal(readAfterFailedBonusBody.feedbackBonusStatus, "failed_confirmation");
+  assert.deepEqual(readAfterFailedBonusBody.feedbackBonusTransactionHashes, [bonusTransactionHash]);
+  assert.match(String(readAfterFailedBonusBody.nextAction), /stored bonus transaction hashes/);
+
+  const retriedBonusResponse = await handoffCompleteFeedbackBonusRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+      token,
+      transactionHashes: [bonusTransactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const retriedBonusBody = (await retriedBonusResponse.json()) as Record<string, unknown>;
+  assert.equal(retriedBonusResponse.status, 200);
+  assert.equal(retriedBonusBody.status, "submitted");
+  assert.equal(retriedBonusBody.feedbackBonusStatus, "confirmed");
+  assert.deepEqual(retriedBonusBody.feedbackBonusTransactionHashes, [bonusTransactionHash]);
+  assert.equal((retriedBonusBody.ask as { feedbackBonus?: { status?: string } }).feedbackBonus?.status, "funded");
+  assert.equal(bonusConfirmCalls, 2);
 });
 
 test("agent ask handoff route defaults eligible USDC asks to EIP-3009 authorization", async () => {

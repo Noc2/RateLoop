@@ -587,6 +587,15 @@ export const agentAskHandoffOutputSchema = {
       type: ["string", "null"],
     },
     expiresAt: { type: "string" },
+    feedbackBonusError: {
+      description: "Feedback Bonus confirmation failure, or null when no bonus confirmation error is pending.",
+      type: ["string", "null"],
+    },
+    feedbackBonusStatus: {
+      enum: ["pending_confirmation", "failed_confirmation", "confirmed", null],
+      type: ["string", "null"],
+    },
+    feedbackBonusTransactionHashes: { items: { type: "string" }, type: "array" },
     handoffId: { type: "string" },
     handoffToken: { type: "string" },
     handoffUrl: { type: "string" },

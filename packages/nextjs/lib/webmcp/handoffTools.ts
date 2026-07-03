@@ -19,6 +19,8 @@ export type HandoffWebMcpState = {
   draftError: string | null;
   error: string | null;
   feedbackBonusLabel: string;
+  feedbackBonusNeedsConfirmation: boolean;
+  feedbackBonusStatus: string | null;
   handoffId: string;
   hasConnectedWallet: boolean;
   hasTransactionPlan: boolean;
@@ -84,6 +86,9 @@ export function validateHandoffWebMcpDraft(state: HandoffWebMcpState) {
 export function getHandoffWebMcpNextAction(state: HandoffWebMcpState) {
   if (!state.isLoaded) return "Open a valid handoff link and wait for the handoff to load.";
   if (state.status === "expired") return "Create a fresh handoff link.";
+  if (state.feedbackBonusNeedsConfirmation) {
+    return "Retry Feedback Bonus confirmation with the stored bonus transaction hashes.";
+  }
   if (state.status === "submitted") return "Read the public result or poll the ask status.";
   if (state.error) return "Resolve the handoff error shown in the browser.";
   if (state.draftError) return "Fix the draft error shown in the browser.";
@@ -106,6 +111,8 @@ function summarizeHandoffWebMcpStatus(state: HandoffWebMcpState) {
     connectedChainId: state.connectedChainId,
     connectedWallet: state.connectedWallet,
     feedbackBonusLabel: state.feedbackBonusLabel,
+    feedbackBonusNeedsConfirmation: state.feedbackBonusNeedsConfirmation,
+    feedbackBonusStatus: state.feedbackBonusStatus,
     handoffId: state.handoffId,
     nextAction: getHandoffWebMcpNextAction(state),
     questionCount: state.questions.length,

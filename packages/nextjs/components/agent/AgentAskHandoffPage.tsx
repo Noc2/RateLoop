@@ -172,6 +172,9 @@ type Handoff = {
   publicUrl?: string | null;
   requestBody?: JsonRecord;
   status: string;
+  feedbackBonusError?: string | null;
+  feedbackBonusStatus?: string | null;
+  feedbackBonusTransactionHashes?: string[];
   transactionHashes?: string[];
   transactionPlan?: HandoffTransactionPlan | null;
   updatedAt?: string;
@@ -293,6 +296,7 @@ const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
 const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
 const DEFAULT_FEEDBACK_BONUS_AMOUNT = "2";
 const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
+const FEEDBACK_BONUS_RECOVERY_STORAGE_PREFIX = "rateloop.feedbackBonusRecovery.";
 
 const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
@@ -315,6 +319,36 @@ const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
   disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
   visibility: "public",
 };
+
+function feedbackBonusRecoveryStorageKey(handoffId: string) {
+  return `${FEEDBACK_BONUS_RECOVERY_STORAGE_PREFIX}${handoffId}`;
+}
+
+function readLocalFeedbackBonusRecovery(handoffId: string, operationKey: string | null | undefined) {
+  if (typeof window === "undefined" || !operationKey) return [];
+  try {
+    const raw = window.localStorage.getItem(feedbackBonusRecoveryStorageKey(handoffId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { hashes?: unknown; operationKey?: unknown };
+    if (parsed.operationKey !== operationKey || !Array.isArray(parsed.hashes)) return [];
+    return parsed.hashes.filter((hash): hash is string => typeof hash === "string" && /^0x[0-9a-fA-F]{64}$/.test(hash));
+  } catch {
+    return [];
+  }
+}
+
+function storeLocalFeedbackBonusRecovery(params: { handoffId: string; hashes: string[]; operationKey: string | null }) {
+  if (typeof window === "undefined" || !params.operationKey || params.hashes.length === 0) return;
+  window.localStorage.setItem(
+    feedbackBonusRecoveryStorageKey(params.handoffId),
+    JSON.stringify({ hashes: params.hashes, operationKey: params.operationKey }),
+  );
+}
+
+function clearLocalFeedbackBonusRecovery(handoffId: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(feedbackBonusRecoveryStorageKey(handoffId));
+}
 const TARGET_AUDIENCE_TAXONOMY = getProfileSelfReportTaxonomy().targetAudience;
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
 const TARGET_AUDIENCE_CHIP_GROUPS: Array<{
@@ -2061,6 +2095,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [savedDraftJson, setSavedDraftJson] = useState("");
   const [draftSourceKey, setDraftSourceKey] = useState("");
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
+  const [clientFeedbackBonusRecoveryHashes, setClientFeedbackBonusRecoveryHashes] = useState<string[]>([]);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
   const { data: protocolRoundConfigBounds } = useScaffoldReadContract({
     contractName: "ProtocolConfig" as any,
@@ -2148,7 +2183,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       });
       const body = (await response.json()) as Handoff | { error?: string; message?: string };
       if (!response.ok) throw new Error(readResponseError(body, "Failed to load handoff."));
-      setHandoff(body as Handoff);
+      const loaded = body as Handoff;
+      setClientFeedbackBonusRecoveryHashes(readLocalFeedbackBonusRecovery(handoffId, loaded.operationKey));
+      setHandoff(loaded);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load handoff.");
     } finally {
@@ -2185,6 +2222,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     handoff?.status === "failed" && failedImageAsset ? handoff.error || failedImageAsset.error || null : null;
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
   const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
+  const feedbackBonusRecoveryHashes =
+    handoff?.feedbackBonusTransactionHashes && handoff.feedbackBonusTransactionHashes.length > 0
+      ? handoff.feedbackBonusTransactionHashes
+      : clientFeedbackBonusRecoveryHashes;
   const connectedChainId = chain?.id ?? chainId ?? null;
   const handoffChainId = handoff?.chainId ?? null;
   const handoffFundingChainId = handoffChainId ?? targetNetwork.id;
@@ -2220,6 +2261,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const needsChainSwitch = Boolean(handoffChainId && connectedChainId && connectedChainId !== handoffChainId);
   const isBusy =
     isPreparing || isExecuting || isSigningMessage || isSigningTypedData || isSavingDraft || switchingChainId !== null;
+  const hasRetryableFeedbackBonusConfirmation = Boolean(
+    token &&
+      handoff?.operationKey &&
+      feedbackBonusRecoveryHashes.length > 0 &&
+      handoff.feedbackBonusStatus !== "confirmed" &&
+      !isExpiredHandoff &&
+      !isBusy,
+  );
+  const feedbackBonusConfirmationError =
+    handoff?.feedbackBonusStatus === "failed_confirmation"
+      ? (handoff.feedbackBonusError ?? "Feedback Bonus confirmation failed.")
+      : null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
@@ -2257,17 +2310,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     duplicateAskPayloadRecoveryMessage && handoff && draftForm && isDraftEditable && !isBusy,
   );
   const canSubmit = Boolean(
-    token &&
-      address &&
-      handoff &&
-      !connectedMismatch &&
-      !isTerminalStatus &&
-      !isBusy &&
-      !failedImageUploadMessage &&
-      !draftConfidentialityBondError &&
-      !draftValidationError &&
-      (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
-      (hasTransactionPlan || (connectedChainId && canPrepareHandoff(handoff))),
+    hasRetryableFeedbackBonusConfirmation ||
+      (token &&
+        address &&
+        handoff &&
+        !connectedMismatch &&
+        !isTerminalStatus &&
+        !isBusy &&
+        !failedImageUploadMessage &&
+        !draftConfidentialityBondError &&
+        !draftValidationError &&
+        (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
+        (hasTransactionPlan || (connectedChainId && canPrepareHandoff(handoff)))),
   );
   const draftFeedbackBonusAsset =
     draftForm?.feedbackBonusAsset ?? (draftForm?.feedbackBonusAmount === null ? null : draftBountyAsset);
@@ -2388,6 +2442,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       draftError,
       error,
       feedbackBonusLabel: feedbackBonusDraftLabel,
+      feedbackBonusNeedsConfirmation: hasRetryableFeedbackBonusConfirmation,
+      feedbackBonusStatus: handoff?.feedbackBonusStatus ?? null,
       handoffId,
       hasConnectedWallet: Boolean(address),
       hasTransactionPlan,
@@ -2412,6 +2468,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       handoff,
       handoffId,
       hasTransactionPlan,
+      hasRetryableFeedbackBonusConfirmation,
       hasUnsavedDraft,
       isLoading,
       isTerminalStatus,
@@ -3002,6 +3059,50 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     ],
   );
 
+  const confirmFeedbackBonus = useCallback(
+    async (params: {
+      baseHandoff: Handoff;
+      hashes: string[];
+      successHandoff?: CompleteResponse;
+      successMessage?: string;
+    }) => {
+      if (!token) throw new Error("This handoff link is missing its private token.");
+      if (params.hashes.length === 0) throw new Error("Feedback Bonus confirmation is missing transaction hashes.");
+
+      const response = await fetch(`/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+        body: JSON.stringify({ token, transactionHashes: params.hashes }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const body = (await response.json()) as CompleteResponse | { error?: string; message?: string };
+      if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm Feedback Bonus."));
+
+      const bonusHandoff = body as CompleteResponse;
+      clearLocalFeedbackBonusRecovery(handoffId);
+      setClientFeedbackBonusRecoveryHashes([]);
+      setHandoff(current => {
+        const baseAsk = params.successHandoff?.ask ?? current?.requestBody ?? null;
+        return {
+          ...(params.successHandoff ?? current ?? params.baseHandoff),
+          ...bonusHandoff,
+          ask: {
+            ...(isJsonRecord(baseAsk) ? baseAsk : {}),
+            ...(isJsonRecord(bonusHandoff.ask) ? { feedbackBonus: bonusHandoff.ask.feedbackBonus } : {}),
+          },
+          publicUrl:
+            bonusHandoff.publicUrl ??
+            params.successHandoff?.publicUrl ??
+            current?.publicUrl ??
+            params.baseHandoff.publicUrl ??
+            null,
+        };
+      });
+      notification.success(params.successMessage ?? "Feedback Bonus funded.");
+      return bonusHandoff;
+    },
+    [handoffId, token],
+  );
+
   const executeHandoff = useCallback(
     async (targetHandoff: Handoff, replayTransactionHashes: string[] = []) => {
       const hasStoredTransactionHashes = replayTransactionHashes.length > 0;
@@ -3081,30 +3182,24 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         if (feedbackBonusPlan) {
           try {
             const feedbackBonusHashes = await executeWalletTransactionPlan({
-              action: "ask",
+              action: "feedback bonus",
               calls: feedbackBonusPlan.calls ?? [],
               chainId: handoffChainId,
               getPostCallDelayMs,
               requiresAtomicExecution: feedbackBonusPlan.requiresAtomicExecution,
               requiresOrderedExecution: feedbackBonusPlan.requiresOrderedExecution,
             });
-            const bonusResponse = await fetch(`/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
-              body: JSON.stringify({ token, transactionHashes: feedbackBonusHashes }),
-              headers: { "content-type": "application/json" },
-              method: "POST",
+            storeLocalFeedbackBonusRecovery({
+              handoffId,
+              hashes: feedbackBonusHashes,
+              operationKey: nextHandoff.operationKey,
             });
-            const bonusBody = (await bonusResponse.json()) as CompleteResponse | { error?: string; message?: string };
-            if (!bonusResponse.ok) throw new Error(readResponseError(bonusBody, "Failed to confirm Feedback Bonus."));
-            const bonusHandoff = bonusBody as CompleteResponse;
-            setHandoff(current => ({
-              ...nextHandoff,
-              ask: {
-                ...(isJsonRecord(nextHandoff.ask) ? nextHandoff.ask : {}),
-                ...(isJsonRecord(bonusHandoff.ask) ? { feedbackBonus: bonusHandoff.ask.feedbackBonus } : {}),
-              },
-              publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? targetHandoff.publicUrl ?? null,
-            }));
-            notification.success("Feedback Bonus funded.");
+            setClientFeedbackBonusRecoveryHashes(feedbackBonusHashes);
+            await confirmFeedbackBonus({
+              baseHandoff: targetHandoff,
+              hashes: feedbackBonusHashes,
+              successHandoff: nextHandoff,
+            });
           } catch (feedbackBonusError) {
             const message = readHandoffActionError(feedbackBonusError, "Failed to fund Feedback Bonus.");
             setError(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
@@ -3131,6 +3226,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       address,
       connectedChainId,
       connectedMismatch,
+      confirmFeedbackBonus,
       dismissTransactionStatusToast,
       executeWalletTransactionPlan,
       handoffId,
@@ -3140,8 +3236,31 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     ],
   );
 
+  const retryFeedbackBonusConfirmation = useCallback(async () => {
+    if (!handoff || feedbackBonusRecoveryHashes.length === 0) return;
+    setIsExecuting(true);
+    setError(null);
+    try {
+      await confirmFeedbackBonus({
+        baseHandoff: handoff,
+        hashes: feedbackBonusRecoveryHashes,
+        successMessage: "Feedback Bonus confirmed.",
+      });
+    } catch (retryError) {
+      const message = readHandoffActionError(retryError, "Failed to confirm Feedback Bonus.");
+      setError(`Feedback Bonus confirmation failed: ${message}`);
+      notification.error(`Feedback Bonus confirmation failed: ${message}`);
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [confirmFeedbackBonus, feedbackBonusRecoveryHashes, handoff]);
+
   const handleSubmitAsk = useCallback(async () => {
     if (!handoff) return;
+    if (hasRetryableFeedbackBonusConfirmation) {
+      await retryFeedbackBonusConfirmation();
+      return;
+    }
     if (!address) {
       notification.error("Connect the wallet that will fund this ask.");
       return;
@@ -3181,8 +3300,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     executeHandoff,
     handoff,
     hasUnsavedDraft,
+    hasRetryableFeedbackBonusConfirmation,
     prepareHandoff,
     requireAcceptance,
+    retryFeedbackBonusConfirmation,
     saveDraft,
   ]);
 
@@ -3193,6 +3314,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const submitLabel = (() => {
     if (isSavingDraft) return "Saving...";
     if (switchingChainId !== null) return "Switching...";
+    if (hasRetryableFeedbackBonusConfirmation) return isExecuting ? "Retrying..." : "Retry bonus";
     if (isPreparing || isSigningMessage || isSigningTypedData) return "Preparing...";
     return isExecuting ? "Submitting..." : "Submit";
   })();
@@ -3283,6 +3405,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           <div className="flex items-start gap-2">
             <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{error}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {!error && feedbackBonusConfirmationError ? (
+        <div className="surface-card-nested rounded-lg p-4 text-sm text-warning">
+          <div className="flex items-start gap-2">
+            <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+            <span>Ask submitted, but Feedback Bonus confirmation needs retry: {feedbackBonusConfirmationError}</span>
           </div>
         </div>
       ) : null}

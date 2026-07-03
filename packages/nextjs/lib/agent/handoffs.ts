@@ -32,6 +32,8 @@ export type AgentAskHandoffStatus =
   | "failed"
   | "expired";
 
+export type AgentAskHandoffFeedbackBonusStatus = "pending_confirmation" | "failed_confirmation" | "confirmed";
+
 export type AgentAskHandoffRecord = {
   chainId: number | null;
   clientRequestId: string | null;
@@ -41,6 +43,9 @@ export type AgentAskHandoffRecord = {
   editedByUser: boolean;
   error: string | null;
   expiresAt: Date;
+  feedbackBonusError: string | null;
+  feedbackBonusStatus: AgentAskHandoffFeedbackBonusStatus | null;
+  feedbackBonusTransactionHashes: Hex[];
   id: string;
   operationKey: `0x${string}` | null;
   originalRequestBody: JsonObject;
@@ -108,6 +113,16 @@ const HANDOFF_ASSET_POSITION_COLUMN = "position";
 const HANDOFF_ASSET_POSITION_MIGRATION_MESSAGE =
   `Agent ask handoff asset database migration is pending. Apply ${HANDOFF_ASSET_POSITION_MIGRATION_PATH} ` +
   "to the handoff database before creating or preparing browser handoff links.";
+const HANDOFF_FEEDBACK_BONUS_RECOVERY_MIGRATION_PATH =
+  "packages/nextjs/drizzle/0018_agent_handoff_feedback_bonus_recovery.sql";
+const HANDOFF_FEEDBACK_BONUS_RECOVERY_COLUMNS = [
+  "feedback_bonus_transaction_hashes",
+  "feedback_bonus_status",
+  "feedback_bonus_error",
+] as const;
+const HANDOFF_FEEDBACK_BONUS_RECOVERY_MIGRATION_MESSAGE =
+  `Agent ask handoff database migration is pending. Apply ${HANDOFF_FEEDBACK_BONUS_RECOVERY_MIGRATION_PATH} ` +
+  "to enable Feedback Bonus confirmation recovery for browser handoffs.";
 const HANDOFF_LINK_EXPIRED_MESSAGE = "Handoff link has expired. Ask the AI agent to generate a new handoff link.";
 const IMAGE_BASE64_TRANSPORT_HINT =
   "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
@@ -217,6 +232,7 @@ type ErrorWithCause = {
 let handoffDraftSchemaReadyPromise: Promise<void> | null = null;
 let handoffDraftSchemaReadyForTests: boolean | null = null;
 let handoffAssetPositionSchemaReadyPromise: Promise<void> | null = null;
+let handoffFeedbackBonusRecoverySchemaReadyPromise: Promise<void> | null = null;
 
 export class AgentAskHandoffError extends Error {
   readonly status: number;
@@ -234,6 +250,10 @@ function pendingHandoffDraftMigrationError() {
 
 function pendingHandoffAssetPositionMigrationError() {
   return new AgentAskHandoffError(HANDOFF_ASSET_POSITION_MIGRATION_MESSAGE, 503);
+}
+
+function pendingHandoffFeedbackBonusRecoveryMigrationError() {
+  return new AgentAskHandoffError(HANDOFF_FEEDBACK_BONUS_RECOVERY_MIGRATION_MESSAGE, 503);
 }
 
 function isMissingHandoffDraftSchemaError(error: unknown, depth = 0): boolean {
@@ -284,6 +304,30 @@ function isMissingHandoffAssetPositionSchemaError(error: unknown, depth = 0): bo
     : false;
 }
 
+function isMissingHandoffFeedbackBonusRecoverySchemaError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as ErrorWithCause;
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const mentionsHandoffTable = message.includes("agent_ask_handoff_intents");
+  const mentionsFeedbackBonusColumn = HANDOFF_FEEDBACK_BONUS_RECOVERY_COLUMNS.some(column => message.includes(column));
+
+  if ((code === "42703" || code === "42P01") && (mentionsHandoffTable || mentionsFeedbackBonusColumn)) {
+    return true;
+  }
+  if (message.includes("column") && message.includes("does not exist") && mentionsFeedbackBonusColumn) {
+    return true;
+  }
+  if (message.includes("relation") && message.includes("does not exist") && mentionsHandoffTable) {
+    return true;
+  }
+
+  return depth < 3 && candidate.cause !== undefined
+    ? isMissingHandoffFeedbackBonusRecoverySchemaError(candidate.cause, depth + 1)
+    : false;
+}
+
 async function checkHandoffDraftSchemaReady() {
   try {
     await dbClient.execute(`
@@ -303,6 +347,14 @@ async function checkHandoffAssetPositionSchemaReady() {
   await dbClient.execute(`
     SELECT ${HANDOFF_ASSET_POSITION_COLUMN}
     FROM agent_ask_handoff_assets
+    LIMIT 0
+  `);
+}
+
+async function checkHandoffFeedbackBonusRecoverySchemaReady() {
+  await dbClient.execute(`
+    SELECT feedback_bonus_transaction_hashes, feedback_bonus_status, feedback_bonus_error
+    FROM agent_ask_handoff_intents
     LIMIT 0
   `);
 }
@@ -337,6 +389,10 @@ export function __resetAgentAskHandoffAssetPositionSchemaReadyForTests() {
   handoffAssetPositionSchemaReadyPromise = null;
 }
 
+export function __resetAgentAskHandoffFeedbackBonusRecoverySchemaReadyForTests() {
+  handoffFeedbackBonusRecoverySchemaReadyPromise = null;
+}
+
 export async function assertAgentAskHandoffAssetPositionSchemaReady() {
   handoffAssetPositionSchemaReadyPromise ??= (async () => {
     try {
@@ -358,6 +414,17 @@ export async function assertAgentAskHandoffAssetPositionSchemaReady() {
     throw error;
   });
   await handoffAssetPositionSchemaReadyPromise;
+}
+
+export async function assertAgentAskHandoffFeedbackBonusRecoverySchemaReady() {
+  handoffFeedbackBonusRecoverySchemaReadyPromise ??= checkHandoffFeedbackBonusRecoverySchemaReady().catch(error => {
+    handoffFeedbackBonusRecoverySchemaReadyPromise = null;
+    if (isMissingHandoffFeedbackBonusRecoverySchemaError(error)) {
+      throw pendingHandoffFeedbackBonusRecoveryMigrationError();
+    }
+    throw error;
+  });
+  await handoffFeedbackBonusRecoverySchemaReadyPromise;
 }
 
 function nowDate() {
@@ -534,6 +601,10 @@ function parseStoredHashes(value: string | null): Hex[] {
   }
 }
 
+function parseFeedbackBonusStatus(value: unknown): AgentAskHandoffFeedbackBonusStatus | null {
+  return value === "pending_confirmation" || value === "failed_confirmation" || value === "confirmed" ? value : null;
+}
+
 function rowToHandoff(row: Record<string, unknown> | undefined): AgentAskHandoffRecord | null {
   if (!row) return null;
   return {
@@ -550,6 +621,11 @@ function rowToHandoff(row: Record<string, unknown> | undefined): AgentAskHandoff
     editedByUser: row.edited_by_user === true || row.edited_by_user === "true",
     error: typeof row.error === "string" ? row.error : null,
     expiresAt: row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at)),
+    feedbackBonusError: typeof row.feedback_bonus_error === "string" ? row.feedback_bonus_error : null,
+    feedbackBonusStatus: parseFeedbackBonusStatus(row.feedback_bonus_status),
+    feedbackBonusTransactionHashes: parseStoredHashes(
+      typeof row.feedback_bonus_transaction_hashes === "string" ? row.feedback_bonus_transaction_hashes : null,
+    ),
     id: String(row.id),
     operationKey: typeof row.operation_key === "string" ? (row.operation_key as `0x${string}`) : null,
     originalRequestBody: parseStoredJson(String(row.original_request_body ?? row.request_body)),
@@ -963,12 +1039,19 @@ export function buildAgentAskHandoffResponse(params: {
 }) {
   const failedAsset = params.assets.find(asset => asset.status === "failed");
   const uploadingAsset = params.assets.find(asset => asset.status === "uploading");
+  const feedbackBonusNeedsConfirmation =
+    params.handoff.feedbackBonusTransactionHashes.length > 0 &&
+    (params.handoff.feedbackBonusStatus === "pending_confirmation" ||
+      params.handoff.feedbackBonusStatus === "failed_confirmation");
   const nextAction = (() => {
     if (params.handoff.status === "failed" && failedAsset) {
       return "Image upload failed. Ask the agent for a fresh handoff link with a regenerated or re-exported image.";
     }
     if (uploadingAsset) {
       return "Image upload is still staging. Poll rateloop_get_handoff_status before sharing or preparing the handoff.";
+    }
+    if (feedbackBonusNeedsConfirmation) {
+      return "Feedback Bonus confirmation needs retry with the stored bonus transaction hashes; do not rebroadcast the bonus wallet calls.";
     }
     if (params.handoff.status === "failed" && params.handoff.transactionHashes.length > 0) {
       return "Confirmation failed after wallet transactions were submitted. Retry handoff completion with the stored transaction hashes; do not rebroadcast the wallet calls.";
@@ -1021,6 +1104,9 @@ export function buildAgentAskHandoffResponse(params: {
     editedByUser: params.handoff.editedByUser,
     error: params.handoff.error,
     expiresAt: params.handoff.expiresAt.toISOString(),
+    feedbackBonusError: params.handoff.feedbackBonusError,
+    feedbackBonusStatus: params.handoff.feedbackBonusStatus,
+    feedbackBonusTransactionHashes: params.handoff.feedbackBonusTransactionHashes,
     id: params.handoff.id,
     nextAction,
     operationKey: params.handoff.operationKey,
@@ -1346,6 +1432,35 @@ export async function updateAgentAskHandoffStatus(params: {
   }
 }
 
+export async function updateAgentAskHandoffFeedbackBonusStatus(params: {
+  error?: string | null;
+  handoffId: string;
+  status: AgentAskHandoffFeedbackBonusStatus;
+  transactionHashes?: Hex[];
+}) {
+  await assertAgentAskHandoffFeedbackBonusRecoverySchemaReady();
+
+  const now = nowDate();
+  await dbClient.execute({
+    sql: `
+      UPDATE agent_ask_handoff_intents
+      SET feedback_bonus_status = ?,
+          feedback_bonus_transaction_hashes = COALESCE(?, feedback_bonus_transaction_hashes),
+          feedback_bonus_error = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND status != 'expired'
+    `,
+    args: [
+      params.status,
+      params.transactionHashes ? JSON.stringify(params.transactionHashes) : null,
+      params.error ?? null,
+      now,
+      params.handoffId,
+    ],
+  });
+}
+
 export function assertHandoffCanEditDraft(handoff: AgentAskHandoffRecord) {
   assertFresh(handoff);
   if (handoff.status !== "pending" && handoff.status !== "failed") {
@@ -1364,6 +1479,7 @@ export async function updateAgentAskHandoffDraft(params: {
 }) {
   assertHandoffCanEditDraft(params.handoff);
   await assertAgentAskHandoffDraftSchemaReady();
+  await assertAgentAskHandoffFeedbackBonusRecoverySchemaReady();
 
   const normalized = normalizeAgentAskHandoffRequestBody({
     fieldName: "requestBody",
@@ -1401,6 +1517,9 @@ export async function updateAgentAskHandoffDraft(params: {
           payload_hash = NULL,
           transaction_plan = NULL,
           transaction_hashes = NULL,
+          feedback_bonus_transaction_hashes = NULL,
+          feedback_bonus_status = NULL,
+          feedback_bonus_error = NULL,
           error = NULL,
           updated_at = ?
       WHERE id = ?
