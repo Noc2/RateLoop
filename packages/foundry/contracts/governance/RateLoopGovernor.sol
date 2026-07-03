@@ -288,9 +288,12 @@ contract RateLoopGovernor is
 
         weight = super._castVote(proposalId, account, support, reason, params);
 
-        // Lock the voting power that was used
         if (weight > 0) {
-            reputationToken.lockForGovernance(account, weight);
+            uint256 transferable = reputationToken.getTransferableBalance(account);
+            uint256 lockAmount = weight < transferable ? weight : transferable;
+            if (lockAmount > 0) {
+                reputationToken.lockForGovernance(account, lockAmount);
+            }
         }
 
         return weight;

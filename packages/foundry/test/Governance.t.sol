@@ -200,7 +200,7 @@ contract GovernanceTest is Test {
         governor.propose(targets, values, calldatas, _boundDescription("Transferred away threshold", voter1));
     }
 
-    function test_GovernanceLocking_VoteRejectsPostSnapshotTransfer() public {
+    function test_GovernanceLocking_VoteLocksRemainingBalanceAfterPostSnapshotTransfer() public {
         vm.roll(block.number + 1);
 
         address[] memory targets = new address[](1);
@@ -217,8 +217,41 @@ contract GovernanceTest is Test {
         token.transfer(address(0x123), VOTER_BALANCE - 1);
 
         vm.prank(voter2);
-        vm.expectRevert("Insufficient balance for governance lock");
         governor.castVote(proposalId, 1);
+
+        (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes) = governor.proposalVotes(proposalId);
+        assertEq(againstVotes, 0);
+        assertEq(forVotes, VOTER_BALANCE);
+        assertEq(abstainVotes, 0);
+        assertEq(token.getLockedBalance(voter2), 1);
+        assertEq(token.getTransferableBalance(voter2), 0);
+    }
+
+    function test_GovernanceLocking_VoteCountsAfterFullPostSnapshotTransfer() public {
+        vm.roll(block.number + 1);
+
+        address[] memory targets = new address[](1);
+        targets[0] = address(timelock);
+        uint256[] memory values = new uint256[](1);
+        bytes[] memory calldatas = new bytes[](1);
+
+        vm.prank(voter1);
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Test", voter1));
+
+        vm.roll(block.number + governor.votingDelay() + 1);
+
+        vm.prank(voter2);
+        token.transfer(address(0x123), VOTER_BALANCE);
+
+        vm.prank(voter2);
+        governor.castVote(proposalId, 1);
+
+        (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes) = governor.proposalVotes(proposalId);
+        assertEq(againstVotes, 0);
+        assertEq(forVotes, VOTER_BALANCE);
+        assertEq(abstainVotes, 0);
+        assertEq(token.getLockedBalance(voter2), 0);
+        assertEq(token.getTransferableBalance(voter2), 0);
     }
 
     function test_GovernanceLocking_UnlocksAfter7Days() public {
