@@ -614,7 +614,13 @@ async function roundSnapshotSourceReady(
 async function readPublicCorrelationArtifact(
   snapshot: Pick<RoundPayoutSnapshotArtifact, "artifactHash" | "artifactURI">,
 ): Promise<PublicCorrelationArtifactWithWeights | null> {
-  const canonical = await readArtifactCanonicalJson(snapshot.artifactURI);
+  let canonical: string | null;
+  try {
+    canonical = await readArtifactCanonicalJson(snapshot.artifactURI);
+  } catch {
+    incrementCounter("keeper_artifact_cache_or_fetch_failure_total");
+    return null;
+  }
   if (!canonical) {
     incrementCounter("keeper_artifact_cache_or_fetch_failure_total");
     return null;

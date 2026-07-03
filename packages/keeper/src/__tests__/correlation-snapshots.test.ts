@@ -220,6 +220,108 @@ async function loadPublisher(
   };
 }
 
+async function runFinalizedRatingSnapshotApplication(params: {
+  artifactURI: string;
+  fetchImpl?: typeof fetch;
+}) {
+  vi.resetModules();
+  vi.doMock("../config.js", () => ({
+    config: {
+      contracts: {
+        clusterPayoutOracle: ORACLE,
+        contentRegistry: CONTENT_REGISTRY,
+        votingEngine: VOTING_ENGINE,
+      },
+      correlationSnapshots: {
+        enabled: true,
+        mode: "file",
+        artifactPath: "/tmp/correlation-snapshots.json",
+        frontendRegistry: FRONTEND_REGISTRY,
+        maxRoundsPerTick: 20,
+        artifactStorage: {
+          mode: "file",
+          outputDir: "correlation-artifacts",
+          publicBaseUrl: "https://artifacts.example.com/rateloop",
+        },
+      },
+    },
+  }));
+  if (params.fetchImpl) {
+    vi.stubGlobal("fetch", vi.fn(params.fetchImpl));
+  }
+
+  vi.mocked(readFile).mockResolvedValue(
+    JSON.stringify({
+      correlationEpochs: [
+        {
+          epochId: "1",
+          fromRoundId: "1",
+          toRoundId: "1",
+          clusterRoot: `0x${"1".repeat(64)}`,
+          parameterHash: `0x${"2".repeat(64)}`,
+          artifactHash: `0x${"3".repeat(64)}`,
+          artifactURI: "https://artifacts.example.com/rateloop/epoch.json",
+        },
+      ],
+      roundPayoutSnapshots: [
+        {
+          domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+          rewardPoolId: "0",
+          contentId: "9",
+          roundId: "2",
+          correlationEpochId: "1",
+          rawEligibleVoters: 5,
+          effectiveParticipantUnits: 50_000,
+          totalClaimWeight: "100",
+          weightRoot: `0x${"4".repeat(64)}`,
+          reasonRoot: `0x${"5".repeat(64)}`,
+          artifactHash: `0x${"6".repeat(64)}`,
+          artifactURI: params.artifactURI,
+        },
+      ],
+    }),
+  );
+
+  const readContract = vi.fn(
+    async ({ functionName }: { functionName: string }) => {
+      if (functionName === "correlationEpochSnapshot") return { status: 3 };
+      if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+      if (functionName === "getRoundPayoutSnapshot")
+        return { status: 3, finalizedAt: 100n };
+      if (functionName === "isRoundPayoutSnapshotOutsideVetoWindow")
+        return true;
+      if (functionName === "roundLifecycleState")
+        return { cleanupRemaining: 0n };
+      if (functionName === "isRoundPayoutSnapshotConsumed") return false;
+      throw new Error(`unexpected readContract(${functionName})`);
+    },
+  );
+  const logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+  const writeContract = vi.fn();
+  const { publishConfiguredCorrelationSnapshots } = await import(
+    "../correlation-snapshots.js"
+  );
+
+  const result = await publishConfiguredCorrelationSnapshots(
+    {
+      readContract,
+      getBlock: vi.fn().mockResolvedValue({ timestamp: 200n }),
+      waitForTransactionReceipt: vi.fn(),
+    } as never,
+    { writeContract } as never,
+    { id: 31337 } as never,
+    { address: ACCOUNT } as never,
+    logger,
+  );
+
+  return { result, logger, writeContract };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
@@ -1195,6 +1297,43 @@ describe("correlation snapshot publisher", () => {
       { address: ACCOUNT } as never,
       logger,
     );
+
+    expect(result.ratingSnapshotsApplied).toBe(0);
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping rating snapshot application because artifact could not be read or verified",
+      expect.objectContaining({
+        snapshotKey: SNAPSHOT_KEY,
+        artifactHash: `0x${"6".repeat(64)}`,
+      }),
+    );
+  });
+
+  it("skips finalized rating snapshot application when a data URI is malformed", async () => {
+    const { result, logger, writeContract } =
+      await runFinalizedRatingSnapshotApplication({
+        artifactURI: "data:application/json,%E0%A4%A",
+      });
+
+    expect(result.ratingSnapshotsApplied).toBe(0);
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping rating snapshot application because artifact could not be read or verified",
+      expect.objectContaining({
+        snapshotKey: SNAPSHOT_KEY,
+        artifactHash: `0x${"6".repeat(64)}`,
+      }),
+    );
+  });
+
+  it("skips finalized rating snapshot application when public artifact fetch rejects", async () => {
+    const { result, logger, writeContract } =
+      await runFinalizedRatingSnapshotApplication({
+        artifactURI: "https://artifacts.example.com/rateloop/round.json",
+        fetchImpl: async () => {
+          throw new Error("network unavailable");
+        },
+      });
 
     expect(result.ratingSnapshotsApplied).toBe(0);
     expect(writeContract).not.toHaveBeenCalled();
