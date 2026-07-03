@@ -906,17 +906,17 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     buildDescription: values => `Set ProtocolConfig RaterRegistry to ${values.raterRegistry || "address"}`,
   },
   {
-    id: "content-set-treasury",
-    group: "Content Registry",
+    id: "protocol-set-treasury",
+    group: "Protocol Config",
     label: "Set treasury",
     mode: "proposal",
-    contractName: "ContentRegistry",
+    contractName: "ProtocolConfig",
     functionName: "setTreasury",
-    description: "Create a proposal to update the treasury that receives protocol fees.",
+    description: "Create a proposal to update the protocol treasury used by current forfeiture and treasury routes.",
     advanced: true,
     fields: [{ key: "treasury", label: "Treasury address", type: "address", required: true }],
     buildArgs: (_, parser) => [parser.address("treasury", "Treasury address")],
-    buildDescription: values => `Set ContentRegistry treasury to ${values.treasury || "address"}`,
+    buildDescription: values => `Set ProtocolConfig treasury to ${values.treasury || "address"}`,
   },
 ];
 

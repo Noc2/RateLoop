@@ -65,6 +65,28 @@ test("governance action composer hides standalone voting engine rotations", () =
   );
 });
 
+test("governance action composer routes treasury updates through ProtocolConfig", () => {
+  const templates = new Map(getGovernanceActionTemplateSummaries().map(template => [template.id, template]));
+
+  assert.deepEqual(templates.get("protocol-set-treasury"), {
+    contractName: "ProtocolConfig",
+    fieldKeys: ["treasury"],
+    functionName: "setTreasury",
+    group: "Protocol Config",
+    id: "protocol-set-treasury",
+    label: "Set treasury",
+    mode: "proposal",
+  });
+  assert.equal(
+    getGovernanceActionTemplateSummaries().some(
+      template =>
+        template.id === "content-set-treasury" ||
+        (template.contractName === "ContentRegistry" && template.functionName === "setTreasury"),
+    ),
+    false,
+  );
+});
+
 test("governance action composer exposes oracle finality timing with veto window", () => {
   const templates = new Map(getGovernanceActionTemplateSummaries().map(template => [template.id, template]));
 
