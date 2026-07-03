@@ -270,7 +270,7 @@ export const vote = onchainTable(
     rbtsStakeReturned: t.bigint(), // null until RBTS rewards are scored
     rbtsForfeitedStake: t.bigint(), // null until RBTS rewards are scored
     stake: t.bigint().notNull(),
-    epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
+    epochIndex: t.integer().notNull(), // Current protocol stores 0 for the single blind epoch
     revealed: t.boolean().notNull().default(false),
     committedAt: t.bigint().notNull(),
     commitTxHash: t.hex(),

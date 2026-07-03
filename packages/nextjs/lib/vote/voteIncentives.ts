@@ -83,7 +83,7 @@ export function getRoundProgressMessaging(snapshot: IncentiveSnapshot): RoundPro
       detailLabel: urgencyLabel,
       detailTone: snapshot.epoch1Remaining <= 15 * 60 ? "warning" : "primary",
       tooltip:
-        "Blind signals stay hidden and earn full reward weight. Open-phase signals use 25% informed weight, so early raters keep the 4x advantage.",
+        "Blind signals stay hidden and keep full reward weight. Final payouts and evidence can still be adjusted by correlation snapshots after reveal.",
     };
   }
 
@@ -96,7 +96,7 @@ export function getRoundProgressMessaging(snapshot: IncentiveSnapshot): RoundPro
       detailLabel: "Near settlement",
       detailTone: "success",
       tooltip:
-        "Open signals can see live pools and revealed signal. Informed signals use 25% weight, but they help push rounds to settlement faster.",
+        "Open signals help push rounds to settlement faster. Accepted commits keep full epoch weight; final payouts can still be correlation-adjusted.",
     };
   }
 
@@ -117,7 +117,7 @@ export function getRoundProgressMessaging(snapshot: IncentiveSnapshot): RoundPro
     detailLabel: "Help settle this round",
     detailTone: "success",
     tooltip:
-      "Open signals can use the revealed market signal. Informed signals use 25% weight, but they often help rounds close faster.",
+      "Open signals can use the revealed market signal and help rounds close faster. Accepted commits keep full epoch weight.",
   };
 }
 

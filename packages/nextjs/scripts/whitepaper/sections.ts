@@ -300,7 +300,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: `Private vote reports are encrypted with tlock against the drand beacon, so early raters cannot see the up/down distribution they are contributing to. Once epoch-1 results are visible, later reports still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
+            text: "Private vote reports are encrypted with tlock against the drand beacon, so raters cannot see the up/down distribution they are contributing to during the accepted commit window. The current launch config uses a single blind epoch with full commit weight for accepted votes; anti-herding comes from hidden signals, reveal gating, leave-one-out RBTS scoring, and finalized correlation snapshots rather than a later reduced-weight voting tier.",
           },
         ],
       },
@@ -321,7 +321,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Sybil resistance from LREP cost, calibration, per-round stake caps, optional credentials, and public behavior history.",
               "Cryptographic hiding during the blind phase through tlock and drand.",
-              "Economic anti-herding through blind commit-reveal, epoch-weighted rewards, correlation-adjusted RBTS/public-rating weights, and surprise-weighted bounty claims.",
+              "Economic anti-herding through blind commit-reveal, single blind-epoch rewards, correlation-adjusted RBTS/public-rating weights, and surprise-weighted bounty claims.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
               "Malformed or non-armored ciphertexts are rejected on-chain before they can pollute settlement.",
               "Reward-pool qualification and bundle terminal sync are permissionless, and the keeper can drive them before the first claimant pays that gas.",

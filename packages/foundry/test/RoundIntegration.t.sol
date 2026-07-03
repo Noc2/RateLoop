@@ -62,7 +62,7 @@ contract MockRoundIntegrationFrontendRegistry {
     }
 }
 
-/// @title Round-based integration tests for tlock commit-reveal flow with epoch-weighted rewards.
+/// @title Round-based integration tests for tlock commit-reveal flow with single blind-epoch rewards.
 /// @dev Covers: full lifecycle, multi-voter, concurrent rounds, tied rounds,
 ///      cancelled/expired rounds, consensus settlement, config snapshots.
 ///      Uses fake AGE-armored test ciphertexts, not real drand/tlock payloads.

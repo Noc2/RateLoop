@@ -241,7 +241,7 @@ const TechStackPage: NextPage = () => {
           },
           { symbol: String.raw`\mathrm{ind}_i`, meaning: "independence multiplier (bps) from the correlation scorer" },
           { symbol: String.raw`a_i`, meaning: "share of other raters' reveal weight on your side" },
-          { symbol: String.raw`v_i`, meaning: "your epoch-weighted reveal weight" },
+          { symbol: String.raw`v_i`, meaning: "your correlation-adjusted reveal weight" },
           { symbol: String.raw`p`, meaning: "clamped trailing up-vote share over the base-rate window" },
         ]}
         params={[

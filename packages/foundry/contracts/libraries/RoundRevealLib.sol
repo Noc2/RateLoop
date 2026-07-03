@@ -377,12 +377,12 @@ library RoundRevealLib {
         RbtsRoundTotals memory totals
     ) private returns (RbtsRoundTotals memory) {
         uint16 scoreBps = commitRbtsScoreBps[commitKey];
-        uint256 scoreWeight =
-            RewardMath.calculatePositiveScoreSpreadWeight(commitRbtsWeight[commitKey], scoreBps, benchmarkScoreBps);
+        uint256 scoringWeight = commitRbtsWeight[commitKey];
+        uint256 scoreWeight = RewardMath.calculatePositiveScoreSpreadWeight(scoringWeight, scoreBps, benchmarkScoreBps);
         uint256 stakeAmount = roundCommits[commitKey].stakeAmount;
         uint256 forfeitedStake = positiveSpreadWeight == 0
             ? 0
-            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, benchmarkScoreBps, revealedCount);
+            : RewardMath.calculateNegativeScoreSpreadForfeit(scoringWeight, scoreBps, benchmarkScoreBps, revealedCount);
         uint256 stakeReturned = stakeAmount - forfeitedStake;
 
         commitRbtsRewardWeight[commitKey] = scoreWeight;
@@ -391,8 +391,8 @@ library RoundRevealLib {
 
         totals.rewardWeight += scoreWeight;
         totals.forfeitedPool += forfeitedStake;
-        if (commitRbtsWeight[commitKey] > 0) {
-            totals.participationWeight += commitRbtsWeight[commitKey];
+        if (scoringWeight > 0) {
+            totals.participationWeight += scoringWeight;
             unchecked {
                 ++totals.participationClaimants;
             }

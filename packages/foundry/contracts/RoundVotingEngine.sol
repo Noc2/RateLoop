@@ -32,7 +32,7 @@ import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol"
 /// @dev Flow: commitVote (stores ciphertext hash, drand metadata, and commit hash) → epoch ends → revealVote
 ///      (caller supplies plaintext consistent with the commit hash) → settleRound (≥3 revealed votes) or
 ///      finalizeRevealFailedRound().
-///      Rounds accumulate votes across 20-minute epochs. After each epoch, keepers normally derive reveal plaintext
+///      Rounds accept votes during one blind tlock epoch. After the epoch, keepers normally derive reveal plaintext
 ///      off-chain from drand/tlock and submit reveals, while voters can also self-reveal if needed.
 ///      Accepted tlock tradeoff: the contract enforces lightweight tlock metadata guardrails on chain but does not
 ///      prove that the ciphertext decrypts to the committed plaintext. Invalid or mismatched ciphertexts are handled
@@ -40,7 +40,6 @@ import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol"
 ///      If the 20-minute voting window passes below commit quorum the round cancels with refunds; once commit quorum exists,
 ///      any unrevealed vote can finalize as RevealFailed only after the round stops accepting votes
 ///      and the final reveal grace deadline has passed.
-///      Epoch-weighting: epoch-1 (blind) = 100% public-verdict weight; epoch-2+ (informed) = 25%.
 ///      LREP stake rewards wait for finalized RBTS settlement weights from the correlation oracle.
 contract RoundVotingEngine is
     IRoundVotingCommitReveal,
@@ -876,7 +875,7 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Settle a round after ≥minVoters votes have been revealed. Permissionless.
-    /// @dev Public verdict uses epoch-weighted stake pools while RBTS settlement weights finalize LREP accounting.
+    /// @dev Public verdict uses revealed stake pools while RBTS settlement weights finalize LREP accounting.
     ///      Rating update uses bounded binary signal evidence so public rating movement is
     ///      compatible with absolute Robust BTS reports without making it a raw stake vote.
     function settleRound(uint256 contentId, uint256 roundId) external nonReentrant {
@@ -904,22 +903,15 @@ contract RoundVotingEngine is
 
         bool upWins;
 
-        // Record the public verdict from epoch-weighted binary pools. Robust BTS scores
-        // settle LREP rewards later; they do not override the binary signal used for rating movement.
+        // Record the public verdict from the revealed binary pools. Robust BTS scores settle LREP
+        // rewards later; they do not override the binary signal used for rating movement.
         upWins = round.weightedUpPool > round.weightedDownPool;
         if (round.weightedUpPool == round.weightedDownPool) {
-            if (round.upPool == round.downPool) {
-                round.state = RoundLib.RoundState.Tied;
-                round.settledAt = block.timestamp.toUint48();
-                _notifyBundleRoundTerminal(contentId, roundId, false);
-                emit RoundTied(contentId, roundId);
-                return;
-            }
-            // Tiebreak: smaller raw pool wins. Rationale: identical weighted pools with
-            // different raw pools means the smaller-raw side achieved the same weight with
-            // fewer tokens -> more concentration in early epochs -> "more informed" voters.
-            // This inverts the conventional raw-majority-breaks-tie convention intentionally.
-            upWins = round.upPool < round.downPool;
+            round.state = RoundLib.RoundState.Tied;
+            round.settledAt = block.timestamp.toUint48();
+            _notifyBundleRoundTerminal(contentId, roundId, false);
+            emit RoundTied(contentId, roundId);
+            return;
         }
         if (!scoringClosed) {
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, roundRbtsScoringClosedAt, contentId, roundId);

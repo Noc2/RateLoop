@@ -312,23 +312,21 @@ contract RewardMathTest is Test {
         assertEq(weight, 10000, "Epoch 0 (blind epoch-1) must return 10000 bps (100%)");
     }
 
-    function test_EpochWeightBps_Epoch1_Returns2500() public view {
+    function test_EpochWeightBps_Epoch1_Returns10000() public view {
         uint256 weight = harness.epochWeightBps(1);
-        assertEq(weight, 2500, "Epoch 1 (informed epoch-2+) must return 2500 bps (25%)");
+        assertEq(weight, 10000, "Epoch 1 remains fenced to 100% weight");
     }
 
-    function test_EpochWeightBps_HighEpoch_Returns2500() public view {
-        // All epochs >= 1 (informed) return the same 25% weight
+    function test_EpochWeightBps_HighEpoch_Returns10000() public view {
         uint256 weight2 = harness.epochWeightBps(2);
         uint256 weight100 = harness.epochWeightBps(100);
-        assertEq(weight2, 2500, "Epoch 2 must also return 2500 bps");
-        assertEq(weight100, 2500, "Epoch 100 must also return 2500 bps");
+        assertEq(weight2, 10000, "Epoch 2 remains fenced to 100% weight");
+        assertEq(weight100, 10000, "Epoch 100 remains fenced to 100% weight");
     }
 
-    function test_EpochWeightBps_EarlyVoterAdvantage() public view {
-        // Epoch-1 voter gets 4x the reward weight of an epoch-2+ voter
+    function test_EpochWeightBps_NoDormantEarlyVoterAdvantage() public view {
         uint256 blindWeight = harness.epochWeightBps(0);
-        uint256 informedWeight = harness.epochWeightBps(1);
-        assertEq(blindWeight / informedWeight, 4, "Blind voter must have 4x weight vs informed voter");
+        uint256 futureEpochWeight = harness.epochWeightBps(1);
+        assertEq(blindWeight, futureEpochWeight, "single-epoch protocol must not expose a dormant 4x tier");
     }
 }

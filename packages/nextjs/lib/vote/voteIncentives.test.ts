@@ -45,7 +45,7 @@ test("getRoundProgressMessaging shows blind urgency", () => {
     detailLabel: "11:00 left",
     detailTone: "warning",
     tooltip:
-      "Blind signals stay hidden and earn full reward weight. Open-phase signals use 25% informed weight, so early raters keep the 4x advantage.",
+      "Blind signals stay hidden and keep full reward weight. Final payouts and evidence can still be adjusted by correlation snapshots after reveal.",
   });
 });
 
@@ -93,7 +93,7 @@ test("describeOpenRoundActivity keeps using reveal progress after commit quorum 
   );
 });
 
-test("estimateVoteReturn uses informed weight without projecting majority-pool rewards", () => {
+test("estimateVoteReturn keeps full weight without projecting majority-pool rewards", () => {
   const estimate = estimateVoteReturn(
     {
       isEpoch1: false,
@@ -102,7 +102,7 @@ test("estimateVoteReturn uses informed weight without projecting majority-pool r
     10,
   );
 
-  assert.equal(estimate.effectiveStakeMicro, 2_500_000n);
+  assert.equal(estimate.effectiveStakeMicro, 10_000_000n);
   assert.equal(estimate.projectedVoterPoolMicro, 0n);
   assert.equal(estimate.projectedPoolShareMicro, 0n);
   assert.equal(estimate.estimatedGrossReturnMicro, 10_000_000n);

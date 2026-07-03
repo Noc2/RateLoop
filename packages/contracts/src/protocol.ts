@@ -54,7 +54,7 @@ export const REVEAL_FAILED_GRACE_MULTIPLIER = 24;
 
 export const EPOCH_WEIGHT_BPS = {
   blind: BPS_SCALE,
-  informed: 2_500,
+  informed: BPS_SCALE,
 } as const;
 
 export const PLATFORM_REWARD_SPLIT_BPS = {

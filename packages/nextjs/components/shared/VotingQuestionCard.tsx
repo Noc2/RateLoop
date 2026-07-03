@@ -172,7 +172,7 @@ function LiveRoundActivity({
     ? ""
     : snapshot.isEpoch1
       ? "Signals stay hidden until reveal, so early signal stays private while keeping full weight."
-      : "Revealed signal is live now. Open signals use informed weight, but they can still help close the round.";
+      : "Revealed signal is live now. Open signals retain full epoch weight and can still help close the round.";
   const condensedDetailCopy =
     progress?.detailLabel ??
     (snapshot.phase === "voting" && snapshot.voteCount >= snapshot.minVoters ? "Waiting for reveals" : detailCopy);

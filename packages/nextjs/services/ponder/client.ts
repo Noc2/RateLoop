@@ -1577,7 +1577,7 @@ export interface PonderVoteItem {
   rbtsStakeReturned?: string | null;
   rbtsForfeitedStake?: string | null;
   stake: string;
-  epochIndex: number; // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
+  epochIndex: number; // Current protocol stores 0 for the single blind epoch
   revealed: boolean;
   committedAt: string;
   commitTxHash?: string | null;

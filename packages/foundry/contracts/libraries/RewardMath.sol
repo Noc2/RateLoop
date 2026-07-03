@@ -3,9 +3,8 @@ pragma solidity ^0.8.34;
 
 /// @title RewardMath
 /// @notice Pure functions for rating and competitive RBTS reward calculations.
-/// @dev Voter rewards are distributed proportional to positive score-spread weight.
-///      Epoch 1 (blind) = 100% weight; Epoch 2+ (saw results) = 25% weight.
-///      This creates a 4:1 reward ratio for early blind voters vs late informed voters.
+/// @dev Voter rewards are distributed proportional to positive score-spread weight. Current
+///      protocol config accepts a single blind epoch, so epoch weighting is pinned at 100%.
 library RewardMath {
     uint256 internal constant PRECISION = 1e18;
 
@@ -103,21 +102,21 @@ library RewardMath {
     }
 
     /// @notice Calculate forfeited stake from score spread below the report benchmark.
-    /// @param stakeAmount Raw stake attached to the revealed report.
+    /// @param forfeitBase Economic weight exposed to score-spread forfeiture.
     /// @param scoreBps Rater's RBTS score in bps.
     /// @param benchmarkScoreBps Benchmark RBTS score in bps.
     /// @param revealedCount Number of score-eligible revealed participants in the round.
     function calculateNegativeScoreSpreadForfeit(
-        uint256 stakeAmount,
+        uint256 forfeitBase,
         uint16 scoreBps,
         uint16 benchmarkScoreBps,
         uint256 revealedCount
     ) internal pure returns (uint256) {
         if (revealedCount < SCORE_SPREAD_FORFEIT_MIN_REVEALS) return 0;
-        if (stakeAmount == 0 || scoreBps >= benchmarkScoreBps) return 0;
+        if (forfeitBase == 0 || scoreBps >= benchmarkScoreBps) return 0;
         uint256 deltaBps = uint256(benchmarkScoreBps) - scoreBps;
-        uint256 forfeitedStake = (stakeAmount * SCORE_SPREAD_INTENSITY_BPS * deltaBps) / BPS_TOTAL / BPS_TOTAL;
-        uint256 maxForfeit = (stakeAmount * MAX_SCORE_SPREAD_FORFEIT_BPS) / BPS_TOTAL;
+        uint256 forfeitedStake = (forfeitBase * SCORE_SPREAD_INTENSITY_BPS * deltaBps) / BPS_TOTAL / BPS_TOTAL;
+        uint256 maxForfeit = (forfeitBase * MAX_SCORE_SPREAD_FORFEIT_BPS) / BPS_TOTAL;
         return forfeitedStake > maxForfeit ? maxForfeit : forfeitedStake;
     }
 

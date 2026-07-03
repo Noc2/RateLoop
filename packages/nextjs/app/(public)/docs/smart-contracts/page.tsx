@@ -378,9 +378,8 @@ const SmartContracts: NextPage = () => {
       <h2>RoundVotingEngine</h2>
       <p>
         Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding,
-        epoch-weighted rewards, and deterministic settlement. One-sided rounds do not receive a consensus subsidy.
-        Commit-time reward weight is stake times the epoch timing weight; human credentials do not multiply settlement
-        rewards.
+        single blind-epoch rewards, and deterministic settlement. One-sided rounds do not receive a consensus subsidy.
+        Accepted commit-time reward weight is full stake; human credentials do not multiply settlement rewards.
       </p>
       <h3>Configuration</h3>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
@@ -492,7 +491,7 @@ const SmartContracts: NextPage = () => {
           <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
           revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). The round
           snapshot is guarded at creation so <code>minVoters</code> cannot fall below the three-participant RBTS floor.
-          Determines the public verdict from epoch-weighted binary signal pools and puts non-tied rounds into{" "}
+          Determines the public verdict from revealed binary signal pools and puts non-tied rounds into{" "}
           <code>SettlementPending</code> until a finalized <code>PAYOUT_DOMAIN_RBTS_SETTLEMENT</code> snapshot supplies
           effective RBTS weights. The visible rating moves after the finalized public-rating snapshot and veto window;
           bounty, launch-LREP, public-rating, and RBTS settlement correlation caps use the ClusterPayoutOracle domains

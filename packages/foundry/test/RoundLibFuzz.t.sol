@@ -47,8 +47,7 @@ contract RoundLibFuzz is Test {
 
     function testFuzz_epochWeightBps_Bounded(uint8 epochIndex) public pure {
         uint256 weight = RoundLib.epochWeightBps(epochIndex);
-        // Epoch 0 = 10000 (100%), all others = 2500 (25%)
-        assertTrue(weight == 10000 || weight == 2500, "unexpected weight value");
+        assertEq(weight, 10000, "single-epoch protocol keeps all epoch weights at 100%");
     }
 
     // =========================================================================
@@ -63,12 +62,13 @@ contract RoundLibFuzz is Test {
         assertEq(effective, stakeAmount, "epoch 0 should return full stake");
     }
 
-    function testFuzz_effectiveStake_Epoch1Quarter(uint256 stakeAmount) public {
+    function testFuzz_effectiveStake_NonzeroEpochStillFullStake(uint256 stakeAmount, uint8 epochIndex) public {
         stakeAmount = bound(stakeAmount, 0, type(uint64).max);
 
-        harness.setCommit(stakeAmount, 1);
+        vm.assume(epochIndex != 0);
+        harness.setCommit(stakeAmount, epochIndex);
         uint256 effective = harness.getEffectiveStake();
-        assertEq(effective, (stakeAmount * 2500) / 10000, "epoch 1+ should return 25%");
+        assertEq(effective, stakeAmount, "future epoch indexes are fenced to full stake until re-enabled");
     }
 
     // =========================================================================
@@ -94,7 +94,7 @@ contract RoundLibFuzz is Test {
         uint8 idx1 = harness.getComputeEpochIndex(epochDuration, t1);
         uint8 idx2 = harness.getComputeEpochIndex(epochDuration, t2);
 
-        // Later timestamp should have epoch index >= earlier
-        assertGe(idx2, idx1, "epoch index should be monotonically non-decreasing");
+        assertEq(idx1, 0, "current protocol always uses epoch index 0");
+        assertEq(idx2, 0, "current protocol always uses epoch index 0");
     }
 }

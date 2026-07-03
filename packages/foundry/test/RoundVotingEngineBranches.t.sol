@@ -1943,9 +1943,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                 RewardMath.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, scoringWeight, scoreBps);
             uint256 expectedRewardWeight =
                 RewardMath.calculatePositiveScoreSpreadWeight(scoringWeight, scoreBps, benchmarkScoreBps);
-            RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKeys[i]);
             uint256 expectedForfeit = RewardMath.calculateNegativeScoreSpreadForfeit(
-                commit.stakeAmount, scoreBps, benchmarkScoreBps, SCORE_SPREAD_TEST_REVEALS
+                scoringWeight, scoreBps, benchmarkScoreBps, SCORE_SPREAD_TEST_REVEALS
             );
 
             assertEq(
@@ -1956,7 +1955,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             assertEq(
                 _commitRbtsForfeitedStake(engine, contentId, roundId, commitKeys[i]),
                 expectedForfeit,
-                string.concat("forfeited stake should use leave-one-out benchmark #", Strings.toString(i))
+                string.concat(
+                    "forfeited stake should use leave-one-out benchmark and scoring weight #", Strings.toString(i)
+                )
             );
         }
     }

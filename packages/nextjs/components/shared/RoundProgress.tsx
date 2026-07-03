@@ -77,7 +77,7 @@ function RoundStatusChip({
  *
  * Active round shows the phase badge:
  * - Blind phase: Full reward weight (100%) — signals encrypted
- * - Open phase: Reduced reward weight (25%) — blind phase results now visible
+ * - Open phase: Reveal/settlement progress with accepted commits retaining full epoch weight
  *
  * Terminal states: Resolved / Cancelled / Tied / Reveal failed
  */
