@@ -618,42 +618,6 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
-    "name": "finalizeChallengedCorrelationEpoch",
-    "inputs": [
-      {
-        "name": "epochId",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "reasonHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "finalizeChallengedRoundPayoutSnapshot",
-    "inputs": [
-      {
-        "name": "snapshotKey",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "reasonHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "finalizeCorrelationEpoch",
     "inputs": [
       {

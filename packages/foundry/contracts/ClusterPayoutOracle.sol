@@ -396,7 +396,25 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function finalizeCorrelationEpoch(uint64 epochId) external {
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
-        if (snapshot.status == SnapshotStatus.Challenged) revert SnapshotChallenged();
+        if (snapshot.status == SnapshotStatus.Challenged) {
+            if (
+                !hasRole(ARBITER_ROLE, msg.sender) && block.timestamp
+                    < _challengeDeadline(
+                        snapshot.proposedAt,
+                        snapshot.challengeWindowAtProposal + snapshot.finalizationVetoWindowAtProposal
+                    )
+            ) {
+                revert SnapshotChallenged();
+            }
+            snapshot.status = SnapshotStatus.Finalized;
+            snapshot.finalizedAt = block.timestamp.toUint64();
+            _recordSnapshotDisputeClosed(snapshot.frontendOperator);
+            _creditBond(snapshot.proposer, snapshot.bond);
+            snapshot.bond = 0;
+            emit CorrelationEpochChallengeDismissed(epochId, msg.sender, bytes32(0));
+            emit CorrelationEpochFinalized(epochId, snapshot.clusterRoot, snapshot.parameterHash);
+            return;
+        }
         if (
             snapshot.status != SnapshotStatus.Proposed
                 || block.timestamp < _challengeDeadline(snapshot.proposedAt, snapshot.challengeWindowAtProposal)
@@ -407,19 +425,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         snapshot.finalizedAt = block.timestamp.toUint64();
         _creditBond(snapshot.proposer, snapshot.bond);
         snapshot.bond = 0;
-        emit CorrelationEpochFinalized(epochId, snapshot.clusterRoot, snapshot.parameterHash);
-    }
-
-    function finalizeChallengedCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
-        CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
-        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
-        if (snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
-        snapshot.status = SnapshotStatus.Finalized;
-        snapshot.finalizedAt = block.timestamp.toUint64();
-        _recordSnapshotDisputeClosed(snapshot.frontendOperator);
-        _creditBond(snapshot.proposer, snapshot.bond);
-        snapshot.bond = 0;
-        emit CorrelationEpochChallengeDismissed(epochId, msg.sender, reasonHash);
         emit CorrelationEpochFinalized(epochId, snapshot.clusterRoot, snapshot.parameterHash);
     }
 
@@ -632,7 +637,32 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function finalizeRoundPayoutSnapshot(bytes32 snapshotKey) external {
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
-        if (proposal.snapshot.status == SnapshotStatus.Challenged) revert SnapshotChallenged();
+        if (proposal.snapshot.status == SnapshotStatus.Challenged) {
+            _requireCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
+            if (
+                !hasRole(ARBITER_ROLE, msg.sender) && block.timestamp
+                    < _challengeDeadline(
+                        proposal.proposedAt, proposal.challengeWindowAtProposal + proposal.finalizationVetoWindowAtProposal
+                    )
+            ) {
+                revert SnapshotChallenged();
+            }
+            proposal.snapshot.status = SnapshotStatus.Finalized;
+            proposal.snapshot.finalizedAt = block.timestamp.toUint64();
+            _recordSnapshotDisputeClosed(proposal.frontendOperator);
+            _creditBond(proposal.proposer, proposal.bond);
+            proposal.bond = 0;
+            emit RoundPayoutSnapshotChallengeDismissed(snapshotKey, msg.sender, bytes32(0));
+            emit RoundPayoutSnapshotFinalized(
+                snapshotKey,
+                proposal.snapshot.domain,
+                proposal.snapshot.rewardPoolId,
+                proposal.snapshot.contentId,
+                proposal.snapshot.roundId,
+                proposal.snapshot.correlationEpochId
+            );
+            return;
+        }
         if (
             proposal.snapshot.status != SnapshotStatus.Proposed
                 || block.timestamp < _challengeDeadline(proposal.proposedAt, proposal.challengeWindowAtProposal)
@@ -645,30 +675,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // Return the proposer's own bond plus any challenge bonds awarded to them on finalization.
         _creditBond(proposal.proposer, proposal.bond);
         proposal.bond = 0;
-        emit RoundPayoutSnapshotFinalized(
-            snapshotKey,
-            proposal.snapshot.domain,
-            proposal.snapshot.rewardPoolId,
-            proposal.snapshot.contentId,
-            proposal.snapshot.roundId,
-            proposal.snapshot.correlationEpochId
-        );
-    }
-
-    function finalizeChallengedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
-        external
-        onlyRole(ARBITER_ROLE)
-    {
-        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
-        if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
-        if (proposal.snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
-        _requireCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
-        proposal.snapshot.status = SnapshotStatus.Finalized;
-        proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _recordSnapshotDisputeClosed(proposal.frontendOperator);
-        _creditBond(proposal.proposer, proposal.bond);
-        proposal.bond = 0;
-        emit RoundPayoutSnapshotChallengeDismissed(snapshotKey, msg.sender, reasonHash);
         emit RoundPayoutSnapshotFinalized(
             snapshotKey,
             proposal.snapshot.domain,

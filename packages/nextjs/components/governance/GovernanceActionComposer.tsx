@@ -635,22 +635,10 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     label: "Finalize challenged epoch",
     mode: "proposal",
     contractName: "ClusterPayoutOracle",
-    functionName: "finalizeChallengedCorrelationEpoch",
+    functionName: "finalizeCorrelationEpoch",
     description: "Create a proposal to dismiss a challenge and finalize a proposed correlation epoch root.",
-    fields: [
-      { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
-      {
-        key: "reasonHash",
-        label: "Reason hash",
-        type: "bytes32",
-        required: true,
-        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
-      },
-    ],
-    buildArgs: (_, parser) => [
-      parser.uint("epochId", "Correlation epoch ID"),
-      parser.bytes32("reasonHash", "Reason hash"),
-    ],
+    fields: [{ key: "epochId", label: "Correlation epoch ID", type: "uint", required: true }],
+    buildArgs: (_, parser) => [parser.uint("epochId", "Correlation epoch ID")],
     buildDescription: values => `Finalize challenged correlation epoch ${values.epochId || "0"}`,
   },
   {
@@ -781,22 +769,10 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     label: "Finalize challenged payout root",
     mode: "proposal",
     contractName: "ClusterPayoutOracle",
-    functionName: "finalizeChallengedRoundPayoutSnapshot",
+    functionName: "finalizeRoundPayoutSnapshot",
     description: "Create a proposal to dismiss a challenge and finalize a round payout root.",
-    fields: [
-      { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
-      {
-        key: "reasonHash",
-        label: "Reason hash",
-        type: "bytes32",
-        required: true,
-        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
-      },
-    ],
-    buildArgs: (_, parser) => [
-      parser.bytes32("snapshotKey", "Snapshot key"),
-      parser.bytes32("reasonHash", "Reason hash"),
-    ],
+    fields: [{ key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true }],
+    buildArgs: (_, parser) => [parser.bytes32("snapshotKey", "Snapshot key")],
     buildDescription: values => `Finalize challenged round payout root ${values.snapshotKey || "snapshot"}`,
   },
   {

@@ -610,10 +610,43 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
         assertTrue(frontendRegistry.hasOpenSnapshotDispute(address(this)));
 
-        oracle.finalizeChallengedCorrelationEpoch(1, keccak256("challenge-dismissed"));
+        oracle.finalizeCorrelationEpoch(1);
 
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
         assertFalse(frontendRegistry.hasOpenSnapshotDispute(address(this)));
+    }
+
+    function test_CorrelationEpochChallengeCanBePermissionlesslyFinalizedAfterResolutionDeadline() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory proposed = oracle.correlationEpochSnapshot(1);
+
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
+
+        uint256 resolutionDeadline = uint256(proposed.proposedAt) + proposed.challengeWindowAtProposal
+            + proposed.finalizationVetoWindowAtProposal;
+        vm.warp(resolutionDeadline - 1);
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
+        oracle.finalizeCorrelationEpoch(1);
+
+        vm.warp(resolutionDeadline);
+        vm.prank(address(0xBEEF));
+        oracle.finalizeCorrelationEpoch(1);
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory finalized = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(finalized.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
+        assertEq(oracle.pendingBondWithdrawals(address(this)), CHALLENGE_BOND);
     }
 
     function test_CorrelationEpochChallengeCountsAccountableFrontendNotRotatedProposer() public {
@@ -724,6 +757,45 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
 
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
+    }
+
+    function test_RoundPayoutChallengeCanBePermissionlesslyFinalizedAfterResolutionDeadline() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
+
+        _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
+
+        uint256 resolutionDeadline = uint256(proposedAt) + oracle.challengeWindow() + oracle.finalizationVetoWindow();
+        vm.warp(resolutionDeadline - 1);
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        vm.warp(resolutionDeadline);
+        vm.prank(address(0xBEEF));
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory finalized = _roundPayoutSnapshot(input);
+        assertEq(uint8(finalized.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
+        assertEq(oracle.pendingBondWithdrawals(address(this)), CHALLENGE_BOND);
     }
 
     function test_RoundPayoutSnapshotKeepsProposalChallengeTermsWhenConfigExpands() public {
@@ -1294,7 +1366,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
     }
 
-    function test_ChallengedEpochCannotFinalizeUntilArbiterRejectsIt() public {
+    function test_NonArbiterCannotFinalizeChallengedEpochBeforeResolutionDeadline() public {
         oracle.proposeCorrelationEpoch(
             1,
             1,
@@ -1308,6 +1380,7 @@ contract ClusterPayoutOracleTest is Test {
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
 
         vm.warp(2 hours + 2);
+        vm.prank(address(0xBEEF));
         vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
         oracle.finalizeCorrelationEpoch(1);
 
@@ -1527,7 +1600,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.finalizeCorrelationEpoch(1);
 
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
-        oracle.finalizeChallengedRoundPayoutSnapshot(snapshotKey, keccak256("dismiss-child-challenge"));
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
     function test_RejectedFinalizedCorrelationEpochBlocksFuturePayoutVerification() public {
@@ -2422,7 +2495,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("invalid-challenge"));
-        oracle.finalizeChallengedCorrelationEpoch(1, keccak256("challenge-dismissed"));
+        oracle.finalizeCorrelationEpoch(1);
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(epoch.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
@@ -2460,7 +2533,7 @@ contract ClusterPayoutOracleTest is Test {
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
         _challengeRoundPayoutSnapshot(snapshotKey, keccak256("invalid-round-challenge"));
-        oracle.finalizeChallengedRoundPayoutSnapshot(snapshotKey, keccak256("round-challenge-dismissed"));
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
             oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
