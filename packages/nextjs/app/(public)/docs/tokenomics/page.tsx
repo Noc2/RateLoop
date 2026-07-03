@@ -277,7 +277,8 @@ const Tokenomics = () => {
               <td className="font-mono">{protocolDocFacts.frontendOperatorStakeLabel}</td>
               <td>
                 Returned on exit unless slashed; also backs operator payout-root proposals. Earned fees stay slashable
-                through a 1-hour withdrawal review window; stake exits still wait 14 days
+                while accrued, withdrawal-pending, or paused by an active payout-root challenge; stake exits still wait
+                14 days
               </td>
             </tr>
           </tbody>

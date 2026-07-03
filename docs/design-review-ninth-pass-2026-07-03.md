@@ -19,7 +19,7 @@ The owner asked for this to be recorded explicitly.
 
 ## Scope and calibration
 
-This is a verification-and-hunt pass. Since the eighth-pass review, exactly two contract commits landed: `6e8b816da` (remediating my eighth-pass finding 8P-1) and `4d8d27e88` (removing the fenced two-tier epoch dead code that 7P-7 flagged across the seventh and eighth passes). No fee-withdrawal / dispute-gate change landed, so the 6P-5 item remains open (a concrete remediation plan for it was delivered separately). Two subagents verified those two commits at the cited lines and hunted for regressions they might have introduced; a third took a fresh deep pass over the contracts the prior eight reviews covered least, since the marginal value now lies in the less-trodden surface.
+This is a verification-and-hunt pass. Since the eighth-pass review, exactly two contract commits landed: `6e8b816da` (remediating my eighth-pass finding 8P-1) and `4d8d27e88` (removing the fenced two-tier epoch dead code that 7P-7 flagged across the seventh and eighth passes). At the time of this pass, no fee-withdrawal / dispute-gate change had landed, and a concrete remediation plan for 6P-5 was delivered separately; that dispute-gated withdrawal fix has since landed and is no longer carried as open in the current review status. Two subagents verified those two commits at the cited lines and hunted for regressions they might have introduced; a third took a fresh deep pass over the contracts the prior eight reviews covered least, since the marginal value now lies in the less-trodden surface.
 
 Accepted-design constraints from `AGENTS.md` were honored and not re-litigated: optimistic `ClusterPayoutOracle` payout roots with 5-USDC anti-spam challenge bonds and governance arbitration; the 60-minute `revealGracePeriod`; fresh redeploy (storage-layout movement not treated as an upgrade finding); stale-engine fail-closed rotation; the 1-hour finality launch posture; single-task RBTS truthfulness as BNE-only; and the `maxDuration == epochDuration` single-blind-window bound (the only valid config).
 
@@ -81,16 +81,15 @@ The identity/ban/credential surface is internally consistent after the two conse
 
 Carried forward from prior passes; none is a new bug, each wants an explicit accept-or-fix decision before deployment:
 
-1. **6P-5 — 1-hour frontend fee withdrawal vs. multi-day slash latency.** Still open at HEAD. A concrete, UX-preserving remediation plan (dispute-gated fee withdrawal: freeze `completeFeeWithdrawal` while the operator has an open oracle challenge, keep `FEE_WITHDRAWAL_DELAY ≥ challengeWindow + finalizationVetoWindow` via the readiness gate, and reconcile the README/NatSpec claim) was delivered separately and is ready to implement or ratify.
-2. **9P-1 — governor self-cancel friction** (this pass): fix or document.
-3. **6P-6 — seed v4 residuals** (Base-sequencer grind; ~4.5 h re-roll ratchet): document as named trust assumptions and/or derive re-armed blocks deterministically.
-4. **Governor lock cliff** (fifth pass): `castVote` reverts if current balance < snapshot weight; `min(weight, balance)` or a documented behavior.
-5. **Mechanism addendum** (seventh pass): the bounded leave-one-out benchmark externality (largest at n = 3–10) and the exactly-costless herding equilibrium — accepted residuals of the single-task tournament transform, worth stating in the whitepaper alongside the independence-oracle and ≥8-effective-units controls that compensate for them.
+1. **9P-1 — governor self-cancel friction** (this pass): fix or document.
+2. **6P-6 — seed v4 residuals** (Base-sequencer grind; ~4.5 h re-roll ratchet): document as named trust assumptions and/or derive re-armed blocks deterministically.
+3. **Governor lock cliff** (fifth pass): `castVote` reverts if current balance < snapshot weight; `min(weight, balance)` or a documented behavior.
+4. **Mechanism addendum** (seventh pass): the bounded leave-one-out benchmark externality (largest at n = 3–10) and the exactly-costless herding equilibrium — accepted residuals of the single-task tournament transform, worth stating in the whitepaper alongside the independence-oracle and ≥8-effective-units controls that compensate for them.
 
 ## Priorities
 
 1. **9P-1** — release the cooldown + stake lock on proposer self-cancel, or document the friction (the one new item; Low, cheap).
-2. **6P-5 / 6P-6 / governor-lock / mechanism-addendum** — ratify each as an explicit accept-or-fix decision and reconcile the docs; none needs a large code change.
+2. **6P-6 / governor-lock / mechanism-addendum** — ratify each as an explicit accept-or-fix decision and reconcile the docs; none needs a large code change.
 3. Re-run `forge test`, `make check-contract-sizes`, and `make check-storage-layouts` locally at HEAD — especially for `4d8d27e88`, whose broad refactor and test edits should be confirmed green on a clean checkout (not possible in the review sandbox).
 
 ---

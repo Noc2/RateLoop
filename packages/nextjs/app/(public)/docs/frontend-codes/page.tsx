@@ -116,9 +116,9 @@ const FrontendCodes: NextPage = () => {
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> from your operator address
           on each settled round. Withdrawing accumulated LREP is a two-step flow:{" "}
           <code>FrontendRegistry.requestFeeWithdrawal()</code> starts a 1-hour review window during which the amount
-          stays slashable, then <code>completeFeeWithdrawal()</code> pays it out — or use{" "}
-          <code>completeDeregister()</code> after exit, which sweeps stake and all fees after the separate 14-day
-          unbonding period. If governance slashes your frontend, you must restore the full{" "}
+          stays slashable, then <code>completeFeeWithdrawal()</code> pays it out once no payout-root challenge is active
+          — or use <code>completeDeregister()</code> after exit, which sweeps stake and all fees after the separate
+          14-day unbonding period. If governance slashes your frontend, you must restore the full{" "}
           {protocolDocFacts.frontendOperatorStakeLabel} bond before fee claims can accrue to you again. Reward-pool
           frontend shares are paid automatically when eligible voters claim.
         </li>
@@ -332,8 +332,9 @@ RoundVotingEngine.commitVote(
         <li>
           <strong>Slashing</strong> - Governance can slash staked LREP for abuse and confiscate accrued frontend fees
           and any pending fee withdrawal, including abuse of the payout-root publication process. Because withdrawals
-          wait out a 1-hour review window, the fee stream itself remains slashable during the launch payout finality
-          window while the separate 14-day stake unbonding period protects operator exits.
+          wait out a 1-hour review window and pause during active challenged payout snapshots, the fee stream remains
+          slashable while accrued or pending; the separate 14-day stake unbonding period protects longer-tail operator
+          exits.
         </li>
         <li>
           <strong>Challenger bounty</strong> - When a slash follows a rejected payout root, governance can route a fixed

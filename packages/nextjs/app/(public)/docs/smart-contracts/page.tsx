@@ -701,8 +701,9 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>requestFeeWithdrawal()</code> / <code>completeFeeWithdrawal()</code> &mdash; Two-step withdrawal of
           accumulated platform fees while healthy, fully bonded, and not exiting. The requested amount stays in the
-          registry and remains fully slashable for a 1-hour review window before it can be completed. Voluntary frontend
-          stake exits still wait out the separate 14-day unbonding period.
+          registry and remains fully slashable for a 1-hour review window before it can be completed; active challenged
+          payout snapshots pause completion. Voluntary frontend stake exits still wait out the separate 14-day unbonding
+          period.
         </li>
         <li>
           <code>slashFrontend(address, amount, reason)</code> &mdash; Slash frontend stake (governance). Already accrued

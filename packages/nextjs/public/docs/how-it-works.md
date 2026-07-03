@@ -156,18 +156,24 @@ refund finality, then either recover to a replacement oracle or refund expired
 residue under the existing bounty expiry rules.
 
 Successful challenges are rewarded: when governance slashes a frontend over a
-rejected root, it can route a fixed 50% of everything confiscated — the stake
-cut, accrued fees, and any pending fee withdrawal — to the recorded challenger
-through `slashFrontendWithBounty`, so catching a bad root pays instead of just
-returning the challenge bond.
+rejected root, it should include the matching slash in the same governance
+batch where appropriate. Parent-epoch rejection batches should also explicitly
+reject any challenged child round snapshots that need their fee-withdrawal
+freeze cleared immediately. Governance can route a fixed 50% of everything
+confiscated — the stake cut, accrued fees, and any pending fee withdrawal — to
+the recorded challenger through `slashFrontendWithBounty`, so catching a bad
+root pays instead of just returning the challenge bond.
 
 The oracle is intentionally optimistic. The goal is not fully per-snapshot
 economic collateralization on-chain; it is public artifacts, challenge windows,
 governance arbitration, and frontend-operator accountability through possible
 slashing, reputation loss, and future-income loss. Frontend fee withdrawals
-wait out a 1-hour slashable review window in the FrontendRegistry, so an
-operator's undelivered earnings act as collateral that grows automatically with
-their usage.
+wait out a 1-hour slashable review window in the FrontendRegistry, and
+completion is frozen while an authorized oracle reports an active challenge
+against that frontend's payout-root output. The 1,000 LREP bond and 14-day
+stake exit are the primary backing for fresh offenses that governance resolves
+after the short fee review window; fees back accountability only while they
+remain accrued, escrowed, withdrawal-pending, or challenge-frozen.
 
 ## Rater Accountability
 
