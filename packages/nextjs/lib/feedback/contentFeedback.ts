@@ -1239,14 +1239,8 @@ export async function listContentFeedback(params: {
       throw error;
     }
 
-    return {
-      items: [],
-      count: 0,
-      publicCount: 0,
-      settlementComplete: params.context.settlementComplete,
-      openRoundId: params.context.openRoundId,
-      awardableFeedbackBonusPools: [],
-    };
+    rows = [];
+    publicCount = 0;
   }
 
   const localItems = rows

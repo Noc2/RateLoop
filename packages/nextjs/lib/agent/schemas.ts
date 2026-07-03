@@ -506,36 +506,51 @@ const agentHandoffGeneratedImageInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const agentAskHandoffRequestProperties = {
+  ...agentAskInputBaseProperties,
+  maxPaymentAmount: {
+    description:
+      "Maximum bounty payment spend in atomic units for the selected funding mode. For same-asset Feedback Bonuses, include the bonus amount too; mixed-asset wallet-call Feedback Bonuses are confirmed through a separate wallet plan. EIP-3009/x402 payments are USDC-only.",
+    pattern: "^\\d+$",
+    type: "string",
+  },
+  paymentMode: {
+    default: "eip3009_usdc_authorization",
+    description:
+      "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties, bundled asks, hosts that want raw wallet calls, or any Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus.",
+    enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
+    type: "string",
+  },
+  walletAddress: {
+    ...agentWalletAddressSchema,
+    description: "Optional expected user wallet. If omitted, the user chooses the wallet in the browser handoff.",
+  },
+} satisfies JsonSchema;
+
+const agentAskHandoffRequestSchema = {
+  additionalProperties: true,
+  properties: agentAskHandoffRequestProperties,
+  required: ["clientRequestId", "bounty", "maxPaymentAmount"],
+  type: "object",
+} satisfies JsonSchema;
+
 export const agentCreateAskHandoffInputSchema = {
   additionalProperties: true,
+  anyOf: [{ required: ["request"] }, { required: ["clientRequestId", "bounty", "maxPaymentAmount"] }],
   description:
     "Create a browser handoff ask. If the ask compares exactly two named options, set question.templateId to head_to_head_ab and fill question.templateInputs optionAKey=A, optionALabel, optionBKey=B, and optionBLabel so the browser opens in A/B comparison mode.",
   properties: {
-    ...agentAskInputBaseProperties,
+    ...agentAskHandoffRequestProperties,
     generatedImages: {
       description: `Optional generated/local image bytes to stage into the browser handoff. Uses the same JPG, PNG, and WEBP limit as the submit page: 10 MB per image, with the MCP JSON body limit applying to the aggregate base64 request. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows, and pass bytes from file-backed tooling such as rateloop-agents handoff --file ask.json --image mockup.png rather than copied terminal output. ${GENERATED_IMAGE_DISPLAY_GUIDANCE_SENTENCE}`,
       items: agentHandoffGeneratedImageInputSchema,
       maxItems: 4,
       type: "array",
     },
-    maxPaymentAmount: {
-      description:
-        "Maximum bounty payment spend in atomic units for the selected funding mode. For same-asset Feedback Bonuses, include the bonus amount too; mixed-asset wallet-call Feedback Bonuses are confirmed through a separate wallet plan. EIP-3009/x402 payments are USDC-only.",
-      pattern: "^\\d+$",
-      type: "string",
-    },
-    paymentMode: {
-      default: "eip3009_usdc_authorization",
-      description:
-        "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties, bundled asks, hosts that want raw wallet calls, or any Feedback Bonus funding outside the USDC one-shot path. EIP-3009/x402 can only one-shot USDC bounty plus USDC Feedback Bonus.",
-      enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
-      type: "string",
-    },
     request: {
-      additionalProperties: true,
+      ...agentAskHandoffRequestSchema,
       description:
         "Optional wrapped ask request body. When present, RateLoop stages generatedImages alongside this request.",
-      type: "object",
     },
     ttlMs: {
       description:
@@ -544,12 +559,7 @@ export const agentCreateAskHandoffInputSchema = {
       minimum: 60000,
       type: "integer",
     },
-    walletAddress: {
-      ...agentWalletAddressSchema,
-      description: "Optional expected user wallet. If omitted, the user chooses the wallet in the browser handoff.",
-    },
   },
-  required: ["clientRequestId", "bounty", "maxPaymentAmount"],
   type: "object",
 } satisfies JsonSchema;
 

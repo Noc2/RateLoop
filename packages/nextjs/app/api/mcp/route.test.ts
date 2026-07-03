@@ -304,9 +304,12 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     properties?: Record<string, unknown>;
   };
   const handoffSchema = toolByName.get("rateloop_create_ask_handoff_link")?.inputSchema as {
+    anyOf?: Array<{ required?: string[] }>;
     properties?: {
+      request?: { properties?: Record<string, unknown>; required?: string[] };
       ttlMs?: { description?: string; maximum?: number; minimum?: number };
     };
+    required?: string[];
   };
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
     properties?: {
@@ -343,6 +346,16 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.equal(handoffSchema.properties?.ttlMs?.minimum, 60_000);
   assert.equal(handoffSchema.properties?.ttlMs?.maximum, 1_800_000);
   assert.match(handoffSchema.properties?.ttlMs?.description ?? "", /maximum 1800000/);
+  assert.deepEqual(handoffSchema.required, undefined);
+  assert.ok(handoffSchema.anyOf?.some(option => option.required?.includes("request")));
+  assert.ok(
+    handoffSchema.anyOf?.some(option =>
+      ["clientRequestId", "bounty", "maxPaymentAmount"].every(field => option.required?.includes(field)),
+    ),
+  );
+  assert.deepEqual(handoffSchema.properties?.request?.required, ["clientRequestId", "bounty", "maxPaymentAmount"]);
+  assert.ok(handoffSchema.properties?.request?.properties?.clientRequestId);
+  assert.ok(handoffSchema.properties?.request?.properties?.maxPaymentAmount);
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
   assert.equal(askSchema.properties?.bounty?.properties?.bountyEligibility?.default, undefined);
   assert.match(

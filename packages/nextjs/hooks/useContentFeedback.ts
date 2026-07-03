@@ -84,22 +84,6 @@ async function readResponseBody<T>(response: Response, fallbackError: string): P
   return body as T;
 }
 
-function readFeedbackRecordHash(record: unknown): string | null {
-  if (Array.isArray(record)) {
-    return typeof record[0] === "string" ? record[0] : null;
-  }
-  if (record && typeof record === "object" && "feedbackHash" in record) {
-    const hash = (record as { feedbackHash?: unknown }).feedbackHash;
-    return typeof hash === "string" ? hash : null;
-  }
-  return null;
-}
-
-function hasPublishedFeedbackRecord(record: unknown) {
-  const feedbackHash = readFeedbackRecordHash(record);
-  return typeof feedbackHash === "string" && feedbackHash !== zeroHash;
-}
-
 function readBatchTransactionHash(result: { receipts?: readonly { transactionHash?: unknown }[] }) {
   return result.receipts?.find(receipt => typeof receipt.transactionHash === "string")?.transactionHash as
     | `0x${string}`
@@ -199,13 +183,14 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       const hasAlreadyPublishedFeedback = async () => {
         if (!publicClient) return false;
         try {
-          const record = await publicClient.readContract({
-            address: feedbackRegistryAddress,
-            abi: FeedbackRegistryAbi,
-            functionName: "feedbackByCommitKey",
-            args: [BigInt(normalizedContentId), BigInt(params.roundId), commitKey],
+          return await hasPublishedFeedbackPostcondition({
+            client: publicClient,
+            commitKey,
+            contentId: BigInt(normalizedContentId),
+            expectedFeedbackHash: params.feedbackHash,
+            feedbackRegistryAddress,
+            roundId: BigInt(params.roundId),
           });
-          return hasPublishedFeedbackRecord(record);
         } catch {
           return false;
         }
@@ -428,10 +413,6 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         if (!publishedFeedback) {
           throw new Error("Feedback registry is not deployed for this chain");
         }
-        if (publishedFeedback.alreadyPublished) {
-          await queryClient.invalidateQueries({ queryKey });
-          return { ok: true, alreadyPublished: true };
-        }
         await readResponseBody<{ ok: true; item: ContentFeedbackItem }>(
           await fetch("/api/feedback", {
             method: "POST",
@@ -447,7 +428,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
               clientNonce: challenge.clientNonce,
               feedbackHash: challenge.feedbackHash,
               commitKey: publishedFeedback.commitKey,
-              publicationTxHash: publishedFeedback.txHash,
+              publicationTxHash: publishedFeedback.alreadyPublished ? null : publishedFeedback.txHash,
               signature,
               challengeId: challenge.challengeId,
             }),
@@ -456,7 +437,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         );
 
         await queryClient.invalidateQueries({ queryKey });
-        return { ok: true };
+        return publishedFeedback.alreadyPublished ? { ok: true, alreadyPublished: true } : { ok: true };
       } catch (error) {
         const submitError = readFeedbackSubmissionError(error);
         if (!submitError) {

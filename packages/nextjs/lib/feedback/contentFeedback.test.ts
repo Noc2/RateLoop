@@ -15,6 +15,7 @@ type PonderRoundItem = import("~~/services/ponder/client").PonderRoundItem;
 type PonderVoteItem = import("~~/services/ponder/client").PonderVoteItem;
 type PonderVotesResponse = import("~~/services/ponder/client").PonderVotesResponse;
 type ProtocolDeploymentScope = import("~~/lib/protocolDeployment").ProtocolDeploymentScope;
+type DatabaseResources = import("../db").DatabaseResources;
 type DbModule = typeof import("../db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 
@@ -190,6 +191,30 @@ function buildFeedbackBonusAward(params: Partial<PonderFeedbackBonusAward> = {})
     frontendFee: "30000",
     awardedAt: "1500",
     ...params,
+  };
+}
+
+function createContentFeedbackStorageUnavailableResources(base: DatabaseResources): DatabaseResources {
+  const storageUnavailableError = Object.assign(new Error('relation "content_feedback" does not exist'), {
+    code: "42P01",
+  });
+  const database = new Proxy(base.database as object, {
+    get(target, property, receiver) {
+      if (property === "select") {
+        return () => {
+          throw storageUnavailableError;
+        };
+      }
+
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as DatabaseResources["database"];
+
+  return {
+    client: base.client,
+    database,
+    pool: base.pool,
   };
 }
 
@@ -788,6 +813,51 @@ test("feedback counts merge protocol-indexed rows without double-counting local 
     "22": 1,
     "23": 1,
   });
+});
+
+test("feedback list continues with protocol-indexed rows when local storage is unavailable", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "7", state: ROUND_STATE.Open }]);
+  const protocolItem = buildProtocolFeedbackItem({
+    id: "24",
+    contentId: "24",
+    roundId: "7",
+    body: "Protocol-indexed feedback remains visible.",
+  });
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentFeedback: async params => ({
+      items: params.contentId === "24" ? [protocolItem] : [],
+      total: params.contentId === "24" ? 1 : 0,
+      limit: 100,
+      offset: 0,
+      hasMore: false,
+    }),
+  });
+  const unavailableResources = createContentFeedbackStorageUnavailableResources(
+    dbTestMemory.createMemoryDatabaseResources(),
+  );
+  dbModule.__setDatabaseResourcesForTests(unavailableResources);
+
+  try {
+    const result = await contentFeedback.listContentFeedback({
+      chainId: TEST_DEPLOYMENT_A.chainId,
+      deploymentKey: TEST_DEPLOYMENT_A.deploymentKey,
+      contentId: "24",
+      context: activeContext,
+    });
+    const counts = await contentFeedback.listContentFeedbackCounts({
+      chainId: TEST_DEPLOYMENT_A.chainId,
+      deploymentKey: TEST_DEPLOYMENT_A.deploymentKey,
+      contentIds: ["24"],
+      contextByContentId: new Map([["24", activeContext]]),
+    });
+
+    assert.equal(result.count, 1);
+    assert.equal(result.publicCount, 1);
+    assert.equal(result.items[0]?.body, "Protocol-indexed feedback remains visible.");
+    assert.deepEqual(counts, { "24": 1 });
+  } finally {
+    dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
+  }
 });
 
 test("terminal round feedback becomes public", async () => {
