@@ -14,7 +14,6 @@ Describe how you tested your changes:
 - [ ] Contract size gate passes (`yarn workspace @rateloop/foundry check:sizes`)
 - [ ] Lint passes (`yarn next:lint`)
 - [ ] Type check passes (`yarn next:check-types`)
-- [ ] Base Sepolia readiness passes (`yarn base-sepolia:check`) when staging deployment/env wiring changed
 - [ ] Base mainnet readiness passes (`yarn base-mainnet:check`) when production deployment/env wiring changed
 - [ ] Node/workspace tests pass for changed packages (`yarn test:ts` or focused `node scripts/run-node-tests.mjs ...`)
 - [ ] E2E smoke checked when user-visible app flows changed (`yarn e2e:ci:app` or focused Playwright spec)

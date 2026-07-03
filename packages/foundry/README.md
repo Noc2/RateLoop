@@ -49,18 +49,15 @@ Treat new features on these contracts as size-sensitive: prefer library extracti
 
 **Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears. Index or alert on `SettlementSideEffectFailed` from `RoundVotingEngine` as a standing production requirement.
 
-On Base mainnet and Base Sepolia, deploys use a Foundry keystore selected via `--keystore <name>`. Forge can use
+On Base mainnet, deploys use a Foundry keystore selected via `--keystore <name>`. Forge can use
 Basescan verification when `BASESCAN_API_KEY` is set.
 
 Base mainnet is the current production deployment boundary and its contract addresses should be preserved by default.
-Use Base Sepolia for fresh deployment validation before any future production contract or integration change. Do not use
-the current `ContentRegistry` implementation as an in-place upgrade for an older proxy unless a separate
+Do not use the current `ContentRegistry` implementation as an in-place upgrade for an older proxy unless a separate
 migration/backfill is provided for `submissionMediaValidator` and `questionBundleRoundObserverByContent`. Do not use the
 current `RaterRegistry` implementation as an in-place upgrade for an older proxy unless a separate migration/backfill is
-provided for the `_identityBanSource` to `_identityBanSources` slot-32 retype. The `base-sepolia:check -- --live`
-readiness probe verifies the deployed `ContentRegistry.submissionMediaValidator()` exposes the gated-submission
-validator selectors before staging is treated as ready. For production wiring or environment changes, run
-`base:check -- --live` or `base-mainnet:check -- --live` against the existing Base mainnet deployment.
+provided for the `_identityBanSource` to `_identityBanSources` slot-32 retype. For production wiring or environment
+changes, run `base:check -- --live` or `base-mainnet:check -- --live` against the existing Base mainnet deployment.
 
 The deploy wrapper verifies the live RPC chain and stamps Base or World Chain mainnet deploys with the `production`
 deployment profile, but checked-in production artifacts no longer block a fresh deployment. Running

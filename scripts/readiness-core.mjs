@@ -6,22 +6,6 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-const WORLDCHAIN_SEPOLIA_CHAIN_ID = 4801;
-const WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX = "0x12c1";
-const WORLDCHAIN_SEPOLIA_USDC = "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88";
-export const WORLDCHAIN_SEPOLIA_READINESS_CONFIG = {
-  appEnvName: "WORLDCHAIN_SEPOLIA_APP_URL",
-  chainId: WORLDCHAIN_SEPOLIA_CHAIN_ID,
-  chainIdHex: WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX,
-  deploymentPath: "packages/foundry/deployments/4801.json",
-  keeperEnvName: "WORLDCHAIN_SEPOLIA_KEEPER_URL",
-  label: "World Chain Sepolia",
-  networkName: "worldchainSepolia",
-  ponderEnvName: "WORLDCHAIN_SEPOLIA_PONDER_URL",
-  ponderStatusKey: "worldchainSepolia",
-  rpcEnvName: "WORLDCHAIN_SEPOLIA_RPC_URL",
-  usdc: WORLDCHAIN_SEPOLIA_USDC,
-};
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
@@ -796,10 +780,7 @@ function extractBalancedObject(source, openBraceIndex) {
   return undefined;
 }
 
-export function parseGeneratedContractsForChain(
-  source,
-  chainId = WORLDCHAIN_SEPOLIA_READINESS_CONFIG.chainId,
-) {
+export function parseGeneratedContractsForChain(source, chainId) {
   const marker = `  ${chainId}: {`;
   const start = source.indexOf(marker);
   if (start === -1) return new Map();
@@ -841,7 +822,7 @@ export function parseGeneratedContractsForChain(
 
 export function validateOfflineReadiness(
   { deploymentJson, deployedContractsSource, protocolSource },
-  readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
+  readinessConfig,
 ) {
   const checks = [];
   const failures = [];
@@ -922,7 +903,7 @@ export function validateOfflineReadiness(
 
 export function loadOfflineInputs(
   root = repoRoot,
-  readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
+  readinessConfig,
 ) {
   return {
     deploymentJson: JSON.parse(
@@ -1347,7 +1328,7 @@ export async function validateLiveReadiness({
   deploymentJson,
   keeperUrl,
   ponderUrl,
-  readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
+  readinessConfig,
   requireTargets = false,
   rpcUrl,
 }) {
