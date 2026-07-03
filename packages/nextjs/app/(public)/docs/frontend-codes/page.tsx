@@ -125,7 +125,7 @@ const FrontendCodes: NextPage = () => {
         <li>
           <strong>Publish roots:</strong> If you operate the correlation scorer, propose deterministic
           ClusterPayoutOracle epoch and round payout roots from the registered frontend wallet, or from a separate
-          snapshot keeper wallet assigned by that frontend, so USDC bounty and launch LREP claims can finalize.
+          snapshot keeper wallet assigned by that frontend, so LREP or USDC bounty and launch LREP claims can finalize.
         </li>
         <li>
           <strong>Anchor confidentiality logs:</strong> If your frontend serves private context, publish your own
@@ -169,8 +169,8 @@ RoundVotingEngine.commitVote(
       </p>
       <ol>
         <li>
-          <strong>Revealing votes:</strong> After each 20-minute epoch ends, the service decrypts tlock ciphertexts
-          using the drand randomness beacon and calls{" "}
+          <strong>Revealing votes:</strong> After each configured question duration ends, the service decrypts tlock
+          ciphertexts using the drand randomness beacon and calls{" "}
           <code>revealVoteByCommitKey(contentId, roundId, commitKey, isUp, predictedUpBps, salt)</code> for each
           unrevealed commit. Vote choices stay hidden until this step runs.
         </li>

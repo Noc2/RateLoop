@@ -510,8 +510,9 @@ export function getDbPushPlan(databaseConfig, options = {}) {
       shouldRun: false,
       reason: `DATABASE_URL points to non-local ${formatDatabaseTarget(databaseConfig)}`,
       help:
-        "Run `yarn workspace @rateloop/nextjs db:push` manually when you intend to migrate this database, " +
-        `or rerun dev-stack with ${allowRemoteDbPushFlag}.`,
+        "Apply numbered SQL migrations through the deployment database migration process. " +
+        "`db:push` is controlled schema sync, not the deploy migration runner; " +
+        `rerun dev-stack with ${allowRemoteDbPushFlag} only when you explicitly want schema sync against this database.`,
     };
   }
 

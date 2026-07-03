@@ -93,14 +93,14 @@ Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
 Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
 raw rating evidence is 3.3 up units versus 1.3 down units. If the public-rating
 snapshot leaves those weights unchanged, the applied rating is about `7.2/10`;
-if it discounts a detected cluster, the adjusted evidence can move less. USDC
+if it discounts a detected cluster, the adjusted evidence can move less. LREP or USDC
 bounty and launch LREP claims still wait for their own correlation payout
 snapshots. The keeper normally closes the public verdict once reveal conditions are met,
 but any user or operator can self-settle an eligible round on-chain if automation
 is delayed. Non-tied rounds then wait for the RBTS settlement snapshot before LREP
 stake rewards are claimable. With the launch oracle defaults, healthy unchallenged reward and result finality normally completes within 1 hour after the public verdict or payout source is ready, including challenge, finalization, veto, keeper/application transactions, and indexing.
 
-For USDC bounties, the finalized correlation payout snapshot sets each rater's
+For LREP or USDC bounties, the finalized correlation payout snapshot sets each rater's
 claim weight: a surprise-weighted base weight, reduced by weak verified-anchor
 support when a side floods above its trailing base rate, capped per detected
 same-side cluster, and then multiplied by an independence multiplier. Artifacts
@@ -138,7 +138,7 @@ Settled RateLoop scores are public feedback signals, not objective truth. Do not
 ## Payout Roots
 
 ClusterPayoutOracle is governed by LREP holders and stores the challengeable
-roots used for USDC bounty and launch LREP claim weights. Registered frontend
+roots used for LREP or USDC bounty and launch LREP claim weights. Registered frontend
 operators with the 1,000 LREP operator bond can propose deterministic
 correlation epoch and round payout roots. The public artifact shape is
 `rateloop-correlation-artifact-v3`, and each epoch parameter hash commits to the

@@ -32,7 +32,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Fast Do Rounds Settle?",
     answer:
-      "Round length is set per question. Rounds with quick raters can close the public verdict within minutes, while rounds that recruit human panels typically take from about an hour to a day. LREP rewards wait for the RBTS settlement root, and USDC bounty claims unlock after payout challenge windows.",
+      "Round length is set per question. Rounds with quick raters can close the public verdict within minutes, while rounds that recruit human panels typically take from about an hour to a day. LREP rewards wait for the RBTS settlement root, and LREP or USDC bounty claims unlock after payout challenge windows.",
     learnMoreHref: "/docs/how-it-works",
     learnMoreLabel: "How It Works",
   },

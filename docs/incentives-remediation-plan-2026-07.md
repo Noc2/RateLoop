@@ -51,6 +51,7 @@ If the fresh-deployment branch includes the `PAYOUT_DOMAIN_RBTS_SETTLEMENT` / do
 
 ## Commit 5 — Fix Low: replace sequencer-influenced pairing entropy without adding a new wait
 
+- **Status:** required for the fresh redeploy posture. Do not treat a future-blockhash or sequencer non-grinding assumption as the launch model.
 - **Goal:** prevent a centralized L2 sequencer from biasing RBTS reference/peer pairings through the delayed blockhash.
 - **Contract plan:** derive `scoreSeed` from precommitted voter entropy instead of a future blockhash: accumulate a `roundRevealEntropy` hash from `(commitKey, salt)` during reveal, combine it with the settlement-closed `scoringSetHash`, `chainid`, engine address, content ID, round ID, and a version string, and use that seed for `_rbtsOtherIndex` / `_rbtsPeerIndex`. The salt is already bound into the commit hash, so the sequencer cannot choose it after seeing the scoring set; censorship remains possible but no longer gives direct pairing choice.
 - **Compatibility plan:** remove the one-block delayed-seed state machine for the redeployed engine, or keep it only as a fallback when no reveal entropy exists. Update event names/comments so `RbtsSeedCaptured` no longer suggests blockhash dependence.

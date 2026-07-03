@@ -179,10 +179,10 @@ const TechStackPage: NextPage = () => {
         can be paid even when the rating outcome is contested.
       </p>
       <p>
-        Equal-weight bounty rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can
-        instead use the finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective
-        correlation weight built from a surprise-weighted base claim weight. Bounty size can raise the required rater
-        floor under the launch policy: {protocolDocFacts.bountyParticipantFloorsLabel}.{" "}
+        Equal-weight bounty rounds give one claim-weight unit to each eligible revealed rater. Snapshot-scored bounty
+        rounds can instead use the finalized correlation payout snapshot, where the claim weight is the rater&apos;s
+        effective correlation weight built from a surprise-weighted base claim weight. Bounty size can raise the
+        required rater floor under the launch policy: {protocolDocFacts.bountyParticipantFloorsLabel}.{" "}
         {protocolDocFacts.quorumRatchetPolicyLabel} With the launch oracle timing, healthy unchallenged bounty and
         result finality normally completes within <strong>{protocolDocFacts.payoutFinalityMaxDelayLabel}</strong> after
         the public verdict or payout source is ready, including challenge, finalization, veto, keeper/application
@@ -190,7 +190,7 @@ const TechStackPage: NextPage = () => {
         recovery are exceptional paths and can take longer; they do not change the normal claim timing.
       </p>
       <p>
-        For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: an answer that merely matches the
+        For snapshot-scored bounty rounds, the base claim weight is surprise-weighted: an answer that merely matches the
         prior pays the flat floor, while an answer that predicts peers better than the trailing base rate can earn extra
         weight. That bonus is reduced when an overrepresented side lacks verified or high-independence anchor support,
         capped per detected same-side cluster, and then multiplied by independence; launch-credit weights stay flat. The
@@ -275,9 +275,9 @@ const TechStackPage: NextPage = () => {
       <p>
         RateLoop uses challengeable correlation snapshots for RBTS stake settlement, payout accounting, and
         public-rating effective weights. Settlement records the public verdict and any pending raw rating evidence
-        first; then RBTS stake rewards, the visible rating evidence update, USDC bounty claims, and earned launch LREP
-        credits wait for the matching finalized Merkle roots. This delays reward finality and visible rating movement
-        until the relevant snapshot has cleared its challenge window.
+        first; then RBTS stake rewards, the visible rating evidence update, LREP or USDC bounty claims, and earned
+        launch LREP credits wait for the matching finalized Merkle roots. This delays reward finality and visible rating
+        movement until the relevant snapshot has cleared its challenge window.
       </p>
       <p>
         Effective correlation weight is the payout weight left after applying an independence multiplier to the

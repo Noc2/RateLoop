@@ -396,7 +396,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           Settlement status: a round can close the public verdict before rewards are ready. Treat{" "}
           <code>SettlementPending</code> and pending result packages as non-final for LREP reward claims until the RBTS
-          settlement snapshot is applied; USDC bounty claims also wait for finalized payout roots.
+          settlement snapshot is applied; LREP or USDC bounty claims also wait for finalized payout roots.
         </li>
         <li>
           Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it
@@ -477,7 +477,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       </ol>
       <p>
         For low-level MCP wallet-call hosts only, use <code>rateloop_ask_humans</code>, execute the returned{" "}
-        <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>, then poll status and result.
+        <code>transactionPlan.calls</code>, then call <code>rateloop_confirm_ask_transactions</code>. If that
+        confirmation returns <code>feedbackBonus.transactionPlan</code>, execute it and call{" "}
+        <code>rateloop_confirm_feedback_bonus_transactions</code> before polling status and result.
       </p>
       <p>
         If a returned <code>transactionPlan</code> has <code>requiresAtomicExecution: true</code>, execute its calls

@@ -29,7 +29,7 @@ The core loop is:
 2. **Fund** — attach a non-refundable LREP or USDC bounty, optionally choose who can claim the bounty payout, and optionally add a LREP or USDC Feedback Bonus at question creation; everyone can answer by default.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and close** — commit-reveal keeps predictions private until reveal, then the public verdict closes on-chain.
-5. **Finalize rewards** — RBTS stake rewards, USDC bounties, and launch LREP credits wait for challengeable correlation snapshots; non-tied rounds remain visibly pending until reward settlement completes.
+5. **Finalize rewards** — RBTS stake rewards, LREP or USDC bounties, and launch LREP credits wait for challengeable correlation snapshots; non-tied rounds remain visibly pending until reward settlement completes.
 6. **Use** — agents, apps, and frontends read the final score, revealed votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
 
 Key pieces:
@@ -41,7 +41,7 @@ Key pieces:
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and USDC Bounties and Feedback Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses add LREP or USDC for useful notes with at least 1 hour of post-settlement award time, and the fresh redeploy uses one question duration for the blind window, bounty eligibility, and Feedback Bonus close; wallet-call asks can use either bonus asset through exact user-signed plans, while USDC remains the x402-compatible public agent payment lane with one-shot bounty plus bonus funding
-- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, USDC payouts, and launch LREP payouts across rounds; artifacts carry source-event input snapshots so challengers recompute the same roots
+- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped RBTS settlement weight, public-rating evidence, LREP or USDC bounty payouts, and launch LREP payouts across rounds; artifacts carry source-event input snapshots so challengers recompute the same roots
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
@@ -53,6 +53,7 @@ RateLoop does not treat raw token balance as enough to earn or control outcomes.
 weighting, verified-human launch anchors, correlation epoch snapshots, governance locks, proposal/quorum floors, and hard
 minimums for submission bounties are the main mitigations.
 These mitigations reduce visible herding and detectable cluster economics, but the current single-task RBTS mechanism is not collusion-proof: truthfulness is an independent-rater Bayes-Nash guarantee, and undetected coordinated blocs remain a residual signal risk.
+The fresh redeploy requires RBTS reference/peer pairings to avoid depending on an L2 sequencer-provided future blockhash; the remediation plan uses precommitted reveal entropy bound to the closed scoring set without adding another user wait.
 
 Live protocol and product documentation is maintained in the Next.js docs routes, with deployment and audit notes under
 [docs](docs). Start with [docs/env-parity.md](docs/env-parity.md) for service environment checks.
@@ -121,7 +122,7 @@ The quickest app-only startup is:
 yarn dev:stack
 ```
 
-That command starts the Next app's local Postgres container, runs `db:push` for local databases, and then starts the frontend plus Ponder. If `DATABASE_URL` points to a non-local database, `yarn dev:stack` skips the schema push by default so it does not accidentally apply destructive Drizzle changes to shared data. Run `yarn workspace @rateloop/nextjs db:push` manually when you intend to migrate that database, or opt in with `yarn dev:stack --allow-remote-db-push`.
+That command starts the Next app's local Postgres container, runs `db:push` for local development schema sync, and then starts the frontend plus Ponder. If `DATABASE_URL` points to a non-local database, `yarn dev:stack` skips the schema push by default so it does not accidentally apply destructive Drizzle changes to shared data. Apply numbered SQL migrations through the production or staging database migration process described in `packages/nextjs/drizzle/README.md`; use `yarn workspace @rateloop/nextjs db:push` only for controlled local or development schema sync, or opt in with `yarn dev:stack --allow-remote-db-push` when you explicitly want schema sync against that configured database.
 
 If Keeper is configured with `RPC_URL`, `CHAIN_ID`, and a wallet, `yarn dev:stack` starts it too; otherwise the script skips Keeper and leaves the app stack running. Contract deployment stays separate, so you can point the stack at either a local chain or a testnet. Stop the local Postgres container later with:
 

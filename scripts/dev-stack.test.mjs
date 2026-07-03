@@ -56,6 +56,8 @@ test("skips the Next.js schema push for remote databases by default", () => {
 
   assert.equal(plan.shouldRun, false);
   assert.match(plan.reason, /non-local postgres@example\.com:5432\/rateloop_app/);
+  assert.match(plan.help, /numbered SQL migrations/);
+  assert.match(plan.help, /schema sync, not the deploy migration runner/);
   assert.match(plan.help, /--allow-remote-db-push/);
 });
 

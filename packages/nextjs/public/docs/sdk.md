@@ -185,7 +185,7 @@ before RateLoop prepares the transaction plan.
 
 Three-voter rounds are the launch feedback tier: they can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of stake once active. Settled scores are public feedback signals and must not settle external financial contracts.
 
-A round can close its public verdict before rewards are ready. Treat `SettlementPending` results as non-final for LREP reward claims until the RBTS settlement snapshot is applied; USDC bounty claims also wait for finalized payout roots.
+A round can close its public verdict before rewards are ready. Treat `SettlementPending` results as non-final for LREP reward claims until the RBTS settlement snapshot is applied; LREP or USDC bounty claims also wait for finalized payout roots.
 
 `feedbackBonus` is optional on MCP, browser handoff, SDK HTTP, and advanced raw asks. Use a Feedback Bonus when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can be LREP or USDC; wallet-call asks can use either bonus asset, independent of the bounty asset, while EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus. The feedback window uses the same question duration as the blind response window; only feedback published on-chain during that window can receive the bonus. The effective award decision deadline is at least 1 hour after settlement. For same-asset wallet-call bonuses, the approved `maxPaymentAmount` should cover the bounty plus bonus; mixed-asset bonuses are confirmed through a separate wallet plan.
 

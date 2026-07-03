@@ -626,9 +626,9 @@ const SmartContracts: NextPage = () => {
 
       <h2>ClusterPayoutOracle</h2>
       <p>
-        Stores optimistic correlation epoch roots and round payout roots for USDC bounties, launch LREP credits, and
-        public-rating effective weights. Registered frontend operators propose public deterministic artifacts; auditors
-        can challenge them with the configured USDC bond, and governance arbitrates challenged roots.
+        Stores optimistic correlation epoch roots and round payout roots for LREP or USDC bounties, launch LREP credits,
+        and public-rating effective weights. Registered frontend operators propose public deterministic artifacts;
+        auditors can challenge them with the configured USDC bond, and governance arbitrates challenged roots.
       </p>
       <ul>
         <li>
