@@ -14,6 +14,7 @@ import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface IGovernanceLockableVotes is IVotes {
+    function balanceOf(address account) external view returns (uint256);
     function getTransferableBalance(address account) external view returns (uint256);
     function lockForGovernance(address account, uint256 amount) external;
     function lockProposalGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external;
@@ -288,8 +289,8 @@ contract RateLoopGovernor is
         weight = super._castVote(proposalId, account, support, reason, params);
 
         if (weight > 0) {
-            uint256 transferable = reputationToken.getTransferableBalance(account);
-            uint256 lockAmount = weight < transferable ? weight : transferable;
+            uint256 currentBalance = reputationToken.balanceOf(account);
+            uint256 lockAmount = weight < currentBalance ? weight : currentBalance;
             if (lockAmount > 0) {
                 reputationToken.lockForGovernance(account, lockAmount);
             }
