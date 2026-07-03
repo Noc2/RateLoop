@@ -65,7 +65,7 @@ export type ContentRound = {
   id: string;
   contentId: string;
   roundId: string;
-  state: number; // 0=Open, 1=Settled, 2=Cancelled, 3=Tied, 4=RevealFailed
+  state: number; // 0=Open, 1=Settled, 2=Cancelled, 3=Tied, 4=RevealFailed, 5=SettlementPending
   voteCount: string;
   totalStake: string;
   upPool: string;
@@ -77,6 +77,7 @@ export type ContentRound = {
   ratingReviewReferenceRatingBps: number | null;
   ratingReviewRawUpEvidence: string | null;
   ratingReviewRawDownEvidence: string | null;
+  rbtsSettlementPendingAt?: string | null;
   createdAt: number;
 };
 

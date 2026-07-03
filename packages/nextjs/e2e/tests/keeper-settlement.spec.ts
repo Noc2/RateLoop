@@ -185,17 +185,20 @@ test.describe("Keeper-backed settlement lifecycle", () => {
       await new Promise(resolve => setTimeout(resolve, keeperDecryptWaitMs));
     }
 
-    const settledIndexed = await waitForPonderIndexed(
+    const closedIndexed = await waitForPonderIndexed(
       async () => {
         const data = await getContentById(contentId!);
         const round = data.rounds.find(item => item.roundId === String(roundId));
-        return round !== undefined && round.state === ROUND_STATE.Settled;
+        return (
+          round !== undefined &&
+          (round.state === ROUND_STATE.Settled || round.state === ROUND_STATE.SettlementPending)
+        );
       },
       240_000,
       2_000,
-      "keeper-settlement:settled",
+      "keeper-settlement:closed",
     );
-    expect(settledIndexed, "Keeper did not settle the round within the timeout").toBe(true);
+    expect(closedIndexed, "Keeper did not close the round within the timeout").toBe(true);
 
     const revealedVotesIndexed = await waitForPonderIndexed(
       async () => {
@@ -212,10 +215,14 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     const round = data.rounds.find(item => item.roundId === String(roundId));
 
     expect(round).toBeTruthy();
-    expect(round!.state).toBe(ROUND_STATE.Settled);
+    expect([ROUND_STATE.Settled, ROUND_STATE.SettlementPending]).toContain(round!.state);
     expect(round!.upWins).toBe(true);
     expect(Number(round!.voteCount)).toBe(voters.length);
-    expect(round!.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);
-    expect(BigInt(round!.ratingReviewRawUpEvidence ?? "0")).toBeGreaterThan(0n);
+    if (round!.state === ROUND_STATE.Settled) {
+      expect(round!.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);
+      expect(BigInt(round!.ratingReviewRawUpEvidence ?? "0")).toBeGreaterThan(0n);
+    } else {
+      expect(round!.rbtsSettlementPendingAt).toBeTruthy();
+    }
   });
 });
