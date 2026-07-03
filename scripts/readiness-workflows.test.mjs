@@ -209,7 +209,7 @@ test("local Anvil deploy steps use dummy explorer keys instead of repository sec
   assert.equal((e2eWorkflow.match(/ETHERSCAN_API_KEY: local-anvil-dummy/g) ?? []).length, 2);
 });
 
-test("Railway service start commands pin production mode", () => {
+test("Railway service start commands, watch patterns, and health checks pin production mode", () => {
   const keeper = readWorkflow("packages/keeper/railway.toml");
   const ponder = readWorkflow("packages/ponder/railway.toml");
 
@@ -226,12 +226,16 @@ test("Railway service start commands pin production mode", () => {
     keeper,
     /buildCommand = "yarn workspace @rateloop\/keeper build:workspace-deps && yarn workspace @rateloop\/keeper build"/,
   );
+  assert.match(keeper, /scripts\/with-workspace-dist-lock\.mjs/);
   assert.doesNotMatch(keeper, /dockerfilePath/);
+  assert.match(keeper, /healthcheckPath = "\/live"/);
+  assert.match(keeper, /healthcheckTimeout = 120/);
   assert.match(ponder, /builder = "RAILPACK"/);
   assert.match(
     ponder,
     /buildCommand = "yarn workspace @rateloop\/ponder build:workspace-deps"/,
   );
+  assert.match(ponder, /scripts\/with-workspace-dist-lock\.mjs/);
   assert.doesNotMatch(ponder, /dockerfilePath/);
   assert.match(ponder, /healthcheckPath = "\/health"/);
   assert.match(ponder, /healthcheckTimeout = 900/);

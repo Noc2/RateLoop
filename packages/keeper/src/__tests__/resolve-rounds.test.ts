@@ -1884,7 +1884,7 @@ describe("resolveRounds", () => {
     );
   });
 
-  it("re-verifies Ponder deployment after a cached match later mismatches", async () => {
+  it("re-verifies Ponder deployment on every production tick and fails on mismatch", async () => {
     mockConfig.keeperWorkDiscovery.enabled = true;
 
     const round = makeRound({

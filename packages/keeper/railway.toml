@@ -8,6 +8,7 @@ watchPatterns = [
   "yarn.lock",
   "scripts/clean-package-dist.mjs",
   "scripts/fix-esm-extensions.mjs",
+  "scripts/with-workspace-dist-lock.mjs",
   "scripts/write-cjs-package-json.mjs",
   "packages/contracts/**",
   "packages/keeper/**",
@@ -16,3 +17,5 @@ watchPatterns = [
 
 [deploy]
 startCommand = "NODE_ENV=production yarn workspace @rateloop/keeper start:built-dist"
+healthcheckPath = "/live"
+healthcheckTimeout = 120

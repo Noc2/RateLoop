@@ -168,7 +168,6 @@ const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
 let keeperWorkDiscoveryTick = 0;
 // Rotating cursor for bounded chain content scans on Ponder discovery ticks.
 let chainReconciliationContentCursor = 1n;
-let verifiedPonderDeploymentCacheKey: string | null = null;
 
 function emptyResult(): KeeperResult {
   return {
@@ -197,7 +196,6 @@ export function resetKeeperStateForTests(): void {
   cleanupDiscoveryRoundByContent.clear();
   keeperWorkDiscoveryTick = 0;
   chainReconciliationContentCursor = 1n;
-  verifiedPonderDeploymentCacheKey = null;
   decryptFailureCount.clear();
   resetTlockClientCacheForTests();
   lastBlockTimestampS = null;
@@ -635,15 +633,6 @@ function normalizePonderDeploymentChainId(value: unknown): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function expectedPonderDeploymentCacheKey(baseUrl: string) {
-  return [
-    baseUrl,
-    config.chainId,
-    config.contracts.contentRegistry.toLowerCase(),
-    config.contracts.feedbackRegistry.toLowerCase(),
-  ].join("|");
-}
-
 function expectedPonderDeploymentKey() {
   return [
     String(config.chainId),
@@ -656,8 +645,6 @@ async function assertPonderDeploymentMatchesKeeper(
   baseUrl: string,
   headers: Record<string, string>,
 ): Promise<void> {
-  const cacheKey = expectedPonderDeploymentCacheKey(baseUrl);
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
   try {
@@ -681,7 +668,6 @@ async function assertPonderDeploymentMatchesKeeper(
       typeof deployment.deploymentKey === "string" && deployment.deploymentKey.trim()
         ? deployment.deploymentKey.trim().toLowerCase()
         : null;
-    const verificationCacheKey = `${cacheKey}:${ponderDeploymentKey ?? "unknown"}`;
 
     const expectedContentRegistry = config.contracts.contentRegistry.toLowerCase();
     const expectedFeedbackRegistry = config.contracts.feedbackRegistry.toLowerCase();
@@ -708,12 +694,9 @@ async function assertPonderDeploymentMatchesKeeper(
     }
 
     if (mismatches.length > 0) {
-      verifiedPonderDeploymentCacheKey = null;
       const deploymentKey = ponderDeploymentKey ? ` (${ponderDeploymentKey})` : "";
       throw new Error(`Ponder deployment does not match keeper config${deploymentKey}: ${mismatches.join(", ")}`);
     }
-
-    verifiedPonderDeploymentCacheKey = verificationCacheKey;
   } finally {
     clearTimeout(timeout);
   }
