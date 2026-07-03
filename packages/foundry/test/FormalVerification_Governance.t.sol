@@ -319,9 +319,14 @@ contract FormalVerification_GovernanceTest is Test {
         vm.expectRevert("Exceeds transferable balance (governance locked)");
         token.transfer(address(300), 1);
 
-        // After 7 days, the aggregate lock remains until the longer proposal window expires.
+        // After 7 days, the vote lock expires but the proposal-threshold lock remains
+        // until the longer proposal window expires.
         vm.warp(block.timestamp + 7 days + 1);
-        assertEq(token.getLockedBalance(voter), 1_000_000e6, "Longer proposal lock still active");
+        assertEq(token.getLockedBalance(voter), governor.proposalThreshold(), "Longer proposal lock still active");
+
+        vm.prank(voter);
+        vm.expectRevert("Exceeds transferable balance (governance locked)");
+        token.transfer(address(300), 1_000_000e6);
 
         vm.warp(proposalUnlockTime + 1);
         assertEq(token.getLockedBalance(voter), 0, "Lock expired after proposal window");
