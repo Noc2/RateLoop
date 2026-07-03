@@ -26,7 +26,7 @@ const { resolvePonderDatabaseSchema, schemaFromProtocolDeploymentKey } = require
 };
 
 const KEEPER_WORK_PATH = "/keeper/work";
-const DEPLOYMENT_PROBE_PATHS = new Set(["/deployment"]);
+const DEPLOYMENT_PROBE_PATHS = new Set(["/deployment", "/ready"]);
 
 function isKeeperWorkPath(pathname: string) {
   return pathname === KEEPER_WORK_PATH;
@@ -177,6 +177,10 @@ app.use(
     origin: allowedOrigins,
   }),
 );
+
+// Railway's service-level fallback can probe /ready; keep it lightweight and outside
+// browser-facing rate/CORS gates, while /health/indexer carries richer diagnostics.
+app.get("/ready", (c) => c.json({ status: "ok" }));
 
 // Ponder provides /health and /status natively. /health/indexer adds indexer-specific signals.
 app.get("/health/indexer", async (c) => {
