@@ -75,38 +75,38 @@ describe("Ponder protocol deployment metadata", () => {
     });
   });
 
-  it("resolves Base Sepolia deployment keys from shared artifacts over stale env", () => {
+  it("resolves Base mainnet deployment keys from shared artifacts over stale env", () => {
     const staleContentRegistryAddress = "0x1000000000000000000000000000000000000001";
     const staleFeedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
-    const contentRegistryAddress = getSharedDeploymentAddress(84532, "ContentRegistry")?.toLowerCase() as
+    const contentRegistryAddress = getSharedDeploymentAddress(8453, "ContentRegistry")?.toLowerCase() as
       | `0x${string}`
       | undefined;
-    const feedbackRegistryAddress = getSharedDeploymentAddress(84532, "FeedbackRegistry")?.toLowerCase() as
+    const feedbackRegistryAddress = getSharedDeploymentAddress(8453, "FeedbackRegistry")?.toLowerCase() as
       | `0x${string}`
       | undefined;
     expect(contentRegistryAddress).toBeDefined();
     expect(feedbackRegistryAddress).toBeDefined();
 
     const metadata = resolvePonderProtocolDeploymentMetadata({
-      PONDER_NETWORK: "baseSepolia",
-      PONDER_CHAIN_ID: "84532",
+      PONDER_NETWORK: "base",
+      PONDER_CHAIN_ID: "8453",
       PONDER_CONTENT_REGISTRY_ADDRESS: staleContentRegistryAddress,
       PONDER_FEEDBACK_REGISTRY_ADDRESS: staleFeedbackRegistryAddress,
-      DATABASE_SCHEMA: "rateloop_ponder_base_sepolia",
+      DATABASE_SCHEMA: "rateloop_ponder_base",
     });
 
     expect(metadata).toEqual({
       configured: true,
-      network: "baseSepolia",
-      chainId: 84532,
+      network: "base",
+      chainId: 8453,
       contentRegistryAddress: contentRegistryAddress!,
       feedbackRegistryAddress: feedbackRegistryAddress!,
       deploymentKey: buildPonderProtocolDeploymentKey({
-        chainId: 84532,
+        chainId: 8453,
         contentRegistryAddress: contentRegistryAddress!,
         feedbackRegistryAddress: feedbackRegistryAddress!,
       }),
-      databaseSchema: "rateloop_ponder_base_sepolia",
+      databaseSchema: "rateloop_ponder_base",
     });
   });
 
@@ -124,11 +124,11 @@ describe("Ponder protocol deployment metadata", () => {
     expect(() =>
       resolvePonderProtocolDeploymentMetadata({
         PONDER_NETWORK: "base",
-        PONDER_CHAIN_ID: "84532",
+        PONDER_CHAIN_ID: "31337",
         PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
         PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
       }),
-    ).toThrow("PONDER_CHAIN_ID 84532 does not match PONDER_NETWORK base (8453).");
+    ).toThrow("PONDER_CHAIN_ID 31337 does not match PONDER_NETWORK base (8453).");
   });
 
   it("rejects malformed explicit chain ids instead of falling back to the network", () => {
@@ -146,11 +146,11 @@ describe("Ponder protocol deployment metadata", () => {
     expect(() =>
       resolvePonderProtocolDeploymentMetadata({
         PONDER_NETWORK: "hardhat",
-        PONDER_CHAIN_ID: "4801",
+        PONDER_CHAIN_ID: "8453",
         PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
         PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
       }),
-    ).toThrow("PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).");
+    ).toThrow("PONDER_CHAIN_ID 8453 does not match PONDER_NETWORK hardhat (31337).");
   });
 
   it("returns null without a known chain", () => {

@@ -24,13 +24,12 @@ yarn keeper:start  # Production mode (long-running service)
 
 Copy `.env.example` to `.env.local` and configure:
 
-For supported live `CHAIN_ID` values `84532`, `8453`, `4801`, and `480`, Keeper reads the latest contract addresses from `@rateloop/contracts`.
+For the supported live `CHAIN_ID=8453`, Keeper reads the latest Base mainnet contract addresses from `@rateloop/contracts`.
 For local `31337`, address vars override the shared artifact so a fresh Anvil deploy can be used without committing
 machine-specific local addresses. For any non-local chain, publish the deployment through `@rateloop/contracts` instead
 of relying on Keeper address env overrides.
 
 Run production Keeper with `CHAIN_ID=8453`, a Base mainnet `RPC_URL`, and the matching Base mainnet `PONDER_BASE_URL`.
-Use `CHAIN_ID=84532` with Base Sepolia RPC/Ponder URLs for staging and validation before future production changes.
 
 | Variable                                          | Default                                                             | Description                                                                                                        |
 | ------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |

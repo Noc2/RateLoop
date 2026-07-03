@@ -1230,7 +1230,7 @@ describe("registerContentRoutes", () => {
     }
   });
 
-  it("uses the Base Sepolia default schema for metadata sync writes", async () => {
+  it("uses the Base mainnet default schema for metadata sync writes", async () => {
     const originalDatabaseUrl = process.env.DATABASE_URL;
     const originalNodeEnv = process.env.NODE_ENV;
     const originalPonderNetwork = process.env.PONDER_NETWORK;
@@ -1245,7 +1245,7 @@ describe("registerContentRoutes", () => {
     }));
     process.env.DATABASE_URL = "postgres://localhost/rateloop";
     process.env.NODE_ENV = "test";
-    process.env.PONDER_NETWORK = "baseSepolia";
+    process.env.PONDER_NETWORK = "base";
     process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
     delete process.env.DATABASE_SCHEMA;
     delete process.env.RATELOOP_PONDER_DATABASE_SCHEMA;
@@ -1260,7 +1260,7 @@ describe("registerContentRoutes", () => {
       registerContentRoutes(app);
       const questionMetadata = {
         schemaVersion: "rateloop.question.v3",
-        title: "Public-safe Base Sepolia title",
+        title: "Public-safe Base mainnet title",
       };
       const questionMetadataHash = canonicalJsonHash(questionMetadata);
       const deployment = resolvePonderProtocolDeploymentMetadata();
@@ -1286,7 +1286,7 @@ describe("registerContentRoutes", () => {
       expect(await response.json()).toMatchObject({ updated: 1, skipped: 0 });
       expect(query).toHaveBeenCalledTimes(1);
       const [sqlText] = query.mock.calls[0]!;
-      expect(sqlText).toContain('"rateloop_ponder_base_sepolia"."content"');
+      expect(sqlText).toContain('"rateloop_ponder_base"."content"');
     } finally {
       if (originalDatabaseUrl === undefined) {
         delete process.env.DATABASE_URL;

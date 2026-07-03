@@ -152,12 +152,6 @@ describe("resolveTlockClientForDrandChain", () => {
   });
 
   it("rejects non-quicknet hashes for mainnet deployments", () => {
-    vi.stubEnv("CHAIN_ID", "480");
-
-    expect(() =>
-      resolveTlockClientForDrandChain(`0x${QUICKNET_T_CHAIN_HASH}`),
-    ).toThrow("Mainnet keeper deployments require drand quicknet chain hash");
-
     vi.stubEnv("CHAIN_ID", "8453");
 
     expect(() =>
@@ -165,9 +159,7 @@ describe("resolveTlockClientForDrandChain", () => {
     ).toThrow("Mainnet keeper deployments require drand quicknet chain hash");
   });
 
-  it("allows testnet quicknet on Base Sepolia", () => {
-    vi.stubEnv("CHAIN_ID", "84532");
-
+  it("allows testnet quicknet for local fixtures", () => {
     expect(
       resolveTlockClientForDrandChain(`0x${QUICKNET_T_CHAIN_HASH}`),
     ).toBeInstanceOf(FailoverChainClient);

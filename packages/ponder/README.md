@@ -14,7 +14,7 @@ yarn ponder:start   # Production mode (no file watching)
 yarn ponder:codegen # Regenerate TypeScript types from schema
 ```
 
-Requires a running chain (local via `yarn chain` or a configured testnet RPC).
+Requires a running chain (local via `yarn chain` or the Base mainnet RPC configured for production).
 
 ## Scripts
 
@@ -36,14 +36,11 @@ Within the package directory, additional scripts are available:
 
 | Variable                                   | Description                                                                                                                                                                                                 |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PONDER_NETWORK`                           | Active network: `hardhat`, `baseSepolia`, `base`, `worldchainSepolia`, or `worldchain`                                                                                                                      |
+| `PONDER_NETWORK`                           | Active network: `hardhat` or `base`                                                                                                                                                                          |
 | `PONDER_CHAIN_ID`                          | Optional explicit chain ID; must match `PONDER_NETWORK` when both are set. Used by `yarn ponder:start` for protocol deployment keys and Postgres schema selection when unset defaults from the network name |
 | `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                                                                                                       |
-| `PONDER_RPC_URL_84532`                     | RPC URL for Base Sepolia                                                                                                                                                                                    |
 | `PONDER_RPC_URL_8453`                      | RPC URL for Base mainnet                                                                                                                                                                                    |
-| `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                                                                                                                             |
-| `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                                                                                                             |
-| `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; validated against shared artifacts for supported live chains that have deployment metadata in `@rateloop/contracts`                                                        |
+| `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; validated against the Base mainnet shared artifacts when `PONDER_NETWORK=base`                                                                                             |
 | `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                                                                                                               |
 | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local-only fallback when the active chain has no shared deployment metadata                                                                                              |
 | `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local-only fallback when the active chain has no shared deployment metadata                                                                                                 |
@@ -59,9 +56,7 @@ For live supported chains, Ponder treats `@rateloop/contracts` as the source of 
 For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
 `yarn deploy` does not need machine-specific addresses committed to the shared deployment artifact. After `yarn deploy`,
 the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
-`PONDER_NETWORK=hardhat`. Run production indexing with `PONDER_NETWORK=base` and `PONDER_RPC_URL_8453`; use
-`PONDER_NETWORK=baseSepolia` with `PONDER_RPC_URL_84532` for staging and validation before future production changes.
-World Chain live networks remain supported as `worldchainSepolia` and `worldchain`.
+`PONDER_NETWORK=hardhat`. Run production indexing with `PONDER_NETWORK=base` and `PONDER_RPC_URL_8453`.
 Keep `RATELOOP_E2E_PRODUCTION_BUILD` and `NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD` unset for Ponder live-chain
 services. Those flags are for local Next.js/Playwright test behavior and Ponder rejects them outside `hardhat`.
 
@@ -73,7 +68,7 @@ protocol deployment-scoped schema from the active chain's `ContentRegistry` and 
 addresses, so a future incident/governance migration that changes contract addresses indexes into a fresh
 schema even if content IDs restart. If neither value is available and `DATABASE_SCHEMA` is unset or still
 set to the generic legacy `ponder` value, the launcher uses RateLoop-owned network fallbacks such as
-`rateloop_ponder_base_sepolia`. To force a specific live schema, set
+`rateloop_ponder_base`. To force a specific live schema, set
 `RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true` and choose a unique recovery value such as
 `rateloop_ponder_manual_recovery_202606`; remove the override after the recovery window.
 

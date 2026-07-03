@@ -133,8 +133,8 @@ test("keeps Ponder data when the local deployment fingerprint is unchanged", () 
 test("does not reset Ponder data for non-local Ponder networks", () => {
   assert.deepEqual(
     getPonderDataResetPlan({
-      ponderNetwork: "worldchainSepolia",
-      ponderRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
+      ponderNetwork: "base",
+      ponderRpcUrl: "https://mainnet.base.org",
       currentFingerprint: "new",
       storedFingerprint: "old",
       hasPglite: true,
@@ -165,8 +165,8 @@ test("checks the local hardhat Ponder RPC before starting services", () => {
 test("skips the Ponder RPC startup check outside local hardhat", () => {
   assert.deepEqual(
     getPonderRpcPreflightPlan({
-      ponderNetwork: "worldchainSepolia",
-      ponderRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
+      ponderNetwork: "base",
+      ponderRpcUrl: "https://mainnet.base.org",
     }),
     {
       shouldCheck: false,
@@ -205,11 +205,11 @@ test("reports local hardhat Ponder RPC chain ID mismatches", async () => {
   const error = await getPonderRpcReadinessError({
     fetchImpl: async () => ({
       ok: true,
-      json: async () => ({ result: "0x12c1" }),
+      json: async () => ({ result: "0x2105" }),
     }),
   });
 
-  assert.match(error ?? "", /reports chain 4801/);
+  assert.match(error ?? "", /reports chain 8453/);
   assert.match(error ?? "", /expects chain 31337/);
 });
 
@@ -261,7 +261,7 @@ test("warns when Keeper points at local Ponder for a different chain", () => {
   const warning = getDevStackNetworkAlignmentWarning({
     keeperEnabled: true,
     keeperEnv: {
-      CHAIN_ID: "4801",
+      CHAIN_ID: "8453",
       PONDER_BASE_URL: "http://localhost:42069",
     },
     ponderEnv: {
@@ -269,7 +269,7 @@ test("warns when Keeper points at local Ponder for a different chain", () => {
     },
   });
 
-  assert.match(warning ?? "", /Keeper is configured for chain 4801/);
+  assert.match(warning ?? "", /Keeper is configured for chain 8453/);
   assert.match(warning ?? "", /Ponder is configured for hardhat \(chain 31337\)/);
 });
 
@@ -277,16 +277,16 @@ test("uses Base network ids in Keeper/Ponder alignment warnings", () => {
   const warning = getDevStackNetworkAlignmentWarning({
     keeperEnabled: true,
     keeperEnv: {
-      CHAIN_ID: "8453",
+      CHAIN_ID: "31337",
       PONDER_BASE_URL: "http://localhost:42069",
     },
     ponderEnv: {
-      PONDER_NETWORK: "baseSepolia",
+      PONDER_NETWORK: "base",
     },
   });
 
-  assert.match(warning ?? "", /Keeper is configured for chain 8453/);
-  assert.match(warning ?? "", /Ponder is configured for baseSepolia \(chain 84532\)/);
+  assert.match(warning ?? "", /Keeper is configured for chain 31337/);
+  assert.match(warning ?? "", /Ponder is configured for base \(chain 8453\)/);
 });
 
 test("does not warn when Keeper and local Ponder target the same chain", () => {
@@ -309,10 +309,10 @@ test("does not warn when Keeper uses a remote Ponder API", () => {
   assert.equal(
     getDevStackNetworkAlignmentWarning({
       keeperEnabled: true,
-      keeperEnv: {
-        CHAIN_ID: "4801",
-        PONDER_BASE_URL: "https://ponder.example.com",
-      },
+    keeperEnv: {
+      CHAIN_ID: "8453",
+      PONDER_BASE_URL: "https://ponder.example.com",
+    },
       ponderEnv: {
         PONDER_NETWORK: "hardhat",
       },
@@ -411,7 +411,7 @@ test("preserves explicit Next target network overrides from the shell", () => {
       },
       baseEnv: {
         NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "false",
-        NEXT_PUBLIC_TARGET_NETWORKS: "4801",
+        NEXT_PUBLIC_TARGET_NETWORKS: "8453",
         NEXT_PUBLIC_RPC_URL_31337: "http://localhost:9545",
         RATELOOP_IMAGE_MODERATION_MODE: "openai",
         RATELOOP_E2E_PRODUCTION_BUILD: "false",

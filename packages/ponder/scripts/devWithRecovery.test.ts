@@ -60,14 +60,14 @@ describe("devWithRecovery", () => {
 
     expect(
       shouldRecover(output, {
-        PONDER_NETWORK: "worldchainSepolia",
-        PONDER_RPC_URL_4801: "https://worldchain-sepolia.g.alchemy.com/public",
+        PONDER_NETWORK: "base",
+        PONDER_RPC_URL_8453: "https://mainnet.base.org",
       }),
     ).toBe(false);
     expect(
       getRecoveryReason(output, {
-        PONDER_NETWORK: "worldchainSepolia",
-        PONDER_RPC_URL_4801: "https://worldchain-sepolia.g.alchemy.com/public",
+        PONDER_NETWORK: "base",
+        PONDER_RPC_URL_8453: "https://mainnet.base.org",
       }),
     ).toBeNull();
   });

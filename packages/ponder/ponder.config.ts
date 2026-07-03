@@ -24,12 +24,7 @@ import {
 import { httpWithGetLogsBlockRange } from "./src/rpcTransport";
 import { QuestionRewardPoolEscrowIndexerAbi } from "./src/questionRewardPoolEscrowIndexerAbi";
 
-type PonderNetworkName =
-  | "baseSepolia"
-  | "base"
-  | "worldchainSepolia"
-  | "hardhat"
-  | "worldchain";
+type PonderNetworkName = "base" | "hardhat";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -42,21 +37,9 @@ const NETWORKS: Record<
     pollingInterval: number;
   }
 > = {
-  baseSepolia: {
-    chainId: 84532,
-    defaultRpcUrl: "https://sepolia.base.org",
-    maxGetLogsBlockRange: 1_000,
-    pollingInterval: 5_000,
-  },
   base: {
     chainId: 8453,
     defaultRpcUrl: "https://mainnet.base.org",
-    maxGetLogsBlockRange: 1_000,
-    pollingInterval: 5_000,
-  },
-  worldchainSepolia: {
-    chainId: 4801,
-    defaultRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
     maxGetLogsBlockRange: 1_000,
     pollingInterval: 5_000,
   },
@@ -64,12 +47,6 @@ const NETWORKS: Record<
     chainId: 31337,
     defaultRpcUrl: "http://127.0.0.1:8545",
     pollingInterval: 1_000,
-  },
-  worldchain: {
-    chainId: 480,
-    defaultRpcUrl: "https://worldchain-mainnet.g.alchemy.com/public",
-    maxGetLogsBlockRange: 1_000,
-    pollingInterval: 5_000,
   },
 };
 
@@ -124,7 +101,7 @@ function sharedDeploymentRecoveryHint() {
     return "Restore the existing Base mainnet deployment artifact/contracts package and run `yarn base-mainnet:check` before starting Ponder.";
   }
 
-  return "For staging or new networks, run `yarn deploy --network <network>` to refresh shared deployments before starting Ponder.";
+  return "For local development, run `yarn deploy` to refresh shared deployments before starting Ponder.";
 }
 
 function readEnv(key: string): string | undefined {

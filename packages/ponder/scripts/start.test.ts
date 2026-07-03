@@ -152,16 +152,16 @@ describe("Ponder production launcher", () => {
       assertProductionRpcChainId({
         env: {
           NODE_ENV: "production",
-          PONDER_NETWORK: "base",
-          PONDER_RPC_URL_8453: "https://mainnet.base.org",
-        },
-        fetchImpl: vi.fn(async () => ({
-          ok: true,
-          json: async () => ({ result: "0x14a34" }),
-        })),
-      }),
-    ).rejects.toThrow(
-      "PONDER_RPC_URL_8453 reports chainId 84532 but 8453 expected.",
+        PONDER_NETWORK: "base",
+        PONDER_RPC_URL_8453: "https://mainnet.base.org",
+      },
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ result: "0x7a69" }),
+      })),
+    }),
+  ).rejects.toThrow(
+      "PONDER_RPC_URL_8453 reports chainId 31337 but 8453 expected.",
     );
   });
 
@@ -180,12 +180,12 @@ describe("Ponder production launcher", () => {
         ensureContractsArtifactsImpl,
         assertProductionRpcChainIdImpl: async () => {
           throw new Error(
-            "PONDER_RPC_URL_8453 reports chainId 84532 but 8453 expected.",
+            "PONDER_RPC_URL_8453 reports chainId 31337 but 8453 expected.",
           );
         },
       }),
     ).rejects.toThrow(
-      "PONDER_RPC_URL_8453 reports chainId 84532 but 8453 expected.",
+      "PONDER_RPC_URL_8453 reports chainId 31337 but 8453 expected.",
     );
 
     expect(ensureContractsArtifactsImpl).toHaveBeenCalled();
@@ -226,7 +226,7 @@ describe("Ponder production launcher", () => {
 
     const child = new FakeChild();
     const deploymentKey =
-      "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
     const ensureContractsArtifactsImpl = vi.fn();
     const resolveProtocolDeploymentKeyImpl = vi.fn(() => deploymentKey);
     const spawnImpl = vi.fn(() => child);
@@ -236,7 +236,7 @@ describe("Ponder production launcher", () => {
     expect(
       await startPonder({
         argv: ["--port", "42069"],
-        env: { PONDER_NETWORK: "worldchainSepolia" },
+        env: { PONDER_NETWORK: "base" },
         spawnImpl,
         ensureContractsArtifactsImpl,
         resolveProtocolDeploymentKeyImpl,
@@ -245,14 +245,14 @@ describe("Ponder production launcher", () => {
 
     expect(ensureContractsArtifactsImpl).toHaveBeenCalled();
     expect(resolveProtocolDeploymentKeyImpl).toHaveBeenCalledWith({
-      env: { PONDER_NETWORK: "worldchainSepolia" },
+      env: { PONDER_NETWORK: "base" },
     });
     expect(spawnImpl).toHaveBeenCalledWith(
       "ponder",
       ["start", "--schema", schema, "--port", "42069"],
       {
         env: {
-          PONDER_NETWORK: "worldchainSepolia",
+          PONDER_NETWORK: "base",
           RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
           DATABASE_SCHEMA: schema,
         },
@@ -269,7 +269,7 @@ describe("Ponder production launcher", () => {
 
     const child = new FakeChild();
     const deploymentKey =
-      "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
     const railwayDeploymentId = "123e4567-e89b-12d3-a456-426614174000";
     const schema = schemaFromProtocolDeploymentKey(deploymentKey);
     const ensureContractsArtifactsImpl = vi.fn();
@@ -281,7 +281,7 @@ describe("Ponder production launcher", () => {
       await startPonder({
         argv: ["--port", "42069"],
         env: {
-          PONDER_NETWORK: "worldchainSepolia",
+          PONDER_NETWORK: "base",
           RAILWAY_DEPLOYMENT_ID: railwayDeploymentId,
         },
         spawnImpl,
@@ -295,7 +295,7 @@ describe("Ponder production launcher", () => {
       ["start", "--schema", schema, "--port", "42069"],
       {
         env: {
-          PONDER_NETWORK: "worldchainSepolia",
+          PONDER_NETWORK: "base",
           RAILWAY_DEPLOYMENT_ID: railwayDeploymentId,
           RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
           DATABASE_SCHEMA: schema,
@@ -313,12 +313,12 @@ describe("Ponder production launcher", () => {
       resolveProtocolDeploymentKeyFromArtifacts({
         env: {
           PONDER_NETWORK: "hardhat",
-          PONDER_CHAIN_ID: "4801",
+          PONDER_CHAIN_ID: "8453",
         },
         requireImpl: vi.fn(),
       }),
     ).toThrow(
-      "PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).",
+      "PONDER_CHAIN_ID 8453 does not match PONDER_NETWORK hardhat (31337).",
     );
   });
 });

@@ -46,10 +46,7 @@ const keeperService = {
 };
 const ponderNetworkChainIds = {
   hardhat: "31337",
-  baseSepolia: "84532",
   base: "8453",
-  worldchainSepolia: "4801",
-  worldchain: "480",
 };
 const allowRemoteDbPushFlag = "--allow-remote-db-push";
 const skipDbPushFlag = "--skip-db-push";

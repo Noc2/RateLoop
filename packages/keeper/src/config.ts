@@ -8,10 +8,7 @@ loadDotenv();
 
 const CHAIN_NAMES: Record<number, string> = {
   31337: "Foundry",
-  84532: "Base Sepolia",
   8453: "Base",
-  4801: "World Chain Sepolia",
-  480: "World Chain",
 };
 
 const LOCAL_HARDHAT_CHAIN_ID = 31337;

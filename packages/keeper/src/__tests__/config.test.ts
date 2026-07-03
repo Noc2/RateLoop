@@ -13,13 +13,8 @@ const sharedDeployments = deployedContracts as Record<
   number,
   DeploymentChain | undefined
 >;
-const chain84532 = sharedDeployments[84532];
-const chain4801 = sharedDeployments[4801];
-const chain480 = sharedDeployments[480];
+const chain8453 = sharedDeployments[8453];
 const chain31337 = sharedDeployments[31337];
-const itWithWorldChainArtifacts = chain480 ? it : it.skip;
-const itWithWorldChainSepoliaFeedbackBonusEscrowArtifact =
-  chain4801?.FeedbackBonusEscrow ? it : it.skip;
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
   RPC_URL: "https://rpc.example.com",
@@ -60,9 +55,9 @@ const LOCAL_ADVISORY_VOTE_RECORDER =
   chain31337?.AdvisoryVoteRecorder?.address ??
   "0x5555555555555555555555555555555555555555";
 
-function requireBaseSepoliaDeployment() {
-  expect(chain84532).toBeDefined();
-  return chain84532!;
+function requireBaseMainnetDeployment() {
+  expect(chain8453).toBeDefined();
+  return chain8453!;
 }
 
 async function loadKeeperConfig(
@@ -317,7 +312,7 @@ describe("keeper config", () => {
   it("ignores stale CHAIN_NAME overrides for known chain ids", async () => {
     const { config } = await loadKeeperConfig({
       CHAIN_ID: "31337",
-      CHAIN_NAME: "World Chain Sepolia",
+      CHAIN_NAME: "Stale Chain",
     });
 
     expect(config.chainName).toBe("Foundry");
@@ -420,8 +415,8 @@ describe("keeper config", () => {
   it("rejects plaintext RPC URLs for live chain ids", async () => {
     await expect(
       loadKeeperConfig({
-        CHAIN_ID: "84532",
-        RPC_URL: "http://sepolia.base.org",
+        CHAIN_ID: "8453",
+        RPC_URL: "http://mainnet.base.org",
       }),
     ).rejects.toThrow("RPC_URL must use HTTPS");
   });
@@ -501,7 +496,7 @@ describe("keeper config", () => {
   });
 
   it.each([
-    ["CHAIN_ID", "4801abc", "CHAIN_ID must be a positive integer"],
+    ["CHAIN_ID", "8453abc", "CHAIN_ID must be a positive integer"],
     [
       "KEEPER_INTERVAL_MS",
       "30000ms",
@@ -789,35 +784,14 @@ describe("keeper config", () => {
     );
   });
 
-  itWithWorldChainArtifacts(
-    "derives World Chain mainnet contract addresses from shared deployment artifacts",
-    async () => {
-      const { config } = await loadKeeperConfig(
-        {
-          CHAIN_ID: "480",
-        },
-        [
-          "VOTING_ENGINE_ADDRESS",
-          "CONTENT_REGISTRY_ADDRESS",
-          "ADVISORY_VOTE_RECORDER_ADDRESS",
-        ],
-      );
-
-      expect(config.chainId).toBe(480);
-      expect(config.chainName).toBe("World Chain");
-      expect(config.contracts.votingEngine).toBe(
-        chain480!.RoundVotingEngine.address,
-      );
-      expect(config.contracts.contentRegistry).toBe(
-        chain480!.ContentRegistry.address,
-      );
-    },
-  );
-
-  it("derives World Chain Sepolia contract addresses from shared deployment artifacts", async () => {
+  it("derives Base mainnet contract addresses from shared deployment artifacts", async () => {
+    const baseMainnet = requireBaseMainnetDeployment();
     const { config } = await loadKeeperConfig(
       {
-        CHAIN_ID: "4801",
+        CHAIN_ID: "8453",
+        KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+        NODE_ENV: "production",
+        RPC_URL: "https://mainnet.base.org",
       },
       [
         "VOTING_ENGINE_ADDRESS",
@@ -826,43 +800,16 @@ describe("keeper config", () => {
       ],
     );
 
-    expect(config.chainId).toBe(4801);
-    expect(config.chainName).toBe("World Chain Sepolia");
+    expect(config.chainId).toBe(8453);
+    expect(config.chainName).toBe("Base");
     expect(config.contracts.votingEngine).toBe(
-      chain4801!.RoundVotingEngine.address,
+      baseMainnet.RoundVotingEngine.address,
     );
     expect(config.contracts.contentRegistry).toBe(
-      chain4801!.ContentRegistry.address,
+      baseMainnet.ContentRegistry.address,
     );
     expect(config.contracts.advisoryVoteRecorder).toBe(
-      chain4801!.AdvisoryVoteRecorder.address,
-    );
-  });
-
-  it("derives Base Sepolia contract addresses from shared deployment artifacts", async () => {
-    const baseSepolia = requireBaseSepoliaDeployment();
-    const { config } = await loadKeeperConfig(
-      {
-        CHAIN_ID: "84532",
-        RPC_URL: "https://sepolia.base.org",
-      },
-      [
-        "VOTING_ENGINE_ADDRESS",
-        "CONTENT_REGISTRY_ADDRESS",
-        "ADVISORY_VOTE_RECORDER_ADDRESS",
-      ],
-    );
-
-    expect(config.chainId).toBe(84532);
-    expect(config.chainName).toBe("Base Sepolia");
-    expect(config.contracts.votingEngine).toBe(
-      baseSepolia.RoundVotingEngine.address,
-    );
-    expect(config.contracts.contentRegistry).toBe(
-      baseSepolia.ContentRegistry.address,
-    );
-    expect(config.contracts.advisoryVoteRecorder).toBe(
-      baseSepolia.AdvisoryVoteRecorder.address,
+      baseMainnet.AdvisoryVoteRecorder.address,
     );
   });
 
@@ -892,55 +839,62 @@ describe("keeper config", () => {
     );
   });
 
-  itWithWorldChainArtifacts(
-    "rejects stale live contract env values when shared deployment artifacts exist",
-    async () => {
-      await expect(
-        loadKeeperConfig({
-          CHAIN_ID: "480",
-          VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
-          CONTENT_REGISTRY_ADDRESS:
-            "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
-          ADVISORY_VOTE_RECORDER_ADDRESS:
-            "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
-        }),
-      ).rejects.toThrow(
-        "conflicts with RoundVotingEngine from shared deployment artifacts",
-      );
-    },
-  );
+  it("rejects stale live contract env values when shared deployment artifacts exist", async () => {
+    requireBaseMainnetDeployment();
 
-  itWithWorldChainSepoliaFeedbackBonusEscrowArtifact(
-    "rejects stale live FeedbackBonusEscrow env values when shared deployment artifacts exist",
-    async () => {
-      await expect(
-        loadKeeperConfig(
-          {
-            CHAIN_ID: "4801",
-            FEEDBACK_BONUS_ESCROW_ADDRESS:
-              "0x7777777777777777777777777777777777777777",
-          },
-          [
-            "VOTING_ENGINE_ADDRESS",
-            "CONTENT_REGISTRY_ADDRESS",
-            "ADVISORY_VOTE_RECORDER_ADDRESS",
-          ],
-        ),
-      ).rejects.toThrow(
-        "conflicts with FeedbackBonusEscrow from shared deployment artifacts",
-      );
-    },
-  );
+    await expect(
+      loadKeeperConfig({
+        CHAIN_ID: "8453",
+        KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+        NODE_ENV: "production",
+        RPC_URL: "https://mainnet.base.org",
+        VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
+        CONTENT_REGISTRY_ADDRESS:
+          "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
+        ADVISORY_VOTE_RECORDER_ADDRESS:
+          "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+      }),
+    ).rejects.toThrow(
+      "conflicts with RoundVotingEngine from shared deployment artifacts",
+    );
+  });
 
-  it("rejects stale live ClusterPayoutOracle env values when shared deployment artifacts exist", async () => {
-    requireBaseSepoliaDeployment();
+  it("rejects stale live FeedbackBonusEscrow env values when shared deployment artifacts exist", async () => {
+    requireBaseMainnetDeployment();
 
     await expect(
       loadKeeperConfig(
         {
-          CHAIN_ID: "84532",
+          CHAIN_ID: "8453",
+          FEEDBACK_BONUS_ESCROW_ADDRESS:
+            "0x7777777777777777777777777777777777777777",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+          NODE_ENV: "production",
+          RPC_URL: "https://mainnet.base.org",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+      ),
+    ).rejects.toThrow(
+      "conflicts with FeedbackBonusEscrow from shared deployment artifacts",
+    );
+  });
+
+  it("rejects stale live ClusterPayoutOracle env values when shared deployment artifacts exist", async () => {
+    requireBaseMainnetDeployment();
+
+    await expect(
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "8453",
           CLUSTER_PAYOUT_ORACLE_ADDRESS:
             "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+          NODE_ENV: "production",
+          RPC_URL: "https://mainnet.base.org",
         },
         [
           "VOTING_ENGINE_ADDRESS",
@@ -954,24 +908,26 @@ describe("keeper config", () => {
   });
 
   it("rejects env-only live ClusterPayoutOracle addresses when correlation snapshots are enabled", async () => {
-    requireBaseSepoliaDeployment();
+    requireBaseMainnetDeployment();
     const getSharedDeploymentAddress: SharedDeploymentAddressResolver = (
       chainId,
       contractName,
     ) =>
-      chainId === 84532 && contractName === "ClusterPayoutOracle"
+      chainId === 8453 && contractName === "ClusterPayoutOracle"
         ? undefined
         : actualGetSharedDeploymentAddress(chainId, contractName);
 
     await expect(
       loadKeeperConfig(
         {
-          CHAIN_ID: "84532",
-          RPC_URL: "https://sepolia.base.org",
+          CHAIN_ID: "8453",
           KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
           KEEPER_CORRELATION_SNAPSHOTS_MODE: "file",
           KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH:
             "./correlation-snapshots.json",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+          NODE_ENV: "production",
+          RPC_URL: "https://mainnet.base.org",
           CLUSTER_PAYOUT_ORACLE_ADDRESS:
             "0x6666666666666666666666666666666666666666",
         },
@@ -988,21 +944,23 @@ describe("keeper config", () => {
   });
 
   it("rejects env-only live FeedbackBonusEscrow addresses when forfeits are enabled", async () => {
-    requireBaseSepoliaDeployment();
+    requireBaseMainnetDeployment();
     const getSharedDeploymentAddress: SharedDeploymentAddressResolver = (
       chainId,
       contractName,
     ) =>
-      chainId === 84532 && contractName === "FeedbackBonusEscrow"
+      chainId === 8453 && contractName === "FeedbackBonusEscrow"
         ? undefined
         : actualGetSharedDeploymentAddress(chainId, contractName);
 
     await expect(
       loadKeeperConfig(
         {
-          CHAIN_ID: "84532",
-          RPC_URL: "https://sepolia.base.org",
+          CHAIN_ID: "8453",
           KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED: "true",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+          NODE_ENV: "production",
+          RPC_URL: "https://mainnet.base.org",
           FEEDBACK_BONUS_ESCROW_ADDRESS:
             "0x7777777777777777777777777777777777777777",
         },

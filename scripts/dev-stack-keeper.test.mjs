@@ -4,8 +4,8 @@ import { applyKeeperDevStackEnvDefaults, getMissingKeeperEnvVars } from "./dev-s
 
 test("defaults the dev-stack keeper to the local Ponder API", () => {
   const env = applyKeeperDevStackEnvDefaults({
-    RPC_URL: "https://worldchain-sepolia.example",
-    CHAIN_ID: "4801",
+    RPC_URL: "https://mainnet.base.org",
+    CHAIN_ID: "8453",
     KEEPER_PRIVATE_KEY: "0xabc",
   });
 
@@ -15,8 +15,8 @@ test("defaults the dev-stack keeper to the local Ponder API", () => {
 
 test("uses the Next.js Ponder URL when defaulting the dev-stack keeper", () => {
   const env = applyKeeperDevStackEnvDefaults({
-    RPC_URL: "https://worldchain-sepolia.example",
-    CHAIN_ID: "4801",
+    RPC_URL: "https://mainnet.base.org",
+    CHAIN_ID: "8453",
     KEEPER_PRIVATE_KEY: "0xabc",
     NEXT_PUBLIC_PONDER_URL: "http://127.0.0.1:42070",
   });
@@ -129,8 +129,8 @@ test("requires a valid HTTPS public artifact base URL when automatic snapshots u
 test("defaults non-local automatic correlation snapshots to file artifacts", () => {
   assert.deepEqual(
     getMissingKeeperEnvVars({
-      RPC_URL: "https://worldchain-sepolia.example",
-      CHAIN_ID: "4801",
+      RPC_URL: "https://mainnet.base.org",
+      CHAIN_ID: "8453",
       KEEPER_PRIVATE_KEY: "0xabc",
       PONDER_BASE_URL: "https://ponder.example.com",
       KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",

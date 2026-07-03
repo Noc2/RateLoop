@@ -233,13 +233,6 @@ export async function startPonder({
     console.warn(
       "[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.",
     );
-  } else if (schemaInfo?.ignoredDeprecatedStaticSchema) {
-    console.warn(
-      `[ponder:start] Ignoring deprecated static Ponder schema override on Railway; using deployment-scoped schema ${schemaInfo.schema}.`,
-    );
-    console.warn(
-      "[ponder:start] Remove RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_worldchain_canary (or DATABASE_SCHEMA with the same value) from Railway env vars.",
-    );
   } else if (schemaInfo?.ignoredLiveSchemaOverride) {
     console.warn(
       `[ponder:start] Ignoring live Ponder schema override; using protocol deployment-scoped schema ${schemaInfo.schema}.`,

@@ -1171,7 +1171,7 @@ describe("resolveRounds", () => {
         status: 200,
         json: async () => ({
           ...matchingPonderDeployment(),
-          chainId: 84532,
+          chainId: 8453,
           contentRegistryAddress: "0x9999999999999999999999999999999999999999",
         }),
       };
@@ -1690,7 +1690,7 @@ describe("resolveRounds", () => {
     );
   });
 
-  it("reveals a World Chain Sepolia quicknet-t commit with the quicknet-t client", async () => {
+  it("reveals a testnet quicknet-t commit with the quicknet-t client", async () => {
     timelockDecrypt.mockResolvedValueOnce(makePlaintext(true, 1));
 
     const round = makeRound({
@@ -1912,7 +1912,7 @@ describe("resolveRounds", () => {
             json: async () => ({
               ...stableDeployment,
               deploymentKey: mismatchedDeploymentKey,
-              chainId: 84532,
+              chainId: 8453,
             }),
           };
         }

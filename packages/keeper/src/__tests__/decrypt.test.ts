@@ -112,7 +112,7 @@ describe("decryptTlockVoteCiphertext", () => {
     ]);
   });
 
-  it("uses the drand quicknet-t client for World Chain Sepolia ciphertexts", async () => {
+  it("uses the drand quicknet-t client for testnet ciphertexts", async () => {
     const saltHex = "ef".repeat(32);
     const plaintext = Buffer.alloc(36);
     plaintext.writeUInt8(2, 0);

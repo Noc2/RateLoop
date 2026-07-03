@@ -16,7 +16,7 @@ async function loadKeeperClient(options: KeeperClientOptions = {}) {
 
   const mockedPublicClient = {
     kind: "public",
-    getChainId: vi.fn().mockResolvedValue(options.rpcChainId ?? 4801),
+    getChainId: vi.fn().mockResolvedValue(options.rpcChainId ?? 8453),
   };
   const createPublicClient = vi.fn(() => mockedPublicClient);
   const createWalletClient = vi.fn(() => ({ kind: "wallet" }));
@@ -39,8 +39,8 @@ async function loadKeeperClient(options: KeeperClientOptions = {}) {
   }));
   vi.doMock("../config.js", () => ({
     config: {
-      chainId: 4801,
-      chainName: "World Chain Sepolia",
+      chainId: 8453,
+      chainName: "Base",
       rpcUrl: "https://rpc.example.com",
       privateKey: options.privateKey,
     },
@@ -133,10 +133,10 @@ describe("keeper client", () => {
   });
 
   it("rejects RPC endpoints on the wrong chain", async () => {
-    const clientModule = await loadKeeperClient({ rpcChainId: 480 });
+    const clientModule = await loadKeeperClient({ rpcChainId: 31337 });
 
     await expect(clientModule.validateKeeperConnectivity()).rejects.toThrow(
-      "RPC_URL reports chain ID 480, but CHAIN_ID is 4801.",
+      "RPC_URL reports chain ID 31337, but CHAIN_ID is 8453.",
     );
   });
 });
