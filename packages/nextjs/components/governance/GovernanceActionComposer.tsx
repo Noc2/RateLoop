@@ -69,6 +69,7 @@ type GovernanceActionTemplate = {
 };
 
 const TREASURY_GRANT_ACTION_ID = "treasury-grant";
+export const TREASURY_GRANT_TREASURY_CONTRACT_NAME = "ProtocolConfig";
 export const GOVERNANCE_ACTION_QUERY_PARAM = "governanceAction";
 export const CONFIDENTIALITY_SLASH_BOND_ACTION_ID = "confidentiality-slash-bond";
 export const RATER_REGISTRY_BAN_IDENTITY_ACTION_ID = "rater-registry-ban-identity";
@@ -1020,7 +1021,7 @@ export function GovernanceActionComposer() {
   });
 
   const { data: configuredTreasuryAddress } = useScaffoldReadContract({
-    contractName: "ContentRegistry",
+    contractName: TREASURY_GRANT_TREASURY_CONTRACT_NAME,
     functionName: "treasury" as any,
     query: { enabled: isTreasuryGrant },
   });
@@ -1403,7 +1404,7 @@ export function GovernanceActionComposer() {
                   </p>
                   {treasuryAddressMismatch && (
                     <p className="text-base text-warning">
-                      The ContentRegistry treasury address is not the governor timelock. This proposal spends LREP held
+                      The ProtocolConfig treasury address is not the governor timelock. This proposal spends LREP held
                       by the timelock treasury.
                     </p>
                   )}

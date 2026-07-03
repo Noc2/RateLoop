@@ -3,6 +3,7 @@ import {
   ORACLE_TIMING_CONFIG_ACTION_ID,
   RATER_REGISTRY_BAN_IDENTITY_ACTION_ID,
   RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID,
+  TREASURY_GRANT_TREASURY_CONTRACT_NAME,
   getGovernanceActionTemplateSummaries,
   getOracleTimingLaunchBudgetPreview,
   oracleTimingDescriptionReferencesMonitoringEvidence,
@@ -85,6 +86,10 @@ test("governance action composer routes treasury updates through ProtocolConfig"
     ),
     false,
   );
+});
+
+test("governance action composer checks treasury grants against ProtocolConfig", () => {
+  assert.equal(TREASURY_GRANT_TREASURY_CONTRACT_NAME, "ProtocolConfig");
 });
 
 test("governance action composer exposes oracle finality timing with veto window", () => {
