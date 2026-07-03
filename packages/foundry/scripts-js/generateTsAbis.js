@@ -50,7 +50,6 @@ const PROXY_BACKED_DEPLOYMENT_EXPORT_CONTRACTS = [
   "ProfileRegistry",
   "ContentRegistry",
   "RoundVotingEngine",
-  "RoundVotingEngineRbtsSettlementModule",
   "ProtocolConfig",
   "RoundRewardDistributor",
   "QuestionRewardPoolEscrow",

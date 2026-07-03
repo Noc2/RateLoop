@@ -57,8 +57,6 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
   "0x0000000000000000000000000000000000000019": "FeedbackRegistryProxyAdmin",
   "0x000000000000000000000000000000000000001a": "FeedbackBonusEscrowProxyAdmin",
   "0x000000000000000000000000000000000000001b": "RaterRegistryProxyAdmin",
-  "0x0000000000000000000000000000000000000020":
-    "RoundVotingEngineRbtsSettlementModuleProxyAdmin",
   "0x000000000000000000000000000000000000001e":
     "ConfidentialityEscrowProxyAdmin",
   deploymentBlockNumber: "200",
@@ -247,6 +245,28 @@ describe("assertFreshTargetDeployment", () => {
           }
         ),
       /maps proxy-backed contracts to implementation CREATE addresses: RaterRegistry/
+    );
+  });
+
+  test("accepts direct RoundVotingEngineRbtsSettlementModule exports", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+
+    assert.doesNotThrow(() =>
+      assertFreshTargetDeployment(
+        {},
+        {},
+        { 480: REQUIRED_WORLD_CHAIN_EXPORT },
+        { 480: 200 },
+        {},
+        {
+          480: new Map([
+            [
+              "0x000000000000000000000000000000000000001f",
+              "RoundVotingEngineRbtsSettlementModule",
+            ],
+          ]),
+        }
+      )
     );
   });
 
