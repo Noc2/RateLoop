@@ -1,6 +1,6 @@
 [build]
-builder = "RAILPACK"
-buildCommand = "yarn workspace @rateloop/ponder build:workspace-deps"
+builder = "DOCKERFILE"
+dockerfilePath = "packages/ponder/Dockerfile"
 watchPatterns = [
   ".yarn/**",
   ".yarnrc.yml",
@@ -16,6 +16,6 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "NODE_ENV=production yarn workspace @rateloop/ponder start:built-workspace-deps"
-healthcheckPath = "/health"
-healthcheckTimeout = 900
+startCommand = "yarn start:built-workspace-deps"
+healthcheckPath = "/ready"
+healthcheckTimeout = 120

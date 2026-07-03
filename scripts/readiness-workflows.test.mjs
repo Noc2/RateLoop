@@ -108,7 +108,7 @@ test("Railway service start commands, watch patterns, and health checks pin prod
   );
   assert.match(
     ponder,
-    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-workspace-deps"/,
+    /startCommand = "yarn start:built-workspace-deps"/,
   );
   assert.match(keeper, /builder = "DOCKERFILE"/);
   assert.match(keeper, /dockerfilePath = "packages\/keeper\/Dockerfile"/);
@@ -116,15 +116,12 @@ test("Railway service start commands, watch patterns, and health checks pin prod
   assert.doesNotMatch(keeper, /buildCommand/);
   assert.match(keeper, /healthcheckPath = "\/live"/);
   assert.match(keeper, /healthcheckTimeout = 120/);
-  assert.match(ponder, /builder = "RAILPACK"/);
-  assert.match(
-    ponder,
-    /buildCommand = "yarn workspace @rateloop\/ponder build:workspace-deps"/,
-  );
+  assert.match(ponder, /builder = "DOCKERFILE"/);
+  assert.match(ponder, /dockerfilePath = "packages\/ponder\/Dockerfile"/);
   assert.match(ponder, /scripts\/with-workspace-dist-lock\.mjs/);
-  assert.doesNotMatch(ponder, /dockerfilePath/);
-  assert.match(ponder, /healthcheckPath = "\/health"/);
-  assert.match(ponder, /healthcheckTimeout = 900/);
+  assert.doesNotMatch(ponder, /buildCommand/);
+  assert.match(ponder, /healthcheckPath = "\/ready"/);
+  assert.match(ponder, /healthcheckTimeout = 120/);
 });
 
 test("Ponder Docker runtime uses pinned base and production dependencies", () => {
