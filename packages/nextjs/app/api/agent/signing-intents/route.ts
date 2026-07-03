@@ -9,17 +9,12 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
+import { parseOptionalPositiveTtlMs } from "~~/lib/agent/requestTtl";
 import { createAgentSigningIntent } from "~~/lib/agent/signingIntents";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const SIGNING_INTENTS_ROUTE_PATH = "/api/agent/signing-intents";
-
-function readTtlMs(value: unknown) {
-  if (value === undefined || value === null || value === "") return undefined;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
 
 export async function POST(request: NextRequest) {
   return handlePublicAgentRoute({
@@ -39,10 +34,15 @@ export async function POST(request: NextRequest) {
         ? (body as { request?: unknown }).request
         : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "ttlMs"));
 
+      const ttl = parseOptionalPositiveTtlMs((body as { ttlMs?: unknown }).ttlMs);
+      if (!ttl.ok) {
+        return agentRouteErrorResponse(ttl.message, 400);
+      }
+
       return createAgentSigningIntent({
         appBaseUrl,
         requestBody,
-        ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),
+        ttlMs: ttl.ttlMs,
       });
     },
     rateLimit: AGENT_WRITE_RATE_LIMIT,

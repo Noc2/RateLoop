@@ -6,6 +6,7 @@ import {
   AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME,
   verifySignedReadSession,
 } from "~~/lib/auth/signedReadSessions";
+import { isBlankQueryNumber, parseStrictPositiveQueryNumber } from "~~/lib/http/queryNumbers";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -36,12 +37,12 @@ export async function GET(request: NextRequest) {
       return agentRouteErrorResponse("Signed read required", 401);
     }
 
-    // WS-7 (2026-05-21 repo audit): bound and validate the `limit` query parameter so that
-    // `?limit=Infinity`, `?limit=NaN`, or `?limit=-1` don't reach the data layer. Matches the
-    // parseInt + clamp pattern used by sibling routes (frontend/claimable-fees, leaderboard,
-    // agent-callbacks/{deliver,sweep}, etc.).
-    const rawLimit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
-    const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10, 1), 100);
+    const limitParam = request.nextUrl.searchParams.get("limit");
+    const parsedLimit = isBlankQueryNumber(limitParam) ? 10 : parseStrictPositiveQueryNumber(limitParam);
+    if (parsedLimit === null) {
+      return agentRouteErrorResponse("limit must be a positive integer.", 400);
+    }
+    const limit = Math.min(parsedLimit, 100);
     const items = await listAgentAskSummaries({
       ownerWalletAddress: normalized.payload.normalizedAddress,
       policyId,

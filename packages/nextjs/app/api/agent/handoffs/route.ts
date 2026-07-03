@@ -10,6 +10,7 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
+import { parseOptionalPositiveTtlMs } from "~~/lib/agent/requestTtl";
 import { ImageUploadQuotaError } from "~~/lib/attachments/imageAttachments";
 import { resolveRateLimitSubject } from "~~/utils/rateLimit";
 
@@ -17,12 +18,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 const HANDOFFS_ROUTE_PATH = "/api/agent/handoffs";
-
-function readTtlMs(value: unknown) {
-  if (value === undefined || value === null || value === "") return undefined;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
 
 export async function POST(request: NextRequest) {
   return handlePublicAgentRoute({
@@ -47,13 +42,17 @@ export async function POST(request: NextRequest) {
           );
 
       try {
+        const ttl = parseOptionalPositiveTtlMs((body as { ttlMs?: unknown }).ttlMs);
+        if (!ttl.ok) {
+          return agentRouteErrorResponse(ttl.message, 400);
+        }
         return await createAgentAskHandoff({
           appBaseUrl,
           generatedImageUploads: (body as { generatedImageUploads?: unknown }).generatedImageUploads,
           generatedImages: (body as { generatedImages?: unknown }).generatedImages,
           rateLimitSubjectId: resolveRateLimitSubject(request),
           requestBody,
-          ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),
+          ttlMs: ttl.ttlMs,
         });
       } catch (error) {
         if (error instanceof ImageUploadQuotaError) {

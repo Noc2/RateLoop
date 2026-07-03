@@ -7,12 +7,14 @@ import {
   hashAgentPolicyManagementPayload,
   normalizeAgentPolicyManagementInput,
 } from "~~/lib/auth/agentPolicies";
+import { AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME, issueSignedReadSession } from "~~/lib/auth/signedReadSessions";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 type ChallengeRouteModule = typeof import("./challenge/route");
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type PoliciesModule = typeof import("~~/lib/agent/policies");
+type RecentRouteModule = typeof import("./recent/route");
 type SignedActionsModule = typeof import("~~/lib/auth/signedActions");
 type PoliciesRouteModule = typeof import("./route");
 type StatusRouteModule = typeof import("./status/route");
@@ -23,6 +25,7 @@ let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
 let policiesModule: PoliciesModule;
 let policiesRoute: PoliciesRouteModule;
+let recentRoute: RecentRouteModule;
 let signedActions: SignedActionsModule;
 let statusRoute: StatusRouteModule;
 let tokenRoute: TokenRouteModule;
@@ -124,6 +127,7 @@ before(async () => {
 
   challengeRoute = await import("./challenge/route");
   policiesRoute = await import("./route");
+  recentRoute = await import("./recent/route");
   statusRoute = await import("./status/route");
   tokenRoute = await import("./token/route");
 });
@@ -202,4 +206,29 @@ test("agent policy token rotation returns canonical MCP config URL in production
   assert.equal(server?.url, "https://canonical.rateloop.ai/app/api/mcp");
   assert.equal(server?.headers?.Authorization, `Bearer ${body.token}`);
   assert.equal(server?.walletAddress, AGENT_WALLET);
+});
+
+test("agent policy recent route rejects malformed numeric limits", async () => {
+  const session = await issueSignedReadSession(OWNER_WALLET, "agent_policies");
+  const response = await recentRoute.GET(
+    new NextRequest(
+      `https://rateloop.example/api/agent/policies/recent?address=${OWNER_WALLET}&policyId=pol_test&limit=10junk`,
+      {
+        headers: new Headers({
+          cookie: `${AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME}=${session.token}`,
+          "x-real-ip": "203.0.113.10",
+        }),
+        method: "GET",
+      },
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    code: "invalid_arguments",
+    message: "limit must be a positive integer.",
+    recoverWith: "fix_request_and_retry",
+    retryable: false,
+    status: 400,
+  });
 });

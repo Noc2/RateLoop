@@ -1294,6 +1294,24 @@ test("agent signing intent route accepts ttlMs on direct ask bodies without pers
   assert.equal(new Date(String(body.expiresAt)).getTime() - new Date(String(body.createdAt)).getTime(), 300000);
 });
 
+test("agent signing intent route rejects malformed TTLs", async () => {
+  installAskOverrides();
+
+  const response = await signingIntentsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
+      ...questionPayload("signing-intent-invalid-ttl"),
+      maxPaymentAmount: "1500000",
+      signatureMode: "browser_link",
+      ttlMs: "10junk",
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "invalid_arguments");
+  assert.equal(body.message, "ttlMs must be a positive integer.");
+});
+
 test("agent signing intent route redacts webhook secrets from browser responses", async () => {
   installAskOverrides();
 
@@ -1594,6 +1612,25 @@ test("agent ask handoff route reports clamped TTLs", async () => {
   assert.deepEqual(body.warnings, [
     "requested_ttl_clamped: requested ttlMs 7200000 exceeds the maximum 1800000; using 1800000.",
   ]);
+});
+
+test("agent ask handoff route rejects malformed TTLs", async () => {
+  for (const ttlMs of ["10junk", "1.5", "NaN", 0, -1, true, [], {}]) {
+    const response = await handoffsRoute.POST(
+      makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+        request: {
+          ...handoffQuestionPayload(`agent-handoff-invalid-ttl-${typeof ttlMs}`),
+          maxPaymentAmount: "1500000",
+        },
+        ttlMs,
+      }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    assert.equal(response.status, 400, JSON.stringify({ ttlMs, body }));
+    assert.equal(body.code, "invalid_arguments");
+    assert.equal(body.message, "ttlMs must be a positive integer.");
+  }
 });
 
 test("agent ask handoff prepare explains how to recover an expired link", async () => {
