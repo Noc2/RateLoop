@@ -32,9 +32,12 @@ import {
 import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 import { normalizeInferredHeadToHeadAbRequestBody } from "./voteUi";
+import {
+  readOptionalPositiveInteger,
+  type CliOptions,
+  type CliOptionValue,
+} from "./cliOptions";
 
-type CliOptionValue = string | boolean | string[];
-type CliOptions = Record<string, CliOptionValue>;
 const DRY_RUN_WALLET_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 const AGENTS_PACKAGE_PATH_PREFIX = "packages/agents/";
 type AgentsRuntimeConfig = ReturnType<typeof loadAgentsRuntimeConfig>;
@@ -146,22 +149,6 @@ function readStringList(options: CliOptions, ...names: string[]): string[] {
     if (Array.isArray(value)) return value;
     return [];
   });
-}
-
-function readOptionalPositiveInteger(
-  options: CliOptions,
-  name: string,
-): number | undefined {
-  const value = options[name];
-  if (value === undefined) return undefined;
-  if (typeof value !== "string") {
-    throw new Error(`--${name} must be a positive integer`);
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error(`--${name} must be a positive integer`);
-  }
-  return parsed;
 }
 
 function singleValueOptions(
@@ -571,10 +558,7 @@ async function main() {
       const agent = createAgentClient();
       printJson(
         await agent.getQuestionStatus({
-          chainId:
-            typeof options["chain-id"] === "string"
-              ? Number(options["chain-id"])
-              : undefined,
+          chainId: readOptionalPositiveInteger(options, "chain-id"),
           clientRequestId:
             typeof options["client-request-id"] === "string"
               ? options["client-request-id"]
@@ -597,10 +581,7 @@ async function main() {
       const agent = createAgentClient();
       printJson(
         await agent.getResult({
-          chainId:
-            typeof options["chain-id"] === "string"
-              ? Number(options["chain-id"])
-              : undefined,
+          chainId: readOptionalPositiveInteger(options, "chain-id"),
           clientRequestId:
             typeof options["client-request-id"] === "string"
               ? options["client-request-id"]

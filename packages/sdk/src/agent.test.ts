@@ -1345,6 +1345,26 @@ test("getQuestionStatus supports tokenless direct operation and wallet client lo
   assert.equal(byClient.terminal, false);
 });
 
+test("getQuestionStatus rejects invalid direct lookup chain ids", async () => {
+  const requestedUrls: string[] = [];
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrls.push(String(input));
+      return jsonResponse({ ready: false });
+    },
+  });
+
+  for (const chainId of [0, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(
+      agent.getQuestionStatus({ chainId, clientRequestId: "ask-3" }),
+      /chainId must be a positive base-10 safe integer/,
+    );
+  }
+
+  assert.deepEqual(requestedUrls, []);
+});
+
 test("authenticated status, result, and templates use direct agent HTTP endpoints", async () => {
   const requestedUrls: string[] = [];
   const agent = createRateLoopAgentClient({
@@ -1435,6 +1455,27 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   assert.equal(status.terminal, false);
   assert.equal(templateMode, "single_question");
   assert.equal(templates.templates[0]?.bundleStrategy, "independent");
+});
+
+test("getResult rejects invalid direct lookup chain ids", async () => {
+  const requestedUrls: string[] = [];
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    mcpAccessToken: "agent-token",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrls.push(String(input));
+      return jsonResponse({ answer: "pending", ready: false });
+    },
+  });
+
+  for (const chainId of [0, Number.NaN, Number.NEGATIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(
+      agent.getResult({ chainId, clientRequestId: "ask-http" }),
+      /chainId must be a positive base-10 safe integer/,
+    );
+  }
+
+  assert.deepEqual(requestedUrls, []);
 });
 
 test("getResult uses tokenless public result packages when contentId is known", async () => {

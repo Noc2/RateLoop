@@ -1862,14 +1862,15 @@ function agentStatusUrl(
     ).toString();
   }
 
-  if (!params.chainId || !params.clientRequestId) {
+  const chainId = validateLookupChainId(params.chainId);
+  if (!chainId || !params.clientRequestId) {
     throw new RateLoopSdkError(
       "Provide operationKey or both chainId and clientRequestId",
     );
   }
 
   const url = new URL("./asks/by-client-request", `${agentBaseUrl(config)}/`);
-  url.searchParams.set("chainId", String(params.chainId));
+  url.searchParams.set("chainId", String(chainId));
   url.searchParams.set("clientRequestId", params.clientRequestId);
   if (params.walletAddress) {
     url.searchParams.set("walletAddress", params.walletAddress);
@@ -1897,14 +1898,15 @@ function agentResultUrl(
 
   const contentId =
     params.contentId === undefined ? "" : String(params.contentId).trim();
-  if (contentId && (!params.chainId || !params.clientRequestId)) {
+  const chainId = validateLookupChainId(params.chainId);
+  if (contentId && (!chainId || !params.clientRequestId)) {
     return new URL(
       `./results/by-content/${encodeURIComponent(contentId)}`,
       `${agentBaseUrl(config)}/`,
     ).toString();
   }
 
-  if (!params.chainId || !params.clientRequestId) {
+  if (!chainId || !params.clientRequestId) {
     throw new RateLoopSdkError(
       "Provide contentId, operationKey, or both chainId and clientRequestId",
     );
@@ -1914,7 +1916,7 @@ function agentResultUrl(
     "./results/by-client-request",
     `${agentBaseUrl(config)}/`,
   );
-  url.searchParams.set("chainId", String(params.chainId));
+  url.searchParams.set("chainId", String(chainId));
   url.searchParams.set("clientRequestId", params.clientRequestId);
   if (params.walletAddress) {
     url.searchParams.set("walletAddress", params.walletAddress);
@@ -1923,6 +1925,16 @@ function agentResultUrl(
     url.searchParams.set("contentId", contentId);
   }
   return url.toString();
+}
+
+function validateLookupChainId(chainId: number | undefined) {
+  if (chainId === undefined) return undefined;
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new RateLoopSdkError(
+      "chainId must be a positive base-10 safe integer",
+    );
+  }
+  return chainId;
 }
 
 function agentTemplatesUrl(config: NormalizedAgentConfig) {
