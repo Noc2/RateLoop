@@ -29,6 +29,12 @@ import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
+contract MockUnmarkedRbtsSettlementModule {
+    function ping() external pure returns (uint256) {
+        return 1;
+    }
+}
+
 contract MockAdvisoryLaunchDistributionPool {
     RaterRegistry public immutable raterRegistry;
     uint16 public maxUnverifiedCreditsPerRound;
@@ -611,6 +617,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             roundId,
             RoundEngineReadHelpers.commitKeys(engine, contentId, roundId)
         );
+    }
+
+    function test_SetRbtsSettlementModuleRejectsUnmarkedCode() public {
+        MockUnmarkedRbtsSettlementModule unmarked = new MockUnmarkedRbtsSettlementModule();
+
+        vm.prank(owner);
+        vm.expectRevert(RoundVotingEngine.InvalidAddress.selector);
+        engine.setRbtsSettlementModule(address(unmarked));
     }
 
     function _sortedCommitKeys(bytes32[] memory commitKeys) internal pure returns (bytes32[] memory sortedCommitKeys) {

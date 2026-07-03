@@ -1,6 +1,19 @@
 export const RoundVotingEngineRbtsSettlementModuleAbi = [
   {
     "type": "function",
+    "name": "RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "applyRbtsSettlementSnapshot",
     "inputs": [
       {

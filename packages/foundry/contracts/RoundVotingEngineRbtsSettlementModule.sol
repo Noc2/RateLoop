@@ -16,6 +16,8 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
     error UnrevealedPastEpochVotes();
     error SnapshotAvailable();
 
+    bytes32 public constant RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER =
+        keccak256("rateloop.rbts-settlement-module.v1");
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
     uint8 internal constant PAYOUT_DOMAIN_RBTS_SETTLEMENT = 5;
     uint256 internal constant RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT = 1 hours;

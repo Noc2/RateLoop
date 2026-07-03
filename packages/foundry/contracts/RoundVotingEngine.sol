@@ -27,6 +27,10 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { IRoundVotingCommitReveal } from "./interfaces/IRoundVotingCommitReveal.sol";
 import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol";
 
+interface IRbtsSettlementModuleShape {
+    function RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER() external pure returns (bytes32);
+}
+
 /// @title RoundVotingEngine
 /// @notice Per-content round-based commit-reveal voting with keeper-assisted/self-reveal and RBTS settlement.
 /// @dev Flow: commitVote (stores ciphertext hash, drand metadata, and commit hash) → epoch ends → revealVote
@@ -51,6 +55,9 @@ contract RoundVotingEngine is
 {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
+
+    bytes32 internal constant RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER =
+        keccak256("rateloop.rbts-settlement-module.v1");
 
     // --- Custom Errors ---
     error InvalidAddress();
@@ -788,6 +795,11 @@ contract RoundVotingEngine is
 
     function _setRbtsSettlementModule(address module) private {
         if (module == address(0) || module.code.length == 0) revert InvalidAddress();
+        try IRbtsSettlementModuleShape(module).RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER() returns (bytes32 marker) {
+            if (marker != RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
         rbtsSettlementModule = module;
         emit RbtsSettlementModuleUpdated(module);
     }
