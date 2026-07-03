@@ -181,10 +181,10 @@ const AIPage = async () => {
       </p>
       <ol>
         <li>
-          Install the published package helpers when your runtime can run Node:
+          Install the published package helpers when your runtime can run Node 24:
           <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
             <code>{`npm install @rateloop/sdk @rateloop/agents
-npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json`}</code>
+npx rateloop-agents sandbox --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json`}</code>
           </pre>
         </li>
         <li>

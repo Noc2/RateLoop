@@ -161,6 +161,17 @@ test("static agent docs keep no-payment dry-run guidance", () => {
   }
 });
 
+test("public AI docs use published-package example paths and Node 24", () => {
+  const docsAiPage = readFileSync(
+    new URL("../packages/nextjs/app/(public)/docs/ai/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(docsAiPage, /Node 24/);
+  assert.match(docsAiPage, /node_modules\/@rateloop\/agents\/examples\/questions\/landing-pitch-review\.json/);
+  assert.doesNotMatch(docsAiPage, /npx rateloop-agents sandbox --file packages\/agents\/examples/);
+});
+
 test("static agent docs mention optional 16:9 image guidance", () => {
   for (const file of [
     "packages/nextjs/public/docs/ai.md",
@@ -232,6 +243,8 @@ test("historical RBTS entropy report points to the fresh-redeploy posture", () =
 test("fresh redeploy runbooks do not present stale stacks or blockhash pairing as current", () => {
   assert.match(keeperReadme, /owner-directed fresh deployment artifacts/);
   assert.doesNotMatch(keeperReadme, /preserve the existing deployed contract stack/);
+  assert.match(keeperReadme, /settled LREP or USDC bounty rounds/);
+  assert.doesNotMatch(keeperReadme, /settled USDC bounty rounds/);
 
   assert.match(designReview, /historical\/superseded/);
   assert.match(designReview, /fresh redeploy posture.*precommitted reveal entropy/s);
@@ -242,6 +255,8 @@ test("historical use-case snapshot does not label gated AI constraints as curren
   const useCases = activeDocs["docs/use-cases-2026-06.md"];
   assert.match(useCases, /Capability envelope at snapshot time/);
   assert.match(useCases, /Snapshot-time note/);
+  assert.match(useCases, /Adoption blockers that remained at snapshot time/);
+  assert.doesNotMatch(useCases, /still 404 on npm/);
   assert.doesNotMatch(useCases, /Capability envelope \(current\)/);
   assert.doesNotMatch(useCases, /Note: gated\/private-context rounds currently require/);
 });

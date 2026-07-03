@@ -541,6 +541,12 @@ function isTruthyEnvValue(value) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
+function readPayoutFinalityEnv(primaryName, deprecatedAliasName) {
+  const primaryValue = process.env[primaryName]?.trim();
+  if (primaryValue) return primaryValue;
+  return process.env[deprecatedAliasName]?.trim() ?? "";
+}
+
 function isHttpsUrl(value) {
   try {
     return new URL(value).protocol === "https:";
@@ -1267,7 +1273,10 @@ async function validateLivePayoutFinalityBudget({
       ),
     ]);
   const configuredOpsLagBudget = Number(
-    process.env.PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS ?? "",
+    readPayoutFinalityEnv(
+      "KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS",
+      "PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS",
+    ),
   );
   const opsLagBudget = BigInt(
     Number.isFinite(configuredOpsLagBudget) && configuredOpsLagBudget >= 0
@@ -1275,7 +1284,10 @@ async function validateLivePayoutFinalityBudget({
       : DEFAULT_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS,
   );
   const overlapProof = isTruthyEnvValue(
-    process.env.PAYOUT_FINALITY_OVERLAP_PROOF ?? "",
+    readPayoutFinalityEnv(
+      "KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF",
+      "PAYOUT_FINALITY_OVERLAP_PROOF",
+    ),
   );
   const challengeMultiplier = overlapProof ? 1n : 2n;
   const configuredBudget =

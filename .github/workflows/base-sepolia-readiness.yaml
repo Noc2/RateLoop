@@ -16,9 +16,9 @@ on:
         required: false
         default: "false"
       strict_one_shot_feedback_bonus_x402:
-        description: Require one-shot Feedback Bonus x402 readiness after a fresh Base Sepolia redeploy
+        description: Historical compatibility input; stale one-shot Feedback Bonus x402 readiness now fails by default
         required: false
-        default: "false"
+        default: "true"
 
 permissions:
   contents: read
@@ -94,7 +94,4 @@ jobs:
           PONDER_KEEPER_WORK_TOKEN: ${{ secrets.PONDER_KEEPER_WORK_TOKEN }}
         run: |
           args=(--live --require-live-targets)
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.strict_one_shot_feedback_bonus_x402 }}" == "true" ]]; then
-            args+=(--require-one-shot-feedback-bonus-x402)
-          fi
           node scripts/check-base-sepolia-readiness.mjs "${args[@]}"

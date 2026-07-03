@@ -113,14 +113,8 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     liveJob,
     /args=\(--live --require-live-targets\)/,
   );
-  assert.match(
-    liveJob,
-    /github\.event\.inputs\.strict_one_shot_feedback_bonus_x402/,
-  );
-  assert.match(
-    liveJob,
-    /args\+=\(--require-one-shot-feedback-bonus-x402\)/,
-  );
+  assert.doesNotMatch(liveJob, /strict_one_shot_feedback_bonus_x402/);
+  assert.doesNotMatch(liveJob, /--require-one-shot-feedback-bonus-x402/);
   assert.match(
     liveJob,
     /node scripts\/check-base-sepolia-readiness\.mjs "\$\{args\[@\]\}"/,

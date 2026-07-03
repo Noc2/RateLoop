@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  WORLDCHAIN_SEPOLIA_READINESS_RETIRED_NOTICE,
   PONDER_INDEXED_CONTRACTS,
   REQUIRED_ADDRESS_WIRING_CHECKS,
   REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS,
@@ -31,6 +32,21 @@ import {
 } from "./check-base-sepolia-readiness.mjs";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+
+test("retired World Chain Sepolia script directs operators to Base Sepolia readiness", () => {
+  const result = spawnSync(
+    process.execPath,
+    [new URL("check-worldchain-sepolia-readiness.mjs", import.meta.url).pathname],
+    {
+      encoding: "utf8",
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /World Chain Sepolia readiness is retired/i);
+  assert.match(result.stderr, /yarn base-sepolia:check/);
+  assert.match(WORLDCHAIN_SEPOLIA_READINESS_RETIRED_NOTICE, /fresh Base deployment/);
+});
 
 function addressFor(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
@@ -600,7 +616,7 @@ test("validateBaseSepoliaOfflineReadiness accepts a staging app env that targets
   assert.deepEqual(result.failures, []);
 });
 
-test("validateBaseSepoliaOfflineReadiness warns on the known stale x402 submitter", () => {
+test("validateBaseSepoliaOfflineReadiness fails closed on the known stale x402 submitter", () => {
   const staleSubmitter = "0x24AB19e0D8052DEc62bEc59e986e336adc4721F3";
   const deploymentJson = makeDeploymentJson({ networkName: "baseSepolia" });
   const x402Address = buildDeploymentAddressMap(deploymentJson).get(
@@ -624,11 +640,15 @@ test("validateBaseSepoliaOfflineReadiness warns on the known stale x402 submitte
     appEnvSource: "NEXT_PUBLIC_TARGET_NETWORKS=84532\n",
   });
 
-  assert.equal(result.ok, true);
-  assert.match(result.warnings?.[0] ?? "", /known stale staging submitter/);
+  assert.equal(result.ok, false);
+  assert(
+    result.failures.some((message) =>
+      message.includes("one-shot Feedback Bonus x402 submissions remain disabled"),
+    ),
+  );
 });
 
-test("validateBaseSepoliaOfflineReadiness can require one-shot Feedback Bonus x402 support", () => {
+test("validateBaseSepoliaOfflineReadiness allows stale x402 submitter only for historical diagnostics", () => {
   const staleSubmitter = "0x24AB19e0D8052DEc62bEc59e986e336adc4721F3";
   const deploymentJson = makeDeploymentJson({ networkName: "baseSepolia" });
   const x402Address = buildDeploymentAddressMap(deploymentJson).get(
@@ -652,17 +672,11 @@ test("validateBaseSepoliaOfflineReadiness can require one-shot Feedback Bonus x4
         'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
       appEnvSource: "NEXT_PUBLIC_TARGET_NETWORKS=84532\n",
     },
-    { requireOneShotFeedbackBonusX402: true },
+    { allowStaleOneShotFeedbackBonusX402: true },
   );
 
-  assert.equal(result.ok, false);
-  assert(
-    result.failures.some((message) =>
-      message.includes(
-        "one-shot Feedback Bonus x402 submissions remain disabled",
-      ),
-    ),
-  );
+  assert.equal(result.ok, true);
+  assert.match(result.warnings?.[0] ?? "", /known stale staging submitter/);
 });
 
 test("Base Sepolia readiness defaults to the committed staging env fixture", () => {
@@ -887,6 +901,93 @@ test("validateLiveReadiness rejects payout finality budgets above one hour", asy
   }
 });
 
+test("validateLiveReadiness uses keeper-prefixed payout finality env overrides", async () => {
+  const previousOpsLag = process.env.KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS;
+  const previousOverlap = process.env.KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF;
+  const previousLegacyOpsLag = process.env.PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS;
+  const previousLegacyOverlap = process.env.PAYOUT_FINALITY_OVERLAP_PROOF;
+  process.env.KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS = "0";
+  process.env.KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF = "true";
+  delete process.env.PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS;
+  delete process.env.PAYOUT_FINALITY_OVERLAP_PROOF;
+
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const submissionMediaValidatorAddress = addressFor(102);
+  const restoreFetch = mockRpc((method, params) => {
+    if (method === "eth_chainId") return "0x12c1";
+    if (method === "eth_call") {
+      if (
+        params[0].to === contentRegistryAddress &&
+        params[0].data === "0x738dbaa0"
+      ) {
+        return encodeStorageAddress(submissionMediaValidatorAddress);
+      }
+      if (
+        params[0].to === submissionMediaValidatorAddress &&
+        params[0].data === "0xb717bbbd"
+      ) {
+        return encodeStorageAddress(contentRegistryAddress);
+      }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses, {
+        challengeWindowSeconds: 25 * 60,
+        finalizationVetoWindowSeconds: 25 * 60,
+        feeWithdrawalDelaySeconds: 60 * 60,
+        launchPayoutFinalityBudgetSeconds: 60 * 60,
+      });
+      if (timingResult) return timingResult;
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses);
+      if (wiringResult) return wiringResult;
+      throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
+    }
+    if (method === "eth_getStorageAt") {
+      assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
+      return encodeStorageAddress(addressFor(0));
+    }
+    if (method === "eth_getCode") return selectorBytecode();
+    throw new Error(`Unexpected RPC method ${method}`);
+  });
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      rpcUrl: "https://rpc.example",
+    });
+
+    assert.equal(result.ok, true, result.failures.join("\n"));
+    assert(
+      result.checks.some(({ message }) =>
+        message.includes("payout finality budget 3000s <= 3600s")
+          && message.includes("overlapProof=true"),
+      ),
+      result.checks.map(({ message }) => message).join("\n"),
+    );
+  } finally {
+    restoreFetch();
+    if (previousOpsLag === undefined) {
+      delete process.env.KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS;
+    } else {
+      process.env.KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS = previousOpsLag;
+    }
+    if (previousOverlap === undefined) {
+      delete process.env.KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF;
+    } else {
+      process.env.KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF = previousOverlap;
+    }
+    if (previousLegacyOpsLag === undefined) {
+      delete process.env.PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS;
+    } else {
+      process.env.PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS = previousLegacyOpsLag;
+    }
+    if (previousLegacyOverlap === undefined) {
+      delete process.env.PAYOUT_FINALITY_OVERLAP_PROOF;
+    } else {
+      process.env.PAYOUT_FINALITY_OVERLAP_PROOF = previousLegacyOverlap;
+    }
+  }
+});
+
 test("validateLiveReadiness rejects fee withdrawal delays below the dispute window", async () => {
   const deploymentJson = makeDeploymentJson();
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
@@ -1030,7 +1131,6 @@ test("buildReadinessUrl preserves path-prefixed app readiness URLs", () => {
 
 test("readiness scripts print one JSON document when live mode is enabled", () => {
   const scripts = [
-    "scripts/check-worldchain-sepolia-readiness.mjs",
     "scripts/check-base-sepolia-readiness.mjs",
     "scripts/check-base-mainnet-readiness.mjs",
   ];

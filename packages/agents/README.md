@@ -191,7 +191,7 @@ Production asks use Base mainnet (`8453`). Local signer examples should continue
 so generated test wallets stay on testnet assets; public browser-handoff examples may use Base mainnet when they are
 intended to exercise the production handoff service. For Base Sepolia Feedback Bonus staging, use wallet calls for LREP
 or USDC bonuses, including mixed-asset bonus plans; use USDC x402 one-shot bounty plus bonus only after
-`yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
+`yarn base-sepolia:check` passes with the fresh submitter deployment.
 
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.

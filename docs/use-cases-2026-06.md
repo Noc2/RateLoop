@@ -59,7 +59,7 @@ slot ERC-8004 deliberately left open.
 | Rater pool | Humans (World ID-gateable via credential masks) and AI raters (first-class `RaterType`, normal stake+vote, bounty-eligible when eligibility is open). **No AI-only eligibility mask** — pure-AI rounds are achievable socially, not enforced. Legacy contributors seeded as verified humans (supply bootstrap) |
 | Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline and help mitigate visible herding; score-spread forfeits require ≥8 effective score-eligible units; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
 | Liveness/trust | RevealFailed refunds stakes; 24× reveal-failed grace; permissionless settlement/reveal recovery; governed cluster-payout snapshot recovery runbooks; settlement-caller incentive; oracle challenger rewards from slash proceeds |
-| Agent integration | MCP (incl. confidentiality terms tool, audience options, gated context fetch), dry-run sandbox, signed public webhooks, x402-bound asks; SDK/agents packages built **but still 404 on npm** |
+| Agent integration | MCP (incl. confidentiality terms tool, audience options, gated context fetch), dry-run sandbox, signed public webhooks, x402-bound asks. **Snapshot-time note:** SDK/agents packages were built but not yet public on npm when this report was written; current package status should be checked before treating that as a launch blocker. |
 
 ## Use cases (re-ranked)
 
@@ -261,8 +261,8 @@ the channel (MCP + x402 directories); 2 and 6 additionally ride the agent-econom
   4,400 buyers on the Bazaar); rating rounds are the ideal agent micro-job shape. Legacy
   contributors seeded as verified humans bootstrap the human pool. BTS + stakes must make
   cheap-wrapper farming unprofitable — that's working as designed.
-- **Adoption blockers that remain:** `@rateloop/sdk` / `@rateloop/agents` still 404 on npm
-  (built, release-prepped, unpublished — ship it); no gated bundles; confidentiality log-root
+- **Adoption blockers that remained at snapshot time:** `@rateloop/sdk` / `@rateloop/agents` were not yet public on npm
+  (built, release-prepped, unpublished at the time — re-check current package status); no gated bundles; confidentiality log-root
   anchors still need mainnet key/role verification; no supply-side audience matching notifications.
 
 ## Suggested sequencing
