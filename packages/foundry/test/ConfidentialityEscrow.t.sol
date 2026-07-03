@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
 import { ConfidentialityEscrow } from "../contracts/ConfidentialityEscrow.sol";
@@ -918,7 +919,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
     }
 
-    function testReleaseBondAllowsMaturedBondWhilePaused() public {
+    function testReleaseBondBlocksMaturedBondWhilePaused() public {
         uint256 contentId = _submitGatedQuestion("paused-release", 1e6);
         bytes32 identityKey = _postLrepBond(contentId, voter1);
 
@@ -931,6 +932,13 @@ contract ConfidentialityEscrowTest is VotingTestBase {
 
         vm.prank(owner);
         confidentialityEscrow.setPaused(true);
+
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertTrue(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+
+        vm.prank(owner);
+        confidentialityEscrow.setPaused(false);
 
         uint256 beforeBalance = lrepToken.balanceOf(voter1);
         confidentialityEscrow.releaseBond(contentId, identityKey);
