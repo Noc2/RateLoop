@@ -1,6 +1,7 @@
 import {
   buildClaimableQuestionRewardCandidateVoters,
   getClaimableQuestionRewardsQueryKey,
+  getQuestionBundleRewardClaimCandidateKey,
   getQuestionRewardAsset,
 } from "./useClaimableQuestionRewards";
 import assert from "node:assert/strict";
@@ -47,6 +48,50 @@ test("getClaimableQuestionRewardsQueryKey scopes linked claim discovery by deplo
   assert.deepEqual(
     getClaimableQuestionRewardsQueryKey(["0xabcdef0000000000000000000000000000000001"], 8453, "base-mainnet"),
     ["claimableQuestionRewards", "0xabcdef0000000000000000000000000000000001", 8453, "base-mainnet"],
+  );
+});
+
+test("getQuestionBundleRewardClaimCandidateKey keeps identity-scoped bundle rows distinct", () => {
+  assert.notEqual(
+    getQuestionBundleRewardClaimCandidateKey({
+      bundleId: "1",
+      roundSetIndex: 0,
+      identityKey: "0x1111000000000000000000000000000000000000000000000000000000000000",
+      identityHolder: "0xABCDEF0000000000000000000000000000000001",
+      payoutWeight: null,
+    }),
+    getQuestionBundleRewardClaimCandidateKey({
+      bundleId: "1",
+      roundSetIndex: 0,
+      identityKey: "0x2222000000000000000000000000000000000000000000000000000000000000",
+      identityHolder: "0xabcdef0000000000000000000000000000000002",
+      payoutWeight: null,
+    }),
+  );
+});
+
+test("getQuestionBundleRewardClaimCandidateKey falls back to payout proof identity fields", () => {
+  assert.equal(
+    getQuestionBundleRewardClaimCandidateKey({
+      bundleId: "2",
+      roundSetIndex: 1,
+      identityKey: null,
+      identityHolder: null,
+      payoutWeight: {
+        domain: 2,
+        rewardPoolId: "2",
+        contentId: "2",
+        roundId: "2",
+        commitKey: "0x3333000000000000000000000000000000000000000000000000000000000000",
+        identityKey: "0x4444000000000000000000000000000000000000000000000000000000000000",
+        account: "0xABCDEF0000000000000000000000000000000003",
+        baseWeight: "10",
+        independenceBps: 10000,
+        effectiveWeight: "10",
+        reasonHash: "0x5555000000000000000000000000000000000000000000000000000000000000",
+      },
+    }),
+    "2-1-0x4444000000000000000000000000000000000000000000000000000000000000-0xabcdef0000000000000000000000000000000003",
   );
 });
 

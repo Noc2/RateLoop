@@ -940,6 +940,8 @@ export interface PonderQuestionBundleRewardClaimCandidate {
   payoutWeightRoot?: `0x${string}` | null;
   payoutArtifactUri?: string | null;
   roundSetClaimedAmount: string;
+  identityKey?: `0x${string}` | null;
+  identityHolder?: `0x${string}` | null;
   requiredCompleters: number;
   requiredSettledRounds: number;
   questionCount: number;

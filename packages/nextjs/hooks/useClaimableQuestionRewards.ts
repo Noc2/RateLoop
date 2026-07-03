@@ -65,6 +65,26 @@ export function getQuestionRewardAsset(candidate: { asset?: number | null; curre
   return candidate.currency === "LREP" || candidate.asset === 0 ? ("LREP" as const) : ("USDC" as const);
 }
 
+function normalizeClaimCandidateKeyPart(value: string | null | undefined) {
+  return value?.toLowerCase() ?? "";
+}
+
+export function getQuestionBundleRewardClaimCandidateKey(
+  candidate: Pick<
+    PonderQuestionBundleRewardClaimCandidate,
+    "bundleId" | "roundSetIndex" | "identityKey" | "identityHolder" | "payoutWeight"
+  >,
+) {
+  const identityKey = candidate.identityKey ?? candidate.payoutWeight?.identityKey;
+  const identityHolder = candidate.identityHolder ?? candidate.payoutWeight?.account;
+  return [
+    candidate.bundleId,
+    candidate.roundSetIndex,
+    normalizeClaimCandidateKeyPart(identityKey),
+    normalizeClaimCandidateKeyPart(identityHolder),
+  ].join("-");
+}
+
 function buildPayoutWeight(
   payoutWeight?:
     | PonderQuestionRewardClaimCandidate["payoutWeight"]
@@ -169,7 +189,7 @@ export function useClaimableQuestionRewards() {
       );
       const seen = new Set<string>();
       return pages.flat().filter(candidate => {
-        const key = `${candidate.bundleId}-${candidate.roundSetIndex}`;
+        const key = getQuestionBundleRewardClaimCandidateKey(candidate);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
