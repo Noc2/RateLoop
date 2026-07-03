@@ -222,6 +222,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(cachedSnapshotRejected, "Snapshot not rejected");
 
         uint256 allocationToReturn = snapshot.allocation;
+        uint32 rawEligibleVoters = snapshot.rawEligibleVoters;
         rewardPool.unallocatedAmount += allocationToReturn;
         require(rewardPool.qualifiedRounds > 0, "No qualified rounds");
         require(rewardPool.pendingRecoveredRounds < type(uint32).max, "Too many recovered rounds");
@@ -231,6 +232,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         }
         delete roundSnapshots[rewardPoolId][roundId];
         roundSnapshots[rewardPoolId][roundId].allocation = allocationToReturn;
+        roundSnapshots[rewardPoolId][roundId].rawEligibleVoters = rawEligibleVoters;
         rejectedRecoveredRound[rewardPoolId][roundId] = true;
 
         emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);
@@ -255,6 +257,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
         require(rejectedRecoveredRound[rewardPoolId][roundId], "Round not recovered");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round already qualified");
+        require(!reopenedRecoveredRound[rewardPoolId][roundId], "Round already reopened");
         require(roundId < rewardPool.nextRoundToEvaluate, "Cursor not advanced");
 
         address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
@@ -274,7 +277,9 @@ library QuestionRewardPoolEscrowRecoveryLib {
                 == address(this),
             "Cluster consumer mismatch"
         );
-        (,,, uint48 sourceReadyAt) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
+            votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        require(cleanupRemaining == 0, "Cleanup pending");
         require(sourceReadyAt != 0, "Cluster source pending");
         uint64 proposedAt =
             oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
@@ -283,6 +288,19 @@ library QuestionRewardPoolEscrowRecoveryLib {
         bytes32 newSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         require(!oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, newSnapshotDigest), "Snapshot payload rejected");
         require(!oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, newSnapshot.weightRoot), "Snapshot root rejected");
+
+        RoundSnapshot storage recoveredSnapshot = roundSnapshots[rewardPoolId][roundId];
+        require(newSnapshot.rawEligibleVoters == recoveredSnapshot.rawEligibleVoters, "Cluster snapshot mismatch");
+        uint256 minEffectiveUnits = rewardPool.requiredVoters > 3 ? rewardPool.requiredVoters : 3;
+        uint256 effectiveParticipantUnits = newSnapshot.effectiveParticipantUnits;
+        require(
+            recoveredSnapshot.rawEligibleVoters >= rewardPool.requiredVoters
+                && effectiveParticipantUnits >= minEffectiveUnits * 10_000 && newSnapshot.totalClaimWeight > 0,
+            "Replacement not qualifiable"
+        );
+        uint256 recoveredAllocation = recoveredSnapshot.allocation;
+        require(recoveredAllocation > 0 && recoveredAllocation <= rewardPool.unallocatedAmount, "No allocation");
+        require(recoveredAllocation >= effectiveParticipantUnits, "Small allocation");
 
         if (roundId + 1 == rewardPool.nextRoundToEvaluate) {
             rewardPool.nextRoundToEvaluate = uint64(roundId);

@@ -1048,8 +1048,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (!_isBundleRoundSetComplete(bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex)) {
             return false;
         }
-        bool preQualificationSkipped =
-            bundleRoundSetSnapshots[bundleId][roundSetIndex].clusterSnapshotDigest != bytes32(0);
+        BundleRoundSetSnapshot storage roundSetSnapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
+        bool preQualificationSkipped = roundSetSnapshot.clusterSnapshotDigest != bytes32(0)
+            || roundSetSnapshot.preQualificationSnapshotlessSkipped;
         qualificationPending = _qualifyBundleRoundSet(
             bundleRewards,
             bundleQuestions,
@@ -1146,11 +1147,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 payoutDomain
             );
             if (!snapshotReady) {
+                IClusterPayoutOracle.SnapshotStatus snapshotStatus =
+                    _bundlePayoutSnapshotStatus(bundleRewardClusterPayoutOracle, bundleId, roundSetIndex, payoutDomain);
                 if (
                     preQualificationSkipped
-                        && _bundlePayoutSnapshotStatus(
-                                bundleRewardClusterPayoutOracle, bundleId, roundSetIndex, payoutDomain
-                            ) == IClusterPayoutOracle.SnapshotStatus.Rejected
+                        && (snapshotStatus == IClusterPayoutOracle.SnapshotStatus.None
+                            || snapshotStatus == IClusterPayoutOracle.SnapshotStatus.Rejected)
                 ) {
                     return false;
                 }
@@ -1230,7 +1232,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             frontendFeeClaimedAmount: 0,
             firstClaimPaid: false,
             clusterWeightRoot: clusterWeightRoot,
-            clusterSnapshotDigest: clusterSnapshotDigest
+            clusterSnapshotDigest: clusterSnapshotDigest,
+            preQualificationSnapshotlessSkipped: false
         });
         _markBundleRoundSetCompleters(
             bundleQuestions,

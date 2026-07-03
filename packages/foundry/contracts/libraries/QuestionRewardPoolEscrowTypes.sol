@@ -124,6 +124,7 @@ struct BundleRoundSetSnapshot {
     bool firstClaimPaid;
     bytes32 clusterWeightRoot;
     bytes32 clusterSnapshotDigest;
+    bool preQualificationSnapshotlessSkipped;
 }
 
 /// @dev Caller-supplied params for `QuestionRewardPoolEscrowPoolActionsLib.createRewardPool`.

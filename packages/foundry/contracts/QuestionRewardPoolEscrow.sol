@@ -355,9 +355,9 @@ contract QuestionRewardPoolEscrow is
         uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        require(msg.sender == address(registry), "Only registry");
+        require(msg.sender == address(registry));
         _requireCurrentRegistryEscrow();
-        require(funder != address(0), "Invalid funder");
+        require(funder != address(0));
         rewardPoolId = _createRewardPool(
             contentId,
             funder,
@@ -385,9 +385,9 @@ contract QuestionRewardPoolEscrow is
         uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        require(msg.sender == address(registry), "Only registry");
+        require(msg.sender == address(registry));
         _requireCurrentRegistryEscrow();
-        require(funder != address(0), "Invalid funder");
+        require(funder != address(0));
 
         CreateSubmissionBundleParams memory params = CreateSubmissionBundleParams({
             bundleId: bundleId,
@@ -934,7 +934,7 @@ contract QuestionRewardPoolEscrow is
         // try/catch during settlement, so a paused escrow would silently swallow the terminal
         // signal with no retry path, permanently locking bundle claims. Caller is restricted
         // to the voting engine, which is already a trusted state machine.
-        require(msg.sender == address(votingEngine), "Only engine");
+        require(msg.sender == address(votingEngine));
         QuestionRewardPoolEscrowBundleActionsLib.recordBundleQuestionTerminal(
             bundleRewards,
             bundleQuestionRecordedRounds,

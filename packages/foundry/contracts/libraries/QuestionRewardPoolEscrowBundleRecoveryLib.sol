@@ -50,7 +50,10 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         require(roundSetIndex < bundle.requiredSettledRounds, "Invalid round set");
         BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
         require(!snapshot.qualified, "Round set qualified");
-        require(snapshot.clusterSnapshotDigest == bytes32(0), "Round set already skipped");
+        require(
+            snapshot.clusterSnapshotDigest == bytes32(0) && !snapshot.preQualificationSnapshotlessSkipped,
+            "Round set already skipped"
+        );
         require(
             QuestionRewardPoolEscrowBundleLib.isRoundSetComplete(
                 bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex
@@ -58,7 +61,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             "Round set incomplete"
         );
 
-        (bytes32 snapshotDigest, bytes32 weightRoot) = _requireRejectedPreQualificationBundleSnapshot(
+        (bytes32 snapshotDigest, bytes32 weightRoot) = _requireRejectedOrMissingPreQualificationBundleSnapshot(
             bundleQuestions,
             bundleRoundIds,
             bundleRewardClusterPayoutOracle,
@@ -71,6 +74,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
 
         snapshot.clusterSnapshotDigest = snapshotDigest;
         snapshot.clusterWeightRoot = weightRoot;
+        snapshot.preQualificationSnapshotlessSkipped = snapshotDigest == bytes32(0);
 
         emit PreQualificationRejectedSnapshotBundleRoundSetSkipped(bundleId, roundSetIndex, snapshotDigest, weightRoot);
     }
@@ -431,7 +435,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         }
     }
 
-    function _requireRejectedPreQualificationBundleSnapshot(
+    function _requireRejectedOrMissingPreQualificationBundleSnapshot(
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
@@ -451,6 +455,12 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
 
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
         uint256 snapshotRoundId = _bundleSnapshotRoundId(roundSetIndex);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        if (proposedAt == 0) {
+            require(oracle.roundPayoutSnapshotConsumer(payoutDomain) == address(this), "Cluster consumer mismatch");
+            return (bytes32(0), bytes32(0));
+        }
+
         IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot =
             oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId);
         require(oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected, "Snapshot not rejected");
@@ -458,7 +468,6 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId) == address(this),
             "Cluster consumer mismatch"
         );
-        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
         require(proposedAt >= sourceReadyAt && proposedAt >= pinnedAt, "Cluster source stale");
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, bundleId, bundleId, snapshotRoundId);
