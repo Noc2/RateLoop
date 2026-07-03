@@ -139,7 +139,7 @@ For local files, prefer the file-backed CLI path so image bytes never pass throu
 
 ```bash
 yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
-# Repeat --image for up to four generated/local images.
+# Repeat --image for up to four generated/local images on a single-question handoff.
 ```
 
 For larger local files, the CLI creates the handoff from image metadata first and then uploads the file bytes through a
@@ -276,6 +276,7 @@ low final rating should be interpreted.
 - `agent_trace_review`
 - `proposal_review`
 - `pairwise_output_preference`
+- `head_to_head_ab`
 
 Next.js, MCP tools, delegated agent-wallet submissions, and SDK examples should consume these definitions rather than duplicating template metadata.
 
