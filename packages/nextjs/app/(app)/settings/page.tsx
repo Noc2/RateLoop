@@ -53,7 +53,7 @@ function parseSettingsTab(value: string | null): SettingsTab | null {
 }
 
 function getSettingsHash(tab: SettingsTab) {
-  return tab === "notifications" ? "" : `#${tab}`;
+  return tab === "wallet" ? "" : `#${tab}`;
 }
 
 function buildSettingsTabUrl(pathname: string, searchParams: URLSearchParams, tab: SettingsTab) {

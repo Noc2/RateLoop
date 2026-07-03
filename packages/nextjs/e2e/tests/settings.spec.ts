@@ -26,7 +26,15 @@ test.describe("Settings page", () => {
 
     await waitForSettingsHeading(page, "Gas And Wallet Funding");
     await expectActiveSettingsTab(page, "Wallet");
-    await expect(page).toHaveURL(/\/settings(?:#wallet)?$/);
+    await expect(page).toHaveURL(/\/settings$/);
+  });
+
+  test("notification query canonically opens the notification tab", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/settings?tab=notifications");
+
+    await waitForSettingsHeading(page, /Notification settings/i);
+    await expectActiveSettingsTab(page, "Notifications");
+    await expect(page).toHaveURL(/\/settings#notifications$/);
   });
 
   test("wallet tab can transfer LREP to another address", async ({ connectedPage: page }) => {
@@ -68,7 +76,7 @@ test.describe("Settings page", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
     await gotoWithRetry(page, "/settings#wallet", { ensureWalletConnected: true });
 
-    await expect(page).toHaveURL(/\/settings#wallet$/);
+    await expect(page).toHaveURL(/\/settings$/);
     await expectActiveSettingsTab(page, "Wallet");
     await waitForSettingsHeading(page, "Rater credential required for delegation");
     await expect(page.getByText("Delegation is only available", { exact: false })).toHaveCount(0);
@@ -91,7 +99,7 @@ test.describe("Settings page", () => {
 
     await waitForSettingsHeading(page, "Gas And Wallet Funding");
     await expectActiveSettingsTab(page, "Wallet");
-    await expect(page).toHaveURL(/\/settings#wallet$/);
+    await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByTestId("wallet-snapshot-address")).toHaveText(ANVIL_ACCOUNTS.account2.address);
     await expect(page.getByTestId("wallet-snapshot-eth")).toContainText("ETH");
     await expect(page.getByTestId("wallet-snapshot-lrep")).toContainText("LREP");
