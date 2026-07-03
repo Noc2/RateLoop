@@ -236,8 +236,9 @@ abstract contract SecondPassAuditRegressionBase is VotingTestBase {
     function _newEligibleClusterPayoutOracle() internal returns (ClusterPayoutOracle oracle) {
         _ensureOracleFrontendRegistered();
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
+        bytes32 disputeRecorderRole = frontendRegistry.SNAPSHOT_DISPUTE_RECORDER_ROLE();
         vm.prank(owner);
-        frontendRegistry.grantRole(frontendRegistry.SNAPSHOT_DISPUTE_RECORDER_ROLE(), address(oracle));
+        frontendRegistry.grantRole(disputeRecorderRole, address(oracle));
     }
 
     function _ensureOracleFrontendRegistered() internal {
