@@ -183,8 +183,9 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         );
         assertEq(replacementKey, snapshotKey);
         bytes32[][] memory proofs = _merkleProofs(leaves);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(replacementKey);
-        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory replacementSnapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        vm.warp(uint256(replacementSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
 
         registry.applyRatingPayoutSnapshot(contentId, roundId, weights, proofs);
         assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
@@ -202,8 +203,9 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
             oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(weights), _merkleRoot(leaves)
         );
         bytes32[][] memory proofs = _merkleProofs(leaves);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        vm.warp(uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
 
         vm.recordLogs();
         registry.applyRatingPayoutSnapshot(contentId, roundId, weights, proofs);
@@ -250,7 +252,7 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
     ) internal returns (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[][] memory proofs) {
         bytes32[] memory leaves;
         (payoutWeights, leaves) = _publicRatingPayoutLeaves(oracle, contentId, roundId, commitCount);
-        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+        _finalizePublicRatingPayoutSnapshotWithRoot(
             oracle,
             contentId,
             roundId,
@@ -261,8 +263,9 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         );
         proofs = _merkleProofs(leaves);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        vm.warp(uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
     }
 
     function _finalizePublicRatingPayoutSnapshotWithRoot(
@@ -326,8 +329,9 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
             })
         );
         snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt =
+            oracle.roundPayoutSnapshotProposedAt(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 

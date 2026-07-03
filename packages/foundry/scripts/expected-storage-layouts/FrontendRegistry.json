@@ -111,6 +111,12 @@
     {
       "slot": 17,
       "offset": 0,
+      "label": "openSnapshotDisputeCount",
+      "type": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "slot": 18,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -132,8 +138,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[37]",
-      "numberOfBytes": "1184",
+      "label": "uint256[36]",
+      "numberOfBytes": "1152",
       "base": "t_uint256"
     },
     {

@@ -1792,8 +1792,8 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(5, 0, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(5, 0, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
         vm.warp(block.timestamp + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
         return _testMerkleProofs(leaves);

@@ -110,6 +110,19 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "SNAPSHOT_DISPUTE_RECORDER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "STAKE_AMOUNT",
     "inputs": [],
     "outputs": [
@@ -574,6 +587,25 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "hasOpenSnapshotDispute",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "hasRole",
     "inputs": [
       {
@@ -727,6 +759,25 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "openSnapshotDisputeCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pendingFeeWithdrawalAmount",
     "inputs": [
       {
@@ -762,6 +813,32 @@ export const FrontendRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "recordSnapshotDisputeClosed",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recordSnapshotDisputeOpened",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1412,6 +1489,56 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "SnapshotDisputeClosed",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "recorder",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "openDisputes",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SnapshotDisputeOpened",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "recorder",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "openDisputes",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "SnapshotProposerUpdated",
     "inputs": [
       {
@@ -1486,7 +1613,17 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidFrontend",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoOpenSnapshotDispute",
     "inputs": []
   },
   {
@@ -1525,5 +1662,10 @@ export const FrontendRegistryAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "SnapshotDisputeActive",
+    "inputs": []
   }
 ] as const;

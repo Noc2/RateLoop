@@ -77,7 +77,8 @@ contract SecondPassRbtsSettlementOracleTest is SecondPassAuditRegressionBase {
         uint256 contentId = _submitQuestion("rbts-pre-finalized-parent-rejected-snapshot");
         uint256 roundId = _moveRoundToRbtsSettlementPending(contentId);
         bytes32 snapshotKey = _proposeMalformedRbtsSnapshot(oracle, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId);
 
         vm.warp(block.timestamp + 1 hours);
 
@@ -86,7 +87,7 @@ contract SecondPassRbtsSettlementOracleTest is SecondPassAuditRegressionBase {
         vm.expectRevert(RoundVotingEngineRbtsSettlementModule.SnapshotAvailable.selector);
         votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
 
-        oracle.rejectCorrelationEpoch(proposal.snapshot.correlationEpochId, keccak256("wrong-rbts-parent"));
+        oracle.rejectCorrelationEpoch(snapshot.correlationEpochId, keccak256("wrong-rbts-parent"));
         uint64 parentRejectedAt = oracle.roundPayoutSnapshotCorrelationEpochRejectedAt(snapshotKey);
         assertEq(parentRejectedAt, block.timestamp);
 
@@ -154,10 +155,13 @@ contract SecondPassRbtsSettlementOracleTest is SecondPassAuditRegressionBase {
         returns (bytes32 snapshotKey, uint64 correlationEpochId)
     {
         snapshotKey = _proposeMalformedRbtsSnapshot(oracle, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        correlationEpochId = proposal.snapshot.correlationEpochId;
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId);
+        correlationEpochId = snapshot.correlationEpochId;
 
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt =
+            oracle.roundPayoutSnapshotProposedAt(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeCorrelationEpoch(correlationEpochId);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }

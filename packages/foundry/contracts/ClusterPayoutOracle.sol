@@ -33,8 +33,8 @@ interface IRbtsSettlementSnapshotConsumerView {
 ///      USDC/LREP payouts and delayed public rating updates. The oracle is
 ///      intentionally not a fully per-snapshot economically secured oracle: proposers are accountable through the
 ///      FrontendRegistry's global LREP bond, public artifacts, challenge windows, governance arbitration, slashing,
-///      reputation, and fee loss while fees remain escrowed or withdrawal-pending. Challenge bonds are a USDC anti-spam
-///      mechanism.
+///      reputation, future-fee loss, and fee loss while fees remain accrued, withdrawal-pending, or frozen by an active
+///      challenge. Challenge bonds are a USDC anti-spam mechanism.
 contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -115,7 +115,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         address frontendOperator;
         address challenger;
         bytes32 artifactHash;
-        string artifactURI;
+        bytes32 artifactUriHash;
         // Accumulates challenge bonds posted against this proposal (paid out to proposer on
         // dismissal, to challenger on rejection). Zero after finalize / reject.
         uint256 bond;
@@ -139,8 +139,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(uint256 => bytes32) public correlationEpochSourceSetDigest;
     mapping(uint256 => mapping(bytes32 => bytes32)) public correlationEpochSnapshotCoverageDigest;
     mapping(address => uint256) public pendingBondWithdrawals;
-    /// @notice Active challenged snapshots keyed by accountable frontend operator.
-    mapping(address => uint256) public openDisputeCount;
     /// @notice Exact rejected round-payout proposal payloads. Used when the arbiter rejects bad
     ///         metadata around a deterministic weightRoot without burning the root itself.
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
@@ -448,7 +446,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (wasChallenged) {
             _recordSnapshotDisputeClosed(snapshot.frontendOperator);
         }
-        _rejectLiveRoundPayoutSnapshotsForRejectedEpoch(epochId, correlationEpochDigest);
         // Metadata-only rejection clears bad surrounding fields without burning the deterministic
         // root. The explicit root path is reserved for invalid scorer output.
         if (rejectRoot) {
@@ -485,7 +482,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
         snapshot.status = SnapshotStatus.Rejected;
         _markCorrelationEpochSnapshotRejected(epochId, correlationEpochDigest);
-        _rejectLiveRoundPayoutSnapshotsForRejectedEpoch(epochId, correlationEpochDigest);
         if (rejectRoot) {
             _rejectCorrelationEpochRoot(snapshot);
         }
@@ -580,7 +576,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             frontendOperator: frontendOperator,
             challenger: address(0),
             artifactHash: input.artifactHash,
-            artifactURI: input.artifactURI,
+            artifactUriHash: keccak256(bytes(input.artifactURI)),
             bond: 0,
             challengeBondAtProposal: challengeBond,
             correlationEpochDigest: correlationEpochDigest,
@@ -820,10 +816,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return _correlationEpochDigest(snapshot);
     }
 
-    function hasOpenDispute(address frontendOperator) external view returns (bool) {
-        return openDisputeCount[frontendOperator] > 0;
-    }
-
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         public
         pure
@@ -943,10 +935,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return _roundPayoutSnapshotProposalDigest(proposal);
     }
 
-    function roundPayoutProposal(bytes32 snapshotKey) external view returns (RoundPayoutProposal memory) {
-        return roundPayoutProposals[snapshotKey];
-    }
-
     function verifyPayoutWeight(PayoutWeight calldata payout, bytes32[] calldata proof) external view returns (bool) {
         bytes32 snapshotKey =
             roundPayoutSnapshotKey(payout.domain, payout.rewardPoolId, payout.contentId, payout.roundId);
@@ -1026,7 +1014,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             snapshot.weightRoot,
             snapshot.reasonRoot,
             proposal.artifactHash,
-            keccak256(bytes(proposal.artifactURI)),
+            proposal.artifactUriHash,
             proposal.correlationEpochDigest
         );
     }
@@ -1042,25 +1030,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             ) {
                 (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(proposal);
                 if (consumedKnown && consumed) revert SnapshotConsumed();
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _rejectLiveRoundPayoutSnapshotsForRejectedEpoch(uint64 epochId, bytes32 correlationEpochDigest) private {
-        bytes32[] storage snapshotKeys = correlationEpochSnapshotKeys[epochId];
-        uint256 length = snapshotKeys.length;
-        for (uint256 i; i < length;) {
-            bytes32 snapshotKey = snapshotKeys[i];
-            RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
-            if (
-                proposal.snapshot.correlationEpochId == epochId
-                    && proposal.correlationEpochDigest == correlationEpochDigest
-                    && _isUnfinalizedRoundPayoutStatus(proposal.snapshot.status)
-            ) {
-                _rejectStaleRoundPayoutSnapshot(snapshotKey, proposal);
             }
             unchecked {
                 ++i;
@@ -1361,10 +1330,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 || status == SnapshotStatus.Finalized;
     }
 
-    function _isUnfinalizedRoundPayoutStatus(SnapshotStatus status) private pure returns (bool) {
-        return status == SnapshotStatus.Proposed || status == SnapshotStatus.Challenged;
-    }
-
     function _correlationEpochDigest(CorrelationEpochSnapshot storage snapshot) private view returns (bytes32) {
         return _correlationEpochDigest(
             snapshot.epochId,
@@ -1431,17 +1396,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     function _recordSnapshotDisputeOpened(address frontendOperator) private {
-        openDisputeCount[frontendOperator] += 1;
         frontendRegistry.recordSnapshotDisputeOpened(frontendOperator);
     }
 
     function _recordSnapshotDisputeClosed(address frontendOperator) private {
-        uint256 openDisputes = openDisputeCount[frontendOperator];
-        if (openDisputes == 0) revert InvalidSnapshot();
-        unchecked {
-            openDisputes -= 1;
-        }
-        openDisputeCount[frontendOperator] = openDisputes;
         frontendRegistry.recordSnapshotDisputeClosed(frontendOperator);
     }
 

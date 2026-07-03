@@ -3710,13 +3710,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) =
             _publicRatingPayoutLeaves(oracle, contentId, roundId, 3);
-        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+        _finalizePublicRatingPayoutSnapshotWithRoot(
             oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(payoutWeights), _merkleRoot(leaves)
         );
         bytes32[][] memory proofs = _merkleProofs(leaves);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        bytes32 snapshotKey = snapshot.snapshotKey;
 
-        uint256 vetoDeadline = uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
+        uint256 vetoDeadline = uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
         vm.warp(vetoDeadline - 1);
         vm.expectRevert();
         registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
@@ -3741,7 +3743,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(payoutWeights), _merkleRoot(leaves)
         );
         bytes32[][] memory proofs = _merkleProofs(leaves);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
 
         ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
         replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
@@ -3760,7 +3763,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(replacementOracle));
 
-        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        vm.warp(uint256(snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
         registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
         assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
     }
@@ -4760,8 +4763,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 artifactURI: "ipfs://round-same-root-corrected"
             })
         );
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(1, rewardPoolId, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         bytes32[] memory proof = new bytes32[](0);
@@ -4812,8 +4815,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 artifactURI: "ipfs://round-corrected"
             });
         oracle.proposeRoundPayoutSnapshot(correctedInput);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(1, rewardPoolId, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
         _warpPastQuestionRewardSnapshotVeto(oracle, rewardPoolId, contentId, roundId);
 
@@ -7458,8 +7461,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(1, rewardPoolId, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
@@ -7528,8 +7531,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(1, rewardPoolId, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
@@ -7573,8 +7576,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             })
         );
         snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt =
+            oracle.roundPayoutSnapshotProposedAt(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
@@ -7681,8 +7685,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, snapshotRoundId
         );
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(
+            oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, snapshotRoundId
+        );
+        vm.warp(uint256(proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 

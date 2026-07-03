@@ -3182,8 +3182,8 @@ contract LaunchDistributionPoolTest is Test {
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposal.proposedAt) + 2);
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId);
+        vm.warp(uint256(proposedAt) + 2);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 

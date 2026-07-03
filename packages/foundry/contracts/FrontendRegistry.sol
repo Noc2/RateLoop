@@ -60,8 +60,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     uint256 public constant UNBONDING_PERIOD = 14 days;
 
     /// @notice Launch delay between requesting a fee withdrawal and the LREP leaving the registry.
-    /// @dev Earned operator fees stay slashable during this short review buffer. The longer
-    ///      14-day `UNBONDING_PERIOD` still applies to voluntary frontend stake exits.
+    /// @dev Earned operator fees stay slashable during this short review buffer, and completion
+    ///      stays blocked while an authorized oracle reports an active challenged payout snapshot.
+    ///      The longer 14-day `UNBONDING_PERIOD` still applies to voluntary frontend stake exits.
     uint256 public constant FEE_WITHDRAWAL_DELAY = 1 hours;
 
     // --- Structs ---
@@ -97,7 +98,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => address) public feeCreditorVotingEngine;
 
     /// @notice LREP fees moved out of `lrepFees` by `requestFeeWithdrawal`, still slashable
-    ///         until the matching release timestamp passes.
+    ///         until the withdrawal is completed.
     mapping(address => uint256) public pendingFeeWithdrawalAmount;
     /// @notice Timestamp at which a pending fee withdrawal can be completed.
     mapping(address => uint256) public pendingFeeWithdrawalReleaseAt;
@@ -609,11 +610,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     }
 
     /// @inheritdoc IFrontendRegistry
-    function recordSnapshotDisputeOpened(address frontend)
-        external
-        override
-        onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE)
-    {
+    function recordSnapshotDisputeOpened(address frontend) external override onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE) {
         if (frontend == address(0)) revert InvalidFrontend();
         uint256 openDisputes = openSnapshotDisputeCount[frontend] + 1;
         openSnapshotDisputeCount[frontend] = openDisputes;
@@ -621,11 +618,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     }
 
     /// @inheritdoc IFrontendRegistry
-    function recordSnapshotDisputeClosed(address frontend)
-        external
-        override
-        onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE)
-    {
+    function recordSnapshotDisputeClosed(address frontend) external override onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE) {
         if (frontend == address(0)) revert InvalidFrontend();
         uint256 openDisputes = openSnapshotDisputeCount[frontend];
         if (openDisputes == 0) revert NoOpenSnapshotDispute();

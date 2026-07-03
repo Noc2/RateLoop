@@ -181,9 +181,9 @@ contract ClusterPayoutOracleTest is Test {
 
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(proposal.proposer, keeper);
-        assertEq(proposal.frontendOperator, frontendOperator);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot = _roundPayoutSnapshot(input);
+        assertEq(snapshot.snapshotKey, snapshotKey);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
 
         frontendRegistry.setEligible(frontendOperator, false);
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory nextInput = _defaultRoundPayoutInput(1);
@@ -401,12 +401,10 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(proposed.challengeWindowAtProposal, 2 hours);
-        assertEq(proposed.finalizationVetoWindowAtProposal, 20 minutes);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
 
         oracle.setOracleTimingConfig(1 hours, 45 minutes);
-        vm.warp(uint256(proposed.proposedAt) + 2 hours);
+        vm.warp(uint256(proposedAt) + 2 hours);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory finalized =
@@ -456,8 +454,8 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposed.proposedAt) + 15 minutes);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
+        vm.warp(uint256(proposedAt) + 15 minutes);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         uint256 childVetoDeadline =
@@ -505,8 +503,8 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposed.proposedAt) + 15 minutes);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
+        vm.warp(uint256(proposedAt) + 15 minutes);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         uint256 childVetoDeadline =
@@ -521,8 +519,8 @@ contract ClusterPayoutOracleTest is Test {
         );
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-child-during-parent-veto"));
 
-        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory rejected = _roundPayoutSnapshot(input);
+        assertEq(uint8(rejected.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
     }
 
     function test_FinalizedRoundPayoutSnapshotRootRejectWaitsForParentEpochVetoDeadline() public {
@@ -548,8 +546,8 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
-        vm.warp(uint256(proposed.proposedAt) + 15 minutes);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
+        vm.warp(uint256(proposedAt) + 15 minutes);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         uint256 childVetoDeadline =
@@ -564,8 +562,8 @@ contract ClusterPayoutOracleTest is Test {
         );
         oracle.rejectFinalizedRoundPayoutSnapshotRoot(snapshotKey, keccak256("bad-child-root-during-parent-veto"));
 
-        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory rejected = _roundPayoutSnapshot(input);
+        assertEq(uint8(rejected.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
         assertTrue(oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, input.weightRoot));
     }
 
@@ -609,15 +607,11 @@ contract ClusterPayoutOracleTest is Test {
 
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
 
-        assertEq(oracle.openDisputeCount(address(this)), 1);
-        assertTrue(oracle.hasOpenDispute(address(this)));
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
         assertTrue(frontendRegistry.hasOpenSnapshotDispute(address(this)));
 
         oracle.finalizeChallengedCorrelationEpoch(1, keccak256("challenge-dismissed"));
 
-        assertEq(oracle.openDisputeCount(address(this)), 0);
-        assertFalse(oracle.hasOpenDispute(address(this)));
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
         assertFalse(frontendRegistry.hasOpenSnapshotDispute(address(this)));
     }
@@ -644,10 +638,9 @@ contract ClusterPayoutOracleTest is Test {
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
         frontendRegistry.setAuthorizedSnapshotFrontend(replacementProposer, frontend);
 
-        assertEq(oracle.openDisputeCount(frontend), 1);
-        assertEq(oracle.openDisputeCount(proposer), 0);
-        assertEq(oracle.openDisputeCount(replacementProposer), 0);
         assertEq(frontendRegistry.openSnapshotDisputeCount(frontend), 1);
+        assertEq(frontendRegistry.openSnapshotDisputeCount(proposer), 0);
+        assertEq(frontendRegistry.openSnapshotDisputeCount(replacementProposer), 0);
     }
 
     function test_CorrelationEpochKeepsProposalChallengeTermsWhenConfigExpands() public {
@@ -694,18 +687,16 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(proposed.challengeWindowAtProposal, 2 hours);
-        assertEq(proposed.challengeBondAtProposal, CHALLENGE_BOND);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
 
         oracle.setOracleConfig(1 hours, CHALLENGE_BOND * 2, address(this));
-        vm.warp(uint256(proposed.proposedAt) + 1 hours + 1);
+        vm.warp(uint256(proposedAt) + 1 hours + 1);
 
         _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
 
-        ClusterPayoutOracle.RoundPayoutProposal memory challenged = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(challenged.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
-        assertEq(challenged.bond, CHALLENGE_BOND);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory challenged = _roundPayoutSnapshot(input);
+        assertEq(uint8(challenged.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
     }
 
     function test_RoundPayoutChallengeRecordsFrontendDisputeUntilRejected() public {
@@ -728,14 +719,10 @@ contract ClusterPayoutOracleTest is Test {
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
 
-        assertEq(oracle.openDisputeCount(address(this)), 1);
-        assertTrue(oracle.hasOpenDispute(address(this)));
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
 
         oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
 
-        assertEq(oracle.openDisputeCount(address(this)), 0);
-        assertFalse(oracle.hasOpenDispute(address(this)));
         assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
     }
 
@@ -758,12 +745,10 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposed = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(proposed.challengeWindowAtProposal, 2 hours);
-        assertEq(proposed.challengeBondAtProposal, CHALLENGE_BOND);
+        uint64 proposedAt = _roundPayoutSnapshotProposedAt(input);
 
         oracle.setOracleConfig(3 hours, CHALLENGE_BOND * 2, address(this));
-        vm.warp(uint256(proposed.proposedAt) + 2 hours + 1);
+        vm.warp(uint256(proposedAt) + 2 hours + 1);
 
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
@@ -1101,9 +1086,13 @@ contract ClusterPayoutOracleTest is Test {
         );
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3);
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(proposal.consumer, address(ratingConsumer));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory proposal =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3);
+        assertEq(uint8(proposal.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(
+            oracle.roundPayoutSnapshotConsumerFor(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3),
+            address(ratingConsumer)
+        );
 
         vm.warp(2 hours + 2);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
@@ -1735,10 +1724,9 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
 
         assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, staleDigest));
-        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.snapshot.weightRoot, input.weightRoot);
-        assertEq(replacement.artifactHash, keccak256("replacement-epoch-artifact"));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory replacement = _roundPayoutSnapshot(input);
+        assertEq(uint8(replacement.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(replacement.weightRoot, input.weightRoot);
     }
 
     function test_StaleFinalizedRoundPayoutSnapshotCannotBeReplacedWhenConsumed() public {
@@ -2273,8 +2261,6 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        assertEq(oracle.roundPayoutProposal(snapshotKey).proposalTimeSnapshotProposer, keeper);
-
         frontendRegistry.clearAuthorizedSnapshotFrontend(frontendOperator);
 
         usdc.mint(keeper, CHALLENGE_BOND);
@@ -2290,7 +2276,8 @@ contract ClusterPayoutOracleTest is Test {
         oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("independent-challenge"));
         vm.stopPrank();
 
-        assertEq(oracle.roundPayoutProposal(snapshotKey).challenger, unrelatedChallenger);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory challenged = _roundPayoutSnapshot(input);
+        assertEq(uint8(challenged.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
     }
 
     function test_RotatedKeeperCanChallengePriorKeeperCorrelationEpoch() public {
@@ -2385,7 +2372,6 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
 
-        assertEq(oracle.roundPayoutProposal(snapshotKey).proposalTimeSnapshotProposer, address(0));
         frontendRegistry.setAuthorizedSnapshotFrontend(challenger, frontendOperator);
         assertTrue(frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger));
 
@@ -2395,9 +2381,8 @@ contract ClusterPayoutOracleTest is Test {
         oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("post-proposal-assignee-challenge"));
         vm.stopPrank();
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
-        assertEq(proposal.challenger, challenger);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory proposal = _roundPayoutSnapshot(input);
+        assertEq(uint8(proposal.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
     }
 
     function test_ChallengesRequireUsdcApprovalAndRejectNativeToken() public {
@@ -2643,10 +2628,10 @@ contract ClusterPayoutOracleTest is Test {
         input.artifactURI = "ipfs://round-replacement";
         oracle.proposeRoundPayoutSnapshot(input);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(proposal.snapshot.weightRoot, oracle.payoutWeightLeaf(payout));
-        assertEq(proposal.snapshot.totalClaimWeight, 1_001);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory proposal = _roundPayoutSnapshot(input);
+        assertEq(uint8(proposal.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(proposal.weightRoot, oracle.payoutWeightLeaf(payout));
+        assertEq(proposal.totalClaimWeight, 1_001);
     }
 
     function test_RejectedSnapshotRootCannotBeReproposed() public {
@@ -2692,9 +2677,9 @@ contract ClusterPayoutOracleTest is Test {
         input.weightRoot = keccak256("replacement-weight-root");
         oracle.proposeRoundPayoutSnapshot(input);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(proposal.snapshot.weightRoot, keccak256("replacement-weight-root"));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory proposal = _roundPayoutSnapshot(input);
+        assertEq(uint8(proposal.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(proposal.weightRoot, keccak256("replacement-weight-root"));
     }
 
     function test_FinalizedRoundPayoutSnapshotCanBeRejectedWhenConsumerHasNotAppliedIt() public {
@@ -2721,8 +2706,8 @@ contract ClusterPayoutOracleTest is Test {
 
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-finalized-root"));
 
-        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory rejected = _roundPayoutSnapshot(input);
+        assertEq(uint8(rejected.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
 
         input.artifactHash = keccak256("epoch-artifact");
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
@@ -2733,12 +2718,11 @@ contract ClusterPayoutOracleTest is Test {
         input.totalClaimWeight = 2_501;
         input.artifactURI = "ipfs://round-corrected";
         oracle.proposeRoundPayoutSnapshot(input);
-        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.artifactHash, keccak256("epoch-artifact"));
-        assertEq(replacement.consumer, address(questionConsumer));
-        assertEq(replacement.snapshot.weightRoot, input.weightRoot);
-        assertEq(replacement.snapshot.totalClaimWeight, 2_501);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory replacement = _roundPayoutSnapshot(input);
+        assertEq(uint8(replacement.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(_roundPayoutSnapshotConsumerFor(input), address(questionConsumer));
+        assertEq(replacement.weightRoot, input.weightRoot);
+        assertEq(replacement.totalClaimWeight, 2_501);
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectRevertsAfterVetoWindow() public {
@@ -2796,8 +2780,8 @@ contract ClusterPayoutOracleTest is Test {
         questionConsumer.setConsumed(true);
 
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
-        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory rejected = _roundPayoutSnapshot(input);
+        assertEq(uint8(rejected.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectUsesSnapshottedConsumerAfterRotation() public {
@@ -2889,9 +2873,8 @@ contract ClusterPayoutOracleTest is Test {
         input.artifactURI = "ipfs://round-v2";
         oracle.proposeRoundPayoutSnapshot(input);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.artifactHash, replacementArtifact);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory replacement = _roundPayoutSnapshot(input);
+        assertEq(uint8(replacement.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
     }
 
     function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentRevertsSnapshotExistsWhenConsumerViewReverts()
@@ -2940,9 +2923,9 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
 
         assertFalse(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, originalDigest));
-        ClusterPayoutOracle.RoundPayoutProposal memory original = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(original.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
-        assertEq(original.snapshot.weightRoot, keccak256("leaf"));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory original = _roundPayoutSnapshot(input);
+        assertEq(uint8(original.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(original.weightRoot, keccak256("leaf"));
     }
 
     function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentRevertsSnapshotConsumedWhenConsumed() public {
@@ -3015,9 +2998,8 @@ contract ClusterPayoutOracleTest is Test {
         input.artifactURI = "ipfs://round-v2";
         oracle.proposeRoundPayoutSnapshot(input);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.artifactHash, replacementArtifact);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory replacement = _roundPayoutSnapshot(input);
+        assertEq(uint8(replacement.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
         assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, staleDigest));
     }
 
@@ -3036,9 +3018,8 @@ contract ClusterPayoutOracleTest is Test {
         IClusterPayoutOracle.RoundPayoutSnapshot memory staleSnapshot =
             oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         assertEq(uint8(staleSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
-        assertEq(oracle.pendingBondWithdrawals(CHALLENGER), CHALLENGE_BOND);
-        assertEq(oracle.openDisputeCount(address(this)), 0);
-        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
+        assertEq(oracle.pendingBondWithdrawals(CHALLENGER), 0);
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
 
         bytes32 replacementArtifact = keccak256("epoch-artifact-v2");
         _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), replacementArtifact);
@@ -3048,10 +3029,9 @@ contract ClusterPayoutOracleTest is Test {
 
         assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, staleDigest));
         assertEq(oracle.pendingBondWithdrawals(CHALLENGER), CHALLENGE_BOND);
-        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.bond, 0);
-        assertEq(replacement.challenger, address(0));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory replacement = _roundPayoutSnapshot(input);
+        assertEq(uint8(replacement.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
     }
 
     function test_StaleRoundPayoutSnapshotChallengeRevertsBeforeBondPull() public {
@@ -3087,8 +3067,8 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
 
         _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round"));
-        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory proposal = _roundPayoutSnapshot(input);
+        assertEq(uint8(proposal.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
     }
 
     function test_LaunchSnapshotsUseZeroRewardPoolId() public {
@@ -3199,6 +3179,30 @@ contract ClusterPayoutOracleTest is Test {
             artifactHash: keccak256("epoch-artifact"),
             artifactURI: "ipfs://round"
         });
+    }
+
+    function _roundPayoutSnapshot(IClusterPayoutOracle.RoundPayoutSnapshotInput memory input)
+        private
+        view
+        returns (IClusterPayoutOracle.RoundPayoutSnapshot memory)
+    {
+        return oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+    }
+
+    function _roundPayoutSnapshotProposedAt(IClusterPayoutOracle.RoundPayoutSnapshotInput memory input)
+        private
+        view
+        returns (uint64)
+    {
+        return oracle.roundPayoutSnapshotProposedAt(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+    }
+
+    function _roundPayoutSnapshotConsumerFor(IClusterPayoutOracle.RoundPayoutSnapshotInput memory input)
+        private
+        view
+        returns (address)
+    {
+        return oracle.roundPayoutSnapshotConsumerFor(input.domain, input.rewardPoolId, input.contentId, input.roundId);
     }
 
     function _proposeDefaultCorrelationEpoch(uint64 epochId, bytes32 clusterRoot, bytes32 artifactHash) private {
