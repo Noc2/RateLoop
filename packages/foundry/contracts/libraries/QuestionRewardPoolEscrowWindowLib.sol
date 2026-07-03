@@ -152,6 +152,29 @@ library QuestionRewardPoolEscrowWindowLib {
         return true;
     }
 
+    function previewBundleWindowForRoundSet(
+        RoundVotingEngine votingEngine,
+        BundleReward storage bundle,
+        BundleQuestion[] storage questions,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        uint256 bundleId,
+        uint256 roundSetIndex
+    ) internal view returns (bool active, uint64 bountyOpensAt, uint64 bountyClosesAt) {
+        if (bundle.bountyWindowSeconds == 0) {
+            return (true, bundle.bountyOpensAt, 0);
+        }
+        if (bundle.bountyClosesAt != 0) {
+            return (bundle.bountyOpensAt <= bundle.bountyClosesAt, bundle.bountyOpensAt, bundle.bountyClosesAt);
+        }
+
+        uint64 firstStakedAt =
+            _firstBundleRoundSetStake(votingEngine, questions, bundleRoundIds, bundleId, roundSetIndex);
+        if (firstStakedAt == 0 || firstStakedAt > bundle.bountyStartBy) {
+            return (false, firstStakedAt, bundle.bountyStartBy);
+        }
+        return (true, firstStakedAt, uint64(uint256(firstStakedAt) + bundle.bountyWindowSeconds));
+    }
+
     function bundleRefundClock(BundleReward storage bundle) internal view returns (uint64) {
         if (bundle.bountyWindowSeconds == 0) return 0;
         if (bundle.bountyClosesAt != 0) return bundle.bountyClosesAt;

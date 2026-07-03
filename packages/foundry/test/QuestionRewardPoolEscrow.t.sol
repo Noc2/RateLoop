@@ -8728,8 +8728,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
-        _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
 
         vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
         assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
