@@ -52,7 +52,7 @@ const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/
 const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 const X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-payment-v4"));
-const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v6"));
+const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v7"));
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 
 export class X402QuestionInputError extends Error {
@@ -172,6 +172,7 @@ export type X402QuestionPaymentNonceRewardTerms = {
 export type X402QuestionPaymentNonceFeedbackBonus = {
   amount: bigint;
   awarder: Address;
+  executeBy?: bigint | number | string;
 };
 
 export type X402QuestionParserOptions = {
@@ -1407,11 +1408,11 @@ function buildRoundConfigHash(roundConfig: X402QuestionRoundConfig): Hex {
   );
 }
 
-function buildFeedbackBonusTermsHash(feedbackBonus: X402QuestionPaymentNonceFeedbackBonus): Hex {
+function buildFeedbackBonusTermsHash(feedbackBonus: X402QuestionPaymentNonceFeedbackBonus, executeBy: bigint): Hex {
   return keccak256(
     encodeAbiParameters(
-      [{ type: "uint256" }, { type: "address" }],
-      [feedbackBonus.amount, feedbackBonus.awarder],
+      [{ type: "uint256" }, { type: "address" }, { type: "uint256" }],
+      [feedbackBonus.amount, feedbackBonus.awarder, executeBy],
     ),
   );
 }
@@ -1522,6 +1523,10 @@ export function buildX402QuestionOneShotPaymentNonce(params: {
   if (!params.x402Authorization.from || !params.x402Authorization.to) {
     throw new X402QuestionInputError("x402 authorization payer and payee are required.");
   }
+  const feedbackExecuteBy = normalizeNonceBigInt(
+    params.feedbackBonus.executeBy ?? params.x402Authorization.validBefore,
+    "feedbackBonus.executeBy",
+  );
   return keccak256(
     encodeAbiParameters(
       [
@@ -1560,7 +1565,7 @@ export function buildX402QuestionOneShotPaymentNonce(params: {
         buildRewardTermsHash(params.rewardTerms),
         buildRoundConfigHash(params.roundConfig),
         buildQuestionConfidentialityHash(params.question.confidentiality),
-        buildFeedbackBonusTermsHash(params.feedbackBonus),
+        buildFeedbackBonusTermsHash(params.feedbackBonus, feedbackExecuteBy),
         params.question.spec.questionMetadataHash,
         params.question.spec.resultSpecHash,
       ],

@@ -337,11 +337,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         );
     }
 
-    /// @notice Sweep an expired feedback-bonus pool's remaining balance to the protocol treasury.
-    /// @dev L-Funds-2: if the protocol treasury is unset (paused/replaced ProtocolConfig),
-    ///      fall back to refunding the original funder instead of reverting. The primary intent
-    ///      remains treasury-forfeit; the funder-refund branch is a defense-in-depth fallback
-    ///      so a transiently-misconfigured ProtocolConfig cannot strand the funds.
+    /// @notice Settle an expired feedback-bonus pool's remaining balance.
+    /// @dev Awardable settled rounds forfeit unspent funds to the protocol treasury. Rounds that
+    ///      never reach an awardable terminal state refund the funder: no useful feedback award was
+    ///      possible, so there is no anti-spam reason to confiscate the bonus.
     function forfeitExpiredFeedbackBonus(uint256 poolId)
         external
         nonReentrant
@@ -356,6 +355,13 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
         pool.forfeited = true;
         pool.remainingAmount = 0;
+
+        address refundRecipient = _expiredFeedbackBonusRefundRecipient(pool);
+        if (refundRecipient != address(0)) {
+            _bonusToken(pool.asset).safeTransfer(refundRecipient, forfeitedAmount);
+            emit FeedbackBonusFunderRefunded(poolId, refundRecipient, forfeitedAmount);
+            return forfeitedAmount;
+        }
 
         address treasury = _protocolTreasury();
         if (treasury != address(0)) {
@@ -503,6 +509,17 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
 
         return requestedDeadline;
+    }
+
+    function _expiredFeedbackBonusRefundRecipient(FeedbackBonusPool storage pool) internal view returns (address) {
+        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(pool.contentId, pool.roundId);
+        if (
+            state != RoundLib.RoundState.Settled && state != RoundLib.RoundState.Tied
+                && state != RoundLib.RoundState.RevealFailed
+        ) {
+            return pool.funder;
+        }
+        return address(0);
     }
 
     function _requireCurrentRegistryVotingEngine() internal view {

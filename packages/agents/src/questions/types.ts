@@ -54,6 +54,7 @@ export type AgentAskExample = {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
     awarder?: string;
+    executeBy?: string | number | bigint;
   };
   maxPaymentAmount?: string | number | bigint;
   question?: AgentQuestionExample;

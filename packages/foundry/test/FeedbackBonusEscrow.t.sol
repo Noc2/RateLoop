@@ -139,6 +139,8 @@ contract FeedbackRegistryNoVotingEngineShapeMock {
 }
 
 contract FeedbackBonusEscrowTest is VotingTestBase {
+    event FeedbackBonusFunderRefunded(uint256 indexed poolId, address indexed funder, uint256 amount);
+
     LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
@@ -875,6 +877,27 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         assertEq(forfeitedAmount, BONUS_AMOUNT);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + BONUS_AMOUNT);
+    }
+
+    function testExpiredCancelledRoundBonusRefundsFunder() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 7 days);
+        (bytes32 salt,) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+        salt;
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+
+        vm.warp(block.timestamp + 7 days + 1);
+        votingEngine.cancelExpiredRound(contentId, roundId);
+
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        vm.expectEmit(true, true, false, true);
+        emit FeedbackBonusFunderRefunded(poolId, funder, BONUS_AMOUNT);
+        uint256 refundedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        assertEq(refundedAmount, BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore + BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore);
     }
 
     function testLongerRequestedAwardDeadlineWinsOverMinimumDecisionWindow() public {

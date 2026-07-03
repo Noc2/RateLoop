@@ -24,11 +24,12 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     uint8 internal constant REWARD_ASSET_USDC = 1;
     bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v4");
     bytes32 internal constant X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN =
-        keccak256("rateloop-x402-question-one-shot-payment-v6");
+        keccak256("rateloop-x402-question-one-shot-payment-v7");
 
     struct FeedbackBonusTerms {
         uint256 amount;
         address awarder;
+        uint256 executeBy;
     }
 
     ContentRegistry public immutable registry;
@@ -352,6 +353,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         address configuredFeedbackEscrow = feedbackBonusEscrow;
         if (feedbackBonusTerms.amount != 0) {
             require(configuredFeedbackEscrow != address(0), "Feedback escrow unset");
+            require(block.timestamp <= feedbackBonusTerms.executeBy, "Feedback execution expired");
         }
 
         uint256 balanceBefore = usdcToken.balanceOf(address(this));
@@ -614,7 +616,8 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     }
 
     function _hashFeedbackBonusTerms(FeedbackBonusTerms memory feedbackBonusTerms) private pure returns (bytes32) {
-        return keccak256(abi.encode(feedbackBonusTerms.amount, feedbackBonusTerms.awarder));
+        return
+            keccak256(abi.encode(feedbackBonusTerms.amount, feedbackBonusTerms.awarder, feedbackBonusTerms.executeBy));
     }
 
     function _hashStringArray(string[] memory values) private pure returns (bytes32) {

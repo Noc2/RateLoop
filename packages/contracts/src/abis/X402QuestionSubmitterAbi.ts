@@ -178,6 +178,11 @@ export const X402QuestionSubmitterAbi = [
             "name": "awarder",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "executeBy",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       },
@@ -391,6 +396,11 @@ export const X402QuestionSubmitterAbi = [
             "name": "awarder",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "executeBy",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       },
@@ -1070,6 +1080,11 @@ export const X402QuestionSubmitterAbi = [
             "name": "awarder",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "executeBy",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       },
@@ -1281,6 +1296,11 @@ export const X402QuestionSubmitterAbi = [
             "name": "awarder",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "executeBy",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       },

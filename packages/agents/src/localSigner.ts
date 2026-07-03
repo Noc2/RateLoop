@@ -151,6 +151,7 @@ const X402QuestionSubmitterOneShotAbi = [
         components: [
           { name: "amount", type: "uint256" },
           { name: "awarder", type: "address" },
+          { name: "executeBy", type: "uint256" },
         ],
         name: "feedbackBonusTerms",
         type: "tuple",
@@ -387,6 +388,7 @@ type ExpectedLocalSignerFeedbackBonus = {
   asset: LocalFeedbackBonusAsset;
   assetId: typeof FEEDBACK_BONUS_ASSET_LREP | typeof FEEDBACK_BONUS_ASSET_USDC;
   awarder: Address;
+  executeBy?: bigint;
 };
 
 type ExpectedLocalSignerFeedbackBonusPoolTarget = {
@@ -830,12 +832,17 @@ function normalizeLocalSignerFeedbackBonus(
     typeof bonus.awarder === "string" && bonus.awarder.trim()
       ? normalizeAddress(bonus.awarder, "feedbackBonus.awarder")
       : walletAddress;
+  const executeBy =
+    bonus.executeBy === undefined
+      ? undefined
+      : normalizeBigInt(bonus.executeBy, "feedbackBonus.executeBy");
   return {
     amount,
     asset,
     assetId:
       asset === "LREP" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC,
     awarder,
+    ...(executeBy === undefined ? {} : { executeBy }),
   };
 }
 
@@ -2171,6 +2178,13 @@ function assertFeedbackBonusTerms(
     expected.awarder,
     `${fieldName}.awarder`,
   );
+  if (expected.executeBy !== undefined) {
+    assertEqualBigInt(
+      readStructField(value, "executeBy", 2, fieldName),
+      expected.executeBy,
+      `${fieldName}.executeBy`,
+    );
+  }
 }
 
 function assertSubmissionDetails(

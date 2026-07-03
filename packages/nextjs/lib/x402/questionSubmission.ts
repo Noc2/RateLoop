@@ -279,6 +279,7 @@ export type X402FeedbackBonusRequest = {
 type X402FeedbackBonusTerms = {
   amount: bigint;
   awarder: Address;
+  executeBy: bigint;
 };
 
 type StoredFeedbackBonusStatus =
@@ -436,16 +437,22 @@ function supportsX402OneShotFeedbackBonus(config: {
   );
 }
 
-function oneShotFeedbackBonusTerms(feedbackBonus: X402FeedbackBonusRequest | null | undefined): X402FeedbackBonusTerms {
+function oneShotFeedbackBonusTerms(params: {
+  executeBy: bigint;
+  feedbackBonus: X402FeedbackBonusRequest | null | undefined;
+}): X402FeedbackBonusTerms {
+  const feedbackBonus = params.feedbackBonus;
   if (!feedbackBonus || !shouldUseOneShotX402Payment(feedbackBonus)) {
     return {
       amount: 0n,
       awarder: ZERO_ADDRESS,
+      executeBy: 0n,
     };
   }
   return {
     amount: feedbackBonus.amount,
     awarder: feedbackBonus.awarder,
+    executeBy: params.executeBy,
   };
 }
 
@@ -1009,6 +1016,7 @@ const X402QuestionSubmitterAbi = [
         components: [
           { name: "amount", type: "uint256" },
           { name: "awarder", type: "address" },
+          { name: "executeBy", type: "uint256" },
         ],
         name: "feedbackBonusTerms",
         type: "tuple",
@@ -1159,6 +1167,7 @@ const X402QuestionSubmitterAbi = [
         components: [
           { name: "amount", type: "uint256" },
           { name: "awarder", type: "address" },
+          { name: "executeBy", type: "uint256" },
         ],
         name: "feedbackBonusTerms",
         type: "tuple",
@@ -1984,8 +1993,11 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     submitter: params.walletAddress,
   });
   const question = context.primaryQuestion;
-  const feedbackBonusTerms = oneShotFeedbackBonusTerms(params.feedbackBonus);
   const paymentAmount = x402NativePaymentAmount(params.payload, params.feedbackBonus);
+  const feedbackBonusTerms = oneShotFeedbackBonusTerms({
+    executeBy: validBefore,
+    feedbackBonus: params.feedbackBonus,
+  });
 
   const nonceMetadata = {
     categoryId: question.categoryId,

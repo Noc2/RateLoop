@@ -198,6 +198,7 @@ const X402QuestionSubmitterOneShotSubmitWithConfidentialityAbi = [
         components: [
           { name: "amount", type: "uint256" },
           { name: "awarder", type: "address" },
+          { name: "executeBy", type: "uint256" },
         ],
         name: "feedbackBonusTerms",
         type: "tuple",
@@ -797,10 +798,11 @@ function x402OneShotPaymentNonceForPayload(
   );
   const feedbackBonusTermsHash = keccak256(
     encodeAbiParameters(
-      [{ type: "uint256" }, { type: "address" }],
+      [{ type: "uint256" }, { type: "address" }, { type: "uint256" }],
       [
         BigInt(String(feedbackBonus.amount)),
         String(feedbackBonus.awarder) as `0x${string}`,
+        BigInt(X402_VALID_BEFORE),
       ],
     ),
   );
@@ -827,7 +829,7 @@ function x402OneShotPaymentNonceForPayload(
         { type: "bytes32" },
       ],
       [
-        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v6")),
+        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v7")),
         480n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
@@ -978,6 +980,7 @@ function submitX402OneShotQuestionData(payload = feedbackBonusAskPayload()) {
       {
         amount: BigInt(FEEDBACK_BONUS_AMOUNT),
         awarder: account.address,
+        executeBy: BigInt(X402_VALID_BEFORE),
       },
       {
         from: account.address,
