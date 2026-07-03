@@ -9,8 +9,6 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_CONFIRM_TIMEOUT_MS = 210_000;
 const DEFAULT_MCP_PROTOCOL_VERSION = "2025-11-25";
 const DEFAULT_AGENT_API_PATH = "/api/agent";
-const DEFAULT_MCP_PATH = "/api/mcp";
-const DEFAULT_PUBLIC_MCP_PATH = "/api/mcp/public";
 const AGENT_AUTH_REQUIRED_MESSAGE =
   "RateLoop agent operations require apiBaseUrl for direct HTTP or mcpApiUrl for MCP. Add mcpAccessToken only for managed agent policies.";
 const PLAINTEXT_RATING_FIELDS = [
@@ -1498,9 +1496,7 @@ async function callMcpTool<T>(
   args: JsonRecord,
 ): Promise<T> {
   if (!config.mcpApiUrl) {
-    throw new RateLoopSdkError(
-      "apiBaseUrl or mcpApiUrl is required for MCP agent operations",
-    );
+    throw new RateLoopSdkError("mcpApiUrl is required for MCP agent operations");
   }
 
   const id = `rateloop-sdk-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1668,14 +1664,7 @@ function normalizeAgentConfig(
   const apiBaseUrl = normalizeUrl(options.apiBaseUrl);
   const fetchImpl = options.fetchImpl ?? fetch;
   const quoteFetchImpl = options.quoteFetchImpl ?? fetchImpl;
-  const defaultMcpPath = options.mcpAccessToken
-    ? DEFAULT_MCP_PATH
-    : DEFAULT_PUBLIC_MCP_PATH;
-  const mcpApiUrl =
-    normalizeUrl(options.mcpApiUrl) ??
-    (apiBaseUrl
-      ? new URL(defaultMcpPath, `${apiBaseUrl}/`).toString()
-      : undefined);
+  const mcpApiUrl = normalizeUrl(options.mcpApiUrl);
 
   enforceTokenUrlPolicy("apiBaseUrl", apiBaseUrl, options.mcpAccessToken);
   enforceTokenUrlPolicy("mcpApiUrl", mcpApiUrl, options.mcpAccessToken);

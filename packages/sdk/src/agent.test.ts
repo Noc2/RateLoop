@@ -166,6 +166,26 @@ test("agent config rejects token-bearing remote HTTP URLs", () => {
   );
 });
 
+test("MCP-only helpers require an explicit mcpApiUrl", async () => {
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async () => {
+      throw new Error("fetch should not run without mcpApiUrl");
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      agent.prepareImageUpload({
+        filename: "mockup.png",
+        mimeType: "image/png",
+        sha256: `0x${"a".repeat(64)}`,
+        sizeBytes: 1234,
+      }),
+    /mcpApiUrl is required for MCP agent operations/,
+  );
+});
+
 test("agent config allows token-bearing localhost HTTP URLs", () => {
   for (const url of [
     "http://localhost:3000",
@@ -1090,6 +1110,7 @@ test("askHumans can still route feedback bonus asks through MCP", async () => {
   let requestedBody: any;
   const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
+    mcpApiUrl: "https://rateloop.example/api/mcp",
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
       requestedBody = JSON.parse(String(init?.body));
