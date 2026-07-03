@@ -926,6 +926,25 @@ export const RateLoopGovernorAbi = [
   },
   {
     "type": "function",
+    "name": "proposalLockedAmount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "proposalNeedsQueuing",
     "inputs": [
       {
