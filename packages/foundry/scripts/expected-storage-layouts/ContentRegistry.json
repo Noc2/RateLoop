@@ -123,71 +123,77 @@
     {
       "slot": 20,
       "offset": 0,
+      "label": "contentRoundVotingEngine",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
       "label": "protocolConfig",
       "type": "t_contract(ProtocolConfig)"
     },
     {
-      "slot": 21,
+      "slot": 22,
       "offset": 0,
       "label": "pendingSubmissions",
       "type": "t_mapping(t_bytes32,t_struct(PendingSubmission))"
     },
     {
-      "slot": 22,
+      "slot": 23,
       "offset": 0,
       "label": "dormantKeyReleasableAt",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
-      "slot": 23,
+      "slot": 24,
       "offset": 0,
       "label": "_ratingState",
       "type": "t_mapping(t_uint256,t_struct(RatingState))"
     },
     {
-      "slot": 24,
+      "slot": 25,
       "offset": 0,
       "label": "pendingRatingSettlement",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(PendingRatingSettlement)))"
     },
     {
-      "slot": 25,
+      "slot": 26,
       "offset": 0,
       "label": "appliedRatingSnapshotDigest",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))"
     },
     {
-      "slot": 26,
+      "slot": 27,
       "offset": 0,
       "label": "latestAppliedRatingSnapshotRoundId",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
-      "slot": 27,
+      "slot": 28,
       "offset": 0,
       "label": "nextRatingSnapshotRoundId",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
-      "slot": 28,
+      "slot": 29,
       "offset": 0,
       "label": "contentSlashConfigSnapshot",
       "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
     },
     {
-      "slot": 29,
+      "slot": 30,
       "offset": 0,
       "label": "submissionMediaValidator",
       "type": "t_contract(SubmissionMediaValidator)"
     },
     {
-      "slot": 30,
+      "slot": 31,
       "offset": 0,
       "label": "questionBundleRoundObserverByContent",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 31,
+      "slot": 32,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -203,8 +209,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[36]",
-      "numberOfBytes": "1152",
+      "label": "uint256[35]",
+      "numberOfBytes": "1120",
       "base": "t_uint256"
     },
     {
@@ -294,6 +300,14 @@
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_bytes32"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => address))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_address)"
     },
     {
       "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))",

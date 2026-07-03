@@ -237,6 +237,7 @@ library ContentRegistryRatingSnapshotLib {
         mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement) storage pendingSettlements,
         mapping(uint256 => uint256) storage nextRatingSnapshotRoundId,
         mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
+        mapping(uint256 => address) storage roundVotingEngine,
         address votingEngineAddress,
         uint256 latestRoundId,
         uint256 contentId,
@@ -251,6 +252,7 @@ library ContentRegistryRatingSnapshotLib {
             if (!_canAdvanceRatingSnapshotCursor(
                     pendingSettlements,
                     appliedRatingSnapshotDigest,
+                    roundVotingEngine,
                     votingEngine,
                     contentId,
                     nextRoundId
@@ -278,6 +280,7 @@ library ContentRegistryRatingSnapshotLib {
     function _canAdvanceRatingSnapshotCursor(
         mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement) storage pendingSettlements,
         mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
+        mapping(uint256 => address) storage roundVotingEngine,
         IRoundVotingEngine votingEngine,
         uint256 contentId,
         uint256 roundId
@@ -295,7 +298,10 @@ library ContentRegistryRatingSnapshotLib {
             return false;
         }
 
-        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, roundId);
+        address roundEngineAddress = roundVotingEngine[roundId];
+        IRoundVotingEngine roundEngine =
+            roundEngineAddress == address(0) ? votingEngine : IRoundVotingEngine(roundEngineAddress);
+        (, RoundLib.RoundState state,,,,,,) = roundEngine.roundCore(contentId, roundId);
         return _canSkipRatingSnapshotRound(state, appliedRatingSnapshotDigest[contentId][roundId]);
     }
 

@@ -177,6 +177,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => address) internal contentRoundTrackingEngine;
     /// @notice Latest globally allocated voting round id per content, shared across engine rotations.
     mapping(uint256 => uint256) internal latestVotingRoundId;
+    /// @notice Voting engine that owns each allocated content round.
+    mapping(uint256 => mapping(uint256 => address)) internal contentRoundVotingEngine;
 
     /// @notice ProtocolConfig used for governance-tunable rating and slash parameters.
     ProtocolConfig public protocolConfig;
@@ -211,7 +213,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => address) internal questionBundleRoundObserverByContent;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[36] private __gap;
+    uint256[35] private __gap;
 
     // --- Events ---
     event ContentSubmitted(
@@ -1364,6 +1366,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             roundId = latestVotingRoundId[contentId] + 1;
         }
         latestVotingRoundId[contentId] = roundId;
+        contentRoundVotingEngine[contentId][roundId] = msg.sender;
     }
 
     function _openInitialRoundForSubmission(uint256 contentId) internal {
@@ -1372,6 +1375,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
         latestVotingRoundId[contentId] = 1;
         contentRoundTrackingEngine[contentId] = currentEngine;
+        contentRoundVotingEngine[contentId][1] = currentEngine;
         IRoundVotingEngine(currentEngine).openInitialRoundFromRegistry(contentId, 1);
     }
 
@@ -1450,6 +1454,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             pendingRatingSettlement[contentId],
             nextRatingSnapshotRoundId,
             appliedRatingSnapshotDigest,
+            contentRoundVotingEngine[contentId],
             votingEngine,
             latestVotingRoundId[contentId],
             contentId,

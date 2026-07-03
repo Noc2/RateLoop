@@ -3259,6 +3259,36 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(RoundEngineReadHelpers.activeRoundId(replacementEngine, 1), 2);
     }
 
+    function test_AdvanceRatingSnapshotCursor_UsesOriginalEngineForRotatedTerminalRound() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(
+            registry, "https://example.com/rating-cursor-rotation", "goal", "goal", "tags", 0
+        );
+        vm.stopPrank();
+
+        _commit(voter1, 1, true);
+        uint256 oldRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
+        vm.warp(T0 + 7 days + 1);
+        votingEngine.cancelExpiredRound(1, oldRoundId);
+        RoundLib.Round memory oldRound = RoundEngineReadHelpers.round(votingEngine, 1, oldRoundId);
+        assertEq(uint8(oldRound.state), uint8(RoundLib.RoundState.Cancelled));
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        _openRoundForTest(replacementEngine, 1, voter2);
+        assertEq(RoundEngineReadHelpers.activeRoundId(replacementEngine, 1), oldRoundId + 1);
+
+        vm.expectEmit(true, false, false, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingSnapshotCursorAdvanced(1, oldRoundId + 1, 1);
+        registry.advanceRatingSnapshotCursor(1, 1);
+    }
+
     // =========================================================================
     // Engine deauthorization (M-Identity-1) regression
     // =========================================================================
