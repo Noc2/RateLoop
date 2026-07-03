@@ -3477,7 +3477,7 @@ describe("registerDataRoutes", () => {
   });
 
   it("summarizes pending viewer bounty and feedback bonus statuses by content", async () => {
-    const { queryBuilder } = mockPonderModules([
+    const { db, queryBuilder } = mockPonderModules([
       {
         contentId: 2n,
         pendingBountyCount: 1,
@@ -3517,6 +3517,12 @@ describe("registerDataRoutes", () => {
         },
       ],
     });
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("awaitingBountyPayoutCount");
+    expect(selection).toContain("questionRewardPoolRound.rewardPoolId");
+    expect(selection).toContain("roundPayoutSnapshot.weightRoot");
+    expect(selection).toContain("roundPayoutSnapshot.artifactUri");
+    expect(selection).not.toContain("questionRewardPool.asset");
     expect(queryBuilder.where).toHaveBeenCalledTimes(2);
     const whereExpressions = queryBuilder.where.mock.calls.map(([value]) =>
       serializeExpression(value),

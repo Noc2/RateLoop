@@ -1582,7 +1582,7 @@ export function registerDataRoutes(app: ApiApp) {
         pendingBountyCount: sql<number>`count(*)`,
         claimableBountyCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is not null then 1 else 0 end)`,
         awaitingBountyAllocationCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is null then 1 else 0 end)`,
-        awaitingBountyPayoutCount: sql<number>`sum(case when ${questionRewardPool.asset} != 0 and ${questionRewardPoolRound.rewardPoolId} is not null and (${roundPayoutSnapshot.weightRoot} is null or ${roundPayoutSnapshot.artifactUri} is null) then 1 else 0 end)`,
+        awaitingBountyPayoutCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is not null and (${roundPayoutSnapshot.weightRoot} is null or ${roundPayoutSnapshot.artifactUri} is null) then 1 else 0 end)`,
         latestBountyRoundId: sql<bigint | null>`max(${vote.roundId})`,
       })
       .from(vote)
