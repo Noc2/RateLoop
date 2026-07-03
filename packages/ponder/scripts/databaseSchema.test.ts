@@ -5,6 +5,7 @@ import {
   buildProtocolDeploymentKey,
   hasSchemaFlag,
   protocolDeploymentKeyFromEnv,
+  resolvePonderChainId,
   schemaFromProtocolDeploymentKey,
   resolvePonderDatabaseSchema,
   schemaFromRailwayDeploymentId,
@@ -187,6 +188,24 @@ describe("Ponder database schema launcher", () => {
         PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
       }),
     ).toThrow("PONDER_CHAIN_ID 8453 does not match PONDER_NETWORK baseSepolia (84532).");
+  });
+
+  test("rejects malformed explicit chain ids before deriving schemas", () => {
+    expect(() =>
+      resolvePonderChainId({
+        PONDER_NETWORK: "base",
+        PONDER_CHAIN_ID: "8453junk",
+      }),
+    ).toThrow("PONDER_CHAIN_ID must be a positive integer.");
+
+    expect(() =>
+      protocolDeploymentKeyFromEnv({
+        PONDER_NETWORK: "base",
+        PONDER_CHAIN_ID: "8453junk",
+        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+      }),
+    ).toThrow("PONDER_CHAIN_ID must be a positive integer.");
   });
 
   test("honors a custom DATABASE_SCHEMA", () => {

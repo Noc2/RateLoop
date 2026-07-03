@@ -22,6 +22,7 @@ const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
   worldchain: "rateloop_ponder_worldchain",
 };
 const LIVE_PONDER_NETWORKS = new Set(["baseSepolia", "base", "worldchainSepolia", "worldchain"]);
+const DECIMAL_UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/;
 function readEnv(env, key) {
   const value = env[key]?.trim();
   return value ? value : undefined;
@@ -43,11 +44,21 @@ function normalizeAddress(value) {
     : undefined;
 }
 
-function resolveChainId(env) {
+function parseStrictPositiveInteger(value) {
+  if (!DECIMAL_UNSIGNED_INTEGER_PATTERN.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function resolvePonderChainId(env) {
   const ponderNetwork = readEnv(env, "PONDER_NETWORK");
   const networkChainId = PONDER_NETWORK_CHAIN_IDS[ponderNetwork];
-  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
-  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) {
+  const explicitChainIdRaw = readEnv(env, "PONDER_CHAIN_ID");
+  if (explicitChainIdRaw !== undefined) {
+    const explicitChainId = parseStrictPositiveInteger(explicitChainIdRaw);
+    if (explicitChainId === null) {
+      throw new Error("PONDER_CHAIN_ID must be a positive integer.");
+    }
     if (networkChainId !== undefined && explicitChainId !== networkChainId) {
       throw new Error(
         `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${ponderNetwork} (${networkChainId}).`,
@@ -78,7 +89,7 @@ export function protocolDeploymentKeyFromEnv(env = process.env) {
     ?? readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY");
   if (explicitKey) return explicitKey.toLowerCase();
 
-  const chainId = resolveChainId(env);
+  const chainId = resolvePonderChainId(env);
   const contentRegistryAddress = normalizeAddress(readEnv(env, "PONDER_CONTENT_REGISTRY_ADDRESS"));
   const feedbackRegistryAddress = normalizeAddress(readEnv(env, "PONDER_FEEDBACK_REGISTRY_ADDRESS"));
   if (

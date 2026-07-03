@@ -6,8 +6,8 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import {
   buildPonderStartArgs,
   buildProtocolDeploymentKey,
+  resolvePonderChainId,
 } from "./databaseSchema.mjs";
-import { PONDER_NETWORK_CHAIN_IDS } from "../src/protocol-deployment.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
@@ -34,27 +34,6 @@ function readEnv(env, key) {
   return value ? value : undefined;
 }
 
-function resolveChainId(env) {
-  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
-  const networkChainId = PONDER_NETWORK_CHAIN_IDS[ponderNetwork];
-  const explicitChainId = Number.parseInt(
-    readEnv(env, "PONDER_CHAIN_ID") ?? "",
-    10,
-  );
-  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) {
-    if (networkChainId !== undefined && explicitChainId !== networkChainId) {
-      throw new Error(
-        `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${ponderNetwork} (${networkChainId}).`,
-      );
-    }
-    if (ponderNetwork !== undefined && networkChainId === undefined)
-      return undefined;
-    return explicitChainId;
-  }
-
-  return networkChainId;
-}
-
 export async function assertProductionRpcChainId({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -62,7 +41,7 @@ export async function assertProductionRpcChainId({
 } = {}) {
   if (readEnv(env, "NODE_ENV") !== "production") return false;
 
-  const expectedChainId = resolveChainId(env);
+  const expectedChainId = resolvePonderChainId(env);
   if (!expectedChainId) return false;
 
   const key = `PONDER_RPC_URL_${expectedChainId}`;
@@ -176,7 +155,7 @@ export function resolveProtocolDeploymentKeyFromArtifacts({
   env = process.env,
   requireImpl = require,
 } = {}) {
-  const chainId = resolveChainId(env);
+  const chainId = resolvePonderChainId(env);
   if (!chainId) return undefined;
 
   let deployments;

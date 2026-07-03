@@ -129,6 +129,24 @@ describe("Ponder production launcher", () => {
     );
   });
 
+  test("rejects malformed production chain ids before probing RPC", async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(
+      assertProductionRpcChainId({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_CHAIN_ID: "8453junk",
+          PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        },
+        fetchImpl,
+      }),
+    ).rejects.toThrow("PONDER_CHAIN_ID must be a positive integer.");
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   test("rejects wrong-chain production RPCs before startup", async () => {
     await expect(
       assertProductionRpcChainId({
