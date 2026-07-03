@@ -305,7 +305,7 @@ const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
 const FEEDBACK_BONUS_RECOVERY_STORAGE_PREFIX = "rateloop.feedbackBonusRecovery.";
 
 const BOUNTY_AMOUNT_TOOLTIP =
-  "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
+  "LREP or USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
   "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
 const CONFIDENTIALITY_BOND_TOOLTIP =
@@ -1773,7 +1773,7 @@ async function buildDraftRequestBody(
   const requestBody = structuredClone(handoff.requestBody ?? {}) as JsonRecord;
   const bountyAmount = parseSubmissionRewardAmount(form.bountyAmount);
   if (bountyAmount === null) {
-    throw new Error("Bounty must be a positive USDC amount with up to 6 decimals.");
+    throw new Error("Bounty must be a positive LREP or USDC amount with up to 6 decimals.");
   }
 
   const questionDurationSeconds = parseRoundSecondsInput(form.roundBlindSeconds, "Question duration");

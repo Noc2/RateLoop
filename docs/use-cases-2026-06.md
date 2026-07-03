@@ -48,13 +48,13 @@ two scarce assets (World ID-verified humans + incentive mechanism) into a moat n
 can copy. Nobody in mid-2026 sells independent, incentive-aligned third-party AI judgment — the
 slot ERC-8004 deliberately left open.
 
-## Capability envelope (current)
+## Capability envelope at snapshot time
 
 | Dimension | Status |
 | --- | --- |
 | Latency | Per-question `roundConfig`; human rounds ~40 min–hours (recruitment-bound; fast-lane estimator: epoch + ≥15 min); instant-rater rounds floor at **~2–4 min** (1-min epoch min, drand quicknet 3s, keeper 30s tick, 2-step settle +1 block, Ponder seconds) |
 | Cost | 1 USDC floor; fast-lane guidance $0.33–0.75/rater → ~$5/10 raters, ~$12.50/25; ≥1,000 USDC bounties require ≥5 voters; gated mode unpriced; confidentiality bonds are rater-side |
-| Private context | **Live end-to-end**: hosted-only gated context, wallet-signed terms (server-recorded, content-commitment-bound), sharp watermark + HMAC view tokens + access logs, append-only daily log-root artifacts with anchoring-required cron publication, artifact-bound breach evidence, bond escrow (1–100 USDC default cap, 0 allowed), breach tab + slash/ban governance actions, disclosure-after-settlement or private-forever. Gaps: no gated bundles; mainnet anchor key/role still needs operational verification; **gated rounds are human-credential-only (AI raters excluded)** |
+| Private context | **Snapshot-time note, re-verify before current guidance**: hosted-only gated context, wallet-signed terms (server-recorded, content-commitment-bound), sharp watermark + HMAC view tokens + access logs, append-only daily log-root artifacts with anchoring-required cron publication, artifact-bound breach evidence, bond escrow (1–100 USDC default cap, 0 allowed), breach tab + slash/ban governance actions, disclosure-after-settlement or private-forever. Historical gaps recorded here: no gated bundles; mainnet anchor key/role still needed operational verification; the snapshot treated gated rounds as human-credential-only. Current docs should be checked before carrying that AI-rater constraint forward. |
 | Targeting | Validated taxonomy + `rateloop_list_audience_options` + submit-UI picker + indexed `targetAudience` + `targetAudienceMatch` in results + 7-day cooldown + payout-artifact claim-weight enforcement. Still self-reported; consistency probes/verified tiers pending (`audience-targeting-plan-2026-06.md`) |
 | Rater pool | Humans (World ID-gateable via credential masks) and AI raters (first-class `RaterType`, normal stake+vote, bounty-eligible when eligibility is open). **No AI-only eligibility mask** — pure-AI rounds are achievable socially, not enforced. Legacy contributors seeded as verified humans (supply bootstrap) |
 | Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline and help mitigate visible herding; score-spread forfeits require ≥8 effective score-eligible units; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
@@ -129,8 +129,9 @@ continuous monitoring. Product gaps to close: an enforced AI-only/mixed eligibil
 contingent human round, triggered by dispersion/calibration — not by low score), operator/model
 diversity attestation, and published calibration data (AI-round verdicts vs. subsequent
 human-round verdicts — the escalation tier doubles as the trust dataset for the fast tier).
-Note: gated/private-context rounds currently require a human credential, so confidential asks
-can't use the AI tier yet.
+Snapshot-time note: this report treated gated/private-context rounds as human-credential-only,
+so confidential asks could not use the AI tier yet. Re-check the current confidentiality docs
+before using that constraint as product guidance.
 
 ### 3. Agent-purchased evidence and verification (PMF 7)
 
@@ -247,9 +248,9 @@ the channel (MCP + x402 directories); 2 and 6 additionally ride the agent-econom
   embargo as the transparency story, sell `private_forever`/asker-triggered as the product.
 - **Close the AI-round product gaps** for use case 2: enforced AI/mixed eligibility config,
   escalation-as-primitive (dispersion-triggered contingent human round), operator/model
-  diversity attestation, and published AI-vs-human calibration data. Also decide whether gated
-  rounds should ever admit credentialed AI raters (today: human-only), since confidential asks
-  currently can't use the fast tier.
+  diversity attestation, and published AI-vs-human calibration data. Snapshot-time gated-AI
+  constraints in this report must be re-verified against current confidentiality docs before
+  they are used for planning.
 - **Monoculture and judge-injection are the trust risks of the AI tier.** Frontier models agree
   on wrong answers ~60% of the time when both err, and peer prediction pays consensus — a
   monoculture's blind spot gets *rewarded*. Injection attacks hit 30–99% ASR on single LLM

@@ -88,6 +88,39 @@ const protocolReleaseConstants = readFileSync(
   new URL("../packages/nextjs/constants/protocolRelease.ts", import.meta.url),
   "utf8",
 );
+const agentAskHandoffPage = readFileSync(
+  new URL(
+    "../packages/nextjs/components/agent/AgentAskHandoffPage.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const docsHowItWorksPage = readFileSync(
+  new URL(
+    "../packages/nextjs/app/(public)/docs/how-it-works/page.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const docsSmartContractsPage = readFileSync(
+  new URL(
+    "../packages/nextjs/app/(public)/docs/smart-contracts/page.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const whitepaperSections = readFileSync(
+  new URL("../packages/nextjs/scripts/whitepaper/sections.ts", import.meta.url),
+  "utf8",
+);
+const keeperReadme = readFileSync(
+  new URL("../packages/keeper/README.md", import.meta.url),
+  "utf8",
+);
+const designReview = readFileSync(
+  new URL("../docs/design-review-2026-07.md", import.meta.url),
+  "utf8",
+);
 
 const ponderReadme = readFileSync(
   new URL("../packages/ponder/README.md", import.meta.url),
@@ -159,6 +192,25 @@ test("public agent copy keeps open-rater and LREP-or-USDC wallet-call framing", 
   assert.match(agentsEnvExample, /EIP-3009 one-shot asks require USDC/);
 });
 
+test("generic bounty copy stays asset-neutral outside x402-only paths", () => {
+  assert.match(agentAskHandoffPage, /LREP or USDC amount funded from the connected wallet/);
+  assert.match(agentAskHandoffPage, /positive LREP or USDC amount/);
+  assert.doesNotMatch(agentAskHandoffPage, /"USDC amount funded from the connected wallet/);
+  assert.doesNotMatch(agentAskHandoffPage, /positive USDC amount with up to 6 decimals\./);
+
+  assert.match(docsHowItWorksPage, /Bounty payout timing/);
+  assert.doesNotMatch(docsHowItWorksPage, /USDC payout timing/);
+  assert.match(docsSmartContractsPage, /LREP or USDC bounty claims/);
+  assert.doesNotMatch(docsSmartContractsPage, /payout snapshots for USDC claims/);
+
+  assert.match(whitepaperSections, /fund LREP or USDC for wallet-call bounties/);
+  assert.match(whitepaperSections, /LREP or USDC bounty payouts/);
+  assert.match(whitepaperSections, /LREP or USDC bounty claims and launch LREP claims/);
+  assert.doesNotMatch(whitepaperSections, /fund USDC for bounties/);
+  assert.doesNotMatch(whitepaperSections, /USDC payouts, and launch LREP payouts/);
+  assert.doesNotMatch(whitepaperSections, /USDC bounty and launch LREP claims/);
+});
+
 test("historical RBTS entropy report points to the fresh-redeploy posture", () => {
   assert.match(newIssuesRemediationReport, /Superseded RBTS entropy note, 2026-07-03/);
   assert.match(newIssuesRemediationReport, /precommitted reveal entropy bound to the closed scoring set/);
@@ -167,6 +219,23 @@ test("historical RBTS entropy report points to the fresh-redeploy posture", () =
     /Do not treat a future-blockhash or sequencer non-grinding assumption as the launch model/,
   );
   assert.match(incentivesRemediationPlan, /precommitted voter entropy/);
+});
+
+test("fresh redeploy runbooks do not present stale stacks or blockhash pairing as current", () => {
+  assert.match(keeperReadme, /owner-directed fresh deployment artifacts/);
+  assert.doesNotMatch(keeperReadme, /preserve the existing deployed contract stack/);
+
+  assert.match(designReview, /historical\/superseded/);
+  assert.match(designReview, /fresh redeploy posture.*precommitted reveal entropy/s);
+  assert.doesNotMatch(designReview, /RBTS pairing seed is still derived purely from a delayed blockhash/);
+});
+
+test("historical use-case snapshot does not label gated AI constraints as current", () => {
+  const useCases = activeDocs["docs/use-cases-2026-06.md"];
+  assert.match(useCases, /Capability envelope at snapshot time/);
+  assert.match(useCases, /Snapshot-time note/);
+  assert.doesNotMatch(useCases, /Capability envelope \(current\)/);
+  assert.doesNotMatch(useCases, /Note: gated\/private-context rounds currently require/);
 });
 
 test("governance docs frame Base mainnet contracts as durable infrastructure", () => {

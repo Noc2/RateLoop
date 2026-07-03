@@ -76,8 +76,8 @@ const SmartContracts: NextPage = () => {
               <td className="font-mono text-primary">ClusterPayoutOracle</td>
               <td>
                 Governance-managed optimistic correlation epoch and round payout snapshots proposed by bonded frontend
-                operators for RBTS settlement weights, public-rating evidence, USDC claims, and launch LREP credits,
-                with USDC challenge bonds
+                operators for RBTS settlement weights, public-rating evidence, LREP or USDC bounty claims, and launch
+                LREP credits, with USDC challenge bonds
               </td>
               <td>No</td>
             </tr>
@@ -563,7 +563,7 @@ const SmartContracts: NextPage = () => {
       <h2>QuestionRewardPoolEscrow</h2>
       <p>
         Custodies question bounties and bundle bounties, records qualified reward rounds, verifies finalized correlation
-        payout snapshots for USDC claims, and routes the configured frontend share.
+        payout snapshots for LREP or USDC bounty claims, and routes the configured frontend share.
       </p>
       <ul>
         <li>

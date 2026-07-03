@@ -175,7 +175,7 @@ const HowItWorks: NextPage = () => {
 
       <h3 id="stablecoin-bounties">Bounties</h3>
       <div className="not-prose my-4 rounded-lg bg-warning/10 p-4 text-sm text-base-content">
-        <p className="font-semibold text-warning">USDC payout timing</p>
+        <p className="font-semibold text-warning">Bounty payout timing</p>
         <p className="mt-1 text-base-content/75">
           LREP stake rewards become claimable after the RBTS settlement snapshot is applied. On the healthy unchallenged
           path, reward and result finality normally completes within{" "}
