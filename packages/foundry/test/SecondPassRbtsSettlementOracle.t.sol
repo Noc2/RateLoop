@@ -26,7 +26,13 @@ contract SecondPassRbtsSettlementOracleTest is SecondPassAuditRegressionBase {
         IClusterPayoutOracle.RoundPayoutSnapshot memory rejected =
             oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId);
         assertEq(uint8(rejected.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        uint64 rejectedAt = oracle.roundPayoutSnapshotRejectedAt(snapshotKey);
+        assertEq(rejectedAt, block.timestamp);
 
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.RoundNotExpired.selector);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        vm.warp(uint256(rejectedAt) + 1 hours);
         votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint8(settled.state), uint8(RoundLib.RoundState.Settled));

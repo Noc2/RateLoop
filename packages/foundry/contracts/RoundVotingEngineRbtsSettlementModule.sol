@@ -48,6 +48,9 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
                 )) {
                 revert SnapshotAvailable();
             }
+            _requireNoRecentRejectedRbtsSettlementSnapshot(
+                roundRbtsSettlementOracle[contentId][roundId], contentId, roundId
+            );
             _returnRbtsStakes(contentId, roundId);
             _completeRbtsSettlement(contentId, roundId, round, 0, 0, bytes32(0));
             emit RbtsSettlementSnapshotTimedOut(contentId, roundId);
@@ -164,6 +167,20 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         return status == IClusterPayoutOracle.SnapshotStatus.Proposed
             || status == IClusterPayoutOracle.SnapshotStatus.Challenged
             || status == IClusterPayoutOracle.SnapshotStatus.Finalized;
+    }
+
+    function _requireNoRecentRejectedRbtsSettlementSnapshot(address oracleAddress, uint256 contentId, uint256 roundId)
+        internal
+        view
+    {
+        if (oracleAddress == address(0)) return;
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId);
+        try oracle.roundPayoutSnapshotRejectedAt(snapshotKey) returns (uint64 rejectedAt) {
+            if (rejectedAt != 0 && block.timestamp < uint256(rejectedAt) + RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT) {
+                revert RoundNotExpired();
+            }
+        } catch { }
     }
 
     function _returnRbtsStakes(uint256 contentId, uint256 roundId)

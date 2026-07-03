@@ -33,7 +33,8 @@ interface IRbtsSettlementSnapshotConsumerView {
 ///      USDC/LREP payouts and delayed public rating updates. The oracle is
 ///      intentionally not a fully per-snapshot economically secured oracle: proposers are accountable through the
 ///      FrontendRegistry's global LREP bond, public artifacts, challenge windows, governance arbitration, slashing,
-///      reputation, and future fee loss. Challenge bonds are a USDC anti-spam mechanism.
+///      reputation, and fee loss while fees remain escrowed or withdrawal-pending. Challenge bonds are a USDC anti-spam
+///      mechanism.
 contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -142,6 +143,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     ///         metadata around a deterministic weightRoot without burning the root itself.
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotRoots;
+    /// @notice Timestamp of the most recent state-changing rejection for each round-payout snapshot key.
+    mapping(bytes32 => uint64) public roundPayoutSnapshotRejectedAt;
     /// @notice Exact rejected correlation-epoch proposal payloads. Used when the arbiter rejects
     ///         bad metadata around a deterministic clusterRoot without burning the root itself.
     mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochSnapshotDigests;
@@ -692,7 +695,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         if (!_isObjectivelyInvalidRbtsSettlementSnapshot(proposal)) revert InvalidSnapshot();
 
-        proposal.snapshot.status = SnapshotStatus.Rejected;
+        _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
@@ -705,7 +708,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
-        proposal.snapshot.status = SnapshotStatus.Rejected;
+        _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
         if (rejectRoot) {
             rejectedRoundPayoutSnapshotRoots[snapshotKey][proposal.snapshot.weightRoot] = true;
@@ -746,7 +749,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (consumer == address(0)) revert InvalidAddress();
         if (block.timestamp >= _effectiveRoundPayoutSnapshotVetoDeadline(proposal)) revert SnapshotNotFinalizable();
 
-        proposal.snapshot.status = SnapshotStatus.Rejected;
+        _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
         if (rejectRoot) {
             rejectedRoundPayoutSnapshotRoots[snapshotKey][snapshot.weightRoot] = true;
@@ -1056,9 +1059,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
-        proposal.snapshot.status = SnapshotStatus.Rejected;
+        _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
         proposal.bond = 0;
         if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
+    }
+
+    function _markRoundPayoutSnapshotRejected(bytes32 snapshotKey, RoundPayoutProposal storage proposal) private {
+        proposal.snapshot.status = SnapshotStatus.Rejected;
+        roundPayoutSnapshotRejectedAt[snapshotKey] = block.timestamp.toUint64();
     }
 
     function _roundPayoutSnapshotDigest(

@@ -1886,6 +1886,25 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "roundPayoutSnapshotRejectedAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundPayoutSnapshotVetoDeadline",
     "inputs": [
       {
