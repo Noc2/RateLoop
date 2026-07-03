@@ -129,20 +129,6 @@ describe("ponder api bootstrap", () => {
     });
   });
 
-  it("keeps Railway readiness probes outside the shared request limiter", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const { default: app } = await loadApp({
-      NODE_ENV: "production",
-      CORS_ORIGIN: "https://app.rateloop.ai",
-      RATE_LIMIT_TRUSTED_IP_HEADERS: undefined,
-    });
-
-    const response = await app.request("https://ponder.rateloop.ai/ready");
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "ok" });
-  });
-
   it("keeps deployment probes available when CORS is misconfigured", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { default: app } = await loadApp({
@@ -157,21 +143,6 @@ describe("ponder api bootstrap", () => {
     const response = await app.request("https://ponder.rateloop.ai/deployment");
 
     expect(response.status).toBe(200);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("CORS_ORIGIN is required"));
-  });
-
-  it("keeps Railway readiness probes available when CORS is misconfigured", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { default: app } = await loadApp({
-      NODE_ENV: "production",
-      CORS_ORIGIN: undefined,
-      RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
-    });
-
-    const response = await app.request("https://ponder.rateloop.ai/ready");
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "ok" });
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("CORS_ORIGIN is required"));
   });
 

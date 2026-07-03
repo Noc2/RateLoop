@@ -120,7 +120,7 @@ test("Railway service start commands, watch patterns, and health checks pin prod
   assert.match(ponder, /dockerfilePath = "packages\/ponder\/Dockerfile"/);
   assert.match(ponder, /scripts\/with-workspace-dist-lock\.mjs/);
   assert.doesNotMatch(ponder, /buildCommand/);
-  assert.match(ponder, /healthcheckPath = "\/ready"/);
+  assert.match(ponder, /healthcheckPath = "\/health"/);
   assert.match(ponder, /healthcheckTimeout = 120/);
 });
 

@@ -17,5 +17,5 @@ watchPatterns = [
 
 [deploy]
 startCommand = "yarn start:built-workspace-deps"
-healthcheckPath = "/ready"
+healthcheckPath = "/health"
 healthcheckTimeout = 120
