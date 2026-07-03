@@ -16,6 +16,6 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "NODE_ENV=production yarn workspace @rateloop/keeper start:built-dist"
+startCommand = "yarn start:built-dist"
 healthcheckPath = "/live"
 healthcheckTimeout = 120

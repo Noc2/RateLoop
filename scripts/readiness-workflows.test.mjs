@@ -201,7 +201,7 @@ test("Railway service start commands, watch patterns, and health checks pin prod
 
   assert.match(
     keeper,
-    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/keeper start:built-dist"/,
+    /startCommand = "yarn start:built-dist"/,
   );
   assert.match(
     ponder,
