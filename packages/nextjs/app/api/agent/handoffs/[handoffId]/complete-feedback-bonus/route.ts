@@ -44,6 +44,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       if (!handoff.operationKey) {
         throw new AgentAskHandoffError("Prepare this handoff before completing its Feedback Bonus.");
       }
+      if (handoff.status !== "submitted") {
+        throw new AgentAskHandoffError("Complete this handoff before completing its Feedback Bonus.");
+      }
 
       await updateAgentAskHandoffFeedbackBonusStatus({
         error: null,

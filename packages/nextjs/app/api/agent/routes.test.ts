@@ -2356,6 +2356,65 @@ test("agent ask handoff route retries completion with stored transaction hashes"
   assert.equal(confirmCalls, 2);
 });
 
+test("agent ask handoff route blocks Feedback Bonus completion for an expired prepared handoff", async () => {
+  let bonusConfirmCalls = 0;
+  const bonusTransactionHash = `0x${"5".repeat(64)}` as const;
+  installAskOverrides({
+    confirmFeedbackBonusQuestionSubmissionRequest: async () => {
+      bonusConfirmCalls += 1;
+      throw new Error("feedback bonus confirm should not run");
+    },
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-feedback-bonus-before-submit"),
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+        },
+        maxPaymentAmount: "3500000",
+        paymentMode: "wallet_calls",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  await dbModule.dbClient.execute({
+    args: [new Date(Date.now() - 1_000), handoffId],
+    sql: "UPDATE agent_ask_handoff_intents SET expires_at = ? WHERE id = ?",
+  });
+
+  const bonusResponse = await handoffCompleteFeedbackBonusRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+      token,
+      transactionHashes: [bonusTransactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const bonusBody = (await bonusResponse.json()) as Record<string, unknown>;
+  assert.equal(bonusResponse.status, 400);
+  assert.equal(bonusBody.message, "Complete this handoff before completing its Feedback Bonus.");
+  assert.equal(bonusConfirmCalls, 0);
+});
+
 test("agent ask handoff route retries Feedback Bonus completion with stored bonus transaction hashes", async () => {
   let bonusConfirmCalls = 0;
   const mainTransactionHash = `0x${"4".repeat(64)}` as const;
