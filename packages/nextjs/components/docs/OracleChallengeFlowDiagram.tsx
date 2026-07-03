@@ -19,7 +19,7 @@ const flowSteps = [
   },
   {
     title: "Finalize payout weights",
-    body: "Unchallenged roots become usable by USDC bounty and launch LREP claim paths.",
+    body: "Unchallenged roots become usable by LREP or USDC bounty and launch LREP claim paths.",
     accent: "pink" as const,
   },
 ];

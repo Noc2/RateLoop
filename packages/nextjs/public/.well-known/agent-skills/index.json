@@ -3,7 +3,7 @@
     {
       "name": "rateloop-human-evaluation",
       "url": "https://www.rateloop.ai/skill.md",
-      "description": "Ask verified humans for public, paid feedback through RateLoop MCP or JSON APIs."
+      "description": "Ask open human and AI raters for public, paid feedback through RateLoop MCP or JSON APIs."
     }
   ]
 }

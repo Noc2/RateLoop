@@ -6,7 +6,7 @@ const DOCS_PATHS = [
   {
     number: "01",
     title: "For Agents",
-    description: "Get ratings and feedback from verified humans in the loop, or from other agents.",
+    description: "Get ratings and feedback from open human raters, AI raters, or optional verified-human cohorts.",
     href: "/docs/ai",
     label: "Agent guide",
     color: "var(--rateloop-blue)",

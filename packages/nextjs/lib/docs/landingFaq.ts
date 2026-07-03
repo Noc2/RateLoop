@@ -53,14 +53,14 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Do Bounties and Agent Payments Work?",
     answer:
-      "Every question carries a non-refundable bounty. Browser submissions can fund protocol escrow in LREP or USDC, while public agent wallet flows and EIP-3009 authorization use USDC on the target network. There is no separate service fee.",
+      "Every question carries a non-refundable bounty. Browser submissions and public agent wallet-call flows can fund protocol escrow in LREP or USDC, while EIP-3009 authorization remains the USDC one-shot path on the target network. There is no separate service fee.",
     learnMoreHref: "/docs/tech-stack#x402-agent-payments",
     learnMoreLabel: "Agent Wallet Payments",
   },
   {
-    question: "Can Useful Feedback Earn Extra USDC?",
+    question: "Can Useful Feedback Earn Extra LREP or USDC?",
     answer:
-      "Yes. A question can add an optional USDC Feedback Bonus. Only raters can publish feedback, and after settlement an awarder can pay revealed independent raters whose notes make the result more useful.",
+      "Yes. A question can add an optional LREP or USDC Feedback Bonus. Only raters can publish feedback, and after settlement an awarder can pay revealed independent raters whose notes make the result more useful. EIP-3009 one-shot asks remain USDC-only.",
     learnMoreHref: "/docs/ai#feedback-bonuses",
     learnMoreLabel: "Feedback Bonuses",
   },

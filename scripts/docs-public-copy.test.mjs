@@ -31,6 +31,37 @@ const publicDocs = {
   ),
 };
 
+const publicSkill = readFileSync(
+  new URL("../packages/nextjs/public/skill.md", import.meta.url),
+  "utf8",
+);
+const agentSkillsIndex = readFileSync(
+  new URL(
+    "../packages/nextjs/public/.well-known/agent-skills/index.json",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const landingFaq = readFileSync(
+  new URL("../packages/nextjs/lib/docs/landingFaq.ts", import.meta.url),
+  "utf8",
+);
+const oracleChallengeFlowDiagram = readFileSync(
+  new URL(
+    "../packages/nextjs/components/docs/OracleChallengeFlowDiagram.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const docsIndexPage = readFileSync(
+  new URL("../packages/nextjs/app/(public)/docs/page.tsx", import.meta.url),
+  "utf8",
+);
+const agentsEnvExample = readFileSync(
+  new URL("../packages/agents/.env.example", import.meta.url),
+  "utf8",
+);
+
 const governanceDocsPage = readFileSync(
   new URL(
     "../packages/nextjs/app/(public)/docs/governance/page.tsx",
@@ -94,6 +125,30 @@ test("static agent docs mention optional 16:9 image guidance", () => {
     assert.match(publicDocs[file], /Prefer 16:9/i, file);
     assert.match(publicDocs[file], /other ratios are allowed/i, file);
   }
+});
+
+test("public agent copy keeps open-rater and LREP-or-USDC wallet-call framing", () => {
+  assert.match(
+    landingFaq,
+    /public agent wallet-call flows can fund protocol escrow in LREP or USDC/,
+  );
+  assert.match(landingFaq, /EIP-3009 authorization remains the USDC one-shot path/);
+  assert.doesNotMatch(landingFaq, /Extra USDC/);
+  assert.doesNotMatch(landingFaq, /optional USDC Feedback Bonus/);
+
+  assert.match(
+    oracleChallengeFlowDiagram,
+    /LREP or USDC bounty and launch LREP claim paths/,
+  );
+  assert.match(publicSkill, /LREP or USDC bounty claims wait for finalized payout roots/);
+  assert.doesNotMatch(publicSkill, /USDC bounties wait for finalized payout roots/);
+
+  assert.match(agentSkillsIndex, /open human and AI raters/);
+  assert.doesNotMatch(agentSkillsIndex, /Ask verified humans/);
+  assert.match(docsIndexPage, /open human raters, AI raters, or optional verified-human cohorts/);
+  assert.doesNotMatch(docsIndexPage, /verified humans in the loop, or from other agents/);
+  assert.match(agentsEnvExample, /Base Sepolia LREP or USDC for wallet-call testnet asks/);
+  assert.match(agentsEnvExample, /EIP-3009 one-shot asks require USDC/);
 });
 
 test("governance docs frame Base mainnet contracts as durable infrastructure", () => {
