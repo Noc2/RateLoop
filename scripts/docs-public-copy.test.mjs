@@ -7,9 +7,9 @@ const activeDocs = {
     new URL("../docs/use-cases-2026-06.md", import.meta.url),
     "utf8",
   ),
-  "docs/agent-to-agent-acceptance-oracle-2026-06.md": readFileSync(
+  "docs/ux-review-multi-agent-2026-07-03.md": readFileSync(
     new URL(
-      "../docs/agent-to-agent-acceptance-oracle-2026-06.md",
+      "../docs/ux-review-multi-agent-2026-07-03.md",
       import.meta.url,
     ),
     "utf8",
@@ -61,15 +61,6 @@ const agentsEnvExample = readFileSync(
   new URL("../packages/agents/.env.example", import.meta.url),
   "utf8",
 );
-const newIssuesRemediationReport = readFileSync(
-  new URL("../docs/new-issues-remediation-report-2026-07-02.md", import.meta.url),
-  "utf8",
-);
-const incentivesRemediationPlan = readFileSync(
-  new URL("../docs/incentives-remediation-plan-2026-07.md", import.meta.url),
-  "utf8",
-);
-
 const governanceDocsPage = readFileSync(
   new URL(
     "../packages/nextjs/app/(public)/docs/governance/page.tsx",
@@ -121,11 +112,6 @@ const keeperReadme = readFileSync(
   new URL("../packages/keeper/README.md", import.meta.url),
   "utf8",
 );
-const designReview = readFileSync(
-  new URL("../docs/design-review-2026-07.md", import.meta.url),
-  "utf8",
-);
-
 const ponderReadme = readFileSync(
   new URL("../packages/ponder/README.md", import.meta.url),
   "utf8",
@@ -135,18 +121,18 @@ const ponderEnvExample = readFileSync(
   "utf8",
 );
 
-test("active public docs avoid stale World Chain and mandatory credential copy", () => {
+test("active public docs avoid stale chain and mandatory credential copy", () => {
   for (const [file, content] of Object.entries(activeDocs)) {
     assert.doesNotMatch(content, /World App rater base/i, file);
     assert.doesNotMatch(content, /World ID-gated/i, file);
-    assert.doesNotMatch(content, /World Chain ~2s blocks/i, file);
+    assert.doesNotMatch(content, /~2s blocks/i, file);
   }
 });
 
-test("static public docs identify Base mainnet production and Base Sepolia staging", () => {
+test("static public docs identify Base mainnet production only", () => {
   for (const [file, content] of Object.entries(publicDocs)) {
     assert.match(content, /Base mainnet.*8453|8453.*Base mainnet/i, file);
-    assert.match(content, /Base Sepolia.*84532|84532.*Base Sepolia/i, file);
+    assert.doesNotMatch(content, /testnet validation/i, file);
   }
 });
 
@@ -203,7 +189,7 @@ test("public agent copy keeps open-rater and LREP-or-USDC wallet-call framing", 
   assert.doesNotMatch(agentSkillsIndex, /Ask verified humans/);
   assert.match(docsIndexPage, /open human raters, AI raters, or optional verified-human cohorts/);
   assert.doesNotMatch(docsIndexPage, /verified humans in the loop, or from other agents/);
-  assert.match(agentsEnvExample, /Base Sepolia LREP or USDC for wallet-call testnet asks/);
+  assert.match(agentsEnvExample, /Base mainnet LREP or USDC/);
   assert.match(agentsEnvExample, /EIP-3009 one-shot asks require USDC/);
 });
 
@@ -230,25 +216,11 @@ test("generic bounty copy stays asset-neutral outside x402-only paths", () => {
   assert.doesNotMatch(whitepaperSections, /USDC bounty and launch LREP claims/);
 });
 
-test("historical RBTS entropy report points to the fresh-redeploy posture", () => {
-  assert.match(newIssuesRemediationReport, /Superseded RBTS entropy note, 2026-07-03/);
-  assert.match(newIssuesRemediationReport, /precommitted reveal entropy bound to the closed scoring set/);
-  assert.match(
-    newIssuesRemediationReport,
-    /Do not treat a future-blockhash or sequencer non-grinding assumption as the launch model/,
-  );
-  assert.match(incentivesRemediationPlan, /precommitted voter entropy/);
-});
-
 test("fresh redeploy runbooks do not present stale stacks or blockhash pairing as current", () => {
   assert.match(keeperReadme, /owner-directed fresh deployment artifacts/);
   assert.doesNotMatch(keeperReadme, /preserve the existing deployed contract stack/);
   assert.match(keeperReadme, /settled LREP or USDC bounty rounds/);
   assert.doesNotMatch(keeperReadme, /settled USDC bounty rounds/);
-
-  assert.match(designReview, /historical\/superseded/);
-  assert.match(designReview, /fresh redeploy posture.*precommitted reveal entropy/s);
-  assert.doesNotMatch(designReview, /RBTS pairing seed is still derived purely from a delayed blockhash/);
 });
 
 test("historical use-case snapshot does not label gated AI constraints as current", () => {

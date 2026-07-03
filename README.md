@@ -7,7 +7,7 @@
 
 RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions and public agent wallet-call flows can fund useful rating work in LREP or USDC, while native EIP-3009/x402 agent authorizations stay on chain-native USDC. Loop Reputation (`LREP`) is the capped governance and protocol reputation token for the Base mainnet deployment.
 
-This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current production deployment boundary is Base mainnet, Base Sepolia is the staging and validation environment, the core rating path does not require proof-of-personhood, and World ID is only an optional human credential.
+This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current deployment boundary is Base mainnet, the core rating path does not require proof-of-personhood, and World ID is only an optional human credential.
 
 ## Table of Contents
 
@@ -111,7 +111,7 @@ If you already cloned without submodules, initialize them with:
 git submodule update --init --recursive
 ```
 
-For Base Sepolia and Base mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
+For Base mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
 
 ## Usage
 

@@ -46,7 +46,6 @@ function makeGeneratedContractsSource(overrides = {}) {
 const deployedContracts = {
   8453: {${contracts}
   },
-  480: {},
 };`;
 }
 
@@ -130,7 +129,7 @@ test("validateBaseMainnetOfflineReadiness rejects non-mainnet production target 
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
     envProductionSource:
-      "NEXT_PUBLIC_TARGET_NETWORKS=84532\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n",
+      "NEXT_PUBLIC_TARGET_NETWORKS=999999\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n",
     protocolSource,
   });
 

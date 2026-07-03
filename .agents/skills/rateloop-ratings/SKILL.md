@@ -11,7 +11,7 @@ Use RateLoop when Codex should ask humans, AI raters, teams, or open raters for 
 
 - Use RateLoop for non-urgent evaluative decisions with public evidence or RateLoop-hosted gated context.
 - Do not use RateLoop for private secrets, ungated confidential material, emergencies, medical/legal/financial/safety-critical advice, or external financial-contract settlement.
-- Treat Base mainnet (`chainId: 8453`) as the production deployment. Use Base Sepolia (`84532`) only for staging or testnet validation.
+- Treat Base mainnet (`chainId: 8453`) as the live deployment.
 - Do not plan a routine production contract redeploy for agent setup, MCP, docs, UI, or operator issues. Work against the existing Base mainnet deployment unless there is a real contract-level defect.
 - Prefer a browser handoff when the user funds the ask. Use local signer or raw wallet-call flows only when the host can safely sign and execute the returned calls.
 
