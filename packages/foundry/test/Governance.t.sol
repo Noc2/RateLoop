@@ -815,6 +815,33 @@ contract GovernanceTest is Test {
         assertEq(unlockTime, expectedUnlockTime);
     }
 
+    function test_ProposerSelfCancelPendingReleasesCooldownAndProposalStake() public {
+        vm.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+        string memory description = _boundDescription("Mistaken proposal", voter1);
+
+        vm.prank(voter1);
+        uint256 proposalId = governor.propose(targets, values, calldatas, description);
+
+        assertEq(uint256(governor.state(proposalId)), uint256(IGovernor.ProposalState.Pending));
+        assertGt(governor.nextProposalBlock(voter1), block.number);
+        assertEq(token.getLockedBalance(voter1), governor.proposalThreshold());
+
+        vm.prank(voter1);
+        governor.cancel(targets, values, calldatas, keccak256(bytes(description)));
+
+        assertEq(uint256(governor.state(proposalId)), uint256(IGovernor.ProposalState.Canceled));
+        assertEq(governor.nextProposalBlock(voter1), 0);
+        assertEq(token.getLockedBalance(voter1), 0);
+        assertEq(token.getTransferableBalance(voter1), VOTER_BALANCE);
+
+        vm.prank(voter1);
+        uint256 correctedProposalId =
+            governor.propose(targets, values, calldatas, _boundDescription("Corrected proposal", voter1));
+        assertTrue(correctedProposalId != 0);
+    }
+
     function test_CreateProposal_RequiresExactProposerSuffixMarker() public {
         vm.roll(block.number + 1);
 

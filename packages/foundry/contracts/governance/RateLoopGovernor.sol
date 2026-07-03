@@ -17,6 +17,7 @@ interface IGovernanceLockableVotes is IVotes {
     function getTransferableBalance(address account) external view returns (uint256);
     function lockForGovernance(address account, uint256 amount) external;
     function lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external;
+    function releaseGovernanceLock(address account, uint256 amount) external;
 }
 
 /// @title RateLoopGovernor
@@ -244,7 +245,18 @@ contract RateLoopGovernor is
         bytes[] memory calldatas,
         bytes32 descriptionHash
     ) internal override(Governor, GovernorTimelockControl) returns (uint256) {
-        return super._cancel(targets, values, calldatas, descriptionHash);
+        uint256 proposalId = getProposalId(targets, values, calldatas, descriptionHash);
+        address proposer = proposalProposer(proposalId);
+        bool releaseProposerState = state(proposalId) == ProposalState.Pending && _msgSender() == proposer;
+
+        proposalId = super._cancel(targets, values, calldatas, descriptionHash);
+
+        if (releaseProposerState) {
+            nextProposalBlock[proposer] = 0;
+            reputationToken.releaseGovernanceLock(proposer, proposalThreshold());
+        }
+
+        return proposalId;
     }
 
     function _executor() internal view override(Governor, GovernorTimelockControl) returns (address) {

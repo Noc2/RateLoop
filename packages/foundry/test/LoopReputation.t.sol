@@ -111,6 +111,52 @@ contract LoopReputationTest is Test {
         assertEq(unlockTime, longUnlockTime);
     }
 
+    function test_GovernanceLockReleaseReducesActiveLock() public {
+        vm.prank(admin);
+        token.mint(rater, 2_000e6);
+
+        vm.prank(governance);
+        token.setGovernor(governor);
+
+        vm.prank(governor);
+        token.lockForGovernance(rater, 1_000e6);
+
+        (, uint256 unlockTimeBefore) = token.getGovernanceLock(rater);
+
+        vm.prank(governor);
+        token.releaseGovernanceLock(rater, 400e6);
+
+        (uint256 amount, uint256 unlockTime) = token.getGovernanceLock(rater);
+        assertEq(amount, 600e6);
+        assertEq(unlockTime, unlockTimeBefore);
+        assertEq(token.getTransferableBalance(rater), 1_400e6);
+    }
+
+    function test_GovernanceLockReleaseClearsWhenAmountCoversLock() public {
+        vm.prank(admin);
+        token.mint(rater, 1_000e6);
+
+        vm.prank(governance);
+        token.setGovernor(governor);
+
+        vm.prank(governor);
+        token.lockForGovernance(rater, 700e6);
+
+        vm.prank(governor);
+        token.releaseGovernanceLock(rater, 1_000e6);
+
+        (uint256 amount, uint256 unlockTime) = token.getGovernanceLock(rater);
+        assertEq(amount, 0);
+        assertEq(unlockTime, block.timestamp);
+        assertEq(token.getTransferableBalance(rater), 1_000e6);
+    }
+
+    function test_GovernanceLockReleaseRequiresGovernor() public {
+        vm.prank(rater);
+        vm.expectRevert("Only governor");
+        token.releaseGovernanceLock(rater, 1);
+    }
+
     function test_SetGovernorRejectsEoaOrWrongToken() public {
         vm.prank(governance);
         vm.expectRevert("Governor must be contract");

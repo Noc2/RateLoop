@@ -34,6 +34,7 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     address public governor;
 
     event GovernanceLocked(address indexed account, uint256 amount, uint256 unlockTime);
+    event GovernanceLockReleased(address indexed account, uint256 amount, uint256 remainingAmount);
     event GovernorSet(address indexed governor);
 
     constructor(address admin, address governance) ERC20("Loop Reputation", "LREP") ERC20Permit("Loop Reputation") {
@@ -78,6 +79,24 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     function lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external {
         require(msg.sender == governor, "Only governor");
         _lockForGovernanceUntil(account, amount, unlockTime);
+    }
+
+    function releaseGovernanceLock(address account, uint256 amount) external {
+        require(msg.sender == governor, "Only governor");
+        require(amount > 0, "Amount must be > 0");
+
+        GovernanceLock storage lock = _governanceLock[account];
+        if (lock.unlockTime <= block.timestamp || lock.amount == 0) {
+            return;
+        }
+
+        uint256 released = amount < lock.amount ? amount : lock.amount;
+        lock.amount -= released;
+        if (lock.amount == 0) {
+            lock.unlockTime = block.timestamp;
+        }
+
+        emit GovernanceLockReleased(account, released, lock.amount);
     }
 
     function _lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) internal {
