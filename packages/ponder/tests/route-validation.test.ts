@@ -3645,6 +3645,7 @@ describe("registerCorrelationRoutes", () => {
         },
       ],
       [
+        [],
         [
           {
             id: 11n,
@@ -3665,6 +3666,9 @@ describe("registerCorrelationRoutes", () => {
             updatedAt: 2_200n,
           },
         ],
+        [],
+        [],
+        [],
         [],
         [],
         [],
@@ -3745,6 +3749,7 @@ describe("registerCorrelationRoutes", () => {
         },
       ],
       [
+        [],
         [
           {
             id: 12n,
@@ -3756,6 +3761,7 @@ describe("registerCorrelationRoutes", () => {
             updatedAt: 300n,
           },
         ],
+        [],
         [{ domain: 1, sourceReadyAt: 1_000n }],
         [],
         [],
@@ -3818,9 +3824,124 @@ describe("registerCorrelationRoutes", () => {
     expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.consumedAt");
     expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.vetoEndsAt");
     const epochSnapshotWhere = serializeExpression(
-      queryBuilders[1]?.where.mock.calls[0]?.[0],
+      queryBuilders[2]?.where.mock.calls[0]?.[0],
     );
     expect(epochSnapshotWhere).toContain("correlationEpochSnapshot.vetoEndsAt");
+  });
+
+  it("keeps normal-path finality breaches visible when attention rows hit the sample cap", async () => {
+    const rejectedRows = Array.from({ length: 1_000 }, (_, index) => ({
+      id: `0x${(index + 1).toString(16).padStart(64, "0")}`,
+      domain: 1,
+      status: 4,
+      proposedAt: 100n,
+      challengeEndsAt: 200n,
+      finalizedAt: null,
+      vetoEndsAt: null,
+      consumedAt: null,
+      updatedAt: 300n + BigInt(index),
+    }));
+
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          id: `0x${"e".repeat(64)}`,
+          domain: 1,
+          status: 1,
+          proposedAt: 1_000n,
+          challengeEndsAt: 1_900n,
+          finalizedAt: null,
+          vetoEndsAt: null,
+          consumedAt: null,
+          updatedAt: 1_000n,
+        },
+      ],
+      [
+        rejectedRows,
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/finality-sla?now=6000",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      status: "degraded",
+      breachCount: 1,
+      rejectedCount: 1_000,
+    });
+    expect(body.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: 1,
+          phase: "challenge_window",
+          count: 1,
+          oldestAgeSeconds: 5000,
+        }),
+        expect.objectContaining({
+          domain: 1,
+          phase: "rejected",
+          count: 1_000,
+        }),
+      ]),
+    );
+
+    const roundNormalWhere = serializeExpression(
+      queryBuilders[0]?.where.mock.calls[0]?.[0],
+    );
+    expect(roundNormalWhere).toContain('["roundPayoutSnapshot.status",1]');
+    expect(roundNormalWhere).toContain('["roundPayoutSnapshot.status",3]');
+    expect(roundNormalWhere).not.toContain('"kind":"inArray"');
+
+    const roundAttentionWhere = serializeExpression(
+      queryBuilders[1]?.where.mock.calls[0]?.[0],
+    );
+    expect(roundAttentionWhere).toContain("roundPayoutSnapshot.status");
+    expect(roundAttentionWhere).toContain("[2,4]");
+    expect(roundAttentionWhere).not.toContain(
+      '["roundPayoutSnapshot.status",1]',
+    );
+    expect(roundAttentionWhere).not.toContain(
+      '["roundPayoutSnapshot.status",3]',
+    );
+
+    const epochNormalWhere = serializeExpression(
+      queryBuilders[2]?.where.mock.calls[0]?.[0],
+    );
+    expect(epochNormalWhere).toContain(
+      '["correlationEpochSnapshot.status",1]',
+    );
+    expect(epochNormalWhere).toContain(
+      '["correlationEpochSnapshot.status",3]',
+    );
+    expect(epochNormalWhere).not.toContain('"kind":"inArray"');
+
+    const epochAttentionWhere = serializeExpression(
+      queryBuilders[3]?.where.mock.calls[0]?.[0],
+    );
+    expect(epochAttentionWhere).toContain("correlationEpochSnapshot.status");
+    expect(epochAttentionWhere).toContain("[2,4]");
+    expect(epochAttentionWhere).not.toContain(
+      '["correlationEpochSnapshot.status",1]',
+    );
+    expect(epochAttentionWhere).not.toContain(
+      '["correlationEpochSnapshot.status",3]',
+    );
   });
 
   it("lists settled reward rounds that still need payout snapshots", async () => {

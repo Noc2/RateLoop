@@ -406,17 +406,19 @@ async function loadSourceReadyUnproposedRows() {
 export async function buildCorrelationFinalitySla(
   nowSeconds = BigInt(Math.floor(Date.now() / 1000)),
 ) {
-  const [roundRows, epochRows, sourceReadyRows] = await Promise.all([
+  const [
+    roundNormalRows,
+    roundAttentionRows,
+    epochNormalRows,
+    epochAttentionRows,
+    sourceReadyRows,
+  ] = await Promise.all([
     db
       .select()
       .from(roundPayoutSnapshot)
       .where(
         or(
-          inArray(roundPayoutSnapshot.status, [
-            SNAPSHOT_STATUS.Proposed,
-            SNAPSHOT_STATUS.Challenged,
-            SNAPSHOT_STATUS.Rejected,
-          ]),
+          eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Proposed),
           and(
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Finalized),
             or(
@@ -430,14 +432,21 @@ export async function buildCorrelationFinalitySla(
       .limit(SLA_ROW_LIMIT),
     db
       .select()
+      .from(roundPayoutSnapshot)
+      .where(
+        inArray(roundPayoutSnapshot.status, [
+          SNAPSHOT_STATUS.Challenged,
+          SNAPSHOT_STATUS.Rejected,
+        ]),
+      )
+      .orderBy(asc(roundPayoutSnapshot.updatedAt), asc(roundPayoutSnapshot.id))
+      .limit(SLA_ROW_LIMIT),
+    db
+      .select()
       .from(correlationEpochSnapshot)
       .where(
         or(
-          inArray(correlationEpochSnapshot.status, [
-            SNAPSHOT_STATUS.Proposed,
-            SNAPSHOT_STATUS.Challenged,
-            SNAPSHOT_STATUS.Rejected,
-          ]),
+          eq(correlationEpochSnapshot.status, SNAPSHOT_STATUS.Proposed),
           and(
             eq(correlationEpochSnapshot.status, SNAPSHOT_STATUS.Finalized),
             sql`${correlationEpochSnapshot.vetoEndsAt} > ${nowSeconds}`,
@@ -449,16 +458,41 @@ export async function buildCorrelationFinalitySla(
         asc(correlationEpochSnapshot.id),
       )
       .limit(SLA_ROW_LIMIT),
+    db
+      .select()
+      .from(correlationEpochSnapshot)
+      .where(
+        inArray(correlationEpochSnapshot.status, [
+          SNAPSHOT_STATUS.Challenged,
+          SNAPSHOT_STATUS.Rejected,
+        ]),
+      )
+      .orderBy(
+        asc(correlationEpochSnapshot.updatedAt),
+        asc(correlationEpochSnapshot.id),
+      )
+      .limit(SLA_ROW_LIMIT),
     loadSourceReadyUnproposedRows(),
   ]);
-  const roundSummary = summarizeRows(
+  const roundNormalSummary = summarizeRows(
     nowSeconds,
-    roundRows as SnapshotRow[],
+    roundNormalRows as SnapshotRow[],
     0,
   );
-  const epochSummary = summarizeRows(
+  const roundAttentionSummary = summarizeRows(
     nowSeconds,
-    epochRows as SnapshotRow[],
+    roundAttentionRows as SnapshotRow[],
+    0,
+  );
+  const epochNormalSummary = summarizeRows(
+    nowSeconds,
+    epochNormalRows as SnapshotRow[],
+    "correlation_epoch",
+    { completeAfterFinalizedVeto: true },
+  );
+  const epochAttentionSummary = summarizeRows(
+    nowSeconds,
+    epochAttentionRows as SnapshotRow[],
     "correlation_epoch",
     { completeAfterFinalizedVeto: true },
   );
@@ -467,12 +501,14 @@ export async function buildCorrelationFinalitySla(
     sourceReadyRows,
   );
   const normalBreaches = [
-    ...roundSummary.normalBreaches,
-    ...epochSummary.normalBreaches,
+    ...roundNormalSummary.normalBreaches,
+    ...epochNormalSummary.normalBreaches,
     ...sourceReadySummary.normalBreaches,
   ];
-  const disputedCount = roundSummary.disputedCount + epochSummary.disputedCount;
-  const rejectedCount = roundSummary.rejectedCount + epochSummary.rejectedCount;
+  const disputedCount =
+    roundAttentionSummary.disputedCount + epochAttentionSummary.disputedCount;
+  const rejectedCount =
+    roundAttentionSummary.rejectedCount + epochAttentionSummary.rejectedCount;
 
   return {
     status:
@@ -490,8 +526,10 @@ export async function buildCorrelationFinalitySla(
     rejectedCount,
     phases: [
       ...sourceReadySummary.buckets,
-      ...roundSummary.buckets,
-      ...epochSummary.buckets,
+      ...roundNormalSummary.buckets,
+      ...roundAttentionSummary.buckets,
+      ...epochNormalSummary.buckets,
+      ...epochAttentionSummary.buckets,
     ].sort((a, b) =>
       String(a.domain).localeCompare(String(b.domain)) ||
       a.phase.localeCompare(b.phase),
