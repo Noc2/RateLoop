@@ -19,9 +19,15 @@ function isAuthorizedSweepSecret(candidate: string, secret: string) {
   return candidateBuffer.length === secretBuffer.length && timingSafeEqual(candidateBuffer, secretBuffer);
 }
 
-export async function POST(request: NextRequest) {
-  const secret = process.env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET?.trim() ?? "";
-  if (!secret) {
+function getSweepSecrets() {
+  return [process.env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET?.trim(), process.env.CRON_SECRET?.trim()].filter(
+    (secret): secret is string => Boolean(secret),
+  );
+}
+
+async function handleSweep(request: NextRequest) {
+  const secrets = getSweepSecrets();
+  if (secrets.length === 0) {
     return NextResponse.json({ error: "Question details sweep is not configured." }, { status: 503 });
   }
 
@@ -29,10 +35,18 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   const token = request.headers.get("x-rateloop-sweep-secret")?.trim() || readBearerToken(request);
-  if (!isAuthorizedSweepSecret(token, secret)) {
+  if (!secrets.some(secret => isAuthorizedSweepSecret(token, secret))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   const result = await sweepOrphanedQuestionDetails();
   return NextResponse.json(result);
+}
+
+export async function GET(request: NextRequest) {
+  return handleSweep(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleSweep(request);
 }

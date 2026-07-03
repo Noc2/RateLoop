@@ -19,14 +19,20 @@ function isAuthorizedSweepRequest(token: string, secret: string) {
   return tokenBuffer.length === secretBuffer.length && timingSafeEqual(tokenBuffer, secretBuffer);
 }
 
+function getSweepSecrets() {
+  return [process.env.RATELOOP_IMAGE_ATTACHMENT_SWEEP_SECRET?.trim(), process.env.CRON_SECRET?.trim()].filter(
+    (secret): secret is string => Boolean(secret),
+  );
+}
+
 function parseLimit(request: NextRequest) {
   const value = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "", 10);
   return Number.isSafeInteger(value) && value > 0 ? Math.min(value, 500) : 100;
 }
 
-export async function POST(request: NextRequest) {
-  const secret = process.env.RATELOOP_IMAGE_ATTACHMENT_SWEEP_SECRET?.trim() ?? "";
-  if (!secret) {
+async function handleSweep(request: NextRequest) {
+  const secrets = getSweepSecrets();
+  if (secrets.length === 0) {
     return NextResponse.json({ error: "Image attachment sweep is not configured." }, { status: 503 });
   }
 
@@ -34,9 +40,17 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   const token = request.headers.get("x-rateloop-image-attachment-sweep-secret")?.trim() || readBearerToken(request);
-  if (!isAuthorizedSweepRequest(token, secret)) {
+  if (!secrets.some(secret => isAuthorizedSweepRequest(token, secret))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   return NextResponse.json(await sweepOrphanedImageAttachments({ limit: parseLimit(request) }));
+}
+
+export async function GET(request: NextRequest) {
+  return handleSweep(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleSweep(request);
 }

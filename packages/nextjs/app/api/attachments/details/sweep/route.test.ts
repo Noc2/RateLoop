@@ -11,6 +11,7 @@ const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalSweepSecret = env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET;
+const originalCronSecret = env.CRON_SECRET;
 
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
@@ -35,6 +36,16 @@ function sweepRequest(token = "wrong-secret") {
   });
 }
 
+function cronRequest(token = "cron-secret") {
+  return new NextRequest("https://rateloop.ai/api/attachments/details/sweep", {
+    headers: new Headers({
+      authorization: `Bearer ${token}`,
+      "user-agent": "question-details-sweep-test",
+    }),
+    method: "GET",
+  });
+}
+
 before(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "test";
@@ -48,6 +59,7 @@ beforeEach(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "test";
   env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET = "sweep-secret";
+  delete env.CRON_SECRET;
   const resources = dbTestMemory.createMemoryDatabaseResources();
   dbModule.__setDatabaseResourcesForTests(resources);
   rateLimit.__setRateLimitStoreForTests(resources.client);
@@ -60,15 +72,26 @@ after(() => {
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("RATELOOP_QUESTION_DETAILS_SWEEP_SECRET", originalSweepSecret);
+  restoreEnv("CRON_SECRET", originalCronSecret);
 });
 
 test("question details sweep returns 503 when secret is not configured", async () => {
   delete env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET;
+  delete env.CRON_SECRET;
 
   const response = await route.POST(sweepRequest("sweep-secret"));
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: "Question details sweep is not configured." });
+});
+
+test("question details sweep accepts Vercel cron GET bearer auth", async () => {
+  delete env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET;
+  env.CRON_SECRET = "cron-secret";
+
+  const response = await route.GET(cronRequest());
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { deleted: 0, scanned: 0 });
 });
 
 test("question details sweep uses bearer auth and rate limits unauthorized guesses", async () => {
