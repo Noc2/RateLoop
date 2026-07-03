@@ -116,6 +116,8 @@ interface IClusterPayoutOracle {
 
     function roundPayoutSnapshotRejectedAt(bytes32 snapshotKey) external view returns (uint64);
 
+    function roundPayoutSnapshotCorrelationEpochRejectedAt(bytes32 snapshotKey) external view returns (uint64);
+
     function finalizationVetoWindow() external view returns (uint64);
 
     function FINALIZATION_VETO_WINDOW() external view returns (uint64);

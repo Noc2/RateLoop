@@ -38,6 +38,67 @@ contract SecondPassRbtsSettlementOracleTest is SecondPassAuditRegressionBase {
         assertEq(uint8(settled.state), uint8(RoundLib.RoundState.Settled));
     }
 
+    function testParentRejectedRbtsSnapshotMustWaitBeforeTimeout() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rbts-parent-rejected-snapshot");
+        uint256 roundId = _moveRoundToRbtsSettlementPending(contentId);
+        (bytes32 snapshotKey, uint64 correlationEpochId) =
+            _proposeFinalizedMalformedRbtsSnapshot(oracle, contentId, roundId);
+
+        IClusterPayoutOracle.PayoutWeight[] memory emptyWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory emptyProofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.SnapshotAvailable.selector);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        oracle.rejectFinalizedCorrelationEpoch(correlationEpochId, keccak256("wrong-rbts-parent"));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory rejected =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId);
+        assertEq(uint8(rejected.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        assertTrue(
+            oracle.isRoundPayoutSnapshotRejectedByCorrelationEpoch(
+                oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId
+            )
+        );
+        assertEq(oracle.roundPayoutSnapshotRejectedAt(snapshotKey), 0);
+        uint64 parentRejectedAt = oracle.roundPayoutSnapshotCorrelationEpochRejectedAt(snapshotKey);
+        assertEq(parentRejectedAt, block.timestamp);
+
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.RoundNotExpired.selector);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        vm.warp(uint256(parentRejectedAt) + 1 hours);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+        RoundLib.Round memory settled = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint8(settled.state), uint8(RoundLib.RoundState.Settled));
+    }
+
+    function testPreFinalizedParentRejectedRbtsSnapshotMustWaitBeforeTimeout() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("rbts-pre-finalized-parent-rejected-snapshot");
+        uint256 roundId = _moveRoundToRbtsSettlementPending(contentId);
+        bytes32 snapshotKey = _proposeMalformedRbtsSnapshot(oracle, contentId, roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+
+        vm.warp(block.timestamp + 1 hours);
+
+        IClusterPayoutOracle.PayoutWeight[] memory emptyWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory emptyProofs = new bytes32[][](0);
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.SnapshotAvailable.selector);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        oracle.rejectCorrelationEpoch(proposal.snapshot.correlationEpochId, keccak256("wrong-rbts-parent"));
+        uint64 parentRejectedAt = oracle.roundPayoutSnapshotCorrelationEpochRejectedAt(snapshotKey);
+        assertEq(parentRejectedAt, block.timestamp);
+
+        vm.expectRevert(RoundVotingEngineRbtsSettlementModule.RoundNotExpired.selector);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+
+        vm.warp(uint256(parentRejectedAt) + 1 hours);
+        votingEngine.applyRbtsSettlementSnapshot(contentId, roundId, emptyWeights, emptyProofs);
+        RoundLib.Round memory settled = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint8(settled.state), uint8(RoundLib.RoundState.Settled));
+    }
+
     function _moveRoundToRbtsSettlementPending(uint256 contentId) internal returns (uint256 roundId) {
         roundId = _revealRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         vm.roll(block.number + 1);
@@ -86,5 +147,18 @@ contract SecondPassRbtsSettlementOracleTest is SecondPassAuditRegressionBase {
             })
         );
         snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_RBTS_SETTLEMENT(), 0, contentId, roundId);
+    }
+
+    function _proposeFinalizedMalformedRbtsSnapshot(ClusterPayoutOracle oracle, uint256 contentId, uint256 roundId)
+        internal
+        returns (bytes32 snapshotKey, uint64 correlationEpochId)
+    {
+        snapshotKey = _proposeMalformedRbtsSnapshot(oracle, contentId, roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        correlationEpochId = proposal.snapshot.correlationEpochId;
+
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeCorrelationEpoch(correlationEpochId);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 }

@@ -176,11 +176,16 @@ contract RoundVotingEngineRbtsSettlementModule is RoundVotingEngineStorage {
         if (oracleAddress == address(0)) return;
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_RBTS_SETTLEMENT, 0, contentId, roundId);
+        uint64 latestRejectedAt;
         try oracle.roundPayoutSnapshotRejectedAt(snapshotKey) returns (uint64 rejectedAt) {
-            if (rejectedAt != 0 && block.timestamp < uint256(rejectedAt) + RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT) {
-                revert RoundNotExpired();
-            }
+            latestRejectedAt = rejectedAt;
         } catch { }
+        try oracle.roundPayoutSnapshotCorrelationEpochRejectedAt(snapshotKey) returns (uint64 parentRejectedAt) {
+            if (parentRejectedAt > latestRejectedAt) latestRejectedAt = parentRejectedAt;
+        } catch { }
+        if (latestRejectedAt != 0 && block.timestamp < uint256(latestRejectedAt) + RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT) {
+            revert RoundNotExpired();
+        }
     }
 
     function _returnRbtsStakes(uint256 contentId, uint256 roundId)

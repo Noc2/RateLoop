@@ -1799,6 +1799,25 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "roundPayoutSnapshotCorrelationEpochRejectedAt",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundPayoutSnapshotKey",
     "inputs": [
       {

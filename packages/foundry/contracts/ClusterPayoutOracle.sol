@@ -145,6 +145,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotRoots;
     /// @notice Timestamp of the most recent state-changing rejection for each round-payout snapshot key.
     mapping(bytes32 => uint64) public roundPayoutSnapshotRejectedAt;
+    /// @notice Timestamp of the most recent rejection for an exact correlation-epoch proposal digest.
+    mapping(uint64 => mapping(bytes32 => uint64)) private correlationEpochSnapshotRejectedAt;
     /// @notice Exact rejected correlation-epoch proposal payloads. Used when the arbiter rejects
     ///         bad metadata around a deterministic clusterRoot without burning the root itself.
     mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochSnapshotDigests;
@@ -429,8 +431,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
+        bytes32 correlationEpochDigest = _correlationEpochDigest(snapshot);
         snapshot.status = SnapshotStatus.Rejected;
-        rejectedCorrelationEpochSnapshotDigests[epochId][_correlationEpochDigest(snapshot)] = true;
+        _markCorrelationEpochSnapshotRejected(epochId, correlationEpochDigest);
         // Metadata-only rejection clears bad surrounding fields without burning the deterministic
         // root. The explicit root path is reserved for invalid scorer output.
         if (rejectRoot) {
@@ -466,7 +469,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         _revertIfAnyConsumedChildSnapshot(epochId, correlationEpochDigest);
 
         snapshot.status = SnapshotStatus.Rejected;
-        rejectedCorrelationEpochSnapshotDigests[epochId][correlationEpochDigest] = true;
+        _markCorrelationEpochSnapshotRejected(epochId, correlationEpochDigest);
         if (rejectRoot) {
             _rejectCorrelationEpochRoot(snapshot);
         }
@@ -878,6 +881,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             && !_isLiveCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId);
     }
 
+    function roundPayoutSnapshotCorrelationEpochRejectedAt(bytes32 snapshotKey) external view returns (uint64) {
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        RoundPayoutSnapshot storage snapshot = proposal.snapshot;
+        if (snapshot.status == SnapshotStatus.None || !_isLiveRoundPayoutStatus(snapshot.status)) return 0;
+        if (_isLiveCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId)) return 0;
+        return correlationEpochSnapshotRejectedAt[snapshot.correlationEpochId][proposal.correlationEpochDigest];
+    }
+
     function roundPayoutSnapshotConsumerFor(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view
@@ -1067,6 +1078,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function _markRoundPayoutSnapshotRejected(bytes32 snapshotKey, RoundPayoutProposal storage proposal) private {
         proposal.snapshot.status = SnapshotStatus.Rejected;
         roundPayoutSnapshotRejectedAt[snapshotKey] = block.timestamp.toUint64();
+    }
+
+    function _markCorrelationEpochSnapshotRejected(uint64 epochId, bytes32 correlationEpochDigest) private {
+        rejectedCorrelationEpochSnapshotDigests[epochId][correlationEpochDigest] = true;
+        correlationEpochSnapshotRejectedAt[epochId][correlationEpochDigest] = block.timestamp.toUint64();
     }
 
     function _roundPayoutSnapshotDigest(
