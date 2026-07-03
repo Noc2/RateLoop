@@ -521,6 +521,12 @@ function isPublicBindAddress(value) {
   return Boolean(normalized && !isLoopbackBindAddress(normalized));
 }
 
+function resolveKeeperMetricsBindAddress(env) {
+  const explicitBindAddress = readRuntimeEnv(env, "METRICS_BIND_ADDRESS");
+  if (explicitBindAddress) return explicitBindAddress;
+  return readRuntimeEnv(env, "PORT") ? "0.0.0.0" : "127.0.0.1";
+}
+
 function isTruthyEnvValue(value) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
@@ -642,7 +648,7 @@ export function validateOffchainRuntimeEnv({
     );
   }
 
-  const metricsBindAddress = readRuntimeEnv(env, "METRICS_BIND_ADDRESS");
+  const metricsBindAddress = resolveKeeperMetricsBindAddress(env);
   if (isPublicBindAddress(metricsBindAddress)) {
     const metricsAuthToken = readRuntimeEnv(env, "METRICS_AUTH_TOKEN");
     addCheck(

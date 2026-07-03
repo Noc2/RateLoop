@@ -5,6 +5,7 @@ import {
   buildDeploymentAddressMap,
   buildPonderUrl,
   buildReadinessUrl,
+  validateOffchainRuntimeEnv,
 } from "./readiness-core.mjs";
 import {
   baseMainnetNotDeployedMessage,
@@ -220,6 +221,46 @@ test("validateBaseMainnetLiveEnvironment rejects malformed access recorder priva
   assert(
     result.failures.some((message) =>
       message.includes("RATELOOP_CONFIDENTIALITY_ACCESS_RECORDER_PRIVATE_KEY"),
+    ),
+  );
+});
+
+test("validateOffchainRuntimeEnv treats hosted PORT as a public Keeper metrics bind", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      PORT: "8080",
+    },
+    failures,
+  });
+
+  assert(
+    failures.includes("METRICS_AUTH_TOKEN is configured when Keeper metrics are public"),
+  );
+});
+
+test("validateOffchainRuntimeEnv treats omitted hosted PORT as loopback for public file artifacts", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "https://artifacts.example.com/rateloop/",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+    },
+    failures,
+  });
+
+  assert(
+    failures.includes(
+      "METRICS_BIND_ADDRESS is non-loopback when Keeper publishes public correlation artifacts",
     ),
   );
 });
