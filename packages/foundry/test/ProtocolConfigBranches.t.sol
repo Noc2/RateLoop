@@ -1717,6 +1717,14 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setSlashConfig(2_500, 2, 0, 200e6);
+
+        uint256 belowMinSlashEvidence = config.MIN_SLASH_EVIDENCE() - 1;
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setSlashConfig(2_500, 2, 7 days, belowMinSlashEvidence);
+
+        uint256 aboveMaxSlashEvidence = config.MAX_SLASH_EVIDENCE() + 1;
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setSlashConfig(2_500, 2, 7 days, aboveMaxSlashEvidence);
     }
 
     function test_SetConfig_RejectsEpochDurationAboveUint32Max() public {

@@ -242,12 +242,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         onlyRole(CONFIG_ROLE)
     {
         _validateChallengeWindow(newChallengeWindow);
-        if (newBondRecipient == address(0)) revert InvalidAddress();
-        if (newChallengeBond < MIN_CHALLENGE_BOND || newChallengeBond > MAX_CHALLENGE_BOND) revert InvalidBond();
+        _validateOracleBondConfig(newChallengeBond, newBondRecipient);
         challengeWindow = newChallengeWindow;
         challengeBond = newChallengeBond;
         bondRecipient = newBondRecipient;
         emit OracleConfigUpdated(newChallengeWindow, newChallengeBond, newBondRecipient);
+    }
+
+    function setOracleBondConfig(uint256 newChallengeBond, address newBondRecipient) external onlyRole(CONFIG_ROLE) {
+        _validateOracleBondConfig(newChallengeBond, newBondRecipient);
+        challengeBond = newChallengeBond;
+        bondRecipient = newBondRecipient;
+        emit OracleConfigUpdated(challengeWindow, newChallengeBond, newBondRecipient);
     }
 
     function setOracleTimingConfig(uint64 newChallengeWindow, uint64 newFinalizationVetoWindow)
@@ -1275,6 +1281,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     function _validateChallengeWindow(uint64 newChallengeWindow) private pure {
         if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
+    }
+
+    function _validateOracleBondConfig(uint256 newChallengeBond, address newBondRecipient) private pure {
+        if (newBondRecipient == address(0)) revert InvalidAddress();
+        if (newChallengeBond < MIN_CHALLENGE_BOND || newChallengeBond > MAX_CHALLENGE_BOND) revert InvalidBond();
     }
 
     function _validateFinalizationVetoWindow(uint64 newFinalizationVetoWindow) private pure {

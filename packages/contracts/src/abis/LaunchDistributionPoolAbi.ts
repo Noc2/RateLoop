@@ -2507,7 +2507,7 @@ export const LaunchDistributionPoolAbi = [
     "name": "LegacyContributorUnclaimedSwept",
     "inputs": [
       {
-        "name": "treasury",
+        "name": "recipient",
         "type": "address",
         "indexed": true,
         "internalType": "address"

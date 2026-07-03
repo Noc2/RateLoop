@@ -294,12 +294,7 @@ contract ConfidentialityEscrow is
         identityKey = _recordBond(contentId, msg.sender, config, resolved);
     }
 
-    function releaseBond(uint256 contentId, bytes32 identityKey)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (uint256 amount)
-    {
+    function releaseBond(uint256 contentId, bytes32 identityKey) external nonReentrant returns (uint256 amount) {
         BondPosition storage position = bonds[contentId][identityKey];
         if (position.poster == address(0) || position.released || position.slashed) revert("No active bond");
         if (!_isBondReleasable(contentId, position.postedAt)) revert("Bond locked");

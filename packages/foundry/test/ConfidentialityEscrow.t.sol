@@ -867,7 +867,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
 
         vm.startPrank(delegate);
         lrepToken.approve(address(confidentialityEscrow), 1_000e6);
-        vm.expectRevert("Identity banned");
+        vm.expectRevert("Credential required");
         confidentialityEscrow.postBond(contentId);
         vm.stopPrank();
     }
@@ -911,6 +911,26 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         vm.expectRevert(VotePreflightLib.ConfidentialityBondRequired.selector);
         vm.prank(voter2);
         engine.openRound(contentId);
+
+        uint256 beforeBalance = lrepToken.balanceOf(voter1);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertEq(lrepToken.balanceOf(voter1), beforeBalance + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+    }
+
+    function testReleaseBondAllowsMaturedBondWhilePaused() public {
+        uint256 contentId = _submitGatedQuestion("paused-release", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        uint256 roundId = engine.currentRoundId(contentId);
+
+        vm.warp(block.timestamp + 30 days);
+        engine.cancelExpiredRound(contentId, roundId);
+
+        vm.prank(owner);
+        confidentialityEscrow.setPaused(true);
 
         uint256 beforeBalance = lrepToken.balanceOf(voter1);
         confidentialityEscrow.releaseBond(contentId, identityKey);

@@ -211,7 +211,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     event LegacyContributorClaimed(
         address indexed account, address indexed recipient, uint256 amount, uint256 allocation, uint256 totalClaimed
     );
-    event LegacyContributorUnclaimedSwept(address indexed treasury, uint256 amount);
+    event LegacyContributorUnclaimedSwept(address indexed recipient, uint256 amount);
 
     modifier onlyAuthorized() {
         if (!authorizedCallers[msg.sender]) revert InvalidAddress();
@@ -1451,13 +1451,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     }
 
     function _isVerifiedAnchorBanned(bytes32 anchorId) private view returns (bool banned) {
-        assembly ("memory-safe") {
-            mstore(0x00, shl(224, 0xf8e0a2d6))
-            mstore(0x04, anchorId)
-            if staticcall(gas(), sload(raterRegistry.slot), 0x00, 0x24, 0x00, 0x20) {
-                banned := iszero(iszero(mload(0x00)))
-            }
-        }
+        (bool ok, bytes memory data) =
+            address(raterRegistry).staticcall(abi.encodeCall(RaterRegistry.isIdentityKeyBanned, (anchorId)));
+        if (!ok || data.length != 32) revert InvalidAddress();
+        return abi.decode(data, (bool));
     }
 
     function _hasActiveHumanCredential(address rater) internal view returns (bool) {

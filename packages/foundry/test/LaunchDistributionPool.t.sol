@@ -115,7 +115,7 @@ contract LaunchDistributionPoolTest is Test {
     event LegacyContributorClaimed(
         address indexed account, address indexed recipient, uint256 amount, uint256 allocation, uint256 totalClaimed
     );
-    event LegacyContributorUnclaimedSwept(address indexed treasury, uint256 amount);
+    event LegacyContributorUnclaimedSwept(address indexed recipient, uint256 amount);
 
     LoopReputation internal lrep;
     RaterRegistry internal registry;
@@ -2362,6 +2362,34 @@ contract LaunchDistributionPoolTest is Test {
         pool.recordEarnedRaterRewardWithSourceReady(
             alice, 1, 1, _commitKey(1), 8_000, 3, true, 1e6, anchors, uint64(block.timestamp)
         );
+    }
+
+    function test_RecordEarnedRaterRewardFailsClosedOnMalformedAnchorBanRead() public {
+        bytes32 anchorId = bytes32("anchor-a");
+        uint256 minStake = pool.MIN_LAUNCH_CREDIT_STAKE();
+        vm.mockCall(address(registry), abi.encodeCall(RaterRegistry.isIdentityKeyBanned, (anchorId)), hex"01");
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice, 1, 1, _commitKey(1), 8_000, 3, true, minStake, _singleAnchor(anchorId), uint64(block.timestamp)
+        );
+
+        vm.clearMockedCalls();
+    }
+
+    function test_RecordEarnedRaterRewardFailsClosedOnRevertingAnchorBanRead() public {
+        bytes32 anchorId = bytes32("anchor-a");
+        uint256 minStake = pool.MIN_LAUNCH_CREDIT_STAKE();
+        vm.mockCallRevert(
+            address(registry), abi.encodeCall(RaterRegistry.isIdentityKeyBanned, (anchorId)), "registry down"
+        );
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice, 1, 1, _commitKey(1), 8_000, 3, true, minStake, _singleAnchor(anchorId), uint64(block.timestamp)
+        );
+
+        vm.clearMockedCalls();
     }
 
     function test_RecordEarnedRaterRewardRequiresRoundContext() public {

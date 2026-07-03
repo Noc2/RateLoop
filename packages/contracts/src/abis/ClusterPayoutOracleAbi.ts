@@ -1971,6 +1971,24 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "setOracleBondConfig",
+    "inputs": [
+      {
+        "name": "newChallengeBond",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newBondRecipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setOracleConfig",
     "inputs": [
       {

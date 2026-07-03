@@ -40,6 +40,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 60 days;
     uint256 public constant MIN_SUBMISSION_LREP_POOL_FLOOR = 1e6;
     uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
+    uint256 public constant MIN_SLASH_EVIDENCE = 1e6;
+    uint256 public constant MAX_SLASH_EVIDENCE = 1_000_000e6;
     uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 100;
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 200;
@@ -1252,6 +1254,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         if (minSlashSettledRounds == 0) revert InvalidConfig();
         if (minSlashLowDuration == 0) revert InvalidConfig();
+        if (minSlashEvidence < MIN_SLASH_EVIDENCE || minSlashEvidence > MAX_SLASH_EVIDENCE) {
+            revert InvalidConfig();
+        }
 
         slashConfig = RatingLib.SlashConfig({
             slashThresholdBps: slashThresholdBps,

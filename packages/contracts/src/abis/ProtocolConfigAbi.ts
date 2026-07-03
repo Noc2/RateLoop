@@ -45,6 +45,32 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_SLASH_EVIDENCE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_SLASH_EVIDENCE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MIN_SUBMISSION_LREP_POOL_FLOOR",
     "inputs": [],
     "outputs": [

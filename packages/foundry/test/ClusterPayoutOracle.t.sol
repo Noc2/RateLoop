@@ -47,6 +47,7 @@ contract ClusterPayoutOracleTest is Test {
     uint256 internal constant CHALLENGE_BOND = 5e6;
     address internal constant CHALLENGER = address(0xCA11);
 
+    event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
     event OracleTimingConfigUpdated(uint64 challengeWindow, uint64 finalizationVetoWindow);
 
     ClusterPayoutOracle internal oracle;
@@ -319,6 +320,26 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
         oracle.setOracleConfig(2 hours, maxChallengeBond + 1, address(this));
+    }
+
+    function test_OracleBondConfigUpdatesBondWithoutChangingTiming() public {
+        address newRecipient = address(0xB0B);
+
+        vm.expectEmit(false, false, false, true);
+        emit OracleConfigUpdated(oracle.challengeWindow(), 10e6, newRecipient);
+        oracle.setOracleBondConfig(10e6, newRecipient);
+
+        assertEq(oracle.challengeWindow(), 2 hours);
+        assertEq(oracle.finalizationVetoWindow(), 15 minutes);
+        assertEq(oracle.challengeBond(), 10e6);
+        assertEq(oracle.bondRecipient(), newRecipient);
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        oracle.setOracleBondConfig(10e6, address(0));
+
+        uint256 aboveMaxChallengeBond = oracle.MAX_CHALLENGE_BOND() + 1;
+        vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
+        oracle.setOracleBondConfig(aboveMaxChallengeBond, newRecipient);
     }
 
     function test_ConstructorLaunchTimingDefaultsToOneHourPolicy() public {
