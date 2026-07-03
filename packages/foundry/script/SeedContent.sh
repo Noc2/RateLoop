@@ -24,7 +24,7 @@ SUBMISSION_ROUND_MAX_DURATION="1200"
 SUBMISSION_ROUND_MIN_VOTERS="3"
 SUBMISSION_ROUND_MAX_VOTERS="100"
 CONTENT_ONE_ROUND_EPOCH_DURATION="120"
-CONTENT_ONE_ROUND_MAX_DURATION="1200"
+CONTENT_ONE_ROUND_MAX_DURATION="120"
 CONTENT_ONE_ROUND_MIN_VOTERS="3"
 CONTENT_ONE_ROUND_MAX_VOTERS="3"
 SUBMISSION_BUNDLE_ROUND_MAX_VOTERS="100"
@@ -820,10 +820,28 @@ settle_seeded_content_one_round() {
   seed_reveal 1 "$roundId" true "$SALT3A" "$VOTER3_KEY"
 
   echo "Settling content 1 round $roundId..."
-  # RBTS settlement is two-step: capture the seed, then finalize in the next block.
+  # RBTS settlement is two-step: settleRound captures the RBTS seed and moves the
+  # round to SettlementPending; finalization then runs via applyRbtsSettlementSnapshot
+  # (a second settleRound would revert RoundNotOpen once the round is SettlementPending).
   cast send "$VOTING_ENGINE" "settleRound(uint256,uint256)" 1 "$roundId" \
     --private-key "$VOTER1_KEY" --rpc-url "$RPC" > /dev/null
-  cast send "$VOTING_ENGINE" "settleRound(uint256,uint256)" 1 "$roundId" \
+
+  # The deploy configures a real ClusterPayoutOracle but publishes no settlement
+  # snapshot for this seeded round, so finalize via the snapshot-timeout path: warp
+  # past RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT (1 hour past roundClusterPayoutReadyAt),
+  # advance past the armed RBTS seed block, then apply an empty snapshot.
+  local settleLifecycle
+  local clusterPayoutReadyAt
+  settleLifecycle=$(cast call "$VOTING_ENGINE" "roundLifecycleState(uint256,uint256)(uint256,uint256,uint256,uint48)" \
+    1 "$roundId" --rpc-url "$RPC")
+  clusterPayoutReadyAt=$(printf '%s\n' "$settleLifecycle" | awk 'NR == 4 { print $1; exit }')
+  if [[ "$clusterPayoutReadyAt" =~ ^[0-9]+$ ]] && [ "$clusterPayoutReadyAt" -gt 0 ]; then
+    cast rpc evm_setNextBlockTimestamp "$((clusterPayoutReadyAt + 3601))" --rpc-url "$RPC" > /dev/null 2>&1 || true
+    cast rpc anvil_mine 1 --rpc-url "$RPC" > /dev/null 2>&1 || true
+  fi
+  cast send "$VOTING_ENGINE" \
+    "applyRbtsSettlementSnapshot(uint256,uint256,(uint8,uint256,uint256,uint256,bytes32,bytes32,address,uint256,uint16,uint256,bytes32)[],bytes32[][])" \
+    1 "$roundId" "[]" "[]" \
     --private-key "$VOTER1_KEY" --rpc-url "$RPC" > /dev/null
 
   ratingBps=$(cast call "$REGISTRY" "getRating(uint256)(uint16)" 1 --rpc-url "$RPC")
