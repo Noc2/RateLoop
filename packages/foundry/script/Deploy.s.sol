@@ -357,9 +357,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         ClusterPayoutOracle clusterPayoutOracle =
             new ClusterPayoutOracle(deployer, address(frontendRegistry), usdcTokenAddress);
-        frontendRegistry.grantRole(
-            frontendRegistry.SNAPSHOT_DISPUTE_RECORDER_ROLE(), address(clusterPayoutOracle)
-        );
+        frontendRegistry.grantRole(frontendRegistry.SNAPSHOT_DISPUTE_RECORDER_ROLE(), address(clusterPayoutOracle));
         // M-Oracle-1 (PR #20): the launch-credit consumer pin on the oracle MUST be set BEFORE
         // `setClusterPayoutOracle` because `_validateClusterPayoutOracle` now verifies the new
         // oracle routes the launch-credit domain back to this pool. Bootstrap order:

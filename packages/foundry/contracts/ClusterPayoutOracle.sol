@@ -399,11 +399,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Challenged) {
             if (
-                !hasRole(ARBITER_ROLE, msg.sender) && block.timestamp
-                    < _challengeDeadline(
-                        snapshot.proposedAt,
-                        snapshot.challengeWindowAtProposal + snapshot.finalizationVetoWindowAtProposal
-                    )
+                !hasRole(ARBITER_ROLE, msg.sender)
+                    && block.timestamp
+                        < _challengeDeadline(
+                            snapshot.proposedAt,
+                            snapshot.challengeWindowAtProposal + snapshot.finalizationVetoWindowAtProposal
+                        )
             ) {
                 revert SnapshotChallenged();
             }
@@ -641,10 +642,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (proposal.snapshot.status == SnapshotStatus.Challenged) {
             _requireCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
             if (
-                !hasRole(ARBITER_ROLE, msg.sender) && block.timestamp
-                    < _challengeDeadline(
-                        proposal.proposedAt, proposal.challengeWindowAtProposal + proposal.finalizationVetoWindowAtProposal
-                    )
+                !hasRole(ARBITER_ROLE, msg.sender)
+                    && block.timestamp
+                        < _challengeDeadline(
+                            proposal.proposedAt,
+                            proposal.challengeWindowAtProposal + proposal.finalizationVetoWindowAtProposal
+                        )
             ) {
                 revert SnapshotChallenged();
             }

@@ -56,8 +56,7 @@ contract RoundVotingEngine is
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
-    bytes32 internal constant RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER =
-        keccak256("rateloop.rbts-settlement-module.v1");
+    bytes32 internal constant RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER = keccak256("rateloop.rbts-settlement-module.v1");
 
     // --- Custom Errors ---
     error InvalidAddress();

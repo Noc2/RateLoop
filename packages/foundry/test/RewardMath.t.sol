@@ -47,7 +47,6 @@ contract RewardMathHarness {
     ) external pure returns (uint256) {
         return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, benchmarkScoreBps, revealedCount);
     }
-
 }
 
 /// @title RewardMath Fuzz & Unit Tests
@@ -298,5 +297,4 @@ contract RewardMathTest is Test {
         assertEq(treasuryShare, 0);
         assertEq(voterShare, 1);
     }
-
 }

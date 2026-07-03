@@ -188,9 +188,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     function renounceRole(bytes32 role, address callerConfirmation) public override {
         if (role == FEE_CREDITOR_ROLE) revert FeeCreditorRoleManagedInternally();
-        if (
-            role == SNAPSHOT_DISPUTE_RECORDER_ROLE && openSnapshotDisputeCountByRecorder[callerConfirmation] != 0
-        ) {
+        if (role == SNAPSHOT_DISPUTE_RECORDER_ROLE && openSnapshotDisputeCountByRecorder[callerConfirmation] != 0) {
             revert SnapshotDisputeActive();
         }
         super.renounceRole(role, callerConfirmation);
