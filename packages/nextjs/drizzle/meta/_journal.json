@@ -127,6 +127,13 @@
       "when": 1782901800000,
       "tag": "0017_confidentiality_frontend_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783048901000,
+      "tag": "0018_agent_handoff_feedback_bonus_recovery",
+      "breakpoints": true
     }
   ]
 }

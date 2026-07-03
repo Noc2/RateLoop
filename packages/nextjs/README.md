@@ -27,7 +27,7 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn next:check-types`                            | TypeScript type checking                                                                   |
 | `yarn workspace @rateloop/nextjs format`           | Format frontend code with Prettier                                                         |
 | `yarn workspace @rateloop/nextjs db:generate`      | Generate Drizzle migrations                                                                |
-| `yarn workspace @rateloop/nextjs db:push`          | Apply migrations to the configured database                                                |
+| `yarn workspace @rateloop/nextjs db:push`          | Synchronize the Drizzle schema to the configured database for controlled local/dev use      |
 | `yarn workspace @rateloop/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
 | `yarn workspace @rateloop/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
 | `yarn workspace @rateloop/nextjs demo:record`      | Record the short Playwright product demo video                                             |
@@ -37,7 +37,7 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn workspace @rateloop/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
 | `yarn e2e:ui`                                      | Run E2E tests with interactive Playwright UI                                               |
 
-**Production deploy:** Run `db:push` (or apply SQL migrations) on the Neon app database before shipping signing-intent changes. Migration `0012_agent_signing_intent_prepared_artifacts.sql` adds `transaction_plan` and `x402_authorization_request` columns required for browser signing reload.
+**Production deploy:** Follow the deploy checklist in `drizzle/README.md` and apply all required numbered SQL migrations through the project or host migration process before shipping database-backed agent/runtime changes. `db:push` is schema synchronization for controlled local/dev environments; it does not execute those numbered SQL migration files.
 
 CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed suites separately on pushes and PRs.
 

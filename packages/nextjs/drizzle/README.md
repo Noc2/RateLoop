@@ -1,10 +1,8 @@
 # Drizzle migrations
 
-SQL migrations in this directory are the source of truth for the Next.js app database schema. Apply them with:
+Numbered SQL migrations in this directory are the source of truth for the Next.js app database schema in migration-file deploys. Apply them through the project or host SQL migration process before shipping database-backed app changes.
 
-```bash
-yarn workspace @rateloop/nextjs db:push
-```
+`yarn workspace @rateloop/nextjs db:push` runs Drizzle schema synchronization against the configured database. Use it for controlled local or development environments; it does not execute the numbered SQL migration files in this directory.
 
 ## Deploy checklist
 
@@ -15,4 +13,4 @@ yarn workspace @rateloop/nextjs db:push
 | `0016_free_transaction_reservation_session_token.sql` | Free-transaction confirm session binding (`reservation_session_token` on pending reservations) |
 | `0018_agent_handoff_feedback_bonus_recovery.sql` | Browser handoff Feedback Bonus confirmation retry state after bonus wallet calls are broadcast |
 
-The Drizzle meta snapshot (`meta/0000_snapshot.json`) may lag behind applied migrations; rely on `schema.ts` and numbered SQL files when auditing drift. Regenerate snapshots with `db:generate` after intentional schema edits.
+The Drizzle meta snapshot (`meta/0000_snapshot.json`) may lag behind applied migrations; rely on `schema.ts`, numbered SQL files, and `meta/_journal.json` when auditing drift. Regenerate snapshots with `db:generate` after intentional schema edits.
