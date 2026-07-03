@@ -9,6 +9,7 @@ import {
   parseAgentResult,
   type AskHumansRequest,
   type ListResultTemplatesResponse,
+  type PrepareRatingTransactionsRequest,
   type QuestionStatusResponse,
   type WebhookReplayStore,
 } from "./agent";
@@ -410,12 +411,53 @@ test("rating SDK helpers call the MCP rating tools", async () => {
   assert.equal(calls[1].arguments.termsVersion, "2026-06");
   assert.equal(calls[1].arguments.challengeId, "challenge-terms");
   assert.equal(calls[1].arguments.signature, "0xterms");
+  assert.equal(calls[2].arguments.contentId, "42");
+  assert.equal(calls[2].arguments.roundId, "7");
   assert.equal(calls[2].arguments.stakeWei, "1000000");
+  assert.equal(calls[2].arguments.targetRound, "100");
   assert.equal(calls[2].arguments.commitHash, `0x${"11".repeat(32)}`);
   assert.equal(calls[2].arguments.isUp, undefined);
   assert.deepEqual(calls[3].arguments.transactionHashes, [
     `0x${"33".repeat(32)}`,
   ]);
+});
+
+test("rating helpers reject unsafe integer inputs before MCP", async () => {
+  const agent = createRateLoopAgentClient({
+    fetchImpl: async () => {
+      throw new Error("fetch should not be called");
+    },
+    mcpApiUrl: "https://rateloop.example/api/mcp/public",
+  });
+  const base = {
+    chainId: 31337,
+    ciphertext: `0x${"ab".repeat(4)}`,
+    commitHash: `0x${"11".repeat(32)}`,
+    contentId: "42",
+    drandChainHash: `0x${"22".repeat(32)}`,
+    frontend: "0x00000000000000000000000000000000000000bb",
+    roundId: "7",
+    roundReferenceRatingBps: 5000,
+    stakeWei: "1000000",
+    targetRound: "100",
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  };
+
+  for (const [overrides, pattern] of [
+    [{ contentId: Number.MAX_SAFE_INTEGER + 1 }, /request\.contentId must be a safe non-negative integer/i],
+    [{ roundId: "7.0" }, /request\.roundId must be a non-negative base-10 integer/i],
+    [{ roundReferenceRatingBps: 10001 }, /request\.roundReferenceRatingBps must be an integer from 0 to 10000/i],
+    [{ stakeWei: -1 }, /request\.stakeWei must be a safe non-negative integer/i],
+    [{ targetRound: "1e2" }, /request\.targetRound must be a non-negative base-10 integer/i],
+  ] as const) {
+    await assert.rejects(
+      agent.prepareRatingTransactions({
+        ...base,
+        ...overrides,
+      } as PrepareRatingTransactionsRequest),
+      pattern,
+    );
+  }
 });
 
 test("prepareRatingTransactions rejects plaintext rating fields before MCP", async () => {

@@ -1307,11 +1307,14 @@ const PLAINTEXT_RATING_FIELDS = [
 
 function parseChainId(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new McpToolError("chainId must be a positive integer.");
+  const rawValue = parseStrictDecimalIntegerString(value, "chainId", {
+    allowZero: false,
+  });
+  const parsed = BigInt(rawValue);
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new McpToolError("chainId must be a positive safe integer.");
   }
-  return parsed;
+  return Number(parsed);
 }
 
 function resolvePonderDeploymentOptionsForChainId(
@@ -1336,29 +1339,52 @@ function resolvePonderDeploymentOptionsFromArgs(
 }
 
 function parseRatingContentId(value: unknown): bigint {
-  const rawValue =
-    typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
-  if (!/^\d+$/.test(rawValue)) {
-    throw new McpToolError("contentId must be a non-negative integer string.");
-  }
-  return BigInt(rawValue);
+  return BigInt(parseStrictDecimalIntegerString(value, "contentId"));
 }
 
 function parseRatingBigInt(value: unknown, fieldName: string): bigint {
-  const rawValue =
-    typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
-  if (!/^\d+$/.test(rawValue)) {
-    throw new McpToolError(`${fieldName} must be a non-negative integer string.`);
-  }
-  return BigInt(rawValue);
+  return BigInt(parseStrictDecimalIntegerString(value, fieldName));
 }
 
 function parseRatingBps(value: unknown): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 10_000) {
+  const rawValue = parseStrictDecimalIntegerString(value, "roundReferenceRatingBps");
+  const parsed = BigInt(rawValue);
+  if (parsed > 10_000n) {
     throw new McpToolError("roundReferenceRatingBps must be an integer from 0 to 10000.");
   }
-  return parsed;
+  return Number(parsed);
+}
+
+function parseStrictDecimalIntegerString(
+  value: unknown,
+  fieldName: string,
+  options: { allowZero?: boolean } = {},
+): string {
+  const allowZero = options.allowZero ?? true;
+  if (typeof value === "bigint") {
+    if (value < 0n || (!allowZero && value === 0n)) {
+      throw new McpToolError(`${fieldName} must be ${allowZero ? "a non-negative" : "a positive"} base-10 integer.`);
+    }
+    return value.toString();
+  }
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0 || (!allowZero && value === 0)) {
+      throw new McpToolError(
+        `${fieldName} must be ${allowZero ? "a safe non-negative" : "a positive safe"} integer. Pass a base-10 string for large values.`,
+      );
+    }
+    return String(value);
+  }
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) {
+    throw new McpToolError(
+      `${fieldName} must be ${allowZero ? "a non-negative" : "a positive"} base-10 integer string.`,
+    );
+  }
+  const trimmed = value.trim();
+  if (!allowZero && BigInt(trimmed) === 0n) {
+    throw new McpToolError(`${fieldName} must be a positive base-10 integer string.`);
+  }
+  return trimmed;
 }
 
 function parseRatingHex(value: unknown, fieldName: string, bytes?: number): Hex {

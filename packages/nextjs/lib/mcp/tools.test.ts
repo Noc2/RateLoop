@@ -1276,6 +1276,32 @@ test("rateloop_prepare_rating_transactions rejects plaintext rating fields", asy
   );
 });
 
+test("rateloop_prepare_rating_transactions rejects unsafe rating integer inputs before lookups", async () => {
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () => {
+      throw new Error("content lookup should not run for invalid rating integers");
+    },
+  });
+
+  for (const [overrides, pattern] of [
+    [{ contentId: Number.MAX_SAFE_INTEGER + 1 }, /contentId must be a safe non-negative integer/i],
+    [{ roundId: "7.0" }, /roundId must be a non-negative base-10 integer string/i],
+    [{ roundReferenceRatingBps: "5e3" }, /roundReferenceRatingBps must be a non-negative base-10 integer string/i],
+    [{ stakeWei: -1 }, /stakeWei must be a safe non-negative integer/i],
+    [{ targetRound: "1e2" }, /targetRound must be a non-negative base-10 integer string/i],
+    [{ chainId: "31337.0" }, /chainId must be a positive base-10 integer string/i],
+  ] as const) {
+    await assert.rejects(
+      () =>
+        callPublicRateLoopMcpTool({
+          arguments: ratingPrepareArguments(overrides),
+          name: "rateloop_prepare_rating_transactions",
+        }),
+      pattern,
+    );
+  }
+});
+
 test("rateloop_prepare_rating_transactions returns wallet calls for encrypted commit material", async () => {
   __setMcpToolTestOverridesForTests({
     getContentById: async () => ratingContent(),

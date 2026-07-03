@@ -1218,19 +1218,23 @@ export async function prepareRatingTransactions(
 ): Promise<PrepareRatingTransactionsResponse> {
   assertNoPlaintextRatingFields(params as unknown as JsonRecord);
   const config = normalizeAgentConfig(options);
+  const lookupArgs = ratingLookupArgs(params);
   return callMcpTool<PrepareRatingTransactionsResponse>(
     config,
     "rateloop_prepare_rating_transactions",
     {
-      ...ratingLookupArgs(params),
+      ...lookupArgs,
       ciphertext: params.ciphertext,
       commitHash: params.commitHash,
       drandChainHash: params.drandChainHash,
       frontend: params.frontend,
-      roundId: params.roundId,
-      roundReferenceRatingBps: params.roundReferenceRatingBps,
-      stakeWei: params.stakeWei,
-      targetRound: params.targetRound,
+      roundId: ratingIntegerArg(params.roundId, "request.roundId"),
+      roundReferenceRatingBps: ratingReferenceBpsArg(
+        params.roundReferenceRatingBps,
+        "request.roundReferenceRatingBps",
+      ),
+      stakeWei: ratingIntegerArg(params.stakeWei, "request.stakeWei"),
+      targetRound: ratingIntegerArg(params.targetRound, "request.targetRound"),
     },
   );
 }
@@ -1953,12 +1957,48 @@ function ratingLookupArgs(
   params: RatingContentLookup & { roundId?: unknown; stakeWei?: unknown },
 ) {
   return {
-    chainId: params.chainId,
-    contentId: params.contentId,
-    roundId: params.roundId,
-    stakeWei: params.stakeWei,
+    chainId: validateLookupChainId(params.chainId),
+    contentId: ratingIntegerArg(params.contentId, "request.contentId"),
+    roundId:
+      params.roundId === undefined
+        ? undefined
+        : ratingIntegerArg(params.roundId, "request.roundId"),
+    stakeWei:
+      params.stakeWei === undefined
+        ? undefined
+        : ratingIntegerArg(params.stakeWei, "request.stakeWei"),
     walletAddress: params.walletAddress,
   } satisfies JsonRecord;
+}
+
+function ratingIntegerArg(value: unknown, path: string) {
+  if (typeof value === "bigint") {
+    if (value < 0n) {
+      throw new RateLoopSdkError(`${path} must be a non-negative base-10 integer.`);
+    }
+    return value.toString();
+  }
+  if (typeof value === "number") {
+    assertSafeNonNegativeNumber(value, path);
+    return String(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return trimmed;
+  }
+  throw new RateLoopSdkError(`${path} must be a non-negative base-10 integer.`);
+}
+
+function ratingReferenceBpsArg(value: unknown, path: string) {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > 10_000
+  ) {
+    throw new RateLoopSdkError(`${path} must be an integer from 0 to 10000.`);
+  }
+  return value;
 }
 
 function assertNoPlaintextRatingFields(params: JsonRecord) {
