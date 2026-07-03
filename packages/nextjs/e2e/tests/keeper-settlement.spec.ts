@@ -213,15 +213,23 @@ test.describe("Keeper-backed settlement lifecycle", () => {
 
     const data = await getContentById(contentId!);
     const round = data.rounds.find(item => item.roundId === String(roundId));
+    const { items: indexedVotes } = await getVotes({ contentId: contentId! });
+    const roundVotes = indexedVotes.filter(item => item.roundId === String(roundId));
+    const expectedUpVotes = voters.filter(voter => voter.isUp).length;
+    const expectedDownVotes = voters.length - expectedUpVotes;
 
     expect(round).toBeTruthy();
     expect([ROUND_STATE.Settled, ROUND_STATE.SettlementPending]).toContain(round!.state);
-    expect(round!.upWins).toBe(true);
     expect(Number(round!.voteCount)).toBe(voters.length);
+    expect(roundVotes.length).toBe(voters.length);
+    expect(roundVotes.filter(vote => vote.isUp).length).toBe(expectedUpVotes);
+    expect(roundVotes.filter(vote => !vote.isUp).length).toBe(expectedDownVotes);
     if (round!.state === ROUND_STATE.Settled) {
+      expect(round!.upWins).toBe(true);
       expect(round!.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);
       expect(BigInt(round!.ratingReviewRawUpEvidence ?? "0")).toBeGreaterThan(0n);
     } else {
+      expect(round!.upWins).toBeNull();
       expect(round!.rbtsSettlementPendingAt).toBeTruthy();
     }
   });

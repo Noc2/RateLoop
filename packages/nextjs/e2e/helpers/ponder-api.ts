@@ -72,7 +72,7 @@ export type ContentRound = {
   downPool: string;
   upCount: string;
   downCount: string;
-  upWins: boolean;
+  upWins: boolean | null;
   ratingReviewStatus: number;
   ratingReviewReferenceRatingBps: number | null;
   ratingReviewRawUpEvidence: string | null;
