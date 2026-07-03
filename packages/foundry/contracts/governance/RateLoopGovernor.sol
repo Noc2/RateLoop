@@ -78,6 +78,8 @@ contract RateLoopGovernor is
     mapping(uint256 => uint256) public proposalCreatedBlock;
     /// @notice Earliest block where each proposer may submit another proposal.
     mapping(address => uint256) public nextProposalBlock;
+    /// @notice Proposal-threshold stake locked when each proposal was created.
+    mapping(uint256 => uint256) public proposalLockedAmount;
 
     error ExcludedHolderCannotGovern(address holder);
     error InvalidExcludedHolder();
@@ -252,8 +254,12 @@ contract RateLoopGovernor is
         proposalId = super._cancel(targets, values, calldatas, descriptionHash);
 
         if (releaseProposerState) {
+            uint256 lockedAmount = proposalLockedAmount[proposalId];
+            delete proposalLockedAmount[proposalId];
             nextProposalBlock[proposer] = 0;
-            reputationToken.releaseGovernanceLock(proposer, proposalThreshold());
+            if (lockedAmount > 0) {
+                reputationToken.releaseGovernanceLock(proposer, lockedAmount);
+            }
         }
 
         return proposalId;
@@ -311,6 +317,7 @@ contract RateLoopGovernor is
 
         uint256 proposalId = super.propose(targets, values, calldatas, description);
         proposalCreatedBlock[proposalId] = block.number;
+        proposalLockedAmount[proposalId] = threshold;
         nextProposalBlock[msg.sender] = block.number + PROPOSAL_COOLDOWN_BLOCKS;
 
         reputationToken.lockForGovernanceUntil(msg.sender, threshold, _proposalLockUntil());

@@ -10,10 +10,20 @@ import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
+contract RateLoopGovernorHarness is RateLoopGovernor {
+    constructor(IVotes reputationToken, TimelockController timelock, address[] memory excludedHolders)
+        RateLoopGovernor(reputationToken, timelock, excludedHolders)
+    { }
+
+    function exposedSetProposalThreshold(uint256 newProposalThreshold) external {
+        _setProposalThreshold(newProposalThreshold);
+    }
+}
+
 contract GovernanceTest is Test {
     LoopReputation public token;
     TimelockController public timelock;
-    RateLoopGovernor public governor;
+    RateLoopGovernorHarness public governor;
 
     address public deployer = address(1);
     address public voter1 = address(2);
@@ -89,7 +99,7 @@ contract GovernanceTest is Test {
         timelock = new TimelockController(2 days, proposers, executors, deployer);
 
         // Deploy Governor with LREP directly (no wrapper needed) and genesis quorum exclusions.
-        governor = new RateLoopGovernor(IVotes(address(token)), timelock, _excludedHolders());
+        governor = new RateLoopGovernorHarness(IVotes(address(token)), timelock, _excludedHolders());
 
         // Set governor on token so it can lock tokens during governance
         token.setGovernor(address(governor));
@@ -833,6 +843,7 @@ contract GovernanceTest is Test {
 
         assertEq(uint256(governor.state(proposalId)), uint256(IGovernor.ProposalState.Canceled));
         assertEq(governor.nextProposalBlock(voter1), 0);
+        assertEq(governor.proposalLockedAmount(proposalId), 0);
         assertEq(token.getLockedBalance(voter1), 0);
         assertEq(token.getTransferableBalance(voter1), VOTER_BALANCE);
 
@@ -840,6 +851,58 @@ contract GovernanceTest is Test {
         uint256 correctedProposalId =
             governor.propose(targets, values, calldatas, _boundDescription("Corrected proposal", voter1));
         assertTrue(correctedProposalId != 0);
+    }
+
+    function test_ProposerSelfCancelReleasesOriginalStakeAfterThresholdIncrease() public {
+        vm.roll(block.number + 1);
+
+        uint256 proposalThreshold = governor.proposalThreshold();
+        uint256 votingLockAmount = governor.MAX_PROPOSAL_THRESHOLD() - proposalThreshold;
+        vm.prank(address(governor));
+        token.lockForGovernance(voter1, votingLockAmount);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+        string memory description = _boundDescription("Cancel after threshold increase", voter1);
+
+        vm.prank(voter1);
+        uint256 proposalId = governor.propose(targets, values, calldatas, description);
+
+        assertEq(token.getLockedBalance(voter1), votingLockAmount + proposalThreshold);
+        assertEq(governor.proposalLockedAmount(proposalId), proposalThreshold);
+
+        governor.exposedSetProposalThreshold(governor.MAX_PROPOSAL_THRESHOLD());
+
+        vm.prank(voter1);
+        governor.cancel(targets, values, calldatas, keccak256(bytes(description)));
+
+        assertEq(governor.proposalLockedAmount(proposalId), 0);
+        assertEq(token.getLockedBalance(voter1), votingLockAmount);
+        assertEq(token.getTransferableBalance(voter1), VOTER_BALANCE - votingLockAmount);
+    }
+
+    function test_ProposerSelfCancelReleasesOriginalStakeAfterThresholdDecrease() public {
+        vm.roll(block.number + 1);
+
+        uint256 originalThreshold = governor.MAX_PROPOSAL_THRESHOLD();
+        governor.exposedSetProposalThreshold(originalThreshold);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+        string memory description = _boundDescription("Cancel after threshold decrease", voter1);
+
+        vm.prank(voter1);
+        uint256 proposalId = governor.propose(targets, values, calldatas, description);
+
+        assertEq(token.getLockedBalance(voter1), originalThreshold);
+        assertEq(governor.proposalLockedAmount(proposalId), originalThreshold);
+
+        governor.exposedSetProposalThreshold(governor.BOOTSTRAP_PROPOSAL_THRESHOLD());
+
+        vm.prank(voter1);
+        governor.cancel(targets, values, calldatas, keccak256(bytes(description)));
+
+        assertEq(governor.proposalLockedAmount(proposalId), 0);
+        assertEq(token.getLockedBalance(voter1), 0);
+        assertEq(token.getTransferableBalance(voter1), VOTER_BALANCE);
     }
 
     function test_CreateProposal_RequiresExactProposerSuffixMarker() public {
