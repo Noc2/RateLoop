@@ -3,7 +3,6 @@ pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 
 /// @title Harness to expose RewardMath internal functions for testing
 contract RewardMathHarness {
@@ -49,9 +48,6 @@ contract RewardMathHarness {
         return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, benchmarkScoreBps, revealedCount);
     }
 
-    function epochWeightBps(uint8 epochIndex) external pure returns (uint256) {
-        return RoundLib.epochWeightBps(epochIndex);
-    }
 }
 
 /// @title RewardMath Fuzz & Unit Tests
@@ -303,30 +299,4 @@ contract RewardMathTest is Test {
         assertEq(voterShare, 1);
     }
 
-    // ====================================================
-    // epochWeightBps — Unit Tests
-    // ====================================================
-
-    function test_EpochWeightBps_Epoch0_Returns10000() public view {
-        uint256 weight = harness.epochWeightBps(0);
-        assertEq(weight, 10000, "Epoch 0 (blind epoch-1) must return 10000 bps (100%)");
-    }
-
-    function test_EpochWeightBps_Epoch1_Returns10000() public view {
-        uint256 weight = harness.epochWeightBps(1);
-        assertEq(weight, 10000, "Epoch 1 remains fenced to 100% weight");
-    }
-
-    function test_EpochWeightBps_HighEpoch_Returns10000() public view {
-        uint256 weight2 = harness.epochWeightBps(2);
-        uint256 weight100 = harness.epochWeightBps(100);
-        assertEq(weight2, 10000, "Epoch 2 remains fenced to 100% weight");
-        assertEq(weight100, 10000, "Epoch 100 remains fenced to 100% weight");
-    }
-
-    function test_EpochWeightBps_NoDormantEarlyVoterAdvantage() public view {
-        uint256 blindWeight = harness.epochWeightBps(0);
-        uint256 futureEpochWeight = harness.epochWeightBps(1);
-        assertEq(blindWeight, futureEpochWeight, "single-epoch protocol must not expose a dormant 4x tier");
-    }
 }

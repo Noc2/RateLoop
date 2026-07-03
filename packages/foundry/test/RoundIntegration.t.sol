@@ -2747,13 +2747,13 @@ contract RoundIntegrationTest is VotingTestBase {
     }
 
     // =========================================================================
-    // SINGLE-DURATION WEIGHTS — all accepted blind-window voters get full weight
+    // SINGLE-DURATION WEIGHTS — all accepted blind-window voters use full stake
     // =========================================================================
 
-    function test_EpochWeighting_Epoch1VoterGetsFullWeight() public {
+    function test_SingleDurationFirstVoterGetsFullStakeWeight() public {
         uint256 contentId = _submitContent();
 
-        // voter1 commits in epoch-1 (epochIndex=0 → 100% weight)
+        // voter1 commits during the shared blind window.
         bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
         bytes32 ch1 = _commitHash(true, s1, voter1, contentId);
 
@@ -2776,24 +2776,24 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         bytes32 ck1 = _commitKey(voter1, ch1);
 
-        // Verify epochIndex = 0 (epoch-1, blind)
+        // The compatibility epochIndex field stays zero for the single-window protocol.
         RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, ck1);
-        assertEq(commit.epochIndex, 0, "First voter should be in epoch-1 (epochIndex=0)");
+        assertEq(commit.epochIndex, 0, "compatibility epochIndex should stay zero");
         assertEq(commit.stakeAmount, STAKE, "Stake should be recorded correctly");
 
-        // Advance past epoch boundary and reveal
+        // Advance past the blind-window boundary and reveal.
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, s1);
 
-        // After reveal, effective weighted pool should reflect 100% weight
+        // After reveal, the compatibility weighted pool should reflect full stake.
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-        assertEq(round.weightedUpPool, STAKE, "Epoch-1 vote should have 100% weight (effectiveStake = stake)");
+        assertEq(round.weightedUpPool, STAKE, "accepted vote should use full stake weight");
     }
 
-    function test_EpochWeighting_SingleDurationLateVoterKeepsFullWeight() public {
+    function test_SingleDurationLateVoterKeepsFullStakeWeight() public {
         uint256 contentId = _submitContent();
 
-        // voter1 commits in epoch-1 (blind)
+        // voter1 commits during the shared blind window.
         bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
         bytes32 ch1 = _commitHash(true, s1, voter1, contentId);
 
@@ -2816,8 +2816,8 @@ contract RoundIntegrationTest is VotingTestBase {
         bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, true, uint256(2)));
         (, bytes32 ck3) = _commitWithSalt(voter3, contentId, true, STAKE, s3);
 
-        // Advance later into the same shared duration. The fresh model has no
-        // second rewardable epoch; accepted blind-window votes remain epochIndex=0.
+        // Advance later into the same shared duration. There is no second rewardable tier;
+        // accepted blind-window votes retain the zero compatibility epochIndex.
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory rEW0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         vm.warp(uint256(rEW0.startTime) + EPOCH_DURATION / 2);
@@ -2828,7 +2828,7 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 voter2RevealableAfter = block.timestamp + EPOCH_DURATION;
 
         RoundLib.Commit memory commit2 = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, ck2);
-        assertEq(commit2.epochIndex, 0, "Single-duration voter should remain epochIndex=0");
+        assertEq(commit2.epochIndex, 0, "compatibility epochIndex should stay zero");
 
         // Reveal voter2's vote after its tlock target.
         _warpPastTlockRevealTime(voter2RevealableAfter);
@@ -2838,8 +2838,8 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // Verify weighted pools: all accepted votes receive full weight.
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-        assertEq(round.weightedUpPool, 2 * STAKE, "Epoch-1 UP votes should have 100% weight");
-        assertEq(round.weightedDownPool, STAKE, "Single-duration DOWN vote should have 100% weight");
+        assertEq(round.weightedUpPool, 2 * STAKE, "UP votes should use full stake weight");
+        assertEq(round.weightedDownPool, STAKE, "DOWN vote should use full stake weight");
 
         // UP wins because it has two votes to one at full weight.
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);

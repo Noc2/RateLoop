@@ -193,11 +193,7 @@ library RoundCleanupLib {
         RoundLib.RoundConfig memory roundCfg
     ) private view returns (uint256 total) {
         uint256 epochEnd = round.startTime + roundCfg.epochDuration;
-        uint256 maxEpochEnd = round.startTime + roundCfg.maxDuration + roundCfg.epochDuration;
-        while (epochEnd <= block.timestamp && epochEnd <= maxEpochEnd) {
-            total += epochUnrevealedCount[epochEnd];
-            epochEnd += roundCfg.epochDuration;
-        }
+        if (epochEnd <= block.timestamp) return epochUnrevealedCount[epochEnd];
     }
 
     function resolveClaimCommit(

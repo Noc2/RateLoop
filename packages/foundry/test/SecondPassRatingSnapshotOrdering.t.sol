@@ -342,7 +342,7 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
             bytes32 commitKey = votingEngine.getRoundCommitKey(contentId, roundId, i);
             (uint256 flags, bytes32 identityKey, address holder) =
                 votingEngine.ratingCommitStateCompact(contentId, roundId, commitKey);
-            uint256 baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8), uint8(flags >> 72));
+            uint256 baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8));
             payoutWeights[i] = IClusterPayoutOracle.PayoutWeight({
                 domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
                 rewardPoolId: 0,
@@ -365,12 +365,12 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         }
     }
 
-    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) internal pure returns (uint256) {
+    function _ratingEvidenceWeight(uint64 stakeAmount) internal pure returns (uint256) {
         uint256 stakeForBonus =
             stakeAmount > RATING_EVIDENCE_STAKE_BONUS_CAP ? RATING_EVIDENCE_STAKE_BONUS_CAP : stakeAmount;
         uint256 stakeBonus = (stakeForBonus * RATING_EVIDENCE_MAX_STAKE_BONUS) / RATING_EVIDENCE_STAKE_BONUS_CAP;
         uint256 rawEvidence = RATING_EVIDENCE_BASE_UNIT + stakeBonus;
-        return (rawEvidence * RoundLib.epochWeightBps(epochIndex)) / 10_000;
+        return rawEvidence;
     }
 
     function _publicRatingEpochSources(uint256 contentId, uint256 roundId)

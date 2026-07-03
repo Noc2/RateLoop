@@ -24,7 +24,6 @@ library RoundCommitStorageLib {
         uint256 epochEnd;
         uint256 effectiveRevealableAfter;
         uint64 targetRound;
-        uint8 epochIdx;
         bytes32 commitHash;
         bytes32 identityKey;
         address identityHolder;
@@ -59,7 +58,7 @@ library RoundCommitStorageLib {
             targetRound: params.targetRound,
             revealed: false,
             isUp: false,
-            epochIndex: params.epochIdx
+            epochIndex: 0
         });
         commitCommittedAt[params.commitKey] = block.timestamp.toUint48();
         if (

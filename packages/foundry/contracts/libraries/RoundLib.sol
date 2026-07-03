@@ -4,20 +4,20 @@ pragma solidity ^0.8.34;
 /// @title RoundLib
 /// @notice Helpers for per-content round state transitions and timing.
 /// @dev Rounds replace global epochs. Each content item has independent rounds that
-///      accumulate votes across 20-minute tlock epochs. Settlement triggers when ≥3
-///      votes are revealed. If the 20-minute voting window passes below commit quorum
+///      accumulate votes during one tlock blind window. Settlement triggers when ≥3
+///      votes are revealed. If the voting window passes below commit quorum
 ///      the round cancels with refunds;
 ///      once commit quorum exists, failure to reach reveal quorum can finalize as RevealFailed.
 ///      Tlock is the primary reveal mechanism — votes are encrypted to the epoch end time
 ///      and become decryptable via drand after the accepted blind window. Current protocol
-///      config requires `maxDuration == epochDuration`, so every accepted vote is epoch 0
-///      with 100% weight. Multi-epoch weighting is intentionally disabled until a future
-///      config change reintroduces it with dedicated tests and economics.
+///      config requires `maxDuration == epochDuration`, so every accepted vote has full
+///      stake weight. Multi-epoch weighting has been removed; a future config relaxation
+///      must introduce new economics and tests explicitly.
 library RoundLib {
     // --- Enums ---
 
     enum RoundState {
-        Open, // Accepting votes in 20-minute epochs; reveals happen after each epoch
+        Open, // Accepting votes during the blind window; reveals happen after it ends
         Settled, // ≥3 votes revealed, rewards distributed
         Cancelled, // Expired with commit count below minVoters — full refund
         Tied, // Equal weighted pools after ≥3 reveals — revealed voters refund, unrevealed cleaned separately
@@ -74,21 +74,7 @@ library RoundLib {
         uint48 revealableAfter; // Dual-purpose; see struct NatSpec above. Always check `revealed` first.
         bool revealed;
         bool isUp; // Set after reveal
-        uint8 epochIndex; // Current accepted configs always store 0 (single blind epoch)
-    }
-
-    // --- Epoch weight ---
-
-    /// @notice Return the configured epoch weight in BPS.
-    /// @dev Current protocol configs accept only one blind epoch, so all commits have 100% weight.
-    function epochWeightBps(uint8) internal pure returns (uint256) {
-        return 10000;
-    }
-
-    /// @notice Compute effective stake for a commit.
-    function effectiveStake(Commit storage commit) internal view returns (uint256) {
-        if (commit.stakeAmount == 0) return 0;
-        return (uint256(commit.stakeAmount) * epochWeightBps(commit.epochIndex)) / 10000;
+        uint8 epochIndex; // Compatibility field; current accepted configs always store 0.
     }
 
     // --- State checks ---
@@ -111,24 +97,11 @@ library RoundLib {
         return round.state == RoundState.Open && !isExpired(round, maxDuration);
     }
 
-    /// @notice Compute the epoch end time for a vote committed at the given timestamp.
+    /// @notice Compute the blind-window end time for a vote committed in the current round.
     /// @param round The round containing the vote.
     /// @param epochDuration Duration of each epoch in seconds.
-    /// @param commitTimestamp The block.timestamp when the vote was committed.
-    /// @return epochEnd The timestamp when this vote's epoch ends (and it becomes revealable).
-    function computeEpochEnd(Round storage round, uint256 epochDuration, uint256 commitTimestamp)
-        internal
-        view
-        returns (uint256)
-    {
-        uint256 elapsed = commitTimestamp - uint256(round.startTime);
-        uint256 epochIdx = elapsed / epochDuration;
-        return uint256(round.startTime) + (epochIdx + 1) * epochDuration;
-    }
-
-    /// @notice Compute the epoch index for a vote committed at the given timestamp.
-    /// @return epochIdx Always 0 for the current single-epoch protocol.
-    function computeEpochIndex(Round storage, uint256, uint256) internal pure returns (uint8) {
-        return 0;
+    /// @return epochEnd The timestamp when this vote's blind window ends (and it becomes revealable).
+    function computeEpochEnd(Round storage round, uint256 epochDuration) internal view returns (uint256) {
+        return uint256(round.startTime) + epochDuration;
     }
 }

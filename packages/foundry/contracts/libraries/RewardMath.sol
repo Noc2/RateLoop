@@ -4,7 +4,7 @@ pragma solidity ^0.8.34;
 /// @title RewardMath
 /// @notice Pure functions for rating and competitive RBTS reward calculations.
 /// @dev Voter rewards are distributed proportional to positive score-spread weight. Current
-///      protocol config accepts a single blind epoch, so epoch weighting is pinned at 100%.
+///      protocol config accepts a single blind window, and accepted votes use full stake weight.
 library RewardMath {
     uint256 internal constant PRECISION = 1e18;
 

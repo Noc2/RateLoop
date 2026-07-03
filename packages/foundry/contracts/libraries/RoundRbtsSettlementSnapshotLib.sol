@@ -78,7 +78,7 @@ library RoundRbtsSettlementSnapshotLib {
             if (payout.identityKey != commitIdentityKey[payout.commitKey]) revert InvalidState();
             if (payout.account != commitIdentityHolder[payout.commitKey]) revert InvalidState();
 
-            uint256 baseWeight = RoundLib.effectiveStake(commit);
+            uint256 baseWeight = commit.stakeAmount;
             if (
                 baseWeight == 0 || payout.baseWeight != baseWeight || payout.effectiveWeight == 0
                     || payout.effectiveWeight > baseWeight

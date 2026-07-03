@@ -124,8 +124,8 @@ library RoundRevealLib {
         commit.revealableAfter = block.timestamp.toUint48();
         round.revealedCount++;
 
-        effectiveStake = _effectiveStake(commit.stakeAmount, commit.epochIndex);
-        ratingEvidenceWeight = _ratingEvidenceWeight(commit.stakeAmount, commit.epochIndex);
+        effectiveStake = commit.stakeAmount;
+        ratingEvidenceWeight = _ratingEvidenceWeight(commit.stakeAmount);
         if (params.countForSettlement) {
             if (params.isUp) {
                 round.upPool += commit.stakeAmount;
@@ -317,12 +317,6 @@ library RoundRevealLib {
         return (settlementEntropy, true);
     }
 
-    function _effectiveStake(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
-        if (stakeAmount == 0) return 0;
-        uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
-        return ((uint256(stakeAmount) * epochWeightBps) / 10_000).toUint64();
-    }
-
     function _captureRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         mapping(uint256 => mapping(uint256 => uint48)) storage roundRbtsScoringClosedAt,
@@ -354,13 +348,12 @@ library RoundRevealLib {
         if (normalized == bytes32(0)) normalized = bytes32(uint256(1));
     }
 
-    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
+    function _ratingEvidenceWeight(uint64 stakeAmount) private pure returns (uint64) {
         uint256 stakeForBonus =
             stakeAmount > RATING_EVIDENCE_STAKE_BONUS_CAP ? RATING_EVIDENCE_STAKE_BONUS_CAP : stakeAmount;
         uint256 stakeBonus = (stakeForBonus * RATING_EVIDENCE_MAX_STAKE_BONUS) / RATING_EVIDENCE_STAKE_BONUS_CAP;
         uint256 rawEvidence = uint256(RATING_EVIDENCE_BASE_UNIT) + stakeBonus;
-        uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
-        return ((rawEvidence * epochWeightBps) / 10_000).toUint64();
+        return rawEvidence.toUint64();
     }
 
     function _accumulateRbtsCommitScore(

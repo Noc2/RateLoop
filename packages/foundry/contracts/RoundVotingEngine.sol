@@ -534,7 +534,7 @@ contract RoundVotingEngine is
                 maxVoters: roundCfg.maxVoters
             })
         );
-        (uint256 epochEnd, uint8 epochIdx) = _computeCommitEpoch(round, roundCfg);
+        uint256 epochEnd = _computeCommitEpoch(round, roundCfg);
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
@@ -572,7 +572,6 @@ contract RoundVotingEngine is
                 epochEnd: epochEnd,
                 effectiveRevealableAfter: effectiveRevealableAfter,
                 targetRound: targetRound,
-                epochIdx: epochIdx,
                 commitHash: commitHash,
                 identityKey: resolved.identityKey,
                 identityHolder: resolved.holder,
@@ -604,10 +603,9 @@ contract RoundVotingEngine is
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)
         internal
         view
-        returns (uint256 epochEnd, uint8 epochIdx)
+        returns (uint256)
     {
-        epochEnd = RoundLib.computeEpochEnd(round, roundCfg.epochDuration, block.timestamp);
-        epochIdx = RoundLib.computeEpochIndex(round, roundCfg.epochDuration, block.timestamp);
+        return RoundLib.computeEpochEnd(round, roundCfg.epochDuration);
     }
 
     function _validateCommitTlockData(
@@ -890,15 +888,12 @@ contract RoundVotingEngine is
         if (round.revealedCount < roundCfg.minVoters) revert NotEnoughVotes();
 
         uint256 unrevealedPastEpochCount;
-        bool scoringClosed = roundRbtsSeedEntropy[contentId][roundId] != bytes32(0);
-        if (!scoringClosed && round.voteCount > round.revealedCount) {
+        if (round.voteCount > round.revealedCount) {
             unrevealedPastEpochCount = _pastEpochUnrevealedCount(contentId, roundId, round, roundCfg);
             if (unrevealedPastEpochCount > 0) {
                 if (!_isSettlementRevealGraceElapsed(contentId, roundId, round)) revert UnrevealedPastEpochVotes();
                 roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
             }
-        } else if (scoringClosed) {
-            unrevealedPastEpochCount = roundUnrevealedCleanupRemaining[contentId][roundId];
         }
 
         bool upWins;
@@ -913,20 +908,16 @@ contract RoundVotingEngine is
             emit RoundTied(contentId, roundId);
             return;
         }
-        if (!scoringClosed) {
-            RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, roundRbtsScoringClosedAt, contentId, roundId);
-            address rbtsSettlementOracle = protocolConfig.clusterPayoutOracle();
-            if (rbtsSettlementOracle == address(0)) revert InvalidAddress();
-            roundRbtsSettlementOracle[contentId][roundId] = rbtsSettlementOracle;
-            round.upWins = upWins;
-            round.state = RoundLib.RoundState.SettlementPending;
-            if (unrevealedPastEpochCount == 0) {
-                roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
-            }
-            emit RbtsSettlementPending(contentId, roundId, rbtsSettlementOracle);
-            return;
+        RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, roundRbtsScoringClosedAt, contentId, roundId);
+        address rbtsSettlementOracle = protocolConfig.clusterPayoutOracle();
+        if (rbtsSettlementOracle == address(0)) revert InvalidAddress();
+        roundRbtsSettlementOracle[contentId][roundId] = rbtsSettlementOracle;
+        round.upWins = upWins;
+        round.state = RoundLib.RoundState.SettlementPending;
+        if (unrevealedPastEpochCount == 0) {
+            roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
         }
-        revert RoundNotOpen();
+        emit RbtsSettlementPending(contentId, roundId, rbtsSettlementOracle);
     }
 
     function applyRbtsSettlementSnapshot(

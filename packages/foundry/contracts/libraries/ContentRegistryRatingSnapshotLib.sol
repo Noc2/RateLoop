@@ -463,16 +463,15 @@ library ContentRegistryRatingSnapshotLib {
         if ((flags & 1) == 0 || identityKey != payout.identityKey || holder != payout.account) revert InvalidState();
 
         isUp = (flags & 2) != 0;
-        baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8), uint8(flags >> 72));
+        baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8));
     }
 
-    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint256) {
+    function _ratingEvidenceWeight(uint64 stakeAmount) private pure returns (uint256) {
         uint256 stakeForBonus =
             stakeAmount > RATING_EVIDENCE_STAKE_BONUS_CAP ? RATING_EVIDENCE_STAKE_BONUS_CAP : stakeAmount;
         uint256 stakeBonus = (stakeForBonus * RATING_EVIDENCE_MAX_STAKE_BONUS) / RATING_EVIDENCE_STAKE_BONUS_CAP;
         uint256 rawEvidence = uint256(RATING_EVIDENCE_BASE_UNIT) + stakeBonus;
-        uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
-        return (rawEvidence * epochWeightBps) / 10_000;
+        return rawEvidence;
     }
 
     function _roundRatingConfig(IRoundVotingEngine votingEngine, uint256 contentId, uint256 roundId)

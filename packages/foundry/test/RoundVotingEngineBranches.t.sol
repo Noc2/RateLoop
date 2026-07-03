@@ -3433,13 +3433,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     // =========================================================================
-    // 7. TIED ROUND (equal weighted pools)
+    // 7. TIED ROUND (equal full-stake pools)
     // =========================================================================
 
     function test_TiedRound_EqualPools_StateIsTied() public {
         uint256 contentId = _submitContent();
 
-        // 1 UP, 1 DOWN with same stake and same epoch weight -> equal weighted pools
+        // 1 UP, 1 DOWN with same stake -> equal weighted pools
         // We need at least 3 voters for minVoters. Use 2 UP + 2 DOWN but same stake.
         // To get tied: 2 UP voters at STAKE + 1 DOWN voter at 2*STAKE, or simply 1 UP + 1 DOWN
         // with minVoters=3 we need at least 3 reveals. Let's do 2 UP + 2 DOWN for a tie with equal stakes.
@@ -3447,7 +3447,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         // Tie: 1.5 UP vs 1.5 DOWN effectively -- let's do STAKE on each side * matching counts.
         // Simplest: voter1 UP STAKE, voter2 DOWN STAKE, voter3 UP STAKE... that's 2 UP 1 DOWN no tie.
         // For a tie with 3 voters: voter1 UP 2*STAKE, voter2 DOWN 2*STAKE + voter3 UP 2*STAKE... no.
-        // Tie means weightedUpPool == weightedDownPool. All epoch-1 (weight=100%).
+        // Tie means weightedUpPool == weightedDownPool. All accepted votes use full stake.
         // We need sum(UP stakes) == sum(DOWN stakes).
         // 3 voters: voter1 UP 2e6, voter2 DOWN 3e6, voter3 UP 1e6 -> up=3e6, down=3e6 -> TIE.
         uint256 s1 = 2e6;
@@ -5620,17 +5620,17 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_EpochWeighting_SingleDurationVotesUseFullWeight() public {
+    function test_SingleDurationVotesUseFullStakeWeight() public {
         uint256 contentId = _submitContent();
 
-        // voter1 commits in epoch 1
+        // voter1 commits during the shared blind window.
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, false, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        // The shared duration is also the blind epoch; all accepted votes are epoch 1 votes.
+        // The shared duration is the only blind window; all accepted votes use full stake.
         RoundLib.Round memory rEW0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(rEW0.startTime) + EPOCH);
 

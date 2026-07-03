@@ -7726,7 +7726,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             bytes32 commitKey = votingEngine.getRoundCommitKey(contentId, roundId, i);
             (uint256 flags, bytes32 identityKey, address holder) =
                 votingEngine.ratingCommitStateCompact(contentId, roundId, commitKey);
-            uint256 baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8), uint8(flags >> 72));
+            uint256 baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8));
             payoutWeights[i] = IClusterPayoutOracle.PayoutWeight({
                 domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
                 rewardPoolId: 0,
@@ -7756,11 +7756,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         }
     }
 
-    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) internal pure returns (uint256) {
+    function _ratingEvidenceWeight(uint64 stakeAmount) internal pure returns (uint256) {
         uint256 stakeForBonus = stakeAmount > 10_000_000 ? 10_000_000 : stakeAmount;
         uint256 stakeBonus = (stakeForBonus * 1_000_000) / 10_000_000;
         uint256 rawEvidence = 1_000_000 + stakeBonus;
-        return (rawEvidence * RoundLib.epochWeightBps(epochIndex)) / 10_000;
+        return rawEvidence;
     }
 
     function _bundlePayoutWeight(
