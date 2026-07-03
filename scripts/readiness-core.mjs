@@ -415,6 +415,11 @@ export const REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS = [
     expectedContractName: "QuestionRewardPoolEscrow",
     label: "ClusterPayoutOracle question bundle reward consumer",
   },
+  {
+    domain: 5,
+    expectedContractName: "RoundVotingEngine",
+    label: "ClusterPayoutOracle RBTS settlement consumer",
+  },
 ];
 
 const OFFCHAIN_RUNTIME_REQUIRED_ENVS = [

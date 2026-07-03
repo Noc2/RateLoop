@@ -265,7 +265,7 @@ test("ProtocolConfig is required but not marked as Ponder-indexed", () => {
 test("required ClusterPayoutOracle consumers cover all deployed payout domains", () => {
   assert.deepEqual(
     REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS.map((check) => check.domain),
-    [1, 2, 3, 4],
+    [1, 2, 3, 4, 5],
   );
   assert.deepEqual(
     REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS.map(
@@ -276,6 +276,7 @@ test("required ClusterPayoutOracle consumers cover all deployed payout domains",
       "LaunchDistributionPool",
       "ContentRegistry",
       "QuestionRewardPoolEscrow",
+      "RoundVotingEngine",
     ],
   );
 });
@@ -1708,6 +1709,7 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
       const wiringResult = handleWiringCall(params[0], deploymentAddresses, {
         "ProtocolConfig rewardDistributor": addressFor(777),
         "ClusterPayoutOracle public rating consumer": addressFor(779),
+        "ClusterPayoutOracle RBTS settlement consumer": addressFor(780),
         "X402QuestionSubmitter feedbackBonusEscrow": addressFor(778),
       });
       if (wiringResult) return wiringResult;
@@ -1746,6 +1748,13 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
       result.failures.some((message) =>
         message.includes(
           "ClusterPayoutOracle public rating consumer points to ContentRegistry deployment",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "ClusterPayoutOracle RBTS settlement consumer points to RoundVotingEngine deployment",
         ),
       ),
     );
