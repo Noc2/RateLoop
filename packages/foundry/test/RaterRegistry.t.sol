@@ -1576,8 +1576,8 @@ contract RaterRegistryTest is Test {
 
         assertTrue(registry.isIdentityKeyBanned(seededKey));
         assertTrue(registry.isIdentityKeyBanned(addressKey));
-        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
-        assertEq(registry.resolveRater(rater).identityKey, addressKey);
+        assertTrue(registry.isIdentityKeyBanned(worldIdKey));
+        assertEq(registry.resolveRater(rater).identityKey, worldIdKey);
 
         vm.prank(governance);
         registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
@@ -1661,7 +1661,7 @@ contract RaterRegistryTest is Test {
         assertTrue(registry.isIdentityKeyBanned(credentialKey));
         assertTrue(registry.isIdentityKeyBanned(launchKey));
         assertTrue(registry.isIdentityKeyBanned(addressKey));
-        assertEq(registry.resolveRater(rater).identityKey, addressKey);
+        assertEq(registry.resolveRater(rater).identityKey, credentialKey);
     }
 
     function test_BanKnownCredentialNullifierRejectsMissingEvidence() public {
@@ -1703,8 +1703,40 @@ contract RaterRegistryTest is Test {
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
         assertTrue(resolved.hasActiveHumanCredential);
         assertEq(resolved.humanNullifier, NULLIFIER_HASH);
-        assertEq(resolved.identityKey, addressKey);
+        assertEq(resolved.identityKey, credentialKey);
         assertTrue(registry.isIdentityKeyBanned(addressKey));
+    }
+
+    function test_WorldIdBanPropagatesAcrossV4OwnerSlotAndUnbans() public {
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+        );
+
+        bytes32 credentialKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
+        bytes32 v4CredentialKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+        bytes32 addressKey = registry.addressIdentityKey(rater);
+        assertEq(credentialKey, v4CredentialKey);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.WorldId,
+            NULLIFIER_HASH,
+            uint64(block.timestamp + 30 days),
+            "governance evidence",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(registry.isIdentityKeyBanned(credentialKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+        assertEq(registry.resolveRater(rater).identityKey, credentialKey);
+
+        vm.prank(governance);
+        registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
+
+        assertFalse(registry.isIdentityKeyBanned(credentialKey));
+        assertFalse(registry.isIdentityKeyBanned(addressKey));
+        assertEq(registry.resolveRater(rater).identityKey, credentialKey);
     }
 
     /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
@@ -1924,6 +1956,36 @@ contract RaterRegistryTest is Test {
         vm.prank(otherRater);
         vm.expectRevert(RaterRegistry.NoPendingDelegate.selector);
         registry.acceptDelegate();
+    }
+
+    function test_BanningActiveDelegateAddressFailsClosedInResolution() public {
+        vm.prank(admin);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 7 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+        vm.prank(admin);
+        registry.revokeHumanCredential(otherRater);
+
+        vm.prank(rater);
+        registry.setDelegate(otherRater);
+        vm.prank(otherRater);
+        registry.acceptDelegate();
+
+        bytes32 delegateAddressKey = registry.addressIdentityKey(otherRater);
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "delegate evidence",
+            EVIDENCE_HASH
+        );
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(otherRater);
+        assertEq(resolved.holder, rater);
+        assertEq(resolved.identityKey, delegateAddressKey);
+        assertEq(resolved.humanNullifier, bytes32(0));
+        assertFalse(resolved.hasActiveHumanCredential);
+        assertTrue(resolved.delegated);
+        assertTrue(registry.isIdentityKeyBanned(delegateAddressKey));
     }
 
     function test_DelegateCannotChainOrUseOwnCredentialIdentity() public {

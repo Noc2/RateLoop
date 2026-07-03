@@ -667,14 +667,11 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
         _writeIdentityBan(credentialKey, expiresAt, evidenceHash);
         _writeIdentityBan(launchHumanIdentityKey(provider, nullifierHash), expiresAt, evidenceHash);
-        HumanCredentialProvider slotProvider = provider;
-        address owner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
-        if (owner == address(0)) {
-            owner = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
+        _writeDerivedIdentityBansForCredentialSlot(provider, nullifierHash, credentialKey);
+        HumanCredentialProvider pairedProvider = _pairedWorldIdProvider(provider);
+        if (pairedProvider != HumanCredentialProvider.None) {
+            _writeDerivedIdentityBansForCredentialSlot(pairedProvider, nullifierHash, credentialKey);
         }
-        _writeDerivedIdentityBanForHolder(owner, credentialKey);
-        address lastHolder = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
-        if (lastHolder != owner) _writeDerivedIdentityBanForHolder(lastHolder, credentialKey);
 
         emit IdentityBanned(provider, nullifierHash, expiresAt, permanent, evidenceHash, reason);
     }
@@ -684,12 +681,11 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
         delete _identityBans[credentialKey];
         delete _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
-        HumanCredentialProvider slotProvider = provider;
-        address owner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
-        _clearDerivedIdentityBan(owner, credentialKey);
-        address lastHolder = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
-        if (lastHolder != owner) _clearDerivedIdentityBan(lastHolder, credentialKey);
-        delete _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
+        _clearDerivedIdentityBansForCredentialSlot(provider, nullifierHash, credentialKey);
+        HumanCredentialProvider pairedProvider = _pairedWorldIdProvider(provider);
+        if (pairedProvider != HumanCredentialProvider.None) {
+            _clearDerivedIdentityBansForCredentialSlot(pairedProvider, nullifierHash, credentialKey);
+        }
         emit IdentityUnbanned(provider, nullifierHash);
     }
 
@@ -1203,6 +1199,14 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (delegated) holder = delegator;
 
         (bytes32 identityKey, bytes32 humanNullifier, bool hasActiveCredential) = _identityForHolder(holder);
+        if (delegated) {
+            bytes32 actorAddressKey = addressIdentityKey(actor);
+            if (isIdentityKeyBanned(actorAddressKey)) {
+                identityKey = actorAddressKey;
+                humanNullifier = bytes32(0);
+                hasActiveCredential = false;
+            }
+        }
         return ResolvedRater({
             holder: holder,
             identityKey: identityKey,
@@ -1290,9 +1294,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         sources.push(sourceKey);
     }
 
-    function _clearDerivedIdentityBan(address holder, bytes32 sourceKey) private {
-        if (holder == address(0)) return;
-        bytes32 identityKey = addressIdentityKey(holder);
+    function _clearDerivedIdentityBanForKey(bytes32 identityKey, bytes32 sourceKey) private {
         bytes32[] storage sources = _identityBanSources[identityKey];
         uint256 sourceCount = sources.length;
         for (uint256 i = 0; i < sourceCount; i++) {
@@ -1301,6 +1303,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             sources.pop();
             return;
         }
+    }
+
+    function _clearDerivedIdentityBan(address holder, bytes32 sourceKey) private {
+        if (holder == address(0)) return;
+        _clearDerivedIdentityBanForKey(addressIdentityKey(holder), sourceKey);
+        bytes32 canonicalKey = _canonicalHumanIdentityKey[holder];
+        if (canonicalKey != bytes32(0)) _clearDerivedIdentityBanForKey(canonicalKey, sourceKey);
     }
 
     function _isBanActive(IdentityBan storage ban) private view returns (bool) {
@@ -1318,6 +1327,40 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function _writeDerivedIdentityBanForHolder(address holder, bytes32 sourceKey) private {
         if (holder == address(0)) return;
         _writeDerivedIdentityBan(addressIdentityKey(holder), sourceKey);
+        bytes32 canonicalKey = _canonicalHumanIdentityKey[holder];
+        if (canonicalKey != bytes32(0)) _writeDerivedIdentityBan(canonicalKey, sourceKey);
+    }
+
+    function _writeDerivedIdentityBansForCredentialSlot(
+        HumanCredentialProvider provider,
+        bytes32 nullifierHash,
+        bytes32 sourceKey
+    ) private {
+        address owner = _humanNullifierOwnerByProvider[provider][nullifierHash];
+        if (owner == address(0)) {
+            owner = _lastRevokedOwnerByProvider[provider][nullifierHash];
+        }
+        _writeDerivedIdentityBanForHolder(owner, sourceKey);
+        address lastHolder = _lastRevokedOwnerByProvider[provider][nullifierHash];
+        if (lastHolder != owner) _writeDerivedIdentityBanForHolder(lastHolder, sourceKey);
+    }
+
+    function _clearDerivedIdentityBansForCredentialSlot(
+        HumanCredentialProvider provider,
+        bytes32 nullifierHash,
+        bytes32 sourceKey
+    ) private {
+        address owner = _humanNullifierOwnerByProvider[provider][nullifierHash];
+        _clearDerivedIdentityBan(owner, sourceKey);
+        address lastHolder = _lastRevokedOwnerByProvider[provider][nullifierHash];
+        if (lastHolder != owner) _clearDerivedIdentityBan(lastHolder, sourceKey);
+        delete _lastRevokedOwnerByProvider[provider][nullifierHash];
+    }
+
+    function _pairedWorldIdProvider(HumanCredentialProvider provider) private pure returns (HumanCredentialProvider) {
+        if (provider == HumanCredentialProvider.WorldId) return HumanCredentialProvider.WorldIdV4;
+        if (provider == HumanCredentialProvider.WorldIdV4) return HumanCredentialProvider.WorldId;
+        return HumanCredentialProvider.None;
     }
 
     function _revokeHumanNullifier(HumanCredentialProvider provider, bytes32 nullifierHash, address revokedRater)
@@ -1457,15 +1500,20 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         HumanCredential storage credential = _humanCredentials[holder];
         if (credential.verified && !_isCredentialRevoked(credential) && credential.nullifierHash != bytes32(0)) {
             humanNullifier = credential.nullifierHash;
+            bytes32 credentialKey = credentialIdentityKey(credential.provider, humanNullifier);
             identityKey = _canonicalHumanIdentityKey[holder];
             if (identityKey == bytes32(0)) {
-                identityKey = credentialIdentityKey(credential.provider, humanNullifier);
+                identityKey = credentialKey;
             }
             hasActiveCredential = credential.expiresAt > block.timestamp;
             if (hasActiveCredential) {
-                bytes32 holderAddressKey = addressIdentityKey(holder);
-                if (isIdentityKeyBanned(holderAddressKey)) {
-                    identityKey = holderAddressKey;
+                if (isIdentityKeyBanned(credentialKey)) {
+                    identityKey = credentialKey;
+                } else if (!isIdentityKeyBanned(identityKey)) {
+                    bytes32 holderAddressKey = addressIdentityKey(holder);
+                    if (isIdentityKeyBanned(holderAddressKey)) {
+                        identityKey = holderAddressKey;
+                    }
                 }
             }
         } else {
