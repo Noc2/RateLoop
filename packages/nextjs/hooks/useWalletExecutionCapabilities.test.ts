@@ -11,11 +11,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("resolveWalletExecutionChainId prefers the wagmi chain when it is available", () => {
-  assert.equal(resolveWalletExecutionChainId(480, 4801), 480);
+  assert.equal(resolveWalletExecutionChainId(8453, 999999), 8453);
 });
 
 test("resolveWalletExecutionChainId falls back to the thirdweb chain during reconnect", () => {
-  assert.equal(resolveWalletExecutionChainId(undefined, 4801), 4801);
+  assert.equal(resolveWalletExecutionChainId(undefined, 8453), 8453);
 });
 
 test("resolveWalletExecutionChainId returns undefined when no wallet chain is available", () => {
@@ -73,7 +73,7 @@ test("resolveWalletExecutionMode keeps unsupported external wallets on direct EV
 test("shouldQueryWalletCapabilities enables capability probing for batch-capable wallet shapes on supported chains", () => {
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 480,
+      chainId: 8453,
       supportedChain: true,
       walletId: "inApp",
     }),
@@ -82,7 +82,7 @@ test("shouldQueryWalletCapabilities enables capability probing for batch-capable
 
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 480,
+      chainId: 8453,
       supportedChain: true,
       walletId: "in-app-wallet",
     }),
@@ -91,7 +91,7 @@ test("shouldQueryWalletCapabilities enables capability probing for batch-capable
 
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 480,
+      chainId: 8453,
       hasSendCalls: true,
       supportedChain: true,
       walletId: "io.metamask",
@@ -101,7 +101,7 @@ test("shouldQueryWalletCapabilities enables capability probing for batch-capable
 
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 480,
+      chainId: 8453,
       hasSendCalls: false,
       supportedChain: true,
       walletId: "io.metamask",
@@ -122,7 +122,7 @@ test("shouldQueryWalletCapabilities enables capability probing for batch-capable
 test("shouldQueryExternalWalletCapabilities probes connected external wallets on supported chains", () => {
   assert.equal(
     shouldQueryExternalWalletCapabilities({
-      chainId: 84532,
+      chainId: 8453,
       connectorId: "io.metamask",
       isThirdwebInApp: false,
       supportedChain: true,
@@ -132,7 +132,7 @@ test("shouldQueryExternalWalletCapabilities probes connected external wallets on
 
   assert.equal(
     shouldQueryExternalWalletCapabilities({
-      chainId: 84532,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       isThirdwebInApp: true,
       supportedChain: true,
@@ -165,13 +165,13 @@ test("resolveWalletCapabilitiesForChain reads chain-keyed capabilities", () => {
   assert.deepEqual(
     resolveWalletCapabilitiesForChain(
       {
-        480: {
+        8453: {
           paymasterService: {
             supported: true,
           },
         },
       },
-      480,
+      8453,
     ),
     {
       paymasterService: {
@@ -189,7 +189,7 @@ test("resolveWalletCapabilitiesForChain accepts direct chain-filtered capabiliti
           supported: true,
         },
       } as any,
-      480,
+      8453,
     ),
     {
       paymasterService: {

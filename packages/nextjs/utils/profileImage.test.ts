@@ -12,15 +12,15 @@ test("getReputationAvatarUrl returns null for invalid addresses", () => {
 
 test("getReputationAvatarUrl includes the selected chain id when provided", () => {
   assert.equal(
-    getReputationAvatarUrl("0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44", 96, "#ff5500", 480),
-    "/api/reputation-avatar?address=0xc1cd80c7cd37b5499560c362b164cba1cff71b44&size=96&accent=ff5500&chainId=480",
+    getReputationAvatarUrl("0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44", 96, "#ff5500", 8453),
+    "/api/reputation-avatar?address=0xc1cd80c7cd37b5499560c362b164cba1cff71b44&size=96&accent=ff5500&chainId=8453",
   );
 });
 
 test("getReputationAvatarUrl includes a stats cache key when provided", () => {
   assert.equal(
-    getReputationAvatarUrl("0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44", 24, null, 480, "stats-2-1-1-5000"),
-    "/api/reputation-avatar?address=0xc1cd80c7cd37b5499560c362b164cba1cff71b44&size=24&chainId=480&v=stats-2-1-1-5000",
+    getReputationAvatarUrl("0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44", 24, null, 8453, "stats-2-1-1-5000"),
+    "/api/reputation-avatar?address=0xc1cd80c7cd37b5499560c362b164cba1cff71b44&size=24&chainId=8453&v=stats-2-1-1-5000",
   );
 });
 

@@ -4,12 +4,10 @@ import * as chains from "viem/chains";
 export const AVAILABLE_TARGET_NETWORKS = {
   [chains.foundry.id]: chains.foundry,
   [chains.base.id]: chains.base,
-  [chains.baseSepolia.id]: chains.baseSepolia,
 } as const satisfies Record<number, chains.Chain>;
 
 const BASE_PRECONF_TARGET_NETWORKS = {
   [chains.base.id]: chains.basePreconf,
-  [chains.baseSepolia.id]: chains.baseSepoliaPreconf,
 } as const satisfies Partial<Record<number, chains.Chain>>;
 
 export type SupportedTargetNetwork =

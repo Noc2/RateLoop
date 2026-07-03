@@ -31,11 +31,11 @@ test("mergeRecentVotesForConnectedWallet keeps delegate votes for the connected 
 });
 
 test("getRecentUserVotesQueryKey scopes cache entries by chain", () => {
-  assert.deepEqual(getRecentUserVotesQueryKey("0xAbC", 4801, "4801:deployment"), [
+  assert.deepEqual(getRecentUserVotesQueryKey("0xAbC", 8453, "8453:deployment"), [
     "ponder-fallback",
     "recentUserVotes",
-    4801,
-    "4801:deployment",
+    8453,
+    "8453:deployment",
     "0xabc",
   ]);
 });

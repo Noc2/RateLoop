@@ -10,7 +10,7 @@ import test from "node:test";
 test("expects thirdweb gas mode from active in-app wallet before wagmi connector settles", () => {
   assert.equal(
     shouldExpectThirdwebGasMode({
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       includeExternalSendCalls: true,
       isThirdwebInApp: true,
@@ -22,7 +22,7 @@ test("expects thirdweb gas mode from active in-app wallet before wagmi connector
 test("does not expect thirdweb gas mode without external send-call support", () => {
   assert.equal(
     shouldExpectThirdwebGasMode({
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       includeExternalSendCalls: false,
       isThirdwebInApp: true,
@@ -34,7 +34,7 @@ test("does not expect thirdweb gas mode without external send-call support", () 
 test("does not expect thirdweb gas mode from stale in-app wallet after external connector settles", () => {
   assert.equal(
     shouldExpectThirdwebGasMode({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "injected",
       includeExternalSendCalls: true,
       isThirdwebInApp: true,
@@ -46,7 +46,7 @@ test("does not expect thirdweb gas mode from stale in-app wallet after external 
 test("shows free transaction allowance for the in-app wallet connector", () => {
   assert.equal(
     shouldShowFreeTransactionAllowance({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       isThirdwebInApp: false,
     }),
@@ -57,7 +57,7 @@ test("shows free transaction allowance for the in-app wallet connector", () => {
 test("shows free transaction allowance before the in-app connector settles", () => {
   assert.equal(
     shouldShowFreeTransactionAllowance({
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       isThirdwebInApp: true,
     }),
@@ -68,7 +68,7 @@ test("shows free transaction allowance before the in-app connector settles", () 
 test("hides free transaction allowance after an external connector settles", () => {
   assert.equal(
     shouldShowFreeTransactionAllowance({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "io.metamask",
       isThirdwebInApp: true,
     }),
@@ -87,10 +87,10 @@ test("hides free transaction allowance on unsupported chains", () => {
   );
 });
 
-test("shows free transaction allowance for in-app wallets on World Chain Sepolia", () => {
+test("shows free transaction allowance for in-app wallets on Base mainnet", () => {
   assert.equal(
     shouldShowFreeTransactionAllowance({
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       isThirdwebInApp: true,
     }),
@@ -102,7 +102,7 @@ test("awaits self-funded reconnect for exhausted free transactions before wagmi 
   assert.equal(
     shouldAwaitSelfFundedGasModeReconnect({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -117,7 +117,7 @@ test("does not await self-funded reconnect after external connector settles", ()
   assert.equal(
     shouldAwaitSelfFundedGasModeReconnect({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "injected",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -132,7 +132,7 @@ test("stops awaiting self-funded reconnect after wallet switches to paid gas", (
   assert.equal(
     shouldAwaitSelfFundedGasModeReconnect({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       executionMode: "self_funded_7702",
       freeTransactionAllowanceResolved: true,
@@ -148,7 +148,7 @@ test("does not await self-funded reconnect forever after sponsorship sync fails"
     assert.equal(
       shouldAwaitSelfFundedGasModeReconnect({
         canUseFreeTransactions: false,
-        chainId: 480,
+        chainId: 8453,
         connectorId: "in-app-wallet",
         executionMode: "sponsored_7702",
         freeTransactionAllowanceResolved: true,
@@ -181,7 +181,7 @@ test("awaits sponsored reconnect only while sponsorship sync is active", () => {
     assert.equal(
       shouldAwaitSponsoredGasModeReconnect({
         canUseFreeTransactions: true,
-        chainId: 480,
+        chainId: 8453,
         connectorId: "in-app-wallet",
         executionMode: "self_funded_7702",
         includeExternalSendCalls: true,
@@ -198,7 +198,7 @@ test("does not await sponsored reconnect forever after sponsorship sync fails", 
     assert.equal(
       shouldAwaitSponsoredGasModeReconnect({
         canUseFreeTransactions: true,
-        chainId: 480,
+        chainId: 8453,
         connectorId: "in-app-wallet",
         executionMode: "self_funded_7702",
         includeExternalSendCalls: true,

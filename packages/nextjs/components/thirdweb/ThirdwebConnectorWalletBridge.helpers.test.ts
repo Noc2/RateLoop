@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("reconnectWagmiConnectorProvider ignores connectors without provider access", () => {
-  assert.equal(reconnectWagmiConnectorProvider(undefined, 480), null);
-  assert.equal(reconnectWagmiConnectorProvider({}, 480), null);
+  assert.equal(reconnectWagmiConnectorProvider(undefined, 8453), null);
+  assert.equal(reconnectWagmiConnectorProvider({}, 8453), null);
 });
 
 test("reconnectWagmiConnectorProvider calls getProvider with the active chain id", async () => {
@@ -17,9 +17,9 @@ test("reconnectWagmiConnectorProvider calls getProvider with the active chain id
         return provider;
       },
     },
-    480,
+    8453,
   );
 
   assert.equal(await result, provider);
-  assert.equal(receivedChainId, 480);
+  assert.equal(receivedChainId, 8453);
 });

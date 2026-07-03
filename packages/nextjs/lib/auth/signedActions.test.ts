@@ -121,7 +121,7 @@ test("verifyAndConsumeSignedActionChallenge forwards the verification chain", as
       walletAddress: WALLET,
       payloadHash: PAYLOAD_HASH,
       signature: "0x1234",
-      chainId: 84532,
+      chainId: 8453,
       buildMessage: ({ nonce, expiresAt }) =>
         signedActions.buildSignedActionMessage({
           title: TITLE,
@@ -134,7 +134,7 @@ test("verifyAndConsumeSignedActionChallenge forwards the verification chain", as
     });
   });
 
-  assert.deepEqual(seenChainIds, [84532]);
+  assert.deepEqual(seenChainIds, [8453]);
 });
 
 test("verifyAndConsumeSignedActionChallenge rejects chain verifier failures", async () => {

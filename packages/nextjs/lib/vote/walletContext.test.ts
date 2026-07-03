@@ -55,7 +55,7 @@ test("assertVoteWalletContext rejects missing address", () => {
 test("assertVoteWalletContext rejects network changes", () => {
   const result = assertVoteWalletContext(SNAPSHOT, {
     address: "0x1111111111111111111111111111111111111111",
-    chainId: 4801,
+    chainId: 999999,
     targetChainId: 8453,
   });
 

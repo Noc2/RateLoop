@@ -20,7 +20,7 @@ type ManagedLifecycleCandidate = {
 
 type ManagedLifecycleCursor = Pick<ManagedLifecycleCandidate, "operationKey" | "sortAt">;
 
-const PRODUCTION_AGENT_LIFECYCLE_TARGET_CHAIN_IDS = new Set([8453, 84532]);
+const PRODUCTION_AGENT_LIFECYCLE_TARGET_CHAIN_IDS = new Set([8453]);
 
 type AgentLifecycleDependencies = {
   enqueueAgentCallbackEvent: typeof enqueueAgentCallbackEvent;

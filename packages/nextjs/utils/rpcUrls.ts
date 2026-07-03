@@ -3,9 +3,6 @@ import type { Chain } from "viem";
 const RPC_CHAIN_NAMES: Record<number, string> = {
   1: "eth-mainnet",
   8453: "base-mainnet",
-  84532: "base-sepolia",
-  480: "worldchain-mainnet",
-  4801: "worldchain-sepolia",
 };
 
 type RpcPreferenceOptions = {
@@ -14,7 +11,7 @@ type RpcPreferenceOptions = {
   rpcOverrides?: Partial<Record<number, string>>;
 };
 
-const BASE_PRECONF_CHAIN_IDS = new Set([8453, 84532]);
+const BASE_PRECONF_CHAIN_IDS = new Set([8453]);
 
 type RpcOverrideOptions = {
   allowLocalhostInProduction?: boolean;

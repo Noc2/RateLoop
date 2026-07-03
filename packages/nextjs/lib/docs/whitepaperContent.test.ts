@@ -219,14 +219,12 @@ test("whitepaper removes legacy section framing", () => {
     /RateLoop & AI/i,
     /Rating Research Basis/i,
     /decentralized content curation protocol/i,
-    /World Chain clock/i,
   ]) {
     assert.doesNotMatch(whitepaperText, stalePhrase);
   }
 
   assert.match(whitepaperText, /question-first/i);
   assert.match(whitepaperText, /LREP or USDC on a configured supported network/i);
-  assert.doesNotMatch(whitepaperText, /USDC on World Chain/i);
   assert.match(whitepaperText, /public infrastructure/i);
 });
 

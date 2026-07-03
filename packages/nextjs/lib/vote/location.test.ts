@@ -4,7 +4,7 @@ import test from "node:test";
 
 test("switching categories clears the requested content query params", () => {
   assert.equal(
-    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=84532&deploymentKey=84532%3A0xabc&q=openlaw", {
+    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=8453&deploymentKey=8453%3A0xabc&q=openlaw", {
       contentId: null,
       categoryHash: "youtube",
     }),
@@ -15,7 +15,7 @@ test("switching categories clears the requested content query params", () => {
 test("switching feed views clears requested content scope without changing the active route filters", () => {
   assert.equal(
     buildVoteLocation(
-      "https://www.rateloop.ai/rate?content=82&chainId=84532&deploymentKey=84532%3A0xabc&q=ed-sheeran#youtube",
+      "https://www.rateloop.ai/rate?content=82&chainId=8453&deploymentKey=8453%3A0xabc&q=ed-sheeran#youtube",
       {
         contentId: null,
       },
@@ -28,16 +28,16 @@ test("selecting content preserves the active category hash", () => {
   assert.equal(
     buildVoteLocation("https://www.rateloop.ai/rate?q=openlaw#youtube", {
       contentId: 9n,
-      chainId: 84532,
-      deploymentKey: " 84532:0xabc ",
+      chainId: 8453,
+      deploymentKey: " 8453:0xabc ",
     }),
-    "https://www.rateloop.ai/rate?q=openlaw&content=9&chainId=84532&deploymentKey=84532%3A0xabc#youtube",
+    "https://www.rateloop.ai/rate?q=openlaw&content=9&chainId=8453&deploymentKey=8453%3A0xabc#youtube",
   );
 });
 
 test("selecting unscoped content clears stale content scope", () => {
   assert.equal(
-    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=84532&deploymentKey=84532%3A0xabc&q=openlaw", {
+    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=8453&deploymentKey=8453%3A0xabc&q=openlaw", {
       contentId: 9n,
     }),
     "https://www.rateloop.ai/rate?content=9&q=openlaw",
@@ -46,14 +46,14 @@ test("selecting unscoped content clears stale content scope", () => {
 
 test("content location updates clear social rating version params", () => {
   assert.equal(
-    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=84532&rv=r-6-5000-1-0&q=openlaw#youtube", {
+    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=8453&rv=r-6-5000-1-0&q=openlaw#youtube", {
       contentId: 9n,
-      chainId: 84532,
+      chainId: 8453,
     }),
-    "https://www.rateloop.ai/rate?content=9&chainId=84532&q=openlaw#youtube",
+    "https://www.rateloop.ai/rate?content=9&chainId=8453&q=openlaw#youtube",
   );
   assert.equal(
-    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=84532&rv=r-6-5000-1-0&q=openlaw#youtube", {
+    buildVoteLocation("https://www.rateloop.ai/rate?content=6&chainId=8453&rv=r-6-5000-1-0&q=openlaw#youtube", {
       contentId: null,
     }),
     "https://www.rateloop.ai/rate?q=openlaw#youtube",

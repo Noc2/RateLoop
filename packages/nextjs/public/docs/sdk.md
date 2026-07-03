@@ -2,7 +2,7 @@
 
 RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track, and read paid human feedback rounds.
 
-Chain ID examples use Base mainnet production (`8453`). Base Sepolia (`84532`) is for staging/testnet validation.
+Chain ID examples use Base mainnet production (`8453`).
 
 ## Use The SDK When
 

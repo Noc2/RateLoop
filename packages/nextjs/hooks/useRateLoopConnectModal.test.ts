@@ -25,7 +25,7 @@ test("Foundry sign-in does not prefer direct connection without an injected wall
 test("live-chain sign-in keeps the existing thirdweb-first behavior", () => {
   assert.equal(
     shouldPreferDirectWagmiConnect({
-      chainId: 480,
+      chainId: 8453,
       hasDirectWagmiConnector: true,
     }),
     false,

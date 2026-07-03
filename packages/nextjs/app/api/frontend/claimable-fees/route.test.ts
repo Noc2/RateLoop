@@ -10,7 +10,7 @@ const originalPonderUrl = env.NEXT_PUBLIC_PONDER_URL;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 const TEST_FRONTEND = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
-const TEST_CHAIN_ID = 84532;
+const TEST_CHAIN_ID = 8453;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type DbModule = typeof import("~~/lib/db");
@@ -195,7 +195,7 @@ test("frontend claimable fees route rejects malformed pagination params", async 
 test("frontend claimable fees route rejects unsupported chain ids", async () => {
   const response = await route.GET(
     makeRequest(
-      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=4801&limit=10&offset=0`,
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=999999&limit=10&offset=0`,
     ),
   );
 

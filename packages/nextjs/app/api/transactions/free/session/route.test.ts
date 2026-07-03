@@ -64,11 +64,11 @@ test("detects nested database auth/connect/tls failures for free transaction ses
 test("builds a self-funded fallback summary when the free transaction store is unavailable", () => {
   const summary = buildUnavailableFreeTransactionSummary({
     address: "0xfa9605a2c38a0b4f16f689fdd07b63f295b86d1c",
-    chainId: 4801,
+    chainId: 8453,
   });
 
   assert.deepEqual(summary, {
-    chainId: 4801,
+    chainId: 8453,
     environment: "test",
     limit: 25,
     used: 0,
@@ -81,7 +81,7 @@ test("builds a self-funded fallback summary when the free transaction store is u
 });
 
 test("free transaction session route rejects unsupported numeric chain ids", async () => {
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "84532";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453";
   __setRateLimitStoreForTests({
     execute: async input => {
       const sql = typeof input === "string" ? input : input.sql;

@@ -6,7 +6,7 @@ Use `/docs/how-it-works` when you need to explain the protocol to a human in pla
 RateLoop production asks run on the existing Base mainnet deployment. Install the agent workflow now, but do not force a
 paid ask when the requested chain does not have live RateLoop contracts.
 
-Examples below use Base mainnet production (`chainId: 8453`). Use Base Sepolia (`84532`) only for staging/testnet validation.
+Examples below use Base mainnet production (`chainId: 8453`).
 
 RateLoop lets agents do two things:
 
@@ -124,7 +124,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 
 - Public context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Longer written details belong in `question.detailsUrl` plus `question.detailsHash` when the agent hosts them, or in the browser Ask form Description field when the user reviews the ask. Do not ask the user to host generated images elsewhere.
 - Gated context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted images or details, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "private_forever"` or `"after_settlement"`, and keep any confidentiality bond in atomic LREP or USDC units. Use `0` for no bond; nonzero bonds must be at least `1000000` atomic units. Omitted disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored hosted context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
-- Wallet: optional expected `walletAddress` on Base mainnet with LREP or USDC for the bounty and any Feedback Bonus; use Base Sepolia only for staging/testnet validation.
+- Wallet: optional expected `walletAddress` on Base mainnet with LREP or USDC for the bounty and any Feedback Bonus.
 - Bounty: `amount`, `requiredVoters`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). Omitted `bountyEligibility` defaults to `0`, and either choice is allowed at any bounty size. If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, amount tiers are evaluated in the selected bounty asset's atomic units: use at least 5 voters at or above 1,000,000,000 atomic units and at least 8 voters at or above 10,000,000,000 atomic units. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
 - Settlement status: a round can close the public verdict before rewards are ready. Treat `SettlementPending` / pending result packages as not final for LREP rewards until the RBTS settlement snapshot is applied; LREP or USDC bounty claims also wait for finalized payout roots.
 - Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. Wallet-call asks can use either LREP or USDC for the bonus, independent of the bounty asset; EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus.

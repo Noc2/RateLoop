@@ -3,7 +3,7 @@ const LOCAL_E2E_PRODUCTION_BUILD_FLAGS = [
   "NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD",
 ] as const;
 
-const MAINNET_TARGET_NETWORK_IDS = new Set([480, 8453]);
+const MAINNET_TARGET_NETWORK_IDS = new Set([8453]);
 const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 type BuildGuardEnv = Record<string, string | undefined>;

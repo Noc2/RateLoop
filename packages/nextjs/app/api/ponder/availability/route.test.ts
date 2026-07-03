@@ -69,7 +69,7 @@ test("ponder availability route reports a healthy indexer", async () => {
 
 test("ponder availability route checks explicit deployment keys", async () => {
   const originalFetch = globalThis.fetch;
-  const deployment = resolveProtocolDeploymentScope(84532);
+  const deployment = resolveProtocolDeploymentScope(8453);
   assert.ok(deployment);
 
   globalThis.fetch = (async input => {
@@ -82,7 +82,7 @@ test("ponder availability route checks explicit deployment keys", async () => {
           contentRegistryAddress: deployment.contentRegistryAddress,
           feedbackRegistryAddress: deployment.feedbackRegistryAddress,
           deploymentKey: deployment.deploymentKey,
-          databaseSchema: "rateloop_ponder_base_sepolia",
+          databaseSchema: "rateloop_ponder_base",
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );

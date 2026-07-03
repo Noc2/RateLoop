@@ -89,8 +89,6 @@ const SUBMISSION_REWARD_DECIMALS = 6;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
 const ZERO_ADDRESS = `0x${"0".repeat(40)}` as const;
-const BASE_SEPOLIA_STALE_X402_SUBMITTER_ADDRESS =
-  "0x24ab19e0d8052dec62bec59e986e336adc4721f3" as const satisfies Lowercase<Address>;
 type FeedbackBonusAsset = "LREP" | "USDC";
 type SubmissionRewardAsset = X402QuestionPayload["bounty"]["asset"];
 
@@ -424,17 +422,6 @@ function x402NativePaymentAmount(
 
 function shouldUseOneShotX402Payment(feedbackBonus: X402FeedbackBonusRequest | null | undefined) {
   return feedbackBonus?.asset === "USDC" && feedbackBonus.amount > 0n;
-}
-
-function supportsX402OneShotFeedbackBonus(config: {
-  chainId: number;
-  x402QuestionSubmitterAddress?: Address;
-}): boolean {
-  return !(
-    config.chainId === 84532 &&
-    config.x402QuestionSubmitterAddress &&
-    normalizedAddress(config.x402QuestionSubmitterAddress) === BASE_SEPOLIA_STALE_X402_SUBMITTER_ADDRESS
-  );
 }
 
 function oneShotFeedbackBonusTerms(params: {
@@ -1370,10 +1357,7 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
     rpcUrl,
     targetNetwork,
     usdcAddress,
-    x402OneShotFeedbackBonusSupported: supportsX402OneShotFeedbackBonus({
-      chainId,
-      x402QuestionSubmitterAddress,
-    }),
+    x402OneShotFeedbackBonusSupported: true,
     x402QuestionSubmitterAddress,
   };
 }

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { type Address, type WalletClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia, foundry } from "viem/chains";
+import { foundry } from "viem/chains";
 import {
   RATELOOP_E2E_RPC_URL_STORAGE_KEY,
   RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY,
@@ -16,7 +16,6 @@ const DEFAULT_LOCAL_TEST_RPC_URL = "http://127.0.0.1:8545";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const SUPPORTED_LOCAL_E2E_CHAINS = {
   [foundry.id]: foundry,
-  [baseSepolia.id]: baseSepolia,
 } as const;
 
 type LocalE2ETestWalletGate = {
@@ -95,10 +94,6 @@ export function getStoredLocalE2ETestWalletRpcUrl(
   const storedValue = storage.getItem(RATELOOP_E2E_RPC_URL_STORAGE_KEY);
   if (!storedValue && chainId === foundry.id) {
     return DEFAULT_LOCAL_TEST_RPC_URL;
-  }
-
-  if (!storedValue && chainId === baseSepolia.id) {
-    return baseSepolia.rpcUrls.default.http[0];
   }
 
   return normalizeRpcUrl(storedValue);

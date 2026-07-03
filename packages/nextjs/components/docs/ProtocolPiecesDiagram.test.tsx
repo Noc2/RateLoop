@@ -14,5 +14,4 @@ test("mobile protocol diagram uses network-neutral on-chain state label", async 
   const html = renderToStaticMarkup(<ProtocolPiecesDiagram />).replace(/\s+/g, " ");
 
   assert.match(html, /On-chain protocol state/);
-  assert.doesNotMatch(html, /Protocol state on World Chain/);
 });

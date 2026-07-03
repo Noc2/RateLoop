@@ -12,9 +12,9 @@ import { contracts } from "~~/utils/scaffold-eth/contract";
 
 const PUBLIC_USDC_ENV_KEYS = [
   "NEXT_PUBLIC_USDC_ADDRESS",
-  "NEXT_PUBLIC_USDC_ADDRESS_84532",
+  "NEXT_PUBLIC_USDC_ADDRESS_8453",
   "NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS",
-  "NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532",
+  "NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453",
 ] as const;
 
 function snapshotPublicUsdcEnv(env: Record<string, string | undefined>) {
@@ -138,9 +138,8 @@ test("getDefaultUsdcAddress uses local MockERC20 before canonical USDC defaults"
     delete env.NEXT_PUBLIC_USDC_ADDRESS;
     assert.equal(getDefaultUsdcAddress(31337)?.toLowerCase(), localMockUsdcAddress.toLowerCase());
     assert.equal(getDefaultUsdcDisplayName(31337), "Mock USDC");
-    assert.equal(getDefaultUsdcDisplayName(480), "USDC");
-    assert.equal(getDefaultUsdcAddress(480), "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1");
-    assert.equal(getDefaultUsdcAddress(84532), "0x036CbD53842c5426634e7929541eC2318f3dCF7e");
+    assert.equal(getDefaultUsdcDisplayName(8453), "USDC");
+    assert.equal(getDefaultUsdcAddress(8453), "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
   } finally {
     if (originalOverride === undefined) {
       delete env.NEXT_PUBLIC_USDC_ADDRESS;
@@ -152,18 +151,18 @@ test("getDefaultUsdcAddress uses local MockERC20 before canonical USDC defaults"
 
 test("getDefaultUsdcAddress supports chain-scoped public USDC overrides", () => {
   const env = process.env as Record<string, string | undefined>;
-  const originalUsdc = env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+  const originalUsdc = env.NEXT_PUBLIC_USDC_ADDRESS_8453;
   const override = "0x0000000000000000000000000000000000000003";
 
   try {
-    env.NEXT_PUBLIC_USDC_ADDRESS_84532 = override;
-    assert.equal(getDefaultUsdcAddress(84532), override);
-    assert.equal(getDefaultUsdcAddress(8453), "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+    env.NEXT_PUBLIC_USDC_ADDRESS_8453 = override;
+    assert.equal(getDefaultUsdcAddress(8453), override);
+    assert.notEqual(getDefaultUsdcAddress(31337), override);
   } finally {
     if (originalUsdc === undefined) {
-      delete env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+      delete env.NEXT_PUBLIC_USDC_ADDRESS_8453;
     } else {
-      env.NEXT_PUBLIC_USDC_ADDRESS_84532 = originalUsdc;
+      env.NEXT_PUBLIC_USDC_ADDRESS_8453 = originalUsdc;
     }
   }
 });
@@ -197,10 +196,10 @@ test("getDefaultUsdcAddress rejects scoped public USDC against unscoped public x
 
   try {
     for (const key of PUBLIC_USDC_ENV_KEYS) delete env[key];
-    env.NEXT_PUBLIC_USDC_ADDRESS_84532 = "0x0000000000000000000000000000000000000001";
+    env.NEXT_PUBLIC_USDC_ADDRESS_8453 = "0x0000000000000000000000000000000000000001";
     env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = "0x0000000000000000000000000000000000000002";
 
-    assert.throws(() => getDefaultUsdcAddress(84532), /Effective public USDC overrides for chain 84532 must match/);
+    assert.throws(() => getDefaultUsdcAddress(8453), /Effective public USDC overrides for chain 8453 must match/);
   } finally {
     restorePublicUsdcEnv(env, snapshot);
   }
@@ -213,9 +212,9 @@ test("getDefaultUsdcAddress rejects unscoped public USDC against scoped public x
   try {
     for (const key of PUBLIC_USDC_ENV_KEYS) delete env[key];
     env.NEXT_PUBLIC_USDC_ADDRESS = "0x0000000000000000000000000000000000000001";
-    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532 = "0x0000000000000000000000000000000000000002";
+    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453 = "0x0000000000000000000000000000000000000002";
 
-    assert.throws(() => getDefaultUsdcAddress(84532), /Effective public USDC overrides for chain 84532 must match/);
+    assert.throws(() => getDefaultUsdcAddress(8453), /Effective public USDC overrides for chain 8453 must match/);
   } finally {
     restorePublicUsdcEnv(env, snapshot);
   }

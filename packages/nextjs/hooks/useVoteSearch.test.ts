@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("buildVoteSearchTarget trims whitespace and encodes the search query", () => {
-  assert.equal(buildVoteSearchTarget("  worldchain votes  "), "/rate?q=worldchain+votes");
+  assert.equal(buildVoteSearchTarget("  base votes  "), "/rate?q=base+votes");
   assert.equal(buildVoteSearchTarget(""), "/rate");
 });
 

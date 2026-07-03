@@ -70,7 +70,7 @@ function askArguments(overrides: Record<string, unknown> = {}) {
       amount: "1000000",
       asset: "USDC",
     },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-bookkeeping-failure",
     maxPaymentAmount: "1500000",
     question: {
@@ -88,7 +88,7 @@ function budgetReservation() {
   return {
     agentId: AGENT.id,
     categoryId: "5",
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-bookkeeping-failure",
     contentId: null,
     createdAt: new Date(),
@@ -158,7 +158,7 @@ async function insertX402SubmissionRecord(params: {
       operationKey,
       params.clientRequestId ?? "wallet:test-public-operation",
       "payload-hash",
-      480,
+      8453,
       AGENT.walletAddress,
       params.paymentAsset ?? "0x0000000000000000000000000000000000000001",
       "1000000",
@@ -203,7 +203,7 @@ async function insertBudgetReservation(params: { agentId?: string; operationKey?
       params.agentId ?? AGENT.id,
       "ask-bookkeeping-failure",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "reserved",
@@ -733,7 +733,7 @@ test("public rateloop_ask_humans still requires maxPaymentAmount for live asks",
 test("public rateloop_create_ask_handoff_link uses configured production app URL", async () => {
   env.NODE_ENV = "production";
   env.APP_URL = "https://canonical.rateloop.ai/app";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "84532";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453";
   delete env.NEXT_PUBLIC_APP_URL;
   delete env.VERCEL_ENV;
   delete env.VERCEL_PROJECT_PRODUCTION_URL;
@@ -741,7 +741,7 @@ test("public rateloop_create_ask_handoff_link uses configured production app URL
 
   const result = await callPublicRateLoopMcpTool({
     arguments: {
-      request: askArguments({ chainId: 84532, clientRequestId: "mcp-handoff-canonical-origin" }),
+      request: askArguments({ chainId: 8453, clientRequestId: "mcp-handoff-canonical-origin" }),
       ttlMs: 300000,
     },
     name: "rateloop_create_ask_handoff_link",
@@ -856,7 +856,7 @@ test("public rateloop_ask_humans stores signed webhook registration until paymen
     status: string;
     webhook: { events: string[]; registered: boolean; signatureHeaders: string[] };
   };
-  const callbackAgentId = publicWebhookAgentId({ chainId: 480, walletAddress: account.address });
+  const callbackAgentId = publicWebhookAgentId({ chainId: 8453, walletAddress: account.address });
 
   assert.equal(body.status, "awaiting_wallet_signature");
   assert.equal(body.webhook.registered, false);
@@ -2118,7 +2118,7 @@ test("rateloop_confirm_ask_transactions marks budget submitted and enqueues subm
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-bookkeeping-failure",
         contentId: "123",
         contentIds: ["123"],
@@ -2157,7 +2157,7 @@ test("rateloop_confirm_ask_transactions marks budget submitted and enqueues subm
     eventId: `${OPERATION_KEY}:question.submitted`,
     eventType: "question.submitted",
     payload: {
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "ask-bookkeeping-failure",
       contentId: "123",
       contentIds: ["123"],
@@ -2188,7 +2188,7 @@ test("rateloop_confirm_ask_transactions activates pending webhook subscriptions 
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-bookkeeping-failure",
         contentId: "123",
         contentIds: ["123"],
@@ -2237,7 +2237,7 @@ test("public rateloop_confirm_ask_transactions enqueues wallet webhook callbacks
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-public-callback",
         contentId: "123",
         contentIds: ["123"],
@@ -2265,11 +2265,11 @@ test("public rateloop_confirm_ask_transactions enqueues wallet webhook callbacks
   assert.equal(body.status, "submitted");
   assert.deepEqual(body.warnings, []);
   assert.deepEqual(enqueued[0], {
-    agentId: publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) }),
+    agentId: publicWebhookAgentId({ chainId: 8453, walletAddress: String(AGENT.walletAddress) }),
     eventId: `${OPERATION_KEY}:question.submitted`,
     eventType: "question.submitted",
     payload: {
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "ask-public-callback",
       contentId: "123",
       contentIds: ["123"],
@@ -2285,7 +2285,7 @@ test("public rateloop_confirm_ask_transactions enqueues wallet webhook callbacks
 test("public rateloop_confirm_ask_transactions activates pending wallet webhook subscriptions after payment confirmation", async () => {
   const registered: unknown[] = [];
   const enqueued: unknown[] = [];
-  const agentId = publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) });
+  const agentId = publicWebhookAgentId({ chainId: 8453, walletAddress: String(AGENT.walletAddress) });
   const pendingCallback = {
     agentId,
     callbackUrl: "https://agent.example/rateloop",
@@ -2300,7 +2300,7 @@ test("public rateloop_confirm_ask_transactions activates pending wallet webhook 
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-public-callback",
         contentId: "123",
         contentIds: ["123"],
@@ -2337,7 +2337,7 @@ test("public rateloop_confirm_ask_transactions activates pending wallet webhook 
     eventId: `${OPERATION_KEY}:question.submitted`,
     eventType: "question.submitted",
     payload: {
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "ask-public-callback",
       contentId: "123",
       contentIds: ["123"],
@@ -2351,7 +2351,7 @@ test("public rateloop_confirm_ask_transactions activates pending wallet webhook 
 });
 
 test("public rateloop_get_question_status surfaces wallet callback deliveries", async () => {
-  const agentId = publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) });
+  const agentId = publicWebhookAgentId({ chainId: 8453, walletAddress: String(AGENT.walletAddress) });
   await insertX402SubmissionRecord({
     mode: "permissionless-wallet-plan",
     operationKey: OPERATION_KEY,
@@ -2368,7 +2368,7 @@ test("public rateloop_get_question_status surfaces wallet callback deliveries", 
     eventId: `${OPERATION_KEY}:question.submitted`,
     eventType: "question.submitted",
     payload: {
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "ask-public-callback",
       eventType: "question.submitted",
       operationKey: OPERATION_KEY,
@@ -2399,7 +2399,7 @@ test("rateloop_confirm_ask_transactions attaches the follow-up feedback bonus pl
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-bookkeeping-failure",
         contentId: "123",
         contentIds: ["123"],

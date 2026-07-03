@@ -1,6 +1,6 @@
 -- Watchlist and notification rows reference ContentRegistry-local content IDs.
 -- Keep legacy rows unscoped, and scope new rows to the active ContentRegistry
--- deployment so World Chain and Base content IDs can safely overlap.
+-- deployment so content IDs from different deployments can safely overlap.
 ALTER TABLE "watched_content" ADD COLUMN "deployment_key" text;--> statement-breakpoint
 ALTER TABLE "watched_content" ADD COLUMN "chain_id" integer;--> statement-breakpoint
 ALTER TABLE "watched_content" ADD COLUMN "content_registry_address" text;--> statement-breakpoint

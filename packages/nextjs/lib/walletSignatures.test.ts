@@ -16,7 +16,7 @@ const baseUsdcAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 
 test("buildLrepPermitTypedData binds the LREP permit domain and spender", () => {
   const typedData = buildLrepPermitTypedData({
-    chainId: 480,
+    chainId: 8453,
     deadline: 1234n,
     nonce: 7n,
     owner,
@@ -27,7 +27,7 @@ test("buildLrepPermitTypedData binds the LREP permit domain and spender", () => 
 
   assert.equal(typedData.domain.name, "Loop Reputation");
   assert.equal(typedData.domain.version, "1");
-  assert.equal(typedData.domain.chainId, 480);
+  assert.equal(typedData.domain.chainId, 8453);
   assert.equal(typedData.domain.verifyingContract, tokenAddress);
   assert.equal(typedData.message.owner, owner);
   assert.equal(typedData.message.spender, spender);
@@ -37,7 +37,7 @@ test("buildLrepPermitTypedData binds the LREP permit domain and spender", () => 
 test("buildRaterDelegateAuthorizationTypedData binds the holder and smart-account delegate", () => {
   const registryAddress = "0x0000000000000000000000000000000000000004";
   const typedData = buildRaterDelegateAuthorizationTypedData({
-    chainId: 480,
+    chainId: 8453,
     deadline: 1234n,
     delegate: spender,
     holder: owner,
@@ -47,7 +47,7 @@ test("buildRaterDelegateAuthorizationTypedData binds the holder and smart-accoun
 
   assert.equal(typedData.domain.name, "RateLoop RaterRegistry");
   assert.equal(typedData.domain.version, "1");
-  assert.equal(typedData.domain.chainId, 480);
+  assert.equal(typedData.domain.chainId, 8453);
   assert.equal(typedData.domain.verifyingContract, registryAddress);
   assert.equal(typedData.primaryType, "DelegateAuthorization");
   assert.equal(typedData.message.holder, owner);
@@ -65,11 +65,11 @@ test("buildUsdcReceiveWithAuthorizationTypedData builds Circle EIP-3009 typed da
       validBefore: 2n,
       value: 10n,
     },
-    chainId: 480,
+    chainId: 8453,
     tokenAddress,
   });
 
-  assert.equal(typedData.domain.name, "USDC");
+  assert.equal(typedData.domain.name, "USD Coin");
   assert.equal(typedData.domain.version, "2");
   assert.equal(typedData.primaryType, "ReceiveWithAuthorization");
   assert.equal(typedData.message.to, spender);

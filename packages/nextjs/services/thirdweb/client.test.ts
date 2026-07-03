@@ -171,14 +171,14 @@ test("shouldIncludeThirdwebWalletAuthOption uses wallet auth when no branded inj
 });
 
 test("createThirdwebInAppWallet can hide wallet auth to avoid duplicate compact mobile wallet rows", () => {
-  const wallet = createThirdwebInAppWallet(480, { includeWalletAuthOption: false });
+  const wallet = createThirdwebInAppWallet(8453, { includeWalletAuthOption: false });
   const config = wallet.getConfig() as { auth?: { options?: string[] } };
 
   assert.deepEqual(config.auth?.options, ["google", "apple", "email", "passkey"]);
 });
 
 test("createThirdwebInAppWallet uses the RateLoop login hero for wallet branding", () => {
-  const wallet = createThirdwebInAppWallet(480);
+  const wallet = createThirdwebInAppWallet(8453);
   const config = wallet.getConfig() as {
     metadata?: { image?: { alt?: string; height?: number; src?: string; width?: number } };
   };
@@ -191,38 +191,26 @@ test("createThirdwebInAppWallet uses the RateLoop login hero for wallet branding
   });
 });
 
-test("createThirdwebInAppWallet enables sponsored smart accounts on World Chain Sepolia", () => {
-  const wallet = createThirdwebInAppWallet(4801);
+test("createThirdwebInAppWallet enables sponsored EIP-7702 on Base mainnet", () => {
+  const wallet = createThirdwebInAppWallet(8453);
   const config = wallet.getConfig() as {
-    executionMode?: { mode?: string; smartAccount?: { chain?: { id?: number }; sponsorGas?: boolean } };
-    smartAccount?: { chain?: { id?: number }; sponsorGas?: boolean };
+    executionMode?: { mode?: string; sponsorGas?: boolean };
   };
 
-  assert.equal(config.executionMode?.mode, "EIP4337");
-  assert.equal(config.executionMode?.smartAccount?.chain?.id, 4801);
-  assert.equal(config.executionMode?.smartAccount?.sponsorGas, true);
-  assert.equal(config.smartAccount?.chain?.id, 4801);
-  assert.equal(config.smartAccount?.sponsorGas, true);
+  assert.equal(config.executionMode?.mode, "EIP7702");
+  assert.equal(config.executionMode?.sponsorGas, true);
   assert.equal(getThirdwebWalletSponsorshipMode(wallet), "sponsored");
 });
 
-test("getThirdwebWalletSmartAccountOptions exposes Sepolia smart account options for the wagmi bridge", () => {
-  const smartAccount = getThirdwebWalletSmartAccountOptions(4801, { sponsorshipMode: "self-funded" });
-
-  assert.equal(smartAccount?.chain.id, 4801);
-  assert.equal(smartAccount && "sponsorGas" in smartAccount ? smartAccount.sponsorGas : undefined, false);
-  assert.equal(getThirdwebWalletSmartAccountOptions(480), undefined);
-});
-
-test("getThirdwebWalletSmartAccountOptions omits Base Sepolia because it uses EIP-7702", () => {
-  const smartAccount = getThirdwebWalletSmartAccountOptions(84532, { sponsorshipMode: "self-funded" });
+test("getThirdwebWalletSmartAccountOptions omits Base mainnet because it uses EIP-7702", () => {
+  const smartAccount = getThirdwebWalletSmartAccountOptions(8453, { sponsorshipMode: "self-funded" });
 
   assert.equal(smartAccount, undefined);
-  assert.equal(getThirdwebWalletSmartAccountOptions(8453), undefined);
+  assert.equal(getThirdwebWalletSmartAccountOptions(999999), undefined);
 });
 
 test("getThirdwebWallets keeps wallet auth inside in-app wallet when no branded injected wallet exists", () => {
-  const wallets = getThirdwebWallets(480, {
+  const wallets = getThirdwebWallets(8453, {
     ethereum: {
       providers: [{ isFrame: true }],
     },
@@ -236,7 +224,7 @@ test("getThirdwebWallets keeps wallet auth inside in-app wallet when no branded 
 });
 
 test("getThirdwebWallets omits in-app wallet auth when a branded injected wallet is listed separately", () => {
-  const wallets = getThirdwebWallets(480, {
+  const wallets = getThirdwebWallets(8453, {
     ethereum: {
       providers: [{ isMetaMask: true }],
     },

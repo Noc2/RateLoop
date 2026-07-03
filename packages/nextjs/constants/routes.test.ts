@@ -51,21 +51,21 @@ test("rate content links can request a short readiness wait", () => {
 
 test("rate content links preserve deployment scope when provided", () => {
   const href = buildRateContentHref(88n, {
-    chainId: 84532,
-    deploymentKey: " 84532:0xabc123 ",
+    chainId: 8453,
+    deploymentKey: " 8453:0xabc123 ",
   });
   const url = new URL(href, "https://www.rateloop.ai");
 
   assert.equal(url.pathname, RATE_ROUTE);
   assert.equal(url.searchParams.get("content"), "88");
-  assert.equal(url.searchParams.get(RATE_CHAIN_ID_PARAM), "84532");
-  assert.equal(url.searchParams.get(RATE_DEPLOYMENT_KEY_PARAM), "84532:0xabc123");
+  assert.equal(url.searchParams.get(RATE_CHAIN_ID_PARAM), "8453");
+  assert.equal(url.searchParams.get(RATE_DEPLOYMENT_KEY_PARAM), "8453:0xabc123");
 });
 
 test("rate content links omit invalid deployment scope", () => {
   assert.equal(
     buildRateContentHref(88n, {
-      chainId: "84532.5",
+      chainId: "8453.5",
       deploymentKey: "   ",
     }),
     `${RATE_ROUTE}?content=88`,

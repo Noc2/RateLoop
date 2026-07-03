@@ -13,6 +13,5 @@ test("legal terms use network-neutral bounty funding copy", async () => {
   const { default: TermsPage } = await import("./page");
   const html = renderToStaticMarkup(<TermsPage />).replace(/\s+/g, " ");
 
-  assert.doesNotMatch(html, /funded in LREP or USDC on World Chain/i);
   assert.match(html, /funded in LREP or USDC on a configured supported network/i);
 });

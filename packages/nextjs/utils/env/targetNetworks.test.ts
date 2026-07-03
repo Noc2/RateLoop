@@ -3,93 +3,81 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as chains from "viem/chains";
 
-test("available app targets are local Foundry and Base deployments", () => {
+test("available app targets are local Foundry and Base mainnet", () => {
   assert.deepEqual(
     Object.keys(AVAILABLE_TARGET_NETWORKS)
       .map(Number)
       .sort((a, b) => a - b),
-    [chains.foundry.id, chains.base.id, chains.baseSepolia.id].sort((a, b) => a - b),
+    [chains.foundry.id, chains.base.id].sort((a, b) => a - b),
   );
 });
 
-test("Base mainnet and Base Sepolia are available targets", () => {
-  const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
+test("Base mainnet is the live available target", () => {
+  const networks = resolveTargetNetworks(`${chains.base.id}`, {
     production: true,
   });
 
   assert.deepEqual(
     networks.map(network => network.id),
-    [chains.baseSepolia.id, chains.base.id],
+    [chains.base.id],
   );
 });
 
-test("Base targets use standard RPC metadata until preconfirmation RPC is enabled", () => {
-  const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
+test("Base mainnet uses standard RPC metadata until preconfirmation RPC is enabled", () => {
+  const [network] = resolveTargetNetworks(`${chains.base.id}`, {
     production: true,
   });
 
-  assert.deepEqual(
-    networks.map(network => network.rpcUrls.default.http[0]),
-    [chains.baseSepolia.rpcUrls.default.http[0], chains.base.rpcUrls.default.http[0]],
-  );
+  assert.equal(network.rpcUrls.default.http[0], chains.base.rpcUrls.default.http[0]);
 });
 
-test("Base targets can opt into Flashblocks preconfirmation RPC metadata", () => {
-  const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
+test("Base mainnet can opt into Flashblocks preconfirmation RPC metadata", () => {
+  const [network] = resolveTargetNetworks(`${chains.base.id}`, {
     production: true,
     rpcOverrides: {
-      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
       [chains.base.id]: "https://8453.rpc.thirdweb.com/client-id",
     },
     useBasePreconfRpc: true,
   });
 
-  assert.deepEqual(
-    networks.map(network => network.rpcUrls.default.http[0]),
-    ["https://84532.rpc.thirdweb.com/client-id", "https://8453.rpc.thirdweb.com/client-id"],
-  );
-  assert.deepEqual(
-    networks.map(
-      network => (network as { experimental_preconfirmationTime?: number }).experimental_preconfirmationTime,
-    ),
-    [200, 200],
-  );
+  assert.equal(network.rpcUrls.default.http[0], "https://8453.rpc.thirdweb.com/client-id");
+  assert.equal((network as { experimental_preconfirmationTime?: number }).experimental_preconfirmationTime, 200);
 });
 
-test("Base preconfirmation opt-in requires generic RPC overrides", () => {
+test("Base preconfirmation opt-in requires a Base mainnet RPC override", () => {
   assert.throws(
     () =>
-      resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+      resolveTargetNetworks(`${chains.base.id}`, {
         production: false,
         useBasePreconfRpc: true,
       }),
-    /NEXT_PUBLIC_RPC_URL_84532/,
+    /NEXT_PUBLIC_RPC_URL_8453/,
   );
 });
 
 test("generic Base RPC overrides are reused when preconfirmation RPC is enabled", () => {
-  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+  const [network] = resolveTargetNetworks(`${chains.base.id}`, {
     production: false,
     rpcOverrides: {
-      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
+      [chains.base.id]: "https://8453.rpc.thirdweb.com/client-id",
     },
     useBasePreconfRpc: true,
   });
 
-  assert.deepEqual(network.rpcUrls.default.http, ["https://84532.rpc.thirdweb.com/client-id"]);
+  assert.deepEqual(network.rpcUrls.default.http, ["https://8453.rpc.thirdweb.com/client-id"]);
 });
 
 test("generic Base RPC overrides stay preferred when preconfirmation RPC is not enabled", () => {
-  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+  const [network] = resolveTargetNetworks(`${chains.base.id}`, {
     production: false,
     rpcOverrides: {
-      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
+      [chains.base.id]: "https://8453.rpc.thirdweb.com/client-id",
     },
   });
 
   assert.deepEqual(network.rpcUrls.default.http.slice(0, 2), [
-    "https://84532.rpc.thirdweb.com/client-id",
-    chains.baseSepolia.rpcUrls.default.http[0],
+    "https://8453.rpc.thirdweb.com/client-id",
+    chains.base.rpcUrls.default.http[0],
   ]);
 });
 
@@ -134,25 +122,23 @@ test("target network parsing rejects chain IDs with non-numeric suffixes", () =>
   );
 });
 
-test("legacy World Chain IDs are not app targets", () => {
-  for (const chainId of [chains.worldchain.id, chains.worldchainSepolia.id]) {
-    assert.throws(
-      () =>
-        resolveTargetNetworks(`${chainId}`, {
-          production: true,
-        }),
-      /Unsupported target network/,
-    );
-  }
+test("unknown live chain IDs are not app targets", () => {
+  assert.throws(
+    () =>
+      resolveTargetNetworks("999999", {
+        production: true,
+      }),
+    /Unsupported target network/,
+  );
 });
 
 test("configured RPC overrides become the preferred browser transport for target chains", () => {
-  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+  const [network] = resolveTargetNetworks(`${chains.base.id}`, {
     production: false,
     rpcOverrides: {
-      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
+      [chains.base.id]: "https://8453.rpc.thirdweb.com/client-id",
     },
   });
 
-  assert.equal(network.rpcUrls.default.http[0], "https://84532.rpc.thirdweb.com/client-id");
+  assert.equal(network.rpcUrls.default.http[0], "https://8453.rpc.thirdweb.com/client-id");
 });

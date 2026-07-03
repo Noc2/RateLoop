@@ -65,7 +65,7 @@ test("next config rejects local E2E production flags on production deployments",
 
 test("next config rejects local E2E production flags for mainnet targets", () => {
   process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
-  process.env.NEXT_PUBLIC_TARGET_NETWORKS = "84532,8453";
+  process.env.NEXT_PUBLIC_TARGET_NETWORKS = "8453";
 
   assert.throws(() => requireFreshNextConfig(), /must not be used with mainnet target networks/);
 });
@@ -77,11 +77,11 @@ test("next config rejects local E2E production flags with non-local app URLs", (
   assert.throws(() => requireFreshNextConfig(), /require localhost app URLs/);
 });
 
-test("next config allows local E2E production flags for localhost Base Sepolia runs", () => {
+test("next config allows local E2E production flags for localhost Foundry runs", () => {
   process.env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
   process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
   process.env.APP_URL = "http://localhost:3000";
-  process.env.NEXT_PUBLIC_TARGET_NETWORKS = "84532";
+  process.env.NEXT_PUBLIC_TARGET_NETWORKS = "31337";
 
   const config = requireFreshNextConfig();
 

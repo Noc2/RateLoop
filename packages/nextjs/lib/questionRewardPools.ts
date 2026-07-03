@@ -55,10 +55,7 @@ function normalizeAddress(value: string | undefined): `0x${string}` | undefined 
 }
 
 function getChainScopedPublicUsdcAddressOverride(chainId: number): `0x${string}` | undefined {
-  if (chainId === 84532) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_84532);
   if (chainId === 8453) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_8453);
-  if (chainId === 4801) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_4801);
-  if (chainId === 480) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_480);
   return undefined;
 }
 
@@ -70,10 +67,7 @@ function getPublicUsdcAddressOverride(chainId?: number): `0x${string}` | undefin
 }
 
 function getChainScopedPublicX402UsdcAddressOverride(chainId: number): `0x${string}` | undefined {
-  if (chainId === 84532) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532);
   if (chainId === 8453) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453);
-  if (chainId === 4801) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_4801);
-  if (chainId === 480) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_480);
   return undefined;
 }
 

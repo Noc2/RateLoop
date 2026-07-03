@@ -35,13 +35,11 @@ test("falls back to the default localhost RPC when no override is stored", () =>
   assert.equal(getStoredLocalE2ETestWalletRpcUrl(createStorage({})), "http://127.0.0.1:8545");
 });
 
-test("falls back to the Base Sepolia public RPC for Base Sepolia test wallets", () => {
-  const storage = createStorage({ [RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY]: "84532" });
-  const rpcUrl = getStoredLocalE2ETestWalletRpcUrl(storage);
+test("does not invent RPC URLs for unsupported stored test-wallet chains", () => {
+  const storage = createStorage({ [RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY]: "999999" });
 
-  assert.equal(getStoredLocalE2ETestWalletChainId(storage), 84532);
-  assert.equal(typeof rpcUrl, "string");
-  assert.match(rpcUrl ?? "", /^https:\/\//);
+  assert.equal(getStoredLocalE2ETestWalletChainId(storage), 999999);
+  assert.equal(getStoredLocalE2ETestWalletRpcUrl(storage), undefined);
 });
 
 test("ignores invalid local E2E RPC URLs", () => {

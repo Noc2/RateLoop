@@ -221,24 +221,21 @@ after(() => {
   restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
 });
 
-test("resolves explicit confidentiality deployment scopes when multiple target networks are configured", () => {
+test("resolves confidentiality deployment scope for the configured Base mainnet deployment", () => {
   const previousTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453,84532";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453";
   try {
-    assert.equal(confidentiality.resolveCurrentConfidentialityDeploymentScope(), null);
-
-    const baseScope = confidentiality.resolveConfidentialityDeploymentScope({ chainId: 8453 });
+    const baseScope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
     assert.equal(baseScope?.chainId, 8453);
     assert.match(baseScope?.deploymentKey ?? "", /^8453:/);
+
+    const baseScopeByChain = confidentiality.resolveConfidentialityDeploymentScope({ chainId: 8453 });
+    assert.deepEqual(baseScopeByChain, baseScope);
 
     const baseScopeByKey = confidentiality.resolveConfidentialityDeploymentScope({
       deploymentKey: baseScope?.deploymentKey,
     });
     assert.deepEqual(baseScopeByKey, baseScope);
-
-    const sepoliaScope = confidentiality.resolveConfidentialityDeploymentScope({ chainId: "84532" } as any);
-    assert.equal(sepoliaScope?.chainId, 84532);
-    assert.match(sepoliaScope?.deploymentKey ?? "", /^84532:/);
   } finally {
     restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", previousTargetNetworks);
   }

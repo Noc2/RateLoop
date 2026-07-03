@@ -19,7 +19,7 @@ import { test } from "node:test";
 import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
-const BASE_SEPOLIA_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(84532);
+const BASE_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(8453);
 
 function isPonderPreflightUrl(url: string) {
   return /\/(?:health|deployment)$/.test(url);
@@ -170,8 +170,8 @@ test("isPonderAvailable proxies browser health checks through Next", async () =>
 test("isPonderAvailable includes explicit deployment keys in browser health checks", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
-  const deploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  assert.ok(BASE_PONDER_DEPLOYMENT);
+  const deploymentKey = BASE_PONDER_DEPLOYMENT.deploymentKey;
   let requestedUrl = "";
 
   Object.defineProperty(globalThis, "window", {
@@ -708,15 +708,15 @@ test("assertPonderQuestionMetadataSyncComplete rejects skipped metadata rows", (
 
 test("ponderApi.syncQuestionMetadata can preflight an explicit deployment key", async () => {
   const originalFetch = globalThis.fetch;
-  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
-  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  assert.ok(BASE_PONDER_DEPLOYMENT);
+  const expectedDeploymentKey = BASE_PONDER_DEPLOYMENT.deploymentKey;
   const requestedUrls: string[] = [];
   let postedBody: Record<string, unknown> | null = null;
 
   globalThis.fetch = (async (input, init) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
-    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_PONDER_DEPLOYMENT);
     if (preflightResponse) return preflightResponse;
     postedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
     return new Response(JSON.stringify({ updated: 1, skipped: 0, errors: [] }), {
@@ -757,14 +757,14 @@ test("ponderApi.syncQuestionMetadata can preflight an explicit deployment key", 
 
 test("ponderApi.getAllTokenHolders can preflight an explicit deployment key", async () => {
   const originalFetch = globalThis.fetch;
-  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
-  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  assert.ok(BASE_PONDER_DEPLOYMENT);
+  const expectedDeploymentKey = BASE_PONDER_DEPLOYMENT.deploymentKey;
   const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
-    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_PONDER_DEPLOYMENT);
     if (preflightResponse) return preflightResponse;
 
     return new Response(
@@ -797,16 +797,16 @@ test("ponderApi.getAllTokenHolders can preflight an explicit deployment key", as
 
 test("ponderApi.getContent can preflight and stamp an explicit chain deployment", async () => {
   const originalFetch = globalThis.fetch;
-  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
-  const contentDeployment = resolveContentDeploymentScope(BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId);
+  assert.ok(BASE_PONDER_DEPLOYMENT);
+  const contentDeployment = resolveContentDeploymentScope(BASE_PONDER_DEPLOYMENT.chainId);
   assert.ok(contentDeployment);
-  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  const expectedDeploymentKey = BASE_PONDER_DEPLOYMENT.deploymentKey;
   const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
-    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_PONDER_DEPLOYMENT);
     if (preflightResponse) return preflightResponse;
 
     return new Response(
@@ -825,11 +825,11 @@ test("ponderApi.getContent can preflight and stamp an explicit chain deployment"
     invalidatePonderCache({ clearLastKnownGood: true });
 
     const result = await ponderApi.getContent(undefined, {
-      chainId: BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId,
+      chainId: BASE_PONDER_DEPLOYMENT.chainId,
       deploymentKey: expectedDeploymentKey,
     });
 
-    assert.equal(result.items[0]?.chainId, BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId);
+    assert.equal(result.items[0]?.chainId, BASE_PONDER_DEPLOYMENT.chainId);
     assert.equal(result.items[0]?.contentRegistryAddress, contentDeployment.contentRegistryAddress);
     assert.equal(result.items[0]?.deploymentKey, contentDeployment.deploymentKey);
   } finally {
@@ -844,14 +844,14 @@ test("ponderApi.getContent can preflight and stamp an explicit chain deployment"
 
 test("protocol data reads preflight an explicit deployment key", async () => {
   const originalFetch = globalThis.fetch;
-  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
-  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  assert.ok(BASE_PONDER_DEPLOYMENT);
+  const expectedDeploymentKey = BASE_PONDER_DEPLOYMENT.deploymentKey;
   const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
-    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_PONDER_DEPLOYMENT);
     if (preflightResponse) return preflightResponse;
 
     if (url.includes("/vote-cooldowns")) {
@@ -902,7 +902,7 @@ test("protocol data reads preflight an explicit deployment key", async () => {
     invalidatePonderCache({ clearLastKnownGood: true });
 
     const options = {
-      chainId: BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId,
+      chainId: BASE_PONDER_DEPLOYMENT.chainId,
       deploymentKey: expectedDeploymentKey,
     };
     await ponderApi.getVotes({ voter: "0x1234567890abcdef1234567890abcdef12345678" }, options);
@@ -973,15 +973,15 @@ test("ponderApi.getContentWindow respects hasMore when search totals are omitted
   try {
     const response = await ponderApi.getContentWindow(
       { limit: "250", search: "rateloop" },
-      { chainId: 84532, deploymentKey: "84532:content:feedback" },
+      { chainId: 8453, deploymentKey: "8453:content:feedback" },
     );
 
     assert.equal(response.items.length, 250);
     assert.equal(response.total, null);
     assert.equal(response.hasMore, true);
     assert.deepEqual(seenOptions, [
-      { chainId: 84532, deploymentKey: "84532:content:feedback" },
-      { chainId: 84532, deploymentKey: "84532:content:feedback" },
+      { chainId: 8453, deploymentKey: "8453:content:feedback" },
+      { chainId: 8453, deploymentKey: "8453:content:feedback" },
     ]);
   } finally {
     ponderApi.getContent = originalGetContent;
@@ -1176,16 +1176,16 @@ test("ponderApi.getAllFollows paginates the full public follow set", async () =>
 test("ponder scoped reads preflight explicit deployment keys", async () => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
-  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  assert.ok(BASE_PONDER_DEPLOYMENT);
   const deploymentOptions = {
-    chainId: BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId,
-    deploymentKey: BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey,
+    chainId: BASE_PONDER_DEPLOYMENT.chainId,
+    deploymentKey: BASE_PONDER_DEPLOYMENT.deploymentKey,
   };
 
   globalThis.fetch = (async input => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
-    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_PONDER_DEPLOYMENT);
     if (preflightResponse) return preflightResponse;
 
     if (url.includes("/category-popularity")) {

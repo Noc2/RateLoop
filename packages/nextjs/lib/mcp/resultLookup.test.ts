@@ -50,7 +50,7 @@ test("rateloop_get_result requires contentId when an operation maps to multiple 
       AGENT.id,
       "bundle-result",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "submitted",
@@ -83,7 +83,7 @@ test("rateloop_get_result requires contentId when an operation maps to multiple 
       operationKey,
       "bundle-result",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -127,7 +127,7 @@ test("rateloop_get_result requires contentId when an operation maps to multiple 
       callRateLoopMcpTool({
         agent: AGENT,
         arguments: {
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "bundle-result",
         },
         name: "rateloop_get_result",
@@ -147,7 +147,7 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
       AGENT.id,
       "bundle-result-selected",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "submitted",
@@ -180,7 +180,7 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
       operationKey,
       "bundle-result-selected",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -248,7 +248,7 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
   const result = (await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "bundle-result-selected",
       contentId: "456",
     },
@@ -262,10 +262,10 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
 
   assert.equal(result.publicUrl, "http://localhost:3000/rate?content=456");
   assert.deepEqual(result.operation?.contentIds, ["123", "456"]);
-  const expectedDeployment = resolveProtocolDeploymentScope(480);
+  const expectedDeployment = resolveProtocolDeploymentScope(8453);
   assert.ok(expectedDeployment);
   assert.deepEqual(contentLookupOptions, {
-    chainId: 480,
+    chainId: 8453,
     deploymentKey: expectedDeployment.deploymentKey,
     includeTargetAudience: true,
   });
@@ -281,7 +281,7 @@ test("rateloop_get_result rejects contentId that does not belong to the operatio
       AGENT.id,
       "bundle-result-mismatch",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "submitted",
@@ -314,7 +314,7 @@ test("rateloop_get_result rejects contentId that does not belong to the operatio
       operationKey,
       "bundle-result-mismatch",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -376,7 +376,7 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
       operationKey,
       "pending-result",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -412,7 +412,7 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
   const result = (await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "pending-result",
     },
     name: "rateloop_get_result",

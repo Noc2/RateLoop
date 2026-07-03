@@ -11,8 +11,8 @@ test("canRepairWalletRpc only enables MetaMask wallets with a configured chain R
   assert.equal(
     canRepairWalletRpc({
       chain: {
-        id: 480,
-        name: "World Chain",
+        id: 8453,
+        name: "Base mainnet",
         nativeCurrency: {
           decimals: 18,
           name: "Ether",
@@ -20,7 +20,7 @@ test("canRepairWalletRpc only enables MetaMask wallets with a configured chain R
         },
         rpcUrls: {
           default: {
-            http: ["https://worldchain-mainnet.g.alchemy.com/public"],
+            http: ["https://base-mainnet.g.alchemy.com/public"],
           },
         },
       } as any,
@@ -32,8 +32,8 @@ test("canRepairWalletRpc only enables MetaMask wallets with a configured chain R
   assert.equal(
     canRepairWalletRpc({
       chain: {
-        id: 480,
-        name: "World Chain",
+        id: 8453,
+        name: "Base mainnet",
         nativeCurrency: {
           decimals: 18,
           name: "Ether",
@@ -41,7 +41,7 @@ test("canRepairWalletRpc only enables MetaMask wallets with a configured chain R
         },
         rpcUrls: {
           default: {
-            http: ["https://worldchain-mainnet.g.alchemy.com/public"],
+            http: ["https://base-mainnet.g.alchemy.com/public"],
           },
         },
       } as any,
@@ -57,11 +57,11 @@ test("buildAddEthereumChainParameter keeps preferred RPC and explorer URLs", () 
       blockExplorers: {
         default: {
           name: "Blockscout",
-          url: "https://worldscan.org",
+          url: "https://basescan.org",
         },
       },
-      id: 480,
-      name: "World Chain",
+      id: 8453,
+      name: "Base mainnet",
       nativeCurrency: {
         decimals: 18,
         name: "Ether",
@@ -69,20 +69,20 @@ test("buildAddEthereumChainParameter keeps preferred RPC and explorer URLs", () 
       },
       rpcUrls: {
         default: {
-          http: ["https://worldchain-mainnet.g.alchemy.com/public"],
+          http: ["https://base-mainnet.g.alchemy.com/public"],
         },
       },
     } as any),
     {
-      blockExplorerUrls: ["https://worldscan.org"],
-      chainId: "0x1e0",
-      chainName: "World Chain",
+      blockExplorerUrls: ["https://basescan.org"],
+      chainId: "0x2105",
+      chainName: "Base mainnet",
       nativeCurrency: {
         decimals: 18,
         name: "Ether",
         symbol: "ETH",
       },
-      rpcUrls: ["https://worldchain-mainnet.g.alchemy.com/public"],
+      rpcUrls: ["https://base-mainnet.g.alchemy.com/public"],
     },
   );
 });
@@ -138,11 +138,11 @@ test("addAndSwitchEthereumChain adds the configured chain before switching", asy
     blockExplorers: {
       default: {
         name: "Blockscout",
-        url: "https://worldscan.org",
+        url: "https://basescan.org",
       },
     },
-    id: 480,
-    name: "World Chain",
+    id: 8453,
+    name: "Base mainnet",
     nativeCurrency: {
       decimals: 18,
       name: "Ether",
@@ -150,7 +150,7 @@ test("addAndSwitchEthereumChain adds the configured chain before switching", asy
     },
     rpcUrls: {
       default: {
-        http: ["https://worldchain-mainnet.g.alchemy.com/public"],
+        http: ["https://base-mainnet.g.alchemy.com/public"],
       },
     },
   } as any);
@@ -160,21 +160,21 @@ test("addAndSwitchEthereumChain adds the configured chain before switching", asy
       method: "wallet_addEthereumChain",
       params: [
         {
-          blockExplorerUrls: ["https://worldscan.org"],
-          chainId: "0x1e0",
-          chainName: "World Chain",
+          blockExplorerUrls: ["https://basescan.org"],
+          chainId: "0x2105",
+          chainName: "Base mainnet",
           nativeCurrency: {
             decimals: 18,
             name: "Ether",
             symbol: "ETH",
           },
-          rpcUrls: ["https://worldchain-mainnet.g.alchemy.com/public"],
+          rpcUrls: ["https://base-mainnet.g.alchemy.com/public"],
         },
       ],
     },
     {
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0x1e0" }],
+      params: [{ chainId: "0x2105" }],
     },
   ]);
 });

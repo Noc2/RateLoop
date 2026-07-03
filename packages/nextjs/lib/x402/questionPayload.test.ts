@@ -40,7 +40,7 @@ const VALID_REQUEST = {
     asset: "USDC",
     requiredVoters: "3",
   },
-  chainId: 480,
+  chainId: 8453,
   clientRequestId: "youtube:abc123",
   question: {
     categoryId: "5",
@@ -60,7 +60,7 @@ const VALID_REQUEST = {
 test("parseX402QuestionRequest normalizes a valid paid question payload", () => {
   const payload = parseX402QuestionRequest(VALID_REQUEST);
 
-  assert.equal(payload.chainId, 480);
+  assert.equal(payload.chainId, 8453);
   assert.equal(payload.questions.length, 1);
   assert.equal(payload.questions[0].contextUrl, "https://example.com/watch?v=abc123");
   assert.equal(payload.bounty.amount, 1_000_000n);

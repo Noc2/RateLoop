@@ -86,7 +86,7 @@ test("thirdweb verifier route denies client id mismatches before evaluating allo
     },
   });
 
-  const response = await route.POST(makeRequest({ clientId: "client-2", chainId: 480 }));
+  const response = await route.POST(makeRequest({ clientId: "client-2", chainId: 8453 }));
 
   assert.deepEqual(await response.json(), {
     isAllowed: false,
@@ -96,7 +96,7 @@ test("thirdweb verifier route denies client id mismatches before evaluating allo
 });
 
 test("thirdweb verifier route delegates valid requests and maps allowance decisions", async () => {
-  const body = { clientId: "client-1", chainId: 480, userOp: { sender: "0xsender" } };
+  const body = { clientId: "client-1", chainId: 8453, userOp: { sender: "0xsender" } };
   const evaluatedBodies: unknown[] = [];
   let allowed = false;
   setThirdwebVerifierRouteTestOverrides({

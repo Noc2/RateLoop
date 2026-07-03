@@ -104,18 +104,18 @@ test("buildContentShareData carries deployment scope in share urls", () => {
   const data = buildContentShareData(
     {
       ...baseContent,
-      chainId: 84532,
-      deploymentKey: "84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      chainId: 8453,
+      deploymentKey: "8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     },
     "https://www.rateloop.ai",
   );
   const shareUrl = new URL(data.shareUrl);
   const imageUrl = new URL(data.imageUrl);
 
-  assert.equal(shareUrl.searchParams.get("chainId"), "84532");
-  assert.equal(shareUrl.searchParams.get("deploymentKey"), "84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  assert.equal(imageUrl.searchParams.get("chainId"), "84532");
-  assert.equal(imageUrl.searchParams.get("deploymentKey"), "84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(shareUrl.searchParams.get("chainId"), "8453");
+  assert.equal(shareUrl.searchParams.get("deploymentKey"), "8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(imageUrl.searchParams.get("chainId"), "8453");
+  assert.equal(imageUrl.searchParams.get("deploymentKey"), "8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 });
 
 test("buildContentShareData omits the rating label for unrated content", () => {

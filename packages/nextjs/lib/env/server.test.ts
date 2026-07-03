@@ -11,16 +11,16 @@ import { afterEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
-const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
+const originalPublicRpcUrl8453 = env.NEXT_PUBLIC_RPC_URL_8453;
 const originalUseBasePreconfRpc = env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
 const originalServerUseBasePreconfRpc = env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalPublicUsdc = env.NEXT_PUBLIC_USDC_ADDRESS;
-const originalPublicUsdc84532 = env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+const originalPublicUsdc8453 = env.NEXT_PUBLIC_USDC_ADDRESS_8453;
 const originalPublicX402Usdc = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;
-const originalPublicX402Usdc84532 = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532;
+const originalPublicX402Usdc8453 = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453;
 const originalServerX402Usdc = env.RATELOOP_X402_USDC_ADDRESS;
-const originalServerX402Usdc84532 = env.RATELOOP_X402_USDC_ADDRESS_84532;
+const originalServerX402Usdc8453 = env.RATELOOP_X402_USDC_ADDRESS_8453;
 const originalAppUrl = env.APP_URL;
 const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
 const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
@@ -41,10 +41,10 @@ afterEach(() => {
     env.DATABASE_URL = originalDatabaseUrl;
   }
 
-  if (originalPublicRpcUrl84532 === undefined) {
-    delete env.NEXT_PUBLIC_RPC_URL_84532;
+  if (originalPublicRpcUrl8453 === undefined) {
+    delete env.NEXT_PUBLIC_RPC_URL_8453;
   } else {
-    env.NEXT_PUBLIC_RPC_URL_84532 = originalPublicRpcUrl84532;
+    env.NEXT_PUBLIC_RPC_URL_8453 = originalPublicRpcUrl8453;
   }
 
   if (originalUseBasePreconfRpc === undefined) {
@@ -71,10 +71,10 @@ afterEach(() => {
     env.NEXT_PUBLIC_USDC_ADDRESS = originalPublicUsdc;
   }
 
-  if (originalPublicUsdc84532 === undefined) {
-    delete env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+  if (originalPublicUsdc8453 === undefined) {
+    delete env.NEXT_PUBLIC_USDC_ADDRESS_8453;
   } else {
-    env.NEXT_PUBLIC_USDC_ADDRESS_84532 = originalPublicUsdc84532;
+    env.NEXT_PUBLIC_USDC_ADDRESS_8453 = originalPublicUsdc8453;
   }
 
   if (originalPublicX402Usdc === undefined) {
@@ -83,10 +83,10 @@ afterEach(() => {
     env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = originalPublicX402Usdc;
   }
 
-  if (originalPublicX402Usdc84532 === undefined) {
-    delete env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532;
+  if (originalPublicX402Usdc8453 === undefined) {
+    delete env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453;
   } else {
-    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532 = originalPublicX402Usdc84532;
+    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453 = originalPublicX402Usdc8453;
   }
 
   if (originalServerX402Usdc === undefined) {
@@ -95,10 +95,10 @@ afterEach(() => {
     env.RATELOOP_X402_USDC_ADDRESS = originalServerX402Usdc;
   }
 
-  if (originalServerX402Usdc84532 === undefined) {
-    delete env.RATELOOP_X402_USDC_ADDRESS_84532;
+  if (originalServerX402Usdc8453 === undefined) {
+    delete env.RATELOOP_X402_USDC_ADDRESS_8453;
   } else {
-    env.RATELOOP_X402_USDC_ADDRESS_84532 = originalServerX402Usdc84532;
+    env.RATELOOP_X402_USDC_ADDRESS_8453 = originalServerX402Usdc8453;
   }
 
   restoreEnv("APP_URL", originalAppUrl);
@@ -231,17 +231,17 @@ test("resolveServerPonderUrl allows localhost production URLs for explicit e2e b
 });
 
 test("resolveServerTargetNetworks rejects Foundry in production by default", () => {
-  const networks = resolveServerTargetNetworks("31337,84532", true);
+  const networks = resolveServerTargetNetworks("31337,8453", true);
   assert.equal(networks, null);
 });
 
 test("resolveServerTargetNetworks tolerates local-chain builds in explicit e2e production mode", () => {
-  const networks = resolveServerTargetNetworks("31337,84532", true, {
+  const networks = resolveServerTargetNetworks("31337,8453", true, {
     allowFoundryInProduction: true,
   });
   assert.deepEqual(
     networks?.map(network => network.id),
-    [31337, 84532],
+    [31337, 8453],
   );
 });
 
@@ -258,23 +258,23 @@ test("resolveServerTargetNetworks returns null for invalid production values", (
 
 test("resolveServerTargetNetworks ignores public Base preconfirmation browser opt-in", () => {
   env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
-  env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
+  env.NEXT_PUBLIC_RPC_URL_8453 = "https://8453.rpc.thirdweb.com/client-id/";
 
-  const networks = resolveServerTargetNetworks("84532", true);
+  const networks = resolveServerTargetNetworks("8453", true);
   const serverRpcUrls: readonly string[] = networks?.[0]?.rpcUrls.default.http ?? [];
 
-  assert.equal(serverRpcUrls[0], "https://84532.rpc.thirdweb.com/client-id");
+  assert.equal(serverRpcUrls[0], "https://8453.rpc.thirdweb.com/client-id");
   assert.equal(serverRpcUrls.includes("https://sepolia-preconf.base.org"), false);
 });
 
 test("resolveServerTargetNetworks honors explicit server Base preconfirmation RPC opt-in", () => {
   env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
-  env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
+  env.NEXT_PUBLIC_RPC_URL_8453 = "https://8453.rpc.thirdweb.com/client-id/";
   env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC = "true";
 
-  const networks = resolveServerTargetNetworks("84532", true);
+  const networks = resolveServerTargetNetworks("8453", true);
 
-  assert.deepEqual(networks?.[0]?.rpcUrls.default.http, ["https://84532.rpc.thirdweb.com/client-id"]);
+  assert.deepEqual(networks?.[0]?.rpcUrls.default.http, ["https://8453.rpc.thirdweb.com/client-id"]);
   assert.equal(
     (networks?.[0] as { experimental_preconfirmationTime?: number } | undefined)?.experimental_preconfirmationTime,
     200,
@@ -283,16 +283,16 @@ test("resolveServerTargetNetworks honors explicit server Base preconfirmation RP
 
 test("resolveServerTargetNetworks returns null when server Base preconfirmation has no generic RPC override", () => {
   env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC = "true";
-  delete env.NEXT_PUBLIC_RPC_URL_84532;
+  delete env.NEXT_PUBLIC_RPC_URL_8453;
 
-  assert.equal(resolveServerTargetNetworks("84532", true), null);
+  assert.equal(resolveServerTargetNetworks("8453", true), null);
 });
 
 test("getServerRpcOverrides includes public per-chain RPC overrides", () => {
-  env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
+  env.NEXT_PUBLIC_RPC_URL_8453 = "https://8453.rpc.thirdweb.com/client-id/";
 
   assert.deepEqual(getServerRpcOverrides(), {
-    84532: "https://84532.rpc.thirdweb.com/client-id",
+    8453: "https://8453.rpc.thirdweb.com/client-id",
   });
 });
 
@@ -347,10 +347,10 @@ test("getX402UsdcAddressOverride returns the shared address when all vars match"
 });
 
 test("getX402UsdcAddressOverride supports chain-scoped Base USDC overrides", () => {
-  const shared = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-  env.NEXT_PUBLIC_USDC_ADDRESS_84532 = shared;
-  env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532 = shared;
-  env.RATELOOP_X402_USDC_ADDRESS_84532 = shared;
-  assert.equal(getX402UsdcAddressOverride(84532), shared.toLowerCase());
-  assert.equal(getX402UsdcAddressOverride(4801), undefined);
+  const shared = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  env.NEXT_PUBLIC_USDC_ADDRESS_8453 = shared;
+  env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453 = shared;
+  env.RATELOOP_X402_USDC_ADDRESS_8453 = shared;
+  assert.equal(getX402UsdcAddressOverride(8453), shared.toLowerCase());
+  assert.equal(getX402UsdcAddressOverride(999999), undefined);
 });

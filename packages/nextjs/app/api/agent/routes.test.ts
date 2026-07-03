@@ -53,7 +53,7 @@ type UrlSafetyModule = typeof import("~~/utils/urlSafety");
 type McpToolTestOverrides = NonNullable<Parameters<McpToolsModule["__setMcpToolTestOverridesForTests"]>[0]>;
 
 const OPERATION_KEY = `0x${"1".repeat(64)}` as const;
-const HANDOFF_CHAIN_ID = 84532;
+const HANDOFF_CHAIN_ID = 8453;
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
   "base64",
@@ -199,7 +199,7 @@ function questionPayload(clientRequestId: string, params: { chainId?: number } =
       amount: "1000000",
       asset: "USDC",
     },
-    chainId: params.chainId ?? 4801,
+    chainId: params.chainId ?? 8453,
     clientRequestId,
     question: {
       categoryId: "5",
@@ -222,7 +222,7 @@ async function seedManagedAskAudit(params: {
   operationKey?: `0x${string}`;
 }) {
   const operationKey = params.operationKey ?? OPERATION_KEY;
-  const chainId = params.chainId ?? 4801;
+  const chainId = params.chainId ?? 8453;
   const now = new Date("2026-04-23T12:00:00.000Z");
   const contentId = params.contentId ?? null;
 
@@ -528,7 +528,7 @@ function installAskOverrides(overrides: McpToolTestOverrides = {}) {
       ({
         agentId: "route-agent",
         categoryId: "5",
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-http",
         contentId: null,
         createdAt: new Date(),
@@ -1360,7 +1360,7 @@ test("agent ask handoff route rejects chains unavailable on this server", async 
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
-        ...questionPayload("agent-handoff-unsupported-chain", { chainId: 480 }),
+        ...questionPayload("agent-handoff-unsupported-chain", { chainId: 999999 }),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -1371,8 +1371,8 @@ test("agent ask handoff route rejects chains unavailable on this server", async 
   assert.equal(response.status, 503);
   assert.equal(body.code, "service_unavailable");
   assert.equal(body.retryable, true);
-  assert.match(String(body.message), /Chain 480 is not available for browser handoffs/);
-  assert.match(String(body.message), /Chain 480 is not configured for this server/);
+  assert.match(String(body.message), /Chain 999999 is not available for browser handoffs/);
+  assert.match(String(body.message), /Chain 999999 is not configured for this server/);
 });
 
 test("agent ask handoff route uses configured production app URL for token links", async () => {
@@ -2646,7 +2646,7 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: 999999,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -2655,8 +2655,8 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
 
   assert.equal(prepareResponse.status, 409);
-  assert.match(String(prepareBody.message), /handoff is for chain 84532/);
-  assert.match(String(prepareBody.message), /requested for chain 480/);
+  assert.match(String(prepareBody.message), /handoff is for chain 8453/);
+  assert.match(String(prepareBody.message), /requested for chain 999999/);
 
   const statusResponse = await handoffRoute.GET(
     makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
@@ -3251,7 +3251,7 @@ test("agent confirm route returns a submitted ask response", async () => {
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-http",
         contentId: "42",
         contentIds: ["42"],
@@ -3282,7 +3282,7 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-public",
         contentId: "42",
         contentIds: ["42"],
@@ -3329,7 +3329,7 @@ test("agent confirm route rejects malformed transaction hashes before MCP confir
 
 test("agent status route returns not_found without treating it as a transport error", async () => {
   const response = await asksByClientRoute.GET(
-    makeGet("https://rateloop.ai/api/agent/asks/by-client-request?chainId=4801&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/asks/by-client-request?chainId=8453&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -3345,7 +3345,7 @@ test("agent status route supports tokenless operation lookups", async () => {
       OPERATION_KEY,
       "wallet:public-status",
       "payload-hash",
-      480,
+      8453,
       "0x00000000000000000000000000000000000000aa",
       "0x0000000000000000000000000000000000000001",
       "1000000",
@@ -3392,7 +3392,7 @@ test("lifecycle sweep uses submitted x402 state even when reservation bookkeepin
       "route-agent",
       "stale-reservation",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "reserved",
@@ -3424,7 +3424,7 @@ test("lifecycle sweep uses submitted x402 state even when reservation bookkeepin
       OPERATION_KEY,
       "mcp:stale-reservation",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -3542,7 +3542,7 @@ test("agent audit by client request route resolves the same managed ask", async 
 
   const response = await asksByClientAuditRoute.GET(
     makeGet(
-      "https://rateloop.ai/api/agent/asks/by-client-request/audit?chainId=4801&clientRequestId=audit-client-http",
+      "https://rateloop.ai/api/agent/asks/by-client-request/audit?chainId=8453&clientRequestId=audit-client-http",
     ),
   );
   const body = (await response.json()) as {
@@ -3574,7 +3574,7 @@ test("agent audit export route returns csv rows for the authenticated agent", as
 
 test("agent audit export route rejects malformed numeric filters", async () => {
   for (const [query, message] of [
-    ["chainId=4801abc", "chainId must be a positive integer."],
+    ["chainId=999999abc", "chainId must be a positive integer."],
     ["limit=10junk", "limit must be a positive integer."],
   ] as const) {
     const response = await asksExportRoute.GET(makeGet(`https://rateloop.ai/api/agent/asks/export?${query}`));
@@ -3646,7 +3646,7 @@ test("agent status route includes live ask guidance for underfunded open markets
       OPERATION_KEY,
       "status-guidance",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -3783,7 +3783,7 @@ test("agent status route includes live ask guidance for underfunded open markets
 
 test("agent results route returns the pending result package before settlement", async () => {
   const response = await resultsByClientRoute.GET(
-    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=4801&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=8453&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -3841,7 +3841,7 @@ test("agent results routes accept contentId for bundle lookups", async () => {
 
   const byClientResponse = await resultsByClientRoute.GET(
     makeGet(
-      "https://rateloop.ai/api/agent/results/by-client-request?chainId=4801&clientRequestId=bundle-result-http&contentId=99",
+      "https://rateloop.ai/api/agent/results/by-client-request?chainId=8453&clientRequestId=bundle-result-http&contentId=99",
     ),
   );
   const byClientBody = (await byClientResponse.json()) as {

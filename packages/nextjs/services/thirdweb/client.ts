@@ -9,10 +9,10 @@ import { getThirdwebWalletAuthConfig } from "~~/services/thirdweb/auth";
 import { getAvailableThirdwebExternalWalletIds } from "~~/services/web3/injectedWalletProviders";
 import { publicEnv } from "~~/utils/env/public";
 
-const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 480, 4801, 8453, 84532]);
-const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([480, 4801, 8453, 84532]);
-const THIRDWEB_IN_APP_EIP7702_CHAIN_IDS = new Set([480, 8453, 84532]);
-const THIRDWEB_IN_APP_EIP4337_CHAIN_IDS = new Set([4801]);
+const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 8453]);
+const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([8453]);
+const THIRDWEB_IN_APP_EIP7702_CHAIN_IDS = new Set([8453]);
+const THIRDWEB_IN_APP_EIP4337_CHAIN_IDS = new Set<number>();
 const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([
   ...THIRDWEB_IN_APP_EIP7702_CHAIN_IDS,
   ...THIRDWEB_IN_APP_EIP4337_CHAIN_IDS,

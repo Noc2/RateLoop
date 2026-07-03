@@ -39,7 +39,6 @@ const rawPublicEnv = {
     optionalEnv(process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD) ??
     (process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ? "true" : undefined),
   ponderUrl: optionalEnv(process.env.NEXT_PUBLIC_PONDER_URL),
-  rpcUrl84532: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_84532),
   rpcUrl8453: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_8453),
   rpcUrl31337: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_31337),
   targetNetworks: optionalEnv(process.env.NEXT_PUBLIC_TARGET_NETWORKS),
@@ -55,7 +54,6 @@ const rpcOverrides = mergeRpcOverrides(
   resolveRpcOverrides(
     {
       31337: rawPublicEnv.rpcUrl31337,
-      84532: rawPublicEnv.rpcUrl84532,
       8453: rawPublicEnv.rpcUrl8453,
     },
     {
@@ -114,10 +112,10 @@ const missingDeployments = targetNetworkIds.filter(chainId => deployedContractsB
 
 function deploymentMetadataRecoveryHint(chainIds: number[]) {
   if (chainIds.includes(8453)) {
-    return "For Base mainnet, restore the existing production deployment metadata/contracts package and run yarn base-mainnet:check. For staging or new networks, deploy contracts before enabling them.";
+    return "For Base mainnet, restore the existing production deployment metadata/contracts package and run yarn base-mainnet:check.";
   }
 
-  return "For staging or new networks, deploy contracts before enabling them.";
+  return "For local development, run yarn deploy after starting yarn chain.";
 }
 
 if (missingDeployments.length > 0) {

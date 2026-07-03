@@ -19,7 +19,7 @@ const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 const CANDIDATE = {
   agentId: "agent-a",
-  chainId: 480,
+  chainId: 8453,
   clientRequestId: "pitch-1",
   contentId: "42",
   operationKey: `0x${"1".repeat(64)}` as const,
@@ -164,7 +164,7 @@ test("sweepAgentLifecycleCallbacks emits open and settling for overdue open roun
 });
 
 test("sweepAgentLifecycleCallbacks scopes content and feedback reads by candidate deployment", async () => {
-  const candidate = { ...CANDIDATE, chainId: 84532 };
+  const candidate = { ...CANDIDATE, chainId: 8453 };
   const deployment = resolveProtocolDeploymentScope(candidate.chainId);
   assert.ok(deployment);
   let contentOptions: unknown = null;
@@ -224,7 +224,7 @@ test("sweepAgentLifecycleCallbacks skips candidates outside configured target ne
     },
     listCandidates: async ({ targetChainIds }) => {
       candidateTargetChainIds = targetChainIds ? Array.from(targetChainIds) : null;
-      return [{ ...CANDIDATE, chainId: 84532 }];
+      return [{ ...CANDIDATE, chainId: 999999 }];
     },
     listContentFeedback: async () =>
       ({
@@ -247,8 +247,8 @@ test("sweepAgentLifecycleCallbacks skips candidates outside configured target ne
 });
 
 test("sweepAgentLifecycleCallbacks filters target chains before applying sweep limit", async () => {
-  const activeChainId = 480;
-  const inactiveChainId = 84532;
+  const activeChainId = 8453;
+  const inactiveChainId = 999999;
   const walletAddress = "0x00000000000000000000000000000000000000bb";
   const submittedAt = new Date("2023-11-14T22:00:00.000Z");
   const activeContentId = "active-after-inactive";
@@ -340,11 +340,11 @@ test("sweepAgentLifecycleCallbacks fails closed for malformed production target 
   });
 });
 
-test("sweepAgentLifecycleCallbacks fails closed for legacy production target networks", async () => {
+test("sweepAgentLifecycleCallbacks fails closed for unsupported production target networks", async () => {
   let listCandidatesCalls = 0;
 
   env.NODE_ENV = "production";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "999999";
   __setAgentLifecycleTestOverridesForTests({
     enqueueAgentCallbackEvent: async () => [],
     getContentById: async () => contentResponse() as never,
@@ -648,7 +648,7 @@ test("sweepAgentLifecycleCallbacks casts nullable lifecycle cursor parameters", 
 test("sweepAgentLifecycleCallbacks discovers public wallet webhook subscriptions", async () => {
   const operationKey = `0x${"8".repeat(64)}` as const;
   const walletAddress = "0x00000000000000000000000000000000000000aa";
-  const agentId = publicWebhookAgentId({ chainId: 480, walletAddress });
+  const agentId = publicWebhookAgentId({ chainId: 8453, walletAddress });
   const submittedAt = new Date("2023-11-14T22:00:00.000Z");
   const enqueued: Array<{ agentId: string; eventType: string; payload: Record<string, unknown> }> = [];
 
@@ -677,7 +677,7 @@ test("sweepAgentLifecycleCallbacks discovers public wallet webhook subscriptions
       operationKey,
       "wallet:hashed-public-id",
       "payload-hash",
-      480,
+      8453,
       walletAddress,
       "0x0000000000000000000000000000000000000001",
       "1000000",

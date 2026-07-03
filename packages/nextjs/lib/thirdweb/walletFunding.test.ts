@@ -7,20 +7,18 @@ import {
 
 test("thirdweb wallet funding is enabled only for Base mainnet", () => {
   assert.equal(supportsThirdwebWalletFunding(8453), true);
-  assert.equal(supportsThirdwebWalletFunding(84532), false);
-  assert.equal(supportsThirdwebWalletFunding(480), false);
-  assert.equal(supportsThirdwebWalletFunding(4801), false);
+  assert.equal(supportsThirdwebWalletFunding(999999), false);
   assert.equal(supportsThirdwebWalletFunding(31337), false);
 });
 
-test("Base Sepolia funding message points users to testnet funding", () => {
+test("unsupported live-chain funding message points users outside RateLoop", () => {
   assert.equal(
     getThirdwebWalletFundingUnavailableMessage({
       asset: "USDC",
-      chainId: 84532,
-      chainName: "Base Sepolia",
+      chainId: 999999,
+      chainName: "unsupported network",
     }),
-    "thirdweb Pay direct USDC top-ups are not available on Base Sepolia. Use a Base Sepolia faucet or send testnet USDC to this wallet, then retry in RateLoop.",
+    "thirdweb Pay direct USDC top-ups are not available on unsupported network. Send USDC to this wallet outside RateLoop, then retry.",
   );
 });
 

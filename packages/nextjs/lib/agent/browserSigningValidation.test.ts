@@ -23,7 +23,7 @@ function validBefore(secondsFromNow = 3600) {
 function askRequestBody(overrides: Record<string, unknown> = {}) {
   return {
     clientRequestId: "browser-signing-test",
-    chainId: 480,
+    chainId: 8453,
     question: {
       categoryId: "5",
       contextUrl: "https://example.com/product/spec",
@@ -62,7 +62,7 @@ function authorizationRequest(
   } = {},
 ) {
   const requestBody = overrides.requestBody ?? askRequestBody();
-  const chainId = typeof requestBody.chainId === "number" ? requestBody.chainId : 480;
+  const chainId = typeof requestBody.chainId === "number" ? requestBody.chainId : 8453;
   const authorization = {
     from: wallet,
     nonce: `0x${"0".repeat(64)}` as `0x${string}`,
@@ -93,7 +93,7 @@ function authorizationRequest(
     eip712: {
       domain: {
         chainId,
-        name: "USDC",
+        name: "USD Coin",
         verifyingContract: usdc,
         version: "2",
         ...overrides.domain,

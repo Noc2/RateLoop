@@ -14,21 +14,21 @@ test("buildFreeTransactionAllowanceSnapshotKey scopes cached summaries by enviro
   assert.equal(
     buildFreeTransactionAllowanceSnapshotKey(
       "0xAbCdEf0000000000000000000000000000000000",
-      4801,
+      8453,
       "https://preview.rateloop.example",
     ),
-    "rateloop-free-transactions-summary:https://preview.rateloop.example:0xabcdef0000000000000000000000000000000000:4801",
+    "rateloop-free-transactions-summary:https://preview.rateloop.example:0xabcdef0000000000000000000000000000000000:8453",
   );
 });
 
 test("buildExhaustionToastKey scopes exhaustion notifications by environment", () => {
   assert.equal(
     buildExhaustionToastKey({
-      chainId: 4801,
+      chainId: 8453,
       environmentScope: "https://rateloop.example",
       raterIdentityKey: "0x1111111111111111111111111111111111111111111111111111111111111111",
     }),
-    "rateloop-free-transactions-exhausted:https://rateloop.example:4801:0x1111111111111111111111111111111111111111111111111111111111111111",
+    "rateloop-free-transactions-exhausted:https://rateloop.example:8453:0x1111111111111111111111111111111111111111111111111111111111111111",
   );
 });
 
@@ -36,18 +36,18 @@ test("buildSponsorshipSyncAttemptKey normalizes the wallet address", () => {
   assert.equal(
     buildSponsorshipSyncAttemptKey({
       address: "0xAbCdEf0000000000000000000000000000000000",
-      chainId: 4801,
+      chainId: 8453,
       sponsorshipMode: "sponsored",
     }),
-    "0xabcdef0000000000000000000000000000000000:4801:sponsored",
+    "0xabcdef0000000000000000000000000000000000:8453:sponsored",
   );
 });
 
 test("clearSponsorshipSyncAttemptAfterFailure clears the matching failed attempt", () => {
   assert.equal(
     clearSponsorshipSyncAttemptAfterFailure(
-      "0xabcdef0000000000000000000000000000000000:4801:self-funded",
-      "0xabcdef0000000000000000000000000000000000:4801:self-funded",
+      "0xabcdef0000000000000000000000000000000000:8453:self-funded",
+      "0xabcdef0000000000000000000000000000000000:8453:self-funded",
     ),
     null,
   );
@@ -56,17 +56,17 @@ test("clearSponsorshipSyncAttemptAfterFailure clears the matching failed attempt
 test("clearSponsorshipSyncAttemptAfterFailure preserves newer attempts", () => {
   assert.equal(
     clearSponsorshipSyncAttemptAfterFailure(
-      "0xabcdef0000000000000000000000000000000000:480:sponsored",
-      "0xabcdef0000000000000000000000000000000000:4801:self-funded",
+      "0xabcdef0000000000000000000000000000000000:8453:sponsored",
+      "0xabcdef0000000000000000000000000000000000:8453:self-funded",
     ),
-    "0xabcdef0000000000000000000000000000000000:480:sponsored",
+    "0xabcdef0000000000000000000000000000000000:8453:sponsored",
   );
 });
 
 test("getEffectiveSponsorshipSyncStatus marks new sync work as pending", () => {
   assert.equal(
     getEffectiveSponsorshipSyncStatus({
-      attemptKey: "0xabcdef0000000000000000000000000000000000:480:sponsored",
+      attemptKey: "0xabcdef0000000000000000000000000000000000:8453:sponsored",
       needsSync: true,
       state: {
         attemptKey: null,
@@ -79,7 +79,7 @@ test("getEffectiveSponsorshipSyncStatus marks new sync work as pending", () => {
 });
 
 test("getEffectiveSponsorshipSyncStatus preserves terminal attempt failures", () => {
-  const attemptKey = "0xabcdef0000000000000000000000000000000000:480:sponsored";
+  const attemptKey = "0xabcdef0000000000000000000000000000000000:8453:sponsored";
 
   assert.equal(
     getEffectiveSponsorshipSyncStatus({

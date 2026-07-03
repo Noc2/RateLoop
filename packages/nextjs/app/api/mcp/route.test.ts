@@ -517,7 +517,7 @@ test("public MCP ask returns a tokenless wallet-call plan", async () => {
             amount: "1000000",
             asset: "USDC",
           },
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "public-ask",
           maxPaymentAmount: "1500000",
           paymentMode: "wallet_calls",
@@ -601,7 +601,7 @@ test("invalid media returns a stable MCP tool error code", async () => {
             amount: "1000000",
             asset: "USDC",
           },
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "invalid-media-check",
           question: {
             categoryId: "5",
@@ -668,7 +668,7 @@ test("category disallowed returns a stable MCP tool error code", async () => {
             amount: "1000000",
             asset: "USDC",
           },
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "category-check",
           maxPaymentAmount: "1500000",
           question: {
@@ -700,7 +700,7 @@ test("pending result returns a full pending result package", async () => {
       method: "tools/call",
       params: {
         arguments: {
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "missing-result",
         },
         name: "rateloop_get_result",
@@ -732,7 +732,7 @@ test("failed submissions return a terminal pending result package without a retr
       "route-agent",
       "failed-result",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "failed",
@@ -765,7 +765,7 @@ test("failed submissions return a terminal pending result package without a retr
       operationKey,
       "failed-result",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -801,7 +801,7 @@ test("failed submissions return a terminal pending result package without a retr
       method: "tools/call",
       params: {
         arguments: {
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "failed-result",
         },
         name: "rateloop_get_result",
@@ -833,7 +833,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
       "route-agent",
       "open-status",
       "payload-hash",
-      480,
+      8453,
       "5",
       "1000000",
       "submitted",
@@ -866,7 +866,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
       operationKey,
       "open-status",
       "payload-hash",
-      480,
+      8453,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -928,7 +928,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
       method: "tools/call",
       params: {
         arguments: {
-          chainId: 480,
+          chainId: 8453,
           clientRequestId: "open-status",
         },
         name: "rateloop_get_question_status",

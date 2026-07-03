@@ -117,7 +117,6 @@ test.describe("Settings page", () => {
 
     await expect(page.getByRole("heading", { name: "Top Up Network Fees" })).toHaveCount(0);
     await expect(page.getByTestId("eth-top-up-panel")).toBeVisible();
-    await expect(page.getByText("ETH covers World Chain gas", { exact: false })).toHaveCount(0);
     await expect(page.getByText("ETH top-up is available on live deployments.")).toBeVisible();
   });
 });

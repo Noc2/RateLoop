@@ -134,7 +134,7 @@ test("free transaction confirm route fails closed when the rate limit store is u
   const response = await route.POST(
     makeRequest({
       address: TEST_ADDRESS,
-      chainId: 480,
+      chainId: 8453,
       operationKey: TEST_OPERATION_KEY,
       reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
       transactionHashes: [TEST_TX_HASH],
@@ -159,7 +159,7 @@ test("free transaction confirm route fails closed when the quota store is unavai
     const response = await route.POST(
       makeRequest({
         address: TEST_ADDRESS,
-        chainId: 480,
+        chainId: 8453,
         operationKey: TEST_OPERATION_KEY,
         reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
         transactionHashes: [TEST_TX_HASH],
@@ -184,7 +184,7 @@ test("free transaction confirm route reports a missing reservation", async () =>
   const response = await route.POST(
     makeRequest({
       address: TEST_ADDRESS,
-      chainId: 480,
+      chainId: 8453,
       operationKey: TEST_OPERATION_KEY,
       reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
       transactionHashes: [TEST_TX_HASH],
@@ -221,9 +221,9 @@ test("free transaction confirm route reports non-pending reservations", async ()
     `,
     args: [
       TEST_OPERATION_KEY,
-      "480:production:identity",
+      "8453:production:identity",
       `0x${"9".repeat(64)}`,
-      480,
+      8453,
       "production",
       TEST_ADDRESS.toLowerCase(),
       TEST_RESERVATION_SESSION_TOKEN,
@@ -238,7 +238,7 @@ test("free transaction confirm route reports non-pending reservations", async ()
   const response = await route.POST(
     makeRequest({
       address: TEST_ADDRESS,
-      chainId: 480,
+      chainId: 8453,
       operationKey: TEST_OPERATION_KEY,
       reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
       transactionHashes: [TEST_TX_HASH],

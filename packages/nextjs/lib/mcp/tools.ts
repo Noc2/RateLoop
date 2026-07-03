@@ -3005,7 +3005,7 @@ function buildDryRunOperationBody(params: {
 
 function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
   const rawOperationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
-  const defaultDryRunChainId = 84532;
+  const defaultDryRunChainId = 8453;
   const chainId = parsePositiveIntegerChainId(args.chainId ?? String(defaultDryRunChainId)) ?? defaultDryRunChainId;
   const clientRequestId =
     typeof args.clientRequestId === "string" && args.clientRequestId.trim()

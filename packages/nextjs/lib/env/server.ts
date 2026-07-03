@@ -71,7 +71,6 @@ export function resolveServerTargetNetworks(
       resolveRpcOverrides(
         {
           31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
-          84532: readEnv("NEXT_PUBLIC_RPC_URL_84532"),
           8453: readEnv("NEXT_PUBLIC_RPC_URL_8453"),
         },
         {
@@ -113,7 +112,6 @@ export function getServerRpcOverrides(): Partial<Record<number, string>> {
     resolveRpcOverrides(
       {
         31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
-        84532: readEnv("NEXT_PUBLIC_RPC_URL_84532"),
         8453: readEnv("NEXT_PUBLIC_RPC_URL_8453"),
       },
       {

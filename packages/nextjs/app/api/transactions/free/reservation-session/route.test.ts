@@ -17,7 +17,7 @@ const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 const TEST_ACCOUNT = privateKeyToAccount(`0x${"12".repeat(32)}`);
 const TEST_ADDRESS = TEST_ACCOUNT.address;
-const TEST_CHAIN_ID = 84532;
+const TEST_CHAIN_ID = 8453;
 const TEST_OPERATION_KEY = `0x${"ab".repeat(32)}`;
 const TEST_RESERVATION_SESSION_TOKEN = "c".repeat(64);
 

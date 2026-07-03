@@ -8,89 +8,80 @@ import {
 } from "./rpcUrls";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { baseSepolia, baseSepoliaPreconf, worldchainSepolia } from "viem/chains";
+import { base, basePreconf, foundry } from "viem/chains";
 
-test("buildAlchemyHttpUrl returns the expected World Chain Sepolia RPC", () => {
-  assert.equal(buildAlchemyHttpUrl(4801, "test-key"), "https://worldchain-sepolia.g.alchemy.com/v2/test-key");
+test("buildAlchemyHttpUrl returns the expected Base mainnet RPC", () => {
+  assert.equal(buildAlchemyHttpUrl(8453, "test-key"), "https://base-mainnet.g.alchemy.com/v2/test-key");
 });
 
-test("buildAlchemyHttpUrl returns the expected Base Sepolia RPC", () => {
-  assert.equal(buildAlchemyHttpUrl(84532, "test-key"), "https://base-sepolia.g.alchemy.com/v2/test-key");
-});
-
-test("buildAlchemyHttpUrl ignores unsupported scaffold-era networks", () => {
+test("buildAlchemyHttpUrl ignores retired and unsupported networks", () => {
   assert.equal(buildAlchemyHttpUrl(137, "test-key"), undefined);
+  assert.equal(buildAlchemyHttpUrl(999999, "test-key"), undefined);
 });
 
 test("getPreferredHttpRpcUrls prioritizes overrides before Alchemy and defaults", () => {
   assert.deepEqual(
-    getPreferredHttpRpcUrls(baseSepolia, {
+    getPreferredHttpRpcUrls(base, {
       alchemyApiKey: "alchemy-key",
       rpcOverrides: {
-        [baseSepolia.id]: "https://rpc.example.com",
+        [base.id]: "https://rpc.example.com",
       },
     }),
-    [
-      "https://rpc.example.com",
-      "https://base-sepolia.g.alchemy.com/v2/alchemy-key",
-      ...baseSepolia.rpcUrls.default.http,
-    ],
+    ["https://rpc.example.com", "https://base-mainnet.g.alchemy.com/v2/alchemy-key", ...base.rpcUrls.default.http],
   );
 });
 
 test("getPreferredHttpRpcUrls requires a configured Base RPC when preconfirmation is enabled", () => {
-  assert.equal(isBasePreconfRpcChain(baseSepoliaPreconf), true);
+  assert.equal(isBasePreconfRpcChain(basePreconf), true);
+  assert.equal(isBasePreconfRpcChain(base), false);
 
   assert.throws(
-    () => getPreferredHttpRpcUrls(baseSepoliaPreconf, { alchemyApiKey: "alchemy-key", preferBasePreconfRpc: true }),
-    /NEXT_PUBLIC_RPC_URL_84532/,
+    () => getPreferredHttpRpcUrls(basePreconf, { alchemyApiKey: "alchemy-key", preferBasePreconfRpc: true }),
+    /NEXT_PUBLIC_RPC_URL_8453/,
   );
 });
 
 test("getPreferredHttpRpcUrls reuses the configured Base RPC when preconfirmation is enabled", () => {
   assert.deepEqual(
-    getPreferredHttpRpcUrls(baseSepoliaPreconf, {
+    getPreferredHttpRpcUrls(basePreconf, {
       alchemyApiKey: "alchemy-key",
       preferBasePreconfRpc: true,
       rpcOverrides: {
-        [baseSepoliaPreconf.id]: "https://84532.rpc.thirdweb.com/client-id",
+        [basePreconf.id]: "https://8453.rpc.thirdweb.com/client-id",
       },
     }),
-    ["https://84532.rpc.thirdweb.com/client-id"],
+    ["https://8453.rpc.thirdweb.com/client-id"],
   );
 });
 
 test("withPreferredHttpRpcUrls preserves Base preconfirmation detection after RPC URL rewrites", () => {
-  const preferredChain = withPreferredHttpRpcUrls(baseSepoliaPreconf, {
+  const preferredChain = withPreferredHttpRpcUrls(basePreconf, {
     preferBasePreconfRpc: true,
     rpcOverrides: {
-      [baseSepoliaPreconf.id]: "https://84532.rpc.thirdweb.com/client-id",
+      [basePreconf.id]: "https://8453.rpc.thirdweb.com/client-id",
     },
   });
 
-  assert.deepEqual(Array.from(preferredChain.rpcUrls.default.http), ["https://84532.rpc.thirdweb.com/client-id"]);
+  assert.deepEqual(Array.from(preferredChain.rpcUrls.default.http), ["https://8453.rpc.thirdweb.com/client-id"]);
   assert.equal(isBasePreconfRpcChain(preferredChain), true);
 });
 
-test("withPreferredHttpRpcUrls rewrites the chain metadata used for wallet add-chain flows", () => {
-  const preferredChain = withPreferredHttpRpcUrls(worldchainSepolia, {
+test("non-Base chain metadata does not receive Alchemy rewrites without a mapped chain name", () => {
+  const preferredChain = withPreferredHttpRpcUrls(foundry, {
     alchemyApiKey: "alchemy-key",
   });
 
-  assert.deepEqual(Array.from(preferredChain.rpcUrls.default.http), [
-    "https://worldchain-sepolia.g.alchemy.com/v2/alchemy-key",
-    "https://worldchain-sepolia.g.alchemy.com/public",
-  ]);
+  assert.deepEqual(Array.from(preferredChain.rpcUrls.default.http), Array.from(foundry.rpcUrls.default.http));
 });
 
 test("resolveRpcOverrides normalizes configured per-chain RPC URLs", () => {
   assert.deepEqual(
     resolveRpcOverrides({
-      4801: "https://4801.rpc.thirdweb.com/client-id/",
-      480: undefined,
+      8453: "https://8453.rpc.thirdweb.com/client-id/",
+      999999: undefined,
     }),
     {
-      4801: "https://4801.rpc.thirdweb.com/client-id",
+      8453: "https://8453.rpc.thirdweb.com/client-id",
     },
   );
 });
@@ -133,14 +124,14 @@ test("mergeRpcOverrides lets env-defined RPC URLs override code defaults", () =>
   assert.deepEqual(
     mergeRpcOverrides(
       {
-        [worldchainSepolia.id]: "https://worldchain-sepolia.g.alchemy.com/public",
+        [base.id]: "https://base-mainnet.g.alchemy.com/public",
       },
       {
-        [worldchainSepolia.id]: "https://4801.rpc.thirdweb.com/client-id",
+        [base.id]: "https://8453.rpc.thirdweb.com/client-id",
       },
     ),
     {
-      [worldchainSepolia.id]: "https://4801.rpc.thirdweb.com/client-id",
+      [base.id]: "https://8453.rpc.thirdweb.com/client-id",
     },
   );
 });

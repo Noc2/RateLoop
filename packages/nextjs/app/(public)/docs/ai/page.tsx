@@ -169,8 +169,7 @@ const AIPage = async () => {
       </p>
       <p>
         RateLoop production asks run on the existing Base mainnet deployment. Install the agent workflow now, but do not
-        force a paid ask when the requested chain does not have live RateLoop contracts. Use Base Sepolia only for
-        staging or testnet validation.
+        force a paid ask when the requested chain does not have live RateLoop contracts.
       </p>
 
       <h2 id="permanent-agent-setup">Permanent Agent Setup</h2>
@@ -382,7 +381,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Wallet: optional expected <code>walletAddress</code> on Base mainnet with LREP or USDC for the bounty and any
-          Feedback Bonus. Use Base Sepolia only for staging/testnet validation.
+          Feedback Bonus.
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, and optional <code>bountyEligibility</code> (

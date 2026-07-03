@@ -73,7 +73,7 @@ test("prefers sponsored submit calls for thirdweb connector wallets with free tr
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: true,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
     }),
     true,
@@ -84,7 +84,7 @@ test("prefers sponsored batch calls for thirdweb connector wallets with free tra
   assert.equal(
     shouldPreferSponsoredBatchCalls({
       canUseFreeTransactions: true,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
     }),
     true,
@@ -94,7 +94,7 @@ test("prefers sponsored batch calls for thirdweb connector wallets with free tra
 test("expects sponsored submit calls for supported thirdweb connector wallets before allowance resolves", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
     }),
     true,
@@ -104,17 +104,17 @@ test("expects sponsored submit calls for supported thirdweb connector wallets be
 test("expects thirdweb batch calls for supported in-app wallets", () => {
   assert.equal(
     shouldExpectThirdwebBatchCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
     }),
     true,
   );
 });
 
-test("expects thirdweb batch calls for in-app wallets on World Chain Sepolia", () => {
+test("expects thirdweb batch calls for in-app wallets on Base mainnet", () => {
   assert.equal(
     shouldExpectThirdwebBatchCalls({
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "in-app-wallet",
     }),
     true,
@@ -125,7 +125,7 @@ test("expects thirdweb batch calls for active external wallets with matching con
   assert.equal(
     shouldExpectThirdwebBatchCalls({
       activeWalletId: "io.metamask",
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "io.metamask",
     }),
     true,
@@ -136,7 +136,7 @@ test("does not expect thirdweb batch calls from stale external wallets", () => {
   assert.equal(
     shouldExpectThirdwebBatchCalls({
       activeWalletId: "io.metamask",
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "com.coinbase.wallet",
     }),
     false,
@@ -146,7 +146,7 @@ test("does not expect thirdweb batch calls from stale external wallets", () => {
 test("uses self-funded batch calls only after in-app wallets switch to paid gas mode", () => {
   assert.equal(
     shouldUseSelfFundedBatchCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "self_funded_7702",
     }),
@@ -154,7 +154,7 @@ test("uses self-funded batch calls only after in-app wallets switch to paid gas 
   );
   assert.equal(
     shouldUseSelfFundedBatchCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "sponsored_7702",
     }),
@@ -162,7 +162,7 @@ test("uses self-funded batch calls only after in-app wallets switch to paid gas 
   );
   assert.equal(
     shouldUseSelfFundedBatchCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "self_funded_7702",
       isThirdwebInApp: true,
@@ -175,7 +175,7 @@ test("uses self-funded batch calls for active external wallets with atomic sendC
   assert.equal(
     shouldUseSelfFundedBatchCalls({
       activeWalletId: "io.metamask",
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,
@@ -187,7 +187,7 @@ test("uses self-funded batch calls for active external wallets with atomic sendC
   assert.equal(
     shouldUseSelfFundedBatchCalls({
       activeWalletId: "io.metamask",
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: false,
@@ -199,7 +199,7 @@ test("uses self-funded batch calls for active external wallets with atomic sendC
   assert.equal(
     shouldUseSelfFundedBatchCalls({
       activeWalletId: "io.metamask",
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,
@@ -212,7 +212,7 @@ test("uses self-funded batch calls for active external wallets with atomic sendC
 test("uses wagmi sendCalls for atomic external wallets even when the thirdweb active wallet is stale", () => {
   assert.equal(
     shouldUseExternalWalletSendCalls({
-      chainId: 84532,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,
@@ -224,7 +224,7 @@ test("uses wagmi sendCalls for atomic external wallets even when the thirdweb ac
   assert.equal(
     shouldUseSelfFundedBatchCalls({
       activeWalletId: "com.coinbase.wallet",
-      chainId: 84532,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,
@@ -282,7 +282,7 @@ test("routes self-funded external wallet batches through the wagmi connector pat
 test("does not route in-app or non-atomic wallets through external wallet sendCalls", () => {
   assert.equal(
     shouldUseExternalWalletSendCalls({
-      chainId: 84532,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "fee_currency",
       hasSendCalls: true,
@@ -294,7 +294,7 @@ test("does not route in-app or non-atomic wallets through external wallet sendCa
 
   assert.equal(
     shouldUseExternalWalletSendCalls({
-      chainId: 84532,
+      chainId: 8453,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,
@@ -307,7 +307,7 @@ test("does not route in-app or non-atomic wallets through external wallet sendCa
 test("uses unmetered sponsored batch calls for in-app wallets with sendCalls support", () => {
   assert.equal(
     shouldUseUnmeteredSponsoredBatchCalls({
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       hasSendCalls: true,
     }),
@@ -316,7 +316,7 @@ test("uses unmetered sponsored batch calls for in-app wallets with sendCalls sup
 
   assert.equal(
     shouldUseUnmeteredSponsoredBatchCalls({
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       hasSendCalls: false,
     }),
@@ -325,7 +325,7 @@ test("uses unmetered sponsored batch calls for in-app wallets with sendCalls sup
 
   assert.equal(
     shouldUseUnmeteredSponsoredBatchCalls({
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "io.metamask",
       hasSendCalls: true,
       isThirdwebInApp: true,
@@ -361,7 +361,7 @@ test("matches thirdweb execution address against the connected wagmi address", (
 test("expects sponsored submit calls from active in-app wallet before wagmi connector settles", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       isThirdwebInApp: true,
     }),
@@ -372,7 +372,7 @@ test("expects sponsored submit calls from active in-app wallet before wagmi conn
 test("does not expect sponsored submit calls for active external wallets", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 4801,
+      chainId: 8453,
       connectorId: "io.metamask",
     }),
     false,
@@ -382,7 +382,7 @@ test("does not expect sponsored submit calls for active external wallets", () =>
 test("does not expect sponsored submit calls from stale in-app wallet after external connector settles", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 480,
+      chainId: 8453,
       connectorId: "injected",
       isThirdwebInApp: true,
     }),
@@ -394,7 +394,7 @@ test("does not prefer sponsored submit calls from stale in-app wallet after exte
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: true,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "io.metamask",
       isThirdwebInApp: true,
     }),
@@ -406,7 +406,7 @@ test("does not prefer sponsored submit calls without free transaction allowance"
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
     }),
     false,
@@ -417,7 +417,7 @@ test("does not prefer sponsored submit calls for unsupported connectors", () => 
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: true,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "walletConnect",
     }),
     false,
@@ -480,7 +480,7 @@ test("skips self-funded fallback when a reserved free transaction was denied spo
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 480,
+      chainId: 8453,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
       hasNativeGasBalance: true,
@@ -494,7 +494,7 @@ test("allows self-funded fallback when sponsorship denial is unrelated to a rese
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 480,
+      chainId: 8453,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
       hasNativeGasBalance: true,
@@ -508,7 +508,7 @@ test("skips self-funded fallback when the in-app wallet has no native gas", () =
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 480,
+      chainId: 8453,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
       hasNativeGasBalance: false,
@@ -522,7 +522,7 @@ test("allows self-funded fallback when sponsored free transactions are exhausted
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 480,
+      chainId: 8453,
       error: new Error(
         'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
@@ -538,7 +538,7 @@ test("allows self-funded fallback when thirdweb sponsored execution is rejected 
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 480,
+      chainId: 8453,
       error: new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400\nCode: UNKNOWN'),
       executionMode: "sponsored_7702",
       hasNativeGasBalance: true,
@@ -552,7 +552,7 @@ test("allows self-funded fallback for wagmi in-app wallet ids when sponsored fre
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "in-app-wallet",
-      chainId: 480,
+      chainId: 8453,
       error: new Error(
         'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
@@ -568,7 +568,7 @@ test("awaits self-funded reconnect after free transactions are exhausted for thi
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -581,7 +581,7 @@ test("awaits self-funded reconnect after exhausted free transactions before wagm
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: undefined,
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -622,7 +622,7 @@ test("awaits self-funded reconnect while the wallet restore context is pending a
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -710,7 +710,7 @@ test("does not await self-funded reconnect after exhausted free transactions onc
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "injected",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -724,7 +724,7 @@ test("stops awaiting self-funded reconnect once the in-app wallet is self-funded
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "self_funded_7702",
       freeTransactionAllowanceResolved: true,
@@ -750,7 +750,7 @@ test("does not await self-funded reconnect before free transaction allowance res
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 480,
+      chainId: 8453,
       connectorId: "in-app-wallet",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: false,

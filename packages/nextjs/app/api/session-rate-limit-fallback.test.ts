@@ -9,7 +9,7 @@ const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 const originalTrustedHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 
 const TEST_ADDRESS = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
-const TEST_CHAIN_ID = 84532;
+const TEST_CHAIN_ID = 8453;
 const TEST_IP = "203.0.113.77";
 
 env.DATABASE_URL = "memory:";

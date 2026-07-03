@@ -6,50 +6,6 @@ import {
 } from "../services/thirdweb/client";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defineChain } from "thirdweb";
-
-test("thirdweb in-app wallets use sponsored EIP-4337 mode on World Chain Sepolia", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(4801), {
-    mode: "EIP4337",
-    smartAccount: {
-      chain: defineChain(4801),
-      sponsorGas: true,
-    },
-  });
-});
-
-test("thirdweb in-app wallets use sponsored EIP-7702 mode on Base Sepolia", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(84532), {
-    mode: "EIP7702",
-    sponsorGas: true,
-  });
-});
-
-test("thirdweb in-app wallets can be forced back to EOA mode", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(4801, { forceEoa: true }), {
-    mode: "EOA",
-  });
-});
-
-test("World Chain Sepolia supports in-app execution without using EIP-7702", () => {
-  assert.equal(supportsThirdwebExecutionCapabilities(4801), true);
-  assert.equal(supportsThirdwebInAppExecutionCapabilities(4801), true);
-  assert.equal(usesThirdwebInAppEip7702Execution(4801), false);
-});
-
-test("Base Sepolia supports in-app EIP-7702 execution", () => {
-  assert.equal(supportsThirdwebExecutionCapabilities(84532), true);
-  assert.equal(supportsThirdwebInAppExecutionCapabilities(84532), true);
-  assert.equal(usesThirdwebInAppEip7702Execution(84532), true);
-});
-
-test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain mainnet", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(480), {
-    mode: "EIP7702",
-    sponsorGas: true,
-  });
-  assert.equal(usesThirdwebInAppEip7702Execution(480), true);
-});
 
 test("thirdweb in-app wallets use sponsored EIP-7702 mode on Base mainnet", () => {
   assert.deepEqual(getThirdwebWalletExecutionMode(8453), {
@@ -59,17 +15,30 @@ test("thirdweb in-app wallets use sponsored EIP-7702 mode on Base mainnet", () =
   assert.equal(usesThirdwebInAppEip7702Execution(8453), true);
 });
 
-test("thirdweb in-app wallets can switch sponsored EIP-4337 mode to self-funded", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(4801, { sponsorshipMode: "self-funded" }), {
-    mode: "EIP4337",
-    smartAccount: {
-      chain: defineChain(4801),
-      sponsorGas: false,
-    },
+test("thirdweb in-app wallets can be forced back to EOA mode", () => {
+  assert.deepEqual(getThirdwebWalletExecutionMode(8453, { forceEoa: true }), {
+    mode: "EOA",
   });
 });
 
-test("thirdweb in-app wallets stay in EOA mode on unsupported chains", () => {
+test("Base mainnet supports in-app EIP-7702 execution", () => {
+  assert.equal(supportsThirdwebExecutionCapabilities(8453), true);
+  assert.equal(supportsThirdwebInAppExecutionCapabilities(8453), true);
+  assert.equal(usesThirdwebInAppEip7702Execution(8453), true);
+});
+
+test("unsupported chains stay in EOA mode", () => {
+  for (const chainId of [999999]) {
+    assert.deepEqual(getThirdwebWalletExecutionMode(chainId), {
+      mode: "EOA",
+    });
+    assert.equal(supportsThirdwebExecutionCapabilities(chainId), false);
+    assert.equal(supportsThirdwebInAppExecutionCapabilities(chainId), false);
+    assert.equal(usesThirdwebInAppEip7702Execution(chainId), false);
+  }
+});
+
+test("thirdweb in-app wallets stay in EOA mode on local Foundry", () => {
   assert.deepEqual(getThirdwebWalletExecutionMode(31337), {
     mode: "EOA",
   });

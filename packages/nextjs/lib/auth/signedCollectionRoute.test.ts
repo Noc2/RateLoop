@@ -80,7 +80,7 @@ test("collection sessions can be scoped by deployment storage keys", async () =>
     hasWriteSession: false,
     walletAddress: WALLET,
     scope: "watchlist",
-    storageScope: "watchlist:84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    storageScope: "watchlist:8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   });
 
   const readCookie = response.cookies.get(signedReadSessions.WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME);
@@ -93,7 +93,7 @@ test("collection sessions can be scoped by deployment storage keys", async () =>
       readCookie.value,
       WALLET,
       "watchlist",
-      "watchlist:84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "watchlist:8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     ),
     true,
   );
@@ -111,7 +111,7 @@ test("collection sessions can be scoped by deployment storage keys", async () =>
       writeCookie.value,
       WALLET,
       "watchlist",
-      "watchlist:84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "watchlist:8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     ),
     true,
   );

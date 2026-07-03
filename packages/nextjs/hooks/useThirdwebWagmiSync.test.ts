@@ -107,10 +107,10 @@ test("shouldSkipThirdwebWagmiSync returns true when the requested thirdweb walle
     shouldSkipThirdwebWagmiSync({
       connectorId: "in-app-wallet",
       currentAddress: "0xabcDEF0000000000000000000000000000000000",
-      currentChainId: 4801,
+      currentChainId: 8453,
       currentConnectorId: "in-app-wallet",
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
-      requestedChainId: 4801,
+      requestedChainId: 8453,
     }),
     true,
   );
@@ -121,11 +121,11 @@ test("shouldSkipThirdwebWagmiSync returns false for forced reconnects on the sam
     shouldSkipThirdwebWagmiSync({
       connectorId: "in-app-wallet",
       currentAddress: "0xabcDEF0000000000000000000000000000000000",
-      currentChainId: 480,
+      currentChainId: 8453,
       currentConnectorId: "in-app-wallet",
       forceReconnect: true,
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
-      requestedChainId: 480,
+      requestedChainId: 8453,
     }),
     false,
   );
@@ -136,10 +136,10 @@ test("shouldSkipThirdwebWagmiSync returns false when the requested chain differs
     shouldSkipThirdwebWagmiSync({
       connectorId: "in-app-wallet",
       currentAddress: "0xabcdef0000000000000000000000000000000000",
-      currentChainId: 480,
+      currentChainId: 8453,
       currentConnectorId: "in-app-wallet",
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
-      requestedChainId: 4801,
+      requestedChainId: 999999,
     }),
     false,
   );
@@ -150,12 +150,12 @@ test("shouldReplaceActiveThirdwebWagmiConnection replaces active in-app connecto
     shouldReplaceActiveThirdwebWagmiConnection({
       connectorId: "in-app-wallet",
       currentAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
-      currentChainId: 4801,
+      currentChainId: 8453,
       currentConnectorId: "in-app-wallet",
       forceReconnect: true,
       replaceActiveConnection: true,
       requestedAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
-      requestedChainId: 4801,
+      requestedChainId: 8453,
     }),
     true,
   );
@@ -166,12 +166,12 @@ test("shouldReplaceActiveThirdwebWagmiConnection does not replace unrelated or o
     shouldReplaceActiveThirdwebWagmiConnection({
       connectorId: "in-app-wallet",
       currentAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
-      currentChainId: 4801,
+      currentChainId: 8453,
       currentConnectorId: "in-app-wallet",
       forceReconnect: true,
       replaceActiveConnection: false,
       requestedAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
-      requestedChainId: 4801,
+      requestedChainId: 8453,
     }),
     false,
   );
@@ -179,12 +179,12 @@ test("shouldReplaceActiveThirdwebWagmiConnection does not replace unrelated or o
     shouldReplaceActiveThirdwebWagmiConnection({
       connectorId: "io.metamask",
       currentAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
-      currentChainId: 4801,
+      currentChainId: 8453,
       currentConnectorId: "io.metamask",
       forceReconnect: true,
       replaceActiveConnection: true,
       requestedAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
-      requestedChainId: 4801,
+      requestedChainId: 8453,
     }),
     false,
   );

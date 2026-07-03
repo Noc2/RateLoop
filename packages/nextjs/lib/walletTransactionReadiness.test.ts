@@ -100,7 +100,7 @@ test("getWalletTransactionReadiness distinguishes self-funded reconnect", () => 
 test("getWalletTransactionReadiness reports wrong network after pending states settle", () => {
   const readiness = getWalletTransactionReadiness({
     ...BASE_PARAMS,
-    accountChainId: 84532,
+    accountChainId: 999999,
   });
 
   assert.equal(readiness.status, "wrong_network");

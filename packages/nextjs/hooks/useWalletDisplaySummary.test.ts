@@ -30,12 +30,12 @@ test("buildWalletDisplaySummary initializes pending fields to zero", () => {
 test("getWalletDisplaySummaryQueryKey partitions cache entries by chain", () => {
   const address = "0x00000000000000000000000000000000000000AA";
 
-  assert.deepEqual(getWalletDisplaySummaryQueryKey(address, 480), [
+  assert.deepEqual(getWalletDisplaySummaryQueryKey(address, 8453), [
     "wallet-display-summary",
-    480,
+    8453,
     "0x00000000000000000000000000000000000000aa",
   ]);
-  assert.notDeepEqual(getWalletDisplaySummaryQueryKey(address, 480), getWalletDisplaySummaryQueryKey(address, 31337));
+  assert.notDeepEqual(getWalletDisplaySummaryQueryKey(address, 8453), getWalletDisplaySummaryQueryKey(address, 31337));
 });
 
 test("reconcileWalletDisplaySummary treats an outgoing transfer as a fresh lower total", () => {
