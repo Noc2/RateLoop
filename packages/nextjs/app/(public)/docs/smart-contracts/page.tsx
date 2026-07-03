@@ -684,7 +684,7 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>requestDeregister()</code> / <code>completeDeregister()</code> &mdash; Start voluntary exit, then
-          withdraw stake + pending fees after the unbonding window elapses.
+          withdraw stake + pending fees after the unbonding window elapses and no challenged payout snapshot is active.
         </li>
         <li>
           <code>topUpStake(amount)</code> &mdash; Restore the fixed 1,000 LREP bond after a partial slash so the

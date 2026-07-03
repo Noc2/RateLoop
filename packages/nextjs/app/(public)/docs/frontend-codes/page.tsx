@@ -116,11 +116,11 @@ const FrontendCodes: NextPage = () => {
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> from your operator address
           on each settled round. Withdrawing accumulated LREP is a two-step flow:{" "}
           <code>FrontendRegistry.requestFeeWithdrawal()</code> starts a 1-hour review window during which the amount
-          stays slashable, then <code>completeFeeWithdrawal()</code> pays it out once no payout-root challenge is active
-          — or use <code>completeDeregister()</code> after exit, which sweeps stake and all fees after the separate
-          14-day unbonding period. If governance slashes your frontend, you must restore the full{" "}
-          {protocolDocFacts.frontendOperatorStakeLabel} bond before fee claims can accrue to you again. Reward-pool
-          frontend shares are paid automatically when eligible voters claim.
+          stays slashable, then <code>completeFeeWithdrawal()</code> pays it out once no payout-root challenge is
+          active. <code>completeDeregister()</code> after exit uses the same no-active-challenge condition before
+          sweeping stake and fees after the separate 14-day unbonding period. If governance slashes your frontend, you
+          must restore the full {protocolDocFacts.frontendOperatorStakeLabel} bond before fee claims can accrue to you
+          again. Reward-pool frontend shares are paid automatically when eligible voters claim.
         </li>
         <li>
           <strong>Publish roots:</strong> If you operate the correlation scorer, propose deterministic
