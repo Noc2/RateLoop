@@ -2227,7 +2227,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.recordBundleQuestionTerminal(contentIds[1], secondRoundId, true);
         vm.stopPrank();
 
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
 
         vm.prank(voter2);
         uint256 reward = rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
