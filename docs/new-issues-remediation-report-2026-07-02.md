@@ -4,6 +4,8 @@ Branch: `main`
 
 Scope: the new fifth-pass issues and adjacent inconsistencies found after the prior fixes. The plan assumed a fresh redeploy of the protocol stack; no compatibility shims for old deployed contracts were added.
 
+Superseded RBTS entropy note, 2026-07-03: the future blockhash/EIP-2935 remediation described in this historical report is not the fresh-redeploy launch posture. The current plan is precommitted reveal entropy bound to the closed scoring set, as described in `docs/incentives-remediation-plan-2026-07.md`. Do not treat a future-blockhash or sequencer non-grinding assumption as the launch model.
+
 ## Principles Applied
 
 - Keep the protocol decentralized from launch: no trusted keeper-only, admin-only, or centralized randomness escape hatch was added for ordinary liveness.

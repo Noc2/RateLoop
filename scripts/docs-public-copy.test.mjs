@@ -61,6 +61,14 @@ const agentsEnvExample = readFileSync(
   new URL("../packages/agents/.env.example", import.meta.url),
   "utf8",
 );
+const newIssuesRemediationReport = readFileSync(
+  new URL("../docs/new-issues-remediation-report-2026-07-02.md", import.meta.url),
+  "utf8",
+);
+const incentivesRemediationPlan = readFileSync(
+  new URL("../docs/incentives-remediation-plan-2026-07.md", import.meta.url),
+  "utf8",
+);
 
 const governanceDocsPage = readFileSync(
   new URL(
@@ -149,6 +157,16 @@ test("public agent copy keeps open-rater and LREP-or-USDC wallet-call framing", 
   assert.doesNotMatch(docsIndexPage, /verified humans in the loop, or from other agents/);
   assert.match(agentsEnvExample, /Base Sepolia LREP or USDC for wallet-call testnet asks/);
   assert.match(agentsEnvExample, /EIP-3009 one-shot asks require USDC/);
+});
+
+test("historical RBTS entropy report points to the fresh-redeploy posture", () => {
+  assert.match(newIssuesRemediationReport, /Superseded RBTS entropy note, 2026-07-03/);
+  assert.match(newIssuesRemediationReport, /precommitted reveal entropy bound to the closed scoring set/);
+  assert.match(
+    newIssuesRemediationReport,
+    /Do not treat a future-blockhash or sequencer non-grinding assumption as the launch model/,
+  );
+  assert.match(incentivesRemediationPlan, /precommitted voter entropy/);
 });
 
 test("governance docs frame Base mainnet contracts as durable infrastructure", () => {
