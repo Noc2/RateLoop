@@ -674,28 +674,8 @@ async function readRoundAtBlock(
   blockTag: `0x${string}`,
 ): Promise<unknown> {
   const { decodeFunctionResult, encodeFunctionData } = await import("viem");
-  const abi = [
-    {
-      name: "roundCore",
-      type: "function",
-      inputs: [
-        { name: "contentId", type: "uint256" },
-        { name: "roundId", type: "uint256" },
-      ],
-      outputs: [
-        { name: "startTime", type: "uint48" },
-        { name: "state", type: "uint8" },
-        { name: "voteCount", type: "uint16" },
-        { name: "revealedCount", type: "uint16" },
-        { name: "totalStake", type: "uint64" },
-        { name: "thresholdReachedAt", type: "uint48" },
-        { name: "settledAt", type: "uint48" },
-      ],
-      stateMutability: "view",
-    },
-  ] as const;
   const data = encodeFunctionData({
-    abi,
+    abi: ROUND_CORE_ABI,
     functionName: "roundCore",
     args: [contentId, roundId],
   });
@@ -705,7 +685,7 @@ async function readRoundAtBlock(
   }
 
   return decodeFunctionResult({
-    abi,
+    abi: ROUND_CORE_ABI,
     functionName: "roundCore",
     data: result,
   });
