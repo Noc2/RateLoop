@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   buildReplayProtectedWebhookVerifier,
   buildSignatureOnlyWebhookVerifier,
@@ -16,6 +17,7 @@ import {
 import { RateLoopApiError } from "./errors";
 
 const API_BASE_URL = "https://rateloop.example";
+const SDK_README = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -23,6 +25,18 @@ function jsonResponse(body: unknown, status = 200) {
     status,
   });
 }
+
+test("README keeps public and managed MCP examples separate", () => {
+  assert.match(
+    SDK_README,
+    /const publicAgent = createRateLoopAgentClient\(\{\s+mcpApiUrl: "https:\/\/www\.rateloop\.ai\/api\/mcp\/public",\s+\}\);/m,
+  );
+  assert.doesNotMatch(SDK_README, /api\/mcp\/public[\s\S]{0,240}mcpAccessToken/);
+  assert.match(
+    SDK_README,
+    /const managedAgent = createRateLoopAgentClient\(\{\s+mcpApiUrl: "https:\/\/www\.rateloop\.ai\/api\/mcp",\s+mcpAccessToken: process\.env\.RATELOOP_MCP_TOKEN,\s+\}\);/m,
+  );
+});
 
 function signedWebhookHeaders(params: {
   body: string;

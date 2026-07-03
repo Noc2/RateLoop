@@ -87,15 +87,13 @@ import {
 } from "@rateloop/sdk/agent";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
-const agent = createRateLoopAgentClient({
+const publicAgent = createRateLoopAgentClient({
   mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
-  // Optional. Add only when using a saved managed policy.
-  mcpAccessToken: process.env.RATELOOP_MCP_TOKEN,
 });
 
 const walletAddress = "0xYourFundedAgentWallet";
 
-const quote = await agent.quoteQuestion({
+const quote = await publicAgent.quoteQuestion({
   clientRequestId: "launch-check-1",
   chainId: 8453,
   bounty: {
@@ -117,12 +115,11 @@ const quote = await agent.quoteQuestion({
   walletAddress,
 });
 
-const dryRun = await agent.askHumans({
+const dryRun = await publicAgent.askHumans({
   chainId: 8453,
   clientRequestId: "launch-check-1-dry-run",
   dryRun: true,
   mode: "dry_run",
-  maxPaymentAmount: quote.payment?.amount ?? "1000000",
   bounty: {
     amount: "1000000",
     requiredVoters: "3",
@@ -142,7 +139,7 @@ const dryRun = await agent.askHumans({
   walletAddress,
 });
 
-const ask = await agent.askHumans({
+const ask = await publicAgent.askHumans({
   chainId: 8453,
   clientRequestId: "launch-check-1",
   maxPaymentAmount: quote.payment?.amount ?? "1000000",
@@ -165,24 +162,24 @@ const ask = await agent.askHumans({
   walletAddress,
 });
 
-const status = await agent.getQuestionStatus({
+const status = await publicAgent.getQuestionStatus({
   operationKey: ask.operationKey,
 });
-const result = await agent.getResult({ operationKey: status.operationKey });
+const result = await publicAgent.getResult({ operationKey: status.operationKey });
 
-let ratingContext = await agent.getRatingContext({
+let ratingContext = await publicAgent.getRatingContext({
   chainId: 8453,
   contentId: "42",
   walletAddress,
 });
 
 if (ratingContext.content?.contextAccess === "gated") {
-  await agent.acceptConfidentialityTerms({
+  await publicAgent.acceptConfidentialityTerms({
     chainId: 8453,
     contentId: "42",
     walletAddress,
   });
-  ratingContext = await agent.getRatingContext({
+  ratingContext = await publicAgent.getRatingContext({
     chainId: 8453,
     contentId: "42",
     walletAddress,
@@ -220,7 +217,7 @@ const encryptedCommit = await buildCommitVoteParams({
   },
 });
 
-const preparedRating = await agent.prepareRatingTransactions({
+const preparedRating = await publicAgent.prepareRatingTransactions({
   chainId: 8453,
   contentId: "42",
   walletAddress,
@@ -263,6 +260,15 @@ const signatureOnlyVerifier = buildSignatureOnlyWebhookVerifier({
 await signatureOnlyVerifier.assertValid({
   body: webhookBody,
   headers: webhookHeaders,
+});
+```
+
+For saved managed MCP policies, use the managed endpoint and pass the token there:
+
+```ts
+const managedAgent = createRateLoopAgentClient({
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp",
+  mcpAccessToken: process.env.RATELOOP_MCP_TOKEN,
 });
 ```
 
