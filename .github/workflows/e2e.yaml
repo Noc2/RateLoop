@@ -208,6 +208,8 @@ jobs:
           CHAIN_ID: "31337"
           KEEPER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
           PONDER_BASE_URL: http://127.0.0.1:42069
+          KEEPER_INTERVAL_MS: "5000"
+          KEEPER_WORK_DISCOVERY_CHAIN_SCAN_PER_TICK: "100"
           METRICS_ENABLED: "true"
           METRICS_PORT: "9090"
         run: yarn keeper:start &
@@ -236,6 +238,7 @@ jobs:
           NOTIFICATION_DELIVERY_SECRET: rateloop-e2e-confidentiality-secret
           # Anvil/Hardhat account #2 — well-known test key, no real funds
           KEEPER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+          KEEPER_INTERVAL_MS: "5000"
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
