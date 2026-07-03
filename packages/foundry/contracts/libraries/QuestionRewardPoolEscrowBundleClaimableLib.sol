@@ -58,10 +58,9 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
                 account
             )) return 0;
 
-        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
-            QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
-                votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
-            );
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
+            votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
+        );
         if (!windowActive) return 0;
 
         (bool completed, address frontend, bytes32 firstCommitKey) = QuestionRewardPoolEscrowBundleLib.bundleRoundSetCommitStatus(
@@ -164,7 +163,9 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
         if (eligibleCompleters < bundle.requiredCompleters) return preview;
 
         uint256 allocation = QuestionRewardPoolEscrowBundleLib.previewRoundSetAllocation(bundle);
-        if (allocation == 0 || allocation > bundle.unallocatedAmount || allocation < eligibleCompleters) return preview;
+        if (allocation == 0 || allocation > bundle.unallocatedAmount || allocation < eligibleCompleters) {
+            return preview;
+        }
         preview.allocation = allocation;
         preview.frontendFeeAllocation = (allocation * bundle.frontendFeeBps) / BPS_SCALE;
         preview.eligibleCompleters = eligibleCompleters;
@@ -241,10 +242,7 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
     function _isEligiblePendingBundleRoundSetCompleter(
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
         mapping(
-            uint256
-                => mapping(
-                uint256 => mapping(uint256 => uint64)
-            )
+            uint256 => mapping(uint256 => mapping(uint256 => uint64))
         ) storage bundleRoundIds,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
@@ -271,14 +269,7 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
             account
         )
             && _bundleRoundSetCommitCompleted(
-            bundleQuestions,
-            bundleRoundIds,
-            votingEngine,
-            protocolConfig,
-            bundle,
-            bundleId,
-            roundSetIndex,
-            account
+            bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, account
         )
             && _bundleRoundSetCommitBountyEligible(
             bundleQuestions,
@@ -308,10 +299,9 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
         uint256 roundSetIndex,
         address account
     ) private view returns (bool completed) {
-        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
-            QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
-                votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
-            );
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
+            votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
+        );
         if (!windowActive) return false;
         (completed,,) = QuestionRewardPoolEscrowBundleLib.bundleRoundSetCommitStatus(
             bundleQuestions,

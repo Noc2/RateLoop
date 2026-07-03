@@ -3262,9 +3262,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_AdvanceRatingSnapshotCursor_UsesOriginalEngineForRotatedTerminalRound() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
-        _submitContentWithReservation(
-            registry, "https://example.com/rating-cursor-rotation", "goal", "goal", "tags", 0
-        );
+        _submitContentWithReservation(registry, "https://example.com/rating-cursor-rotation", "goal", "goal", "tags", 0);
         vm.stopPrank();
 
         _commit(voter1, 1, true);

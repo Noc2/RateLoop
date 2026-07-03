@@ -164,7 +164,9 @@ library ContentRegistryRatingSnapshotLib {
         uint256 contentId,
         uint256 roundId
     ) external view returns (uint64) {
-        if (!pending.exists || pending.applied || msg.sender != pending.clusterPayoutOracle) return 0;
+        if (!pending.exists || pending.applied || msg.sender != pending.clusterPayoutOracle) {
+            return 0;
+        }
         if (pending.provisionallySkipped && latestAppliedRoundId >= roundId) return 0;
         (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
             IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);

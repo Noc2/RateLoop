@@ -1,36 +1,38 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IRaterRegistryStatus} from "./interfaces/IRaterRegistryStatus.sol";
-import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {QuestionRewardPoolEscrowBundleActionsLib} from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import {QuestionRewardPoolEscrowBundleClaimableLib} from "./libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol";
-import {QuestionRewardPoolEscrowBundlePreviewLib} from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import { QuestionRewardPoolEscrowBundleClaimableLib } from "./libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol";
+import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
     EqualShareInputs,
     WeightedShareInputs,
     ClaimableQuestionRewardParams
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowRecoveryLib} from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
-import {QuestionRewardPoolEscrowBundleRecoveryLib} from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
-import {QuestionRewardPoolEscrowPoolActionsLib} from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import {QuestionRewardPoolEscrowSnapshotConsumerLib} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
-import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
-import {QuestionRewardPoolEscrowWindowLib} from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
-import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
+import { QuestionRewardPoolEscrowBundleRecoveryLib } from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
+import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
+import {
+    QuestionRewardPoolEscrowSnapshotConsumerLib
+} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
+import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -42,7 +44,7 @@ import {
     BOUNTY_ELIGIBILITY_OPEN,
     QUESTION_REWARD_CLAIM_GRACE
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.

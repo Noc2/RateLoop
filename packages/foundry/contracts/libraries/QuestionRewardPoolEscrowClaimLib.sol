@@ -653,11 +653,7 @@ library QuestionRewardPoolEscrowClaimLib {
             );
     }
 
-    function _previewRoundAllocation(RewardPool storage rewardPool)
-        private
-        view
-        returns (uint256 allocation)
-    {
+    function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
         uint256 remainingRounds = uint256(rewardPool.requiredSettledRounds) - rewardPool.qualifiedRounds;
         allocation = remainingRounds == 1
