@@ -1,6 +1,6 @@
 [build]
-builder = "RAILPACK"
-buildCommand = "yarn workspace @rateloop/keeper build:workspace-deps && yarn workspace @rateloop/keeper build"
+builder = "DOCKERFILE"
+dockerfilePath = "packages/keeper/Dockerfile"
 watchPatterns = [
   ".yarn/**",
   ".yarnrc.yml",

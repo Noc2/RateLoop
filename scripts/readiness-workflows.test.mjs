@@ -207,13 +207,10 @@ test("Railway service start commands, watch patterns, and health checks pin prod
     ponder,
     /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-workspace-deps"/,
   );
-  assert.match(keeper, /builder = "RAILPACK"/);
-  assert.match(
-    keeper,
-    /buildCommand = "yarn workspace @rateloop\/keeper build:workspace-deps && yarn workspace @rateloop\/keeper build"/,
-  );
+  assert.match(keeper, /builder = "DOCKERFILE"/);
+  assert.match(keeper, /dockerfilePath = "packages\/keeper\/Dockerfile"/);
   assert.match(keeper, /scripts\/with-workspace-dist-lock\.mjs/);
-  assert.doesNotMatch(keeper, /dockerfilePath/);
+  assert.doesNotMatch(keeper, /buildCommand/);
   assert.match(keeper, /healthcheckPath = "\/live"/);
   assert.match(keeper, /healthcheckTimeout = 120/);
   assert.match(ponder, /builder = "RAILPACK"/);
