@@ -5,6 +5,7 @@
       "transport": "streamable-http",
       "headers": {
         "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
+        "MCP-Protocol-Version": "2025-11-25",
         "X-Agent-Name": "gemini-cli"
       }
     }

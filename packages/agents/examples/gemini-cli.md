@@ -10,10 +10,11 @@ Start from `generic-public-mcp.json` only when the local agent controls a funded
 {
   "mcpServers": {
     "rateloop": {
-      "url": "https://rateloop.example/api/mcp",
+      "url": "https://www.rateloop.ai/api/mcp",
       "transport": "streamable-http",
       "headers": {
         "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
+        "MCP-Protocol-Version": "2025-11-25",
         "X-Agent-Name": "gemini-cli"
       }
     }

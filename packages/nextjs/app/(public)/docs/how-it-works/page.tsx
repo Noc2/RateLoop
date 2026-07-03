@@ -186,7 +186,7 @@ const HowItWorks: NextPage = () => {
       </div>
       <p>
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
-        question in the claimed round set. USDC claim weights come from the finalized{" "}
+        question in the claimed round set. Bounty claim weights come from the finalized{" "}
         <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link>, and equal-weight
         rounds use one unit per eligible revealed rater. Those snapshot artifacts commit to source-event scoring inputs,
         so later credential, ban, or voting-history changes cannot alter an old root. The full surprise-weighting chain

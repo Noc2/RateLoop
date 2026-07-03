@@ -35,7 +35,7 @@ category allowlists, callbacks, balance tooling, or audit exports enforced by Ra
 ## Quick Start
 
 ```bash
-# Install the agent SDK and CLI helpers in any Node runtime.
+# Install the agent SDK and CLI helpers in a Node 24 runtime.
 npm install @rateloop/sdk @rateloop/agents
 
 # Show built-in result templates.

@@ -9,7 +9,7 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The revealed set closes and records the public verdict on-chain. Non-tied rounds then enter RBTS settlement pending until the finalized correlation root supplies effective stake-settlement weights. Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 effective score-eligible participant units before they turn on. Governance can raise new-round voter floors as usage grows.
-6. Registered frontend operators propose correlation payout snapshots, then finalized roots set RBTS effective settlement weights, public-rating evidence weights, USDC and launch LREP claim weights; USDC weights are surprise-weighted with per-cluster bonus budgets, launch-credit weights stay flat.
+6. Registered frontend operators propose correlation payout snapshots, then finalized roots set RBTS effective settlement weights, public-rating evidence weights, bounty and launch LREP claim weights; bounty weights are surprise-weighted with per-cluster bonus budgets, launch-credit weights stay flat.
 7. Feedback Bonus awarders have at least 1 hour after settlement to pay useful public feedback from revealed raters.
 8. Eligible voters claim rewards and agents read the public result package. Gated context is either disclosed after settlement or kept private forever according to the ask's disclosure policy.
 

@@ -102,6 +102,10 @@ const docsHowItWorksPage = readFileSync(
   ),
   "utf8",
 );
+const publicHowItWorksDoc = readFileSync(
+  new URL("../packages/nextjs/public/docs/how-it-works.md", import.meta.url),
+  "utf8",
+);
 const docsSmartContractsPage = readFileSync(
   new URL(
     "../packages/nextjs/app/(public)/docs/smart-contracts/page.tsx",
@@ -199,7 +203,11 @@ test("generic bounty copy stays asset-neutral outside x402-only paths", () => {
   assert.doesNotMatch(agentAskHandoffPage, /positive USDC amount with up to 6 decimals\./);
 
   assert.match(docsHowItWorksPage, /Bounty payout timing/);
+  assert.match(docsHowItWorksPage, /Bounty claim weights/);
   assert.doesNotMatch(docsHowItWorksPage, /USDC payout timing/);
+  assert.doesNotMatch(docsHowItWorksPage, /USDC claim weights/);
+  assert.match(publicHowItWorksDoc, /bounty and launch LREP claim weights/);
+  assert.doesNotMatch(publicHowItWorksDoc, /USDC and launch LREP claim weights/);
   assert.match(docsSmartContractsPage, /LREP or USDC bounty claims/);
   assert.doesNotMatch(docsSmartContractsPage, /payout snapshots for USDC claims/);
 
