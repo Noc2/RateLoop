@@ -75,16 +75,29 @@ async function validatePayoutFinalityLaunchBudget() {
     overlapProof: config.payoutFinality.overlapProof,
     configuredBudgetSeconds: configuredBudget.toString(),
     launchBudgetSeconds: LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS,
+    maxHealthyPathSeconds: config.payoutFinality.maxHealthyPathSeconds,
   };
   logger.info("Payout finality launch budget checked", budgetData);
 
   if (
     !LOCAL_CHAIN_IDS.has(config.chainId) &&
-    configuredBudget > BigInt(LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS)
+    config.payoutFinality.maxHealthyPathSeconds !== null &&
+    configuredBudget > BigInt(config.payoutFinality.maxHealthyPathSeconds)
   ) {
     recordPayoutFinalityLaunchBudgetConfigViolation();
     throw new Error(
-      `Configured payout finality budget exceeds launch policy: ${configuredBudget}s > ${LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS}s`,
+      `Configured payout finality budget exceeds launch policy: ${configuredBudget}s > ${config.payoutFinality.maxHealthyPathSeconds}s`,
+    );
+  }
+
+  if (
+    !LOCAL_CHAIN_IDS.has(config.chainId) &&
+    config.payoutFinality.maxHealthyPathSeconds === null &&
+    configuredBudget > BigInt(LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS)
+  ) {
+    logger.warn(
+      "Payout finality launch budget exceeds the one-hour target; continuing because no hard cap is configured",
+      budgetData,
     );
   }
 }

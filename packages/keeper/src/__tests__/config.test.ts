@@ -121,6 +121,11 @@ describe("keeper config", () => {
       maxBundleSyncsPerTick: 10,
       bundleMaxRoundsPerSync: 25,
     });
+    expect(config.payoutFinality).toEqual({
+      opsLagBudgetSeconds: 900,
+      maxHealthyPathSeconds: null,
+      overlapProof: false,
+    });
     expect(config.frontendFees.enabled).toBe(false);
     expect(config.persistence).toEqual({
       databaseUrl: null,
@@ -157,6 +162,38 @@ describe("keeper config", () => {
       maxBundleSyncsPerTick: 3,
       bundleMaxRoundsPerSync: 11,
     });
+  });
+
+  it("loads optional payout finality launch policy settings", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS: "120",
+      KEEPER_PAYOUT_FINALITY_MAX_HEALTHY_PATH_SECONDS: "620100",
+      KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF: "true",
+    });
+
+    expect(config.payoutFinality).toEqual({
+      opsLagBudgetSeconds: 120,
+      maxHealthyPathSeconds: 620100,
+      overlapProof: true,
+    });
+  });
+
+  it("rejects invalid payout finality launch policy settings", async () => {
+    await expect(
+      loadKeeperConfig({
+        KEEPER_PAYOUT_FINALITY_MAX_HEALTHY_PATH_SECONDS: "0",
+      }),
+    ).rejects.toThrow(
+      "KEEPER_PAYOUT_FINALITY_MAX_HEALTHY_PATH_SECONDS must be a positive integer",
+    );
+
+    await expect(
+      loadKeeperConfig({
+        KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF: "sometimes",
+      }),
+    ).rejects.toThrow(
+      "KEEPER_PAYOUT_FINALITY_OVERLAP_PROOF must be a boolean-like value",
+    );
   });
 
   it("loads an optional keeper persistence database URL", async () => {

@@ -217,6 +217,12 @@ function readNonNegativeIntEnv(
   return parseIntegerEnv(name, value, "non-negative", Number(fallback), errors);
 }
 
+function readOptionalPositiveIntEnv(name: string, errors: string[]): number | null {
+  const value = readEnv(name);
+  if (!value) return null;
+  return parseIntegerEnv(name, value, "positive", 0, errors);
+}
+
 function parseIntegerEnv(
   name: string,
   value: string,
@@ -730,6 +736,10 @@ function loadConfig() {
       opsLagBudgetSeconds: readNonNegativeIntEnv(
         "KEEPER_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS",
         "900",
+        errors,
+      ),
+      maxHealthyPathSeconds: readOptionalPositiveIntEnv(
+        "KEEPER_PAYOUT_FINALITY_MAX_HEALTHY_PATH_SECONDS",
         errors,
       ),
       overlapProof: parseBooleanEnv(
