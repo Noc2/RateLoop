@@ -137,6 +137,21 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     },
   });
 
+  const {
+    data: hasOpenSnapshotDispute,
+    isLoading: hasOpenSnapshotDisputeLoading,
+    refetch: refetchHasOpenSnapshotDispute,
+  } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "hasOpenSnapshotDispute",
+    args: [address],
+    query: {
+      enabled: frontendRewardsEnabled && isRegistered,
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 60_000 : false,
+    },
+  });
+
   const frontendAddress = address?.toLowerCase() as `0x${string}` | undefined;
   const roundFeesQuery = useQuery({
     queryKey: getClaimableFrontendRewardsQueryKey(frontendAddress, targetNetwork.id),
@@ -180,8 +195,10 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     const pendingAmount = pendingFeeWithdrawal ?? 0n;
     const pendingReleaseAt = pendingFeeWithdrawalReleaseAt ?? 0n;
     const pendingMatured = pendingAmount > 0n && pendingReleaseAt <= BigInt(nowSeconds);
+    const withdrawalBlockedByDispute = hasOpenSnapshotDispute === true;
+    const canCompletePendingWithdrawal = canWithdrawFees && pendingMatured && !withdrawalBlockedByDispute;
 
-    if (canWithdrawFees && pendingMatured) {
+    if (canCompletePendingWithdrawal) {
       items.push({
         frontend: frontendAddress,
         reward: pendingAmount,
@@ -192,7 +209,7 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     // A new withdrawal request only succeeds once the pending bucket is empty —
     // either there is none, or the matured one above is completed first in the
     // same claim run.
-    const requestSlotFree = pendingAmount === 0n || pendingMatured;
+    const requestSlotFree = pendingAmount === 0n || canCompletePendingWithdrawal;
     const withdrawableFees = canWithdrawFees ? (accumulatedFees ?? 0n) : 0n;
     if (canWithdrawFees && requestSlotFree && (withdrawableFees > 0n || roundFeeItems.length > 0)) {
       items.push({
@@ -208,6 +225,7 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     canWithdrawFees,
     frontendAddress,
     frontendRewardsEnabled,
+    hasOpenSnapshotDispute,
     pendingFeeWithdrawal,
     pendingFeeWithdrawalReleaseAt,
     roundFeeItems,
@@ -227,6 +245,7 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
       refetchAccumulatedFees(),
       refetchPendingFeeWithdrawal(),
       refetchPendingFeeWithdrawalReleaseAt(),
+      refetchHasOpenSnapshotDispute(),
       ...(frontendAddress && canCreditRoundFees ? [roundFeesQuery.refetch()] : []),
     ]);
   }, [
@@ -236,6 +255,7 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     refetchAccumulatedFees,
     refetchExitAvailableAt,
     refetchFrontendInfo,
+    refetchHasOpenSnapshotDispute,
     refetchPendingFeeWithdrawal,
     refetchPendingFeeWithdrawalReleaseAt,
     roundFeesQuery,
@@ -250,7 +270,9 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
       accumulatedFeesLoading ||
       pendingFeeWithdrawalLoading ||
       pendingFeeWithdrawalReleaseAtLoading ||
+      hasOpenSnapshotDisputeLoading ||
       (frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isLoading),
+    feeWithdrawalBlockedByDispute: hasOpenSnapshotDispute === true,
     feesUnavailable: frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isError,
     refetch,
   };

@@ -214,6 +214,17 @@ export function FrontendRegistration() {
     },
   });
 
+  const { data: hasOpenSnapshotDisputeRaw, refetch: refetchHasOpenSnapshotDispute } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "hasOpenSnapshotDispute",
+    args: [address],
+    query: {
+      enabled: !!address,
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 30_000 : false,
+    },
+  });
+
   const { data: exitAvailableAtRaw, refetch: refetchExitAvailableAt } = useScaffoldReadContract({
     contractName: "FrontendRegistry",
     functionName: "frontendExitAvailableAt",
@@ -279,6 +290,7 @@ export function FrontendRegistration() {
   const hasPendingWithdrawal = pendingWithdrawalLrep > 0;
   const pendingWithdrawalReleaseAt = pendingWithdrawalReleaseAtRaw ? Number(pendingWithdrawalReleaseAtRaw) : 0;
   const pendingWithdrawalMatured = hasPendingWithdrawal && nowMs >= pendingWithdrawalReleaseAt * 1000;
+  const feeWithdrawalBlockedByDispute = hasOpenSnapshotDisputeRaw === true;
   const pendingWithdrawalReleaseLabel = hasPendingWithdrawal
     ? new Date(pendingWithdrawalReleaseAt * 1000).toLocaleString()
     : "";
@@ -521,6 +533,10 @@ export function FrontendRegistration() {
 
   const handleCompleteFeeWithdrawal = async () => {
     if (!address || !pendingWithdrawalMatured || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (feeWithdrawalBlockedByDispute) {
+      notification.warning("Withdrawal is paused while a payout snapshot challenge is active.");
+      return;
+    }
     if (!ensureGasBalance()) return;
 
     setIsCompletingWithdrawal(true);
@@ -546,6 +562,7 @@ export function FrontendRegistration() {
       await refreshWalletBalances(address);
       refetchPendingWithdrawal();
       refetchPendingWithdrawalReleaseAt();
+      refetchHasOpenSnapshotDispute();
     } catch (e: any) {
       console.error("Withdrawal failed:", e);
       notifyTransactionError(e, "Failed to complete fee withdrawal");
@@ -1209,7 +1226,8 @@ export function FrontendRegistration() {
               </GradientActionButton>
             </div>
             <p className="text-sm text-base-content/50 mt-2">
-              Withdrawals unlock after a 1-hour review window and stay slashable until then.
+              Withdrawals unlock after a 1-hour review window and stay slashable until then. Active payout-root
+              challenges pause completion.
             </p>
             {hasPendingWithdrawal && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-base-300">
@@ -1217,7 +1235,11 @@ export function FrontendRegistration() {
                   <p className="text-base text-base-content/60">Pending withdrawal</p>
                   <p className="text-lg font-bold text-primary">{pendingWithdrawalLrep.toFixed(2)}</p>
                   <p className="text-sm text-base-content/50">
-                    {pendingWithdrawalMatured ? "Ready to withdraw" : `Unlocks ${pendingWithdrawalReleaseLabel}`}
+                    {feeWithdrawalBlockedByDispute
+                      ? "Paused during active payout-root challenge"
+                      : pendingWithdrawalMatured
+                        ? "Ready to withdraw"
+                        : `Unlocks ${pendingWithdrawalReleaseLabel}`}
                   </p>
                 </div>
                 <GradientActionButton
@@ -1230,10 +1252,17 @@ export function FrontendRegistration() {
                     isAwaitingSponsoredSubmitCalls ||
                     isMissingGasBalance ||
                     !pendingWithdrawalMatured ||
+                    feeWithdrawalBlockedByDispute ||
                     isExitPending
                   }
                 >
-                  {isCompletingWithdrawal ? <span className="loading loading-spinner loading-xs" /> : "Withdraw"}
+                  {isCompletingWithdrawal ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : feeWithdrawalBlockedByDispute ? (
+                    "Dispute pending"
+                  ) : (
+                    "Withdraw"
+                  )}
                 </GradientActionButton>
               </div>
             )}

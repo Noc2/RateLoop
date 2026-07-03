@@ -239,6 +239,8 @@ describe("claimConfiguredFrontendFees", () => {
               return 20n;
             case "pendingFeeWithdrawalReleaseAt":
               return chainTimestamp - 10n;
+            case "hasOpenSnapshotDispute":
+              return false;
             case "getAccumulatedFees":
               return 5n;
             default:
@@ -293,6 +295,63 @@ describe("claimConfiguredFrontendFees", () => {
         functionName: "requestFeeWithdrawal",
         args: [],
       }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("skips a matured pending withdrawal while a snapshot dispute is active", async () => {
+    const logger = makeLogger();
+    const chainTimestamp = 1_000_000n;
+    const publicClient = {
+      readContract: vi.fn(
+        async ({ functionName }: { functionName: string }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 2n;
+            case "previewFrontendFee":
+              return [0n, 0, ACCOUNT, true] as const;
+            case "pendingFeeWithdrawalAmount":
+              return 20n;
+            case "pendingFeeWithdrawalReleaseAt":
+              return chainTimestamp - 10n;
+            case "hasOpenSnapshotDispute":
+              return true;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
+    };
+
+    readCurrentRoundIds.mockResolvedValue({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+    });
+    readRound.mockResolvedValue({
+      state: 1,
+    });
+
+    const result = await claimConfiguredFrontendFees(
+      publicClient as never,
+      {} as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger as never,
+      { chainTimestamp },
+    );
+
+    expect(result).toEqual({
+      frontendAddress: ACCOUNT,
+      roundsClaimed: 0,
+      withdrawals: 0,
+      withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
+    });
+    expect(writeContractAndConfirm).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      "Skipping matured frontend fee withdrawal while snapshot dispute is active",
+      { frontendAddress: ACCOUNT, pendingAmount: 20n },
     );
     expect(logger.warn).not.toHaveBeenCalled();
   });

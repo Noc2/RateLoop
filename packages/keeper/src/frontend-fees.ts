@@ -399,17 +399,31 @@ export async function claimConfiguredFrontendFees(
           (await publicClient.getBlock({ blockTag: "latest" })).timestamp;
 
         if (releaseAt <= chainTimestamp) {
-          await writeContractAndConfirm(publicClient, walletClient, {
-            chain,
-            account,
+          const hasOpenSnapshotDispute = (await publicClient.readContract({
             address: contracts.frontendRegistry,
             abi: FrontendRegistryAbi,
-            functionName: "completeFeeWithdrawal",
-            args: [],
-          });
-          withdrawals = 1;
-          withdrawnAmount = pendingAmount;
-          pendingAmount = 0n;
+            functionName: "hasOpenSnapshotDispute",
+            args: [frontendAddress],
+          })) as boolean;
+
+          if (hasOpenSnapshotDispute) {
+            logger.info(
+              "Skipping matured frontend fee withdrawal while snapshot dispute is active",
+              { frontendAddress, pendingAmount },
+            );
+          } else {
+            await writeContractAndConfirm(publicClient, walletClient, {
+              chain,
+              account,
+              address: contracts.frontendRegistry,
+              abi: FrontendRegistryAbi,
+              functionName: "completeFeeWithdrawal",
+              args: [],
+            });
+            withdrawals = 1;
+            withdrawnAmount = pendingAmount;
+            pendingAmount = 0n;
+          }
         }
       }
 
