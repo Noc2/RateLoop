@@ -859,6 +859,7 @@ contract QuestionRewardPoolEscrow is
             rewardPoolClusterPayoutOraclePinnedAt,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
+            votingEngine,
             rewardPoolId,
             roundId,
             PAYOUT_DOMAIN_QUESTION_REWARD

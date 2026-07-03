@@ -60,6 +60,8 @@ contract TestClusterPayoutOracle {
     mapping(bytes32 => IClusterPayoutOracle.RoundPayoutSnapshot) internal snapshots;
     mapping(bytes32 => bytes32) internal proposalDigests;
     mapping(bytes32 => uint64) internal proposalTimes;
+    mapping(bytes32 => mapping(bytes32 => bool)) internal rejectedDigests;
+    mapping(bytes32 => mapping(bytes32 => bool)) internal rejectedRoots;
 
     IFrontendRegistry public frontendRegistry;
 
@@ -153,12 +155,20 @@ contract TestClusterPayoutOracle {
         return proposalDigests[snapshotKey];
     }
 
-    function rejectedRoundPayoutSnapshotDigests(bytes32, bytes32) external pure returns (bool) {
-        return false;
+    function setRejectedRoundPayoutSnapshotDigest(bytes32 snapshotKey, bytes32 digest, bool rejected) external {
+        rejectedDigests[snapshotKey][digest] = rejected;
     }
 
-    function rejectedRoundPayoutSnapshotRoots(bytes32, bytes32) external pure returns (bool) {
-        return false;
+    function setRejectedRoundPayoutSnapshotRoot(bytes32 snapshotKey, bytes32 root, bool rejected) external {
+        rejectedRoots[snapshotKey][root] = rejected;
+    }
+
+    function rejectedRoundPayoutSnapshotDigests(bytes32 snapshotKey, bytes32 digest) external view returns (bool) {
+        return rejectedDigests[snapshotKey][digest];
+    }
+
+    function rejectedRoundPayoutSnapshotRoots(bytes32 snapshotKey, bytes32 root) external view returns (bool) {
+        return rejectedRoots[snapshotKey][root];
     }
 
     function finalizationVetoWindow() external pure returns (uint64) {

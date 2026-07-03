@@ -243,6 +243,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
+        RoundVotingEngine votingEngine,
         uint256 rewardPoolId,
         uint256 roundId,
         uint8 payoutDomain
@@ -269,9 +270,15 @@ library QuestionRewardPoolEscrowRecoveryLib {
         uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
         require(pinnedAt != 0, "Oracle not pinned");
         require(
-            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) >= pinnedAt,
-            "Cluster source stale"
+            oracle.roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, rewardPool.contentId, roundId)
+                == address(this),
+            "Cluster consumer mismatch"
         );
+        (,,, uint48 sourceReadyAt) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        require(sourceReadyAt != 0, "Cluster source pending");
+        uint64 proposedAt =
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+        require(proposedAt >= sourceReadyAt && proposedAt >= pinnedAt, "Cluster source stale");
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
         bytes32 newSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         require(!oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, newSnapshotDigest), "Snapshot payload rejected");

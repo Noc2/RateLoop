@@ -4908,6 +4908,58 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, replacementWeight, new bytes32[](0)), 0);
     }
 
+    function testReopenRecoveredSnapshotRoundRejectsReplacementConsumerMismatch() public {
+        _ensureTestClusterPayoutOracle(votingEngine);
+        TestClusterPayoutOracle oracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        bytes32 snapshotKey =
+            oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_000);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 rejectedDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        oracle.setRejectedRoundPayoutSnapshotDigest(snapshotKey, rejectedDigest, true);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        oracle.setRoundPayoutSnapshotConsumer(1, address(this));
+        oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_001);
+
+        vm.expectRevert("Cluster consumer mismatch");
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+        assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+    }
+
+    function testReopenRecoveredSnapshotRoundRejectsSourceStaleReplacement() public {
+        _ensureTestClusterPayoutOracle(votingEngine);
+        TestClusterPayoutOracle oracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        bytes32 snapshotKey =
+            oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_000);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 rejectedDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        oracle.setRejectedRoundPayoutSnapshotDigest(snapshotKey, rejectedDigest, true);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_001);
+
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(1, rewardPoolId, contentId, roundId);
+        vm.mockCall(
+            address(votingEngine),
+            abi.encodeWithSelector(votingEngine.roundLifecycleState.selector, contentId, roundId),
+            abi.encode(uint256(0), uint256(0), uint256(0), uint48(proposedAt + 1))
+        );
+
+        vm.expectRevert("Cluster source stale");
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+        assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+    }
+
     function legacyReopenRecoveredSnapshotRound_RemainsRecoverableIfReplacementRejectedBeforeClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
