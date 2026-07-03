@@ -1545,6 +1545,46 @@ contract RaterRegistryTest is Test {
         assertFalse(registry.isIdentityKeyBanned(addressKey));
     }
 
+    function test_ExpiredVerifiedCredentialStillResolvesToDerivedBanAfterRotation() public {
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        bytes32 worldIdKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+        bytes32 addressKey = registry.addressIdentityKey(rater);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+        assertTrue(registry.isIdentityKeyBanned(seededKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+        );
+
+        IRaterIdentityRegistry.ResolvedRater memory active = registry.resolveRater(rater);
+        assertTrue(active.hasActiveHumanCredential);
+        assertEq(active.identityKey, addressKey);
+
+        RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
+        vm.warp(credential.expiresAt + 1);
+
+        IRaterIdentityRegistry.ResolvedRater memory expired = registry.resolveRater(rater);
+        assertEq(expired.holder, rater);
+        assertEq(expired.humanNullifier, NULLIFIER_HASH);
+        assertFalse(expired.hasActiveHumanCredential);
+        assertEq(expired.identityKey, addressKey);
+    }
+
     function test_BanAfterCredentialRotationBansCurrentWorldIdIdentity() public {
         MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);

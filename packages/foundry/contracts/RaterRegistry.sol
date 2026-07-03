@@ -1506,14 +1506,12 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
                 identityKey = credentialKey;
             }
             hasActiveCredential = credential.expiresAt > block.timestamp;
-            if (hasActiveCredential) {
-                if (isIdentityKeyBanned(credentialKey)) {
-                    identityKey = credentialKey;
-                } else if (!isIdentityKeyBanned(identityKey)) {
-                    bytes32 holderAddressKey = addressIdentityKey(holder);
-                    if (isIdentityKeyBanned(holderAddressKey)) {
-                        identityKey = holderAddressKey;
-                    }
+            if (isIdentityKeyBanned(credentialKey)) {
+                identityKey = credentialKey;
+            } else if (!isIdentityKeyBanned(identityKey)) {
+                bytes32 holderAddressKey = addressIdentityKey(holder);
+                if (isIdentityKeyBanned(holderAddressKey)) {
+                    identityKey = holderAddressKey;
                 }
             }
         } else {
