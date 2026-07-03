@@ -24,7 +24,7 @@ export default {
     },
     ${extraLocalContracts}
   },
-  84532: {
+  8453: {
     LoopReputation: {
       address: "${otherChainAddress}",
       abi: [],
@@ -56,14 +56,14 @@ test("readGeneratedAddress extracts the requested chain address only", () => {
     artifactAddress
   );
   assert.equal(
-    readGeneratedAddress(generatedContractsSource(), 84532, "LoopReputation"),
+    readGeneratedAddress(generatedContractsSource(), 8453, "LoopReputation"),
     otherChainAddress
   );
 });
 
 test("extractGeneratedChainBlock returns undefined when the chain is absent", () => {
   assert.equal(
-    extractGeneratedChainBlock(generatedContractsSource(), 8453),
+    extractGeneratedChainBlock(generatedContractsSource(), 1),
     undefined
   );
 });

@@ -7,13 +7,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DEPLOY_TARGET_TO_CHAIN = {
   base: { chainId: 8453, networkName: "base" },
-  baseSepolia: { chainId: 84532, networkName: "baseSepolia" },
-  worldchain: { chainId: 480, networkName: "worldchain" },
-  worldchainSepolia: { chainId: 4801, networkName: "worldchainSepolia" },
 };
 const DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK = {
   base: "production",
-  worldchain: "production",
 };
 const PRODUCTION_NETWORK_NAMES = new Set(
   Object.entries(DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK)

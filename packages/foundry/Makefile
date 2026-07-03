@@ -1,4 +1,4 @@
-.PHONY: build guard-production-deploy deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
+.PHONY: build guard-production-deploy deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -99,36 +99,6 @@ test:
 # Verify contracts (Etherscan-compatible chains)
 verify:
 	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/VerifyAll.s.sol --ffi --rpc-url "$(RPC_URL)"
-
-# Verify a single contract on Blockscout (World Chain networks)
-# Usage: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
-# Optional overrides: BLOCKSCOUT_URL=... BLOCKSCOUT_CHAIN_ID=...
-verify-blockscout:
-	@if [ -z "$(NETWORK)" ]; then \
-		echo "Missing NETWORK. Use NETWORK=worldchain or NETWORK=worldchainSepolia."; \
-		exit 1; \
-	fi
-	@if [ -z "$(CONTRACT_ADDRESS)" ] || [ -z "$(CONTRACT_NAME)" ]; then \
-		echo "Usage: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract"; \
-		exit 1; \
-	fi
-	@case "$(NETWORK)" in \
-		worldchain) \
-			blockscout_url="https://worldchain.blockscout.com/api/"; \
-			chain_id="480"; \
-			;; \
-		worldchainSepolia) \
-			blockscout_url="https://worldchain-sepolia.blockscout.com/api/"; \
-			chain_id="4801"; \
-			;; \
-		*) \
-			echo "Unsupported NETWORK='$(NETWORK)'. Use worldchain or worldchainSepolia."; \
-			exit 1; \
-			;; \
-	esac; \
-	if [ -n "$(BLOCKSCOUT_URL)" ]; then blockscout_url="$(BLOCKSCOUT_URL)"; fi; \
-	if [ -n "$(BLOCKSCOUT_CHAIN_ID)" ]; then chain_id="$(BLOCKSCOUT_CHAIN_ID)"; fi; \
-	forge verify-contract $(CONTRACT_ADDRESS) $(CONTRACT_NAME) --verifier blockscout --verifier-url $$blockscout_url --chain $$chain_id
 
 # Static analysis
 slither:

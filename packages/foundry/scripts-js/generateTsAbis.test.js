@@ -23,7 +23,7 @@ afterEach(() => {
   }
 });
 
-const REQUIRED_WORLD_CHAIN_EXPORT = {
+const REQUIRED_BASE_EXPORT = {
   "0x0000000000000000000000000000000000000001": "TimelockController",
   "0x0000000000000000000000000000000000000002": "RateLoopGovernor",
   "0x0000000000000000000000000000000000000003": "LoopReputation",
@@ -61,7 +61,7 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
     "ConfidentialityEscrowProxyAdmin",
   deploymentBlockNumber: "200",
   deploymentComplete: "true",
-  networkName: "worldchain",
+  networkName: "base",
 };
 
 test("parseTransactionAndReceiptRun skips malformed broadcast JSON with an empty run shape", () => {
@@ -82,7 +82,7 @@ test("parseTransactionAndReceiptRun skips malformed broadcast JSON with an empty
 test("processAllDeployments tracks proxy addresses for latest broadcast freshness", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "rateloop-broadcast-"));
   try {
-    const chainDir = join(tempDir, "Deploy.s.sol", "4801");
+    const chainDir = join(tempDir, "Deploy.s.sol", "8453");
     mkdirSync(chainDir, { recursive: true });
     writeFileSync(
       join(chainDir, "run-1.json"),
@@ -103,7 +103,7 @@ test("processAllDeployments tracks proxy addresses for latest broadcast freshnes
       processAllDeployments(tempDir);
 
     assert.equal(
-      latestBroadcastDeploymentAddresses[4801].has(
+      latestBroadcastDeploymentAddresses[8453].has(
         "0x0000000000000000000000000000000000000004"
       ),
       true
@@ -115,22 +115,22 @@ test("processAllDeployments tracks proxy addresses for latest broadcast freshnes
 
 describe("assertFreshTargetDeployment", () => {
   test("rejects raw target-chain broadcast data without a deployment export", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
-          { 480: { ContentRegistry: { address: "0ximplementation" } } },
+          { 8453: { ContentRegistry: { address: "0ximplementation" } } },
           {},
           {},
-          { 480: 200 }
+          { 8453: 200 }
         ),
       /not marked complete/
     );
   });
 
   test("rejects incomplete non-local deployment exports", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.throws(
       () =>
@@ -138,108 +138,108 @@ describe("assertFreshTargetDeployment", () => {
           {},
           {},
           {
-            480: {
+            8453: {
               "0x0000000000000000000000000000000000000001": "ContentRegistry",
               deploymentBlockNumber: "200",
               deploymentComplete: "true",
-              networkName: "worldchain",
+              networkName: "base",
             },
           },
-          { 480: 200 }
+          { 8453: 200 }
         ),
       /missing required contracts/
     );
   });
 
   test("rejects complete exports missing FeedbackRegistry", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
     const {
       "0x000000000000000000000000000000000000001c": _feedbackRegistry,
       ...deploymentExport
-    } = REQUIRED_WORLD_CHAIN_EXPORT;
+    } = REQUIRED_BASE_EXPORT;
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: deploymentExport },
-          { 480: 200 }
+          { 8453: deploymentExport },
+          { 8453: 200 }
         ),
       /missing required contracts: FeedbackRegistry/
     );
   });
 
   test("rejects complete exports missing ConfidentialityEscrow", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
     const {
       "0x000000000000000000000000000000000000001d": _confidentialityEscrow,
       ...deploymentExport
-    } = REQUIRED_WORLD_CHAIN_EXPORT;
+    } = REQUIRED_BASE_EXPORT;
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: deploymentExport },
-          { 480: 200 }
+          { 8453: deploymentExport },
+          { 8453: 200 }
         ),
       /missing required contracts: ConfidentialityEscrow/
     );
   });
 
   test("rejects proxy-backed deployment exports without proxy admins", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
     const {
       "0x000000000000000000000000000000000000001b": _proxyAdmin,
       ...deploymentExport
-    } = REQUIRED_WORLD_CHAIN_EXPORT;
+    } = REQUIRED_BASE_EXPORT;
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: deploymentExport },
-          { 480: 200 }
+          { 8453: deploymentExport },
+          { 8453: 200 }
         ),
       /missing proxy admin entries: RaterRegistryProxyAdmin/
     );
   });
 
   test("rejects ConfidentialityEscrow exports without proxy admins", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
     const {
       "0x000000000000000000000000000000000000001e": _proxyAdmin,
       ...deploymentExport
-    } = REQUIRED_WORLD_CHAIN_EXPORT;
+    } = REQUIRED_BASE_EXPORT;
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: deploymentExport },
-          { 480: 200 }
+          { 8453: deploymentExport },
+          { 8453: 200 }
         ),
       /missing proxy admin entries: ConfidentialityEscrowProxyAdmin/
     );
   });
 
   test("rejects proxy-backed deployment exports that point at implementation creates", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-          { 480: 200 },
+          { 8453: REQUIRED_BASE_EXPORT },
+          { 8453: 200 },
           {},
           {
-            480: new Map([
+            8453: new Map([
               ["0x000000000000000000000000000000000000000e", "RaterRegistry"],
             ]),
           }
@@ -249,17 +249,17 @@ describe("assertFreshTargetDeployment", () => {
   });
 
   test("accepts direct RoundVotingEngineRbtsSettlementModule exports", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.doesNotThrow(() =>
       assertFreshTargetDeployment(
         {},
         {},
-        { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-        { 480: 200 },
+        { 8453: REQUIRED_BASE_EXPORT },
+        { 8453: 200 },
         {},
         {
-          480: new Map([
+          8453: new Map([
             [
               "0x000000000000000000000000000000000000001f",
               "RoundVotingEngineRbtsSettlementModule",
@@ -271,18 +271,18 @@ describe("assertFreshTargetDeployment", () => {
   });
 
   test("rejects ConfidentialityEscrow exports that point at implementation creates", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-          { 480: 200 },
+          { 8453: REQUIRED_BASE_EXPORT },
+          { 8453: 200 },
           {},
           {
-            480: new Map([
+            8453: new Map([
               [
                 "0x000000000000000000000000000000000000001d",
                 "ConfidentialityEscrow",
@@ -295,32 +295,32 @@ describe("assertFreshTargetDeployment", () => {
   });
 
   test("rejects deployment exports older than the latest broadcast deployment", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.throws(
       () =>
         assertFreshTargetDeployment(
           {},
           {},
-          { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-          { 480: 201 }
+          { 8453: REQUIRED_BASE_EXPORT },
+          { 8453: 201 }
         ),
       /older than the latest broadcast deployment/
     );
   });
 
   test("accepts older complete export when required addresses match latest broadcast", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.doesNotThrow(() =>
       assertFreshTargetDeployment(
         {},
         {},
-        { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-        { 480: 201 },
+        { 8453: REQUIRED_BASE_EXPORT },
+        { 8453: 201 },
         {
-          480: new Set(
-            Object.entries(REQUIRED_WORLD_CHAIN_EXPORT)
+          8453: new Set(
+            Object.entries(REQUIRED_BASE_EXPORT)
               .filter(([address]) => address.startsWith("0x"))
               .map(([address]) => address.toLowerCase())
           ),
@@ -330,14 +330,14 @@ describe("assertFreshTargetDeployment", () => {
   });
 
   test("accepts complete non-local deployment exports at the latest broadcast block", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.doesNotThrow(() =>
       assertFreshTargetDeployment(
         {},
         {},
-        { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-        { 480: 200 }
+        { 8453: REQUIRED_BASE_EXPORT },
+        { 8453: 200 }
       )
     );
   });
@@ -348,12 +348,12 @@ describe("assertFreshTargetDeployment", () => {
     assert.throws(
       () =>
         assertFreshTargetDeployment(
-          { 480: { ContentRegistry: { address: "0ximplementation" } } },
+          { 8453: { ContentRegistry: { address: "0ximplementation" } } },
           {},
           {},
-          { 480: 200 }
+          { 8453: 200 }
         ),
-      /chainId 480 is not marked complete/
+      /chainId 8453 is not marked complete/
     );
   });
 
@@ -364,11 +364,11 @@ describe("assertFreshTargetDeployment", () => {
       () =>
         assertFreshTargetDeployment(
           {},
-          { 480: { ContentRegistry: { address: "0xstale" } } },
+          { 8453: { ContentRegistry: { address: "0xstale" } } },
           {},
           {}
         ),
-      /chainId 480 is not marked complete/
+      /chainId 8453 is not marked complete/
     );
   });
 
@@ -377,10 +377,10 @@ describe("assertFreshTargetDeployment", () => {
 
     assert.doesNotThrow(() =>
       assertFreshTargetDeployment(
-        { 480: { ContentRegistry: { address: "0xproxy" } } },
+        { 8453: { ContentRegistry: { address: "0xproxy" } } },
         {},
-        { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-        { 480: 200 }
+        { 8453: REQUIRED_BASE_EXPORT },
+        { 8453: 200 }
       )
     );
   });
@@ -401,16 +401,15 @@ describe("assertFreshTargetDeployment", () => {
 
 describe("filterGeneratedContractsForDeployTarget", () => {
   test("publishes only the selected target chain during targeted redeploys", () => {
-    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    process.env.DEPLOY_TARGET_NETWORK = "base";
 
     assert.deepEqual(
       filterGeneratedContractsForDeployTarget({
         31337: { ContentRegistry: { address: "0xlocal" } },
-        480: { ContentRegistry: { address: "0xworldchain" } },
-        4801: { ContentRegistry: { address: "0xstaleSepolia" } },
+        8453: { ContentRegistry: { address: "0xbase" } },
       }),
       {
-        480: { ContentRegistry: { address: "0xworldchain" } },
+        8453: { ContentRegistry: { address: "0xbase" } },
       }
     );
   });
@@ -419,7 +418,7 @@ describe("filterGeneratedContractsForDeployTarget", () => {
     delete process.env.DEPLOY_TARGET_NETWORK;
     const generatedContracts = {
       31337: { ContentRegistry: { address: "0xlocal" } },
-      480: { ContentRegistry: { address: "0xworldchain" } },
+      8453: { ContentRegistry: { address: "0xbase" } },
     };
 
     assert.deepEqual(
@@ -487,7 +486,7 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
       31337: {
         MockWorldIDRouter: { address: "0xlocal" },
       },
-      4801: {
+      8453: {
         ContentRegistry: {
           address: "0x0000000000000000000000000000000000000001",
         },
@@ -499,7 +498,7 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
 
     assert.deepEqual(
       pruneNonLocalGeneratedContractsToDeploymentExports(generatedContracts, {
-        4801: {
+        8453: {
           "0x0000000000000000000000000000000000000001": "ContentRegistry",
           deploymentComplete: "true",
         },
@@ -508,7 +507,7 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
         31337: {
           MockWorldIDRouter: { address: "0xlocal" },
         },
-        4801: {
+        8453: {
           ContentRegistry: {
             address: "0x0000000000000000000000000000000000000001",
           },

@@ -59,19 +59,17 @@ current `RaterRegistry` implementation as an in-place upgrade for an older proxy
 provided for the `_identityBanSource` to `_identityBanSources` slot-32 retype. For production wiring or environment
 changes, run `base:check -- --live` or `base-mainnet:check -- --live` against the existing Base mainnet deployment.
 
-The deploy wrapper verifies the live RPC chain and stamps Base or World Chain mainnet deploys with the `production`
+The deploy wrapper verifies the live RPC chain and stamps Base mainnet deploys with the `production`
 deployment profile, but checked-in production artifacts no longer block a fresh deployment. Running
 `yarn deploy --network base` intentionally broadcasts a replacement production stack and rewrites deployment metadata
 from the successful broadcast. Prefer governance/admin rewiring, service configuration, indexing fixes, or app/keeper
-changes against the existing Base mainnet deployment whenever those are sufficient. The legacy
-`--confirm-production-redeploy <token>` option and `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY=<token>` environment variable
-remain accepted for old runbooks, but they are no longer required.
+changes against the existing Base mainnet deployment whenever those are sufficient.
 
-Base and World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
-World ID router for chain `8453`, `84532`, `480`, or `4801`, derives the external nullifier from
-`NEXT_PUBLIC_WORLD_ID_APP_ID` and `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`, and fails pre-broadcast if the live router
-has no code. World ID 4.0 Proof-of-Human remains governance-configurable on `RaterRegistry`, but production deploys do
-not depend on a v4 verifier until that path is tested end-to-end.
+Base mainnet deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical World ID
+router for chain `8453`, derives the external nullifier from `NEXT_PUBLIC_WORLD_ID_APP_ID` and
+`NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`, and fails pre-broadcast if the live router has no code. World ID 4.0
+Proof-of-Human remains governance-configurable on `RaterRegistry`, but production deploys do not depend on a v4 verifier
+until that path is tested end-to-end.
 
 ## Configuration
 
@@ -81,22 +79,16 @@ Create a `.env` file (see `.env.example`):
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `ALCHEMY_API_KEY`                        | Optional RPC provider key for testnet/mainnet deploys                                                                        |
 | `BASE_RPC_URL`                           | Optional Base mainnet RPC override for live deploys                                                                          |
-| `BASE_SEPOLIA_RPC_URL`                   | Optional Base Sepolia RPC override for live deploys                                                                          |
-| `WORLDCHAIN_RPC_URL`                     | Optional World Chain mainnet RPC override for live deploys                                                                   |
-| `WORLDCHAIN_SEPOLIA_RPC_URL`             | Optional World Chain Sepolia RPC override for live deploys                                                                   |
 | `NEXT_PUBLIC_WORLD_ID_APP_ID`            | World ID app ID used to derive the legacy v3 external nullifier                                                              |
 | `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION` | World ID credential action; defaults to `rateloop-human-credential-v1`                                                       |
 | `WORLD_ID_ROUTER_ADDRESS`                | Optional explicit World ID v3 router override; nonzero live-network overrides must have code                                 |
 | `WORLD_ID_EXTERNAL_NULLIFIER_HASH`       | Optional explicit v3 external nullifier hash override; leave unset to derive from app ID and action                          |
-| `RATELOOP_DEPLOYMENT_PROFILE`            | Deployment artifact profile stamp; the deploy wrapper sets `production` for Base/World Chain mainnet and `default` elsewhere |
-| `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY`   | Legacy compatibility token accepted by the deploy wrapper; production redeploys no longer require it                         |
+| `RATELOOP_DEPLOYMENT_PROFILE`            | Deployment artifact profile stamp; the deploy wrapper sets `production` for Base mainnet and `default` for localhost         |
 | `ETHERSCAN_API_KEY`                      | Optional explorer API key for Etherscan-compatible networks                                                                  |
-| `BASESCAN_API_KEY`                       | Optional Basescan API key for Base and Base Sepolia verification                                                             |
+| `BASESCAN_API_KEY`                       | Optional Basescan API key for Base mainnet verification                                                                      |
 
-Base mainnet (`8453`) resolves router `0xBCC7e5910178AFFEEeBA573ba6903E9869594163` by default. Base Sepolia (`84532`)
-resolves router `0x42FF98C4E85212a5D31358ACbFe76a621b50fC02` by default. World Chain mainnet (`480`) and World Chain
-Sepolia (`4801`) remain supported legacy deploy targets. Localhost deploys create `MockWorldIDRouter`, wire it into
-`RaterRegistry`, and export it in the local deployment JSON.
+Base mainnet (`8453`) resolves router `0xBCC7e5910178AFFEEeBA573ba6903E9869594163` by default. Localhost deploys
+create `MockWorldIDRouter`, wire it into `RaterRegistry`, and export it in the local deployment JSON.
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.

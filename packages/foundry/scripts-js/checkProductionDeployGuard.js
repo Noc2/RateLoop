@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "toml";
 import {
-  PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
   parseDeployArgs,
   resolveConfiguredRpcEndpoint,
   validateObservedDeployChain,
@@ -68,7 +67,6 @@ async function main() {
   await validateObservedDeployChain({
     network,
     rpcUrl: resolvedRpcUrl,
-    confirmation: process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV],
   });
 }
 

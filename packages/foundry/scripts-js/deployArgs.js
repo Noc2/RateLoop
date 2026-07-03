@@ -8,39 +8,22 @@ Options:
   --network <network>   Specify the network (default: localhost)
   --keystore <name>     Specify the live-network keystore account to use (bypasses selection prompt)
   --resume              Resume a partial broadcast for the current network + account
-  --confirm-production-redeploy <chainId:block>
-                        Legacy compatibility no-op; production artifacts no longer block redeploys
   --help, -h           Show this help message
 Examples:
-  yarn deploy --network baseSepolia --keystore my-account --resume
+  yarn deploy --network base --keystore my-account --resume
   yarn deploy
   `;
 
-const SUPPORTED_DEPLOY_NETWORKS = new Set([
-  "localhost",
-  "baseSepolia",
-  "base",
-  "worldchainSepolia",
-  "worldchain",
-]);
+const SUPPORTED_DEPLOY_NETWORKS = new Set(["localhost", "base"]);
 
-const SLOW_BROADCAST_NETWORKS = new Set([
-  "baseSepolia",
-  "base",
-  "worldchainSepolia",
-  "worldchain",
-]);
-const PRODUCTION_DEPLOY_NETWORKS = new Set(["base", "worldchain"]);
+const SLOW_BROADCAST_NETWORKS = new Set(["base"]);
+const PRODUCTION_DEPLOY_NETWORKS = new Set(["base"]);
 export const DEPLOY_NETWORK_CHAIN_IDS = {
   localhost: 31337,
-  baseSepolia: 84532,
   base: 8453,
-  worldchainSepolia: 4801,
-  worldchain: 480,
 };
 export const PRODUCTION_DEPLOY_CHAIN_IDS = {
   base: 8453,
-  worldchain: 480,
 };
 
 export const DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND = "25";
@@ -48,8 +31,6 @@ export const DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS = "120";
 export const DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
 export const DEFAULT_RPC_CHAIN_ID_TIMEOUT_MS = 10_000;
 export const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
-export const PRODUCTION_REDEPLOY_CONFIRMATION_ENV =
-  "RATELOOP_CONFIRM_PRODUCTION_REDEPLOY";
 export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
 const ENV_INTERPOLATION_RE = /^\$\{([A-Z0-9_]+)\}$/;
@@ -71,7 +52,6 @@ export function parseDeployArgs(args) {
   let network = "localhost";
   let keystoreArg = null;
   let resume = false;
-  let productionRedeployConfirmation = null;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -82,7 +62,6 @@ export function parseDeployArgs(args) {
         network,
         keystoreArg,
         resume,
-        productionRedeployConfirmation,
       };
     }
 
@@ -103,16 +82,6 @@ export function parseDeployArgs(args) {
 
     if (arg === "--resume") {
       resume = true;
-      continue;
-    }
-
-    if (arg === "--confirm-production-redeploy") {
-      productionRedeployConfirmation = readOptionValue(
-        args,
-        i,
-        "--confirm-production-redeploy"
-      );
-      i++;
       continue;
     }
 
@@ -140,7 +109,6 @@ export function parseDeployArgs(args) {
     network,
     keystoreArg,
     resume,
-    productionRedeployConfirmation,
   };
 }
 
@@ -177,29 +145,17 @@ export function buildDeployFlowFlags(network, env = process.env) {
   const computeUnitsPerSecond = envValue(
     env,
     "RATELOOP_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND",
-    envValue(
-      env,
-      "WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND",
-      DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND
-    )
+    DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND
   );
   const rpcTimeoutSeconds = envValue(
     env,
     "RATELOOP_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS",
-    envValue(
-      env,
-      "WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS",
-      DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS
-    )
+    DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS
   );
   const broadcastTimeoutSeconds = envValue(
     env,
     "RATELOOP_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
-    envValue(
-      env,
-      "WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
-      DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS
-    )
+    DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS
   );
 
   return [
@@ -329,7 +285,6 @@ export async function readRpcChainId(
 export async function validateObservedDeployChain({
   network,
   rpcUrl,
-  confirmation,
   fetchImpl,
 }) {
   if (network === "localhost") {
@@ -364,7 +319,6 @@ export async function validateObservedDeployChain({
     validateProductionRedeployConfirmation({
       network: productionNetwork,
       deploymentJson: readProductionDeploymentArtifact(productionNetwork),
-      confirmation,
     });
   }
 
@@ -386,28 +340,6 @@ export function readProductionDeploymentArtifact(
   }
 
   return JSON.parse(readFileSync(deploymentPath, "utf8"));
-}
-
-export function buildProductionRedeployConfirmationToken({
-  chainId,
-  deploymentBlockNumber,
-}) {
-  const parsedChainId = Number(chainId);
-  const parsedDeploymentBlockNumber = Number(deploymentBlockNumber);
-  if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) {
-    throw new Error(
-      "Production redeploy confirmation requires a valid chain ID."
-    );
-  }
-  if (
-    !Number.isInteger(parsedDeploymentBlockNumber) ||
-    parsedDeploymentBlockNumber <= 0
-  ) {
-    throw new Error(
-      "Production redeploy confirmation requires a valid deploymentBlockNumber."
-    );
-  }
-  return `${parsedChainId}:${parsedDeploymentBlockNumber}`;
 }
 
 export function validateProductionRedeployConfirmation({
@@ -447,15 +379,9 @@ export function validateProductionRedeployConfirmation({
     );
   }
 
-  const expectedToken = buildProductionRedeployConfirmationToken({
-    chainId,
-    deploymentBlockNumber: deploymentJson.deploymentBlockNumber,
-  });
-
-  // Keep the old token discoverable for compatibility, but do not require it.
   return {
     required: false,
-    expectedToken,
+    expectedToken: null,
   };
 }
 

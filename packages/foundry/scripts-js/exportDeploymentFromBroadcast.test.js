@@ -219,7 +219,7 @@ function assertRejectsTamperedCompletion(mutator, expectedLabel) {
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     expectedLabel
   );
@@ -809,13 +809,13 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
 
   const deploymentExport = reconstructDeploymentExportFromBroadcast(
     { transactions, receipts },
-    "worldchainSepolia"
+    "base"
   );
 
   assert.equal(deploymentExport.deploymentBlockNumber, 200);
   assert.equal(deploymentExport.deploymentComplete, "true");
-  assert.equal(deploymentExport.deploymentProfile, "default");
-  assert.equal(deploymentExport.networkName, "worldchainSepolia");
+  assert.equal(deploymentExport.deploymentProfile, "production");
+  assert.equal(deploymentExport.networkName, "base");
   assert.equal(deploymentAt(deploymentExport, address(9)), "FrontendRegistry");
   assert.equal(
     deploymentAt(deploymentExport, address(10)),
@@ -882,9 +882,6 @@ test("resolveDeploymentProfile rejects non-production mainnet env overrides", ()
 
 test("resolveDeploymentProfile uses network defaults", () => {
   assert.equal(resolveDeploymentProfile("base", {}), "production");
-  assert.equal(resolveDeploymentProfile("baseSepolia", {}), "default");
-  assert.equal(resolveDeploymentProfile("worldchain", {}), "production");
-  assert.equal(resolveDeploymentProfile("worldchainSepolia", {}), "default");
 });
 
 test("reconstructDeploymentExportFromBroadcast exports optional mock World ID router", () => {
@@ -902,7 +899,7 @@ test("reconstructDeploymentExportFromBroadcast exports optional mock World ID ro
 
   const deploymentExport = reconstructDeploymentExportFromBroadcast(
     { transactions, receipts },
-    "worldchainSepolia"
+    "base"
   );
 
   assert.equal(deploymentAt(deploymentExport, mockRouter), "MockWorldIDRouter");
@@ -1000,7 +997,7 @@ test("reconstructDeploymentExportFromBroadcast accepts Foundry proxy and decoded
 
   const deploymentExport = reconstructDeploymentExportFromBroadcast(
     { transactions, receipts },
-    "worldchainSepolia"
+    "base"
   );
 
   assert.equal(deploymentExport.deploymentComplete, "true");
@@ -1022,7 +1019,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing completion calls"
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /Broadcast is missing required completion calls: LoopReputation\.renounceRole\(MINTER_ROLE\)/
   );
@@ -1062,7 +1059,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing oracle payout con
       () =>
         reconstructDeploymentExportFromBroadcast(
           { transactions, receipts },
-          "worldchainSepolia"
+          "base"
         ),
       label
     );
@@ -1136,7 +1133,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
       () =>
         reconstructDeploymentExportFromBroadcast(
           { transactions, receipts },
-          "worldchainSepolia"
+          "base"
         ),
       label
     );
@@ -1153,7 +1150,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing protocol oracle c
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /ProtocolConfig\.setClusterPayoutOracle/
   );
@@ -1295,7 +1292,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring",
       () =>
         reconstructDeploymentExportFromBroadcast(
           { transactions, receipts },
-          "worldchainSepolia"
+          "base"
         ),
       label
     );
@@ -1434,7 +1431,7 @@ test("reconstructDeploymentExportFromBroadcast rejects final-state rewrites afte
       () =>
         reconstructDeploymentExportFromBroadcast(
           { transactions, receipts },
-          "worldchainSepolia"
+          "base"
         ),
       label
     );
@@ -1456,7 +1453,7 @@ test("reconstructDeploymentExportFromBroadcast rejects deployments left paused",
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /ContentRegistry remains paused/
   );
@@ -1473,7 +1470,7 @@ test("reconstructDeploymentExportFromBroadcast rejects non-governance proxy admi
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /FrontendRegistry proxy admin is not initialized to governance/
   );
@@ -1496,7 +1493,7 @@ test("reconstructDeploymentExportFromBroadcast rejects unexpected authority muta
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /TimelockController grants governance role to unexpected account/
   );
@@ -1721,7 +1718,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing receipts", () => 
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /Missing receipt for transaction/
   );
@@ -1750,7 +1747,7 @@ test("reconstructDeploymentExportFromBroadcast rejects failed receipts", () => {
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchainSepolia"
+        "base"
       ),
     /failed/
   );
@@ -1779,7 +1776,7 @@ test("reconstructDeploymentExportFromBroadcast rejects partial proxy runs", () =
             },
           ],
         },
-        "worldchainSepolia"
+        "base"
       ),
     /Expected 11 proxy deployments, found 1/
   );

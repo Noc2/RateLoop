@@ -919,43 +919,28 @@ function main() {
  * Must match the network keys in packages/ponder/ponder.config.ts.
  */
 const CHAIN_ID_TO_PONDER_NETWORK = {
-  84532: "baseSepolia",
   8453: "base",
-  4801: "worldchainSepolia",
   31337: "hardhat",
-  480: "worldchain",
 };
 
 const DEPLOY_TARGET_TO_PONDER_NETWORK = {
   localhost: "hardhat",
-  baseSepolia: "baseSepolia",
   base: "base",
-  worldchainSepolia: "worldchainSepolia",
-  worldchain: "worldchain",
 };
 
 const DEPLOY_TARGET_TO_CHAIN_ID = {
   localhost: 31337,
-  baseSepolia: 84532,
   base: 8453,
-  worldchainSepolia: 4801,
-  worldchain: 480,
 };
 
 const PONDER_NETWORK_TO_CHAIN_ID = {
   hardhat: 31337,
-  baseSepolia: 84532,
   base: 8453,
-  worldchainSepolia: 4801,
-  worldchain: 480,
 };
 
 const PONDER_RPC_DEFAULTS = {
   hardhat: "http://127.0.0.1:8545",
-  baseSepolia: "https://sepolia.base.org",
   base: "https://mainnet.base.org",
-  worldchainSepolia: "https://worldchain-sepolia.g.alchemy.com/public",
-  worldchain: "https://worldchain-mainnet.g.alchemy.com/public",
 };
 
 const PONDER_CONTRACT_ENV_KEYS = {

@@ -12,11 +12,9 @@ import {
   assertDeployKeystoreAccountName,
   buildDeploymentProfileEnv,
   buildDeployFlowFlags,
-  buildProductionRedeployConfirmationToken,
   isDeployKeystoreAccountName,
   isSlowBroadcastNetwork,
   parseDeployArgs,
-  readProductionDeploymentArtifact,
   readRpcChainId,
   resolveConfiguredRpcEndpoint,
   resolveEtherscanVerification,
@@ -95,19 +93,17 @@ test("parseDeployArgs returns defaults with no options", () => {
     network: "localhost",
     keystoreArg: null,
     resume: false,
-    productionRedeployConfirmation: null,
   });
 });
 
 test("parseDeployArgs reads supported options", () => {
   assert.deepEqual(
-    parseDeployArgs(["--network", "baseSepolia", "--keystore", "deployer"]),
+    parseDeployArgs(["--network", "base", "--keystore", "deployer"]),
     {
       showHelp: false,
-      network: "baseSepolia",
+      network: "base",
       keystoreArg: "deployer",
       resume: false,
-      productionRedeployConfirmation: null,
     }
   );
 });
@@ -115,12 +111,8 @@ test("parseDeployArgs reads supported options", () => {
 test("parseDeployArgs accepts conservative live keystore names", () => {
   assert.equal(isDeployKeystoreAccountName("keeper-prod_1.json"), true);
   assert.equal(
-    parseDeployArgs([
-      "--network",
-      "baseSepolia",
-      "--keystore",
-      "keeper-prod_1.json",
-    ]).keystoreArg,
+    parseDeployArgs(["--network", "base", "--keystore", "keeper-prod_1.json"])
+      .keystoreArg,
     "keeper-prod_1.json"
   );
 });
@@ -136,7 +128,7 @@ test("parseDeployArgs rejects unsafe live keystore names", () => {
   ]) {
     assert.equal(isDeployKeystoreAccountName(value), false);
     assert.throws(
-      () => parseDeployArgs(["--network", "baseSepolia", "--keystore", value]),
+      () => parseDeployArgs(["--network", "base", "--keystore", value]),
       /(--keystore must be 1-128 characters|Missing value for --keystore)/
     );
     assert.throws(
@@ -152,7 +144,6 @@ test("parseDeployArgs reads resume", () => {
     network: "localhost",
     keystoreArg: null,
     resume: true,
-    productionRedeployConfirmation: null,
   });
 });
 
@@ -162,26 +153,7 @@ test("parseDeployArgs handles help", () => {
     network: "localhost",
     keystoreArg: null,
     resume: false,
-    productionRedeployConfirmation: null,
   });
-});
-
-test("parseDeployArgs reads production redeploy confirmation", () => {
-  assert.deepEqual(
-    parseDeployArgs([
-      "--network",
-      "base",
-      "--confirm-production-redeploy",
-      "8453:47542128",
-    ]),
-    {
-      showHelp: false,
-      network: "base",
-      keystoreArg: null,
-      resume: false,
-      productionRedeployConfirmation: "8453:47542128",
-    }
-  );
 });
 
 test("parseDeployArgs rejects unknown options", () => {
@@ -192,10 +164,6 @@ test("parseDeployArgs rejects missing values", () => {
   assert.throws(
     () => parseDeployArgs(["--network"]),
     /Missing value for --network/
-  );
-  assert.throws(
-    () => parseDeployArgs(["--confirm-production-redeploy"]),
-    /Missing value for --confirm-production-redeploy/
   );
 });
 
@@ -218,10 +186,10 @@ test("buildDeployFlowFlags leaves local deploys unchanged", () => {
 });
 
 test("buildDeployFlowFlags throttles live deploys", () => {
-  assert.equal(isSlowBroadcastNetwork("baseSepolia"), true);
-  assert.equal(isSlowBroadcastNetwork("worldchainSepolia"), true);
+  assert.equal(isSlowBroadcastNetwork("base"), true);
+  assert.equal(isSlowBroadcastNetwork("localhost"), false);
   assert.equal(
-    buildDeployFlowFlags("baseSepolia", {}),
+    buildDeployFlowFlags("base", {}),
     "--slow --compute-units-per-second 25 --rpc-timeout 120 --timeout 300"
   );
 });
@@ -232,17 +200,6 @@ test("buildDeployFlowFlags accepts neutral live throttle overrides", () => {
       RATELOOP_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND: "10",
       RATELOOP_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS: "180",
       RATELOOP_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
-    }),
-    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
-  );
-});
-
-test("buildDeployFlowFlags accepts legacy World Chain throttle overrides", () => {
-  assert.equal(
-    buildDeployFlowFlags("worldchain", {
-      WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND: "10",
-      WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS: "180",
-      WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
     }),
     "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
   );
@@ -277,7 +234,7 @@ test("buildDeploymentProfileEnv rejects non-production mainnet profile overrides
 test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", () => {
   assert.deepEqual(
     buildDeploymentProfileEnv({
-      network: "baseSepolia",
+      network: "localhost",
     }),
     {
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,
@@ -285,27 +242,16 @@ test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", ()
   );
 });
 
-test("production deploy help documents the legacy confirmation no-op", () => {
-  assert.match(DEPLOY_HELP_TEXT, /--confirm-production-redeploy/);
-  assert.match(DEPLOY_HELP_TEXT, /Legacy compatibility no-op/);
-});
-
-test("buildProductionRedeployConfirmationToken uses chain and deployment block", () => {
-  assert.equal(
-    buildProductionRedeployConfirmationToken({
-      chainId: 8453,
-      deploymentBlockNumber: 47542128,
-    }),
-    "8453:47542128"
-  );
+test("production deploy help documents the Base deploy path", () => {
+  assert.match(DEPLOY_HELP_TEXT, /--network <network>/);
+  assert.match(DEPLOY_HELP_TEXT, /yarn deploy --network base --keystore/);
 });
 
 test("validateProductionRedeployConfirmation ignores non-production networks", () => {
   assert.deepEqual(
     validateProductionRedeployConfirmation({
-      network: "baseSepolia",
+      network: "localhost",
       deploymentJson: null,
-      confirmation: null,
     }),
     {
       required: false,
@@ -319,7 +265,6 @@ test("validateProductionRedeployConfirmation allows missing production artifacts
     validateProductionRedeployConfirmation({
       network: "base",
       deploymentJson: null,
-      confirmation: null,
     }),
     {
       required: false,
@@ -337,47 +282,10 @@ test("validateProductionRedeployConfirmation allows existing production artifact
         deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
         networkName: "base",
       },
-      confirmation: null,
     }),
     {
       required: false,
-      expectedToken: "8453:47542128",
-    }
-  );
-});
-
-test("validateProductionRedeployConfirmation accepts the legacy current artifact token", () => {
-  assert.deepEqual(
-    validateProductionRedeployConfirmation({
-      network: "base",
-      deploymentJson: {
-        deploymentBlockNumber: 47542128,
-        deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
-        networkName: "base",
-      },
-      confirmation: "8453:47542128",
-    }),
-    {
-      required: false,
-      expectedToken: "8453:47542128",
-    }
-  );
-});
-
-test("validateProductionRedeployConfirmation ignores stale legacy confirmation tokens", () => {
-  assert.deepEqual(
-    validateProductionRedeployConfirmation({
-      network: "base",
-      deploymentJson: {
-        deploymentBlockNumber: 47542128,
-        deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
-        networkName: "base",
-      },
-      confirmation: "8453:1",
-    }),
-    {
-      required: false,
-      expectedToken: "8453:47542128",
+      expectedToken: null,
     }
   );
 });
@@ -390,11 +298,10 @@ test("validateProductionRedeployConfirmation rejects mismatched production artif
         deploymentJson: {
           deploymentBlockNumber: 47542128,
           deploymentProfile: PRODUCTION_DEPLOYMENT_PROFILE,
-          networkName: "worldchain",
+          networkName: "old-base",
         },
-        confirmation: "8453:47542128",
       }),
-    /existing production artifact is for worldchain/
+    /existing production artifact is for old-base/
   );
 });
 
@@ -415,11 +322,11 @@ test("readRpcChainId parses hex chain IDs", async () => {
   const chainId = await readRpcChainId("https://rpc.example", {
     fetchImpl: async () => ({
       ok: true,
-      json: async () => ({ result: "0x14a34" }),
+      json: async () => ({ result: "0x2105" }),
     }),
   });
 
-  assert.equal(chainId, 84532);
+  assert.equal(chainId, 8453);
 });
 
 test("readRpcChainId reports HTTP failures", async () => {
@@ -510,23 +417,6 @@ test("direct make deploy guard allows production redeploys without confirmation"
   assert.equal(result.status, 0);
 });
 
-test("direct make deploy guard accepts the legacy current production artifact token", async () => {
-  const deployment = readProductionDeploymentArtifact("base");
-  const token = buildProductionRedeployConfirmationToken({
-    chainId: 8453,
-    deploymentBlockNumber: deployment.deploymentBlockNumber,
-  });
-  const result = await withMockRpcChain(8453, (rpcUrl) =>
-    runNodeScript(checkProductionDeployGuardScript, [], {
-      DEPLOY_TARGET_NETWORK: "base",
-      RATELOOP_CONFIRM_PRODUCTION_REDEPLOY: token,
-      RPC_URL: rpcUrl,
-    })
-  );
-
-  assert.equal(result.status, 0);
-});
-
 test("direct make deploy guard rejects raw live RPC URLs without target network", () => {
   const result = spawnSync(
     process.execPath,
@@ -569,44 +459,16 @@ test("direct make deploy guard rejects live network aliases without target netwo
   );
 });
 
-test("direct make deploy guard allows explicit staging targets", async () => {
-  const result = await withMockRpcChain(84532, (rpcUrl) =>
-    runNodeScript(checkProductionDeployGuardScript, [], {
-      DEPLOY_TARGET_NETWORK: "baseSepolia",
-      RPC_URL: rpcUrl,
-    })
-  );
-
-  assert.equal(result.status, 0);
-});
-
-test("direct make deploy guard rejects staging targets backed by production RPC", async () => {
+test("direct make deploy guard rejects removed staging targets", async () => {
   const result = await withMockRpcChain(8453, (rpcUrl) =>
     runNodeScript(checkProductionDeployGuardScript, [], {
-      DEPLOY_TARGET_NETWORK: "baseSepolia",
+      DEPLOY_TARGET_NETWORK: "unsupported",
       RPC_URL: rpcUrl,
     })
   );
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /RPC_URL reports chain 8453, expected 84532/);
-});
-
-test("deploy wrapper rejects staging targets backed by production RPC before keystore selection", async () => {
-  const result = await withMockRpcChain(8453, (rpcUrl) =>
-    runNodeScript(
-      parseArgsScript,
-      ["--network", "baseSepolia", "--keystore", "does-not-matter"],
-      {
-        BASE_SEPOLIA_RPC_URL: rpcUrl,
-        HOME: "/tmp/rateloop-missing-keystore-home",
-      }
-    )
-  );
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /RPC_URL reports chain 8453, expected 84532/);
-  assert.doesNotMatch(result.stdout, /Keystore/);
+  assert.match(result.stderr, /Unsupported deploy network: unsupported/);
 });
 
 test("Make live deploys run the production guard before Forge work", () => {
@@ -658,7 +520,7 @@ test("resolveEtherscanVerification skips when the required API key env is missin
     resolveEtherscanVerification({
       etherscanConfig: {
         key: "${BASESCAN_API_KEY}",
-        url: "https://api-sepolia.basescan.org/api",
+        url: "https://api.basescan.org/api",
       },
       env: {},
     }),
@@ -675,7 +537,7 @@ test("resolveEtherscanVerification enables verification when the required API ke
     resolveEtherscanVerification({
       etherscanConfig: {
         key: "${BASESCAN_API_KEY}",
-        url: "https://api-sepolia.basescan.org/api",
+        url: "https://api.basescan.org/api",
       },
       env: {
         BASESCAN_API_KEY: "abc123",

@@ -6,7 +6,6 @@ import { parse } from "toml";
 import { fileURLToPath } from "url";
 import {
   DEPLOY_HELP_TEXT,
-  PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
   assertDeployKeystoreAccountName,
   buildDeploymentProfileEnv,
   buildDeployFlowFlags,
@@ -22,10 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, "..", ".env") });
 
 const NETWORK_RPC_OVERRIDE_ENV = {
-  baseSepolia: "BASE_SEPOLIA_RPC_URL",
   base: "BASE_RPC_URL",
-  worldchainSepolia: "WORLDCHAIN_SEPOLIA_RPC_URL",
-  worldchain: "WORLDCHAIN_RPC_URL",
 };
 const LOCAL_DEPLOYMENT_SYNC_CONTRACTS = [
   "LoopReputation",
@@ -50,16 +46,11 @@ const LOCAL_DEPLOYMENT_SYNC_CONTRACTS = [
 ];
 let foundryRpcEndpoints = {};
 
-function formatBlockscoutVerifyCommand(networkName) {
-  return `make verify-blockscout NETWORK=${networkName} CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`;
-}
-
 // Get all arguments after the script name
 const args = process.argv.slice(2);
 let network;
 let keystoreArg;
 let resume;
-let productionRedeployConfirmation;
 
 try {
   const parsedArgs = parseDeployArgs(args);
@@ -70,7 +61,6 @@ try {
   network = parsedArgs.network;
   keystoreArg = parsedArgs.keystoreArg;
   resume = parsedArgs.resume;
-  productionRedeployConfirmation = parsedArgs.productionRedeployConfirmation;
 } catch (error) {
   console.error(`\n❌ Error: ${error.message}`);
   process.exit(1);
@@ -118,17 +108,10 @@ function clearKeystoreEnvForLocalDeploy() {
 
 async function validateProductionDeployGuard(rpcUrl) {
   try {
-    const confirmation =
-      productionRedeployConfirmation ??
-      process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV];
     await validateObservedDeployChain({
       network,
       rpcUrl,
-      confirmation,
     });
-    if (confirmation) {
-      process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV] = confirmation;
-    }
   } catch (error) {
     console.error(`\n❌ Error: ${error.message}`);
     process.exit(1);
@@ -224,9 +207,6 @@ if (network === "localhost") {
 configureDeploymentProfile();
 process.env.RESUME_FLAG = resume ? "--resume" : "";
 
-// World Chain explorer support can vary by provider. Skip auto-verification here;
-// verify manually via: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
-const BLOCKSCOUT_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
 process.env.DEPLOY_FLOW_FLAGS = buildDeployFlowFlags(network, process.env);
 
 if (resume) {
@@ -245,43 +225,30 @@ if (overrideEnvKey) {
 
 // Determine verification flags based on network's explorer config
 if (network !== "localhost") {
-  if (BLOCKSCOUT_NETWORKS.has(network)) {
-    process.env.VERIFY_FLAGS = "";
-    // Suppress Forge's built-in etherscan lookups (manual World Chain verification)
-    const existing = process.env.RUST_LOG || "";
-    process.env.RUST_LOG = existing
-      ? `${existing},etherscan=off`
-      : "etherscan=off";
-    console.log(`\n⚠️  Skipping auto-verification for ${network}`);
-    console.log(
-      `   Verify after deploy: ${formatBlockscoutVerifyCommand(network)}`
-    );
-  } else {
-    try {
-      const foundryTomlPath = join(__dirname, "..", "foundry.toml");
-      const tomlString = readFileSync(foundryTomlPath, "utf-8");
-      const parsedToml = parse(tomlString);
-      const etherscanConfig = parsedToml.etherscan?.[network];
-      const verification = resolveEtherscanVerification({
-        etherscanConfig,
-        env: process.env,
-      });
+  try {
+    const foundryTomlPath = join(__dirname, "..", "foundry.toml");
+    const tomlString = readFileSync(foundryTomlPath, "utf-8");
+    const parsedToml = parse(tomlString);
+    const etherscanConfig = parsedToml.etherscan?.[network];
+    const verification = resolveEtherscanVerification({
+      etherscanConfig,
+      env: process.env,
+    });
 
-      process.env.VERIFY_FLAGS = verification.verifyFlags;
-      if (verification.reason === "enabled") {
-        console.log(`\n🔍 Verification: using Etherscan-compatible API`);
-      } else if (verification.reason === "missing-api-key") {
-        console.log(
-          `\n⚠️  Skipping auto-verification for ${network}: ${verification.requiredApiKeyEnv} is not set`
-        );
-      } else {
-        console.log(
-          `\n⚠️  No explorer config for '${network}' — skipping verification`
-        );
-      }
-    } catch {
-      process.env.VERIFY_FLAGS = "";
+    process.env.VERIFY_FLAGS = verification.verifyFlags;
+    if (verification.reason === "enabled") {
+      console.log(`\n🔍 Verification: using Etherscan-compatible API`);
+    } else if (verification.reason === "missing-api-key") {
+      console.log(
+        `\n⚠️  Skipping auto-verification for ${network}: ${verification.requiredApiKeyEnv} is not set`
+      );
+    } else {
+      console.log(
+        `\n⚠️  No explorer config for '${network}' — skipping verification`
+      );
     }
+  } catch {
+    process.env.VERIFY_FLAGS = "";
   }
 } else {
   process.env.VERIFY_FLAGS = "";
