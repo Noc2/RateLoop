@@ -6,6 +6,7 @@ import {
   attachQuestionDetailsToContent,
   createQuestionDetailsFromText,
   getQuestionDetails,
+  getQuestionDetailsSubmissionValidationError,
   getQuestionDetailsUrl,
   parseQuestionDetailsIdFromDetailsUrl,
   sweepOrphanedQuestionDetails,
@@ -412,6 +413,71 @@ test("does not attach failed details even when the local details URL is guessed"
   assert.equal(attached, false);
   const stored = await getQuestionDetails("det_attachfaileddetail");
   assert.equal(stored?.contentId, null);
+});
+
+test("validates hosted details ownership, hash, status, and attachment state before submission", async () => {
+  const result = await createApprovedQuestionDetails({
+    detailsId: "det_submitvaliddetail",
+    ownerWalletAddress: WALLET,
+    text: "Submission details",
+  });
+  assert.ok(result.detailsUrl);
+  assert.ok(result.detailsHash);
+
+  assert.equal(
+    await getQuestionDetailsSubmissionValidationError({
+      details: [{ detailsHash: result.detailsHash, detailsUrl: result.detailsUrl }],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    null,
+  );
+  assert.equal(
+    await getQuestionDetailsSubmissionValidationError({
+      details: [{ detailsHash: `0x${"b".repeat(64)}`, detailsUrl: result.detailsUrl }],
+      ownerWalletAddress: WALLET,
+    }),
+    "Uploaded detailsUrl must match the approved details hash.",
+  );
+  assert.equal(
+    await getQuestionDetailsSubmissionValidationError({
+      details: [{ detailsHash: result.detailsHash, detailsUrl: result.detailsUrl }],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
+    }),
+    "detailsUrl must belong to the submitting wallet or agent.",
+  );
+
+  await db.update(questionDetails).set({ contentId: "77" }).where(eq(questionDetails.id, "det_submitvaliddetail"));
+  assert.equal(
+    await getQuestionDetailsSubmissionValidationError({
+      details: [{ detailsHash: result.detailsHash, detailsUrl: result.detailsUrl }],
+      ownerWalletAddress: WALLET,
+    }),
+    "detailsUrl is already attached to a submitted question.",
+  );
+
+  await createQuestionDetailsFromText({
+    detailsId: "det_submitfaileddetail",
+    requestUrl: "https://www.rateloop.ai/api/attachments/details/upload",
+    sha256: "0".repeat(64),
+    sizeBytes: 999,
+    text: "Failed details",
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: WALLET,
+    },
+  });
+  assert.equal(
+    await getQuestionDetailsSubmissionValidationError({
+      details: [
+        {
+          detailsHash: `0x${"0".repeat(64)}`,
+          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_submitfaileddetail",
+        },
+      ],
+      ownerWalletAddress: WALLET,
+    }),
+    "detailsUrl must come from approved RateLoop details uploads.",
+  );
 });
 
 test("sweeps old failed and blocked details while retaining approved immutable details", async () => {

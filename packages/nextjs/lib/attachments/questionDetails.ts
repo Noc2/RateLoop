@@ -218,6 +218,58 @@ export async function getQuestionDetails(id: string): Promise<QuestionDetails | 
   return details ?? null;
 }
 
+export async function getQuestionDetailsSubmissionValidationError(params: {
+  agentId?: string | null;
+  details: ReadonlyArray<{ detailsHash: string; detailsUrl: string }>;
+  ownerWalletAddress?: string | null;
+}): Promise<string | null> {
+  const submittedDetails = params.details.filter(detail => detail.detailsUrl.trim().length > 0);
+  if (submittedDetails.length === 0) return null;
+
+  const detailsHashesById = new Map<string, string>();
+  for (const detail of submittedDetails) {
+    const detailsId = parseQuestionDetailsIdFromDetailsUrl(detail.detailsUrl);
+    if (!detailsId) {
+      return "detailsUrl must come from RateLoop details uploads. Upload details first.";
+    }
+
+    const detailsHash = detail.detailsHash.trim().toLowerCase().replace(/^0x/, "");
+    const existingHash = detailsHashesById.get(detailsId);
+    if (existingHash && existingHash !== detailsHash) {
+      return "Uploaded detailsUrl must match the approved details hash.";
+    }
+    detailsHashesById.set(detailsId, detailsHash);
+  }
+
+  const ownerWalletAddress =
+    params.ownerWalletAddress && isValidWalletAddress(params.ownerWalletAddress)
+      ? normalizeWalletAddress(params.ownerWalletAddress)
+      : null;
+  const agentId = params.agentId?.trim() || null;
+
+  for (const [detailsId, expectedHash] of detailsHashesById) {
+    const details = await getQuestionDetails(detailsId);
+    if (!details || details.status !== "approved") {
+      return "detailsUrl must come from approved RateLoop details uploads.";
+    }
+    if (!details.sha256 || details.sha256.trim().toLowerCase() !== expectedHash) {
+      return "Uploaded detailsUrl must match the approved details hash.";
+    }
+
+    const ownedByAgent = agentId !== null && details.agentId === agentId;
+    const ownedByWallet =
+      ownerWalletAddress !== null && details.ownerWalletAddress?.trim().toLowerCase() === ownerWalletAddress;
+    if (!ownedByAgent && !ownedByWallet) {
+      return "detailsUrl must belong to the submitting wallet or agent.";
+    }
+    if (details.contentId !== null) {
+      return "detailsUrl is already attached to a submitted question.";
+    }
+  }
+
+  return null;
+}
+
 function questionDetailsSha256Hex(params: {
   detailsId: string;
   normalizedText: string;

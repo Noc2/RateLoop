@@ -34,6 +34,7 @@ import {
 } from "~~/lib/attachments/imageAttachments";
 import {
   attachQuestionDetailsToContent,
+  getQuestionDetailsSubmissionValidationError,
   markQuestionDetailsRequiresGatedAccess,
 } from "~~/lib/attachments/questionDetails";
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
@@ -479,6 +480,12 @@ function getQuestionImageUrls(payload: X402QuestionPayload): string[] {
   return payload.questions.flatMap(question => question.imageUrls);
 }
 
+function getQuestionDetails(payload: X402QuestionPayload): Array<{ detailsHash: Hex; detailsUrl: string }> {
+  return payload.questions
+    .filter(question => question.detailsUrl.trim().length > 0)
+    .map(question => questionDetailsTuple(question));
+}
+
 async function assertApprovedImageAttachmentsForSubmission(
   payload: X402QuestionPayload,
   identity: AttachmentSubmissionIdentity,
@@ -498,6 +505,14 @@ async function assertApprovedAttachmentsForSubmission(
   identity: AttachmentSubmissionIdentity,
 ) {
   await assertApprovedImageAttachmentsForSubmission(payload, identity);
+  const detailsError = await getQuestionDetailsSubmissionValidationError({
+    agentId: identity.agentId,
+    details: getQuestionDetails(payload),
+    ownerWalletAddress: identity.ownerWalletAddress,
+  });
+  if (detailsError) {
+    throw new X402QuestionInputError(detailsError);
+  }
 }
 
 async function markGatedHostedAttachmentsForSubmission(

@@ -137,6 +137,46 @@ async function insertQuestionImageAttachment(params: {
   });
 }
 
+async function insertQuestionDetails(params: {
+  agentId?: string | null;
+  detailsHash: Hex;
+  id: string;
+  ownerWalletAddress?: string | null;
+  status: string;
+}) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `
+      INSERT INTO question_details (
+        id,
+        uploader_kind,
+        owner_wallet_address,
+        agent_id,
+        size_bytes,
+        sha256,
+        normalized_text,
+        status,
+        moderation_status,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      params.id,
+      params.agentId ? "agent" : "wallet",
+      params.ownerWalletAddress ?? null,
+      params.agentId ?? null,
+      18,
+      params.detailsHash.slice(2),
+      "Expanded details",
+      params.status,
+      params.status === "approved" ? "approved" : "failed",
+      now,
+      now,
+    ],
+  });
+}
+
 const TEST_CONFIG = {
   chainId: 8453,
   contentRegistryAddress: "0x0000000000000000000000000000000000000011" as const,
@@ -846,6 +886,48 @@ test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments
     args: [imageId],
   });
   assert.equal(image.rows[0]?.requires_gated_access, true);
+});
+
+test("prepareAgentWalletQuestionSubmissionRequest rejects hosted details from another owner before planning", async () => {
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const detailsId = "det_preparewrongowner";
+  const detailsHash = `0x${"6".repeat(64)}` as const;
+  const payload = buildPayload("wallet-prepare-wrong-details-owner");
+  const [question] = payload.questions;
+  assert.ok(question);
+  payload.questions = [
+    {
+      ...question,
+      detailsHash,
+      detailsUrl: `https://www.rateloop.ai/api/attachments/details/${detailsId}`,
+    },
+  ];
+
+  await insertQuestionDetails({
+    detailsHash,
+    id: detailsId,
+    ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
+    status: "approved",
+  });
+
+  let planCalls = 0;
+  setDefaultTestOverrides({
+    buildAgentWalletQuestionSubmissionPlan: async () => {
+      planCalls += 1;
+      throw new Error("plan should not be built");
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      prepareAgentWalletQuestionSubmissionRequest({
+        agentId: "agent-wallet",
+        payload,
+        walletAddress,
+      }),
+    /detailsUrl must belong to the submitting wallet or agent/,
+  );
+  assert.equal(planCalls, 0);
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission logs", async () => {
