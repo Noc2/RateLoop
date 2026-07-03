@@ -1730,6 +1730,8 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
       ) {
         return encodeStorageAddress(addressFor(777));
       }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses);
+      if (timingResult) return timingResult;
       const wiringResult = handleWiringCall(params[0], deploymentAddresses);
       if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
@@ -1905,6 +1907,8 @@ test("validateLiveReadiness rejects removed post-creation funding selectors", as
       ) {
         return encodeStorageAddress(contentRegistryAddress);
       }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses);
+      if (timingResult) return timingResult;
       const wiringResult = handleWiringCall(params[0], deploymentAddresses);
       if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
@@ -1959,6 +1963,8 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
       ) {
         return encodeStorageAddress(contentRegistryAddress);
       }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses);
+      if (timingResult) return timingResult;
       const wiringResult = handleWiringCall(params[0], deploymentAddresses, {
         "ProtocolConfig rewardDistributor": addressFor(777),
         "ClusterPayoutOracle public rating consumer": addressFor(779),
