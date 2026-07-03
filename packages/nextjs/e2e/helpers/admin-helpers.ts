@@ -14,7 +14,7 @@ import {
   buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
 } from "../../lib/questionSubmissionCommitment";
-import { ANVIL_ACCOUNTS } from "./anvil-accounts";
+import { ANVIL_ACCOUNTS, DEPLOYER } from "./anvil-accounts";
 import { runCommitAttempts } from "./commit-attempts";
 import { type RpcSendResult, isRetryableDirectCommitSendResult } from "./direct-commit-retry";
 import "./fetch-shim";
@@ -324,6 +324,38 @@ async function resolveRegistryAddressGetter(
       functionName,
       data: result,
     }) as string;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveVotingEngineLrepToken(votingEngineAddress: string): Promise<string | null> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const abi = [
+    {
+      name: "rewardDistributorConfigShape",
+      type: "function",
+      inputs: [],
+      outputs: [
+        { name: "registry_", type: "address" },
+        { name: "lrepToken_", type: "address" },
+        { name: "protocolConfig_", type: "address" },
+      ],
+      stateMutability: "view",
+    },
+  ] as const;
+
+  const data = encodeFunctionData({ abi, functionName: "rewardDistributorConfigShape" });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: votingEngineAddress, data }, "latest"]);
+  if (!result) return null;
+
+  try {
+    const [, lrepToken] = decodeFunctionResult({
+      abi,
+      functionName: "rewardDistributorConfigShape",
+      data: result,
+    }) as readonly [string, string, string];
+    return lrepToken;
   } catch {
     return null;
   }
@@ -1412,6 +1444,61 @@ export async function transferLREP(
   return sendTx(fromAddress, tokenAddress, data);
 }
 
+async function readTransferableLREPBalance(holder: string, tokenAddress: string): Promise<bigint> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const abi = [
+    {
+      name: "getTransferableBalance",
+      type: "function",
+      inputs: [{ name: "account", type: "address" }],
+      outputs: [{ name: "", type: "uint256" }],
+      stateMutability: "view",
+    },
+  ] as const;
+  const data = encodeFunctionData({
+    abi,
+    functionName: "getTransferableBalance",
+    args: [holder as `0x${string}`],
+  });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: tokenAddress, data }, "latest"]);
+  if (!result) return 0n;
+
+  try {
+    return decodeFunctionResult({
+      abi,
+      functionName: "getTransferableBalance",
+      data: result,
+    }) as bigint;
+  } catch {
+    return 0n;
+  }
+}
+
+async function ensureDirectCommitStakeAvailable(
+  fromAddress: string,
+  stakeAmount: bigint,
+  votingEngineAddress: string,
+): Promise<void> {
+  if (stakeAmount <= 0n) return;
+
+  const lrepTokenAddress = await resolveVotingEngineLrepToken(votingEngineAddress);
+  if (!lrepTokenAddress) {
+    console.warn(`[commitVoteDirect] Unable to resolve LREP token for ${votingEngineAddress}`);
+    return;
+  }
+
+  const transferableBalance = await readTransferableLREPBalance(fromAddress, lrepTokenAddress);
+  if (transferableBalance >= stakeAmount) return;
+
+  const shortfall = stakeAmount - transferableBalance;
+  const funded = await transferLREP(fromAddress, shortfall, DEPLOYER.address, lrepTokenAddress);
+  if (!funded) {
+    console.warn(
+      `[commitVoteDirect] Unable to fund ${fromAddress} with ${shortfall.toString()} LREP atomic units before direct commit`,
+    );
+  }
+}
+
 /**
  * Approve ERC20 token spending.
  * Calls LoopReputation.approve(address spender, uint256 amount).
@@ -1656,6 +1743,7 @@ export async function commitVoteDirect(
   );
   const contentIdBigInt = BigInt(contentId);
   await ensureDirectCommitRoundOpen(contractAddress, contentIdBigInt, fromAddress);
+  await ensureDirectCommitStakeAvailable(fromAddress, stakeAmount, contractAddress);
 
   return runCommitAttempts({
     attempts: DIRECT_VOTE_COMMIT_ATTEMPTS,
