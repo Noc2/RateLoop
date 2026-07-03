@@ -457,6 +457,10 @@ const agentAskInputBaseProperties = {
     enum: ["dry_run"],
     type: "string",
   },
+  sandbox: {
+    description: "Alias for dryRun=true.",
+    type: ["boolean", "string"],
+  },
   question: agentQuestionInputSchema,
   questions: {
     description: "Ordered bundle of question payloads. The bounty pays only when every question is answered.",
@@ -657,6 +661,13 @@ export const agentQuoteInputSchema = {
 
 export const agentAskHumansInputSchema = {
   additionalProperties: true,
+  anyOf: [
+    { required: ["clientRequestId", "bounty", "maxPaymentAmount"] },
+    { required: ["clientRequestId", "bounty", "dryRun"] },
+    { required: ["clientRequestId", "bounty", "executionMode"] },
+    { required: ["clientRequestId", "bounty", "mode"] },
+    { required: ["clientRequestId", "bounty", "sandbox"] },
+  ],
   properties: {
     ...agentAskInputBaseProperties,
     maxPaymentAmount: {
@@ -716,7 +727,6 @@ export const agentAskHumansInputSchema = {
       type: "string",
     },
   },
-  required: ["clientRequestId", "bounty", "maxPaymentAmount"],
   type: "object",
 } satisfies JsonSchema;
 

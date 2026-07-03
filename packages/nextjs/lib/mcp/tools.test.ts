@@ -589,6 +589,7 @@ test("rateloop_ask_humans dry-run validates without reserving budget or preparin
     agent: AGENT,
     arguments: askArguments({
       dryRun: true,
+      maxPaymentAmount: undefined,
       webhookEvents: ["question.submitted"],
       webhookSecret: "secret",
       webhookUrl: "https://example.com/callback",
@@ -669,6 +670,7 @@ test("public rateloop_ask_humans dry-run skips permissionless transaction planni
   const result = await callPublicRateLoopMcpTool({
     arguments: askArguments({
       dryRun: true,
+      maxPaymentAmount: undefined,
       walletAddress: AGENT.walletAddress,
     }),
     name: "rateloop_ask_humans",
@@ -691,6 +693,41 @@ test("public rateloop_ask_humans dry-run skips permissionless transaction planni
   assert.equal(body.transactionPlan, null);
   assert.equal(body.managedBudget, null);
   assert.equal(body.walletPolicyRequired, false);
+});
+
+test("rateloop_ask_humans still requires maxPaymentAmount for live asks", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: askArguments({ maxPaymentAmount: undefined }),
+        name: "rateloop_ask_humans",
+      }),
+    /maxPaymentAmount must be a non-negative integer string/,
+  );
+});
+
+test("public rateloop_ask_humans still requires maxPaymentAmount for live asks", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+  });
+
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: askArguments({
+          maxPaymentAmount: undefined,
+          walletAddress: AGENT.walletAddress,
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /maxPaymentAmount must be a non-negative integer string/,
+  );
 });
 
 test("public rateloop_create_ask_handoff_link uses configured production app URL", async () => {

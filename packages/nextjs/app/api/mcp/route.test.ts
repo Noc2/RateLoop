@@ -312,11 +312,13 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     required?: string[];
   };
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
+    anyOf?: Array<{ required?: string[] }>;
     properties?: {
       bounty?: { properties?: { bountyEligibility?: { default?: unknown; description?: string } } };
       feedbackBonus?: { properties?: { asset?: { enum?: string[] } } };
       mode?: { enum?: string[] };
     };
+    required?: string[];
   };
   const askOutputSchema = toolByName.get("rateloop_ask_humans")?.outputSchema as {
     properties?: { pollAfterMs?: { type?: unknown } };
@@ -356,6 +358,22 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.deepEqual(handoffSchema.properties?.request?.required, ["clientRequestId", "bounty", "maxPaymentAmount"]);
   assert.ok(handoffSchema.properties?.request?.properties?.clientRequestId);
   assert.ok(handoffSchema.properties?.request?.properties?.maxPaymentAmount);
+  assert.deepEqual(askSchema.required, undefined);
+  assert.ok(
+    askSchema.anyOf?.some(option =>
+      ["clientRequestId", "bounty", "maxPaymentAmount"].every(field => option.required?.includes(field)),
+    ),
+  );
+  assert.ok(
+    askSchema.anyOf?.some(option =>
+      ["clientRequestId", "bounty", "dryRun"].every(field => option.required?.includes(field)),
+    ),
+  );
+  assert.ok(
+    askSchema.anyOf?.some(option =>
+      ["clientRequestId", "bounty", "mode"].every(field => option.required?.includes(field)),
+    ),
+  );
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
   assert.equal(askSchema.properties?.bounty?.properties?.bountyEligibility?.default, undefined);
   assert.match(

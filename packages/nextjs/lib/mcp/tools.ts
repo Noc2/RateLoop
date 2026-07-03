@@ -3440,9 +3440,11 @@ export async function callPublicRateLoopMcpTool(params: {
           });
       const totalPaymentAmount =
         quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus, payload.bounty.asset);
-      const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
-      if (totalPaymentAmount > maxPaymentAmount) {
-        throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
+      if (!dryRun) {
+        const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
+        if (totalPaymentAmount > maxPaymentAmount) {
+          throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
+        }
       }
       if (dryRun) {
         return buildDryRunOperationBody({
@@ -3762,9 +3764,11 @@ export async function callRateLoopMcpTool(params: {
       });
       const totalPaymentAmount =
         quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus, payload.bounty.asset);
-      const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
-      if (totalPaymentAmount > maxPaymentAmount) {
-        throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
+      if (!dryRun) {
+        const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
+        if (totalPaymentAmount > maxPaymentAmount) {
+          throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
+        }
       }
       if (dryRun) {
         return buildDryRunOperationBody({
