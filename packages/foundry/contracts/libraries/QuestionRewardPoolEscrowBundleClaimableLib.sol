@@ -30,6 +30,7 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
     function claimableQuestionBundleReward(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
@@ -58,68 +59,75 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
                 account
             )) return 0;
 
-        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
-            votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
-        );
-        if (!windowActive) return 0;
+        bool completed;
+        address frontend;
+        bytes32 firstCommitKey;
+        {
+            (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
+                votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
+            );
+            if (!windowActive) return 0;
 
-        (bool completed, address frontend, bytes32 firstCommitKey) = QuestionRewardPoolEscrowBundleLib.bundleRoundSetCommitStatus(
-            bundleQuestions,
-            bundleRoundIds,
-            votingEngine,
-            protocolConfig,
-            bountyOpensAt,
-            bountyClosesAt,
-            bundleId,
-            roundSetIndex,
-            account,
-            true,
-            true
-        );
+            (completed, frontend, firstCommitKey) = QuestionRewardPoolEscrowBundleLib.bundleRoundSetCommitStatus(
+                bundleQuestions,
+                bundleRoundIds,
+                votingEngine,
+                protocolConfig,
+                bountyOpensAt,
+                bountyClosesAt,
+                bundleId,
+                roundSetIndex,
+                account,
+                true,
+                true
+            );
+        }
         if (!completed) return 0;
         if (bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey]) return 0;
         if (_isBundleCompleterBanned(
                 bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundleId, roundSetIndex, account
             )) return 0;
 
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
-        if (snapshot.qualified) {
-            if (!QuestionRewardPoolEscrowBundleLib.isRoundSetClaimOpen(
-                    bundleRoundSetSnapshots, bundle, bundleId, roundSetIndex
-                )) return 0;
-            if (!qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][firstCommitKey]) return 0;
-        } else if (!_isEligiblePendingBundleRoundSetCompleter(
+        BundleEqualSharePreview memory preview;
+        {
+            BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
+            if (snapshot.qualified) {
+                if (!QuestionRewardPoolEscrowBundleLib.isRoundSetClaimOpen(
+                        bundleRoundSetSnapshots, bundle, bundleId, roundSetIndex
+                    )) return 0;
+                if (!qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][firstCommitKey]) return 0;
+            } else if (!_isEligiblePendingBundleRoundSetCompleter(
+                    bundleQuestions,
+                    bundleRoundIds,
+                    registry,
+                    votingEngine,
+                    protocolConfig,
+                    bundle,
+                    bundleId,
+                    roundSetIndex,
+                    firstCommitKey,
+                    account
+                )) {
+                return 0;
+            }
+            preview = _equalSharePreview(
                 bundleQuestions,
+                bundleQuestionRecordedRounds,
                 bundleRoundIds,
                 registry,
                 votingEngine,
                 protocolConfig,
                 bundle,
+                snapshot,
                 bundleId,
-                roundSetIndex,
-                firstCommitKey,
-                account
-            )) {
-            return 0;
+                roundSetIndex
+            );
         }
-        BundleEqualSharePreview memory preview = _equalSharePreview(
-            bundleQuestions,
-            bundleRoundIds,
-            registry,
-            votingEngine,
-            protocolConfig,
-            bundle,
-            snapshot,
-            bundleId,
-            roundSetIndex
-        );
         if (preview.allocation == 0) return 0;
         (, claimableAmount,,) = QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
             votingEngine,
-            firstQuestion.contentId,
-            firstRoundId,
+            bundleQuestions[bundleId][0].contentId,
+            bundleRoundIds[bundleId][0][roundSetIndex],
             firstCommitKey,
             frontend,
             EqualShareInputs({
@@ -133,12 +141,8 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
 
     function _equalSharePreview(
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
-        mapping(
-            uint256
-                => mapping(
-                uint256 => mapping(uint256 => uint64)
-            )
-        ) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -155,7 +159,9 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
             return preview;
         }
         if (bundle.pendingRecoveredRoundSets != 0 || roundSetIndex != bundle.completedRoundSets) return preview;
-        if (!_hasRecordedRoundSet(bundleQuestions, bundleRoundIds, bundleId, roundSetIndex)) return preview;
+        if (!QuestionRewardPoolEscrowBundleLib.isRoundSetComplete(
+                bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex
+            )) return preview;
 
         uint256 eligibleCompleters = _bundleRoundSetCompleterCount(
             bundleQuestions, bundleRoundIds, registry, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex
@@ -169,27 +175,6 @@ library QuestionRewardPoolEscrowBundleClaimableLib {
         preview.allocation = allocation;
         preview.frontendFeeAllocation = (allocation * bundle.frontendFeeBps) / BPS_SCALE;
         preview.eligibleCompleters = eligibleCompleters;
-    }
-
-    function _hasRecordedRoundSet(
-        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
-        mapping(
-            uint256
-                => mapping(
-                uint256 => mapping(uint256 => uint64)
-            )
-        ) storage bundleRoundIds,
-        uint256 bundleId,
-        uint256 roundSetIndex
-    ) private view returns (bool) {
-        BundleQuestion[] storage questions = bundleQuestions[bundleId];
-        for (uint256 i = 0; i < questions.length;) {
-            if (bundleRoundIds[bundleId][i][roundSetIndex] == 0) return false;
-            unchecked {
-                ++i;
-            }
-        }
-        return questions.length != 0;
     }
 
     function _bundleRoundSetCompleterCount(

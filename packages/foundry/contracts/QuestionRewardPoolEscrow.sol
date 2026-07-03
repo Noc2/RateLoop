@@ -1054,6 +1054,7 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowBundleClaimableLib.claimableQuestionBundleReward(
             bundleRewards,
             bundleQuestions,
+            bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
