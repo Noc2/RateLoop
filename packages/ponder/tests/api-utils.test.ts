@@ -6,6 +6,7 @@ import {
   isLikelyUrlSearchQuery,
   isValidAddress,
   normalizeContentSearchQuery,
+  parseStrictUnsignedInteger,
   safeBigInt,
   safeLimit,
   safeOffset,
@@ -41,6 +42,28 @@ describe("safeBigInt", () => {
   });
 });
 
+describe("parseStrictUnsignedInteger", () => {
+  it("parses safe unsigned decimal integers", () => {
+    expect(parseStrictUnsignedInteger("0")).toBe(0);
+    expect(parseStrictUnsignedInteger(" 42 ")).toBe(42);
+  });
+
+  it("rejects partial, signed, decimal, blank, and unsafe values", () => {
+    for (const value of [
+      "42abc",
+      "-1",
+      "+1",
+      "1.5",
+      "",
+      "   ",
+      "9007199254740993",
+      undefined,
+    ]) {
+      expect(parseStrictUnsignedInteger(value)).toBeNull();
+    }
+  });
+});
+
 describe("safeLimit", () => {
   it("returns parsed value when valid and within max", () => {
     expect(safeLimit("25", 50, 200)).toBe(25);
@@ -56,6 +79,10 @@ describe("safeLimit", () => {
 
   it("returns default for NaN", () => {
     expect(safeLimit("abc", 50, 200)).toBe(50);
+  });
+
+  it("returns default for partial integer strings", () => {
+    expect(safeLimit("25abc", 50, 200)).toBe(50);
   });
 
   it("returns default for zero", () => {
@@ -82,6 +109,10 @@ describe("safeOffset", () => {
 
   it("returns 0 for NaN", () => {
     expect(safeOffset("abc")).toBe(0);
+  });
+
+  it("returns 0 for partial integer strings", () => {
+    expect(safeOffset("10abc")).toBe(0);
   });
 
   it("returns NaN for offsets above the maximum", () => {

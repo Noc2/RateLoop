@@ -298,6 +298,20 @@ function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
   return BigInt(rawValue);
 }
 
+function parsePositiveSafeInteger(value: unknown, fieldName: string): number {
+  const rawValue = readIntegerString(value, fieldName);
+  if (!/^\d+$/.test(rawValue)) {
+    throw new X402QuestionInputError(`${fieldName} must be a positive integer.`);
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new X402QuestionInputError(`${fieldName} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
 function assertIntegerUpperBound(value: bigint, fieldName: string, maxValue: bigint) {
   if (value <= maxValue) return;
   throw new X402QuestionInputError(`${fieldName} must be at most ${maxValue}.`);
@@ -777,10 +791,7 @@ function normalizeTemplateSelection(
   const templateVersion =
     value.templateVersion === undefined || value.templateVersion === null
       ? (defaults.templateVersion ?? template.version)
-      : Number.parseInt(String(value.templateVersion), 10);
-  if (!Number.isSafeInteger(templateVersion) || templateVersion <= 0) {
-    throw new X402QuestionInputError(`${fieldPrefix}.templateVersion must be a positive integer.`);
-  }
+      : parsePositiveSafeInteger(value.templateVersion, `${fieldPrefix}.templateVersion`);
   if (templateVersion !== template.version) {
     throw new X402QuestionInputError(
       `${fieldPrefix}.templateVersion ${templateVersion} is not supported for ${template.id}.`,
@@ -802,12 +813,7 @@ function normalizeTemplateSelection(
 
 function normalizeChainId(value: unknown, fallbackChainId?: number): number {
   const rawValue = value ?? fallbackChainId;
-  const chainId = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? ""), 10);
-  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
-    throw new X402QuestionInputError("chainId must be a positive integer.");
-  }
-
-  return chainId;
+  return parsePositiveSafeInteger(rawValue, "chainId");
 }
 
 function isSupportedBountyEligibility(value: number): boolean {
@@ -1190,7 +1196,7 @@ export function parseX402QuestionRequest(
   const topLevelTemplateVersion =
     value.templateVersion === undefined || value.templateVersion === null
       ? DEFAULT_AGENT_TEMPLATE_VERSION
-      : Number.parseInt(String(value.templateVersion), 10);
+      : parsePositiveSafeInteger(value.templateVersion, "templateVersion");
   const templateDefaults = {
     confidentiality: normalizeQuestionConfidentiality(value.confidentiality, "confidentiality"),
     templateId: readOptionalString(value.templateId) || DEFAULT_AGENT_TEMPLATE_ID,

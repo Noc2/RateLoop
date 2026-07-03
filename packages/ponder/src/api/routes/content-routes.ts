@@ -66,6 +66,7 @@ import {
   getUrlLookupCandidates,
   isValidAddress,
   normalizeContentSearchQuery,
+  parseStrictUnsignedInteger,
   safeBigInt,
   safeLimit,
   safeOffset,
@@ -1209,8 +1210,8 @@ export function registerContentRoutes(app: ApiApp) {
       }),
     ];
     if (status !== "all") {
-      const parsed = parseInt(status);
-      if (isNaN(parsed)) return c.json({ error: "Invalid status filter" }, 400);
+      const parsed = parseStrictUnsignedInteger(status);
+      if (parsed === null) return c.json({ error: "Invalid status filter" }, 400);
       conditions.push(eq(content.status, parsed));
     }
     if (sortBy === "highest_rewards") {
@@ -1519,10 +1520,11 @@ export function registerContentRoutes(app: ApiApp) {
       if (parsedRoundId === null) return c.json({ error: "Invalid roundId" }, 400);
       conditions.push(eq(round.roundId, parsedRoundId));
     }
+    let parsedStateFilter: number | null = null;
     if (stateFilter !== undefined) {
-      const parsed = parseInt(stateFilter);
-      if (isNaN(parsed)) return c.json({ error: "Invalid state filter" }, 400);
-      conditions.push(eq(round.state, parsed));
+      parsedStateFilter = parseStrictUnsignedInteger(stateFilter);
+      if (parsedStateFilter === null) return c.json({ error: "Invalid state filter" }, 400);
+      conditions.push(eq(round.state, parsedStateFilter));
     }
     if (submitter) {
       if (!isValidAddress(submitter))
@@ -1533,9 +1535,7 @@ export function registerContentRoutes(app: ApiApp) {
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
-    const settledOnly =
-      stateFilter !== undefined &&
-      parseInt(stateFilter) === ROUND_STATE.Settled;
+    const settledOnly = parsedStateFilter === ROUND_STATE.Settled;
 
     const items = await db
       .select({

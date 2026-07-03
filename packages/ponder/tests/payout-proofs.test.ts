@@ -141,6 +141,30 @@ describe("payout artifact proof resolution", () => {
     ).resolves.toBeNull();
   });
 
+  it("does not partially parse malformed fetched artifact content lengths", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify(artifact), {
+        headers: {
+          "content-length": "10000001abc",
+          "content-type": "application/json",
+        },
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resolveQuestionPayoutProof } = await loadResolver(
+      "https://artifacts.example.com/",
+    );
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: "https://artifacts.example.com/payout.json",
+      }),
+    ).resolves.toEqual(expect.objectContaining({ proof: [] }));
+  });
+
   it("uses cached canonical artifacts by hash before fetching the URI", async () => {
     const fetchMock = mockArtifactFetch();
     const { resolveQuestionPayoutProof } = await loadResolver(

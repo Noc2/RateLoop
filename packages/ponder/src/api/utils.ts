@@ -1,6 +1,8 @@
 import { getUrlLookupCandidates } from "../urlCanonicalization.js";
+import { parseStrictUnsignedInteger } from "../numberParsing.js";
 
 export { getCanonicalUrlParts, getUrlLookupCandidates } from "../urlCanonicalization.js";
+export { parseStrictUnsignedInteger } from "../numberParsing.js";
 
 export const MAX_PAGINATION_OFFSET = 50_000;
 const MIN_CONTENT_SEARCH_QUERY_LENGTH = 3;
@@ -18,15 +20,15 @@ export function safeBigInt(value: string): bigint | null {
 
 /** Safely parse pagination limit with defaults and clamping. */
 export function safeLimit(value: string | undefined, defaultVal: number, max: number): number {
-  const parsed = parseInt(value ?? String(defaultVal));
-  if (isNaN(parsed) || parsed < 1) return defaultVal;
+  const parsed = parseStrictUnsignedInteger(value ?? String(defaultVal));
+  if (parsed === null || parsed < 1) return defaultVal;
   return Math.min(parsed, max);
 }
 
 /** Safely parse pagination offset, returning 0 for invalid values. */
 export function safeOffset(value: string | undefined): number {
-  const parsed = parseInt(value ?? "0");
-  if (isNaN(parsed) || parsed < 0) return 0;
+  const parsed = parseStrictUnsignedInteger(value ?? "0");
+  if (parsed === null) return 0;
   if (parsed > MAX_PAGINATION_OFFSET) return Number.NaN;
   return parsed;
 }

@@ -900,6 +900,22 @@ describe("registerContentRoutes", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it("rejects partial content status filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?status=1abc");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid status filter" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid target audience filters with canonical suggestions", async () => {
     const { db } = mockPonderModules([]);
     const { registerContentRoutes } = await import(
@@ -2182,6 +2198,22 @@ describe("registerContentRoutes", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it("rejects partial round state filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/rounds?state=1abc");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid state filter" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("filters rounds by submitter in the database query", async () => {
     const { queryBuilder } = mockPonderModules([{ id: "1-1" }]);
     const { registerContentRoutes } = await import(
@@ -2627,6 +2659,42 @@ describe("registerLeaderboardRoutes", () => {
     expect(await response.json()).toEqual({
       error: "Invalid minSignalVotes",
     });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("rejects partial accuracy leaderboard vote minimums", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?sortBy=signalScore&minVotes=5abc",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Invalid minVotes",
+    });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("rejects partial vote state filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request("http://localhost/votes?state=1abc");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid state filter" });
     expect(db.select).not.toHaveBeenCalled();
   });
 

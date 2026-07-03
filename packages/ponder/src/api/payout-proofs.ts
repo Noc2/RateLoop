@@ -4,6 +4,7 @@ import { eq } from "ponder";
 import { db } from "ponder:api";
 import { payoutArtifactCache } from "ponder:schema";
 import type { Hex } from "viem";
+import { parseStrictUnsignedInteger } from "../numberParsing.js";
 
 export interface PayoutWeightProof {
   payoutWeight: {
@@ -187,8 +188,8 @@ async function readArtifactJson(uri: string): Promise<unknown> {
   // Fast path: the server told us how big the body is — refuse before reading.
   const contentLengthHeader = response.headers.get("content-length");
   if (contentLengthHeader) {
-    const declaredLength = Number.parseInt(contentLengthHeader, 10);
-    if (Number.isFinite(declaredLength) && declaredLength > ARTIFACT_MAX_BYTES) {
+    const declaredLength = parseStrictUnsignedInteger(contentLengthHeader);
+    if (declaredLength !== null && declaredLength > ARTIFACT_MAX_BYTES) {
       throw new Error(`Payout artifact too large: ${declaredLength} > ${ARTIFACT_MAX_BYTES} bytes`);
     }
   }

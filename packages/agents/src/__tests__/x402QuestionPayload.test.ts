@@ -71,6 +71,26 @@ describe("x402 question bounty eligibility", () => {
   });
 });
 
+describe("x402 question integer parsing", () => {
+  it("rejects partial chain ids", () => {
+    expect(() =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        chainId: "480abc",
+      }),
+    ).toThrow("chainId must be a positive integer.");
+  });
+
+  it("rejects partial template versions", () => {
+    expect(() =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        templateVersion: "1abc",
+      }),
+    ).toThrow("templateVersion must be a positive integer.");
+  });
+});
+
 describe("x402 question attachment origins", () => {
   it("rejects production uploaded images from hostile configured app origins", () => {
     process.env.NODE_ENV = "production";

@@ -38,7 +38,12 @@ import {
   isCorrelationVoteScanTruncated,
 } from "../correlation-vote-scan.js";
 import { buildCorrelationFinalitySla } from "../correlation-finality-sla.js";
-import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
+import {
+  parseStrictUnsignedInteger,
+  safeBigInt,
+  safeLimit,
+  safeOffset,
+} from "../utils.js";
 
 const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_FINALIZED = 3;
@@ -345,9 +350,7 @@ function optionalNonNegativeNumberParam(
   value: string | undefined,
 ): number | null {
   if (value === undefined) return null;
-  if (!/^\d+$/.test(value)) return Number.NaN;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
+  return parseStrictUnsignedInteger(value) ?? Number.NaN;
 }
 
 function formatCorrelationVoteRow(

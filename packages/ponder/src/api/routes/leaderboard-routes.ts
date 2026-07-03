@@ -32,7 +32,12 @@ import {
 import { credentialStatus, raterTypeName } from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig, resolveApiNowSeconds } from "../shared.js";
-import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
+import {
+  parseStrictUnsignedInteger,
+  safeBigInt,
+  safeLimit,
+  safeOffset,
+} from "../utils.js";
 
 type OrderableExpression = Parameters<typeof desc>[0];
 type AccuracyLeaderboardRaterTypeFilter = 1 | 2 | 3 | 4;
@@ -316,11 +321,11 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     const offset = safeOffset(c.req.query("offset"));
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
-    const minVotes = parseInt(minVotesParam);
-    if (isNaN(minVotes) || minVotes < 1)
+    const minVotes = parseStrictUnsignedInteger(minVotesParam);
+    if (minVotes === null || minVotes < 1)
       return c.json({ error: "Invalid minVotes" }, 400);
-    const minSignalVotes = parseInt(minSignalVotesParam);
-    if (isNaN(minSignalVotes) || minSignalVotes < 0)
+    const minSignalVotes = parseStrictUnsignedInteger(minSignalVotesParam);
+    if (minSignalVotes === null)
       return c.json({ error: "Invalid minSignalVotes" }, 400);
 
     const categoryId = categoryIdParam ? safeBigInt(categoryIdParam) : null;

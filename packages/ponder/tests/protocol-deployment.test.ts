@@ -131,6 +131,17 @@ describe("Ponder protocol deployment metadata", () => {
     ).toThrow("PONDER_CHAIN_ID 84532 does not match PONDER_NETWORK base (8453).");
   });
 
+  it("rejects malformed explicit chain ids instead of falling back to the network", () => {
+    expect(() =>
+      resolvePonderProtocolDeploymentMetadata({
+        PONDER_NETWORK: "base",
+        PONDER_CHAIN_ID: "8453abc",
+        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+      }),
+    ).toThrow("PONDER_CHAIN_ID must be a positive integer.");
+  });
+
   it("rejects explicit chain ids that do not match the configured network", () => {
     expect(() =>
       resolvePonderProtocolDeploymentMetadata({

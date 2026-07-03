@@ -82,6 +82,23 @@ describe("ponder api bootstrap", () => {
     expect(response.status).toBe(404);
   });
 
+  it("does not partially parse malformed replica counts", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { default: app } = await loadApp({
+      NODE_ENV: "production",
+      CORS_ORIGIN: "https://app.rateloop.ai",
+      RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
+      PONDER_REPLICA_COUNT: "2abc",
+    });
+
+    const response = await app.request("https://ponder.rateloop.ai/content");
+
+    expect(response.status).toBe(404);
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("in-memory rate limiter is running with 2 replicas"),
+    );
+  });
+
   it("keeps deployment probes outside the shared request limiter", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { default: app } = await loadApp({

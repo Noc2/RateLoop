@@ -64,7 +64,13 @@ import {
   maxBigInt,
   raterTypeName,
 } from "../reputation-utils.js";
-import { isValidAddress, safeBigInt, safeLimit, safeOffset } from "../utils.js";
+import {
+  isValidAddress,
+  parseStrictUnsignedInteger,
+  safeBigInt,
+  safeLimit,
+  safeOffset,
+} from "../utils.js";
 import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
 import { resolveQuestionPayoutProof } from "../payout-proofs.js";
 
@@ -1296,8 +1302,8 @@ export function registerDataRoutes(app: ApiApp) {
       conditions.push(eq(vote.roundId, parsed));
     }
     if (stateFilter !== undefined) {
-      const parsed = parseInt(stateFilter);
-      if (isNaN(parsed)) return c.json({ error: "Invalid state filter" }, 400);
+      const parsed = parseStrictUnsignedInteger(stateFilter);
+      if (parsed === null) return c.json({ error: "Invalid state filter" }, 400);
       conditions.push(eq(round.state, parsed));
     }
 

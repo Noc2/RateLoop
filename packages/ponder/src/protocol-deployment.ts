@@ -19,9 +19,17 @@ export interface PonderProtocolDeploymentMetadata {
   databaseSchema: string | null;
 }
 
+const DECIMAL_UNSIGNED_INTEGER_PATTERN = /^\d+$/;
+
 function readEnv(env: NodeJS.ProcessEnv | Record<string, string | undefined>, key: string) {
   const value = env[key]?.trim();
   return value ? value : undefined;
+}
+
+function parseStrictUnsignedInteger(value: string): number | null {
+  if (!DECIMAL_UNSIGNED_INTEGER_PATTERN.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
@@ -35,8 +43,15 @@ function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
 function resolveChainId(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
   const network = readEnv(env, "PONDER_NETWORK");
   const networkChainId = network ? PONDER_NETWORK_CHAIN_IDS[network] : undefined;
-  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
-  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) {
+  const explicitChainIdRaw = readEnv(env, "PONDER_CHAIN_ID");
+  const explicitChainId =
+    explicitChainIdRaw === undefined
+      ? null
+      : parseStrictUnsignedInteger(explicitChainIdRaw);
+  if (explicitChainIdRaw !== undefined && (explicitChainId === null || explicitChainId <= 0)) {
+    throw new Error("PONDER_CHAIN_ID must be a positive integer.");
+  }
+  if (explicitChainId !== null) {
     if (networkChainId !== undefined && explicitChainId !== networkChainId) {
       throw new Error(
         `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${network} (${networkChainId}).`,
