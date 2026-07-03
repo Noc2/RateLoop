@@ -556,7 +556,13 @@ export function resetLocalDatabase() {
 }
 
 export function streamLocalDatabaseLogs() {
-  if (fallbackPostgresWasInitialized() && existsSync(fallbackPostgresLogPath)) {
+  if (
+    selectLocalDatabaseLogSource({
+      fallbackInitialized: fallbackPostgresWasInitialized(),
+      fallbackLogExists: existsSync(fallbackPostgresLogPath),
+      fallbackRunning: fallbackPostgresIsRunning(),
+    }) === "fallback"
+  ) {
     const result = spawnSync("tail", ["-f", fallbackPostgresLogPath], {
       cwd: repoRoot,
       stdio: "inherit",
@@ -566,6 +572,14 @@ export function streamLocalDatabaseLogs() {
 
   const result = runCompose(["logs", "-f", postgresServiceName]);
   process.exit(result.status ?? 0);
+}
+
+export function selectLocalDatabaseLogSource({
+  fallbackInitialized,
+  fallbackLogExists,
+  fallbackRunning,
+}) {
+  return fallbackInitialized && fallbackRunning && fallbackLogExists ? "fallback" : "compose";
 }
 
 function printUsage() {

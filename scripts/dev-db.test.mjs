@@ -4,6 +4,7 @@ import {
   buildLocalDatabasePortConflictMessage,
   composeOutputHasPortConflict,
   resolveComposeBindHost,
+  selectLocalDatabaseLogSource,
 } from "./dev-db.mjs";
 
 const localDatabaseConfig = {
@@ -44,4 +45,31 @@ test("builds actionable help for local database port conflicts", () => {
   assert.match(message, /rater-postgres-1/);
   assert.match(message, /55432/);
   assert.match(message, /yarn dev:stack/);
+});
+
+test("uses Homebrew fallback logs only while the fallback database is running", () => {
+  assert.equal(
+    selectLocalDatabaseLogSource({
+      fallbackInitialized: true,
+      fallbackLogExists: true,
+      fallbackRunning: true,
+    }),
+    "fallback",
+  );
+  assert.equal(
+    selectLocalDatabaseLogSource({
+      fallbackInitialized: true,
+      fallbackLogExists: true,
+      fallbackRunning: false,
+    }),
+    "compose",
+  );
+  assert.equal(
+    selectLocalDatabaseLogSource({
+      fallbackInitialized: false,
+      fallbackLogExists: true,
+      fallbackRunning: true,
+    }),
+    "compose",
+  );
 });
