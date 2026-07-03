@@ -919,6 +919,28 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
     }
 
+    function testEmptyOpenRoundKeepsBondLockedWhileContentActive() public {
+        uint256 contentId = _submitGatedQuestion("empty-open-bond-lock", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        uint256 roundId = engine.currentRoundId(contentId);
+
+        vm.warp(block.timestamp + confidentialityEscrow.evidenceWindow());
+
+        vm.expectRevert("Bond locked");
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertTrue(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+
+        engine.cancelExpiredRound(contentId, roundId);
+
+        uint256 beforeBalance = lrepToken.balanceOf(voter1);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertEq(lrepToken.balanceOf(voter1), beforeBalance + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+    }
+
     function testReleaseBondBlocksMaturedBondWhilePaused() public {
         uint256 contentId = _submitGatedQuestion("paused-release", 1e6);
         bytes32 identityKey = _postLrepBond(contentId, voter1);
@@ -946,7 +968,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
     }
 
-    function testBondedEmptyOpenRoundCannotRelockReleasableBond() public {
+    function testBondedEmptyOpenRoundKeepsReleasableBondLockedUntilCancelled() public {
         uint256 contentId = _submitGatedQuestion("bonded-release-grief", 1e6);
         bytes32 identityKey = _postLrepBond(contentId, voter1);
 
@@ -960,6 +982,14 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         _postLrepBond(contentId, voter2);
         vm.prank(voter2);
         engine.openRound(contentId);
+        uint256 secondRoundId = engine.currentRoundId(contentId);
+
+        vm.expectRevert("Bond locked");
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertTrue(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+
+        vm.warp(block.timestamp + 30 days + 1);
+        engine.cancelExpiredRound(contentId, secondRoundId);
 
         uint256 beforeBalance = lrepToken.balanceOf(voter1);
         confidentialityEscrow.releaseBond(contentId, identityKey);
