@@ -571,13 +571,7 @@ function GovernancePageInner() {
     );
   }
 
-  if (lrepGateState === "zero-lrep" && address) {
-    return (
-      <AppPageShell contentClassName="space-y-6">
-        <GetLrepOnboarding address={address as `0x${string}`} />
-      </AppPageShell>
-    );
-  }
+  const shouldShowLrepOnboarding = lrepGateState === "zero-lrep" && address;
 
   return (
     <AppPageShell contentClassName="space-y-6">
@@ -616,7 +610,13 @@ function GovernancePageInner() {
         </button>
       </div>
 
-      {activeTab === "profile" && address && <PublicProfileView address={address as `0x${string}`} embedded />}
+      {activeTab === "profile" &&
+        address &&
+        (shouldShowLrepOnboarding ? (
+          <GetLrepOnboarding address={address as `0x${string}`} />
+        ) : (
+          <PublicProfileView address={address as `0x${string}`} embedded />
+        ))}
 
       {activeTab === "leaderboard" && (
         <>

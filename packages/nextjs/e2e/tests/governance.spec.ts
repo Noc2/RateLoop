@@ -96,6 +96,11 @@ test.describe("Governance page", () => {
       "href",
       "/docs/how-it-works#eligible-settled-rounds",
     );
+
+    const leaderboardTab = page.getByRole("button", { name: "Leaderboard", exact: true });
+    await expect(leaderboardTab).toBeVisible();
+    await leaderboardTab.click();
+    await expect(page.getByRole("heading", { name: "Leaderboard", exact: true })).toBeVisible({ timeout: 15_000 });
   });
 
   test("profile tab stays read-only until edit is clicked", async ({ browser }) => {
