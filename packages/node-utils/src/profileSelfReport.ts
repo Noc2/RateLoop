@@ -341,12 +341,11 @@ export function normalizeRaterType(value: unknown): RaterTypeValue {
   }
 
   if (typeof value === "string") {
-    const trimmed = value.trim();
-    const numeric = Number(trimmed);
-    if (Number.isInteger(numeric) && numeric >= RATER_TYPE.Unknown && numeric <= RATER_TYPE.Hybrid) {
-      return numeric as RaterTypeValue;
+    if (/^[0-4]$/.test(value)) {
+      return Number(value) as RaterTypeValue;
     }
 
+    const trimmed = value.trim();
     const lower = trimmed.toLowerCase();
     if (lower === "human") return RATER_TYPE.Human;
     if (lower === "ai") return RATER_TYPE.AI;

@@ -99,6 +99,10 @@ test("rater type helpers normalize names, numbers, and invalid values", () => {
   assert.equal(normalizeRaterType("2"), RATER_TYPE.AI);
   assert.equal(normalizeRaterType(3), RATER_TYPE.Team);
   assert.equal(normalizeRaterType("bogus"), RATER_TYPE.Unknown);
+  assert.equal(normalizeRaterType("2.0"), RATER_TYPE.Unknown);
+  assert.equal(normalizeRaterType("+2"), RATER_TYPE.Unknown);
+  assert.equal(normalizeRaterType(" 2 "), RATER_TYPE.Unknown);
+  assert.equal(normalizeRaterType("2ai"), RATER_TYPE.Unknown);
   assert.equal(formatRaterTypeName(RATER_TYPE.Hybrid), "Hybrid");
   assert.equal(formatRaterTypeName(42), "Unknown");
 });
