@@ -23,14 +23,35 @@ Assumptions:
 
 ## Summary
 
-Two new smart-contract issues were found.
+Two new smart-contract issues were found. Both were fixed in `f073d9919`
+(`contracts: unblock recovered reward snapshots`).
 
 | ID | Severity | Area | Status |
 | --- | --- | --- | --- |
-| M-9P-1 | Medium | Question bundle reward cluster snapshot recovery | Open |
-| L-9P-2 | Low | Recovered question reward reopen/refund liveness | Open |
+| M-9P-1 | Medium | Question bundle reward cluster snapshot recovery | Fixed in `f073d9919` |
+| L-9P-2 | Low | Recovered question reward reopen/refund liveness | Fixed in `f073d9919` |
 
 No new high-severity issue was found.
+
+## Resolution Update
+
+`f073d9919` adds a permissionless snapshotless skip path for completed
+cluster-backed bundle round sets through the existing pre-qualification skip
+entrypoint, tracks the snapshotless state explicitly, and keeps replacement
+bundle snapshots claimable before refund.
+
+The same commit hardens recovered single-question reopen checks so a finalized
+replacement snapshot must match the recovered round's raw eligible count,
+satisfy the effective-unit and claim-weight floors, have usable parked
+allocation, pass source/consumer freshness gates, and cannot refresh an already
+reopened recovered round.
+
+Verification after the fix:
+
+- `forge test --offline --match-contract QuestionRewardPoolEscrowTest --match-test "testBundleRefund_|testReopenRecoveredSnapshotRoundRejects|testSnapshotless" -vv`
+  - 18 passed, 0 failed.
+- `make check-contract-sizes`
+  - Passed; `QuestionRewardPoolEscrow` deploy-profile size is 24,570 bytes.
 
 ## Findings
 
