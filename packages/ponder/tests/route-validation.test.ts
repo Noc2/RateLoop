@@ -5620,6 +5620,8 @@ describe("registerKeeperRoutes", () => {
     );
     expect(serializedWhere).toContain("content.gated");
     expect(serializedWhere).toContain("content.bundleId");
+    expect(serializedWhere).toContain("is null");
+    expect(serializedWhere).toContain("= 0");
     expect(serializedWhere).toContain("content.lastActivityAt");
     expect(serializedWhere).toContain("round.state");
     expect(serializedWhere).toContain("round.voteCount");
@@ -5746,6 +5748,9 @@ describe("registerKeeperRoutes", () => {
     const serializedWhere = serializeExpression(
       queryBuilders[2]?.where.mock.calls[0]?.[0],
     );
+    expect(serializedWhere).toContain("content.bundleId");
+    expect(serializedWhere).toContain("is null");
+    expect(serializedWhere).toContain("= 0");
     expect(serializedWhere).toContain("round.revealedCount");
     expect(serializedWhere).toContain("round.minVoters");
     expect(serializedWhere).toContain("round.humanVerifiedCommitCount");

@@ -30,6 +30,10 @@ const MAX_DORMANT_CANDIDATE_LIMIT = 500;
 const MAX_ROUND_OPEN_CANDIDATE_LIMIT = 25;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 
+function standaloneContentPredicate() {
+  return sql<boolean>`(${content.bundleId} is null or ${content.bundleId} = 0)`;
+}
+
 function safeNonNegativeBigIntParam(value: string | undefined): bigint | null {
   if (value === undefined) return null;
   return parseStrictUnsignedBigInt(value);
@@ -143,7 +147,7 @@ export function registerKeeperRoutes(app: ApiApp) {
               and(
                 eq(content.status, 0),
                 eq(content.gated, false),
-                sql`${content.bundleId} = 0`,
+                standaloneContentPredicate(),
                 sql`${content.lastActivityAt} > 0`,
                 sql`${content.lastActivityAt} + ${roundOpenRecentSeconds} >= ${now}`,
                 sql`not exists (
@@ -191,7 +195,7 @@ export function registerKeeperRoutes(app: ApiApp) {
       .where(
         and(
           eq(content.status, 0),
-          sql`${content.bundleId} = 0`,
+          standaloneContentPredicate(),
           sql`${content.lastActivityAt} > 0`,
           sql`${now} > ${content.lastActivityAt} + ${dormancyPeriod}`,
           sql`not exists (
