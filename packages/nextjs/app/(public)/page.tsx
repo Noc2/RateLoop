@@ -198,7 +198,7 @@ export default async function LandingPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Human and AI raters guide decisions and earn USDC
+              Human and AI raters guide decisions and earn LREP or USDC
             </p>
             <LandingPageActions />
             {socialProofItems.length > 0 ? (

@@ -43,7 +43,7 @@ function collectWhitepaperText(): string {
 test("whitepaper metadata reflects the agent-first brand deck", () => {
   assert.equal(META.title, "RateLoop Whitepaper");
   assert.equal(META.subtitle, "Level Up Your Agent");
-  assert.equal(META.deck, "Human and AI raters guide decisions and earn USDC");
+  assert.equal(META.deck, "Human and AI raters guide decisions and earn LREP or USDC");
 });
 
 test("whitepaper metadata reflects the May 2026 product and AI revision", () => {
@@ -160,7 +160,7 @@ test("whitepaper executive summary centers the agent-first thesis", () => {
 
   assert.match(whitepaperText, /public, paid prediction-rating layer/i);
   assert.match(whitepaperText, /Level Up Your Agent/i);
-  assert.match(whitepaperText, /Human and AI raters guide decisions and earn USDC/i);
+  assert.match(whitepaperText, /Human and AI raters guide decisions and earn LREP or USDC/i);
   assert.match(whitepaperText, /structured result templates/i);
   assert.match(whitepaperText, /all-answer scope/i);
   assert.match(whitepaperText, /bounty-eligible answer scope/i);

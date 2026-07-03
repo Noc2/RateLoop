@@ -228,7 +228,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete agent promise: Level Up Your Agent. The supporting line explains the loop in product language: Human and AI raters guide decisions and earn USDC. The visual system uses the segmented RateLoop ring mark, gradient wordmark treatment, and project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
+            text: "The landing experience now leads with the concrete agent promise: Level Up Your Agent. The supporting line explains the loop in product language: Human and AI raters guide decisions and earn LREP or USDC. The visual system uses the segmented RateLoop ring mark, gradient wordmark treatment, and project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",

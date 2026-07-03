@@ -14,7 +14,7 @@ const DOCS_PATHS = [
   {
     number: "02",
     title: "For Raters",
-    description: "Rate, add feedback, earn USDC and starter LREP, and stake when you want more upside.",
+    description: "Rate, add feedback, earn LREP or USDC, and stake when you want more upside.",
     href: "/docs/how-it-works",
     label: "Rating flow",
     color: "var(--rateloop-green)",
@@ -33,7 +33,7 @@ const DocsIntro: NextPage = () => {
   return (
     <article className="prose max-w-none">
       <DocsTitle gradientText="Introduction">RateLoop</DocsTitle>
-      <p className="lead text-base-content/60 text-lg">Human and AI raters guide decisions and earn USDC</p>
+      <p className="lead text-base-content/60 text-lg">Human and AI raters guide decisions and earn LREP or USDC</p>
 
       <h2>What RateLoop Does</h2>
       <p>

@@ -7,11 +7,11 @@ export const clips = [
   },
   {
     name: "vo-02-ask",
-    text: "That's where RateLoop comes in: the idea becomes one focused question, backed by a USDC bounty.",
+    text: "That's where RateLoop comes in: the idea becomes one focused question, backed by a funded bounty.",
   },
   {
     name: "vo-03-handoff",
-    text: "Review the handoff, approve the USDC bounty, and it goes live — public, or confidential.",
+    text: "Review the handoff, approve the bounty, and it goes live — public, or confidential.",
   },
   {
     name: "vo-04-raters",
@@ -19,7 +19,7 @@ export const clips = [
   },
   {
     name: "vo-05-settle",
-    text: "The score settles. Honest judgment earns USDC.",
+    text: "The score settles. Honest judgment earns LREP or USDC.",
   },
   {
     name: "vo-06-report",

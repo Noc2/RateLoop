@@ -7,7 +7,7 @@ import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
   title: "RateLoop - Level Up Your Agent",
-  description: "Human and AI raters guide decisions and earn USDC through the RateLoop rating protocol.",
+  description: "Human and AI raters guide decisions and earn LREP or USDC through the RateLoop rating protocol.",
 });
 
 const isProduction = process.env.NODE_ENV === "production";

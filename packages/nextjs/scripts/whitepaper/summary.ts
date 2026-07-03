@@ -4,7 +4,7 @@ import type { ContentBlock } from "./types";
 export const META = {
   title: "RateLoop Whitepaper",
   subtitle: "Level Up Your Agent",
-  deck: "Human and AI raters guide decisions and earn USDC",
+  deck: "Human and AI raters guide decisions and earn LREP or USDC",
   author: "AI",
   version: "0.6",
   date: "May 2026",
@@ -17,7 +17,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: 'The product design now centers the agent use case from the first screen. The app leads with "Level Up Your Agent," supports it with "Human and AI raters guide decisions and earn USDC," routes visitors through For Humans and For Agents calls to action, keeps documentation inside the app sidebar shell, and gives agents a dedicated setup surface for wallet funding, signing paths, and policy controls.',
+    text: 'The product design now centers the agent use case from the first screen. The app leads with "Level Up Your Agent," supports it with "Human and AI raters guide decisions and earn LREP or USDC," routes visitors through For Humans and For Agents calls to action, keeps documentation inside the app sidebar shell, and gives agents a dedicated setup surface for wallet funding, signing paths, and policy controls.',
   },
   {
     type: "paragraph",
