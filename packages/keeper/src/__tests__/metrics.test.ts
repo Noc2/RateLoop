@@ -312,7 +312,7 @@ describe("metrics", () => {
   });
 
   it("serves unauthenticated liveness while protecting detailed health", async () => {
-    const server = startMetricsServer(0, "127.0.0.1", "0123456789abcdef");
+    const server = startMetricsServer(0, "0.0.0.0", "0123456789abcdef");
     try {
       await once(server, "listening");
       const address = server.address();
@@ -326,6 +326,9 @@ describe("metrics", () => {
 
       const health = await requestLocalhost(address.port, "/health");
       expect(health.statusCode).toBe(401);
+
+      const metrics = await requestLocalhost(address.port, "/metrics");
+      expect(metrics.statusCode).toBe(401);
     } finally {
       server.close();
     }

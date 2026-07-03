@@ -611,21 +611,36 @@ describe("keeper config", () => {
     ).rejects.toThrow("FEEDBACK_BONUS_ESCROW_ADDRESS must be a valid address");
   });
 
-  it("uses PORT as the hosted metrics port fallback", async () => {
+  it("uses PORT as the hosted metrics port fallback and external bind", async () => {
     const { config } = await loadKeeperConfig({
       PORT: "8080",
+      METRICS_AUTH_TOKEN: "0123456789abcdef",
     });
 
     expect(config.metricsPort).toBe(8080);
+    expect(config.metricsBindAddress).toBe("0.0.0.0");
+    expect(config.metricsAuthToken).toBe("0123456789abcdef");
   });
 
   it("lets METRICS_PORT override PORT", async () => {
     const { config } = await loadKeeperConfig({
       PORT: "8080",
       METRICS_PORT: "9091",
+      METRICS_AUTH_TOKEN: "0123456789abcdef",
     });
 
     expect(config.metricsPort).toBe(9091);
+    expect(config.metricsBindAddress).toBe("0.0.0.0");
+  });
+
+  it("requires metrics auth when hosted PORT exposes liveness externally", async () => {
+    await expect(
+      loadKeeperConfig({
+        PORT: "8080",
+      }),
+    ).rejects.toThrow(
+      "METRICS_AUTH_TOKEN (>= 16 chars) is required when METRICS_BIND_ADDRESS is non-loopback",
+    );
   });
 
   it("rejects invalid hosted PORT fallbacks", async () => {

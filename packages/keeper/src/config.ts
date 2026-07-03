@@ -491,12 +491,7 @@ function loadConfig() {
     "9090",
     errors,
   );
-  const shouldExposeFileArtifacts =
-    Boolean(hostedPort) &&
-    correlationSnapshotsEnabled &&
-    correlationSnapshotMode === "auto" &&
-    correlationSnapshotArtifactStorageMode === "file" &&
-    Boolean(correlationSnapshotArtifactPublicBaseUrl);
+  const shouldUseHostedBind = Boolean(hostedPort);
   const publishesPublicFileArtifacts =
     correlationSnapshotsEnabled &&
     correlationSnapshotMode === "auto" &&
@@ -504,7 +499,7 @@ function loadConfig() {
     Boolean(correlationSnapshotArtifactPublicBaseUrl);
   const metricsBindAddress =
     readEnv("METRICS_BIND_ADDRESS") ||
-    (shouldExposeFileArtifacts ? "0.0.0.0" : "127.0.0.1");
+    (shouldUseHostedBind ? "0.0.0.0" : "127.0.0.1");
   const metricsAuthToken = readEnv("METRICS_AUTH_TOKEN") || null;
   const keeperDatabaseUrl = readOptionalPostgresUrlEnv(
     "KEEPER_DATABASE_URL",
