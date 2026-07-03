@@ -16,8 +16,8 @@ import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 interface IGovernanceLockableVotes is IVotes {
     function getTransferableBalance(address account) external view returns (uint256);
     function lockForGovernance(address account, uint256 amount) external;
-    function lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external;
-    function releaseGovernanceLock(address account, uint256 amount) external;
+    function lockProposalGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external;
+    function releaseProposalGovernanceLock(address account, uint256 amount) external;
 }
 
 /// @title RateLoopGovernor
@@ -258,7 +258,7 @@ contract RateLoopGovernor is
             delete proposalLockedAmount[proposalId];
             nextProposalBlock[proposer] = 0;
             if (lockedAmount > 0) {
-                reputationToken.releaseGovernanceLock(proposer, lockedAmount);
+                reputationToken.releaseProposalGovernanceLock(proposer, lockedAmount);
             }
         }
 
@@ -320,7 +320,7 @@ contract RateLoopGovernor is
         proposalLockedAmount[proposalId] = threshold;
         nextProposalBlock[msg.sender] = block.number + PROPOSAL_COOLDOWN_BLOCKS;
 
-        reputationToken.lockForGovernanceUntil(msg.sender, threshold, _proposalLockUntil());
+        reputationToken.lockProposalGovernanceUntil(msg.sender, threshold, _proposalLockUntil());
 
         return proposalId;
     }

@@ -151,6 +151,28 @@ contract LoopReputationTest is Test {
         assertEq(token.getTransferableBalance(rater), 1_000e6);
     }
 
+    function test_ProposalGovernanceLockReleaseDoesNotReduceVoteLock() public {
+        vm.prank(admin);
+        token.mint(rater, 1_000e6);
+
+        vm.prank(governance);
+        token.setGovernor(governor);
+
+        vm.prank(governor);
+        token.lockProposalGovernanceUntil(rater, 100e6, block.timestamp + 8 days);
+
+        vm.prank(governor);
+        token.lockForGovernance(rater, 1_000e6);
+
+        assertEq(token.getLockedBalance(rater), 1_000e6);
+
+        vm.prank(governor);
+        token.releaseProposalGovernanceLock(rater, 100e6);
+
+        assertEq(token.getLockedBalance(rater), 1_000e6);
+        assertEq(token.getTransferableBalance(rater), 0);
+    }
+
     function test_GovernanceLockReleaseRequiresGovernor() public {
         vm.prank(rater);
         vm.expectRevert("Only governor");

@@ -30,6 +30,7 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     }
 
     mapping(address => GovernanceLock) private _governanceLock;
+    mapping(address => GovernanceLock) private _proposalGovernanceLock;
 
     address public governor;
 
@@ -73,19 +74,33 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     function lockForGovernance(address account, uint256 amount) external {
         require(msg.sender == governor, "Only governor");
-        _lockForGovernanceUntil(account, amount, block.timestamp + GOVERNANCE_LOCK_DURATION);
+        _lockForGovernanceUntil(_governanceLock[account], account, amount, block.timestamp + GOVERNANCE_LOCK_DURATION);
     }
 
     function lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external {
         require(msg.sender == governor, "Only governor");
-        _lockForGovernanceUntil(account, amount, unlockTime);
+        _lockForGovernanceUntil(_governanceLock[account], account, amount, unlockTime);
+    }
+
+    function lockProposalGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external {
+        require(msg.sender == governor, "Only governor");
+        require(getTransferableBalance(account) >= amount, "Insufficient transferable balance for governance lock");
+        _lockForGovernanceUntil(_proposalGovernanceLock[account], account, amount, unlockTime);
+    }
+
+    function releaseProposalGovernanceLock(address account, uint256 amount) external {
+        require(msg.sender == governor, "Only governor");
+        _releaseGovernanceLock(_proposalGovernanceLock[account], account, amount);
     }
 
     function releaseGovernanceLock(address account, uint256 amount) external {
         require(msg.sender == governor, "Only governor");
+        _releaseGovernanceLock(_governanceLock[account], account, amount);
+    }
+
+    function _releaseGovernanceLock(GovernanceLock storage lock, address account, uint256 amount) internal {
         require(amount > 0, "Amount must be > 0");
 
-        GovernanceLock storage lock = _governanceLock[account];
         if (lock.unlockTime <= block.timestamp || lock.amount == 0) {
             return;
         }
@@ -99,13 +114,14 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         emit GovernanceLockReleased(account, released, lock.amount);
     }
 
-    function _lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) internal {
+    function _lockForGovernanceUntil(GovernanceLock storage lock, address account, uint256 amount, uint256 unlockTime)
+        internal
+    {
         require(amount > 0, "Amount must be > 0");
         require(balanceOf(account) >= amount, "Insufficient balance for governance lock");
         require(unlockTime > block.timestamp, "Unlock time must be future");
         require(unlockTime <= block.timestamp + MAX_GOVERNANCE_LOCK_DURATION, "Governance lock too long");
 
-        GovernanceLock storage lock = _governanceLock[account];
         if (lock.unlockTime <= block.timestamp) {
             lock.amount = amount;
             lock.unlockTime = unlockTime;
@@ -130,8 +146,11 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     }
 
     function getLockedBalance(address account) public view returns (uint256) {
-        GovernanceLock storage lock = _governanceLock[account];
-        return lock.unlockTime > block.timestamp ? lock.amount : 0;
+        uint256 activeLock = _activeGovernanceLockAmount(_governanceLock[account]);
+        uint256 activeProposalLock = _activeGovernanceLockAmount(_proposalGovernanceLock[account]);
+        uint256 totalLocked = activeLock + activeProposalLock;
+        uint256 balance = balanceOf(account);
+        return totalLocked > balance ? balance : totalLocked;
     }
 
     function getTransferableBalance(address account) public view returns (uint256) {
@@ -146,10 +165,17 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     function getGovernanceLock(address account) external view returns (uint256 amount, uint256 unlockTime) {
         GovernanceLock storage lock = _governanceLock[account];
-        if (lock.unlockTime > block.timestamp) {
-            return (lock.amount, lock.unlockTime);
+        GovernanceLock storage proposalLock = _proposalGovernanceLock[account];
+        amount = getLockedBalance(account);
+        unlockTime = lock.unlockTime > proposalLock.unlockTime ? lock.unlockTime : proposalLock.unlockTime;
+        if (amount == 0) {
+            return (0, unlockTime);
         }
-        return (0, lock.unlockTime);
+        return (amount, unlockTime);
+    }
+
+    function _activeGovernanceLockAmount(GovernanceLock storage lock) private view returns (uint256) {
+        return lock.unlockTime > block.timestamp ? lock.amount : 0;
     }
 
     function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Votes) {

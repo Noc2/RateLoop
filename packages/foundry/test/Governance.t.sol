@@ -905,6 +905,35 @@ contract GovernanceTest is Test {
         assertEq(token.getTransferableBalance(voter1), VOTER_BALANCE);
     }
 
+    function test_ProposerSelfCancelDoesNotReleaseLiveVoteLock() public {
+        vm.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+
+        vm.prank(voter2);
+        uint256 activeProposalId =
+            governor.propose(targets, values, calldatas, _boundDescription("Active proposal", voter2));
+
+        vm.roll(block.number + governor.votingDelay() + 1);
+
+        string memory pendingDescription = _boundDescription("Pending self cancel", voter1);
+        vm.prank(voter1);
+        uint256 pendingProposalId = governor.propose(targets, values, calldatas, pendingDescription);
+
+        vm.prank(voter1);
+        governor.castVote(activeProposalId, 1);
+
+        assertEq(token.getLockedBalance(voter1), VOTER_BALANCE);
+        assertEq(token.getTransferableBalance(voter1), 0);
+
+        vm.prank(voter1);
+        governor.cancel(targets, values, calldatas, keccak256(bytes(pendingDescription)));
+
+        assertEq(governor.proposalLockedAmount(pendingProposalId), 0);
+        assertEq(token.getLockedBalance(voter1), VOTER_BALANCE);
+        assertEq(token.getTransferableBalance(voter1), 0);
+    }
+
     function test_CreateProposal_RequiresExactProposerSuffixMarker() public {
         vm.roll(block.number + 1);
 

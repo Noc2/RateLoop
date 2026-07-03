@@ -621,6 +621,29 @@ export const LoopReputationAbi = [
   },
   {
     "type": "function",
+    "name": "lockProposalGovernanceUntil",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "unlockTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "mint",
     "inputs": [
       {
@@ -734,6 +757,24 @@ export const LoopReputationAbi = [
   {
     "type": "function",
     "name": "releaseGovernanceLock",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "releaseProposalGovernanceLock",
     "inputs": [
       {
         "name": "account",
