@@ -2,107 +2,86 @@
 
 **Date:** 2026-07-03
 **Branch:** `main`
-**Head reviewed:** `cc411f4f2` (`docs: keep only latest non-contract report`)
-**Contract tree note:** no `packages/foundry/contracts` or `packages/foundry/test` files changed between the latest contract-review head `a732991cb` and `cc411f4f2`.
-**Recent smart-contract changes reviewed:** the oracle/frontend dispute gate that closes 6P-5 and the governor proposer-lock hardening that closes 10P-1.
+**Head reviewed:** `ecef9d12f` (`chore(contracts): sync base deployment exports`)
+**Last Solidity remediation reviewed:** `b0bb6adc5` (`fix(rewards): align bundle claimable completeness`)
+**Post-remediation export sync:** `ecef9d12f` updated deployment/ABI exports and generation tests; no Solidity source changed after `b0bb6adc5`.
+**Report status:** findings from this pass were remediated in separate commits before this final report update.
 
 ## Scope
 
-This was a security-focused pass over the committed smart-contract tree under `packages/foundry`. No contract code was changed in this pass.
+This was a security-focused pass over the committed smart-contract tree under `packages/foundry`, with extra attention on the newest accountability changes:
 
-The review focused on the newest and highest-risk areas:
-
-- `ClusterPayoutOracle` challenge/finalize/reject paths and the new frontend dispute recorder integration.
+- `ClusterPayoutOracle` challenge/finalize/reject paths and frontend dispute-recorder integration.
 - `FrontendRegistry` fee withdrawal, deregistration, slashing, and snapshot-dispute accounting.
-- `RateLoopGovernor` and `LoopReputation` proposer/voter lock behavior after the 10P-1 fix.
-- `QuestionRewardPoolEscrow` cluster snapshot recovery/qualification, bundle recovery, and payout-consumer paths.
-- `RoundVotingEngine`, RBTS settlement, registry/config wiring, X402 submission, confidentiality, launch distribution, and feedback bonus flows.
+- `RateLoopGovernor` and `LoopReputation` governance lock behavior.
+- `QuestionRewardPoolEscrow` cluster snapshot recovery, bundle recovery, bundle claimability, and payout consumers.
+- `RoundVotingEngine` RBTS settlement module wiring.
+- X402 submission, confidentiality, launch distribution, feedback bonus, and config/rotation paths.
 
-Three parallel read-only sub-agent sweeps were used as side-channel review over the oracle/frontend surface, reward-pool/snapshot consumers, and governance/config/non-oracle core paths. The lead pass independently rechecked every item included below.
+Three parallel read-only sub-agent sweeps covered oracle/frontend, reward-pool/snapshot-consumer, and governance/config/non-oracle surfaces. The lead pass independently rechecked every reportable item and the remediation diffs.
 
 ## Executive Summary
 
 No High-severity issue was found.
 
-The 6P-5 fee-withdrawal/slash-latency gap is closed on current `main`: fee withdrawal completion and deregistration completion now fail while the operator has an open oracle snapshot dispute. That is the right accountability direction, but it leaves a new Medium-severity liveness/griefing risk: a cheap frivolous challenge can freeze the operator's fee withdrawal and exit until the arbiter resolves it, with no timeout or permissionless dismissal.
+This pass found one Medium and three Low issues. All four were fixed before finalizing this report:
 
-One governance-runbook Low and one governance-hardening Low were also found:
+- **11P-1 Medium:** live snapshot challenges could freeze frontend fee withdrawals and exits indefinitely if the arbiter did not resolve them. Fixed in `1bae59ec4` by bounding challenged snapshot finalization.
+- **11P-2 Low:** oracle/registry rotation or recorder-role revocation during live disputes could strand dispute counts. Fixed in `dc76f573d` plus storage/test sync in `e1a11c89c`.
+- **11P-3 Low:** RBTS settlement module rotation accepted any contract with code before later `delegatecall`. Fixed in `7ac3ad169` with a module marker check.
+- **11P-4 Low:** the unqualified bundle claimable view could preview a round set using nonzero round IDs instead of the same recorded-round-set completeness gate used by settlement. Fixed in `b0bb6adc5`.
 
-- Rotating the oracle's `FrontendRegistry` pointer or dispute-recorder role while disputes are open can strand existing dispute counts.
-- `RoundVotingEngine.setRbtsSettlementModule` accepts any contract with code before later `delegatecall`ing it.
+The prior 10P-1 proposer self-cancel accounting issue is closed, and `336d89e6b` further hardens governance lock accounting by splitting proposal and vote locks instead of relying on one aggregate lock ledger.
 
-The prior 10P-1 proposer self-cancel accounting issue is fixed: current code stores `proposalLockedAmount[proposalId]` and releases that exact amount on pending self-cancel.
+## Remediated Findings
 
-## Findings
+### 11P-1 (Medium, fixed). Frivolous oracle challenges could freeze frontend withdrawals and exits indefinitely
 
-### 11P-1 (Medium, confidence High). Frivolous oracle challenges can freeze frontend withdrawals and exits indefinitely
+**Original issue:** `challengeCorrelationEpoch` and `challengeRoundPayoutSnapshot` incremented the frontend operator's open dispute count, and `FrontendRegistry.completeFeeWithdrawal` / `completeDeregister` correctly blocked while that count was nonzero. Before the fix, a challenged snapshot depended only on arbiter action for resolution, so a cheap frivolous challenge could freeze a frontend's matured fee withdrawal or exit indefinitely.
 
-**Where:** `packages/foundry/contracts/ClusterPayoutOracle.sol:374-392`, `packages/foundry/contracts/ClusterPayoutOracle.sol:607-628`, `packages/foundry/contracts/ClusterPayoutOracle.sol:413-447`, `packages/foundry/contracts/ClusterPayoutOracle.sol:658-736`, `packages/foundry/contracts/FrontendRegistry.sol:347-364`, and `packages/foundry/contracts/FrontendRegistry.sol:415-424`.
+**Fix:** `1bae59ec4` makes challenged epoch and round payout finalization bounded. Arbiters can still resolve challenged snapshots immediately. A non-arbiter can finalize a challenged snapshot only after the proposal-scoped challenge window plus finalization-veto window has elapsed (`ClusterPayoutOracle.sol:397-417`, `ClusterPayoutOracle.sol:638-665`). This closes the unbounded freeze while preserving a deterministic challenge-resolution window.
 
-`challengeCorrelationEpoch` and `challengeRoundPayoutSnapshot` allow any disinterested address to challenge a proposed snapshot during the challenge window by posting the proposal's challenge bond. The default bond is 5 USDC (`DEFAULT_CHALLENGE_BOND = 5e6`). Once challenged, the oracle increments `FrontendRegistry.openSnapshotDisputeCount` for the frontend operator.
+**Residual tradeoff:** if a challenge is legitimate, the arbiter must reject before the resolution deadline or the optimistic proposer wins. That is an operational SLA, not an indefinite liveness dependency.
 
-`FrontendRegistry.completeFeeWithdrawal` and `completeDeregister` now call `_requireNoOpenSnapshotDispute`, so a challenged snapshot blocks completion of both a matured fee withdrawal and a matured deregistration. The issue is that the only normal challenge-resolution paths are arbiter-only: `finalizeChallengedCorrelationEpoch`, `rejectCorrelationEpoch*`, `finalizeChallengedRoundPayoutSnapshot`, and `rejectRoundPayoutSnapshot*`. `_challengeDeadline` only bounds when a challenge can be filed; it does not bound how long a challenged snapshot can remain challenged.
+### 11P-2 (Low, fixed). Oracle/registry rotation could strand open dispute counts
 
-**Impact:** a competitor or other disinterested griefer can spend the anti-spam bond to freeze an honest frontend's earned-fee withdrawal and 14-day exit until the arbiter acts. If the arbiter is slow, unavailable, or operationally paused, the freeze is unbounded. The griefer forfeits only the challenge bond if dismissed. There is no direct theft path and governance can resolve the dispute, so this is Medium rather than High.
+**Original issue:** the oracle opened and closed disputes through its current `frontendRegistry` pointer. If config rotated the registry pointer, or if the registry revoked the old oracle's recorder role while that oracle still had open disputes, the close path could route to the wrong registry or lose permission to decrement the old count.
 
-**Recommended fix:** make the new dispute freeze bounded. A robust shape is to store `challengedAt` and add a permissionless expiry after a governance-configured maximum resolution window. On expiry, close the frontend dispute and move the snapshot to a non-consuming terminal state, such as metadata-only rejected/expired without blacklisting the deterministic root, so an invalid challenged root is not silently consumed but an honest frontend is not frozen forever. Add tests that a frivolous challenge blocks completion during the resolution window and unblocks completion after expiry.
+**Fix:** `dc76f573d` adds an oracle-side open dispute counter and blocks `setFrontendRegistry` while any dispute is open (`ClusterPayoutOracle.sol:1405-1423`). It also tracks open disputes by recorder in `FrontendRegistry`, requires a dispute to close through the recorder that opened it, and blocks recorder-role revoke/renounce while that recorder has open disputes (`FrontendRegistry.sol:107-114`, `FrontendRegistry.sol:181-196`, `FrontendRegistry.sol:623-642`). `e1a11c89c` syncs the storage-layout guard for the new registry slots.
 
-An emergency governance clear path can be useful too, but should not be the only protection; the current issue is specifically arbiter/governance liveness.
+### 11P-3 (Low, fixed). RBTS settlement module setter accepted arbitrary code before delegatecall
 
-### 11P-2 (Low, confidence High). Oracle registry rotation can strand open dispute counts
+**Original issue:** `RoundVotingEngine.setRbtsSettlementModule` was admin-only but accepted any nonzero contract with code. Settlement later dispatches with `delegatecall`, so a mistaken module could corrupt shared storage or brick settlement.
 
-**Where:** `packages/foundry/contracts/ClusterPayoutOracle.sol:275-276`, `packages/foundry/contracts/ClusterPayoutOracle.sol:1398-1404`, `packages/foundry/contracts/ClusterPayoutOracle.sol:1406-1432`, and `packages/foundry/contracts/FrontendRegistry.sol:613-629`.
+**Fix:** `7ac3ad169` adds `RATELOOP_RBTS_SETTLEMENT_MODULE_MARKER` to the module and requires the marker before accepting a module address (`RoundVotingEngine.sol:30-60`, `RoundVotingEngine.sol:792-804`). The regression test rejects unmarked code.
 
-`ClusterPayoutOracle` opens and closes disputes by calling the currently configured `frontendRegistry`. `setFrontendRegistry` can change that pointer through `CONFIG_ROLE` and does not check whether any challenges are open. If a challenge is open against registry A and governance/config rotates the oracle to registry B before the challenge is closed, the eventual close call routes to B, where the open count was never incremented and `recordSnapshotDisputeClosed` reverts `NoOpenSnapshotDispute`. A similar stranding can happen if registry A revokes the old oracle's `SNAPSHOT_DISPUTE_RECORDER_ROLE` before all challenges are drained.
+### 11P-4 (Low, fixed). Bundle claimable preview used a weaker completeness gate than the bundle settlement path
 
-**Impact:** privileged misconfiguration can permanently brick an operator's withdrawal/exit gate in the old registry. This is not an unprivileged attack, but it is a sharp governance-operation hazard with no on-chain recovery hook today.
+**Original issue:** the unqualified bundle claimable preview checked for nonzero round IDs to decide whether a pending round set could be previewed. The settlement path uses recorded-round counters, which are stricter and represent the actual synced completion state. No payout bypass was confirmed, but the public view could overstate claimability for an incompletely recorded round set.
 
-**Recommended fix:** either prevent oracle/registry rotation while any snapshot dispute is open, or add an explicit governance-only `adminClearSnapshotDispute`/migration path with events and a runbook requirement to drain challenges before changing recorder wiring. If 11P-1 adds a global open-dispute counter or challenged-at expiry, reuse that state to make this rotation guard mechanical.
-
-### 11P-3 (Low, confidence High). RBTS settlement module setter has no compatibility marker before delegatecall
-
-**Where:** `packages/foundry/contracts/RoundVotingEngine.sol:785-807` and `packages/foundry/contracts/RoundVotingEngineStorage.sol:11-12`.
-
-`RoundVotingEngine.setRbtsSettlementModule` is admin-only, but `_setRbtsSettlementModule` only checks that the address is nonzero and has code. Later RBTS settlement dispatches to the module with raw `delegatecall`. `RoundVotingEngineStorage` documents that the engine and settlement module share storage layout, so an incompatible or malicious module can corrupt storage, brick settlement, or move accounted LREP if configured by mistake or by compromised governance.
-
-**Impact:** no public attacker path was found, so Low. The risk is deploy/governance safety around a delegatecall module with layout-sensitive authority.
-
-**Recommended fix:** require a module compatibility marker before accepting it, such as a `moduleKind()`/`storageLayoutVersion()` getter returning a known constant, and add tests that an arbitrary contract with code is rejected. A stricter option is to make the module immutable or one-way-freezeable after deployment.
+**Fix:** `b0bb6adc5` threads `bundleQuestionRecordedRounds` into `QuestionRewardPoolEscrowBundleClaimableLib` and uses `QuestionRewardPoolEscrowBundleLib.isRoundSetComplete` for pending previews (`contracts/libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol:30-45`, `contracts/libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol:142-164`).
 
 ## Verified Fixes And Non-Findings
 
-### 6P-5 fee-withdrawal/slash-latency gap is closed
+### 6P-5 fee-withdrawal/slash-latency gap remains closed
 
-Current `FrontendRegistry` tracks open snapshot disputes through `recordSnapshotDisputeOpened` and `recordSnapshotDisputeClosed` behind `SNAPSHOT_DISPUTE_RECORDER_ROLE` (`FrontendRegistry.sol:613-629`). `completeDeregister` calls `_requireNoOpenSnapshotDispute` after unbonding and fee review have matured (`FrontendRegistry.sol:347-364`), and `completeFeeWithdrawal` does the same after the one-hour withdrawal delay (`FrontendRegistry.sol:415-424`).
+`FrontendRegistry` tracks open snapshot disputes, and both fee-withdrawal completion and deregistration completion fail while an operator has a live dispute. The 11P-1 fix now bounds that freeze instead of leaving it fully arbiter-liveness-dependent.
 
-Focused regression tests cover both gates: `test_OpenSnapshotDisputeBlocksMaturedFeeWithdrawalUntilClosed` and `test_OpenSnapshotDisputeBlocksDeregisterCompletionUntilClosed` (`packages/foundry/test/FrontendRegistry.t.sol:1035-1098`). Those tests passed in the focused Foundry run.
+### 10P-1 governance self-cancel accounting remains closed
 
-This closes the original "earned fees leave before any slash can execute" issue for live challenged proposals. Finding 11P-1 is the remaining liveness tradeoff from that fix.
+The earlier exact-amount release issue is fixed, and the newer split-lock change makes proposal locks and vote locks source-aware. This avoids the aggregate-lock ambiguity that made the original threshold-change edge case possible.
 
-### 10P-1 proposer self-cancel release bug is fixed
+### Recovered cluster snapshot reopening did not produce a fresh issue
 
-`RateLoopGovernor` now stores the threshold locked at proposal creation in `proposalLockedAmount` (`RateLoopGovernor.sol:81-82`, `RateLoopGovernor.sol:300-324`). Pending proposer self-cancel reads and deletes that exact stored amount before releasing the governance lock (`RateLoopGovernor.sol:244-263`).
-
-Regression tests cover cancellation after both proposal-threshold increases and decreases (`packages/foundry/test/Governance.t.sol:856-905`). Those tests passed in the focused Foundry run.
-
-### Recovered cluster snapshot reopening did not produce a fresh finding
-
-A sub-agent flagged recovered snapshot reopening as the main reward-pool area to recheck. Current code already performs the important alignment checks before reopening:
-
-- `reopenRecoveredSnapshotRound` requires a finalized replacement snapshot, outside the veto window, with the correct consumer, non-stale source timing, unrejected digest/root, matching raw eligible voter count, and a successful `previewRoundQualificationWithClusterSnapshot` result (`QuestionRewardPoolEscrowRecoveryLib.sol:268-319`).
-- The actual cluster qualification path repeats finalization, consumer, source, raw-voter, effective-unit, total-weight, and allocation checks before writing the qualified snapshot (`QuestionRewardPoolEscrowQualificationLib.sol:278-361`, `QuestionRewardPoolEscrowQualificationLib.sol:746-817`).
-
-No direct loss, double-claim, or stuck-funds path was confirmed in the current implementation.
+`reopenRecoveredSnapshotRound` already requires finalized replacement snapshots, consumer/source readiness, unrejected digest/root, raw-voter agreement, and successful replacement qualification preview before reopening. The actual qualification path repeats the finalization, consumer, source, voter, effective-unit, total-weight, and allocation checks before writing a qualified snapshot.
 
 ### Governance and X402 sweeps did not find a public bypass
 
-The governance/config sub-agent found no public attacker path in the reviewed X402/EIP-3009 submission flow. The submitter checks USDC-only funding, exact payee/value/nonce, exact token receipt, stale escrow, and zero residual balance; the nonce binds chain, registry, gateway, escrow addresses, payment terms, payload, round config, confidentiality, and spec hashes.
-
-The same sweep found no stale-engine bypass for fresh submissions or feedback-bonus creation, and no issue in `ConfidentialityEscrow.confidentialityEscrowConfigShape()`.
+No public attacker path was found in the reviewed X402/EIP-3009 submission flow. The submitter checks USDC-only funding, exact payee/value/nonce, exact token receipt, stale escrow, and zero residual balance; the nonce binds chain, registry, gateway, escrow addresses, payment terms, payload, round config, confidentiality, and spec hashes.
 
 ### External research
 
-I reviewed the current OpenZeppelin Contracts security-advisory index and OpenZeppelin governance documentation. No new applicable High or Medium issue surfaced from dependency research. The known OpenZeppelin Governor proposal-creation front-run class remains relevant background, and RateLoop's enforced `#proposer=0x...` description suffix addresses that class in `RateLoopGovernor._isValidDescriptionForProposer` (`RateLoopGovernor.sol:332-359`).
+I reviewed the current OpenZeppelin Contracts security-advisory index and OpenZeppelin governance documentation. No new applicable High or Medium issue surfaced from dependency research. The known OpenZeppelin Governor proposal-creation front-run class remains relevant background, and RateLoop's enforced `#proposer=0x...` description suffix addresses that class.
 
 Sources:
 
@@ -111,21 +90,24 @@ Sources:
 
 ## Tooling And Verification
 
-Commands were run against the same contract tree reviewed here. The later `main` commits before this report were documentation-only.
+Post-remediation verification:
 
 | Command | Result |
 | --- | --- |
-| `slither .` from `packages/foundry` | Passed: 168 contracts, 35 detectors, 0 results |
-| `forge test --offline --match-contract 'FrontendRegistryTest|ClusterPayoutOracleTest|GovernanceTest|LoopReputationTest' -vv` | Passed: 246 tests, 0 failed |
-| `forge test --offline --match-contract 'QuestionRewardPoolEscrowTest|LaunchDistributionPoolTest|RoundRewardDistributorBranchesTest|RoundRewardDistributorBannedRewardTest|RaterRegistryTest|RoundIntegrationTest|RoundVotingEngineBranchesTest|FeedbackBonusEscrowTest|ConfidentialityEscrowTest|X402QuestionSubmitterTest|SecondPassRatingSnapshotOrderingTest|SecondPassRbtsSettlementOracleTest|SecondPassRecoveredRewardPoolTest' -vv` | Passed: 770 tests, 0 failed |
-| `make check-storage-layouts` from `packages/foundry` | Passed: all pinned storage layouts matched |
-| `make check-contract-sizes DEPLOY_PROFILE=deploy` from `packages/foundry` | Passed after a serial rerun; checked deploy-profile contracts remained under EIP-170 |
-| `yarn foundry:aderyn` | Completed with 0 High findings and broad Low/static categories only |
-| `forge test --offline` from `packages/foundry` | Did not complete: full-suite compile hit the existing `FormalVerification_RoundLifecycle.t.sol:20` stack-too-deep/codegen error |
+| `slither .` from `packages/foundry` | Passed: 169 contracts, 35 detectors, 0 results |
+| `forge test --offline --match-contract 'FrontendRegistryTest|ClusterPayoutOracleTest' -vv` | Passed: 174 tests, 0 failed |
+| `forge test --offline --match-contract RoundVotingEngineBranchesTest -vv` | Passed: 177 tests, 0 failed |
+| `forge test --offline --match-contract 'QuestionRewardPoolEscrowTest|SecondPassRecoveredRewardPoolTest' -vv` | Passed: 213 tests, 0 failed |
+| `forge test --offline --match-contract 'FrontendRegistryTest|ClusterPayoutOracleTest|GovernanceTest|LoopReputationTest' -vv` | Passed: 248 tests, 0 failed |
+| `make check-storage-layouts` from `packages/foundry` | Passed after syncing the intentional `FrontendRegistry` layout snapshot |
+| `make check-contract-sizes DEPLOY_PROFILE=deploy` from `packages/foundry` | Passed; tightest contracts were `QuestionRewardPoolEscrow` at 24,576 bytes, `LaunchDistributionPool` at 24,555, `ContentRegistry` at 24,519, and `ClusterPayoutOracle` at 24,455 |
+| `yarn foundry:generate-ts-abis:test` | Passed: 24 tests, 0 failed |
+| `yarn foundry:aderyn` | Completed earlier in the audit with 0 High findings and broad Low/static categories only |
+
+Known residual tooling caveat: full unfiltered `forge test --offline` still hits the existing `FormalVerification_RoundLifecycle.t.sol:20` stack-too-deep/codegen compile blocker, so the full suite is not yet usable as the broad green gate.
 
 ## Priorities
 
-1. Bound challenged-snapshot freezes so fee withdrawals and exits cannot depend indefinitely on arbiter liveness.
-2. Add a mechanical guard or recovery path for oracle/frontend-registry rotation while disputes are open.
-3. Add an RBTS settlement module compatibility marker before accepting a delegatecall module.
-4. Keep the focused dispute-gate, governor-lock, reward-pool, and oracle suites in the pre-deploy gate; separately fix the full-suite stack-too-deep compile blocker so `forge test --offline` can be used as the broad green gate.
+1. Keep the challenge-resolution deadline operationally monitored; valid challenges now need arbiter action before the optimistic timeout.
+2. Watch contract-size headroom. `QuestionRewardPoolEscrow` is exactly at the EIP-170 limit in deploy profile.
+3. Fix the full-suite stack-too-deep compile blocker so `forge test --offline` can return to being the broad contract verification gate.
