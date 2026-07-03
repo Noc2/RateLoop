@@ -858,7 +858,7 @@ contract GovernanceTest is Test {
         assertEq(unlockTime, expectedUnlockTime);
     }
 
-    function test_ProposerSelfCancelPendingReleasesCooldownAndProposalStake() public {
+    function test_ProposerSelfCancelPendingKeepsCooldownAndReleasesProposalStake() public {
         vm.roll(block.number + 1);
 
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
@@ -868,21 +868,28 @@ contract GovernanceTest is Test {
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
 
         assertEq(uint256(governor.state(proposalId)), uint256(IGovernor.ProposalState.Pending));
-        assertGt(governor.nextProposalBlock(voter1), block.number);
+        uint256 nextBlock = governor.nextProposalBlock(voter1);
+        assertGt(nextBlock, block.number);
         assertEq(token.getLockedBalance(voter1), governor.proposalThreshold());
 
         vm.prank(voter1);
         governor.cancel(targets, values, calldatas, keccak256(bytes(description)));
 
         assertEq(uint256(governor.state(proposalId)), uint256(IGovernor.ProposalState.Canceled));
-        assertEq(governor.nextProposalBlock(voter1), 0);
+        assertEq(governor.nextProposalBlock(voter1), nextBlock);
         assertEq(governor.proposalLockedAmount(proposalId), 0);
         assertEq(token.getLockedBalance(voter1), 0);
         assertEq(token.getTransferableBalance(voter1), VOTER_BALANCE);
 
+        string memory correctedDescription = _boundDescription("Corrected proposal", voter1);
         vm.prank(voter1);
-        uint256 correctedProposalId =
-            governor.propose(targets, values, calldatas, _boundDescription("Corrected proposal", voter1));
+        vm.expectRevert(abi.encodeWithSelector(RateLoopGovernor.ProposalCooldownActive.selector, voter1, nextBlock));
+        governor.propose(targets, values, calldatas, correctedDescription);
+
+        vm.roll(nextBlock);
+
+        vm.prank(voter1);
+        uint256 correctedProposalId = governor.propose(targets, values, calldatas, correctedDescription);
         assertTrue(correctedProposalId != 0);
     }
 

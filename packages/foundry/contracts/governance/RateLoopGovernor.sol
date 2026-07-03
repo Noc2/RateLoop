@@ -256,7 +256,6 @@ contract RateLoopGovernor is
         if (releaseProposerState) {
             uint256 lockedAmount = proposalLockedAmount[proposalId];
             delete proposalLockedAmount[proposalId];
-            nextProposalBlock[proposer] = 0;
             if (lockedAmount > 0) {
                 reputationToken.releaseProposalGovernanceLock(proposer, lockedAmount);
             }
