@@ -10,7 +10,10 @@ import {
   readHandoffGeneratedImageFiles,
   type HandoffGeneratedImageFile,
 } from "./handoffImages";
-import { shouldKeepHandoffFinding } from "./handoffLint";
+import {
+  lintGeneratedImageHandoffShape,
+  shouldKeepHandoffFinding,
+} from "./handoffLint";
 import {
   DEFAULT_HANDOFF_API_BASE_URL,
   createAskHandoffWithStagedImageUploads,
@@ -375,7 +378,9 @@ async function main() {
 
       for (const file of files) {
         const payload = await readJsonFile(file);
-        const findings = lintAgentAskRequest(payload);
+        const findings = lintAgentAskRequest(payload, {
+          requireMaxPaymentAmount: true,
+        });
         results.push({ file, findings, ...summarizeLintFindings(findings) });
       }
 
@@ -457,13 +462,18 @@ async function main() {
           resolveCliInputPath(path, "Handoff image"),
         ),
       );
-      const findings = lintAgentAskRequest(payload, { requireMaxPaymentAmount: true })
-        .filter((finding) =>
+      const findings = [
+        ...lintAgentAskRequest(payload, { requireMaxPaymentAmount: true }).filter((finding) =>
           shouldKeepHandoffFinding(finding, {
             hasGeneratedImages: generatedImages.length > 0,
             payload,
           }),
-        );
+        ),
+        ...lintGeneratedImageHandoffShape({
+          hasGeneratedImages: generatedImages.length > 0,
+          payload,
+        }),
+      ];
       if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;

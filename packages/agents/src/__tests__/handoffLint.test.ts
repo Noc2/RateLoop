@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { shouldKeepHandoffFinding } from "../handoffLint.js";
+import {
+  lintGeneratedImageHandoffShape,
+  shouldKeepHandoffFinding,
+} from "../handoffLint.js";
 import type { QuestionLintFinding } from "../questions/types.js";
 
 const missingContextFinding = (path: string): QuestionLintFinding => ({
@@ -49,5 +52,35 @@ describe("handoff lint filtering", () => {
         { hasGeneratedImages: true, payload: { questions: [{}] } },
       ),
     ).toBe(true);
+  });
+
+  it("rejects generated-image handoffs with multiple questions before the network request", () => {
+    expect(
+      lintGeneratedImageHandoffShape({
+        hasGeneratedImages: true,
+        payload: { questions: [{ title: "A" }, { title: "B" }] },
+      }),
+    ).toEqual([
+      {
+        level: "error",
+        message: "generatedImages currently support single-question handoffs.",
+        path: "questions",
+      },
+    ]);
+  });
+
+  it("allows generated-image handoffs for a question object or one question array item", () => {
+    expect(
+      lintGeneratedImageHandoffShape({
+        hasGeneratedImages: true,
+        payload: { question: { title: "A" } },
+      }),
+    ).toEqual([]);
+    expect(
+      lintGeneratedImageHandoffShape({
+        hasGeneratedImages: true,
+        payload: { questions: [{ title: "A" }] },
+      }),
+    ).toEqual([]);
   });
 });
