@@ -44,6 +44,25 @@ function getClaimableFrontendRewardsQueryKey(address?: string, chainId?: number)
   return ["claimableFrontendRewards", address?.toLowerCase() ?? null, chainId ?? null] as const;
 }
 
+export function getFrontendFeeWithdrawalPlan(params: {
+  canWithdrawFees: boolean;
+  hasOpenSnapshotDispute: boolean | undefined;
+  nowSeconds: number;
+  pendingAmount: bigint;
+  pendingReleaseAt: bigint;
+}) {
+  const pendingMatured = params.pendingAmount > 0n && params.pendingReleaseAt <= BigInt(params.nowSeconds);
+  const disputeStatusKnownClear = params.hasOpenSnapshotDispute === false;
+  const canCompletePendingWithdrawal = params.canWithdrawFees && pendingMatured && disputeStatusKnownClear;
+
+  return {
+    canCompletePendingWithdrawal,
+    pendingMatured,
+    requestSlotFree: params.pendingAmount === 0n || canCompletePendingWithdrawal,
+    withdrawalBlockedByDispute: params.hasOpenSnapshotDispute === true,
+  };
+}
+
 type UseClaimableFrontendRewardsOptions = {
   enabled?: boolean;
 };
@@ -139,6 +158,7 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
 
   const {
     data: hasOpenSnapshotDispute,
+    isError: hasOpenSnapshotDisputeError,
     isLoading: hasOpenSnapshotDisputeLoading,
     refetch: refetchHasOpenSnapshotDispute,
   } = useScaffoldReadContract({
@@ -194,9 +214,13 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     const items = [...roundFeeItems];
     const pendingAmount = pendingFeeWithdrawal ?? 0n;
     const pendingReleaseAt = pendingFeeWithdrawalReleaseAt ?? 0n;
-    const pendingMatured = pendingAmount > 0n && pendingReleaseAt <= BigInt(nowSeconds);
-    const withdrawalBlockedByDispute = hasOpenSnapshotDispute === true;
-    const canCompletePendingWithdrawal = canWithdrawFees && pendingMatured && !withdrawalBlockedByDispute;
+    const { canCompletePendingWithdrawal, requestSlotFree } = getFrontendFeeWithdrawalPlan({
+      canWithdrawFees,
+      hasOpenSnapshotDispute,
+      nowSeconds,
+      pendingAmount,
+      pendingReleaseAt,
+    });
 
     if (canCompletePendingWithdrawal) {
       items.push({
@@ -209,7 +233,6 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     // A new withdrawal request only succeeds once the pending bucket is empty —
     // either there is none, or the matured one above is completed first in the
     // same claim run.
-    const requestSlotFree = pendingAmount === 0n || canCompletePendingWithdrawal;
     const withdrawableFees = canWithdrawFees ? (accumulatedFees ?? 0n) : 0n;
     if (canWithdrawFees && requestSlotFree && (withdrawableFees > 0n || roundFeeItems.length > 0)) {
       items.push({
@@ -273,7 +296,9 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
       hasOpenSnapshotDisputeLoading ||
       (frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isLoading),
     feeWithdrawalBlockedByDispute: hasOpenSnapshotDispute === true,
-    feesUnavailable: frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isError,
+    feesUnavailable:
+      (frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isError) ||
+      (frontendRewardsEnabled && isRegistered && hasOpenSnapshotDisputeError),
     refetch,
   };
 }

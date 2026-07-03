@@ -33,6 +33,24 @@ import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
 const STAKE_AMOUNT = 1000; // Fixed 1,000 LREP stake
 
+export function getFrontendFeeCompletionDisputeState(params: {
+  hasOpenSnapshotDispute: boolean | undefined;
+  isError: boolean;
+  isLoading: boolean;
+  isRegistered: boolean;
+}) {
+  const blockedByDispute = params.isRegistered && params.hasOpenSnapshotDispute === true;
+  const statusUnknown =
+    params.isRegistered && params.hasOpenSnapshotDispute !== true && params.hasOpenSnapshotDispute !== false;
+  const statusUnavailable = params.isRegistered && (statusUnknown || params.isLoading || params.isError);
+
+  return {
+    blockedByDispute,
+    completionReady: params.isRegistered && params.hasOpenSnapshotDispute === false && !statusUnavailable,
+    statusUnavailable,
+  };
+}
+
 function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -214,7 +232,12 @@ export function FrontendRegistration() {
     },
   });
 
-  const { data: hasOpenSnapshotDisputeRaw, refetch: refetchHasOpenSnapshotDispute } = useScaffoldReadContract({
+  const {
+    data: hasOpenSnapshotDisputeRaw,
+    isError: hasOpenSnapshotDisputeError,
+    isLoading: hasOpenSnapshotDisputeLoading,
+    refetch: refetchHasOpenSnapshotDispute,
+  } = useScaffoldReadContract({
     contractName: "FrontendRegistry",
     functionName: "hasOpenSnapshotDispute",
     args: [address],
@@ -268,7 +291,6 @@ export function FrontendRegistration() {
   const isSlashed = frontendInfo ? frontendInfo[3] : false;
   const exitAvailableAt = exitAvailableAtRaw ? Number(exitAvailableAtRaw) : 0;
   const isExitPending = exitAvailableAt > 0;
-  const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000;
   const exitAvailableAtLabel = isExitPending ? new Date(exitAvailableAt * 1000).toLocaleString() : "";
   const snapshotProposer =
     snapshotProposerRaw && snapshotProposerRaw !== ZERO_ADDRESS ? snapshotProposerRaw : undefined;
@@ -290,7 +312,16 @@ export function FrontendRegistration() {
   const hasPendingWithdrawal = pendingWithdrawalLrep > 0;
   const pendingWithdrawalReleaseAt = pendingWithdrawalReleaseAtRaw ? Number(pendingWithdrawalReleaseAtRaw) : 0;
   const pendingWithdrawalMatured = hasPendingWithdrawal && nowMs >= pendingWithdrawalReleaseAt * 1000;
-  const feeWithdrawalBlockedByDispute = hasOpenSnapshotDisputeRaw === true;
+  const feeWithdrawalDisputeState = getFrontendFeeCompletionDisputeState({
+    hasOpenSnapshotDispute: hasOpenSnapshotDisputeRaw,
+    isError: hasOpenSnapshotDisputeError,
+    isLoading: hasOpenSnapshotDisputeLoading,
+    isRegistered,
+  });
+  const feeWithdrawalBlockedByDispute = feeWithdrawalDisputeState.blockedByDispute;
+  const feeWithdrawalDisputeStatusUnavailable = feeWithdrawalDisputeState.statusUnavailable;
+  const feeWithdrawalCompletionReady = feeWithdrawalDisputeState.completionReady;
+  const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000 && feeWithdrawalCompletionReady;
   const pendingWithdrawalReleaseLabel = hasPendingWithdrawal
     ? new Date(pendingWithdrawalReleaseAt * 1000).toLocaleString()
     : "";
@@ -459,7 +490,16 @@ export function FrontendRegistration() {
   };
 
   const handleCompleteDeregister = async () => {
-    if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!address || !frontendRegistryInfo || !frontendRegistryAddress || !isExitPending) return;
+    if (feeWithdrawalDisputeStatusUnavailable) {
+      notification.warning("Checking payout-root challenge status. Retry in a moment.");
+      return;
+    }
+    if (feeWithdrawalBlockedByDispute) {
+      notification.warning("Deregistration completion is paused while a payout snapshot challenge is active.");
+      return;
+    }
+    if (!canCompleteDeregister) return;
     if (!ensureGasBalance()) return;
 
     setIsCompletingDeregister(true);
@@ -533,6 +573,10 @@ export function FrontendRegistration() {
 
   const handleCompleteFeeWithdrawal = async () => {
     if (!address || !pendingWithdrawalMatured || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (feeWithdrawalDisputeStatusUnavailable) {
+      notification.warning("Checking payout-root challenge status. Retry in a moment.");
+      return;
+    }
     if (feeWithdrawalBlockedByDispute) {
       notification.warning("Withdrawal is paused while a payout snapshot challenge is active.");
       return;
@@ -1237,9 +1281,11 @@ export function FrontendRegistration() {
                   <p className="text-sm text-base-content/50">
                     {feeWithdrawalBlockedByDispute
                       ? "Paused during active payout-root challenge"
-                      : pendingWithdrawalMatured
-                        ? "Ready to withdraw"
-                        : `Unlocks ${pendingWithdrawalReleaseLabel}`}
+                      : feeWithdrawalDisputeStatusUnavailable
+                        ? "Checking payout-root challenge status"
+                        : pendingWithdrawalMatured
+                          ? "Ready to withdraw"
+                          : `Unlocks ${pendingWithdrawalReleaseLabel}`}
                   </p>
                 </div>
                 <GradientActionButton
@@ -1253,6 +1299,7 @@ export function FrontendRegistration() {
                     isMissingGasBalance ||
                     !pendingWithdrawalMatured ||
                     feeWithdrawalBlockedByDispute ||
+                    feeWithdrawalDisputeStatusUnavailable ||
                     isExitPending
                   }
                 >
@@ -1260,6 +1307,8 @@ export function FrontendRegistration() {
                     <span className="loading loading-spinner loading-xs" />
                   ) : feeWithdrawalBlockedByDispute ? (
                     "Dispute pending"
+                  ) : feeWithdrawalDisputeStatusUnavailable ? (
+                    "Checking"
                   ) : (
                     "Withdraw"
                   )}
@@ -1268,7 +1317,8 @@ export function FrontendRegistration() {
             )}
             {isExitPending && (
               <p className="text-sm text-base-content/50 mt-2">
-                Completing deregistration after the unbonding period also withdraws fees still held in the registry.
+                Completing deregistration after the unbonding period also withdraws fees still held in the registry once
+                no payout-root challenge is active.
               </p>
             )}
           </div>
@@ -1285,11 +1335,17 @@ export function FrontendRegistration() {
                       isCompletingDeregister ||
                       isAwaitingSponsoredSubmitCalls ||
                       isMissingGasBalance ||
+                      feeWithdrawalBlockedByDispute ||
+                      feeWithdrawalDisputeStatusUnavailable ||
                       !canCompleteDeregister
                     }
                   >
                     {isCompletingDeregister ? (
                       <span className="loading loading-spinner loading-xs" />
+                    ) : feeWithdrawalBlockedByDispute ? (
+                      "Dispute pending"
+                    ) : feeWithdrawalDisputeStatusUnavailable ? (
+                      "Checking dispute"
                     ) : (
                       "Complete Deregistration"
                     )}
@@ -1297,6 +1353,11 @@ export function FrontendRegistration() {
                   <p className="text-sm text-base-content/50 mt-1">
                     Exit requested. Complete it after the unbonding period to withdraw your{" "}
                     {stakedAmount.toLocaleString()} LREP stake and any pending fees.
+                    {feeWithdrawalBlockedByDispute
+                      ? " Completion is paused while a payout-root challenge is active."
+                      : feeWithdrawalDisputeStatusUnavailable
+                        ? " Checking payout-root challenge status before completion."
+                        : ""}
                     {exitAvailableAtLabel ? ` Available after ${exitAvailableAtLabel}.` : ""}
                   </p>
                 </>

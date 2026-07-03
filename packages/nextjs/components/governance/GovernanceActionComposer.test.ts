@@ -1,5 +1,6 @@
 import {
   CONFIDENTIALITY_SLASH_BOND_ACTION_ID,
+  FRONTEND_SLASH_WITH_BOUNTY_ACTION_ID,
   ORACLE_TIMING_CONFIG_ACTION_ID,
   RATER_REGISTRY_BAN_IDENTITY_ACTION_ID,
   RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID,
@@ -86,6 +87,42 @@ test("governance action composer routes treasury updates through ProtocolConfig"
     ),
     false,
   );
+});
+
+test("governance action composer exposes challenger-bounty frontend slashing", () => {
+  const templates = new Map(getGovernanceActionTemplateSummaries().map(template => [template.id, template]));
+
+  assert.deepEqual(templates.get(FRONTEND_SLASH_WITH_BOUNTY_ACTION_ID), {
+    contractName: "FrontendRegistry",
+    fieldKeys: ["frontend", "amount", "reason", "bountyRecipient"],
+    functionName: "slashFrontendWithBounty",
+    group: "Frontend Registry",
+    id: FRONTEND_SLASH_WITH_BOUNTY_ACTION_ID,
+    label: "Slash frontend with bounty",
+    mode: "proposal",
+  });
+});
+
+test("challenger-bounty frontend slash template encodes with resolved contract metadata", () => {
+  const frontendRegistryContracts = Object.values(contracts ?? {})
+    .map(chainContracts => chainContracts.FrontendRegistry)
+    .filter(Boolean);
+  assert.ok(frontendRegistryContracts.length > 0, "FrontendRegistry deployment metadata is required");
+  const frontendRegistryContract = frontendRegistryContracts[0];
+  assert.ok(frontendRegistryContract, "FrontendRegistry deployment metadata is required");
+
+  const data = encodeFunctionData({
+    abi: frontendRegistryContract.abi,
+    functionName: "slashFrontendWithBounty",
+    args: [
+      "0x00000000000000000000000000000000000000aa",
+      1_000_000n,
+      "Rejected payout root",
+      "0x00000000000000000000000000000000000000bb",
+    ],
+  });
+
+  assert.match(data, /^0x[0-9a-f]+$/u);
 });
 
 test("governance action composer checks treasury grants against ProtocolConfig", () => {

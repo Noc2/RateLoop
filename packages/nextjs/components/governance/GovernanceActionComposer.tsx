@@ -74,6 +74,7 @@ export const GOVERNANCE_ACTION_QUERY_PARAM = "governanceAction";
 export const CONFIDENTIALITY_SLASH_BOND_ACTION_ID = "confidentiality-slash-bond";
 export const RATER_REGISTRY_BAN_IDENTITY_ACTION_ID = "rater-registry-ban-identity";
 export const RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID = "rater-registry-unban-identity";
+export const FRONTEND_SLASH_WITH_BOUNTY_ACTION_ID = "frontend-slash-with-bounty";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
@@ -334,6 +335,38 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       parser.string("reason", "Reason"),
     ],
     buildDescription: values => `Slash frontend ${values.frontend || "address"} by ${values.amount || "0"} LREP`,
+  },
+  {
+    id: FRONTEND_SLASH_WITH_BOUNTY_ACTION_ID,
+    group: "Frontend Registry",
+    label: "Slash frontend with bounty",
+    mode: "proposal",
+    contractName: "FrontendRegistry",
+    functionName: "slashFrontendWithBounty",
+    description:
+      "Create a proposal to slash a frontend and route the configured challenger share to a bounty recipient.",
+    fields: [
+      { key: "frontend", label: "Frontend address", type: "address", required: true },
+      { key: "amount", label: "Slash amount (LREP)", type: "lrep", required: true },
+      { key: "reason", label: "Reason", type: "textarea", required: true },
+      {
+        key: "bountyRecipient",
+        label: "Bounty recipient",
+        type: "address",
+        required: true,
+        helperText: "Use the recorded challenger for the rejected payout-root challenge.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.address("frontend", "Frontend address"),
+      parser.lrep("amount", "Slash amount"),
+      parser.string("reason", "Reason"),
+      parser.address("bountyRecipient", "Bounty recipient"),
+    ],
+    buildDescription: values =>
+      `Slash frontend ${values.frontend || "address"} by ${values.amount || "0"} LREP with challenger bounty to ${
+        values.bountyRecipient || "recipient"
+      }`,
   },
   {
     id: "frontend-unslash",
