@@ -22,7 +22,7 @@ import { E2E_RPC_URL, PONDER_URL } from "./service-urls";
 import { ClusterPayoutOracleAbi, FrontendRegistryAbi } from "@rateloop/contracts/abis";
 import { PAYOUT_DOMAIN_QUESTION_REWARD } from "@rateloop/node-utils/correlationScoring";
 import { expect } from "@playwright/test";
-import { createPublicClient, getAddress, http, type Hex } from "viem";
+import { createPublicClient, getAddress, http, parseAbiItem, type Hex } from "viem";
 import { foundry } from "viem/chains";
 
 const SNAPSHOT_STATUS_NONE = 0;
@@ -37,6 +37,9 @@ const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const CORRELATION_ARTIFACT_PORT = 9091;
 const CORRELATION_ARTIFACT_ROUTE_PREFIX = "/correlation-artifacts";
 const correlationArtifactStorageDirectory = path.join(tmpdir(), `rateloop-correlation-artifacts-${process.pid}`);
+const ROUND_PAYOUT_SNAPSHOT_PROPOSED_EVENT = parseAbiItem(
+  "event RoundPayoutSnapshotProposed(bytes32 indexed snapshotKey,uint8 indexed domain,uint256 indexed rewardPoolId,uint256 contentId,uint256 roundId,uint64 correlationEpochId,address frontendOperator,address proposer,uint32 rawEligibleVoters,uint32 effectiveParticipantUnits,uint256 totalClaimWeight,bytes32 weightRoot,bytes32 reasonRoot,bytes32 artifactHash,string artifactURI,uint64 challengeWindowAtProposal,uint64 finalizationVetoWindowAtProposal)",
+);
 
 export const correlationPublicClient = createPublicClient({
   chain: foundry,
@@ -211,11 +214,13 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
   await waitForCorrelationEpochStatus(correlationEpochId, [SNAPSHOT_STATUS_FINALIZED]);
   await advancePastCorrelationEpochVetoDeadline(correlationEpochId);
 
-  const snapshotKey = await getRoundPayoutSnapshotKey(rewardPoolId, contentId, roundId);
-  await waitForRoundPayoutSnapshotStatus(snapshotKey, [SNAPSHOT_STATUS_PROPOSED, SNAPSHOT_STATUS_FINALIZED]);
+  await waitForRoundPayoutSnapshotStatus(rewardPoolId, contentId, roundId, [
+    SNAPSHOT_STATUS_PROPOSED,
+    SNAPSHOT_STATUS_FINALIZED,
+  ]);
 
   await evmIncreaseTime(Number(challengeWindow) + 1);
-  await waitForRoundPayoutSnapshotStatus(snapshotKey, [SNAPSHOT_STATUS_FINALIZED]);
+  await waitForRoundPayoutSnapshotStatus(rewardPoolId, contentId, roundId, [SNAPSHOT_STATUS_FINALIZED]);
   await advancePastRoundPayoutSnapshotVetoDeadline(rewardPoolId, contentId, roundId);
 
   const snapshotIndexed = await waitForPonderIndexed(
@@ -502,17 +507,22 @@ async function waitForCorrelationEpochStatus(epochId: bigint, acceptedStatuses: 
   expect(lastStatus, `Correlation epoch ${epochId.toString()} was challenged`).not.toBe(SNAPSHOT_STATUS_CHALLENGED);
 }
 
-async function waitForRoundPayoutSnapshotStatus(snapshotKey: Hex, acceptedStatuses: readonly number[]) {
+async function waitForRoundPayoutSnapshotStatus(
+  rewardPoolId: bigint,
+  contentId: bigint,
+  roundId: bigint,
+  acceptedStatuses: readonly number[],
+) {
   let lastStatus = SNAPSHOT_STATUS_NONE;
   const ok = await waitForPonderIndexed(
     async () => {
-      const proposal = await correlationPublicClient.readContract({
+      const snapshot = await correlationPublicClient.readContract({
         address: CONTRACT_ADDRESSES.ClusterPayoutOracle,
         abi: ClusterPayoutOracleAbi,
-        functionName: "roundPayoutProposal",
-        args: [snapshotKey],
+        functionName: "getRoundPayoutSnapshot",
+        args: [PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, contentId, roundId],
       });
-      lastStatus = Number(proposal.snapshot.status);
+      lastStatus = Number(snapshot.status);
       return acceptedStatuses.includes(lastStatus);
     },
     120_000,
@@ -521,11 +531,13 @@ async function waitForRoundPayoutSnapshotStatus(snapshotKey: Hex, acceptedStatus
   );
   expect(
     ok,
-    `Round payout snapshot ${snapshotKey} did not reach status ${acceptedStatuses.join(
+    `Round payout snapshot ${contentId.toString()}/${roundId.toString()} did not reach status ${acceptedStatuses.join(
       "/",
     )}; last=${lastStatus}; keeper logs:\n${correlationKeeperLogs.slice(-20).join("\n")}`,
   ).toBe(true);
-  expect(lastStatus, `Round payout snapshot ${snapshotKey} was challenged`).not.toBe(SNAPSHOT_STATUS_CHALLENGED);
+  expect(lastStatus, `Round payout snapshot ${contentId.toString()}/${roundId.toString()} was challenged`).not.toBe(
+    SNAPSHOT_STATUS_CHALLENGED,
+  );
 }
 
 export async function getRoundPayoutSnapshotKey(rewardPoolId: bigint, contentId: bigint, roundId: bigint) {
@@ -539,14 +551,19 @@ export async function getRoundPayoutSnapshotKey(rewardPoolId: bigint, contentId:
 
 export async function readRoundPayoutArtifact(rewardPoolId: bigint, contentId: bigint, roundId: bigint) {
   const snapshotKey = await getRoundPayoutSnapshotKey(rewardPoolId, contentId, roundId);
-  const proposal = await correlationPublicClient.readContract({
+  const events = await correlationPublicClient.getContractEvents({
     address: CONTRACT_ADDRESSES.ClusterPayoutOracle,
-    abi: ClusterPayoutOracleAbi,
-    functionName: "roundPayoutProposal",
-    args: [snapshotKey],
+    abi: [ROUND_PAYOUT_SNAPSHOT_PROPOSED_EVENT],
+    eventName: "RoundPayoutSnapshotProposed",
+    args: { snapshotKey },
+    fromBlock: 0n,
+    toBlock: "latest",
   });
-  const artifactUri = proposal.artifactURI;
+  const artifactUri = events.at(-1)?.args.artifactURI;
   expect(artifactUri, "round payout proposal should carry an artifact URI").toBeTruthy();
+  if (!artifactUri) {
+    throw new Error(`Round payout proposal ${snapshotKey} did not emit an artifact URI`);
+  }
   const artifact = await readCorrelationArtifact(artifactUri);
   const snapshot = artifact.roundPayoutSnapshots?.find(
     (item: { rewardPoolId?: string; contentId?: string; roundId?: string }) =>
