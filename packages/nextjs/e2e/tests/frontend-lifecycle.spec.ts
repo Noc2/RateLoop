@@ -102,7 +102,7 @@ test.describe("Frontend lifecycle", () => {
       "frontend-registration:ui-registered",
     );
     expect(registeredOnChain, "Frontend registration UI should register the operator on-chain").toBe(true);
-    await expect(page.getByText("Active")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("#main-content").getByText("Active", { exact: true })).toBeVisible({ timeout: 30_000 });
   });
 
   test("register frontend and verify in Ponder", async () => {
