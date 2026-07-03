@@ -47,12 +47,18 @@ yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.
 
 `agents:lint` checks structural payload shape (category, template, context URLs, bounty fields, wallet shape). Submit-time economics (`minSubmissionUsdcPool`, coverage minimum vs `maxVoters`), image moderation status, and on-chain gates run only when `askHumans` executes against the hosted API (or via `local-ask` after the same server-side validation path).
 
+The bundled `landing-pitch-review.json` payload targets Base Sepolia (`84532`) so lint, sandbox, and local-signer practice
+stay on testnet assets. Browser handoffs default to the production origin (`https://www.rateloop.ai`), where asks use Base
+mainnet (`8453`); before running `quote` or `handoff` against production, either switch the payload to a funded Base
+mainnet ask or set `RATELOOP_API_BASE_URL` to a staging origin that accepts Base Sepolia.
+
 ```bash
 # First run without a funded wallet, signature, transaction, callback, or bounty.
 yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Quote through MCP, then prefer a browser handoff link for funded user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
+# export RATELOOP_API_BASE_URL=https://staging.example for the Base Sepolia example.
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 yarn agents:handoff --file ask.json --image mockup.png
 

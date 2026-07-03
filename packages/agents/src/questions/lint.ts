@@ -20,6 +20,7 @@ const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
 const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "acceptanceCriteria"] as const;
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
+const SUPPORTED_REWARD_ASSETS = new Set(["LREP", "USDC"]);
 const MAX_PUBLIC_TAGS = 3;
 const MAX_QUESTION_IMAGE_URLS = 4;
 import {
@@ -186,6 +187,18 @@ function parseLintNonNegativeInteger(value: unknown): bigint | null {
   const raw = readLintIntegerString(value);
   if (raw === null) return null;
   return /^\d+$/.test(raw) ? BigInt(raw) : null;
+}
+
+function lintOptionalRewardAsset(value: unknown, path: string, findings: QuestionLintFinding[]) {
+  if (value === undefined || value === null) return;
+  if (typeof value !== "string") {
+    pushFinding(findings, "error", path, `${path} must be USDC or LREP.`);
+    return;
+  }
+  const normalized = value.trim().toUpperCase();
+  if (normalized && !SUPPORTED_REWARD_ASSETS.has(normalized)) {
+    pushFinding(findings, "error", path, `${path} must be USDC or LREP.`);
+  }
 }
 
 function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
@@ -733,6 +746,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
   } else {
     lintSingleDurationTiming(request, findings);
     lintBountyEligibility(request, findings);
+    lintOptionalRewardAsset(request.bounty.asset, "bounty.asset", findings);
 
     const amount = parseLintPositiveInteger(request.bounty.amount);
     if (amount === null) {
@@ -764,6 +778,9 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
       "feedbackBonus.feedbackClosesAt",
       "Remove feedbackBonus.feedbackClosesAt; Feedback Bonus timing uses roundConfig.questionDurationSeconds.",
     );
+  }
+  if (isObject(request.feedbackBonus)) {
+    lintOptionalRewardAsset((request.feedbackBonus as JsonObject).asset, "feedbackBonus.asset", findings);
   }
 
   if (request.templateId && !findAgentResultTemplate(request.templateId)) {

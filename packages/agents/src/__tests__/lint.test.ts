@@ -39,10 +39,10 @@ describe("agent question linting", () => {
   it("accepts omitted legacy bounty timing fields", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
-    bounty: {
-      amount: "1000000",
-      requiredVoters: "3",
-    },
+      bounty: {
+        amount: "1000000",
+        requiredVoters: "3",
+      },
     });
 
     expect(summarizeLintFindings(findings)).toEqual({
@@ -50,6 +50,71 @@ describe("agent question linting", () => {
       ok: true,
       warningCount: 0,
     });
+  });
+
+  it("accepts supported reward assets while preserving defaulted blanks", () => {
+    for (const request of [
+      {
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          asset: "lrep",
+        },
+        feedbackBonus: {
+          amount: "1000000",
+          asset: "usdc",
+        },
+      },
+      {
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          asset: " ",
+        },
+        feedbackBonus: {
+          amount: "1000000",
+          asset: "",
+        },
+      },
+    ]) {
+      const findings = lintAgentAskRequest(request);
+
+      expect(summarizeLintFindings(findings)).toEqual({
+        errorCount: 0,
+        ok: true,
+        warningCount: 0,
+      });
+    }
+  });
+
+  it("rejects unsupported reward assets before server submission", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        asset: "ETH",
+      },
+      feedbackBonus: {
+        amount: "1000000",
+        asset: 1,
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "bounty.asset must be USDC or LREP.",
+          path: "bounty.asset",
+        }),
+        expect.objectContaining({
+          level: "error",
+          message: "feedbackBonus.asset must be USDC or LREP.",
+          path: "feedbackBonus.asset",
+        }),
+      ]),
+    );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
   });
 
   it("rejects legacy timing fields in authored asks", () => {
