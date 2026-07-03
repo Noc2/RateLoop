@@ -127,3 +127,21 @@ test("GET reconciles due disclosures with Vercel cron bearer auth", async () => 
     published: 1,
   });
 });
+
+test("GET rejects malformed disclosure reconciliation limits", async () => {
+  const invalidLimit = await disclosureReconcileRoute.GET(
+    new NextRequest("https://rateloop.ai/api/confidentiality/disclosure/reconcile?limit=1junk", {
+      headers: new Headers({ authorization: "Bearer cron-secret" }),
+    }),
+  );
+  assert.equal(invalidLimit.status, 400);
+  assert.deepEqual(await invalidLimit.json(), { error: "limit must be a positive integer." });
+
+  const invalidScanLimit = await disclosureReconcileRoute.GET(
+    new NextRequest("https://rateloop.ai/api/confidentiality/disclosure/reconcile?scanLimit=1junk", {
+      headers: new Headers({ authorization: "Bearer cron-secret" }),
+    }),
+  );
+  assert.equal(invalidScanLimit.status, 400);
+  assert.deepEqual(await invalidScanLimit.json(), { error: "scanLimit must be a positive integer." });
+});

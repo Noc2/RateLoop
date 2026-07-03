@@ -4,6 +4,7 @@ import { processDueAgentCallbackDeliveries } from "~~/lib/agent-callbacks";
 import { sweepAgentLifecycleCallbacks } from "~~/lib/agent-callbacks/lifecycle";
 import { getAgentCallbackSweepRouteTestOverrides } from "~~/lib/agent-callbacks/route-test-overrides";
 import { sweepExpiredHandoffIntents } from "~~/lib/agent/handoffs";
+import { isBlankQueryNumber, parseStrictPositiveQueryNumber } from "~~/lib/http/queryNumbers";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
@@ -14,14 +15,24 @@ const CALLBACK_SWEEP_ROUTE_RATE_LIMIT = {
   windowMs: 60_000,
 };
 
+type LimitParseResult = { limit: number; ok: true } | { ok: false; response: NextResponse };
+
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   return authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? "";
 }
 
-function parseLimit(request: NextRequest) {
-  const value = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "", 10);
-  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, 100) : 25;
+function parseLimit(request: NextRequest): LimitParseResult {
+  const value = request.nextUrl.searchParams.get("limit");
+  if (isBlankQueryNumber(value)) return { limit: 25, ok: true };
+  const parsed = parseStrictPositiveQueryNumber(value);
+  if (parsed === null) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "limit must be a positive integer." }, { status: 400 }),
+    };
+  }
+  return { limit: Math.min(parsed, 100), ok: true };
 }
 
 function isAuthorizedCallbackRequest(token: string, secret: string) {
@@ -56,7 +67,9 @@ async function handleSweep(request: NextRequest) {
   const processDeliveries = overrides?.processDueAgentCallbackDeliveries ?? processDueAgentCallbackDeliveries;
   const createRandomUUID = overrides?.randomUUID ?? randomUUID;
 
-  const limit = parseLimit(request);
+  const parsedLimit = parseLimit(request);
+  if (!parsedLimit.ok) return parsedLimit.response;
+  const limit = parsedLimit.limit;
   const [callbacks, handoffs] = await Promise.all([sweepCallbacks({ limit }), sweepHandoffs(limit)]);
   const deliveries = await processDeliveries({
     limit,

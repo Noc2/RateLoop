@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { sweepOrphanedImageAttachments } from "~~/lib/attachments/imageAttachments";
+import { isBlankQueryNumber, parseStrictPositiveQueryNumber } from "~~/lib/http/queryNumbers";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SWEEP_RATE_LIMIT = { limit: 30, windowMs: 60_000 };
+
+type LimitParseResult = { limit: number; ok: true } | { ok: false; response: NextResponse };
 
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
@@ -25,9 +28,17 @@ function getSweepSecrets() {
   );
 }
 
-function parseLimit(request: NextRequest) {
-  const value = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "", 10);
-  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, 500) : 100;
+function parseLimit(request: NextRequest): LimitParseResult {
+  const value = request.nextUrl.searchParams.get("limit");
+  if (isBlankQueryNumber(value)) return { limit: 100, ok: true };
+  const parsed = parseStrictPositiveQueryNumber(value);
+  if (parsed === null) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "limit must be a positive integer." }, { status: 400 }),
+    };
+  }
+  return { limit: Math.min(parsed, 500), ok: true };
 }
 
 async function handleSweep(request: NextRequest) {
@@ -44,7 +55,10 @@ async function handleSweep(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  return NextResponse.json(await sweepOrphanedImageAttachments({ limit: parseLimit(request) }));
+  const parsedLimit = parseLimit(request);
+  if (!parsedLimit.ok) return parsedLimit.response;
+
+  return NextResponse.json(await sweepOrphanedImageAttachments({ limit: parsedLimit.limit }));
 }
 
 export async function GET(request: NextRequest) {

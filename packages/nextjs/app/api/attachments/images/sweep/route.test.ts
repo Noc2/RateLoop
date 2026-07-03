@@ -75,6 +75,20 @@ test("image attachment sweep route accepts Vercel cron GET bearer auth", async (
   assert.deepEqual(await response.json(), { deleted: 0, scanned: 0 });
 });
 
+test("image attachment sweep route rejects malformed limits", async () => {
+  const response = await POST(
+    new NextRequest("https://rateloop.ai/api/attachments/images/sweep?limit=10junk", {
+      headers: new Headers({
+        authorization: "Bearer sweep-secret",
+      }),
+      method: "POST",
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "limit must be a positive integer." });
+});
+
 test("image attachment sweep route deletes expired unattached uploads", async () => {
   const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
   await db.insert(questionImageAttachments).values({

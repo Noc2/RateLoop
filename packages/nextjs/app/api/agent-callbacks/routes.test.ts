@@ -128,6 +128,17 @@ test("agent callback deliver route accepts bearer auth, clamps limit, and passes
   assert.deepEqual(calls, [{ limit: 100, workerId: `route:${routeWorkerId}` }]);
 });
 
+test("agent callback deliver route rejects malformed limits", async () => {
+  const response = await deliverRoute.POST(
+    makeRequest("/api/agent-callbacks/deliver?limit=10junk", {
+      authorization: "Bearer callback-secret",
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "limit must be a positive integer." });
+});
+
 test("agent callback sweep route rejects unconfigured and unauthorized requests", async () => {
   delete env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
   const missing = await sweepRoute.POST(makeRequest("/api/agent-callbacks/sweep"));
@@ -143,7 +154,7 @@ test("agent callback sweep route rejects unconfigured and unauthorized requests"
   assert.equal(unauthorized.status, 401);
 });
 
-test("agent callback sweep route accepts header auth and defaults invalid limits", async () => {
+test("agent callback sweep route accepts header auth and defaults blank limits", async () => {
   const calls: unknown[] = [];
   setAgentCallbackSweepRouteTestOverrides({
     randomUUID: () => routeWorkerId,
@@ -162,7 +173,7 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   });
 
   const response = await sweepRoute.POST(
-    makeRequest("/api/agent-callbacks/sweep?limit=bogus", {
+    makeRequest("/api/agent-callbacks/sweep?limit=", {
       "x-rateloop-agent-callback-secret": "callback-secret",
     }),
   );
@@ -170,6 +181,17 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult, deliveries: deliveryResult });
   assert.deepEqual(calls, [{ limit: 25 }, { handoffLimit: 25 }, { limit: 25, workerId: `sweep:${routeWorkerId}` }]);
+});
+
+test("agent callback sweep route rejects malformed limits", async () => {
+  const response = await sweepRoute.POST(
+    makeRequest("/api/agent-callbacks/sweep?limit=bogus", {
+      "x-rateloop-agent-callback-secret": "callback-secret",
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "limit must be a positive integer." });
 });
 
 test("agent callback sweep route accepts Vercel cron GET bearer auth with a split cron secret", async () => {

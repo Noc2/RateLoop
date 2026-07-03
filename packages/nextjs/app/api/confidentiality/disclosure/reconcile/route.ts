@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { reconcileConfidentialDisclosure, reconcileDueConfidentialDisclosure } from "~~/lib/confidentiality/context";
 import { requireConfidentialityJobAuth } from "~~/lib/confidentiality/routeAuth";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
+import { isBlankQueryNumber, parseStrictPositiveQueryNumber } from "~~/lib/http/queryNumbers";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+
+type LimitParseResult = { ok: true; value: number | undefined } | { ok: false; response: NextResponse };
 
 function readContentIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -17,10 +20,16 @@ function readContentIds(value: unknown) {
     .filter(item => /^[0-9]{1,78}$/.test(item));
 }
 
-function readLimit(value: string | null) {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+function readLimit(value: string | null, name: "limit" | "scanLimit"): LimitParseResult {
+  if (isBlankQueryNumber(value)) return { ok: true, value: undefined };
+  const parsed = parseStrictPositiveQueryNumber(value);
+  if (parsed === null) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: `${name} must be a positive integer.` }, { status: 400 }),
+    };
+  }
+  return { ok: true, value: parsed };
 }
 
 export async function GET(request: NextRequest) {
@@ -32,11 +41,16 @@ export async function GET(request: NextRequest) {
   const unauthorized = requireConfidentialityJobAuth(request);
   if (unauthorized) return unauthorized;
 
+  const limit = readLimit(request.nextUrl.searchParams.get("limit"), "limit");
+  if (!limit.ok) return limit.response;
+  const scanLimit = readLimit(request.nextUrl.searchParams.get("scanLimit"), "scanLimit");
+  if (!scanLimit.ok) return scanLimit.response;
+
   return NextResponse.json({
     ok: true,
     ...(await reconcileDueConfidentialDisclosure({
-      limit: readLimit(request.nextUrl.searchParams.get("limit")),
-      scanLimit: readLimit(request.nextUrl.searchParams.get("scanLimit")),
+      limit: limit.value,
+      scanLimit: scanLimit.value,
     })),
   });
 }
