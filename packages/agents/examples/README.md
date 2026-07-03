@@ -91,8 +91,8 @@ npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pi
 Dry runs validate the ask shape and return a deterministic synthetic result. They do not require a funded wallet,
 signature, USDC authorization, transaction plan, callback registration, or mainnet submission.
 
-Before the first paid production ask, fund the configured `walletAddress` with Base mainnet LREP or USDC; use Base Sepolia
-LREP/USDC only for staging or testnet validation. Quote with `rateloop_quote_question` when the ask already uses public URLs
+Before the first paid production ask, fund the configured `walletAddress` with Base mainnet LREP or USDC.
+Quote with `rateloop_quote_question` when the ask already uses public URLs
 or uploaded RateLoop `imageUrls`; for generated-image-only asks, create the browser handoff directly and let the browser
 prepare step price the ask before payment:
 

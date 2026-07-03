@@ -91,7 +91,7 @@ const X402_SIGN_OPTIONS: NonNullable<
   Parameters<typeof signX402AuthorizationRequest>[2]
 > = {
   expectedAmount: X402_AMOUNT,
-  expectedChainId: 480,
+  expectedChainId: 8453,
   expectedUsdcAddress: X402_USDC_ADDRESS,
   expectedX402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
 };
@@ -301,7 +301,7 @@ function questionSpec(questionMetadataBaseUrl?: string) {
 }
 
 function canonicalPayload(questionMetadataBaseUrl?: string) {
-  return buildLocalQuestionCanonicalPayload(askPayload(), 480, {
+  return buildLocalQuestionCanonicalPayload(askPayload(), 8453, {
     questionMetadataBaseUrl,
   });
 }
@@ -322,7 +322,7 @@ function expectedOperationKey(questionMetadataBaseUrl?: string) {
 
 function payloadHashFor(payload: AskHumansRequest) {
   return createHash("sha256")
-    .update(JSON.stringify(buildLocalQuestionCanonicalPayload(payload, 480)))
+    .update(JSON.stringify(buildLocalQuestionCanonicalPayload(payload, 8453)))
     .digest("hex");
 }
 
@@ -381,7 +381,7 @@ function submissionDetailsHashFor(detailsUrl: string, detailsHash: Hex) {
 }
 
 function submissionKeyForPayload(payload: AskHumansRequest) {
-  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   return keccak256(
@@ -464,7 +464,7 @@ function rewardTermsHash() {
 }
 
 function rewardTermsHashForPayload(payload: AskHumansRequest) {
-  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
   const terms = rewardTerms(
     BigInt(canonical.bounty.amount),
     canonical.bounty.asset === "LREP" ? "LREP" : "USDC",
@@ -559,7 +559,7 @@ function expectedRevealCommitment(questionMetadataBaseUrl?: string) {
 }
 
 function revealCommitmentForPayload(payload: AskHumansRequest) {
-  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   return keccak256(
@@ -665,7 +665,7 @@ function x402PaymentNonce(
       ],
       [
         keccak256(stringToHex("rateloop-x402-question-payment-v4")),
-        480n,
+        8453n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
         X402_SUBMITTER_ADDRESS,
@@ -689,7 +689,7 @@ function x402PaymentNonceForPayload(
   payload: AskHumansRequest,
   from = account.address,
 ) {
-  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   const submissionPayloadHash = keccak256(
@@ -741,7 +741,7 @@ function x402PaymentNonceForPayload(
       ],
       [
         keccak256(stringToHex("rateloop-x402-question-payment-v4")),
-        480n,
+        8453n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
         X402_SUBMITTER_ADDRESS,
@@ -765,7 +765,7 @@ function x402OneShotPaymentNonceForPayload(
   payload: AskHumansRequest,
   from = account.address,
 ) {
-  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   const feedbackBonus = payload.feedbackBonus;
@@ -830,7 +830,7 @@ function x402OneShotPaymentNonceForPayload(
       ],
       [
         keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v7")),
-        480n,
+        8453n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
         FEEDBACK_BONUS_ESCROW_ADDRESS,
@@ -885,7 +885,7 @@ function submitQuestionData(
 }
 
 function submitQuestionDataForPayload(payload: AskHumansRequest) {
-  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   const asset = canonical.bounty.asset === "LREP" ? "LREP" : "USDC";
@@ -1027,7 +1027,7 @@ function walletCallsResponse(
   questionMetadataBaseUrl?: string,
 ): AskHumansResponse {
   return {
-    chainId: 480,
+    chainId: 8453,
     operationKey: expectedOperationKey(questionMetadataBaseUrl),
     payment: {
       amount: X402_AMOUNT,
@@ -1081,7 +1081,7 @@ function lrepWalletCallsResponse(
   overrides: Partial<AskHumansResponse> = {},
 ): AskHumansResponse {
   return {
-    chainId: 480,
+    chainId: 8453,
     operationKey: operationKeyFor(payload),
     payment: {
       amount: X402_AMOUNT,
@@ -1176,7 +1176,7 @@ function feedbackBonusPlanResponse(
       : "approve_feedback_bonus_usdc";
 
   return {
-    chainId: 480,
+    chainId: 8453,
     feedbackBonus: {
       amount: String(bonus.amount),
       asset: bonusAsset,
@@ -1240,7 +1240,7 @@ function x402CallsResponse(
   questionMetadataBaseUrl?: string,
 ): AskHumansResponse {
   return {
-    chainId: 480,
+    chainId: 8453,
     operationKey: expectedOperationKey(questionMetadataBaseUrl),
     payment: {
       amount: X402_AMOUNT,
@@ -1276,7 +1276,7 @@ function x402OneShotCallsResponse(
   overrides: Partial<AskHumansResponse> = {},
 ): AskHumansResponse {
   return {
-    chainId: 480,
+    chainId: 8453,
     operationKey: operationKeyFor(payload),
     payment: {
       amount: (BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)).toString(),
@@ -1336,8 +1336,8 @@ function x402AuthorizationRequest(
     authorization,
     typedData: {
       domain: {
-        chainId: 480,
-        name: "USDC",
+        chainId: 8453,
+        name: "USD Coin",
         verifyingContract: X402_USDC_ADDRESS,
         version: "2",
       },
@@ -1454,7 +1454,7 @@ describe("local signer", () => {
       agent,
       config: {
         ...validationConfig(),
-        chainId: 480,
+        chainId: 8453,
         chainName: "test",
         pollingIntervalMs: 1,
         receiptTimeoutMs: 1,
@@ -1513,7 +1513,7 @@ describe("local signer", () => {
         agent,
         config: {
           ...validationConfig(),
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           pollingIntervalMs: 1,
           receiptTimeoutMs: 1,
@@ -1562,7 +1562,7 @@ describe("local signer", () => {
       agent,
       config: {
         ...validationConfig(),
-        chainId: 480,
+        chainId: 8453,
         chainName: "test",
         pollingIntervalMs: 1,
         receiptTimeoutMs: 1,
@@ -1652,7 +1652,7 @@ describe("local signer", () => {
       agent,
       config: {
         ...validationConfig(),
-        chainId: 480,
+        chainId: 8453,
         chainName: "test",
         pollingIntervalMs: 1,
         receiptTimeoutMs: 1,
@@ -1765,7 +1765,7 @@ describe("local signer", () => {
           agent,
           config: {
             ...validationConfig(),
-            chainId: 480,
+            chainId: 8453,
             chainName: "test",
             pollingIntervalMs: 1,
             receiptTimeoutMs: 1,
@@ -1807,7 +1807,7 @@ describe("local signer", () => {
         agent,
         config: {
           ...validationConfig(),
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           pollingIntervalMs: 1,
           receiptTimeoutMs: 1,
@@ -1838,7 +1838,7 @@ describe("local signer", () => {
         agent,
         config: {
           ...validationConfig(),
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           pollingIntervalMs: 1,
           receiptTimeoutMs: 1,
@@ -1878,7 +1878,7 @@ describe("local signer", () => {
       askHumans: async (requestPayload: AskHumansRequest) => {
         askCalls.push(requestPayload);
         return {
-          chainId: 480,
+          chainId: 8453,
           operationKey: operationKeyFor(payload),
           payloadHash: payloadHashFor(payload),
           paymentMode: "x402_authorization",
@@ -1903,7 +1903,7 @@ describe("local signer", () => {
         account,
         agent,
         config: {
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
           pollingIntervalMs: 1,
@@ -1931,9 +1931,9 @@ describe("local signer", () => {
     await expect(
       signX402AuthorizationRequest(account, x402AuthorizationRequest(), {
         ...X402_SIGN_OPTIONS,
-        expectedChainId: 4801,
+        expectedChainId: 999999,
       }),
-    ).rejects.toThrow(/does not match local signer chain 4801/);
+    ).rejects.toThrow(/does not match local signer chain 999999/);
   });
 
   it("rejects x402 authorizations with an unexpected typed-data shape", async () => {
@@ -2032,7 +2032,7 @@ describe("local signer", () => {
       ask: walletCallsResponse(),
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPayload: askPayload(),
     });
 
@@ -2052,7 +2052,7 @@ describe("local signer", () => {
       ask: lrepWalletCallsResponse(payload),
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPayload: payload,
     });
 
@@ -2065,7 +2065,7 @@ describe("local signer", () => {
       ask: walletCallsResponse({}, QUESTION_METADATA_BASE_URL),
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPayload: askPayload(),
     });
 
@@ -2126,7 +2126,7 @@ describe("local signer", () => {
         questionMetadataBaseUrlPinned: config.questionMetadataBaseUrlPinned,
       },
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPayload: askPayload(),
     });
 
@@ -2138,7 +2138,7 @@ describe("local signer", () => {
       "0x0000000000000000000000000000000000000123" as const;
     const config = loadLocalSignerConfig({}, {
       RATELOOP_X402_USDC_ADDRESS: unscopedUsdcAddress,
-      RATELOOP_X402_USDC_ADDRESS_480: X402_USDC_ADDRESS,
+      RATELOOP_X402_USDC_ADDRESS_8453: X402_USDC_ADDRESS,
     } as NodeJS.ProcessEnv);
 
     const calls = validateLocalSignerTransactionPlan({
@@ -2150,7 +2150,7 @@ describe("local signer", () => {
         usdcAddressesByChain: config.usdcAddressesByChain,
       },
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPayload: askPayload(),
     });
 
@@ -2160,8 +2160,8 @@ describe("local signer", () => {
   it("rejects disagreeing chain-scoped USDC aliases", () => {
     expect(() =>
       loadLocalSignerConfig({}, {
-        RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_480: X402_USDC_ADDRESS,
-        RATELOOP_X402_USDC_ADDRESS_480:
+        RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_8453: X402_USDC_ADDRESS,
+        RATELOOP_X402_USDC_ADDRESS_8453:
           "0x0000000000000000000000000000000000000123",
       } as NodeJS.ProcessEnv),
     ).toThrow(/must match when both are set/);
@@ -2177,7 +2177,7 @@ describe("local signer", () => {
           questionMetadataBaseUrl: "https://operator.example",
         },
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPayload: askPayload(),
       }),
     ).toThrow(/does not match local signer questionMetadataBaseUrl/);
@@ -2189,7 +2189,7 @@ describe("local signer", () => {
       ask: x402CallsResponse(),
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPaymentAuthorization: signedX402Authorization(),
       expectedPayload: askPayload(),
     });
@@ -2204,7 +2204,7 @@ describe("local signer", () => {
       ask: x402OneShotCallsResponse(payload),
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
-      expectedChainId: 480,
+      expectedChainId: 8453,
       expectedPaymentAuthorization: signedOneShotX402Authorization(payload),
       expectedPayload: payload,
     });
@@ -2251,7 +2251,7 @@ describe("local signer", () => {
         }),
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPayload: askPayload(),
       }),
     ).toThrow(/title must match/);
@@ -2277,7 +2277,7 @@ describe("local signer", () => {
         }),
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPayload: askPayload(),
       }),
     ).toThrow(/revealCommitment must match/);
@@ -2290,7 +2290,7 @@ describe("local signer", () => {
         ask: x402CallsResponse(),
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPaymentAuthorization: {
           ...signedX402Authorization(),
           signature: `0x${"2".repeat(64)}${"4".repeat(64)}1c`,
@@ -2321,7 +2321,7 @@ describe("local signer", () => {
         ask: wrongTarget,
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPayload: askPayload(),
       }),
     ).toThrow(/to must be/);
@@ -2350,7 +2350,7 @@ describe("local signer", () => {
         ask: wrongAmount,
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPayload: askPayload(),
       }),
     ).toThrow(/approve amount must equal/);
@@ -2365,7 +2365,7 @@ describe("local signer", () => {
         }),
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPayload: askPayload(),
       }),
     ).toThrow(/does not match local signer/);
@@ -2388,7 +2388,7 @@ describe("local signer", () => {
         ask: badSelector,
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
-        expectedChainId: 480,
+        expectedChainId: 8453,
         expectedPaymentAuthorization: signedX402Authorization(),
         expectedPayload: askPayload(),
       }),
@@ -2432,7 +2432,7 @@ describe("local signer", () => {
         account,
         agent,
         config: {
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
           pollingIntervalMs: 1,
@@ -2476,7 +2476,7 @@ describe("local signer", () => {
         account,
         agent,
         config: {
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
           pollingIntervalMs: 1,
@@ -2512,17 +2512,17 @@ describe("local signer", () => {
         account,
         agent,
         config: {
-          chainId: 480,
+          chainId: 8453,
           chainName: "test",
           pollingIntervalMs: 1,
           receiptTimeoutMs: 1,
         },
         payload: {
           ...askPayload(),
-          chainId: 4801,
+          chainId: 999999,
         },
       }),
-    ).rejects.toThrow(/chainId 4801 does not match local signer chain 480/);
+    ).rejects.toThrow(/chainId 999999 does not match local signer chain 8453/);
   });
 });
 
@@ -2543,7 +2543,7 @@ describe("local signer round config alignment", () => {
   it("defaults roundConfig.minVoters to bounty.requiredVoters when omitted", () => {
     const canonical = buildLocalQuestionCanonicalPayload(
       fiveVoterAskPayload(),
-      480,
+      8453,
     );
 
     expect(canonical.roundConfig).toEqual({
@@ -2558,7 +2558,7 @@ describe("local signer round config alignment", () => {
     const payload = fiveVoterAskPayload();
     payload.bounty.requiredVoters = "150";
 
-    const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+    const canonical = buildLocalQuestionCanonicalPayload(payload, 8453);
 
     expect(canonical.roundConfig).toEqual({
       questionDurationSeconds: "1200",
@@ -2576,7 +2576,7 @@ describe("local signer round config alignment", () => {
           minVoters: "5",
         },
       }),
-      480,
+      8453,
     );
 
     expect(canonical.roundConfig).toEqual({
@@ -2591,7 +2591,7 @@ describe("local signer round config alignment", () => {
     tooManyRequiredVoters.bounty.requiredVoters = "65536";
 
     expect(() =>
-      buildLocalQuestionCanonicalPayload(tooManyRequiredVoters, 480),
+      buildLocalQuestionCanonicalPayload(tooManyRequiredVoters, 8453),
     ).toThrow(/bounty\.requiredVoters must be at most 65535/);
 
     expect(() =>
@@ -2603,7 +2603,7 @@ describe("local signer round config alignment", () => {
             minVoters: "5",
           },
         }),
-        480,
+        8453,
       ),
     ).toThrow(
       /question\.roundConfig\.questionDurationSeconds must be at most 4294967295/,
@@ -2615,7 +2615,7 @@ describe("local signer round config alignment", () => {
       fiveVoterAskPayload({
         roundPreset: "pure_agent_fast",
       }),
-      480,
+      8453,
     );
 
     expect(canonical.roundConfig).toEqual({
@@ -2636,7 +2636,7 @@ describe("local signer round config alignment", () => {
           },
           roundPreset: "pure_agent_fast",
         }),
-        480,
+        8453,
       ),
     ).toThrow(/roundPreset cannot be combined with question\.roundConfig/);
   });
@@ -2661,7 +2661,7 @@ describe("local signer round config alignment", () => {
           title: QUESTION_TITLE,
         },
       }),
-      480,
+      8453,
     );
 
     expect(canonical.questions[0].confidentiality).toEqual({
@@ -2690,7 +2690,7 @@ describe("local signer round config alignment", () => {
           title: QUESTION_TITLE,
         },
       }),
-      480,
+      8453,
     );
 
     expect(canonical.questions[0].confidentiality.disclosurePolicy).toBe(
@@ -2718,7 +2718,7 @@ describe("local signer round config alignment", () => {
             title: QUESTION_TITLE,
           },
         }),
-        480,
+        8453,
       ),
     ).toThrow(
       /questions\[0\]\.confidentiality\.bond\.amount must be 0 or at least 1000000 atomic units/,
@@ -2745,7 +2745,7 @@ describe("local signer round config alignment", () => {
             title: QUESTION_TITLE,
           },
         }),
-        480,
+        8453,
       ),
     ).toThrow(
       /questions\[0\]\.confidentiality\.bond\.amount must be at most 18446744073709551615/,
@@ -2811,9 +2811,9 @@ describe("local signer media canonicalization", () => {
     };
     const options = { questionMetadataBaseUrl: QUESTION_METADATA_BASE_URL };
 
-    expect(buildLocalQuestionCanonicalPayload(payload, 480, options)).toEqual(
+    expect(buildLocalQuestionCanonicalPayload(payload, 8453, options)).toEqual(
       toCanonicalQuestionPayload(
-        parseX402QuestionRequest(payload, 480, options),
+        parseX402QuestionRequest(payload, 8453, options),
         options,
       ),
     );
@@ -2832,7 +2832,7 @@ describe("local signer media canonicalization", () => {
           ],
         },
       },
-      480,
+      8453,
     );
 
     expect(canonical.questions[0].imageUrls).toEqual([
@@ -2852,7 +2852,7 @@ describe("local signer media canonicalization", () => {
           imageUrls: [UPLOADED_IMAGE_URL_PREFIXED],
         },
       },
-      480,
+      8453,
     );
 
     expect(parsed.questions[0].imageUrls).toEqual([
@@ -2873,7 +2873,7 @@ describe("local signer media canonicalization", () => {
           imageUrls: [LOCALHOST_UPLOADED_IMAGE_URL],
         },
       },
-      480,
+      8453,
       {
         allowLocalhostAttachmentOrigins: true,
         questionMetadataBaseUrl: QUESTION_METADATA_BASE_URL,
@@ -2899,7 +2899,7 @@ describe("local signer media canonicalization", () => {
             imageUrls: [LOCALHOST_UPLOADED_IMAGE_URL],
           },
         },
-        480,
+        8453,
         { allowLocalhostAttachmentOrigins: false },
       ),
     ).toThrow(/imageUrls must come from RateLoop uploads/);
@@ -2914,7 +2914,7 @@ describe("local signer media canonicalization", () => {
             detailsUrl: LOCALHOST_DETAILS_URL,
           },
         },
-        480,
+        8453,
         { allowLocalhostAttachmentOrigins: false },
       ),
     ).toThrow(/detailsUrl must be an HTTPS URL/);
@@ -2936,7 +2936,7 @@ describe("x402 head-to-head parser validation", () => {
             templateId: "head_to_head_ab",
           },
         },
-        480,
+        8453,
       ),
     ).toThrow(/templateInputs must include valid optionAKey/);
   });
@@ -2968,7 +2968,7 @@ describe("x402 head-to-head parser validation", () => {
             },
           ],
         },
-        480,
+        8453,
       ),
     ).toThrow(/head_to_head_ab supports exactly one question/);
   });

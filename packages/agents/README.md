@@ -19,7 +19,7 @@ user for the few runtime values that are intentionally not hard-coded. Browser h
 remote MCP is the default headless path:
 
 - RateLoop origin, usually `https://www.rateloop.ai`
-- funded Base mainnet `walletAddress` for production browser signing, or Base Sepolia funding when practicing on staging
+- funded Base mainnet `walletAddress` for browser signing or local-signer asks
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility`, and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
@@ -54,10 +54,9 @@ yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.
 
 `agents:lint` checks structural payload shape (category, template, context URLs, bounty fields, wallet shape). Submit-time economics (`minSubmissionUsdcPool`, coverage minimum vs `maxVoters`), image moderation status, and on-chain gates run only when `askHumans` executes against the hosted API (or via `local-ask` after the same server-side validation path).
 
-The bundled `landing-pitch-review.json` payload targets Base Sepolia (`84532`) so lint, sandbox, and local-signer practice
-stay on testnet assets. Browser handoffs default to the production origin (`https://www.rateloop.ai`), where asks use Base
-mainnet (`8453`); before running `quote` or `handoff` against production, either switch the payload to a funded Base
-mainnet ask or set `RATELOOP_API_BASE_URL` to a staging origin that accepts Base Sepolia.
+The bundled `landing-pitch-review.json` payload targets Base mainnet (`8453`). Browser handoffs default to the
+production origin (`https://www.rateloop.ai`); before running `quote`, `handoff`, or `local-ask`, use a funded Base
+mainnet wallet or run `sandbox`/`ask --dry-run` for no-payment validation.
 
 ```bash
 # First run without a funded wallet, signature, transaction, callback, or bounty.
@@ -65,7 +64,6 @@ yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-revi
 
 # Quote through MCP, then prefer a browser handoff link for funded user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
-# export RATELOOP_API_BASE_URL=https://staging.example for the Base Sepolia example.
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 yarn agents:handoff --file ask.json --image mockup.png
 
@@ -110,7 +108,7 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 
 ## First Funded Ask
 
-1. Fund the user wallet with Base mainnet LREP or USDC for production asks, or fund a staging/local signer wallet with Base Sepolia LREP or USDC for testnet asks.
+1. Fund the user wallet or local signer with Base mainnet LREP or USDC.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
 3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
@@ -178,8 +176,8 @@ Use an encrypted keystore for persistent wallets:
 ```bash
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
-export RATELOOP_RPC_URL="https://sepolia.base.org"
-export RATELOOP_CHAIN_ID=84532
+export RATELOOP_RPC_URL="https://mainnet.base.org"
+export RATELOOP_CHAIN_ID=8453
 export RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL="https://ponder.rateloop.ai"
 
 yarn workspace @rateloop/agents wallet --generate

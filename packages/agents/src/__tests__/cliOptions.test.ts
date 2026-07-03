@@ -4,14 +4,14 @@ import { readOptionalPositiveInteger } from "../cliOptions";
 describe("readOptionalPositiveInteger", () => {
   it("returns undefined for omitted options and parses decimal safe integers", () => {
     expect(readOptionalPositiveInteger({}, "chain-id")).toBeUndefined();
-    expect(readOptionalPositiveInteger({ "chain-id": "480" }, "chain-id")).toBe(480);
+    expect(readOptionalPositiveInteger({ "chain-id": "8453" }, "chain-id")).toBe(8453);
   });
 
   it("rejects non-decimal, non-positive, and unsafe integers", () => {
     for (const value of [
       "0",
       "-1",
-      "+480",
+      "+8453",
       "0x1e0",
       "480abc",
       "1.5",

@@ -27,7 +27,7 @@ const VALID_REQUEST = {
     asset: "USDC",
     requiredVoters: "3",
   },
-  chainId: 480,
+  chainId: 8453,
   clientRequestId: "agents:test",
   question: {
     categoryId: "5",

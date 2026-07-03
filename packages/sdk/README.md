@@ -18,7 +18,7 @@ The core client surface below is available today. Framework-specific hooks and U
 
 The exported helper names use the RateLoop namespace.
 
-**Chain IDs:** `8453` = Base mainnet production; `84532` = Base Sepolia staging/testnet. Examples below use Base mainnet unless noted.
+**Chain ID:** `8453` = Base mainnet production.
 
 `apiBaseUrl` on `createRateLoopClient` should point at the hosted Ponder indexer (`https://ponder.rateloop.ai` or your deployment's `NEXT_PUBLIC_PONDER_URL`), not the Next.js app origin. For `createRateLoopAgentClient`, set `mcpApiUrl` explicitly to your Next.js MCP host (`https://www.rateloop.ai/api/mcp/public` or managed `/api/mcp`); do not derive MCP from a Ponder `apiBaseUrl`.
 

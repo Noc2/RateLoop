@@ -14,7 +14,7 @@ const VALID_REQUEST = {
     amount: "1000000",
     requiredVoters: "3",
   },
-  chainId: 84532,
+  chainId: 8453,
   clientRequestId: "landing-pitch-demo",
   question: {
     categoryId: "1",
@@ -66,7 +66,7 @@ describe("agent question linting", () => {
       ]),
     );
 
-    for (const chainId of [0, Number.NaN, Number.MAX_SAFE_INTEGER + 1, "84532abc"]) {
+    for (const chainId of [0, Number.NaN, Number.MAX_SAFE_INTEGER + 1, "8453abc"]) {
       const findings = lintAgentAskRequest({ ...VALID_REQUEST, chainId });
       expect(findings).toEqual(
         expect.arrayContaining([

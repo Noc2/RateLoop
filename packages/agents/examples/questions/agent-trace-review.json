@@ -1,6 +1,6 @@
 {
   "clientRequestId": "agent-trace-review-demo",
-  "chainId": 84532,
+  "chainId": 8453,
   "templateId": "agent_trace_review",
   "maxPaymentAmount": "1500000",
   "bounty": {

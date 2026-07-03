@@ -126,7 +126,7 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
 
   const quote = await agent.quoteQuestion({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-1",
     question: {
       categoryId: 1n,
@@ -233,7 +233,7 @@ test("quoteFetchImpl is used only for quoteQuestion", async () => {
 
   const quote = await agent.quoteQuestion({
     bounty: { amount: "1000000" },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-quote-fetch",
     question: {
       categoryId: "1",
@@ -244,7 +244,7 @@ test("quoteFetchImpl is used only for quoteQuestion", async () => {
   });
   const ask = await agent.askHumans({
     bounty: { amount: "1000000" },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-quote-fetch",
     maxPaymentAmount: "1000000",
     question: {
@@ -548,7 +548,7 @@ test("quoteQuestion uses direct authenticated agent HTTP when apiBaseUrl and tok
 
   const response = await agent.quoteQuestion({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-direct",
     question: {
       categoryId: 5n,
@@ -589,7 +589,7 @@ test("quoteQuestion supports tokenless direct agent HTTP with a wallet address",
 
   const response = await agent.quoteQuestion({
     bounty: { amount: 1_000_000n, requiredVoters: 3n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-tokenless-quote",
     question: {
       categoryId: 7n,
@@ -630,7 +630,7 @@ test("agent client preserves a path-prefixed apiBaseUrl for direct HTTP", async 
 
   await agent.quoteQuestion({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-prefixed",
     question: {
       categoryId: 5n,
@@ -661,7 +661,7 @@ test("agent client builds unchanged URLs for the default root-host apiBaseUrl", 
 
   await agent.quoteQuestion({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-default-base",
     question: {
       categoryId: 5n,
@@ -695,7 +695,7 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
 
   const request: AskHumansRequest = {
     bounty: { amount: 1_000_000n, requiredVoters: 3n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-2",
     maxPaymentAmount: 1_250_000n,
     question: {
@@ -740,7 +740,7 @@ test("quoteQuestion and askHumans pass dryRun through direct HTTP", async () => 
   });
   const request = {
     bounty: { amount: 1_000_000n, requiredVoters: 3n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-dry-run",
     dryRun: true,
     question: {
@@ -782,7 +782,7 @@ test("agent ask helpers reject unsafe numeric atomic fields before transport", a
       amount: "1000000",
       requiredVoters: "3",
     },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-unsafe-number",
     question: {
       categoryId: "7",
@@ -884,7 +884,7 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
   const createResponse = await agent.createSigningIntent({
     request: {
       bounty: { amount: 1_000_000n },
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "browser-signing",
       maxPaymentAmount: 1_000_000n,
       question: {
@@ -983,7 +983,7 @@ test("ask handoff helpers use direct browser-handoff routes", async () => {
   const created = await agent.createAskHandoff({
     request: {
       bounty: { amount: 1_000_000n },
-      chainId: 480,
+      chainId: 8453,
       clientRequestId: "browser-handoff",
       maxPaymentAmount: 1_000_000n,
       question: {
@@ -1037,7 +1037,7 @@ test("askHumans prefers direct authenticated agent HTTP before MCP framing", asy
 
   await agent.askHumans({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-http",
     maxPaymentAmount: 1_250_000n,
     question: {
@@ -1084,7 +1084,7 @@ test("askHumans submits feedback bonus asks through direct agent HTTP", async ()
 
   const response = await agent.askHumans({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-feedback-bonus",
     feedbackBonus: { amount: 2_000_000n },
     maxPaymentAmount: 3_000_000n,
@@ -1138,7 +1138,7 @@ test("askHumans can still route feedback bonus asks through MCP", async () => {
 
   const response = await agent.askHumans({
     bounty: { amount: 1_000_000n },
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-feedback-bonus",
     feedbackBonus: { amount: 2_000_000n },
     maxPaymentAmount: 3_000_000n,
@@ -1261,7 +1261,7 @@ test("confirm helpers use confirmTimeoutMs instead of the default request timeou
   observed.rating = (
     await captureNextRequestTimeout(() =>
       agent.confirmRatingTransactions({
-        chainId: 480,
+        chainId: 8453,
         contentId: "42",
         transactionHashes: [`0x${"8a".repeat(32)}`],
         walletAddress: "0x00000000000000000000000000000000000000aa",
@@ -1367,7 +1367,7 @@ test("MCP tool errors preserve structured recovery details", async () => {
     () =>
       agent.askHumans({
         bounty: { amount: "1000000" },
-        chainId: 480,
+        chainId: 8453,
         clientRequestId: "ask-too-low",
         maxPaymentAmount: "1",
         question: {
@@ -1409,14 +1409,14 @@ test("getQuestionStatus supports tokenless direct operation and wallet client lo
     operationKey: `0x${"33".repeat(32)}`,
   });
   const byClient = await agent.getQuestionStatus({
-    chainId: 480,
+    chainId: 8453,
     clientRequestId: "ask-3",
     walletAddress: "0x00000000000000000000000000000000000000aa",
   });
 
   assert.deepEqual(requestedUrls, [
     `https://rateloop.example/api/agent/asks/0x${"33".repeat(32)}`,
-    "https://rateloop.example/api/agent/asks/by-client-request?chainId=480&clientRequestId=ask-3&walletAddress=0x00000000000000000000000000000000000000aa",
+    "https://rateloop.example/api/agent/asks/by-client-request?chainId=8453&clientRequestId=ask-3&walletAddress=0x00000000000000000000000000000000000000aa",
   ]);
   assert.equal(byOperation.status, "awaiting_wallet_signature");
   assert.equal(byClient.terminal, false);
@@ -1488,7 +1488,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   const status = await agent.getQuestionStatus({
     operationKey: `0x${"77".repeat(32)}`,
   });
-  await agent.getResult({ chainId: 480, clientRequestId: "ask-http" });
+  await agent.getResult({ chainId: 8453, clientRequestId: "ask-http" });
   await agent.getResult({ contentId: "123" });
   await agent.getResult({
     contentId: "456",
@@ -1513,7 +1513,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   );
   assert.equal(
     requestedUrls[1],
-    "https://rateloop.example/api/agent/results/by-client-request?chainId=480&clientRequestId=ask-http",
+    "https://rateloop.example/api/agent/results/by-client-request?chainId=8453&clientRequestId=ask-http",
   );
   assert.equal(
     requestedUrls[2],

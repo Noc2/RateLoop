@@ -1,6 +1,6 @@
 {
   "clientRequestId": "action-go-no-go-demo",
-  "chainId": 84532,
+  "chainId": 8453,
   "templateId": "agent_action_go_no_go",
   "maxPaymentAmount": "1000000",
   "bounty": {

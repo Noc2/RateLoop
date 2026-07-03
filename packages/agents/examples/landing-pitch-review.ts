@@ -7,9 +7,8 @@ import { pathToFileURL } from "node:url";
 
 const PRODUCTION_API_BASE_URL = "https://www.rateloop.ai";
 const BASE_MAINNET_CHAIN_ID = 8453;
-const BASE_SEPOLIA_CHAIN_ID = 84532;
 const apiBaseUrl =
-  process.env.RATELOOP_API_BASE_URL ?? "https://staging.rateloop.example";
+  process.env.RATELOOP_API_BASE_URL ?? PRODUCTION_API_BASE_URL;
 const mcpAccessToken = process.env.RATELOOP_MCP_TOKEN;
 const walletAddress = process.env.RATELOOP_AGENT_WALLET_ADDRESS;
 
@@ -40,11 +39,7 @@ function requireOperationKey(response: { operationKey?: string }) {
 }
 
 function readChainId() {
-  const fallback =
-    apiBaseUrl === PRODUCTION_API_BASE_URL
-      ? BASE_MAINNET_CHAIN_ID
-      : BASE_SEPOLIA_CHAIN_ID;
-  const raw = process.env.RATELOOP_CHAIN_ID ?? String(fallback);
+  const raw = process.env.RATELOOP_CHAIN_ID ?? String(BASE_MAINNET_CHAIN_ID);
   if (!/^\d+$/.test(raw)) {
     throw new Error("RATELOOP_CHAIN_ID must be a positive base-10 integer.");
   }
@@ -52,9 +47,9 @@ function readChainId() {
   if (!Number.isSafeInteger(chainId) || chainId <= 0) {
     throw new Error("RATELOOP_CHAIN_ID must be a positive base-10 safe integer.");
   }
-  if (apiBaseUrl === PRODUCTION_API_BASE_URL && chainId !== BASE_MAINNET_CHAIN_ID) {
+  if (chainId !== BASE_MAINNET_CHAIN_ID) {
     throw new Error(
-      "The production RateLoop host only accepts Base mainnet asks; set RATELOOP_CHAIN_ID=8453 or use a staging API host.",
+      "The RateLoop example targets the live Base mainnet deployment; set RATELOOP_CHAIN_ID=8453.",
     );
   }
   return chainId;
