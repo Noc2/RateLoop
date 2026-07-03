@@ -3290,6 +3290,14 @@ contract MockLaunchOracleFrontendRegistry {
     function accessRecorderForFrontend(address) external pure returns (address recorder) {
         return address(0);
     }
+
+    function hasOpenSnapshotDispute(address) external pure returns (bool) {
+        return false;
+    }
+
+    function recordSnapshotDisputeOpened(address) external { }
+
+    function recordSnapshotDisputeClosed(address) external { }
 }
 
 /// @dev Test source for M-Oracle-1 readiness checks. Always returns 1 (epoch-second 1) so that

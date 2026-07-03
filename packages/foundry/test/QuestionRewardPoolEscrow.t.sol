@@ -7357,6 +7357,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function _newEligibleClusterPayoutOracle() internal returns (ClusterPayoutOracle oracle) {
         _ensureOracleFrontendRegistered();
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
+        vm.prank(owner);
+        frontendRegistry.grantRole(frontendRegistry.SNAPSHOT_DISPUTE_RECORDER_ROLE(), address(oracle));
     }
 
     function _ensureOracleFrontendRegistered() internal {
@@ -9212,6 +9214,14 @@ contract MockQuestionRewardOracleFrontendRegistry {
     function accessRecorderForFrontend(address) external pure returns (address recorder) {
         return address(0);
     }
+
+    function hasOpenSnapshotDispute(address) external pure returns (bool) {
+        return false;
+    }
+
+    function recordSnapshotDisputeOpened(address) external { }
+
+    function recordSnapshotDisputeClosed(address) external { }
 }
 
 contract MockBundleFrontendRegistry {
@@ -9247,4 +9257,12 @@ contract MockBundleFrontendRegistry {
     function canClaimFeesForRound(address frontend, uint48) external view returns (bool) {
         return frontends[frontend].canClaim;
     }
+
+    function hasOpenSnapshotDispute(address) external pure returns (bool) {
+        return false;
+    }
+
+    function recordSnapshotDisputeOpened(address) external { }
+
+    function recordSnapshotDisputeClosed(address) external { }
 }

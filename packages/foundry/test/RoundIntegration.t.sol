@@ -60,6 +60,14 @@ contract MockRoundIntegrationFrontendRegistry {
     function accessRecorderForFrontend(address) external pure returns (address) {
         return address(0);
     }
+
+    function hasOpenSnapshotDispute(address) external pure returns (bool) {
+        return false;
+    }
+
+    function recordSnapshotDisputeOpened(address) external { }
+
+    function recordSnapshotDisputeClosed(address) external { }
 }
 
 /// @title Round-based integration tests for tlock commit-reveal flow with single blind-epoch rewards.

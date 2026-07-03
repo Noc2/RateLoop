@@ -1030,6 +1030,99 @@ contract FrontendRegistryTest is Test {
         registry.completeFeeWithdrawal();
     }
 
+    function test_OpenSnapshotDisputeBlocksMaturedFeeWithdrawalUntilClosed() public {
+        address disputeRecorder = address(0xD15);
+        bytes32 disputeRecorderRole = registry.SNAPSHOT_DISPUTE_RECORDER_ROLE();
+        vm.prank(admin);
+        registry.grantRole(disputeRecorderRole, disputeRecorder);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 100e6);
+
+        vm.prank(frontend1);
+        registry.requestFeeWithdrawal();
+        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeOpened(frontend1);
+        assertTrue(registry.hasOpenSnapshotDispute(frontend1));
+
+        vm.prank(frontend1);
+        vm.expectRevert(FrontendRegistry.SnapshotDisputeActive.selector);
+        registry.completeFeeWithdrawal();
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeClosed(frontend1);
+        assertFalse(registry.hasOpenSnapshotDispute(frontend1));
+
+        uint256 balanceBefore = lrepToken.balanceOf(frontend1);
+        vm.prank(frontend1);
+        registry.completeFeeWithdrawal();
+        assertEq(lrepToken.balanceOf(frontend1) - balanceBefore, 100e6);
+    }
+
+    function test_OpenSnapshotDisputeBlocksDeregisterCompletionUntilClosed() public {
+        address disputeRecorder = address(0xD15);
+        bytes32 disputeRecorderRole = registry.SNAPSHOT_DISPUTE_RECORDER_ROLE();
+        vm.prank(admin);
+        registry.grantRole(disputeRecorderRole, disputeRecorder);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(frontend1);
+        registry.requestDeregister();
+        vm.warp(registry.frontendExitAvailableAt(frontend1));
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeOpened(frontend1);
+
+        vm.prank(frontend1);
+        vm.expectRevert(FrontendRegistry.SnapshotDisputeActive.selector);
+        registry.completeDeregister();
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeClosed(frontend1);
+
+        uint256 balanceBefore = lrepToken.balanceOf(frontend1);
+        vm.prank(frontend1);
+        registry.completeDeregister();
+        assertEq(lrepToken.balanceOf(frontend1) - balanceBefore, STAKE);
+    }
+
+    function test_SnapshotDisputeRecorderRoleRequired() public {
+        address disputeRecorder = address(0xD15);
+        bytes32 disputeRecorderRole = registry.SNAPSHOT_DISPUTE_RECORDER_ROLE();
+
+        vm.prank(disputeRecorder);
+        vm.expectRevert();
+        registry.recordSnapshotDisputeOpened(frontend1);
+
+        vm.prank(admin);
+        registry.grantRole(disputeRecorderRole, disputeRecorder);
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeOpened(frontend1);
+
+        vm.prank(frontend1);
+        vm.expectRevert();
+        registry.recordSnapshotDisputeClosed(frontend1);
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeClosed(frontend1);
+
+        vm.prank(disputeRecorder);
+        vm.expectRevert(FrontendRegistry.NoOpenSnapshotDispute.selector);
+        registry.recordSnapshotDisputeClosed(frontend1);
+    }
+
     function test_RevertRequestFeeWithdrawalWhilePending() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);

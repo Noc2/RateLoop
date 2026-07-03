@@ -98,6 +98,8 @@ interface IClusterPayoutOracle {
 
     function frontendRegistry() external view returns (IFrontendRegistry);
 
+    function hasOpenDispute(address frontendOperator) external view returns (bool);
+
     function roundPayoutSnapshotConsumerFor(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view

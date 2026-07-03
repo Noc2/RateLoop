@@ -30,6 +30,7 @@ const ROUND_PAYOUT_SNAPSHOT_CONSUMER_SELECTOR = "0x2fc1e72a";
 const CHALLENGE_WINDOW_SELECTOR = "0x861a1412";
 const FINALIZATION_VETO_WINDOW_SELECTOR = "0xf25cb0ca";
 const LAUNCH_PAYOUT_FINALITY_BUDGET_SELECTOR = "0x967dd972";
+const FEE_WITHDRAWAL_DELAY_SELECTOR = "0x925703f1";
 const DEFAULT_PAYOUT_FINALITY_OPS_LAG_BUDGET_SECONDS = 15 * 60;
 const ADDRESS_WORD_RE = /^[a-fA-F0-9]{64}$/;
 export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
@@ -1222,6 +1223,19 @@ async function readClusterPayoutOracleUint256(rpcUrl, deploymentAddresses, selec
   return parseUint256Result(result);
 }
 
+async function readFrontendRegistryUint256(rpcUrl, deploymentAddresses, selector) {
+  const registryAddress = deploymentAddresses.get("FrontendRegistry");
+  if (!registryAddress) return undefined;
+  const result = await rpc(rpcUrl, "eth_call", [
+    {
+      to: registryAddress,
+      data: selector,
+    },
+    "latest",
+  ]);
+  return parseUint256Result(result);
+}
+
 async function validateLivePayoutFinalityBudget({
   checks,
   deploymentAddresses,
@@ -1229,7 +1243,7 @@ async function validateLivePayoutFinalityBudget({
   readinessConfig,
   rpcUrl,
 }) {
-  const [challengeWindow, finalizationVetoWindow, launchBudget] =
+  const [challengeWindow, finalizationVetoWindow, launchBudget, feeWithdrawalDelay] =
     await Promise.all([
       readClusterPayoutOracleUint256(
         rpcUrl,
@@ -1245,6 +1259,11 @@ async function validateLivePayoutFinalityBudget({
         rpcUrl,
         deploymentAddresses,
         LAUNCH_PAYOUT_FINALITY_BUDGET_SELECTOR,
+      ),
+      readFrontendRegistryUint256(
+        rpcUrl,
+        deploymentAddresses,
+        FEE_WITHDRAWAL_DELAY_SELECTOR,
       ),
     ]);
   const configuredOpsLagBudget = Number(
@@ -1283,6 +1302,31 @@ async function validateLivePayoutFinalityBudget({
     }s <= ${maxBudget.toString()}s (${formula}; challenge=${
       challengeWindow?.toString() ?? "unknown"
     }s, veto=${finalizationVetoWindow?.toString() ?? "unknown"}s, ops=${opsLagBudget.toString()}s, overlapProof=${overlapProof})`,
+  );
+
+  const disputeWindow =
+    challengeWindow === undefined || finalizationVetoWindow === undefined
+      ? undefined
+      : challengeWindow + finalizationVetoWindow;
+  addCheck(
+    checks,
+    failures,
+    feeWithdrawalDelay !== undefined,
+    "FrontendRegistry fee withdrawal delay is readable",
+  );
+  addCheck(
+    checks,
+    failures,
+    feeWithdrawalDelay !== undefined &&
+      disputeWindow !== undefined &&
+      feeWithdrawalDelay >= disputeWindow,
+    `FrontendRegistry fee withdrawal delay ${
+      feeWithdrawalDelay?.toString() ?? "unknown"
+    }s >= oracle dispute window ${
+      disputeWindow?.toString() ?? "unknown"
+    }s (challenge=${challengeWindow?.toString() ?? "unknown"}s, veto=${
+      finalizationVetoWindow?.toString() ?? "unknown"
+    }s)`,
   );
 }
 

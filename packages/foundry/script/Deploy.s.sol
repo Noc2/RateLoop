@@ -338,9 +338,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         frontendRegistry.setVotingEngine(address(votingEngine));
         frontendRegistry.initializeFeeCreditor(address(rewardDistributor));
-        if (!isLocalDev) {
-            frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
-        }
 
         _seedCategories(categoryRegistry);
         if (!isLocalDev) {
@@ -360,6 +357,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         ClusterPayoutOracle clusterPayoutOracle =
             new ClusterPayoutOracle(deployer, address(frontendRegistry), usdcTokenAddress);
+        frontendRegistry.grantRole(
+            frontendRegistry.SNAPSHOT_DISPUTE_RECORDER_ROLE(), address(clusterPayoutOracle)
+        );
         // M-Oracle-1 (PR #20): the launch-credit consumer pin on the oracle MUST be set BEFORE
         // `setClusterPayoutOracle` because `_validateClusterPayoutOracle` now verifies the new
         // oracle routes the launch-credit domain back to this pool. Bootstrap order:
@@ -394,6 +394,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             clusterPayoutOracle.renounceRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), deployer);
         }
         protocolConfig.setClusterPayoutOracle(address(clusterPayoutOracle));
+        if (!isLocalDev) {
+            frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
+        }
         // M-Oracle-1: wire the launch pool to the voting engine so its
         // `roundPayoutSnapshotSourceReadyAt` view can authoritatively reject pre-source proposals
         // even before the first earned-rater credit has been pending-recorded.

@@ -90,6 +90,27 @@ function encodeUint256(value) {
   return `0x${BigInt(value).toString(16).padStart(64, "0")}`;
 }
 
+function handlePayoutTimingCall(call, deploymentAddresses, overrides = {}) {
+  const clusterPayoutOracleAddress = deploymentAddresses.get("ClusterPayoutOracle");
+  const frontendRegistryAddress = deploymentAddresses.get("FrontendRegistry");
+  const data = String(call.data ?? "").toLowerCase();
+  if (call.to === clusterPayoutOracleAddress && data === "0x861a1412") {
+    return encodeUint256(overrides.challengeWindowSeconds ?? 15 * 60);
+  }
+  if (call.to === clusterPayoutOracleAddress && data === "0xf25cb0ca") {
+    return encodeUint256(overrides.finalizationVetoWindowSeconds ?? 15 * 60);
+  }
+  if (call.to === clusterPayoutOracleAddress && data === "0x967dd972") {
+    return encodeUint256(
+      overrides.launchPayoutFinalityBudgetSeconds ?? 60 * 60,
+    );
+  }
+  if (call.to === frontendRegistryAddress && data === "0x925703f1") {
+    return encodeUint256(overrides.feeWithdrawalDelaySeconds ?? 60 * 60);
+  }
+  return undefined;
+}
+
 function selectorBytecode() {
   return `0x${[
     ...REQUIRED_SELECTOR_CHECKS.flatMap((check) => check.selectors),
@@ -782,6 +803,8 @@ test("validateLiveReadiness retries transient RPC HTTP rate limits", async () =>
       ) {
         return encodeStorageAddress(contentRegistryAddress);
       }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses);
+      if (timingResult) return timingResult;
       const wiringResult = handleWiringCall(params[0], deploymentAddresses);
       if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
@@ -811,7 +834,6 @@ test("validateLiveReadiness rejects payout finality budgets above one hour", asy
   const deploymentJson = makeDeploymentJson();
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
   const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
-  const clusterPayoutOracleAddress = deploymentAddresses.get("ClusterPayoutOracle");
   const submissionMediaValidatorAddress = addressFor(102);
   const restoreFetch = mockRpc((method, params) => {
     if (method === "eth_chainId") return "0x12c1";
@@ -828,24 +850,13 @@ test("validateLiveReadiness rejects payout finality budgets above one hour", asy
       ) {
         return encodeStorageAddress(contentRegistryAddress);
       }
-      if (
-        params[0].to === clusterPayoutOracleAddress &&
-        params[0].data.toLowerCase() === "0x861a1412"
-      ) {
-        return encodeUint256(60 * 60);
-      }
-      if (
-        params[0].to === clusterPayoutOracleAddress &&
-        params[0].data.toLowerCase() === "0xf25cb0ca"
-      ) {
-        return encodeUint256(15 * 60);
-      }
-      if (
-        params[0].to === clusterPayoutOracleAddress &&
-        params[0].data.toLowerCase() === "0x967dd972"
-      ) {
-        return encodeUint256(60 * 60);
-      }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses, {
+        challengeWindowSeconds: 60 * 60,
+        feeWithdrawalDelaySeconds: 2 * 60 * 60,
+        finalizationVetoWindowSeconds: 15 * 60,
+        launchPayoutFinalityBudgetSeconds: 60 * 60,
+      });
+      if (timingResult) return timingResult;
       const wiringResult = handleWiringCall(params[0], deploymentAddresses);
       if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
@@ -868,6 +879,62 @@ test("validateLiveReadiness rejects payout finality budgets above one hour", asy
     assert(
       result.failures.some((message) =>
         message.includes("payout finality budget 8100s <= 3600s"),
+      ),
+      result.failures.join("\n"),
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("validateLiveReadiness rejects fee withdrawal delays below the dispute window", async () => {
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const submissionMediaValidatorAddress = addressFor(102);
+  const restoreFetch = mockRpc((method, params) => {
+    if (method === "eth_chainId") return "0x12c1";
+    if (method === "eth_call") {
+      if (
+        params[0].to === contentRegistryAddress &&
+        params[0].data === "0x738dbaa0"
+      ) {
+        return encodeStorageAddress(submissionMediaValidatorAddress);
+      }
+      if (
+        params[0].to === submissionMediaValidatorAddress &&
+        params[0].data === "0xb717bbbd"
+      ) {
+        return encodeStorageAddress(contentRegistryAddress);
+      }
+      const timingResult = handlePayoutTimingCall(params[0], deploymentAddresses, {
+        feeWithdrawalDelaySeconds: 20 * 60,
+      });
+      if (timingResult) return timingResult;
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses);
+      if (wiringResult) return wiringResult;
+      throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
+    }
+    if (method === "eth_getStorageAt") {
+      assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
+      return encodeStorageAddress(addressFor(0));
+    }
+    if (method === "eth_getCode") return selectorBytecode();
+    throw new Error(`Unexpected RPC method ${method}`);
+  });
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      rpcUrl: "https://rpc.example",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "fee withdrawal delay 1200s >= oracle dispute window 1800s",
+        ),
       ),
       result.failures.join("\n"),
     );

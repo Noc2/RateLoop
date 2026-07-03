@@ -595,6 +595,61 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(challenged.bond, CHALLENGE_BOND);
     }
 
+    function test_CorrelationEpochChallengeRecordsFrontendDisputeUntilDismissed() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+
+        assertEq(oracle.openDisputeCount(address(this)), 1);
+        assertTrue(oracle.hasOpenDispute(address(this)));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
+        assertTrue(frontendRegistry.hasOpenSnapshotDispute(address(this)));
+
+        oracle.finalizeChallengedCorrelationEpoch(1, keccak256("challenge-dismissed"));
+
+        assertEq(oracle.openDisputeCount(address(this)), 0);
+        assertFalse(oracle.hasOpenDispute(address(this)));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
+        assertFalse(frontendRegistry.hasOpenSnapshotDispute(address(this)));
+    }
+
+    function test_CorrelationEpochChallengeCountsAccountableFrontendNotRotatedProposer() public {
+        address frontend = address(0xFEE);
+        address proposer = address(0xB0B);
+        address replacementProposer = address(0xB0C);
+        frontendRegistry.setEligible(frontend, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(proposer, frontend);
+
+        vm.prank(proposer);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+        frontendRegistry.setAuthorizedSnapshotFrontend(replacementProposer, frontend);
+
+        assertEq(oracle.openDisputeCount(frontend), 1);
+        assertEq(oracle.openDisputeCount(proposer), 0);
+        assertEq(oracle.openDisputeCount(replacementProposer), 0);
+        assertEq(frontendRegistry.openSnapshotDisputeCount(frontend), 1);
+    }
+
     function test_CorrelationEpochKeepsProposalChallengeTermsWhenConfigExpands() public {
         oracle.proposeCorrelationEpoch(
             1,
@@ -651,6 +706,37 @@ contract ClusterPayoutOracleTest is Test {
         ClusterPayoutOracle.RoundPayoutProposal memory challenged = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(challenged.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
         assertEq(challenged.bond, CHALLENGE_BOND);
+    }
+
+    function test_RoundPayoutChallengeRecordsFrontendDisputeUntilRejected() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
+
+        assertEq(oracle.openDisputeCount(address(this)), 1);
+        assertTrue(oracle.hasOpenDispute(address(this)));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 1);
+
+        oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
+
+        assertEq(oracle.openDisputeCount(address(this)), 0);
+        assertFalse(oracle.hasOpenDispute(address(this)));
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
     }
 
     function test_RoundPayoutSnapshotKeepsProposalChallengeTermsWhenConfigExpands() public {
@@ -2950,7 +3036,9 @@ contract ClusterPayoutOracleTest is Test {
         IClusterPayoutOracle.RoundPayoutSnapshot memory staleSnapshot =
             oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         assertEq(uint8(staleSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
-        assertEq(oracle.pendingBondWithdrawals(CHALLENGER), 0);
+        assertEq(oracle.pendingBondWithdrawals(CHALLENGER), CHALLENGE_BOND);
+        assertEq(oracle.openDisputeCount(address(this)), 0);
+        assertEq(frontendRegistry.openSnapshotDisputeCount(address(this)), 0);
 
         bytes32 replacementArtifact = keccak256("epoch-artifact-v2");
         _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), replacementArtifact);
@@ -3145,6 +3233,7 @@ contract MockFrontendRegistry {
     mapping(address => bool) internal eligible;
     mapping(address => address) internal snapshotFrontend;
     mapping(address => address) public snapshotProposerForFrontend;
+    mapping(address => uint256) public openSnapshotDisputeCount;
 
     function setEligible(address frontend, bool value) external {
         eligible[frontend] = value;
@@ -3173,6 +3262,20 @@ contract MockFrontendRegistry {
 
     function isEligible(address frontend) external view returns (bool) {
         return eligible[frontend];
+    }
+
+    function hasOpenSnapshotDispute(address frontend) external view returns (bool) {
+        return openSnapshotDisputeCount[frontend] > 0;
+    }
+
+    function recordSnapshotDisputeOpened(address frontend) external {
+        openSnapshotDisputeCount[frontend] += 1;
+    }
+
+    function recordSnapshotDisputeClosed(address frontend) external {
+        uint256 openDisputes = openSnapshotDisputeCount[frontend];
+        require(openDisputes > 0, "No open snapshot dispute");
+        openSnapshotDisputeCount[frontend] = openDisputes - 1;
     }
 
     function authorizedSnapshotFrontend(address proposer) external view returns (address frontend) {

@@ -9,6 +9,15 @@ interface IFrontendRegistry {
     /// @notice Fixed LREP stake required for frontend registration
     function STAKE_AMOUNT() external view returns (uint256);
 
+    /// @notice Whether a frontend operator has at least one oracle snapshot under active challenge.
+    function hasOpenSnapshotDispute(address frontend) external view returns (bool);
+
+    /// @notice Record that an authorized oracle accepted a challenge against this frontend's snapshot.
+    function recordSnapshotDisputeOpened(address frontend) external;
+
+    /// @notice Record that an authorized oracle resolved a previously challenged frontend snapshot.
+    function recordSnapshotDisputeClosed(address frontend) external;
+
     /// @notice Check if a frontend address is eligible to earn fees
     /// @param frontend The frontend address to check
     /// @return True if the frontend is fully bonded, not slashed, and not exiting

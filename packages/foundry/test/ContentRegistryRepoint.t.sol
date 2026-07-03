@@ -54,6 +54,14 @@ contract MockFrontendRegistryForRepoint {
     function accessRecorderForFrontend(address) external pure returns (address recorder) {
         return address(0);
     }
+
+    function hasOpenSnapshotDispute(address) external pure returns (bool) {
+        return false;
+    }
+
+    function recordSnapshotDisputeOpened(address) external { }
+
+    function recordSnapshotDisputeClosed(address) external { }
 }
 
 contract ContentRegistryRepointTest is VotingTestBase {

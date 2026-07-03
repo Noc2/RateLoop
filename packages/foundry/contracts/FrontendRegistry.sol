@@ -28,11 +28,15 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     error HistoricalFeeCreditor();
     error FeeCreditorRoleManagedInternally();
+    error InvalidFrontend();
+    error NoOpenSnapshotDispute();
+    error SnapshotDisputeActive();
 
     // --- Access Control Roles ---
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
     bytes32 public constant FEE_CREDITOR_ROLE = keccak256("FEE_CREDITOR_ROLE");
+    bytes32 public constant SNAPSHOT_DISPUTE_RECORDER_ROLE = keccak256("SNAPSHOT_DISPUTE_RECORDER_ROLE");
 
     /// @notice Maximum LREP that can be credited in a single creditFees() call (50,000 LREP with 6 decimals)
     /// @dev Launch round caps allow at most about 38,000 LREP of frontend fees in one round.
@@ -99,9 +103,11 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => uint256) public pendingFeeWithdrawalReleaseAt;
     mapping(address => address) public accessRecorderForFrontend;
     mapping(address => address) public frontendForAccessRecorder;
+    /// @notice Active challenged oracle snapshots for each frontend operator.
+    mapping(address => uint256) public openSnapshotDisputeCount;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[37] private __gap;
+    uint256[36] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -122,6 +128,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event AccessRecorderUpdated(
         address indexed frontend, address indexed previousRecorder, address indexed newRecorder
     );
+    event SnapshotDisputeOpened(address indexed frontend, address indexed recorder, uint256 openDisputes);
+    event SnapshotDisputeClosed(address indexed frontend, address indexed recorder, uint256 openDisputes);
     /// @notice L-Frontend-2: emitted when governance rotates the confiscation recipient.
     event ConfiscationRecipientUpdated(address indexed previous, address indexed current);
     event FeeCreditorUpdated(address indexed oldCreditor, address indexed newCreditor);
@@ -154,6 +162,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
         // FEE_CREDITOR_ROLE is administered by governance, not DEFAULT_ADMIN_ROLE.
         _setRoleAdmin(FEE_CREDITOR_ROLE, GOVERNANCE_ROLE);
+        // Deployment admin wires the launch oracle; governance keeps ADMIN_ROLE for future rotations.
+        _setRoleAdmin(SNAPSHOT_DISPUTE_RECORDER_ROLE, ADMIN_ROLE);
 
         lrepToken = IERC20(_lrepToken);
         confiscationRecipient = _governance;
@@ -186,6 +196,11 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     function getAccumulatedFees(address frontend) external view override returns (uint256 lrepFees) {
         Frontend storage f = frontends[frontend];
         return uint256(f.lrepFees);
+    }
+
+    /// @inheritdoc IFrontendRegistry
+    function hasOpenSnapshotDispute(address frontend) public view override returns (bool) {
+        return openSnapshotDisputeCount[frontend] > 0;
     }
 
     /// @inheritdoc IFrontendRegistry
@@ -345,6 +360,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
             feeReviewAvailableAt = pendingFeeWithdrawalReleaseAt[msg.sender];
         }
         require(block.timestamp >= feeReviewAvailableAt, "Fee withdrawal delay active");
+        _requireNoOpenSnapshotDispute(msg.sender);
 
         uint256 refund = uint256(f.stakedAmount);
         uint256 pendingFees = uint256(f.lrepFees) + pendingWithdrawal;
@@ -369,9 +385,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     /// @notice Start a delayed withdrawal of accumulated LREP fees.
     /// @dev The amount stays in the registry and remains fully slashable until
-    ///      `FEE_WITHDRAWAL_DELAY` elapses, so an operator cannot drain the fee buffer ahead of
-    ///      a slashing review. One pending withdrawal per frontend; complete it before
-    ///      requesting the next.
+    ///      `FEE_WITHDRAWAL_DELAY` elapses. Completion is also blocked while an authorized
+    ///      oracle reports an active challenge against the frontend's snapshot output. One
+    ///      pending withdrawal per frontend; complete it before requesting the next.
     function requestFeeWithdrawal() external nonReentrant {
         Frontend storage f = frontends[msg.sender];
         require(f.operator != address(0), "Not registered");
@@ -404,6 +420,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         uint256 lrepAmount = pendingFeeWithdrawalAmount[msg.sender];
         require(lrepAmount > 0, "No pending withdrawal");
         require(block.timestamp >= pendingFeeWithdrawalReleaseAt[msg.sender], "Withdrawal delay active");
+        _requireNoOpenSnapshotDispute(msg.sender);
 
         pendingFeeWithdrawalAmount[msg.sender] = 0;
         pendingFeeWithdrawalReleaseAt[msg.sender] = 0;
@@ -591,6 +608,34 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         emit FrontendSlashed(frontend, amount, reason);
     }
 
+    /// @inheritdoc IFrontendRegistry
+    function recordSnapshotDisputeOpened(address frontend)
+        external
+        override
+        onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE)
+    {
+        if (frontend == address(0)) revert InvalidFrontend();
+        uint256 openDisputes = openSnapshotDisputeCount[frontend] + 1;
+        openSnapshotDisputeCount[frontend] = openDisputes;
+        emit SnapshotDisputeOpened(frontend, msg.sender, openDisputes);
+    }
+
+    /// @inheritdoc IFrontendRegistry
+    function recordSnapshotDisputeClosed(address frontend)
+        external
+        override
+        onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE)
+    {
+        if (frontend == address(0)) revert InvalidFrontend();
+        uint256 openDisputes = openSnapshotDisputeCount[frontend];
+        if (openDisputes == 0) revert NoOpenSnapshotDispute();
+        unchecked {
+            openDisputes -= 1;
+        }
+        openSnapshotDisputeCount[frontend] = openDisputes;
+        emit SnapshotDisputeClosed(frontend, msg.sender, openDisputes);
+    }
+
     /// @notice Unslash a frontend (restore ability to operate)
     /// @param frontend The frontend address to unslash
     function unslashFrontend(address frontend) external onlyRole(GOVERNANCE_ROLE) {
@@ -760,6 +805,10 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     function _isEligible(address frontend, Frontend storage f) internal view returns (bool) {
         return f.operator != address(0) && !f.slashed && uint256(f.stakedAmount) >= STAKE_AMOUNT
             && frontendExitAvailableAt[frontend] == 0;
+    }
+
+    function _requireNoOpenSnapshotDispute(address frontend) internal view {
+        if (hasOpenSnapshotDispute(frontend)) revert SnapshotDisputeActive();
     }
 
     function _requireFeeCreditorForEngine(address creditor, address engine)

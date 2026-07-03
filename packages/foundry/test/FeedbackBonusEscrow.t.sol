@@ -32,6 +32,14 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
         return 1;
     }
 
+    function hasOpenSnapshotDispute(address) external pure returns (bool) {
+        return false;
+    }
+
+    function recordSnapshotDisputeOpened(address) external { }
+
+    function recordSnapshotDisputeClosed(address) external { }
+
     function isEligible(address frontend_) external view returns (bool) {
         return frontend_ == frontend;
     }

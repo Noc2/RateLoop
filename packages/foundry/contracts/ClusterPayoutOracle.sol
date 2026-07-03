@@ -139,6 +139,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(uint256 => bytes32) public correlationEpochSourceSetDigest;
     mapping(uint256 => mapping(bytes32 => bytes32)) public correlationEpochSnapshotCoverageDigest;
     mapping(address => uint256) public pendingBondWithdrawals;
+    /// @notice Active challenged snapshots keyed by accountable frontend operator.
+    mapping(address => uint256) public openDisputeCount;
     /// @notice Exact rejected round-payout proposal payloads. Used when the arbiter rejects bad
     ///         metadata around a deterministic weightRoot without burning the root itself.
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
@@ -388,6 +390,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         snapshot.status = SnapshotStatus.Challenged;
         snapshot.challenger = msg.sender;
         snapshot.bond += bond;
+        _recordSnapshotDisputeOpened(snapshot.frontendOperator);
         _pullExactChallengeBond(msg.sender, bond);
         emit CorrelationEpochChallenged(epochId, msg.sender, reasonHash);
     }
@@ -415,6 +418,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
         snapshot.status = SnapshotStatus.Finalized;
         snapshot.finalizedAt = block.timestamp.toUint64();
+        _recordSnapshotDisputeClosed(snapshot.frontendOperator);
         _creditBond(snapshot.proposer, snapshot.bond);
         snapshot.bond = 0;
         emit CorrelationEpochChallengeDismissed(epochId, msg.sender, reasonHash);
@@ -438,8 +442,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
         bytes32 correlationEpochDigest = _correlationEpochDigest(snapshot);
+        bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         snapshot.status = SnapshotStatus.Rejected;
         _markCorrelationEpochSnapshotRejected(epochId, correlationEpochDigest);
+        if (wasChallenged) {
+            _recordSnapshotDisputeClosed(snapshot.frontendOperator);
+        }
+        _rejectLiveRoundPayoutSnapshotsForRejectedEpoch(epochId, correlationEpochDigest);
         // Metadata-only rejection clears bad surrounding fields without burning the deterministic
         // root. The explicit root path is reserved for invalid scorer output.
         if (rejectRoot) {
@@ -476,6 +485,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
         snapshot.status = SnapshotStatus.Rejected;
         _markCorrelationEpochSnapshotRejected(epochId, correlationEpochDigest);
+        _rejectLiveRoundPayoutSnapshotsForRejectedEpoch(epochId, correlationEpochDigest);
         if (rejectRoot) {
             _rejectCorrelationEpochRoot(snapshot);
         }
@@ -618,6 +628,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         proposal.snapshot.status = SnapshotStatus.Challenged;
         proposal.challenger = msg.sender;
         proposal.bond += bond;
+        _recordSnapshotDisputeOpened(proposal.frontendOperator);
         _pullExactChallengeBond(msg.sender, bond);
         emit RoundPayoutSnapshotChallenged(snapshotKey, msg.sender, reasonHash);
     }
@@ -658,6 +669,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         _requireCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
+        _recordSnapshotDisputeClosed(proposal.frontendOperator);
         _creditBond(proposal.proposer, proposal.bond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotChallengeDismissed(snapshotKey, msg.sender, reasonHash);
@@ -704,8 +716,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         if (!_isObjectivelyInvalidRbtsSettlementSnapshot(proposal)) revert InvalidSnapshot();
 
+        bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
+        if (wasChallenged) {
+            _recordSnapshotDisputeClosed(proposal.frontendOperator);
+        }
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
         proposal.bond = 0;
@@ -717,8 +733,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
+        bool wasChallenged = proposal.snapshot.status == SnapshotStatus.Challenged;
         _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
+        if (wasChallenged) {
+            _recordSnapshotDisputeClosed(proposal.frontendOperator);
+        }
         if (rejectRoot) {
             rejectedRoundPayoutSnapshotRoots[snapshotKey][proposal.snapshot.weightRoot] = true;
         }
@@ -798,6 +818,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         return _correlationEpochDigest(snapshot);
+    }
+
+    function hasOpenDispute(address frontendOperator) external view returns (bool) {
+        return openDisputeCount[frontendOperator] > 0;
     }
 
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -1025,6 +1049,25 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
     }
 
+    function _rejectLiveRoundPayoutSnapshotsForRejectedEpoch(uint64 epochId, bytes32 correlationEpochDigest) private {
+        bytes32[] storage snapshotKeys = correlationEpochSnapshotKeys[epochId];
+        uint256 length = snapshotKeys.length;
+        for (uint256 i; i < length;) {
+            bytes32 snapshotKey = snapshotKeys[i];
+            RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+            if (
+                proposal.snapshot.correlationEpochId == epochId
+                    && proposal.correlationEpochDigest == correlationEpochDigest
+                    && _isUnfinalizedRoundPayoutStatus(proposal.snapshot.status)
+            ) {
+                _rejectStaleRoundPayoutSnapshot(snapshotKey, proposal);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function _roundPayoutSnapshotConsumptionStatus(RoundPayoutProposal storage proposal)
         private
         view
@@ -1076,7 +1119,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
+        bool wasChallenged = proposal.snapshot.status == SnapshotStatus.Challenged;
         _markRoundPayoutSnapshotRejected(snapshotKey, proposal);
+        if (wasChallenged) {
+            _recordSnapshotDisputeClosed(proposal.frontendOperator);
+        }
         proposal.bond = 0;
         if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
     }
@@ -1314,6 +1361,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 || status == SnapshotStatus.Finalized;
     }
 
+    function _isUnfinalizedRoundPayoutStatus(SnapshotStatus status) private pure returns (bool) {
+        return status == SnapshotStatus.Proposed || status == SnapshotStatus.Challenged;
+    }
+
     function _correlationEpochDigest(CorrelationEpochSnapshot storage snapshot) private view returns (bytes32) {
         return _correlationEpochDigest(
             snapshot.epochId,
@@ -1377,6 +1428,21 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (amount == 0) return;
         pendingBondWithdrawals[to] += amount;
         emit BondWithdrawalCredited(to, amount);
+    }
+
+    function _recordSnapshotDisputeOpened(address frontendOperator) private {
+        openDisputeCount[frontendOperator] += 1;
+        frontendRegistry.recordSnapshotDisputeOpened(frontendOperator);
+    }
+
+    function _recordSnapshotDisputeClosed(address frontendOperator) private {
+        uint256 openDisputes = openDisputeCount[frontendOperator];
+        if (openDisputes == 0) revert InvalidSnapshot();
+        unchecked {
+            openDisputes -= 1;
+        }
+        openDisputeCount[frontendOperator] = openDisputes;
+        frontendRegistry.recordSnapshotDisputeClosed(frontendOperator);
     }
 
     function _setFrontendRegistry(address newFrontendRegistry) private {
