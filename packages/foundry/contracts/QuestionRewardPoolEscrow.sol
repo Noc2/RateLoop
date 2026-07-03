@@ -19,7 +19,6 @@ import { QuestionRewardPoolEscrowBundleClaimableLib } from "./libraries/Question
 import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
-    EqualShareInputs,
     WeightedShareInputs,
     ClaimableQuestionRewardParams
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
@@ -683,43 +682,24 @@ contract QuestionRewardPoolEscrow is
             uint256 reservedFrontendFee
         )
     {
-        if (snapshot.totalClaimWeight == 0) {
-            reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
-                snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
+        require(snapshot.totalClaimWeight > 0, "No claim weight");
+        (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
+            QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                claimWeight,
+                WeightedShareInputs({
+                    allocation: snapshot.allocation,
+                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                    totalClaimWeight: snapshot.totalClaimWeight,
+                    claimedWeight: snapshot.claimedWeight,
+                    claimedAmount: snapshot.claimedAmount,
+                    frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
+                })
             );
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
-                QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
-                    votingEngine,
-                    rewardPool.contentId,
-                    roundId,
-                    commitKey,
-                    frontend,
-                    EqualShareInputs({
-                        allocation: snapshot.allocation,
-                        frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                        eligibleParticipants: snapshot.eligibleVoters,
-                        claimedCount: snapshot.claimedCount
-                    })
-                );
-        } else {
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
-                QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
-                    votingEngine,
-                    rewardPool.contentId,
-                    roundId,
-                    commitKey,
-                    frontend,
-                    claimWeight,
-                    WeightedShareInputs({
-                        allocation: snapshot.allocation,
-                        frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                        totalClaimWeight: snapshot.totalClaimWeight,
-                        claimedWeight: snapshot.claimedWeight,
-                        claimedAmount: snapshot.claimedAmount,
-                        frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
-                    })
-                );
-        }
     }
 
     /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (LREP/USDC).

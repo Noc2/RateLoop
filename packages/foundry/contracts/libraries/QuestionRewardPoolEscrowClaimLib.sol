@@ -400,19 +400,7 @@ library QuestionRewardPoolEscrowClaimLib {
                 0
             );
         }
-        if (snapshot.totalClaimWeight == 0) {
-            return _claimableEqual(
-                votingEngine,
-                rewardPool.contentId,
-                roundId,
-                commitKey,
-                frontend,
-                snapshot.allocation,
-                snapshot.frontendFeeAllocation,
-                snapshot.eligibleVoters,
-                snapshot.claimedCount
-            );
-        }
+        if (snapshot.totalClaimWeight == 0) return 0;
         if (snapshot.claimedWeight >= snapshot.totalClaimWeight) return 0;
         return _claimableWeighted(
             votingEngine,

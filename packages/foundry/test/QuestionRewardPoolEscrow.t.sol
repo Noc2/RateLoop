@@ -5311,6 +5311,26 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(uint256(vm.load(address(rewardPoolEscrow), clusterSnapshotDigestSlot)), 0);
     }
 
+    function testQuestionRewardClaimRejectsQualifiedSnapshotWithoutClaimWeight() public {
+        uint256 contentId = _submitQuestion("zero-claim-weight-snapshot");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.totalClaimWeight, 30_000);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+
+        bytes32 totalClaimWeightSlot = bytes32(uint256(_roundSnapshotStorageSlot(rewardPoolId, roundId)) + 4);
+        vm.store(address(rewardPoolEscrow), totalClaimWeightSlot, bytes32(0));
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+
+        vm.prank(voter1);
+        vm.expectRevert("No claim weight");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
     function testRewardPoolCreatedBeforeClusterOracleKeepsStandardClaims() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
