@@ -84,6 +84,8 @@ const LAUNCH_PAYOUT_FINALITY_BUDGET_SECONDS = 60 * 60;
 const DEFAULT_KEEPER_OPS_LAG_BUDGET_SECONDS = 15 * 60;
 const MONITORING_EVIDENCE_PATTERN =
   /\b(alert|alerts|dashboard|dashboards|keeper|indexer|monitoring|ponder|p95|p99|slo|sla|breach|breaches)\b/i;
+const EPOCH_REJECTION_CHILD_SNAPSHOT_NOTE =
+  "If this epoch has challenged child round payout snapshots whose fee-withdrawal freeze should clear immediately, batch explicit child snapshot rejections with this epoch action.";
 
 const protocolConfigConfidentialityAbi = [
   {
@@ -679,6 +681,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     contractName: "ClusterPayoutOracle",
     functionName: "rejectCorrelationEpoch",
     description: "Create a proposal to reject an exact correlation epoch payload without blacklisting its root.",
+    note: EPOCH_REJECTION_CHILD_SNAPSHOT_NOTE,
     fields: [
       { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
       {
@@ -703,6 +706,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     contractName: "ClusterPayoutOracle",
     functionName: "rejectCorrelationEpochRoot",
     description: "Create a proposal to reject a correlation epoch and blacklist its cluster root.",
+    note: EPOCH_REJECTION_CHILD_SNAPSHOT_NOTE,
     fields: [
       { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
       {
@@ -727,6 +731,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     contractName: "ClusterPayoutOracle",
     functionName: "rejectFinalizedCorrelationEpoch",
     description: "Create a proposal to reject a finalized correlation epoch payload without blacklisting its root.",
+    note: EPOCH_REJECTION_CHILD_SNAPSHOT_NOTE,
     advanced: true,
     fields: [
       { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
@@ -752,6 +757,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     contractName: "ClusterPayoutOracle",
     functionName: "rejectFinalizedCorrelationEpochRoot",
     description: "Create a proposal to reject a finalized correlation epoch and blacklist its cluster root.",
+    note: EPOCH_REJECTION_CHILD_SNAPSHOT_NOTE,
     advanced: true,
     fields: [
       { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
@@ -963,6 +969,7 @@ export function getGovernanceActionTemplateSummaries() {
     id: template.id,
     label: template.label,
     mode: template.mode,
+    ...(template.note ? { note: template.note } : {}),
   }));
 }
 

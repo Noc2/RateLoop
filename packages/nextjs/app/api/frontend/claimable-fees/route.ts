@@ -11,6 +11,7 @@ const LOOKUP_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
 function buildDegradedFrontendFeeResponse(offset: number) {
   return {
+    error: "Claimable frontend fee lookup unavailable",
     items: [],
     hasMore: false,
     nextOffset: offset,
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
     const result = await listClaimableFrontendFeeRoundsForRoute(frontend, { chainId: parsedChainId, limit, offset });
     return NextResponse.json(result);
   } catch (error) {
-    console.warn("Failed to fetch claimable frontend fees; returning degraded empty response:", error);
-    return NextResponse.json(buildDegradedFrontendFeeResponse(offset));
+    console.warn("Failed to fetch claimable frontend fees; returning degraded response:", error);
+    return NextResponse.json(buildDegradedFrontendFeeResponse(offset), { status: 503 });
   }
 }

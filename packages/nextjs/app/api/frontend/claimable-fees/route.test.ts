@@ -10,7 +10,7 @@ const originalPonderUrl = env.NEXT_PUBLIC_PONDER_URL;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 const TEST_FRONTEND = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
-const TEST_CHAIN_ID = 4801;
+const TEST_CHAIN_ID = 84532;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type DbModule = typeof import("~~/lib/db");
@@ -145,7 +145,7 @@ test("frontend claimable fees route accepts an explicit supported chain id", asy
   assert.equal(response.status, 200);
 });
 
-test("frontend claimable fees route returns a degraded empty page when lookup fails", async () => {
+test("frontend claimable fees route returns a degraded unavailable response when lookup fails", async () => {
   lookup.__setListClaimableFrontendFeeRoundsForTests(async () => {
     throw new Error("Ponder request timed out");
   });
@@ -156,8 +156,9 @@ test("frontend claimable fees route returns a degraded empty page when lookup fa
     ),
   );
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
+    error: "Claimable frontend fee lookup unavailable",
     items: [],
     hasMore: false,
     nextOffset: 7,
@@ -194,7 +195,7 @@ test("frontend claimable fees route rejects malformed pagination params", async 
 test("frontend claimable fees route rejects unsupported chain ids", async () => {
   const response = await route.GET(
     makeRequest(
-      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=31337&limit=10&offset=0`,
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=4801&limit=10&offset=0`,
     ),
   );
 

@@ -3,6 +3,7 @@ import {
   buildClaimRewardsButtonParts,
   shouldShowClaimPreparationLabel,
   shouldShowClaimRewardsUnavailableStatus,
+  shouldShowFrontendWithdrawalPausedStatus,
 } from "./ClaimRewardsButton";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -117,6 +118,32 @@ test("shouldShowClaimRewardsUnavailableStatus can be hidden on global wallet sur
     shouldShowClaimRewardsUnavailableStatus({
       ...unavailableState,
       showUnavailableStatus: false,
+    }),
+    false,
+  );
+});
+
+test("shouldShowFrontendWithdrawalPausedStatus only shows an otherwise empty paused withdrawal state", () => {
+  const pausedState = {
+    claimablesLoading: false,
+    frontendFeeWithdrawalBlockedByDispute: true,
+    isClaiming: false,
+    isPreparingActiveClaim: false,
+    visibleClaimableItemsCount: 0,
+  };
+
+  assert.equal(shouldShowFrontendWithdrawalPausedStatus(pausedState), true);
+  assert.equal(
+    shouldShowFrontendWithdrawalPausedStatus({
+      ...pausedState,
+      visibleClaimableItemsCount: 1,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowFrontendWithdrawalPausedStatus({
+      ...pausedState,
+      frontendFeeWithdrawalBlockedByDispute: false,
     }),
     false,
   );

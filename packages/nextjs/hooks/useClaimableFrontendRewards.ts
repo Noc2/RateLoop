@@ -206,21 +206,27 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     });
   }, [canCreditRoundFees, frontendAddress, frontendRewardsEnabled, roundFeesQuery.data?.items]);
 
+  const pendingAmount = pendingFeeWithdrawal ?? 0n;
+  const pendingReleaseAt = pendingFeeWithdrawalReleaseAt ?? 0n;
+  const frontendFeeWithdrawalPlan = useMemo(
+    () =>
+      getFrontendFeeWithdrawalPlan({
+        canWithdrawFees,
+        hasOpenSnapshotDispute,
+        nowSeconds,
+        pendingAmount,
+        pendingReleaseAt,
+      }),
+    [canWithdrawFees, hasOpenSnapshotDispute, nowSeconds, pendingAmount, pendingReleaseAt],
+  );
+
   const claimableItems = useMemo<ClaimableRewardItem[]>(() => {
     if (!frontendRewardsEnabled || !frontendAddress) {
       return [];
     }
 
     const items = [...roundFeeItems];
-    const pendingAmount = pendingFeeWithdrawal ?? 0n;
-    const pendingReleaseAt = pendingFeeWithdrawalReleaseAt ?? 0n;
-    const { canCompletePendingWithdrawal, requestSlotFree } = getFrontendFeeWithdrawalPlan({
-      canWithdrawFees,
-      hasOpenSnapshotDispute,
-      nowSeconds,
-      pendingAmount,
-      pendingReleaseAt,
-    });
+    const { canCompletePendingWithdrawal, requestSlotFree } = frontendFeeWithdrawalPlan;
 
     if (canCompletePendingWithdrawal) {
       items.push({
@@ -248,11 +254,9 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
     canWithdrawFees,
     frontendAddress,
     frontendRewardsEnabled,
-    hasOpenSnapshotDispute,
-    pendingFeeWithdrawal,
-    pendingFeeWithdrawalReleaseAt,
+    frontendFeeWithdrawalPlan,
+    pendingAmount,
     roundFeeItems,
-    nowSeconds,
   ]);
 
   const totalClaimable = useMemo(() => claimableItems.reduce((sum, item) => sum + item.reward, 0n), [claimableItems]);
@@ -296,6 +300,8 @@ export function useClaimableFrontendRewards({ enabled = true }: UseClaimableFron
       hasOpenSnapshotDisputeLoading ||
       (frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isLoading),
     feeWithdrawalBlockedByDispute: hasOpenSnapshotDispute === true,
+    feeWithdrawalMaturedBlockedByDispute:
+      frontendFeeWithdrawalPlan.pendingMatured && frontendFeeWithdrawalPlan.withdrawalBlockedByDispute,
     feesUnavailable:
       (frontendRewardsEnabled && canCreditRoundFees && roundFeesQuery.isError) ||
       (frontendRewardsEnabled && isRegistered && hasOpenSnapshotDisputeError),

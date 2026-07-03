@@ -160,6 +160,20 @@ test("governance oracle timing template encodes with resolved contract metadata"
   assert.match(data, /^0x[0-9a-f]+$/u);
 });
 
+test("governance epoch rejection templates warn about child snapshot fee freezes", () => {
+  const templates = new Map(getGovernanceActionTemplateSummaries().map(template => [template.id, template]));
+
+  for (const id of [
+    "oracle-reject-correlation-epoch",
+    "oracle-reject-correlation-epoch-root",
+    "oracle-reject-finalized-correlation-epoch",
+    "oracle-reject-finalized-correlation-epoch-root",
+  ]) {
+    assert.match(templates.get(id)?.note ?? "", /child round payout snapshots/i);
+    assert.match(templates.get(id)?.note ?? "", /fee-withdrawal freeze/i);
+  }
+});
+
 test("oracle timing preview warns above the one-hour launch budget", () => {
   const launchPreview = getOracleTimingLaunchBudgetPreview({
     challengeWindow: "900",

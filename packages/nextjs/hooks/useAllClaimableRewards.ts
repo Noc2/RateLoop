@@ -84,6 +84,7 @@ export function useAllClaimableRewards(options: UseAllClaimableRewardsOptions = 
   const {
     claimableItems: frontendClaimableItems,
     isLoading: frontendClaimableLoading,
+    feeWithdrawalMaturedBlockedByDispute: frontendFeeWithdrawalMaturedBlockedByDispute,
     feesUnavailable: frontendFeesUnavailable,
     refetch: refetchFrontendClaimables,
   } = useClaimableFrontendRewards({ enabled: includeFrontendRewards });
@@ -340,6 +341,7 @@ export function useAllClaimableRewards(options: UseAllClaimableRewardsOptions = 
     questionRewardPoolClaimableLoading;
   const ponderUnavailable =
     votesPonderUnavailable || questionRewardsPonderUnavailable || (includeFrontendRewards && frontendFeesUnavailable);
+  const frontendFeeWithdrawalBlockedByDispute = includeFrontendRewards && frontendFeeWithdrawalMaturedBlockedByDispute;
 
   const refetch = useCallback(async () => {
     await Promise.all([
@@ -368,6 +370,7 @@ export function useAllClaimableRewards(options: UseAllClaimableRewardsOptions = 
     activeStake,
     isLoading,
     ponderUnavailable,
+    frontendFeeWithdrawalBlockedByDispute,
     refetch,
   };
 }

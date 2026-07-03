@@ -337,6 +337,7 @@ export function FrontendRegistration() {
   const {
     items: claimableRoundFees,
     totalClaimable: totalClaimableRoundFees,
+    isError: claimableRoundFeesError,
     isLoading: claimableRoundFeesLoading,
     hasNextPage,
     fetchNextPage,
@@ -352,6 +353,16 @@ export function FrontendRegistration() {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, [hasPendingDeadline]);
+
+  const refetchFeeWithdrawalDisputeState = async () => {
+    const result = await refetchHasOpenSnapshotDispute();
+    return getFrontendFeeCompletionDisputeState({
+      hasOpenSnapshotDispute: result.data === true || result.data === false ? result.data : undefined,
+      isError: result.isError,
+      isLoading: false,
+      isRegistered,
+    });
+  };
 
   const ensureGasBalance = (options: { usesSponsoredGas?: boolean } = {}) => {
     if (!options.usesSponsoredGas && (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls)) {
@@ -504,6 +515,16 @@ export function FrontendRegistration() {
 
     setIsCompletingDeregister(true);
     try {
+      const freshDisputeState = await refetchFeeWithdrawalDisputeState();
+      if (freshDisputeState.statusUnavailable) {
+        notification.warning("Checking payout-root challenge status. Retry in a moment.");
+        return;
+      }
+      if (freshDisputeState.blockedByDispute) {
+        notification.warning("Deregistration completion is paused while a payout snapshot challenge is active.");
+        return;
+      }
+
       if (canUseBatchedFrontendRegistryCalls) {
         await executeSponsoredCalls(
           [
@@ -585,6 +606,16 @@ export function FrontendRegistration() {
 
     setIsCompletingWithdrawal(true);
     try {
+      const freshDisputeState = await refetchFeeWithdrawalDisputeState();
+      if (freshDisputeState.statusUnavailable) {
+        notification.warning("Checking payout-root challenge status. Retry in a moment.");
+        return;
+      }
+      if (freshDisputeState.blockedByDispute) {
+        notification.warning("Withdrawal is paused while a payout snapshot challenge is active.");
+        return;
+      }
+
       if (canUseBatchedFrontendRegistryCalls) {
         await executeSponsoredCalls(
           [
@@ -1156,6 +1187,10 @@ export function FrontendRegistration() {
                 <span className="loading loading-spinner loading-xs" />
                 Scanning settled rounds for claimable frontend fees...
               </div>
+            ) : claimableRoundFeesError ? (
+              <p className="text-sm text-warning">
+                Fee scan unavailable. Retry in a moment; registry withdrawal controls below remain available.
+              </p>
             ) : claimableRoundFees.length > 0 ? (
               <div className="space-y-3">
                 <GradientActionButton

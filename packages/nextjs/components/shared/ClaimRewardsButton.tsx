@@ -96,6 +96,28 @@ export function shouldShowClaimRewardsUnavailableStatus({
   );
 }
 
+export function shouldShowFrontendWithdrawalPausedStatus({
+  claimablesLoading,
+  frontendFeeWithdrawalBlockedByDispute,
+  isClaiming,
+  isPreparingActiveClaim,
+  visibleClaimableItemsCount,
+}: {
+  claimablesLoading: boolean;
+  frontendFeeWithdrawalBlockedByDispute: boolean;
+  isClaiming: boolean;
+  isPreparingActiveClaim: boolean;
+  visibleClaimableItemsCount: number;
+}) {
+  return (
+    frontendFeeWithdrawalBlockedByDispute &&
+    !claimablesLoading &&
+    visibleClaimableItemsCount === 0 &&
+    !isClaiming &&
+    !isPreparingActiveClaim
+  );
+}
+
 export function ClaimRewardsButton({
   className,
   includeFrontendRewards = true,
@@ -108,6 +130,7 @@ export function ClaimRewardsButton({
     claimableItems,
     totalLrepClaimable,
     totalUsdcClaimable,
+    frontendFeeWithdrawalBlockedByDispute,
     ponderUnavailable,
     isLoading: claimablesLoading,
     refetch: refetchClaimable,
@@ -229,7 +252,8 @@ export function ClaimRewardsButton({
     totalUsdcClaimable <= 0n &&
     !isClaiming &&
     !isPreparingActiveClaim &&
-    !ponderUnavailable
+    !ponderUnavailable &&
+    !frontendFeeWithdrawalBlockedByDispute
   ) {
     return null;
   }
@@ -247,6 +271,22 @@ export function ClaimRewardsButton({
     return (
       <p className={`${className ?? ""} text-xs text-base-content/60`} role="status">
         Reward indexer unavailable
+      </p>
+    );
+  }
+
+  if (
+    shouldShowFrontendWithdrawalPausedStatus({
+      claimablesLoading,
+      frontendFeeWithdrawalBlockedByDispute,
+      isClaiming,
+      isPreparingActiveClaim,
+      visibleClaimableItemsCount: visibleClaimableItems.length,
+    })
+  ) {
+    return (
+      <p className={`${className ?? ""} text-xs text-base-content/60`} role="status">
+        Frontend withdrawal paused by payout dispute
       </p>
     );
   }
