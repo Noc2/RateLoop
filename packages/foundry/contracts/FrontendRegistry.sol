@@ -106,9 +106,12 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => address) public frontendForAccessRecorder;
     /// @notice Active challenged oracle snapshots for each frontend operator.
     mapping(address => uint256) public openSnapshotDisputeCount;
+    /// @notice Active snapshot disputes opened by each authorized recorder.
+    mapping(address => uint256) public openSnapshotDisputeCountByRecorder;
+    mapping(address => mapping(address => uint256)) private openSnapshotDisputeCountByRecorderAndFrontend;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[36] private __gap;
+    uint256[34] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -177,11 +180,19 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     function revokeRole(bytes32 role, address account) public override {
         if (role == FEE_CREDITOR_ROLE) revert FeeCreditorRoleManagedInternally();
+        if (role == SNAPSHOT_DISPUTE_RECORDER_ROLE && openSnapshotDisputeCountByRecorder[account] != 0) {
+            revert SnapshotDisputeActive();
+        }
         super.revokeRole(role, account);
     }
 
     function renounceRole(bytes32 role, address callerConfirmation) public override {
         if (role == FEE_CREDITOR_ROLE) revert FeeCreditorRoleManagedInternally();
+        if (
+            role == SNAPSHOT_DISPUTE_RECORDER_ROLE && openSnapshotDisputeCountByRecorder[callerConfirmation] != 0
+        ) {
+            revert SnapshotDisputeActive();
+        }
         super.renounceRole(role, callerConfirmation);
     }
 
@@ -614,15 +625,21 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         if (frontend == address(0)) revert InvalidFrontend();
         uint256 openDisputes = openSnapshotDisputeCount[frontend] + 1;
         openSnapshotDisputeCount[frontend] = openDisputes;
+        openSnapshotDisputeCountByRecorder[msg.sender] += 1;
+        openSnapshotDisputeCountByRecorderAndFrontend[msg.sender][frontend] += 1;
         emit SnapshotDisputeOpened(frontend, msg.sender, openDisputes);
     }
 
     /// @inheritdoc IFrontendRegistry
     function recordSnapshotDisputeClosed(address frontend) external override onlyRole(SNAPSHOT_DISPUTE_RECORDER_ROLE) {
         if (frontend == address(0)) revert InvalidFrontend();
+        uint256 recorderOpenDisputes = openSnapshotDisputeCountByRecorderAndFrontend[msg.sender][frontend];
+        if (recorderOpenDisputes == 0) revert NoOpenSnapshotDispute();
         uint256 openDisputes = openSnapshotDisputeCount[frontend];
         if (openDisputes == 0) revert NoOpenSnapshotDispute();
         unchecked {
+            openSnapshotDisputeCountByRecorderAndFrontend[msg.sender][frontend] = recorderOpenDisputes - 1;
+            openSnapshotDisputeCountByRecorder[msg.sender] -= 1;
             openDisputes -= 1;
         }
         openSnapshotDisputeCount[frontend] = openDisputes;

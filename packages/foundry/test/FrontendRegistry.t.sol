@@ -1123,6 +1123,56 @@ contract FrontendRegistryTest is Test {
         registry.recordSnapshotDisputeClosed(frontend1);
     }
 
+    function test_SnapshotDisputeMustCloseThroughOpeningRecorder() public {
+        address firstRecorder = address(0xD15);
+        address secondRecorder = address(0xD16);
+        bytes32 disputeRecorderRole = registry.SNAPSHOT_DISPUTE_RECORDER_ROLE();
+        vm.startPrank(admin);
+        registry.grantRole(disputeRecorderRole, firstRecorder);
+        registry.grantRole(disputeRecorderRole, secondRecorder);
+        vm.stopPrank();
+
+        vm.prank(firstRecorder);
+        registry.recordSnapshotDisputeOpened(frontend1);
+        assertEq(registry.openSnapshotDisputeCount(frontend1), 1);
+        assertEq(registry.openSnapshotDisputeCountByRecorder(firstRecorder), 1);
+        assertEq(registry.openSnapshotDisputeCountByRecorder(secondRecorder), 0);
+
+        vm.prank(secondRecorder);
+        vm.expectRevert(FrontendRegistry.NoOpenSnapshotDispute.selector);
+        registry.recordSnapshotDisputeClosed(frontend1);
+
+        vm.prank(firstRecorder);
+        registry.recordSnapshotDisputeClosed(frontend1);
+        assertEq(registry.openSnapshotDisputeCount(frontend1), 0);
+        assertEq(registry.openSnapshotDisputeCountByRecorder(firstRecorder), 0);
+    }
+
+    function test_SnapshotDisputeRecorderRoleCannotRotateWhileDisputesAreOpen() public {
+        address disputeRecorder = address(0xD15);
+        bytes32 disputeRecorderRole = registry.SNAPSHOT_DISPUTE_RECORDER_ROLE();
+        vm.prank(admin);
+        registry.grantRole(disputeRecorderRole, disputeRecorder);
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeOpened(frontend1);
+
+        vm.prank(admin);
+        vm.expectRevert(FrontendRegistry.SnapshotDisputeActive.selector);
+        registry.revokeRole(disputeRecorderRole, disputeRecorder);
+
+        vm.prank(disputeRecorder);
+        vm.expectRevert(FrontendRegistry.SnapshotDisputeActive.selector);
+        registry.renounceRole(disputeRecorderRole, disputeRecorder);
+
+        vm.prank(disputeRecorder);
+        registry.recordSnapshotDisputeClosed(frontend1);
+
+        vm.prank(admin);
+        registry.revokeRole(disputeRecorderRole, disputeRecorder);
+        assertFalse(registry.hasRole(disputeRecorderRole, disputeRecorder));
+    }
+
     function test_RevertRequestFeeWithdrawalWhilePending() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);

@@ -890,6 +890,28 @@ contract ClusterPayoutOracleTest is Test {
         );
     }
 
+    function test_SetFrontendRegistryRejectsOpenSnapshotDisputes() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+
+        MockFrontendRegistry replacement = new MockFrontendRegistry();
+        replacement.setEligible(address(this), true);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
+        oracle.setFrontendRegistry(address(replacement));
+
+        oracle.finalizeCorrelationEpoch(1);
+        oracle.setFrontendRegistry(address(replacement));
+    }
+
     // M-Oracle-1: snapshot proposals must wait until the consumer signals the round source is
     // ready. Without this gate one eligible frontend could squat the slot at gas cost only and
     // censor honest payouts for the full challenge window. Verifies both the not-yet-ready

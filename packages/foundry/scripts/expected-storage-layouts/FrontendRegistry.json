@@ -117,6 +117,18 @@
     {
       "slot": 18,
       "offset": 0,
+      "label": "openSnapshotDisputeCountByRecorder",
+      "type": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "slot": 19,
+      "offset": 0,
+      "label": "openSnapshotDisputeCountByRecorderAndFrontend",
+      "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))"
+    },
+    {
+      "slot": 20,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -138,8 +150,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[36]",
-      "numberOfBytes": "1152",
+      "label": "uint256[34]",
+      "numberOfBytes": "1088",
       "base": "t_uint256"
     },
     {
@@ -175,6 +187,14 @@
       "numberOfBytes": "32",
       "key": "t_address",
       "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+      "encoding": "mapping",
+      "label": "mapping(address => mapping(address => uint256))",
+      "numberOfBytes": "32",
+      "key": "t_address",
+      "value": "t_mapping(t_address,t_uint256)"
     },
     {
       "id": "t_mapping(t_address,t_struct(Frontend))",

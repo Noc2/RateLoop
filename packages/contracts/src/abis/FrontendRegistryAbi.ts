@@ -778,6 +778,25 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "openSnapshotDisputeCountByRecorder",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pendingFeeWithdrawalAmount",
     "inputs": [
       {

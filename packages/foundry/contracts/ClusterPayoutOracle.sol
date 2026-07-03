@@ -139,6 +139,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(uint256 => bytes32) public correlationEpochSourceSetDigest;
     mapping(uint256 => mapping(bytes32 => bytes32)) public correlationEpochSnapshotCoverageDigest;
     mapping(address => uint256) public pendingBondWithdrawals;
+    uint256 private openSnapshotDisputes;
     /// @notice Exact rejected round-payout proposal payloads. Used when the arbiter rejects bad
     ///         metadata around a deterministic weightRoot without burning the root itself.
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
@@ -1403,13 +1404,22 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     function _recordSnapshotDisputeOpened(address frontendOperator) private {
         frontendRegistry.recordSnapshotDisputeOpened(frontendOperator);
+        unchecked {
+            ++openSnapshotDisputes;
+        }
     }
 
     function _recordSnapshotDisputeClosed(address frontendOperator) private {
         frontendRegistry.recordSnapshotDisputeClosed(frontendOperator);
+        uint256 remainingDisputes = openSnapshotDisputes;
+        if (remainingDisputes == 0) revert SnapshotNotFinalizable();
+        unchecked {
+            openSnapshotDisputes = remainingDisputes - 1;
+        }
     }
 
     function _setFrontendRegistry(address newFrontendRegistry) private {
+        if (address(frontendRegistry) != address(0) && openSnapshotDisputes != 0) revert SnapshotChallenged();
         if (newFrontendRegistry == address(0)) revert InvalidAddress();
         if (newFrontendRegistry.code.length == 0) revert InvalidAddress();
         try IFrontendRegistry(newFrontendRegistry).STAKE_AMOUNT() returns (uint256 stakeAmount) {
