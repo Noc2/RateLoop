@@ -336,7 +336,8 @@ const REQUIRED_COMPLETION_CALLS = [
     keyArgCount: 1,
   },
   {
-    label: "ClusterPayoutOracle.setRoundPayoutSnapshotConsumer(RBTS_SETTLEMENT)",
+    label:
+      "ClusterPayoutOracle.setRoundPayoutSnapshotConsumer(RBTS_SETTLEMENT)",
     contractName: "ClusterPayoutOracle",
     target: "ClusterPayoutOracle",
     functionName: "setRoundPayoutSnapshotConsumer(uint8,address)",

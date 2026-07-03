@@ -34,10 +34,7 @@ test("contract size gate validates deploy-profile artifacts", () => {
   const packageJson = JSON.parse(
     readFileSync(join(packageRoot, "package.json"), "utf8")
   );
-  const makefile = readFileSync(
-    join(packageRoot, "Makefile"),
-    "utf8"
-  );
+  const makefile = readFileSync(join(packageRoot, "Makefile"), "utf8");
 
   assert.equal(packageJson.scripts["check:sizes"], "make check-contract-sizes");
   assert.match(makefile, /forge build --force --skip script --skip test/);

@@ -9,7 +9,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 function frontendRegistrySlots() {
   const layout = JSON.parse(
     readFileSync(
-      join(__dirname, "..", "scripts", "expected-storage-layouts", "FrontendRegistry.json"),
+      join(
+        __dirname,
+        "..",
+        "scripts",
+        "expected-storage-layouts",
+        "FrontendRegistry.json"
+      ),
       "utf8"
     )
   );
