@@ -1695,8 +1695,6 @@ export async function commitVoteDirect(
         {
           targetRound: tlockRuntime.targetRound,
           drandChainHash: tlockRuntime.drandConfig.chainHash,
-          drandGenesisTimeSeconds: tlockRuntime.drandConfig.genesisTime,
-          drandPeriodSeconds: tlockRuntime.drandConfig.period,
         },
       );
 

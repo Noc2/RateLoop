@@ -203,13 +203,18 @@ export async function main() {
   console.log("Prepared ask:", JSON.stringify(ask, null, 2));
 
   if (ask.transactionPlan?.calls?.length) {
+    if (ask.transactionPlan.requiresAtomicExecution) {
+      console.log(
+        "This transaction plan requires atomic execution. Batch every transactionPlan.calls item in one atomic wallet operation, or stop and use the browser handoff/local-ask flow instead.",
+      );
+    }
     const hashes = (process.env.RATELOOP_CONFIRM_TX_HASHES ?? "")
       .split(",")
       .map((hash) => hash.trim())
       .filter(Boolean);
     if (hashes.length === 0) {
       console.log(
-        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets, prefer the browser handoff flow instead.",
+        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets or non-atomic wallet hosts, prefer the browser handoff flow instead.",
       );
       return;
     }

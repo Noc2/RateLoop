@@ -50,5 +50,7 @@ describe("agent public examples and docs", () => {
     expect(landingPitch).toContain("BASE_MAINNET_CHAIN_ID");
     expect(landingPitch).not.toMatch(/SEPOLIA/);
     expect(landingPitch).toContain("live Base mainnet deployment");
+    expect(landingPitch).toContain("requiresAtomicExecution");
+    expect(landingPitch).toContain("Batch every transactionPlan.calls item in one atomic wallet operation");
   });
 });
