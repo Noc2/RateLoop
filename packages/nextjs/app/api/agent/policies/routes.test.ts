@@ -75,7 +75,7 @@ function configureTestEnv() {
   env.APP_URL = "https://canonical.rateloop.ai/app";
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "4801";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "84532";
   env.VERCEL = "1";
   delete env.NEXT_PUBLIC_APP_URL;
   delete env.VERCEL_ENV;

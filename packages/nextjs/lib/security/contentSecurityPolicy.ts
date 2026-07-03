@@ -12,13 +12,7 @@ type ContentSecurityPolicyOptions = {
   rpcOrigins?: string[];
 };
 
-const RPC_ENV_KEYS = [
-  "NEXT_PUBLIC_RPC_URL_31337",
-  "NEXT_PUBLIC_RPC_URL_84532",
-  "NEXT_PUBLIC_RPC_URL_8453",
-  "NEXT_PUBLIC_RPC_URL_4801",
-  "NEXT_PUBLIC_RPC_URL_480",
-] as const;
+const RPC_ENV_KEYS = ["NEXT_PUBLIC_RPC_URL_31337", "NEXT_PUBLIC_RPC_URL_84532", "NEXT_PUBLIC_RPC_URL_8453"] as const;
 
 function toOrigin(value: string | undefined): string | undefined {
   if (!value) return undefined;
@@ -50,8 +44,6 @@ export function resolveRuntimeContentSecurityPolicyOptions(): ContentSecurityPol
         31337: process.env.NEXT_PUBLIC_RPC_URL_31337,
         84532: process.env.NEXT_PUBLIC_RPC_URL_84532,
         8453: process.env.NEXT_PUBLIC_RPC_URL_8453,
-        4801: process.env.NEXT_PUBLIC_RPC_URL_4801,
-        480: process.env.NEXT_PUBLIC_RPC_URL_480,
       },
       {
         allowLocalhostInProduction: allowLocalE2EProductionBuild,

@@ -1,40 +1,18 @@
-name: World Chain Sepolia Readiness
+name: Legacy World Chain Sepolia Readiness (Retired)
 
 on:
   workflow_dispatch:
-    inputs:
-      live:
-        description: Run live RPC, Ponder, and app probes when environment variables are configured
-        required: false
-        default: "false"
 
 permissions:
   contents: read
 
 jobs:
-  readiness:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      WORLDCHAIN_SEPOLIA_APP_URL: ${{ vars.WORLDCHAIN_SEPOLIA_APP_URL }}
-      WORLDCHAIN_SEPOLIA_PONDER_URL: ${{ vars.WORLDCHAIN_SEPOLIA_PONDER_URL }}
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: true
-
-      - name: Setup node env
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-
-      - name: Offline readiness checks
-        run: node scripts/check-worldchain-sepolia-readiness.mjs
-
-      - name: Live readiness probes
-        if: github.event.inputs.live == 'true'
-        env:
-          WORLDCHAIN_SEPOLIA_RPC_URL: ${{ secrets.WORLDCHAIN_SEPOLIA_RPC_URL }}
-        run: node scripts/check-worldchain-sepolia-readiness.mjs --live --require-live-targets
+      - name: Retired Base-first rollout notice
+        run: |
+          echo "World Chain Sepolia readiness is retired for the fresh Base deployment."
+          echo "Use Base Sepolia readiness for staging validation and Base mainnet readiness for production changes."

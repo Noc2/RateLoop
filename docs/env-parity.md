@@ -29,8 +29,6 @@ RPC variables:
 - `NEXT_PUBLIC_RPC_URL_31337`
 - `NEXT_PUBLIC_RPC_URL_84532`
 - `NEXT_PUBLIC_RPC_URL_8453`
-- `NEXT_PUBLIC_RPC_URL_4801`
-- `NEXT_PUBLIC_RPC_URL_480`
 
 Base preconfirmation RPCs are browser UX only. Keep Ponder and Keeper on
 sealed-block RPCs. Only set `RATELOOP_SERVER_USE_BASE_PRECONF_RPC=true` with a

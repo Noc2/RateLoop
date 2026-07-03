@@ -3,22 +3,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as chains from "viem/chains";
 
-test("World Chain Sepolia uses ETH as the native token symbol", () => {
-  assert.equal(AVAILABLE_TARGET_NETWORKS[chains.worldchainSepolia.id].nativeCurrency.symbol, "ETH");
-
-  const [network] = resolveTargetNetworks(`${chains.worldchainSepolia.id}`, {
-    production: false,
-  });
-
-  assert.equal(network.nativeCurrency.symbol, "ETH");
-});
-
-test("World Chain mainnet is an available production target", () => {
-  const [network] = resolveTargetNetworks(`${chains.worldchain.id}`, {
-    production: true,
-  });
-
-  assert.equal(network.id, chains.worldchain.id);
+test("available app targets are local Foundry and Base deployments", () => {
+  assert.deepEqual(
+    Object.keys(AVAILABLE_TARGET_NETWORKS)
+      .map(Number)
+      .sort((a, b) => a - b),
+    [chains.foundry.id, chains.base.id, chains.baseSepolia.id].sort((a, b) => a - b),
+  );
 });
 
 test("Base mainnet and Base Sepolia are available targets", () => {
@@ -136,11 +127,23 @@ test("production builds only use a local fallback when Foundry is explicitly all
 test("target network parsing rejects chain IDs with non-numeric suffixes", () => {
   assert.throws(
     () =>
-      resolveTargetNetworks(`${chains.worldchain.id}abc`, {
+      resolveTargetNetworks(`${chains.base.id}abc`, {
         production: true,
       }),
     /comma-separated list of numeric chain IDs/,
   );
+});
+
+test("legacy World Chain IDs are not app targets", () => {
+  for (const chainId of [chains.worldchain.id, chains.worldchainSepolia.id]) {
+    assert.throws(
+      () =>
+        resolveTargetNetworks(`${chainId}`, {
+          production: true,
+        }),
+      /Unsupported target network/,
+    );
+  }
 });
 
 test("configured RPC overrides become the preferred browser transport for target chains", () => {

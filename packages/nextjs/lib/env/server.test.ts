@@ -11,7 +11,6 @@ import { afterEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
-const originalPublicRpcUrl4801 = env.NEXT_PUBLIC_RPC_URL_4801;
 const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
 const originalUseBasePreconfRpc = env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
 const originalServerUseBasePreconfRpc = env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC;
@@ -40,12 +39,6 @@ afterEach(() => {
     delete env.DATABASE_URL;
   } else {
     env.DATABASE_URL = originalDatabaseUrl;
-  }
-
-  if (originalPublicRpcUrl4801 === undefined) {
-    delete env.NEXT_PUBLIC_RPC_URL_4801;
-  } else {
-    env.NEXT_PUBLIC_RPC_URL_4801 = originalPublicRpcUrl4801;
   }
 
   if (originalPublicRpcUrl84532 === undefined) {
@@ -238,17 +231,17 @@ test("resolveServerPonderUrl allows localhost production URLs for explicit e2e b
 });
 
 test("resolveServerTargetNetworks rejects Foundry in production by default", () => {
-  const networks = resolveServerTargetNetworks("31337,4801", true);
+  const networks = resolveServerTargetNetworks("31337,84532", true);
   assert.equal(networks, null);
 });
 
 test("resolveServerTargetNetworks tolerates local-chain builds in explicit e2e production mode", () => {
-  const networks = resolveServerTargetNetworks("31337,4801", true, {
+  const networks = resolveServerTargetNetworks("31337,84532", true, {
     allowFoundryInProduction: true,
   });
   assert.deepEqual(
     networks?.map(network => network.id),
-    [31337, 4801],
+    [31337, 84532],
   );
 });
 
@@ -296,11 +289,9 @@ test("resolveServerTargetNetworks returns null when server Base preconfirmation 
 });
 
 test("getServerRpcOverrides includes public per-chain RPC overrides", () => {
-  env.NEXT_PUBLIC_RPC_URL_4801 = "https://4801.rpc.thirdweb.com/client-id/";
   env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
 
   assert.deepEqual(getServerRpcOverrides(), {
-    4801: "https://4801.rpc.thirdweb.com/client-id",
     84532: "https://84532.rpc.thirdweb.com/client-id",
   });
 });

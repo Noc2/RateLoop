@@ -73,8 +73,6 @@ export function resolveServerTargetNetworks(
           31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
           84532: readEnv("NEXT_PUBLIC_RPC_URL_84532"),
           8453: readEnv("NEXT_PUBLIC_RPC_URL_8453"),
-          4801: readEnv("NEXT_PUBLIC_RPC_URL_4801"),
-          480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
         },
         {
           allowLocalhostInProduction: allowLocalE2EProductionBuild,
@@ -117,8 +115,6 @@ export function getServerRpcOverrides(): Partial<Record<number, string>> {
         31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
         84532: readEnv("NEXT_PUBLIC_RPC_URL_84532"),
         8453: readEnv("NEXT_PUBLIC_RPC_URL_8453"),
-        4801: readEnv("NEXT_PUBLIC_RPC_URL_4801"),
-        480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
       },
       {
         allowLocalhostInProduction: allowLocalE2EProductionBuild,

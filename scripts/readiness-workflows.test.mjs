@@ -38,26 +38,18 @@ test("static analysis includes a dependency audit gate", () => {
   assert.match(auditJob, /yarn security:audit/);
 });
 
-test("legacy World Chain Sepolia readiness workflow is manual-only", () => {
+test("legacy World Chain Sepolia readiness workflow is retired and manual-only", () => {
   const workflow = readWorkflow(
     ".github/workflows/worldchain-sepolia-readiness.yaml",
   );
-  const offlineStep = workflowStepBlock(workflow, "Offline readiness checks");
-  const liveStep = workflowStepBlock(workflow, "Live readiness probes");
 
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^  push:/m);
   assert.doesNotMatch(workflow, /^  pull_request:/m);
   assert.doesNotMatch(workflow, /^  schedule:/m);
-  assert.doesNotMatch(
-    workflow,
-    /^      WORLDCHAIN_SEPOLIA_RPC_URL: \$\{\{ secrets\.WORLDCHAIN_SEPOLIA_RPC_URL \}\}/m,
-  );
-  assert.doesNotMatch(offlineStep, /secrets\./);
-  assert.match(
-    liveStep,
-    /WORLDCHAIN_SEPOLIA_RPC_URL: \$\{\{ secrets\.WORLDCHAIN_SEPOLIA_RPC_URL \}\}/,
-  );
+  assert.doesNotMatch(workflow, /check-worldchain-sepolia-readiness/);
+  assert.match(workflow, /retired/i);
+  assert.match(workflow, /Base Sepolia readiness/);
 });
 
 test("legacy World Chain mainnet readiness workflow is retired and manual-only", () => {

@@ -5,8 +5,6 @@ export const AVAILABLE_TARGET_NETWORKS = {
   [chains.foundry.id]: chains.foundry,
   [chains.base.id]: chains.base,
   [chains.baseSepolia.id]: chains.baseSepolia,
-  [chains.worldchain.id]: chains.worldchain,
-  [chains.worldchainSepolia.id]: chains.worldchainSepolia,
 } as const satisfies Record<number, chains.Chain>;
 
 const BASE_PRECONF_TARGET_NETWORKS = {

@@ -81,7 +81,7 @@ test("builds a self-funded fallback summary when the free transaction store is u
 });
 
 test("free transaction session route rejects unsupported numeric chain ids", async () => {
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "4801";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "84532";
   __setRateLimitStoreForTests({
     execute: async input => {
       const sql = typeof input === "string" ? input : input.sql;
@@ -110,7 +110,7 @@ test("free transaction session route rejects unsupported numeric chain ids", asy
 });
 
 test("free transaction session route falls back to self-funded mode when summary lookup fails", async () => {
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453";
   __setRateLimitStoreForTests({
     execute: async input => {
       const sql = typeof input === "string" ? input : input.sql;
@@ -134,13 +134,13 @@ test("free transaction session route falls back to self-funded mode when summary
   const route = await import("./route");
   const response = await route.GET(
     new NextRequest(
-      "https://rateloop.ai/api/transactions/free/session?address=0x63cada40E8AcF7A1d47229af5Be35b78b16035fa&chainId=480",
+      "https://rateloop.ai/api/transactions/free/session?address=0x63cada40E8AcF7A1d47229af5Be35b78b16035fa&chainId=8453",
     ),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.chainId, 480);
+  assert.equal(body.chainId, 8453);
   assert.equal(body.verified, false);
   assert.equal(body.remaining, 0);
   assert.equal(body.walletAddress, "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa");

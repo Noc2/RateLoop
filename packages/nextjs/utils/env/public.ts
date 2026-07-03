@@ -41,9 +41,7 @@ const rawPublicEnv = {
   ponderUrl: optionalEnv(process.env.NEXT_PUBLIC_PONDER_URL),
   rpcUrl84532: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_84532),
   rpcUrl8453: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_8453),
-  rpcUrl4801: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_4801),
   rpcUrl31337: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_31337),
-  rpcUrl480: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_480),
   targetNetworks: optionalEnv(process.env.NEXT_PUBLIC_TARGET_NETWORKS),
   thirdwebClientId: optionalEnv(process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID),
   useBasePreconfRpc: optionalEnv(process.env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC),
@@ -59,8 +57,6 @@ const rpcOverrides = mergeRpcOverrides(
       31337: rawPublicEnv.rpcUrl31337,
       84532: rawPublicEnv.rpcUrl84532,
       8453: rawPublicEnv.rpcUrl8453,
-      4801: rawPublicEnv.rpcUrl4801,
-      480: rawPublicEnv.rpcUrl480,
     },
     {
       allowLocalhostInProduction: allowLocalE2EProductionBuild,

@@ -733,7 +733,7 @@ test("public rateloop_ask_humans still requires maxPaymentAmount for live asks",
 test("public rateloop_create_ask_handoff_link uses configured production app URL", async () => {
   env.NODE_ENV = "production";
   env.APP_URL = "https://canonical.rateloop.ai/app";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "4801";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "84532";
   delete env.NEXT_PUBLIC_APP_URL;
   delete env.VERCEL_ENV;
   delete env.VERCEL_PROJECT_PRODUCTION_URL;
@@ -741,7 +741,7 @@ test("public rateloop_create_ask_handoff_link uses configured production app URL
 
   const result = await callPublicRateLoopMcpTool({
     arguments: {
-      request: askArguments({ chainId: 4801, clientRequestId: "mcp-handoff-canonical-origin" }),
+      request: askArguments({ chainId: 84532, clientRequestId: "mcp-handoff-canonical-origin" }),
       ttlMs: 300000,
     },
     name: "rateloop_create_ask_handoff_link",

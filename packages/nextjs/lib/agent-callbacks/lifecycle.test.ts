@@ -13,6 +13,10 @@ import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { PonderHttpError } from "~~/services/ponder/client";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 
+const env = process.env as Record<string, string | undefined>;
+const originalNodeEnv = env.NODE_ENV;
+const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
+
 const CANDIDATE = {
   agentId: "agent-a",
   chainId: 480,
@@ -108,6 +112,16 @@ afterEach(() => {
   __setAgentLifecycleTestOverridesForTests(null);
   __setDatabaseResourcesForTests(null);
   __setUrlSafetyDnsResolversForTests(null);
+  if (originalNodeEnv === undefined) {
+    delete env.NODE_ENV;
+  } else {
+    env.NODE_ENV = originalNodeEnv;
+  }
+  if (originalTargetNetworks === undefined) {
+    delete env.NEXT_PUBLIC_TARGET_NETWORKS;
+  } else {
+    env.NEXT_PUBLIC_TARGET_NETWORKS = originalTargetNetworks;
+  }
 });
 
 test("sweepAgentLifecycleCallbacks emits open and settling for overdue open rounds", async () => {
@@ -288,6 +302,73 @@ test("sweepAgentLifecycleCallbacks filters target chains before applying sweep l
   assert.equal(result.scanned, 1);
   assert.equal(result.hasMore, false);
   assert.equal(result.emitted.questionOpen, 1);
+});
+
+test("sweepAgentLifecycleCallbacks fails closed for malformed production target networks", async () => {
+  let contentReads = 0;
+  let listCandidatesCalls = 0;
+
+  env.NODE_ENV = "production";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453abc";
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async () => [],
+    getContentById: async () => {
+      contentReads += 1;
+      return contentResponse() as never;
+    },
+    listCandidates: async () => {
+      listCandidatesCalls += 1;
+      return [];
+    },
+    listContentFeedback: async () =>
+      ({
+        items: [],
+      }) as never,
+  });
+
+  const result = await sweepAgentLifecycleCallbacks();
+
+  assert.equal(contentReads, 0);
+  assert.equal(listCandidatesCalls, 0);
+  assert.equal(result.scanned, 0);
+  assert.deepEqual(result.emitted, {
+    bountyLowResponse: 0,
+    feedbackUnlocked: 0,
+    questionOpen: 0,
+    questionSettled: 0,
+    questionSettling: 0,
+  });
+});
+
+test("sweepAgentLifecycleCallbacks fails closed for legacy production target networks", async () => {
+  let listCandidatesCalls = 0;
+
+  env.NODE_ENV = "production";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async () => [],
+    getContentById: async () => contentResponse() as never,
+    listCandidates: async () => {
+      listCandidatesCalls += 1;
+      return [];
+    },
+    listContentFeedback: async () =>
+      ({
+        items: [],
+      }) as never,
+  });
+
+  const result = await sweepAgentLifecycleCallbacks();
+
+  assert.equal(listCandidatesCalls, 0);
+  assert.equal(result.scanned, 0);
+  assert.deepEqual(result.emitted, {
+    bountyLowResponse: 0,
+    feedbackUnlocked: 0,
+    questionOpen: 0,
+    questionSettled: 0,
+    questionSettling: 0,
+  });
 });
 
 test("sweepAgentLifecycleCallbacks emits settled and feedback unlocked for terminal rounds", async () => {

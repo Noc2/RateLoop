@@ -20,6 +20,8 @@ type ManagedLifecycleCandidate = {
 
 type ManagedLifecycleCursor = Pick<ManagedLifecycleCandidate, "operationKey" | "sortAt">;
 
+const PRODUCTION_AGENT_LIFECYCLE_TARGET_CHAIN_IDS = new Set([8453, 84532]);
+
 type AgentLifecycleDependencies = {
   enqueueAgentCallbackEvent: typeof enqueueAgentCallbackEvent;
   getContentById: typeof ponderApi.getContentById;
@@ -76,12 +78,24 @@ function configuredTargetChainIds() {
   if (targetChainIdsTestOverride !== undefined) return targetChainIdsTestOverride;
   if (process.env.NODE_ENV !== "production") return null;
   const raw = process.env.NEXT_PUBLIC_TARGET_NETWORKS?.trim();
-  if (!raw) return null;
-  const chainIds = raw
+  if (!raw) return new Set<number>();
+  const exactIds = raw
     .split(",")
-    .map(value => Number.parseInt(value.trim(), 10))
-    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0);
-  return chainIds.length > 0 ? new Set(chainIds) : null;
+    .map(value => value.trim())
+    .filter(Boolean);
+  if (exactIds.length === 0 || exactIds.some(value => !/^\d+$/.test(value))) {
+    return new Set<number>();
+  }
+  const chainIds = exactIds.map(value => Number(value));
+  if (
+    chainIds.some(
+      chainId =>
+        !Number.isSafeInteger(chainId) || chainId <= 0 || !PRODUCTION_AGENT_LIFECYCLE_TARGET_CHAIN_IDS.has(chainId),
+    )
+  ) {
+    return new Set<number>();
+  }
+  return new Set(chainIds);
 }
 
 function normalizeTargetChainIds(chainIds: ReadonlySet<number> | null | undefined) {
@@ -252,6 +266,10 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
   let scanned = 0;
   let hasMore = false;
   let cursor: ManagedLifecycleCursor | null = null;
+
+  if (targetChainIds?.size === 0) {
+    return { emitted, hasMore, scanned };
+  }
 
   while (scanned < maxCandidates) {
     const remaining = maxCandidates - scanned;
