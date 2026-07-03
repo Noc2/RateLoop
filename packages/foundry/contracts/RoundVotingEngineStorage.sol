@@ -10,6 +10,8 @@ import { RatingLib } from "./libraries/RatingLib.sol";
 
 /// @title RoundVotingEngineStorage
 /// @notice Shared storage layout for RoundVotingEngine and delegatecall settlement modules.
+// Proxy storage slots are initialized by RoundVotingEngine.initialize(); Slither cannot see cross-contract init.
+// slither-disable-start uninitialized-state,constable-states
 abstract contract RoundVotingEngineStorage {
     // M-Crosscutting-1 (audit 2026-05-20): Storage layout history. This contract is
     // `TransparentUpgradeableProxy`-backed (see `script/Deploy.s.sol`). Slot positions matter
@@ -94,3 +96,4 @@ abstract contract RoundVotingEngineStorage {
     address internal rbtsSettlementModule;
     uint256[12] private __gap;
 }
+// slither-disable-end uninitialized-state,constable-states
