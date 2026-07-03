@@ -27,173 +27,167 @@
     {
       "slot": 4,
       "offset": 0,
-      "label": "raterRegistry",
-      "type": "t_contract(IRaterIdentityRegistry)"
-    },
-    {
-      "slot": 5,
-      "offset": 0,
       "label": "nextRewardPoolId",
       "type": "t_uint256"
     },
     {
-      "slot": 6,
+      "slot": 5,
       "offset": 0,
       "label": "rewardPools",
       "type": "t_mapping(t_uint256,t_struct(RewardPool))"
     },
     {
-      "slot": 7,
+      "slot": 6,
       "offset": 0,
       "label": "roundSnapshots",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RoundSnapshot)))"
     },
     {
-      "slot": 8,
+      "slot": 7,
       "offset": 0,
       "label": "rewardClaimed",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 9,
+      "slot": 8,
       "offset": 0,
       "label": "bundleRewards",
       "type": "t_mapping(t_uint256,t_struct(BundleReward))"
     },
     {
-      "slot": 10,
+      "slot": 9,
       "offset": 0,
       "label": "bundleQuestions",
       "type": "t_mapping(t_uint256,t_array(t_struct(BundleQuestion))dyn)"
     },
     {
-      "slot": 11,
+      "slot": 10,
       "offset": 0,
       "label": "bundleQuestionRecordedRounds",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint32))"
     },
     {
-      "slot": 12,
+      "slot": 11,
       "offset": 0,
       "label": "bundleRoundIds",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint64)))"
     },
     {
-      "slot": 13,
+      "slot": 12,
       "offset": 0,
       "label": "bundleRoundSetSnapshots",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot)))"
     },
     {
-      "slot": 14,
+      "slot": 13,
       "offset": 0,
       "label": "bundleRoundSetRewardClaimed",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 15,
+      "slot": 14,
       "offset": 0,
       "label": "rewardPoolPayerIdentity",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 16,
+      "slot": 15,
       "offset": 0,
       "label": "rewardPoolPayerIdentityKey",
       "type": "t_mapping(t_uint256,t_bytes32)"
     },
     {
-      "slot": 17,
+      "slot": 16,
       "offset": 0,
       "label": "contentBundleId",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
-      "slot": 18,
+      "slot": 17,
       "offset": 0,
       "label": "contentBundleIndex",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
-      "slot": 19,
+      "slot": 18,
       "offset": 0,
       "label": "defaultFrontendFeeBps",
       "type": "t_uint16"
     },
     {
-      "slot": 20,
+      "slot": 19,
       "offset": 0,
       "label": "rewardPoolClusterPayoutOracle",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 21,
+      "slot": 20,
       "offset": 0,
       "label": "bundleRewardClusterPayoutOracle",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 22,
+      "slot": 21,
       "offset": 0,
       "label": "rewardPoolClusterPayoutOraclePinnedAt",
       "type": "t_mapping(t_uint256,t_uint64)"
     },
     {
-      "slot": 23,
+      "slot": 22,
       "offset": 0,
       "label": "bundleRewardClusterPayoutOraclePinnedAt",
       "type": "t_mapping(t_uint256,t_uint64)"
     },
     {
-      "slot": 24,
+      "slot": 23,
       "offset": 0,
       "label": "bundleQuestionTerminalSyncCursor",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 25,
+      "slot": 24,
       "offset": 0,
       "label": "rejectedRecoveredRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 26,
+      "slot": 25,
       "offset": 0,
       "label": "reopenedRecoveredRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 27,
+      "slot": 26,
       "offset": 0,
       "label": "preQualificationRejectedRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 28,
+      "slot": 27,
       "offset": 0,
       "label": "qualifiedQuestionRewardClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))))"
     },
     {
-      "slot": 29,
+      "slot": 28,
       "offset": 0,
       "label": "qualifiedBundleRoundSetClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 30,
+      "slot": 29,
       "offset": 0,
       "label": "rejectedRecoveredBundleRoundSet",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 31,
+      "slot": 30,
       "offset": 0,
       "label": "reopenedRecoveredBundleRoundSet",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 32,
+      "slot": 31,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -242,12 +236,6 @@
       "id": "t_contract(IERC20)",
       "encoding": "inplace",
       "label": "contract IERC20",
-      "numberOfBytes": "20"
-    },
-    {
-      "id": "t_contract(IRaterIdentityRegistry)",
-      "encoding": "inplace",
-      "label": "contract IRaterIdentityRegistry",
       "numberOfBytes": "20"
     },
     {
@@ -636,7 +624,7 @@
       "id": "t_struct(BundleRoundSetSnapshot)",
       "encoding": "inplace",
       "label": "struct BundleRoundSetSnapshot",
-      "numberOfBytes": "320",
+      "numberOfBytes": "352",
       "members": [
         {
           "slot": 0,
@@ -715,6 +703,12 @@
           "offset": 0,
           "label": "clusterSnapshotDigest",
           "type": "t_bytes32"
+        },
+        {
+          "slot": 10,
+          "offset": 0,
+          "label": "preQualificationSnapshotlessSkipped",
+          "type": "t_bool"
         }
       ]
     },

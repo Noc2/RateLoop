@@ -82,6 +82,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
     function recoverOrReopenSnapshotRoundSet(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
@@ -89,6 +90,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
+        ContentRegistry registry,
         RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -98,12 +100,14 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             _reopenRecoveredSnapshotRoundSet(
                 bundleRewards,
                 bundleQuestions,
+                bundleQuestionRecordedRounds,
                 bundleRoundIds,
                 bundleRoundSetSnapshots,
                 bundleRewardClusterPayoutOracle,
                 bundleRewardClusterPayoutOraclePinnedAt,
                 rejectedRecoveredBundleRoundSet,
                 reopenedRecoveredBundleRoundSet,
+                registry,
                 votingEngine,
                 bundleId,
                 roundSetIndex,
@@ -157,6 +161,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         for (uint256 i; i < roundSetIndexes.length;) {
             uint256 roundSetIndex = roundSetIndexes[i];
             require(rejectedRecoveredBundleRoundSet[bundleId][roundSetIndex], "Round set not recovered");
+            BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
             if (
                 !reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex]
                     && _hasRecoveredReplacementSnapshot(
@@ -171,6 +176,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
                         registry,
                         votingEngine,
                         protocolConfig,
+                        snapshot.allocation,
                         bundleId,
                         roundSetIndex,
                         payoutDomain
@@ -179,7 +185,6 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
                 revert RecoveredBundleRoundSetReplacementSnapshotAvailable();
             }
 
-            BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
             require(!snapshot.qualified, "Round set qualified");
             uint256 allocation = snapshot.allocation;
 
@@ -264,12 +269,14 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
     function _reopenRecoveredSnapshotRoundSet(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
         mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredBundleRoundSet,
+        ContentRegistry registry,
         RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -281,7 +288,9 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         require(_usesClusterPayoutSnapshot(bundleRewardClusterPayoutOracle, bundle), "Not cluster-snapshot bundle");
         require(roundSetIndex < bundle.requiredSettledRounds, "Invalid round set");
         require(rejectedRecoveredBundleRoundSet[bundleId][roundSetIndex], "Round set not recovered");
-        require(!bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified, "Round set already qualified");
+        BundleRoundSetSnapshot storage recoveredSnapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
+        require(!recoveredSnapshot.qualified, "Round set already qualified");
+        require(!reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex], "Round set already reopened");
 
         address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
@@ -308,6 +317,24 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         require(pinnedAt != 0, "Oracle not pinned");
         uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
         require(proposedAt >= sourceReadyAt && proposedAt >= pinnedAt, "Cluster source stale");
+        require(
+            QuestionRewardPoolEscrowBundleActionsLib.hasQualifiableRecoveredBundleReplacementSnapshot(
+                bundleRewards,
+                bundleQuestions,
+                bundleQuestionRecordedRounds,
+                bundleRoundIds,
+                bundleRewardClusterPayoutOracle,
+                bundleRewardClusterPayoutOraclePinnedAt,
+                registry,
+                votingEngine,
+                votingEngine.protocolConfig(),
+                payoutDomain,
+                bundleId,
+                roundSetIndex,
+                recoveredSnapshot.allocation
+            ),
+            "Replacement not qualifiable"
+        );
 
         if (block.timestamp > bundle.claimDeadline) {
             bundle.claimDeadline = block.timestamp.toUint64();
@@ -391,6 +418,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint256 recoveredAllocation,
         uint256 bundleId,
         uint256 roundSetIndex,
         uint8 payoutDomain
@@ -408,7 +436,8 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             protocolConfig,
             payoutDomain,
             bundleId,
-            roundSetIndex
+            roundSetIndex,
+            recoveredAllocation
         );
     }
 

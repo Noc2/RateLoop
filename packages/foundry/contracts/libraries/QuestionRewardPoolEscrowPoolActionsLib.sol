@@ -14,7 +14,12 @@ import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowT
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 import { QuestionRewardParticipantFloorLib } from "./QuestionRewardParticipantFloorLib.sol";
-import { RewardPool, RoundSnapshot, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
+import {
+    RewardPool,
+    RoundSnapshot,
+    CreateRewardPoolParams,
+    QUESTION_REWARD_CLAIM_GRACE
+} from "./QuestionRewardPoolEscrowTypes.sol";
 import { RoundLib } from "./RoundLib.sol";
 
 library QuestionRewardPoolEscrowPoolActionsLib {
@@ -25,7 +30,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
     uint256 internal constant BPS_SCALE = 10_000;
-    uint256 internal constant CLAIM_GRACE = 7 days;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
@@ -141,7 +145,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         _requireNoPendingRecoveredRounds(rewardPool);
         _requireNoPendingPreQualificationRejectedRounds(rewardPool);
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) {
-            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
+            return _refundCompleteRewardPool(
+                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, QUESTION_REWARD_CLAIM_GRACE
+            );
         }
 
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
@@ -193,7 +199,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         _requireNoPendingPreQualificationRejectedRounds(rewardPool);
         bool completeRecoveredExit = uint256(rewardPool.qualifiedRounds) + uint256(rewardPool.pendingRecoveredRounds)
                 >= uint256(rewardPool.requiredSettledRounds) || rewardPool.unallocatedRefunded;
-        _requireRecoveredRefundGrace(rewardPool, CLAIM_GRACE);
+        _requireRecoveredRefundGrace(rewardPool, QUESTION_REWARD_CLAIM_GRACE);
         _abandonRecoveredRounds(
             rewardPool,
             rewardPoolPayerIdentity,
@@ -206,12 +212,14 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             votingEngine,
             rewardPoolId,
             roundIds,
-            CLAIM_GRACE,
+            QUESTION_REWARD_CLAIM_GRACE,
             PAYOUT_DOMAIN_QUESTION_REWARD
         );
         if (completeRecoveredExit) {
             rewardPool.unallocatedAmount = 0;
-            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
+            return _refundCompleteRewardPool(
+                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, QUESTION_REWARD_CLAIM_GRACE
+            );
         }
 
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
@@ -255,7 +263,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             votingEngine,
             rewardPoolId,
             roundIds,
-            CLAIM_GRACE,
+            QUESTION_REWARD_CLAIM_GRACE,
             PAYOUT_DOMAIN_QUESTION_REWARD
         );
         QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
@@ -306,7 +314,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             !inactive
                 && (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded)
         ) {
-            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, CLAIM_GRACE);
+            return _refundCompleteRewardPool(
+                votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, QUESTION_REWARD_CLAIM_GRACE
+            );
         }
 
         if (!inactive) {
@@ -644,9 +654,11 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         } catch {
             return false;
         }
-        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Proposed
-            && snapshot.status != IClusterPayoutOracle.SnapshotStatus.Challenged
-            && snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) {
+        if (
+            snapshot.status != IClusterPayoutOracle.SnapshotStatus.Proposed
+                && snapshot.status != IClusterPayoutOracle.SnapshotStatus.Challenged
+                && snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
+        ) {
             return false;
         }
 

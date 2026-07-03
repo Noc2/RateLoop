@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { Vm, VmSafe } from "forge-std/Vm.sol";
-import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ClusterPayoutOracle } from "../../contracts/ClusterPayoutOracle.sol";
-import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
-import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
-import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
-import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
-import { RoundVotingEngineRbtsSettlementModule } from "../../contracts/RoundVotingEngineRbtsSettlementModule.sol";
-import { IConfidentialityEscrow } from "../../contracts/interfaces/IConfidentialityEscrow.sol";
-import { IClusterPayoutOracle } from "../../contracts/interfaces/IClusterPayoutOracle.sol";
-import { IFrontendRegistry } from "../../contracts/interfaces/IFrontendRegistry.sol";
-import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
-import { MockWorldIDVerifier } from "../../contracts/mocks/MockWorldIDVerifier.sol";
-import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
-import { RoundEngineReadHelpers } from "./RoundEngineReadHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm, VmSafe} from "forge-std/Vm.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ClusterPayoutOracle} from "../../contracts/ClusterPayoutOracle.sol";
+import {ContentRegistry} from "../../contracts/ContentRegistry.sol";
+import {ProtocolConfig} from "../../contracts/ProtocolConfig.sol";
+import {RaterRegistry} from "../../contracts/RaterRegistry.sol";
+import {RoundVotingEngine} from "../../contracts/RoundVotingEngine.sol";
+import {RoundVotingEngineRbtsSettlementModule} from "../../contracts/RoundVotingEngineRbtsSettlementModule.sol";
+import {IConfidentialityEscrow} from "../../contracts/interfaces/IConfidentialityEscrow.sol";
+import {IClusterPayoutOracle} from "../../contracts/interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "../../contracts/interfaces/IFrontendRegistry.sol";
+import {RatingLib} from "../../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../../contracts/libraries/RoundLib.sol";
+import {MockWorldIDVerifier} from "../../contracts/mocks/MockWorldIDVerifier.sol";
+import {MockQuestionRewardPoolEscrow} from "../mocks/MockQuestionRewardPoolEscrow.sol";
+import {RoundEngineReadHelpers} from "./RoundEngineReadHelpers.sol";
 
 bytes32 constant TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH =
     0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
@@ -94,6 +94,50 @@ contract TestClusterPayoutOracle {
         uint32 effectiveParticipantUnits,
         uint256 totalClaimWeight
     ) external returns (bytes32 snapshotKey) {
+        return _setFinalizedRoundPayoutSnapshot(
+            domain,
+            rewardPoolId,
+            contentId,
+            roundId,
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            bytes32(0)
+        );
+    }
+
+    function setFinalizedRoundPayoutSnapshotWithRoot(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) external returns (bytes32 snapshotKey) {
+        return _setFinalizedRoundPayoutSnapshot(
+            domain,
+            rewardPoolId,
+            contentId,
+            roundId,
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            weightRoot
+        );
+    }
+
+    function _setFinalizedRoundPayoutSnapshot(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) private returns (bytes32 snapshotKey) {
         snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
         snapshots[snapshotKey] = IClusterPayoutOracle.RoundPayoutSnapshot({
             snapshotKey: snapshotKey,
@@ -106,11 +150,12 @@ contract TestClusterPayoutOracle {
             contentId: contentId,
             roundId: roundId,
             totalClaimWeight: totalClaimWeight,
-            weightRoot: bytes32(0),
+            weightRoot: weightRoot,
             reasonRoot: bytes32(0),
             status: IClusterPayoutOracle.SnapshotStatus.Finalized
         });
-        proposalDigests[snapshotKey] = keccak256(abi.encode(snapshotKey, totalClaimWeight, effectiveParticipantUnits));
+        proposalDigests[snapshotKey] =
+            keccak256(abi.encode(snapshotKey, totalClaimWeight, effectiveParticipantUnits, weightRoot));
         proposalTimes[snapshotKey] = uint64(block.timestamp);
     }
 
@@ -201,7 +246,7 @@ contract TestClusterPayoutOracle {
             && block.timestamp >= roundPayoutSnapshotVetoDeadline(domain, rewardPoolId, contentId, roundId);
     }
 
-    function rejectFinalizedCorrelationEpoch(uint64, bytes32) external pure { }
+    function rejectFinalizedCorrelationEpoch(uint64, bytes32) external pure {}
 
     function verifyPayoutWeight(IClusterPayoutOracle.PayoutWeight calldata, bytes32[] calldata)
         external
@@ -289,7 +334,7 @@ abstract contract ContentSubmissionTestBase {
     }
 
     function _emptySubmissionDetails() internal pure returns (ContentRegistry.SubmissionDetails memory) {
-        return ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: bytes32(0) });
+        return ContentRegistry.SubmissionDetails({detailsUrl: "", detailsHash: bytes32(0)});
     }
 
     function _defaultQuestionConfidentialityHash() internal pure returns (bytes32) {
@@ -773,7 +818,7 @@ abstract contract ContentSubmissionTestBase {
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
-    { }
+    {}
 
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
@@ -848,11 +893,11 @@ abstract contract ContentSubmissionTestBase {
         address clusterOracle = registryConfig.clusterPayoutOracle();
         if (clusterOracle != address(0)) {
             try ITestClusterPayoutOracleConsumerSetter(clusterOracle)
-                .setRoundPayoutSnapshotConsumer(1, address(mockRewardPoolEscrow)) { }
-                catch { }
+                .setRoundPayoutSnapshotConsumer(1, address(mockRewardPoolEscrow)) {}
+                catch {}
             try ITestClusterPayoutOracleConsumerSetter(clusterOracle)
-                .setRoundPayoutSnapshotConsumer(4, address(mockRewardPoolEscrow)) { }
-                catch { }
+                .setRoundPayoutSnapshotConsumer(4, address(mockRewardPoolEscrow)) {}
+                catch {}
         }
         bytes32 configRole = keccak256("CONFIG_ROLE");
         address[8] memory candidates = [
@@ -931,7 +976,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
     // ContentRegistry.questionBundleRoundObserverByContent storage slot (see ContentRegistry.json).
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 30;
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 31;
 
     uint256 private _votingTestCheckpoint;
 
@@ -1388,7 +1433,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _rememberTestReveal(bytes32 commitKey, bool isUp, bytes32 salt) internal {
-        testRevealPayloads[commitKey] = TestRevealPayload({ exists: true, isUp: isUp, salt: salt });
+        testRevealPayloads[commitKey] = TestRevealPayload({exists: true, isUp: isUp, salt: salt});
     }
 
     function _testRevealPayload(bytes32 commitKey) internal view returns (bool isUp, bytes32 salt, bool exists) {
@@ -1584,7 +1629,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     {
         address oracle = engine.protocolConfig().clusterPayoutOracle();
         if (oracle == address(0)) return;
-        try ITestClusterPayoutOracleFrontendSetter(oracle).setFrontendRegistry(frontendRegistryAddress) { } catch { }
+        try ITestClusterPayoutOracleFrontendSetter(oracle).setFrontendRegistry(frontendRegistryAddress) {} catch {}
     }
 
     function _ensureTestRbtsSettlementModule(RoundVotingEngine engine) internal {
@@ -1685,13 +1730,13 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
             bytes32
         ) {
             return true;
-        } catch { }
+        } catch {}
         try ITestRbtsSettlementSnapshotFinalizer(oracle)
             .configureFinalizedRbtsSnapshot(
                 contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
             ) {
             return true;
-        } catch { }
+        } catch {}
         return false;
     }
 

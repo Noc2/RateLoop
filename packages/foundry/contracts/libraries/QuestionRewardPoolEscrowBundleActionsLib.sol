@@ -26,7 +26,8 @@ import {
     BundleQuestion,
     BundleRoundSetSnapshot,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_OPEN
+    BOUNTY_ELIGIBILITY_OPEN,
+    QUESTION_REWARD_CLAIM_GRACE
 } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RoundLib } from "./RoundLib.sol";
@@ -57,7 +58,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     uint256 internal constant MIN_REQUIRED_VOTERS = 3;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant BPS_SCALE = 10_000;
-    uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
     /// @dev L-Funds-A: maximum terminal-round positions advanced inside a single
     ///      `refundQuestionBundleReward` call. Raised from 64 → 512 so funders can single-tx
@@ -705,7 +705,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ProtocolConfig protocolConfig,
         uint8 payoutDomain,
         uint256 bundleId,
-        uint256 roundSetIndex
+        uint256 roundSetIndex,
+        uint256 recoveredAllocation
     ) internal view returns (bool) {
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
         if (roundSetIndex >= bundle.requiredSettledRounds) return false;
@@ -742,7 +743,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 minEffectiveUnits =
             bundle.requiredCompleters > MIN_REQUIRED_VOTERS ? bundle.requiredCompleters : MIN_REQUIRED_VOTERS;
         return snapshot.rawEligibleVoters == completerCount && completerCount >= bundle.requiredCompleters
-            && snapshot.effectiveParticipantUnits >= minEffectiveUnits * BPS_SCALE && snapshot.totalClaimWeight > 0;
+            && snapshot.effectiveParticipantUnits >= minEffectiveUnits * BPS_SCALE && snapshot.totalClaimWeight > 0
+            && recoveredAllocation > 0 && recoveredAllocation <= bundle.unallocatedAmount
+            && recoveredAllocation >= snapshot.effectiveParticipantUnits;
     }
 
     function refundQuestionBundleReward(
@@ -815,7 +818,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 bundle.claimDeadline = uint64(block.timestamp);
                 return 0;
             }
-            require(block.timestamp > uint256(bundle.claimDeadline) + BUNDLE_CLAIM_GRACE, "Grace");
+            require(block.timestamp > uint256(bundle.claimDeadline) + QUESTION_REWARD_CLAIM_GRACE, "Grace");
         }
         refundAmount = bundle.fundedAmount - bundle.claimedAmount;
         require(refundAmount > 0, "No refund");
@@ -1158,9 +1161,22 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 }
                 return true;
             }
-            require(payoutSnapshot.rawEligibleVoters == completerCount, "Cluster snapshot mismatch");
             address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
             IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+            if (payoutSnapshot.rawEligibleVoters != completerCount) {
+                if (recovered) return false;
+                if (_finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot)) return true;
+                if (preQualificationSkipped) return false;
+                QuestionRewardPoolEscrowBundleLib.resetRoundSet(
+                    bundleQuestions,
+                    bundleQuestionRecordedRounds,
+                    bundleRoundIds,
+                    bundleQuestionTerminalSyncCursor,
+                    bundleId,
+                    roundSetIndex
+                );
+                return false;
+            }
             effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
             totalClaimWeight = payoutSnapshot.totalClaimWeight;
             uint256 minEffectiveUnits =

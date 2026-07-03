@@ -1,39 +1,36 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { RoundVotingEngine } from "./RoundVotingEngine.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { QuestionRewardPoolEscrowBundleClaimableLib } from "./libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol";
-import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {RoundVotingEngine} from "./RoundVotingEngine.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IRaterRegistryStatus} from "./interfaces/IRaterRegistryStatus.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {QuestionRewardPoolEscrowBundleActionsLib} from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {QuestionRewardPoolEscrowBundleClaimableLib} from "./libraries/QuestionRewardPoolEscrowBundleClaimableLib.sol";
+import {QuestionRewardPoolEscrowBundlePreviewLib} from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
     EqualShareInputs,
     WeightedShareInputs,
     ClaimableQuestionRewardParams
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
-import { QuestionRewardPoolEscrowBundleRecoveryLib } from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
-import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import {
-    QuestionRewardPoolEscrowSnapshotConsumerLib
-} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
-import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
-import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
-import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowRecoveryLib} from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
+import {QuestionRewardPoolEscrowBundleRecoveryLib} from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
+import {QuestionRewardPoolEscrowPoolActionsLib} from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
+import {QuestionRewardPoolEscrowSnapshotConsumerLib} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
+import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import {QuestionRewardPoolEscrowWindowLib} from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
+import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -42,9 +39,10 @@ import {
     BundleRoundSetSnapshot,
     CreateRewardPoolParams,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_OPEN
+    BOUNTY_ELIGIBILITY_OPEN,
+    QUESTION_REWARD_CLAIM_GRACE
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
@@ -62,9 +60,6 @@ contract QuestionRewardPoolEscrow is
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
     uint256 internal constant BPS_SCALE = 10_000;
     uint16 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
-    /// @notice Grace period voters have after bountyClosesAt to claim on a still-claimable bundle
-    ///         before a third party can sweep the remainder back to the funder.
-    uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
@@ -80,7 +75,6 @@ contract QuestionRewardPoolEscrow is
     IERC20 internal usdcToken;
     ContentRegistry internal registry;
     RoundVotingEngine internal votingEngine;
-    IRaterIdentityRegistry internal raterRegistry;
     uint256 internal nextRewardPoolId;
 
     mapping(uint256 => RewardPool) private rewardPools;
@@ -306,11 +300,13 @@ contract QuestionRewardPoolEscrow is
         address votingEngine_,
         address raterRegistry_
     ) external initializer {
-        require(admin != address(0), "Invalid admin");
-        require(lrepToken_ != address(0), "Invalid LREP token");
-        require(usdcToken_ != address(0), "Invalid token");
-        require(registry_ != address(0), "Invalid registry");
-        require(votingEngine_ != address(0), "Invalid engine");
+        assembly ("memory-safe") {
+            if or(
+                or(or(iszero(admin), iszero(lrepToken_)), or(iszero(usdcToken_), iszero(registry_))),
+                iszero(votingEngine_)
+            ) { revert(0, 0) }
+        }
+        raterRegistry_;
 
         __AccessControl_init();
         __Pausable_init();
@@ -323,7 +319,6 @@ contract QuestionRewardPoolEscrow is
         usdcToken = IERC20(usdcToken_);
         registry = ContentRegistry(registry_);
         votingEngine = RoundVotingEngine(votingEngine_);
-        raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS;
     }
@@ -358,19 +353,42 @@ contract QuestionRewardPoolEscrow is
         require(msg.sender == address(registry));
         _requireCurrentRegistryEscrow();
         require(funder != address(0));
-        rewardPoolId = _createRewardPool(
-            contentId,
-            funder,
-            payer,
+        CreateRewardPoolParams memory params = CreateRewardPoolParams({
+            contentId: contentId,
+            funder: funder,
+            payer: payer,
+            asset: asset,
+            amount: amount,
+            requiredVoters: requiredVoters,
+            requiredSettledRounds: MIN_REQUIRED_SETTLED_ROUNDS,
+            bountyStartBy: rewardClosesAt,
+            bountyWindowSeconds: questionDurationSeconds,
+            feedbackWindowSeconds: questionDurationSeconds,
+            bountyEligibility: bountyEligibility,
+            nonRefundable: true,
+            bountyKind: 0,
+            relatedRoundId: 0,
+            reasonHash: bytes32(0)
+        });
+        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
+            rewardPools,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            registry,
+            votingEngine,
+            lrepToken,
+            usdcToken,
+            defaultFrontendFeeBps,
+            nextRewardPoolId,
+            params
+        );
+        QuestionRewardPoolEscrowPoolActionsLib.snapshotRewardPoolClusterPayoutOracle(
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
+            rewardPoolId,
             asset,
-            amount,
-            requiredVoters,
-            MIN_REQUIRED_SETTLED_ROUNDS,
-            rewardClosesAt,
-            questionDurationSeconds,
-            questionDurationSeconds,
-            bountyEligibility,
-            true
+            address(this)
         );
     }
 
@@ -423,63 +441,6 @@ contract QuestionRewardPoolEscrow is
             votingEngine,
             rewardPoolId,
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
-            address(this)
-        );
-    }
-
-    function _createRewardPool(
-        uint256 contentId,
-        address funder,
-        address payer,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
-        uint8 bountyEligibility,
-        bool nonRefundable
-    ) internal returns (uint256 rewardPoolId) {
-        CreateRewardPoolParams memory params = CreateRewardPoolParams({
-            contentId: contentId,
-            funder: funder,
-            payer: payer,
-            asset: asset,
-            amount: amount,
-            requiredVoters: requiredVoters,
-            requiredSettledRounds: requiredSettledRounds,
-            bountyStartBy: bountyStartBy,
-            bountyWindowSeconds: bountyWindowSeconds,
-            feedbackWindowSeconds: feedbackWindowSeconds,
-            bountyEligibility: bountyEligibility,
-            nonRefundable: nonRefundable,
-            bountyKind: 0,
-            relatedRoundId: 0,
-            reasonHash: bytes32(0)
-        });
-        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
-            rewardPools,
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            registry,
-            votingEngine,
-            lrepToken,
-            usdcToken,
-            defaultFrontendFeeBps,
-            nextRewardPoolId,
-            params
-        );
-        _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, asset);
-    }
-
-    function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {
-        QuestionRewardPoolEscrowPoolActionsLib.snapshotRewardPoolClusterPayoutOracle(
-            rewardPoolClusterPayoutOracle,
-            rewardPoolClusterPayoutOraclePinnedAt,
-            votingEngine,
-            rewardPoolId,
-            asset,
             address(this)
         );
     }
@@ -855,6 +816,8 @@ contract QuestionRewardPoolEscrow is
         QuestionRewardPoolEscrowRecoveryLib.reopenRecoveredSnapshotRound(
             rewardPools,
             roundSnapshots,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
             rewardPoolClusterPayoutOracle,
             rewardPoolClusterPayoutOraclePinnedAt,
             rejectedRecoveredRound,
@@ -870,6 +833,7 @@ contract QuestionRewardPoolEscrow is
         QuestionRewardPoolEscrowBundleRecoveryLib.recoverOrReopenSnapshotRoundSet(
             bundleRewards,
             bundleQuestions,
+            bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
@@ -877,6 +841,7 @@ contract QuestionRewardPoolEscrow is
             rejectedRecoveredBundleRoundSet,
             reopenedRecoveredBundleRoundSet,
             qualifiedBundleRoundSetClaimants,
+            registry,
             votingEngine,
             bundleId,
             roundSetIndex,
@@ -1373,13 +1338,7 @@ contract QuestionRewardPoolEscrow is
     function rewardPoolRefundEligibleAt(uint256 rewardPoolId) external view returns (uint64) {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.claimDeadline == 0) return 0;
-        uint256 eligibleAt = uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE;
-        uint64 refundEligibleAt;
-        assembly ("memory-safe") {
-            if gt(eligibleAt, 0xffffffffffffffff) { revert(0, 0) }
-            refundEligibleAt := eligibleAt
-        }
-        return refundEligibleAt;
+        return rewardPool.claimDeadline + uint64(QUESTION_REWARD_CLAIM_GRACE);
     }
 
     function getQuestionBundleEligibility(uint256 bundleId)
@@ -1436,9 +1395,7 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _requireIncompleteRewardPool(RewardPool storage rewardPool) internal view {
-        require(!rewardPool.refunded, "Bounty refunded");
-        require(!rewardPool.unallocatedRefunded, "Bounty refunded");
-        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
+        _requireQualifiableRewardPool(rewardPool, false);
     }
 
     function _requireQualifiableRewardPool(RewardPool storage rewardPool, bool reopened) internal view {

@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { TestClusterPayoutOracle, VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {TestClusterPayoutOracle, VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
 import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
@@ -24,11 +24,11 @@ import {
 import {
     QuestionRewardPoolEscrowPoolActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundVotingEngineRbtsSettlementModule } from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundVotingEngineRbtsSettlementModule} from "../contracts/RoundVotingEngineRbtsSettlementModule.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
 import {
     BOUNTY_ELIGIBILITY_OPEN,
     BOUNTY_ELIGIBILITY_PASSPORT,
@@ -36,13 +36,13 @@ import {
     BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
     RoundSnapshot
 } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {Eip3009Authorization} from "../contracts/interfaces/IEip3009.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
 
-contract InvalidFeedbackBonusEscrowForX402 { }
+contract InvalidFeedbackBonusEscrowForX402 {}
 
 contract MismatchedFeedbackBonusEscrowForX402 {
     ContentRegistry public registry;
@@ -1012,7 +1012,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
         uint256 fundedAmount = 4 * 10_000;
@@ -1024,7 +1024,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveSettlementVoters() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("impossible-cap", roundConfig);
         uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
 
@@ -1043,7 +1043,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
+                RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
             )
         );
 
@@ -1766,6 +1766,49 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             ),
             0
         );
+    }
+
+    function testRecoveredBundleSnapshotRoundSetRejectsCurrentEligibilityDrift() public {
+        _ensureTestClusterPayoutOracle(votingEngine);
+        TestClusterPayoutOracle oracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        vm.prank(address(oracle));
+        uint64 sourceReadyAt = rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 1);
+        assertGt(sourceReadyAt, 0);
+        if (block.timestamp < sourceReadyAt) vm.warp(sourceReadyAt);
+        bytes32 snapshotKey = oracle.setFinalizedRoundPayoutSnapshotWithRoot(
+            4, bundleId, bundleId, 1, 3, 30_000, 30_000, keccak256("bundle-root-before-drift")
+        );
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        bytes32 rejectedDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        oracle.setRejectedRoundPayoutSnapshotDigest(snapshotKey, rejectedDigest, true);
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+        oracle.setFinalizedRoundPayoutSnapshotWithRoot(
+            4, bundleId, bundleId, 1, 3, 30_001, 30_001, keccak256("bundle-root-after-drift")
+        );
+
+        vm.expectRevert("Replacement not qualifiable");
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+
+        vm.warp(block.timestamp + 30 days + BUNDLE_REFUND_GRACE + BUNDLE_CLAIM_GRACE + 1);
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 refund = rewardPoolEscrow.refundRecoveredQuestionBundleReward(bundleId, _singleRoundSetIndexes(0));
+
+        assertEq(refund, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + REWARD_POOL_AMOUNT);
     }
 
     function testBundleClusterSnapshotWithWrongConsumerDoesNotQualifyRoundSet() public {
@@ -4980,6 +5023,30 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
     }
 
+    function testReopenRecoveredSnapshotRoundRejectsCurrentEligibilityDrift() public {
+        _ensureTestClusterPayoutOracle(votingEngine);
+        TestClusterPayoutOracle oracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        bytes32 snapshotKey =
+            oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_000);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 rejectedDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        oracle.setRejectedRoundPayoutSnapshotDigest(snapshotKey, rejectedDigest, true);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+        oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_001);
+
+        vm.expectRevert("Cluster snapshot mismatch");
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+        assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+    }
+
     function legacyReopenRecoveredSnapshotRound_RemainsRecoverableIfReplacementRejectedBeforeClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
@@ -6550,7 +6617,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         x402QuestionSubmitter.setFeedbackBonusEscrow(address(feedbackEscrow));
 
         X402QuestionSubmitter.FeedbackBonusTerms memory feedbackTerms =
-            X402QuestionSubmitter.FeedbackBonusTerms({ amount: 25e6, awarder: agentWallet });
+            X402QuestionSubmitter.FeedbackBonusTerms({amount: 25e6, awarder: agentWallet});
         Eip3009Authorization memory authorization = _x402OneShotAuthorization(agentWallet, question, feedbackTerms);
 
         usdc.mint(agentWallet, authorization.value);
@@ -8492,7 +8559,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function _roundSnapshotStorageSlot(uint256 rewardPoolId, uint256 roundId) internal pure returns (bytes32) {
-        bytes32 rewardPoolSnapshotSlot = keccak256(abi.encode(rewardPoolId, uint256(7)));
+        bytes32 rewardPoolSnapshotSlot = keccak256(abi.encode(rewardPoolId, uint256(6)));
         return keccak256(abi.encode(roundId, rewardPoolSnapshotSlot));
     }
 
@@ -9121,7 +9188,7 @@ contract MockBundleFrontendRegistry {
     mapping(address => FrontendInfo) public frontends;
 
     function setFrontend(address frontend, address operator, bool eligible, bool canClaim) external {
-        frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
+        frontends[frontend] = FrontendInfo({operator: operator, eligible: eligible, canClaim: canClaim});
     }
 
     function STAKE_AMOUNT() external pure returns (uint256) {

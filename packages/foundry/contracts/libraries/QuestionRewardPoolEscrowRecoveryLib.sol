@@ -241,6 +241,8 @@ library QuestionRewardPoolEscrowRecoveryLib {
     function reopenRecoveredSnapshotRound(
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
@@ -291,11 +293,25 @@ library QuestionRewardPoolEscrowRecoveryLib {
 
         RoundSnapshot storage recoveredSnapshot = roundSnapshots[rewardPoolId][roundId];
         require(newSnapshot.rawEligibleVoters == recoveredSnapshot.rawEligibleVoters, "Cluster snapshot mismatch");
-        uint256 minEffectiveUnits = rewardPool.requiredVoters > 3 ? rewardPool.requiredVoters : 3;
-        uint256 effectiveParticipantUnits = newSnapshot.effectiveParticipantUnits;
+        (
+            bool roundSettled,
+            bool replacementCanQualify,
+            uint256 liveRawEligibleVoters,
+            uint256 effectiveParticipantUnits,,
+        ) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                rewardPoolClusterPayoutOracle,
+                rewardPoolClusterPayoutOraclePinnedAt,
+                votingEngine,
+                rewardPool,
+                roundId,
+                payoutDomain
+            );
+        require(roundSettled, "Round not settled");
+        require(newSnapshot.rawEligibleVoters == liveRawEligibleVoters, "Cluster snapshot mismatch");
         require(
-            recoveredSnapshot.rawEligibleVoters >= rewardPool.requiredVoters
-                && effectiveParticipantUnits >= minEffectiveUnits * 10_000 && newSnapshot.totalClaimWeight > 0,
+            recoveredSnapshot.rawEligibleVoters >= rewardPool.requiredVoters && replacementCanQualify,
             "Replacement not qualifiable"
         );
         uint256 recoveredAllocation = recoveredSnapshot.allocation;
