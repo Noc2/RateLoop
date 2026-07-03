@@ -199,6 +199,7 @@ async function resolveQuestionBundleClaimPayoutProof(params: {
   artifactHash: `0x${string}` | null;
   artifactUri: string | null;
   bundleId: bigint;
+  identityKey: `0x${string}`;
   roundSetIndex: number;
   voterAddrs: `0x${string}`[];
 }) {
@@ -231,6 +232,7 @@ async function resolveQuestionBundleClaimPayoutProof(params: {
         eq(vote.roundId, firstBundleRound.roundId),
         voteMatchesAnyVoter(params.voterAddrs),
         eq(vote.revealed, true),
+        eq(vote.identityKey, params.identityKey),
         sql`${vote.identityKey} is not null`,
         sql`${vote.identityHolder} is not null`,
       ),
@@ -560,6 +562,8 @@ export function registerDataRoutes(app: ApiApp) {
         payoutArtifactHash: roundPayoutSnapshot.artifactHash,
         payoutArtifactUri: roundPayoutSnapshot.artifactUri,
         roundSetClaimedAmount: questionBundleRoundSet.claimedAmount,
+        identityKey: vote.identityKey,
+        identityHolder: vote.identityHolder,
         requiredCompleters: questionBundleReward.requiredCompleters,
         requiredSettledRounds: questionBundleReward.requiredSettledRounds,
         questionCount: questionBundleReward.questionCount,
@@ -630,6 +634,8 @@ export function registerDataRoutes(app: ApiApp) {
         and(
           eq(questionBundleReward.failed, false),
           eq(questionBundleReward.refunded, false),
+          sql`${vote.identityKey} is not null`,
+          sql`${vote.identityHolder} is not null`,
           sql`${questionBundleRoundSet.claimedCount} < ${questionBundleReward.requiredCompleters}`,
           sql`${questionBundleClaim.id} is null`,
           // Fresh bundle rewards use the same creation-anchored bounty window as single questions.
@@ -656,6 +662,8 @@ export function registerDataRoutes(app: ApiApp) {
         roundPayoutSnapshot.artifactHash,
         roundPayoutSnapshot.artifactUri,
         questionBundleRoundSet.claimedAmount,
+        vote.identityKey,
+        vote.identityHolder,
         questionBundleReward.requiredCompleters,
         questionBundleReward.requiredSettledRounds,
         questionBundleReward.questionCount,
@@ -696,6 +704,7 @@ export function registerDataRoutes(app: ApiApp) {
               artifactHash: item.payoutArtifactHash,
               artifactUri: item.payoutArtifactUri,
               bundleId: item.bundleId,
+              identityKey: item.identityKey as `0x${string}`,
               roundSetIndex: item.roundSetIndex,
               voterAddrs,
             })

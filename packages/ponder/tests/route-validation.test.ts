@@ -809,7 +809,7 @@ describe("shared API helpers", () => {
 
 describe("question bundle claim candidates", () => {
   it("excludes bundle round sets already claimed by the voter identity", async () => {
-    const { queryBuilder } = mockPonderModules([
+    const { db, queryBuilder } = mockPonderModules([
       {
         bundleId: 7n,
         roundSetIndex: 0,
@@ -850,6 +850,122 @@ describe("question bundle claim candidates", () => {
     );
     expect(serializedWhere).toContain("questionBundleClaim.id");
     expect(serializedWhere).toContain("is null");
+
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("identityKey");
+    expect(selection).toContain("identityHolder");
+    const groupBy = serializeExpression(queryBuilder.groupBy.mock.calls);
+    expect(groupBy).toContain("vote.identityKey");
+    expect(groupBy).toContain("vote.identityHolder");
+  });
+
+  it("resolves bundle payout proofs for the grouped voter identity", async () => {
+    const leaf = `0x${"d".repeat(64)}`;
+    const groupedIdentityKey = `0x${"b".repeat(64)}`;
+    const payoutWeight = {
+      domain: 4,
+      rewardPoolId: "7",
+      contentId: "7",
+      roundId: "1",
+      commitKey: `0x${"a".repeat(64)}`,
+      identityKey: groupedIdentityKey,
+      account: "0x0000000000000000000000000000000000000001",
+      baseWeight: "10000",
+      independenceBps: 10000,
+      effectiveWeight: "10000",
+      reasonHash: `0x${"c".repeat(64)}`,
+      leaf,
+    };
+    const artifactUri = `data:application/json,${encodeURIComponent(
+      JSON.stringify({
+        roundPayoutSnapshots: [
+          {
+            domain: 4,
+            rewardPoolId: "7",
+            contentId: "7",
+            roundId: "1",
+            leaves: [payoutWeight],
+          },
+        ],
+      }),
+    )}`;
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          bundleId: 7n,
+          roundSetIndex: 0,
+          asset: 1,
+          fundedAmount: 1_000_000n,
+          claimedAmount: 0n,
+          allocation: 1_000_000n,
+          rawEligibleCompleters: 1,
+          effectiveParticipantUnits: 10_000,
+          totalClaimWeight: 10_000n,
+          correlationWeightRoot: null,
+          payoutWeightRoot: leaf,
+          payoutArtifactHash: null,
+          payoutArtifactUri: artifactUri,
+          roundSetClaimedAmount: 0n,
+          identityKey: groupedIdentityKey,
+          identityHolder: "0x0000000000000000000000000000000000000001",
+          requiredCompleters: 1,
+          requiredSettledRounds: 1,
+          questionCount: 1,
+          completedRoundSetCount: 1,
+          totalRecordedQuestionRounds: 1,
+          claimedCount: 0,
+          roundSetClaimedCount: 0,
+          questionDuration: 600,
+          questionDurationSeconds: 600,
+          rewardOpensAt: 1_000n,
+          rewardClosesAt: 1_600n,
+          bountyStartBy: 1_000n,
+          bountyOpensAt: 1_000n,
+          bountyClosesAt: 1_600n,
+          feedbackClosesAt: 1_900n,
+          bountyWindowSeconds: 600,
+          feedbackWindowSeconds: 300,
+          expiresAt: 2_000n,
+          updatedAt: 1_700n,
+        },
+      ],
+      [
+        [{ contentId: 101n, roundId: 12n }],
+        [{ commitKey: payoutWeight.commitKey, identityKey: groupedIdentityKey }],
+      ],
+    );
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/question-bundle-claim-candidates?voter=0x0000000000000000000000000000000000000001",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items[0]).toMatchObject({
+      bundleId: "7",
+      identityKey: groupedIdentityKey,
+      requiresPayoutProof: true,
+      payoutWeight: {
+        domain: 4,
+        rewardPoolId: "7",
+        contentId: "7",
+        roundId: "1",
+        commitKey: payoutWeight.commitKey,
+        identityKey: groupedIdentityKey,
+      },
+      payoutProof: [],
+    });
+    const firstVoteLookupWhere = serializeExpression(
+      queryBuilders[2]?.where.mock.calls[0]?.[0],
+    );
+    expect(firstVoteLookupWhere).toContain("vote.identityKey");
+    expect(firstVoteLookupWhere).toContain(groupedIdentityKey);
   });
 });
 
