@@ -52,6 +52,37 @@ const SETTLE_ROUND_ABI = [
     stateMutability: "nonpayable",
   },
 ] as const;
+const APPLY_RBTS_SETTLEMENT_SNAPSHOT_ABI = [
+  {
+    name: "applyRbtsSettlementSnapshot",
+    type: "function",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+      {
+        name: "payoutWeights",
+        type: "tuple[]",
+        components: [
+          { name: "domain", type: "uint8" },
+          { name: "rewardPoolId", type: "uint256" },
+          { name: "contentId", type: "uint256" },
+          { name: "roundId", type: "uint256" },
+          { name: "commitKey", type: "bytes32" },
+          { name: "identityKey", type: "bytes32" },
+          { name: "account", type: "address" },
+          { name: "baseWeight", type: "uint256" },
+          { name: "independenceBps", type: "uint16" },
+          { name: "effectiveWeight", type: "uint256" },
+          { name: "reasonHash", type: "bytes32" },
+        ],
+      },
+      { name: "proofs", type: "bytes32[][]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+const RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT_SECONDS = 60 * 60;
 const ROUND_CORE_ABI = [
   {
     name: "roundCore",
@@ -2037,18 +2068,28 @@ export async function settleRoundDirect(
   contractAddress: string,
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
+  const contentIdBigInt = BigInt(contentId);
+  const roundIdBigInt = BigInt(roundId);
 
   const data = encodeFunctionData({
     abi: SETTLE_ROUND_ABI,
     functionName: "settleRound",
-    args: [BigInt(contentId), BigInt(roundId)],
+    args: [contentIdBigInt, roundIdBigInt],
   });
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const ok = await sendTx(fromAddress, contractAddress, data);
-    const state = await readRoundStateLatest(contractAddress, BigInt(contentId), BigInt(roundId));
+    const state = await readRoundStateLatest(contractAddress, contentIdBigInt, roundIdBigInt);
     if (state === ROUND_STATE.Settled || state === ROUND_STATE.Tied) {
       return true;
+    }
+    if (state === ROUND_STATE.SettlementPending) {
+      return completeLocalRbtsSettlementTimeout(
+        contractAddress,
+        contentIdBigInt,
+        roundIdBigInt,
+        fromAddress,
+      );
     }
     if (!ok) return false;
     if (state === ROUND_STATE.Open && attempt === 0) {
@@ -2059,6 +2100,39 @@ export async function settleRoundDirect(
   }
 
   return false;
+}
+
+async function completeLocalRbtsSettlementTimeout(
+  contractAddress: string,
+  contentId: bigint,
+  roundId: bigint,
+  fromAddress: string,
+): Promise<boolean> {
+  const { encodeFunctionData } = await import("viem");
+  const lifecycle = await readRoundLifecycleStateLatest(contractAddress, contentId, roundId);
+  if (lifecycle.clusterPayoutReadyAt === 0n) {
+    return false;
+  }
+
+  const latestBlock = await readLatestBlockSnapshot();
+  const fallbackReadyAt = lifecycle.clusterPayoutReadyAt + BigInt(RBTS_SETTLEMENT_SNAPSHOT_TIMEOUT_SECONDS);
+  const currentTimestamp = BigInt(latestBlock.timestampSeconds);
+  if (currentTimestamp < fallbackReadyAt) {
+    const secondsToIncrease = Number(fallbackReadyAt - currentTimestamp + 1n);
+    if (!Number.isSafeInteger(secondsToIncrease) || secondsToIncrease <= 0) {
+      return false;
+    }
+    await evmIncreaseTime(secondsToIncrease);
+  }
+
+  const data = encodeFunctionData({
+    abi: APPLY_RBTS_SETTLEMENT_SNAPSHOT_ABI,
+    functionName: "applyRbtsSettlementSnapshot",
+    args: [contentId, roundId, [], []],
+  });
+  const applied = await sendTx(fromAddress, contractAddress, data);
+  const state = await readRoundStateLatest(contractAddress, contentId, roundId);
+  return applied && (state === ROUND_STATE.Settled || state === ROUND_STATE.Tied);
 }
 
 /**
