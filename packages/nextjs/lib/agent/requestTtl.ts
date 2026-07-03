@@ -1,6 +1,6 @@
 const UNSIGNED_DECIMAL_PATTERN = /^[0-9]+$/;
 
-export type OptionalPositiveTtlMsResult = { ok: true; ttlMs?: number } | { ok: false; message: string };
+type OptionalPositiveTtlMsResult = { ok: true; ttlMs?: number } | { ok: false; message: string };
 
 export function parseOptionalPositiveTtlMs(value: unknown, fieldName = "ttlMs"): OptionalPositiveTtlMsResult {
   if (value === undefined || value === null) return { ok: true };
