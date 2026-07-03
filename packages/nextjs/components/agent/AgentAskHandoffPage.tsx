@@ -4,6 +4,12 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
+  appendFeedbackBonusPoolCreationRecoveryHash,
+  appendFeedbackBonusRecoveryHash,
+  readFeedbackBonusRecoveryStorageValue,
+  serializeFeedbackBonusRecoveryStorageValue,
+} from "./feedbackBonusRecovery";
+import {
   isDuplicateAskPayloadError,
   readHandoffDetailsUploadError,
   readHandoffDuplicateAskPayloadError,
@@ -328,21 +334,17 @@ function readLocalFeedbackBonusRecovery(handoffId: string, operationKey: string 
   if (typeof window === "undefined" || !operationKey) return [];
   try {
     const raw = window.localStorage.getItem(feedbackBonusRecoveryStorageKey(handoffId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as { hashes?: unknown; operationKey?: unknown };
-    if (parsed.operationKey !== operationKey || !Array.isArray(parsed.hashes)) return [];
-    return parsed.hashes.filter((hash): hash is string => typeof hash === "string" && /^0x[0-9a-fA-F]{64}$/.test(hash));
+    return readFeedbackBonusRecoveryStorageValue(raw, operationKey);
   } catch {
     return [];
   }
 }
 
 function storeLocalFeedbackBonusRecovery(params: { handoffId: string; hashes: string[]; operationKey: string | null }) {
-  if (typeof window === "undefined" || !params.operationKey || params.hashes.length === 0) return;
-  window.localStorage.setItem(
-    feedbackBonusRecoveryStorageKey(params.handoffId),
-    JSON.stringify({ hashes: params.hashes, operationKey: params.operationKey }),
-  );
+  if (typeof window === "undefined") return;
+  const value = serializeFeedbackBonusRecoveryStorageValue(params);
+  if (!value) return;
+  window.localStorage.setItem(feedbackBonusRecoveryStorageKey(params.handoffId), value);
 }
 
 function clearLocalFeedbackBonusRecovery(handoffId: string) {
@@ -3180,30 +3182,66 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
         const feedbackBonusPlan = readFeedbackBonusTransactionPlan(nextHandoff.ask);
         if (feedbackBonusPlan) {
+          let feedbackBonusRecoveryHashes: string[] = [];
+          const persistFeedbackBonusRecoveryHashes = (hashes: string[]) => {
+            if (hashes.length === 0) return;
+            storeLocalFeedbackBonusRecovery({
+              handoffId,
+              hashes,
+              operationKey: nextHandoff.operationKey,
+            });
+            setClientFeedbackBonusRecoveryHashes(hashes);
+          };
           try {
             const feedbackBonusHashes = await executeWalletTransactionPlan({
               action: "feedback bonus",
               calls: feedbackBonusPlan.calls ?? [],
               chainId: handoffChainId,
               getPostCallDelayMs,
+              onCallSent: ({ call, hash }) => {
+                const nextHashes = appendFeedbackBonusPoolCreationRecoveryHash({
+                  call,
+                  hash,
+                  hashes: feedbackBonusRecoveryHashes,
+                });
+                if (nextHashes.length === feedbackBonusRecoveryHashes.length) return;
+                feedbackBonusRecoveryHashes = nextHashes;
+                persistFeedbackBonusRecoveryHashes(feedbackBonusRecoveryHashes);
+              },
               requiresAtomicExecution: feedbackBonusPlan.requiresAtomicExecution,
               requiresOrderedExecution: feedbackBonusPlan.requiresOrderedExecution,
             });
-            storeLocalFeedbackBonusRecovery({
-              handoffId,
-              hashes: feedbackBonusHashes,
-              operationKey: nextHandoff.operationKey,
-            });
-            setClientFeedbackBonusRecoveryHashes(feedbackBonusHashes);
+            feedbackBonusRecoveryHashes = feedbackBonusHashes.reduce(
+              (hashes, hash) => appendFeedbackBonusRecoveryHash(hashes, hash),
+              feedbackBonusRecoveryHashes,
+            );
+            persistFeedbackBonusRecoveryHashes(feedbackBonusRecoveryHashes);
             await confirmFeedbackBonus({
               baseHandoff: targetHandoff,
               hashes: feedbackBonusHashes,
               successHandoff: nextHandoff,
             });
           } catch (feedbackBonusError) {
-            const message = readHandoffActionError(feedbackBonusError, "Failed to fund Feedback Bonus.");
-            setError(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
-            notification.error(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
+            if (feedbackBonusRecoveryHashes.length > 0) {
+              try {
+                await confirmFeedbackBonus({
+                  baseHandoff: targetHandoff,
+                  hashes: feedbackBonusRecoveryHashes,
+                  successHandoff: nextHandoff,
+                });
+              } catch (confirmError) {
+                const message = readHandoffActionError(confirmError, "Failed to confirm Feedback Bonus.");
+                const recoveryMessage =
+                  `Ask submitted, and the Feedback Bonus transaction hash was saved. ` +
+                  `Retry confirmation without rebroadcasting wallet calls: ${message}`;
+                setError(recoveryMessage);
+                notification.error(recoveryMessage);
+              }
+            } else {
+              const message = readHandoffActionError(feedbackBonusError, "Failed to fund Feedback Bonus.");
+              setError(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
+              notification.error(`Ask submitted, but Feedback Bonus funding failed: ${message}`);
+            }
           }
         }
 
