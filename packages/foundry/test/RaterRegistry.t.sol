@@ -2021,6 +2021,46 @@ contract RaterRegistryTest is Test {
         registry.acceptDelegateWithSig(holder, deadline, signature);
     }
 
+    function test_SetDelegateRejectsWhenHolderAlreadyHasActiveDelegate() public {
+        address activeDelegate = address(0x6D13);
+        address replacementDelegate = address(0x6D14);
+
+        vm.prank(rater);
+        registry.setDelegate(activeDelegate);
+        vm.prank(activeDelegate);
+        registry.acceptDelegate();
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.DelegateAlreadyAssigned.selector);
+        registry.setDelegate(replacementDelegate);
+
+        assertEq(registry.delegateTo(rater), activeDelegate);
+        assertEq(registry.pendingDelegateTo(rater), address(0));
+        assertEq(registry.pendingDelegateOf(replacementDelegate), address(0));
+    }
+
+    function test_SetDelegateInvalidatesOutstandingSignedAuthorizationBeforeAcceptance() public {
+        uint256 holderKey = 0xA11CE23;
+        address holder = vm.addr(holderKey);
+        address signedDelegate = address(0x6D13);
+        address pendingDelegate = address(0x6D14);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature = _signDelegateAuthorization(registry, holderKey, holder, signedDelegate, deadline);
+
+        vm.prank(holder);
+        registry.setDelegate(pendingDelegate);
+
+        assertEq(registry.delegateAuthorizationNonces(holder), 1);
+
+        vm.prank(signedDelegate);
+        vm.expectRevert(RaterRegistry.InvalidSignature.selector);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
+
+        assertEq(registry.pendingDelegateTo(holder), pendingDelegate);
+        assertEq(registry.pendingDelegateOf(pendingDelegate), holder);
+        assertEq(registry.delegateTo(holder), address(0));
+    }
+
     function test_SignedDelegationRejectsSignatureForDifferentDelegate() public {
         uint256 holderKey = 0xA11CE3;
         address holder = vm.addr(holderKey);
@@ -2108,6 +2148,9 @@ contract RaterRegistryTest is Test {
         vm.prank(otherRater);
         vm.expectRevert(RaterRegistry.CallerIsDelegate.selector);
         registry.setDelegate(subject);
+
+        vm.prank(rater);
+        registry.removeDelegate();
 
         vm.prank(admin);
         registry.seedHumanCredential(subject, uint64(block.timestamp + 7 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);

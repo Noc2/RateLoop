@@ -794,6 +794,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (delegate == msg.sender) revert CannotDelegateSelf();
         if (isIdentityKeyBanned(addressIdentityKey(delegate))) revert InvalidBan();
         if (delegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
+        if (delegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
         if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
         if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
