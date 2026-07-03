@@ -102,17 +102,11 @@ export const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 
 export const USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
   8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
-  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
 };
 
 export const USDC_EIP712_DOMAIN_NAME_BY_CHAIN_ID: Record<number, string> = {
   31337: "USD Coin",
   8453: "USD Coin",
-  84532: "USDC",
-  480: "USDC",
-  4801: "USDC",
 };
 
 export function getUsdcEip712DomainName(chainId: number): string {
@@ -121,9 +115,6 @@ export function getUsdcEip712DomainName(chainId: number): string {
 
 export const WORLD_ID_V3_ROUTER_BY_CHAIN_ID: Record<number, `0x${string}`> = {
   8453: "0xBCC7e5910178AFFEEeBA573ba6903E9869594163",
-  84532: "0x42FF98C4E85212a5D31358ACbFe76a621b50fC02",
-  480: "0x17B354dD2595411ff79041f930e491A4Df39A278",
-  4801: "0x57f928158C3EE7CDad1e4D8642503c4D0201f611",
 };
 
 /** @deprecated Use `USDC_BY_CHAIN_ID`; retained while downstream packages migrate names. */
