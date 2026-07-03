@@ -6,6 +6,7 @@ import {
   getVoterLeaderboardSnapshot,
   resolveVoterLeaderboardSelection,
 } from "~~/lib/governance/voterLeaderboardSnapshot";
+import { isBlankQueryNumber, parseStrictUnsignedQueryNumber } from "~~/lib/http/queryNumbers";
 import { readLrepBalances, readProfileRegistryProfiles } from "~~/lib/profileRegistry/server";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
@@ -13,6 +14,13 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 const MAX_LIMIT = 100;
+
+function parseLeaderboardLimit(value: string | null) {
+  if (isBlankQueryNumber(value)) return 20;
+  const parsed = parseStrictUnsignedQueryNumber(value);
+  if (parsed === null) return null;
+  return Math.min(Math.max(parsed, 1), MAX_LIMIT);
+}
 
 async function buildIncludedAddressFallback(address: string, chainId: number) {
   const [balances, profiles] = await Promise.all([
@@ -46,10 +54,10 @@ export async function GET(request: NextRequest) {
     if (requestedType && requestedType !== "voters") {
       return NextResponse.json({ error: "Unsupported leaderboard type" }, { status: 400 });
     }
-    const limit = Math.min(
-      Math.max(Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "20", 10) || 20, 1),
-      MAX_LIMIT,
-    );
+    const limit = parseLeaderboardLimit(request.nextUrl.searchParams.get("limit"));
+    if (limit === null) {
+      return NextResponse.json({ error: "Valid limit is required" }, { status: 400 });
+    }
     const chainIdRaw = request.nextUrl.searchParams.get("chainId");
     const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
     const parsedChainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);

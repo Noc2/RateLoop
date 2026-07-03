@@ -3,6 +3,7 @@ import { getListClaimableFrontendFeeRoundsForRoute } from "./lookup";
 import { isAddress } from "viem";
 import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
+import { isBlankQueryNumber, parseStrictUnsignedQueryNumber } from "~~/lib/http/queryNumbers";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const ROUTE_RATE_LIMIT = { limit: 120, windowMs: 60_000 };
@@ -17,6 +18,18 @@ function buildDegradedFrontendFeeResponse(offset: number) {
     totalRounds: 0,
     degraded: true,
   };
+}
+
+function parseBoundedUnsignedParam(value: string | null, fallback: number, max: number) {
+  if (isBlankQueryNumber(value)) return fallback;
+  const parsed = parseStrictUnsignedQueryNumber(value);
+  if (parsed === null) return null;
+  return Math.min(Math.max(parsed, 1), max);
+}
+
+function parseOffsetParam(value: string | null) {
+  if (isBlankQueryNumber(value)) return 0;
+  return parseStrictUnsignedQueryNumber(value);
 }
 
 export async function GET(request: NextRequest) {
@@ -49,8 +62,14 @@ export async function GET(request: NextRequest) {
   });
   if (limited) return limited;
 
-  const limit = Math.min(Math.max(parseInt(request.nextUrl.searchParams.get("limit") ?? "10") || 10, 1), 50);
-  const offset = Math.max(parseInt(request.nextUrl.searchParams.get("offset") ?? "0") || 0, 0);
+  const limit = parseBoundedUnsignedParam(request.nextUrl.searchParams.get("limit"), 10, 50);
+  if (limit === null) {
+    return NextResponse.json({ error: "Valid limit is required" }, { status: 400 });
+  }
+  const offset = parseOffsetParam(request.nextUrl.searchParams.get("offset"));
+  if (offset === null) {
+    return NextResponse.json({ error: "Valid offset is required" }, { status: 400 });
+  }
 
   try {
     const listClaimableFrontendFeeRoundsForRoute = getListClaimableFrontendFeeRoundsForRoute();

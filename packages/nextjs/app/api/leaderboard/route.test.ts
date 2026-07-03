@@ -92,3 +92,12 @@ test("leaderboard route rejects malformed chain ids", async () => {
     error: "Valid chainId is required",
   });
 });
+
+test("leaderboard route rejects malformed limits", async () => {
+  const response = await route.GET(makeRequest(`/api/leaderboard?limit=10junk&chainId=${TEST_CHAIN_ID}`));
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "Valid limit is required",
+  });
+});

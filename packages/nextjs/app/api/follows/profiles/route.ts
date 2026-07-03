@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
 import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
+import { isBlankQueryNumber, parseStrictUnsignedQueryNumber } from "~~/lib/http/queryNumbers";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -12,15 +13,15 @@ const ROUTE_RATE_LIMIT_KEY = "/api/follows/profiles";
 const RESOURCE_RATE_LIMIT_KEY = `${ROUTE_RATE_LIMIT_KEY}:resource`;
 
 function parseLimit(value: string | null, fallback: number, max: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (!Number.isFinite(parsed)) return fallback;
+  if (isBlankQueryNumber(value)) return fallback;
+  const parsed = parseStrictUnsignedQueryNumber(value);
+  if (parsed === null) return null;
   return Math.min(Math.max(parsed, 1), max);
 }
 
 function parseOffset(value: string | null) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(parsed, 0);
+  if (isBlankQueryNumber(value)) return 0;
+  return parseStrictUnsignedQueryNumber(value);
 }
 
 export async function GET(request: NextRequest) {
@@ -45,7 +46,13 @@ export async function GET(request: NextRequest) {
   const normalizedAddress = address.toLowerCase() as `0x${string}`;
 
   const limit = parseLimit(request.nextUrl.searchParams.get("limit"), 200, 500);
+  if (limit === null) {
+    return NextResponse.json({ error: "Valid limit is required" }, { status: 400 });
+  }
   const offset = parseOffset(request.nextUrl.searchParams.get("offset"));
+  if (offset === null) {
+    return NextResponse.json({ error: "Valid offset is required" }, { status: 400 });
+  }
   const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
   const chainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);
   if (chainId === null || chainId === undefined) {

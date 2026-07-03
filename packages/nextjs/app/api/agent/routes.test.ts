@@ -3535,6 +3535,20 @@ test("agent audit export route returns csv rows for the authenticated agent", as
   assert.match(body, /submitted/);
 });
 
+test("agent audit export route rejects malformed numeric filters", async () => {
+  for (const [query, message] of [
+    ["chainId=4801abc", "chainId must be a positive integer."],
+    ["limit=10junk", "limit must be a positive integer."],
+  ] as const) {
+    const response = await asksExportRoute.GET(makeGet(`https://rateloop.ai/api/agent/asks/export?${query}`));
+    const body = (await response.json()) as { code?: string; message?: string };
+
+    assert.equal(response.status, 400);
+    assert.equal(body.code, "invalid_arguments");
+    assert.equal(body.message, message);
+  }
+});
+
 test("agent status route surfaces callback delivery state for missed webhooks", async () => {
   await callbackRegistryModule.upsertAgentCallbackSubscription({
     agentId: "route-agent",

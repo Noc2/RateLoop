@@ -127,6 +127,26 @@ test("public follow reads proxy normalized addresses to Ponder", async () => {
   });
 });
 
+test("public follow reads reject malformed pagination params", async () => {
+  const malformedLimit = await route.GET(
+    makeRequest(`/api/follows/profiles?address=${TEST_ADDRESS}&chainId=31337&limit=25junk&offset=5`),
+  );
+
+  assert.equal(malformedLimit.status, 400);
+  assert.deepEqual(await malformedLimit.json(), {
+    error: "Valid limit is required",
+  });
+
+  const malformedOffset = await route.GET(
+    makeRequest(`/api/follows/profiles?address=${TEST_ADDRESS}&chainId=31337&limit=25&offset=5junk`),
+  );
+
+  assert.equal(malformedOffset.status, 400);
+  assert.deepEqual(await malformedOffset.json(), {
+    error: "Valid offset is required",
+  });
+});
+
 test("public follow route-wide rate limit is shared across address params", async () => {
   rateLimit.__setRateLimitStoreForTests(createCountingRateLimitStore());
   ponderApi.getFollows = async () => ({

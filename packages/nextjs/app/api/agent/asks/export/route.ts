@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { AGENT_READ_RATE_LIMIT, MCP_SCOPES, handleAgentRoute } from "~~/lib/agent/http";
+import { isBlankQueryNumber, parseStrictPositiveQueryNumber } from "~~/lib/http/queryNumbers";
 import { listMcpAskAuditExportRows } from "~~/lib/mcp/audits";
 import { McpToolError } from "~~/lib/mcp/tools";
 
@@ -16,18 +17,18 @@ function parseOptionalDate(value: string | null, name: string) {
 }
 
 function parseOptionalChainId(value: string | null) {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  if (isBlankQueryNumber(value)) return undefined;
+  const parsed = parseStrictPositiveQueryNumber(value);
+  if (parsed === null) {
     throw new McpToolError("chainId must be a positive integer.");
   }
   return parsed;
 }
 
 function parseOptionalLimit(value: string | null) {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  if (isBlankQueryNumber(value)) return undefined;
+  const parsed = parseStrictPositiveQueryNumber(value);
+  if (parsed === null) {
     throw new McpToolError("limit must be a positive integer.");
   }
   return parsed;

@@ -167,6 +167,30 @@ test("frontend claimable fees route returns a degraded empty page when lookup fa
   });
 });
 
+test("frontend claimable fees route rejects malformed pagination params", async () => {
+  const malformedLimit = await route.GET(
+    makeRequest(
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=${TEST_CHAIN_ID}&limit=10junk&offset=0`,
+    ),
+  );
+
+  assert.equal(malformedLimit.status, 400);
+  assert.deepEqual(await malformedLimit.json(), {
+    error: "Valid limit is required",
+  });
+
+  const malformedOffset = await route.GET(
+    makeRequest(
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=${TEST_CHAIN_ID}&limit=10&offset=7junk`,
+    ),
+  );
+
+  assert.equal(malformedOffset.status, 400);
+  assert.deepEqual(await malformedOffset.json(), {
+    error: "Valid offset is required",
+  });
+});
+
 test("frontend claimable fees route rejects unsupported chain ids", async () => {
   const response = await route.GET(
     makeRequest(
