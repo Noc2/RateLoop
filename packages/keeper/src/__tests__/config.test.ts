@@ -673,6 +673,26 @@ describe("keeper config", () => {
     );
   });
 
+  it("rejects hosted file artifact publication when metrics are disabled", async () => {
+    await expect(
+      loadKeeperConfig({
+        PORT: "8080",
+        METRICS_ENABLED: "false",
+        METRICS_AUTH_TOKEN: "0123456789abcdef",
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+          "https://artifacts.example.com/rateloop/",
+        PONDER_BASE_URL: "https://ponder.example.com",
+        CLUSTER_PAYOUT_ORACLE_ADDRESS:
+          "0x6666666666666666666666666666666666666666",
+      }),
+    ).rejects.toThrow(
+      "METRICS_ENABLED=true is required when auto correlation snapshots publish file artifacts",
+    );
+  });
+
   it("allows data-uri correlation artifacts on a loopback metrics bind", async () => {
     const { config } = await loadKeeperConfig({
       METRICS_BIND_ADDRESS: "127.0.0.1",

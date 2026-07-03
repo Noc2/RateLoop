@@ -904,6 +904,14 @@ function loadConfig() {
     }
     if (
       publishesPublicFileArtifacts &&
+      !loadedConfig.metricsEnabled
+    ) {
+      errors.push(
+        "METRICS_ENABLED=true is required when auto correlation snapshots publish file artifacts",
+      );
+    }
+    if (
+      publishesPublicFileArtifacts &&
       isLoopbackBindAddress(loadedConfig.metricsBindAddress)
     ) {
       errors.push(
