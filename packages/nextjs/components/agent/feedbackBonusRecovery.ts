@@ -3,7 +3,7 @@ import type { WalletTransactionPlanCall } from "~~/lib/agent/walletTransactionPl
 
 const TRANSACTION_HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
-export function isFeedbackBonusRecoveryHash(value: unknown): value is Hex {
+function isFeedbackBonusRecoveryHash(value: unknown): value is Hex {
   return typeof value === "string" && TRANSACTION_HASH_PATTERN.test(value);
 }
 
