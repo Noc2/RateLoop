@@ -377,9 +377,9 @@ const SmartContracts: NextPage = () => {
 
       <h2>RoundVotingEngine</h2>
       <p>
-        Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding,
-        single blind-epoch rewards, and deterministic settlement. One-sided rounds do not receive a consensus subsidy.
-        Accepted commit-time reward weight is full stake; human credentials do not multiply settlement rewards.
+        Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding, single
+        blind-epoch rewards, and deterministic settlement. One-sided rounds do not receive a consensus subsidy. Accepted
+        commit-time reward weight is full stake; human credentials do not multiply settlement rewards.
       </p>
       <h3>Configuration</h3>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
