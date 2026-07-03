@@ -12,7 +12,7 @@ These examples keep one loop stable across runtimes:
 
 ## Files
 
-- `landing-pitch-review.ts`: canonical SDK loop; public wallet mode prints a browser wallet approval link by default
+- `landing-pitch-review.ts`: canonical SDK loop; public wallet mode prints a browser handoff link by default
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
 - `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses an uploaded RateLoop `imageUrl`
@@ -124,6 +124,10 @@ existing public context or permission to generate public context/image bytes, an
 signing for user approval. Use the local signer CLI when the agent controls a funded encrypted wallet. Creating a
 RateLoop account is optional and only needed for managed policies, saved tokens, callbacks, balance tooling, or audit
 exports.
+
+Managed remote MCP config should contain transport and bearer-token settings only. Wallet scoping for managed agents
+belongs in the RateLoop-managed policy or server environment, while tokenless public wallet-direct calls pass
+`walletAddress` as a tool or request argument.
 
 ## Runtime Notes
 

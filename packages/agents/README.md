@@ -39,9 +39,16 @@ category allowlists, callbacks, balance tooling, or audit exports enforced by Ra
 npm install @rateloop/sdk @rateloop/agents
 
 # Show built-in result templates.
-yarn agents:templates
+npx rateloop-agents templates
 
 # Validate a focused example ask.
+npx rateloop-agents lint --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
+```
+
+From a monorepo checkout, the same helpers are also wired through root Yarn scripts:
+
+```bash
+yarn agents:templates
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
@@ -82,8 +89,8 @@ balance tooling, callbacks, or audit exports.
 For published-package installs, the same commands are available through the `rateloop-agents` bin:
 
 ```bash
-npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
-npx rateloop-agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+npx rateloop-agents sandbox --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
+npx rateloop-agents quote --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
 npx rateloop-agents handoff --file ask.json --image mockup.png
 ```
 

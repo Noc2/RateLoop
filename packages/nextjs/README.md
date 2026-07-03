@@ -34,12 +34,12 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn e2e`                                         | Run the default Playwright Chromium app suite                                              |
 | `yarn workspace @rateloop/nextjs e2e:ci:lifecycle` | Run lifecycle suites for settlement, cancellation, and dormancy                            |
 | `yarn workspace @rateloop/nextjs e2e:ci:keeper`    | Run keeper-backed settlement coverage                                                      |
-| `yarn workspace @rateloop/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
+| `yarn workspace @rateloop/nextjs e2e:full`         | Run broad local app, lifecycle, keeper, responsive, and mobile Playwright coverage          |
 | `yarn e2e:ui`                                      | Run E2E tests with interactive Playwright UI                                               |
 
 **Production deploy:** Follow the deploy checklist in `drizzle/README.md` and apply all required numbered SQL migrations through the project or host migration process before shipping database-backed agent/runtime changes. `db:push` is schema synchronization for controlled local/dev environments; it does not execute those numbered SQL migration files.
 
-CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed suites separately on pushes and PRs.
+CI runs smoke, API, app, submit, confidential-context, World ID mock, responsive, accessibility, lifecycle, and keeper-backed suites separately on pushes and PRs. Scheduled/manual browser matrix jobs add browser-compatibility and mobile coverage beyond the default local `yarn e2e` path.
 
 ## Demo Recorder
 

@@ -6,8 +6,7 @@
       "headers": {
         "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
         "MCP-Protocol-Version": "2025-11-25"
-      },
-      "walletAddress": "${RATELOOP_MCP_WALLET_ADDRESS}"
+      }
     }
   }
 }

@@ -1,4 +1,8 @@
-import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
+import {
+  createRateLoopAgentClient,
+  type AskHandoffResponse,
+  type RateLoopAgentClient,
+} from "@rateloop/sdk/agent";
 import { pathToFileURL } from "node:url";
 
 const apiBaseUrl =
@@ -8,6 +12,54 @@ const walletAddress = process.env.RATELOOP_AGENT_WALLET_ADDRESS;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readPollAfterMs(response: { pollAfterMs?: unknown }) {
+  return typeof response.pollAfterMs === "number" && response.pollAfterMs > 0
+    ? response.pollAfterMs
+    : 15_000;
+}
+
+function isTerminalHandoffStatus(response: AskHandoffResponse) {
+  return (
+    response.terminal === true ||
+    response.status === "failed" ||
+    response.status === "expired" ||
+    response.status === "cancelled"
+  );
+}
+
+function requireOperationKey(response: { operationKey?: string }) {
+  if (!response.operationKey) {
+    throw new Error("Ask response did not include an operationKey.");
+  }
+  return response.operationKey;
+}
+
+async function waitForHandoffSubmission(
+  agent: RateLoopAgentClient,
+  handoff: AskHandoffResponse,
+): Promise<AskHandoffResponse & { operationKey: string }> {
+  const { handoffId, handoffToken } = handoff;
+  if (!handoffId || !handoffToken) {
+    throw new Error("Browser handoff response did not include polling credentials.");
+  }
+
+  let current = handoff;
+  for (;;) {
+    if (current.operationKey) {
+      return current as AskHandoffResponse & { operationKey: string };
+    }
+    if (isTerminalHandoffStatus(current)) {
+      throw new Error(
+        `Browser handoff ended before submission: ${JSON.stringify(current)}`,
+      );
+    }
+
+    await sleep(readPollAfterMs(current));
+    current = await agent.getAskHandoffStatus({ handoffId, handoffToken });
+    console.log("Handoff status:", JSON.stringify(current, null, 2));
+  }
 }
 
 async function writeResultToMemory(memory: {
@@ -24,9 +76,9 @@ async function writeResultToMemory(memory: {
 }
 
 export async function main() {
-  if (!mcpAccessToken && !walletAddress) {
+  if (process.env.RATELOOP_RAW_WALLET_CALLS === "true" && !walletAddress) {
     throw new Error(
-      "Set RATELOOP_AGENT_WALLET_ADDRESS for wallet-direct asks, or RATELOOP_MCP_TOKEN for a managed agent.",
+      "Set RATELOOP_AGENT_WALLET_ADDRESS when RATELOOP_RAW_WALLET_CALLS=true.",
     );
   }
 
@@ -86,18 +138,48 @@ export async function main() {
   };
 
   if (!mcpAccessToken && process.env.RATELOOP_RAW_WALLET_CALLS !== "true") {
-    const signingIntent = await agent.createSigningIntent({
+    const handoff = await agent.createAskHandoff({
       request: askPayload,
       ttlMs: 30 * 60 * 1000,
     });
+    if (!handoff.handoffUrl) {
+      throw new Error("Browser handoff response did not include a handoff URL.");
+    }
     console.log(
-      "Open this browser wallet approval link to review, fund, and submit the ask:",
-      signingIntent.signingUrl,
+      "Open this browser handoff link to review, fund, and submit the ask:",
+      handoff.handoffUrl,
     );
+    const ask = await waitForHandoffSubmission(agent, handoff);
+    console.log("Submitted ask:", JSON.stringify(ask, null, 2));
+
+    for (;;) {
+      const status = await agent.getQuestionStatus({
+        operationKey: ask.operationKey,
+      });
+      console.log("Current status:", JSON.stringify(status, null, 2));
+
+      if (status.ready || status.terminal) {
+        break;
+      }
+
+      await sleep(status.pollAfterMs ?? 15_000);
+    }
+
+    const result = await agent.getResult({ operationKey: ask.operationKey });
+    console.log("Structured result:", JSON.stringify(result, null, 2));
+
+    await writeResultToMemory({
+      answer: result.answer ?? "unknown",
+      clientRequestId,
+      confidence: result.confidence ?? null,
+      operationKey: ask.operationKey,
+      publicUrl: result.publicUrl ?? ask.publicUrl ?? null,
+    });
     return;
   }
 
   const ask = await agent.askHumans(askPayload);
+  const operationKey = requireOperationKey(ask);
 
   console.log("Prepared ask:", JSON.stringify(ask, null, 2));
 
@@ -108,13 +190,13 @@ export async function main() {
       .filter(Boolean);
     if (hashes.length === 0) {
       console.log(
-        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets, prefer the browser wallet approval flow instead.",
+        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets, prefer the browser handoff flow instead.",
       );
       return;
     }
 
     const confirmed = await agent.confirmAskTransactions({
-      operationKey: ask.operationKey,
+      operationKey,
       transactionHashes: hashes,
     });
     console.log("Confirmed ask:", JSON.stringify(confirmed, null, 2));
@@ -122,7 +204,7 @@ export async function main() {
 
   for (;;) {
     const status = await agent.getQuestionStatus({
-      operationKey: ask.operationKey,
+      operationKey,
     });
     console.log("Current status:", JSON.stringify(status, null, 2));
 
@@ -133,14 +215,14 @@ export async function main() {
     await sleep(status.pollAfterMs ?? 15_000);
   }
 
-  const result = await agent.getResult({ operationKey: ask.operationKey });
+  const result = await agent.getResult({ operationKey });
   console.log("Structured result:", JSON.stringify(result, null, 2));
 
   await writeResultToMemory({
     answer: result.answer ?? "unknown",
     clientRequestId,
     confidence: result.confidence ?? null,
-    operationKey: ask.operationKey,
+    operationKey,
     publicUrl: result.publicUrl ?? ask.publicUrl ?? null,
   });
 }

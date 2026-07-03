@@ -235,14 +235,14 @@ yarn workspace @rateloop/nextjs e2e:ci:lifecycle
 # E2E keeper-backed settlement coverage
 yarn workspace @rateloop/nextjs e2e:ci:keeper
 
-# Full local E2E run
+# Broad local E2E run for app, lifecycle, keeper, responsive, and mobile coverage
 yarn workspace @rateloop/nextjs e2e:full
 
 # Interactive Playwright UI mode
 yarn e2e:ui
 ```
 
-CI runs smoke, API, app, submit, confidential-context, World ID mock, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` alone does not match full CI browser coverage.
+CI runs smoke, API, app, submit, confidential-context, World ID mock, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled/manual workflow also runs browser-compatibility and mobile suites, so `yarn e2e` and `e2e:full` do not match every CI browser matrix job by themselves.
 
 ### Run the Dead-Code Scan
 
