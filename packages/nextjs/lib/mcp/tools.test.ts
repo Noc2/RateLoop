@@ -105,6 +105,7 @@ async function insertX402SubmissionRecord(params: {
   agentId?: string;
   clientRequestId?: string;
   contentId?: string | null;
+  expectedRewardAsset?: "LREP" | "USDC";
   mode?: string;
   operationKey?: `0x${string}`;
   pendingCallback?: {
@@ -113,10 +114,26 @@ async function insertX402SubmissionRecord(params: {
     eventTypes: string[];
     secret: string;
   };
+  paymentAsset?: string;
   status?: string;
 }) {
   const now = new Date();
   const operationKey = params.operationKey ?? OPERATION_KEY;
+  const expectedRewardTerms =
+    params.expectedRewardAsset === undefined
+      ? {}
+      : {
+          expectedRewardTerms: {
+            amount: "1000000",
+            asset: params.expectedRewardAsset === "LREP" ? "0" : "1",
+            bountyEligibility: "0",
+            bountyStartBy: "0",
+            bountyWindowSeconds: "86400",
+            feedbackWindowSeconds: "3600",
+            requiredSettledRounds: "1",
+            requiredVoters: "1",
+          },
+        };
   await dbClient.execute({
     sql: `
       INSERT INTO x402_question_submissions (
@@ -143,7 +160,7 @@ async function insertX402SubmissionRecord(params: {
       "payload-hash",
       480,
       AGENT.walletAddress,
-      "0x0000000000000000000000000000000000000001",
+      params.paymentAsset ?? "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
       1,
@@ -151,6 +168,7 @@ async function insertX402SubmissionRecord(params: {
       params.contentId ?? null,
       JSON.stringify({
         ...(params.agentId ? { agentId: params.agentId } : {}),
+        ...expectedRewardTerms,
         mode: params.mode,
         operationKey,
         ...(params.pendingCallback ? { pendingCallback: params.pendingCallback } : {}),
@@ -1031,6 +1049,31 @@ test("managed operation-key lookups still allow same-agent managed records", asy
   assert.equal(body.status, "awaiting_wallet_signature");
 });
 
+test("managed operation-key lookups preserve stored LREP payment labels", async () => {
+  await insertX402SubmissionRecord({
+    agentId: AGENT.id,
+    clientRequestId: "mcp:managed-lrep-request",
+    expectedRewardAsset: "LREP",
+    mode: "agent-wallet-plan",
+    paymentAsset: "0x0000000000000000000000000000000000000004",
+  });
+  await insertBudgetReservation();
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: { operationKey: OPERATION_KEY },
+    name: "rateloop_get_question_status",
+  });
+  const body = result as unknown as {
+    bounty: { asset: string };
+    payment: { asset: string; tokenAddress: string };
+  };
+
+  assert.equal(body.bounty.asset, "LREP");
+  assert.equal(body.payment.asset, "LREP");
+  assert.equal(body.payment.tokenAddress, "0x0000000000000000000000000000000000000004");
+});
+
 test("rateloop_get_rating_context returns local encrypted commit instructions and open-round plan", async () => {
   await insertGatedContextAttachments();
   __setMcpToolTestOverridesForTests({
@@ -1818,6 +1861,45 @@ test("rateloop_quote_question labels LREP bounty payment metadata", async () => 
   assert.equal(body.payment.amount, "1000000");
   assert.equal(body.payment.bountyAmount, "1000000");
   assert.equal(body.payment.totalAmount, "1000000");
+  assert.equal(body.payment.tokenAddress, "0x0000000000000000000000000000000000000004");
+});
+
+test("rateloop_ask_humans preserves LREP wallet-call payment metadata", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+    prepareAgentWalletQuestionSubmissionRequest: async () => ({
+      body: {
+        operationKey: OPERATION_KEY,
+        payment: {
+          amount: "1000000",
+          asset: "LREP",
+          bountyAmount: "1000000",
+          decimals: 6,
+          tokenAddress: "0x0000000000000000000000000000000000000004",
+        },
+        status: "awaiting_wallet_signature",
+        transactionPlan: { calls: [], requiresOrderedExecution: true },
+      },
+      status: 202,
+    }),
+    reserveMcpAgentBudget: async () => budgetReservation(),
+  });
+
+  const body = (await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: askArguments({
+      bounty: {
+        ...askArguments().bounty,
+        asset: "LREP",
+      },
+      maxPaymentAmount: "1000000",
+      paymentMode: "wallet_calls",
+    }),
+    name: "rateloop_ask_humans",
+  })) as { payment: { asset: string; tokenAddress: string } };
+
+  assert.equal(body.payment.asset, "LREP");
   assert.equal(body.payment.tokenAddress, "0x0000000000000000000000000000000000000004");
 });
 

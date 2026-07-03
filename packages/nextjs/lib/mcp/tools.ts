@@ -2486,15 +2486,27 @@ function publicWebhookSignatureRequiredBody(params: {
   };
 }
 
-function normalizeMcpPayment(value: unknown) {
+function normalizePaymentAssetLabel(value: unknown): "LREP" | "USDC" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized === "LREP" || normalized === "USDC" ? normalized : null;
+}
+
+function normalizeMcpPayment(value: unknown, context?: JsonObject) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const payment = value as JsonObject;
   const asset = typeof payment.asset === "string" ? payment.asset : "";
+  const bounty =
+    context?.bounty && typeof context.bounty === "object" && !Array.isArray(context.bounty)
+      ? (context.bounty as JsonObject)
+      : null;
+  const assetLabel = normalizePaymentAssetLabel(asset) ?? normalizePaymentAssetLabel(bounty?.asset);
+  const tokenAddress = asset.startsWith("0x") ? asset : payment.tokenAddress;
   return {
     ...payment,
-    asset: "USDC",
+    ...(assetLabel ? { asset: assetLabel } : {}),
     decimals: X402_USDC_DECIMALS,
-    tokenAddress: asset.startsWith("0x") ? asset : payment.tokenAddress,
+    tokenAddress,
   };
 }
 
@@ -2503,7 +2515,7 @@ function normalizeMcpQuestionBody(value: unknown) {
   const body = value as JsonObject;
   return {
     ...body,
-    payment: normalizeMcpPayment(body.payment),
+    payment: normalizeMcpPayment(body.payment, body),
   };
 }
 
