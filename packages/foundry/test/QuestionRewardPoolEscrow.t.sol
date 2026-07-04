@@ -1445,6 +1445,47 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(replacementOracle));
     }
 
+    function testGovernanceCanRepointQuestionBundleClusterOracleAfterRejectedSnapshot() public {
+        ClusterPayoutOracle originalOracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        _finalizeBundleClusterPayoutSnapshotWithRootNoVetoWait(
+            originalOracle,
+            bundleId,
+            0,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            originalOracle.payoutWeightLeaf(payoutWeight)
+        );
+        bytes32 snapshotKey = originalOracle.roundPayoutSnapshotKey(
+            originalOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1
+        );
+        originalOracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-before-bundle-repoint"));
+
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow)
+        );
+
+        vm.prank(owner);
+        rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(replacementOracle));
+
+        vm.prank(owner);
+        rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(originalOracle));
+    }
+
     function testGovernanceCannotRepointQuestionBundleClusterOracleToWrongConsumer() public {
         _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
