@@ -428,11 +428,13 @@ export function resolveNextServiceEnv({
     env.NEXT_PUBLIC_TARGET_NETWORKS = ponderChainId;
   }
 
-  if (!baseEnv.RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
+  const shouldUseLocalE2EFlags = ponderChainId === ponderNetworkChainIds.hardhat;
+
+  if (shouldUseLocalE2EFlags && !baseEnv.RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
     env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
   }
 
-  if (!baseEnv.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
+  if (shouldUseLocalE2EFlags && !baseEnv.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
     env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
   }
 

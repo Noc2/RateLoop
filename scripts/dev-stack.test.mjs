@@ -377,6 +377,26 @@ test("aligns the Next service target network with the dev Ponder network", () =>
   );
 });
 
+test("does not force local E2E production flags for deployed Ponder networks", () => {
+  assert.deepEqual(
+    resolveNextServiceEnv({
+      databaseUrl: localDatabaseConfig.url,
+      ponderEnv: {
+        PONDER_NETWORK: "base",
+        PONDER_RPC_URL_8453: "https://mainnet.base.org",
+      },
+      baseEnv: {},
+    }),
+    {
+      DATABASE_URL: localDatabaseConfig.url,
+      NEXT_PUBLIC_TARGET_NETWORKS: "8453",
+      NEXT_PUBLIC_RPC_URL_8453: "https://mainnet.base.org",
+      RATELOOP_IMAGE_MODERATION_MODE: "disabled",
+      RATELOOP_QUESTION_DETAILS_MODERATION_MODE: "disabled",
+    },
+  );
+});
+
 test("preserves explicit confidentiality job secrets for the Next service", () => {
   assert.deepEqual(
     resolveNextServiceEnv({
