@@ -2102,6 +2102,41 @@ export async function settleRoundDirect(
   return false;
 }
 
+/**
+ * Close a round into its RBTS settlement-pending state without using the local
+ * no-snapshot timeout fallback. Tests that need positive RBTS accounting can
+ * publish a real local payout snapshot after this returns.
+ */
+export async function settleRoundToRbtsPendingDirect(
+  contentId: number | bigint,
+  roundId: number | bigint,
+  fromAddress: string,
+  contractAddress: string,
+): Promise<boolean> {
+  const { encodeFunctionData } = await import("viem");
+  const contentIdBigInt = BigInt(contentId);
+  const roundIdBigInt = BigInt(roundId);
+
+  const data = encodeFunctionData({
+    abi: SETTLE_ROUND_ABI,
+    functionName: "settleRound",
+    args: [contentIdBigInt, roundIdBigInt],
+  });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ok = await sendTx(fromAddress, contractAddress, data);
+    const state = await readRoundStateLatest(contractAddress, contentIdBigInt, roundIdBigInt);
+    if (state === ROUND_STATE.SettlementPending || state === ROUND_STATE.Settled || state === ROUND_STATE.Tied) {
+      return true;
+    }
+    if (!ok) return false;
+    if (state === ROUND_STATE.Open && attempt === 0) continue;
+    return false;
+  }
+
+  return false;
+}
+
 async function completeLocalRbtsSettlementTimeout(
   contractAddress: string,
   contentId: bigint,

@@ -14,13 +14,18 @@ import {
   requestFrontendFeeWithdrawal,
   revealVoteDirect,
   setTestConfig,
-  settleRoundDirect,
+  settleRoundToRbtsPendingDirect,
   slashFrontend,
   submitContentDirect,
   transferLREP,
   waitForPonderIndexed,
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
+import {
+  ensureFrontendOperatorEligible,
+  publishAndFinalizeRbtsSettlementWithKeeper,
+  stopCorrelationSnapshotKeeper,
+} from "../helpers/correlation";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import "../helpers/fetch-shim";
 import { getContentList } from "../helpers/ponder-api";
@@ -52,6 +57,11 @@ test.describe("Frontend fee claim lifecycle", () => {
   test.beforeAll(async () => {
     const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
     if (!ok) throw new Error("Failed to set test config");
+    await ensureFrontendOperatorEligible(ANVIL_ACCOUNTS.account1.address);
+  });
+
+  test.afterEach(async () => {
+    await stopCorrelationSnapshotKeeper();
   });
 
   function frontendAddressFor(seed: number): `0x${string}` {
@@ -164,19 +174,20 @@ test.describe("Frontend fee claim lifecycle", () => {
     }
 
     await evmIncreaseTime(EPOCH_DURATION + 1);
-    const settled = await settleRoundDirect(
+    const pending = await settleRoundToRbtsPendingDirect(
       BigInt(contentId!),
       roundId,
       ANVIL_ACCOUNTS.account1.address,
       VOTING_ENGINE,
     );
-    expect(settled, "Frontend-fee round did not settle").toBe(true);
+    expect(pending, "Frontend-fee round did not enter RBTS settlement").toBe(true);
+    await publishAndFinalizeRbtsSettlementWithKeeper(BigInt(contentId!), roundId);
 
     return { contentId: contentId!, roundId };
   }
 
   test("registered frontend accrues claimable fees after settlement", async () => {
-    test.setTimeout(180_000);
+    test.setTimeout(520_000);
 
     const uniqueId = Date.now();
     const frontendAddress = frontendAddressFor(uniqueId);
@@ -211,7 +222,7 @@ test.describe("Frontend fee claim lifecycle", () => {
   });
 
   test("slashed frontends route historical frontend fees to protocol", async () => {
-    test.setTimeout(180_000);
+    test.setTimeout(520_000);
 
     const uniqueId = Date.now() + 1;
     const frontendAddress = frontendAddressFor(uniqueId);
