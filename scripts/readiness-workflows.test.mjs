@@ -133,6 +133,7 @@ test("Ponder Docker runtime uses pinned base and production dependencies", () =>
     dockerfile,
     /yarn workspaces focus @rateloop\/ponder --production/,
   );
+  assert.match(dockerfile, /chown -R node:node \/app\/packages\/ponder/);
   assert.match(dockerfile, /CMD \["yarn", "start:built-workspace-deps"\]/);
 });
 
