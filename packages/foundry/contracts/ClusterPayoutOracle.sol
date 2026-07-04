@@ -151,9 +151,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     /// @notice Exact rejected correlation-epoch proposal payloads. Used when the arbiter rejects
     ///         bad metadata around a deterministic clusterRoot without burning the root itself.
     mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochSnapshotDigests;
-    /// @notice Tracks rejected correlation-epoch clusterRoots so an identical re-proposal
-    ///         is blocked at proposeCorrelationEpoch — mirrors rejectedRoundPayoutSnapshotRoots
-    ///         for the correlation-epoch path (L-Oracle-4).
+    /// @notice Historical marker for rejected correlation-epoch clusterRoots under each epoch.
+    ///         Proposal replay protection is enforced by `rejectedCorrelationEpochRootKeys`,
+    ///         which scopes root rejection to the source set that was actually adjudicated.
     mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochRoots;
     /// @notice Canonical rejected correlation roots keyed by range/source set/root, independent
     ///         of caller-chosen epochId.
@@ -314,7 +314,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (existing.status != SnapshotStatus.None && existing.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
         }
-        if (rejectedCorrelationEpochRoots[epochId][clusterRoot]) revert InvalidSnapshot();
         (bytes32 coverageDigest, bytes32 sourceSetDigest) =
             _requireCorrelationEpochSourcesReady(epochId, fromRoundId, toRoundId, sourceRefs);
         bytes32 proposalDigest = _correlationEpochDigest(

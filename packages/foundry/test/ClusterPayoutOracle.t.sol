@@ -1444,6 +1444,52 @@ contract ClusterPayoutOracleTest is Test {
         );
     }
 
+    function test_RejectedCorrelationEpochRootAllowsSameEpochDifferentSourceSet() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpochRoot(1, keccak256("bad-root"));
+
+        bytes32 rejectedSourceSetDigest = oracle.correlationEpochSourceSetDigest(1);
+        assertTrue(oracle.rejectedCorrelationEpochRoots(1, clusterRoot));
+        assertTrue(
+            oracle.rejectedCorrelationEpochRootKeys(
+                oracle.correlationEpochRootKey(rejectedSourceSetDigest, clusterRoot)
+            )
+        );
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("corrected-epoch-artifact"),
+            "ipfs://corrected-epoch",
+            _questionEpochSources(7, 42, 4)
+        );
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory replacement = oracle.correlationEpochSnapshot(1);
+        bytes32 replacementSourceSetDigest = oracle.correlationEpochSourceSetDigest(1);
+        assertEq(uint8(replacement.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(replacement.clusterRoot, clusterRoot);
+        assertTrue(replacementSourceSetDigest != rejectedSourceSetDigest);
+        assertFalse(
+            oracle.rejectedCorrelationEpochRootKeys(
+                oracle.correlationEpochRootKey(replacementSourceSetDigest, clusterRoot)
+            )
+        );
+    }
+
     function test_RejectedCorrelationEpochRootCannotReplayWithAlteredRange() public {
         bytes32 clusterRoot = keccak256("cluster-root");
         oracle.proposeCorrelationEpoch(
