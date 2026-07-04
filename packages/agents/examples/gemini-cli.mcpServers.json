@@ -1,12 +1,9 @@
 {
   "mcpServers": {
     "rateloop": {
-      "url": "https://www.rateloop.ai/api/mcp",
-      "transport": "streamable-http",
+      "httpUrl": "https://www.rateloop.ai/api/mcp/public",
       "headers": {
-        "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
-        "MCP-Protocol-Version": "2025-11-25",
-        "X-Agent-Name": "gemini-cli"
+        "MCP-Protocol-Version": "2025-11-25"
       }
     }
   }

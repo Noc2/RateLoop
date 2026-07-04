@@ -48,6 +48,17 @@ export const RATELOOP_GENERIC_MCP_CONFIG = `{
   }
 }`;
 
+export const RATELOOP_GEMINI_MCP_CONFIG = `{
+  "mcpServers": {
+    "rateloop": {
+      "httpUrl": "${RATELOOP_PUBLIC_MCP_URL}",
+      "headers": {
+        "MCP-Protocol-Version": "${RATELOOP_MCP_PROTOCOL_VERSION}"
+      }
+    }
+  }
+}`;
+
 export const RATELOOP_CURSOR_MCP_CONFIG = `{
   "mcpServers": {
     "rateloop": {
@@ -228,10 +239,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`,
     snippets: [
       oneTimePromptSnippet,
       {
-        description: "Use this generic remote MCP JSON if your Gemini setup accepts MCP server config.",
+        description: "Use this Gemini CLI remote MCP JSON for the tokenless public RateLoop endpoint.",
         kind: "mcp",
         label: "Install MCP",
-        text: RATELOOP_GENERIC_MCP_CONFIG,
+        text: RATELOOP_GEMINI_MCP_CONFIG,
       },
       genericAgentsRuleSnippet,
       commonSkillSnippet,

@@ -4,8 +4,7 @@
       "url": "https://www.rateloop.ai/api/mcp/public",
       "transport": "streamable-http",
       "headers": {
-        "MCP-Protocol-Version": "2025-11-25",
-        "X-Agent-Name": "openclaw"
+        "MCP-Protocol-Version": "2025-11-25"
       }
     }
   }

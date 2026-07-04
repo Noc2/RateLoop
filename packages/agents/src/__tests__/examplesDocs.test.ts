@@ -14,17 +14,49 @@ describe("agent public examples and docs", () => {
       mcpServers?: {
         rateloop?: {
           headers?: Record<string, string>;
+          httpUrl?: string;
           url?: string;
         };
       };
     };
     const server = config.mcpServers?.rateloop;
 
-    expect(server?.url).toBe("https://www.rateloop.ai/api/mcp");
+    expect(server?.httpUrl).toBe("https://www.rateloop.ai/api/mcp/public");
+    expect(server?.url).toBeUndefined();
     expect(server?.headers?.["MCP-Protocol-Version"]).toBe("2025-11-25");
-    expect(markdown).toContain('"url": "https://www.rateloop.ai/api/mcp"');
+    expect(server?.headers?.["Authorization"]).toBeUndefined();
+    expect(server?.headers?.["X-Agent-Name"]).toBeUndefined();
+    expect(markdown).toContain('"httpUrl": "https://www.rateloop.ai/api/mcp/public"');
     expect(markdown).toContain('"MCP-Protocol-Version": "2025-11-25"');
+    expect(markdown).toContain("`rateloop_get_question_status`");
+    expect(markdown).toContain("`rateloop_get_result`");
     expect(markdown).not.toContain("https://rateloop.example/api/mcp");
+  });
+
+  it("keeps OpenClaw MCP markdown aligned with the checked JSON example", () => {
+    const markdown = readPackageFile("examples/openclaw.md");
+    const config = JSON.parse(
+      readPackageFile("examples/openclaw.mcpServers.json"),
+    ) as {
+      mcpServers?: {
+        rateloop?: {
+          headers?: Record<string, string>;
+          transport?: string;
+          url?: string;
+        };
+      };
+    };
+    const server = config.mcpServers?.rateloop;
+
+    expect(server?.url).toBe("https://www.rateloop.ai/api/mcp/public");
+    expect(server?.transport).toBe("streamable-http");
+    expect(server?.headers?.["MCP-Protocol-Version"]).toBe("2025-11-25");
+    expect(server?.headers?.["Authorization"]).toBeUndefined();
+    expect(server?.headers?.["X-Agent-Name"]).toBeUndefined();
+    expect(markdown).toContain('"url": "https://www.rateloop.ai/api/mcp/public"');
+    expect(markdown).toContain('"transport": "streamable-http"');
+    expect(markdown).toContain("`rateloop_get_question_status`");
+    expect(markdown).toContain("`rateloop_get_result`");
   });
 
   it("keeps install docs aligned with the package Node engine", () => {

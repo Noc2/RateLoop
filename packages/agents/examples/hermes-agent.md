@@ -29,5 +29,5 @@ That is enough for the agent to avoid duplicate asks, cite the result later, and
 ## Recovery Rules
 
 - Treat callbacks as hints, not final truth.
-- Before taking a follow-up action, call `getQuestionStatus` or `getResult`.
+- Before taking a follow-up action, call `rateloop_get_question_status` or `rateloop_get_result`.
 - If a callback fails or the agent restarts, use `operationKey` to recover instead of re-submitting the ask.

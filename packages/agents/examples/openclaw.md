@@ -14,8 +14,7 @@ Start from `openclaw.mcpServers.json` for public quote, handoff, status, and res
       "url": "https://www.rateloop.ai/api/mcp/public",
       "transport": "streamable-http",
       "headers": {
-        "MCP-Protocol-Version": "2025-11-25",
-        "X-Agent-Name": "openclaw"
+        "MCP-Protocol-Version": "2025-11-25"
       }
     }
   }
@@ -64,5 +63,5 @@ Use the landing-page pitch checkpoint:
 ## Recovery
 
 - Use callbacks as a wakeup, not as final truth.
-- Recover missed deliveries through `getQuestionStatus`.
+- Recover missed deliveries through `rateloop_get_question_status`, then fetch settled output with `rateloop_get_result`.
 - Avoid duplicate asks by remembering `clientRequestId` and `operationKey`.

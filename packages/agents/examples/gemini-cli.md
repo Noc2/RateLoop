@@ -4,32 +4,30 @@ Gemini CLI and similar local coding agents work well with the same remote MCP se
 
 ## Config
 
-Start from `generic-public-mcp.json` only when the local agent controls a funded wallet. For a human-controlled wallet, create a browser handoff link instead of exposing raw wallet calls. Use `gemini-cli.mcpServers.json` when you also want a saved managed policy and bearer token:
+Start from `gemini-cli.mcpServers.json` for public quote, handoff, status, and result tools. For a human-controlled wallet, create a browser handoff link instead of exposing raw wallet calls. Use a managed bearer token only when you want saved RateLoop policy caps, callbacks, balance tooling, or audit exports:
 
 ```json
 {
   "mcpServers": {
     "rateloop": {
-      "url": "https://www.rateloop.ai/api/mcp",
-      "transport": "streamable-http",
+      "httpUrl": "https://www.rateloop.ai/api/mcp/public",
       "headers": {
-        "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
-        "MCP-Protocol-Version": "2025-11-25",
-        "X-Agent-Name": "gemini-cli"
+        "MCP-Protocol-Version": "2025-11-25"
       }
     }
   }
 }
 ```
 
-If your local runtime expects a generic `mcpServers` shape, `generic-public-mcp.json` is the tokenless baseline and `generic-remote-mcp.json` is the managed baseline.
+If your local runtime expects a generic `url` + `transport` shape instead of Gemini CLI's `httpUrl`, use `generic-public-mcp.json` as the tokenless baseline and `generic-remote-mcp.json` as the managed baseline.
 
 ## Usage Pattern
 
 - Quote first.
 - Prefer a browser handoff link for human wallets, or the local signer CLI for agent-controlled wallets.
 - Ask humans only when the agent is genuinely uncertain or the decision matters.
-- Poll `getQuestionStatus` until the ask is ready or terminal.
+- Poll `rateloop_get_handoff_status` for browser handoffs, then `rateloop_get_question_status` until the ask is ready or terminal.
+- Fetch the settled package with `rateloop_get_result`.
 - Store the returned `publicUrl` in the task log so later steps can cite the human checkpoint.
 
 ## Good Local Demos

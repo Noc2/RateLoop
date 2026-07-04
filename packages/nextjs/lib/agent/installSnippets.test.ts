@@ -4,6 +4,7 @@ import {
   RATELOOP_CODEX_MCP_COMMAND,
   RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND,
   RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
+  RATELOOP_GEMINI_MCP_CONFIG,
   RATELOOP_GENERIC_MCP_CONFIG,
   RATELOOP_ONE_TIME_AGENT_PROMPT,
   RATELOOP_PUBLIC_MCP_URL,
@@ -45,6 +46,24 @@ test("generic MCP config points at public RateLoop MCP endpoint", () => {
   assert.equal(parsed.mcpServers.rateloop.headers["MCP-Protocol-Version"], "2025-11-25");
 });
 
+test("Gemini MCP config uses Gemini CLI httpUrl shape", () => {
+  const parsed = JSON.parse(RATELOOP_GEMINI_MCP_CONFIG) as {
+    mcpServers: {
+      rateloop: {
+        headers: Record<string, string>;
+        httpUrl: string;
+        transport?: string;
+        url?: string;
+      };
+    };
+  };
+
+  assert.equal(parsed.mcpServers.rateloop.httpUrl, RATELOOP_PUBLIC_MCP_URL);
+  assert.equal(parsed.mcpServers.rateloop.url, undefined);
+  assert.equal(parsed.mcpServers.rateloop.transport, undefined);
+  assert.equal(parsed.mcpServers.rateloop.headers["MCP-Protocol-Version"], "2025-11-25");
+});
+
 test("one-time trial prompt names the RateLoop website", () => {
   assert.match(RATELOOP_ONE_TIME_AGENT_PROMPT, /Run an end-to-end RateLoop trial/);
   assert.ok(RATELOOP_ONE_TIME_AGENT_PROMPT.includes(RATELOOP_PUBLIC_ORIGIN));
@@ -78,4 +97,12 @@ test("all install targets include a one-time trial prompt and persistent setup",
       `${target.name} missing rule setup`,
     );
   }
+});
+
+test("Gemini and OpenClaw landing snippets match their shipped example config shape", () => {
+  const gemini = getAgentInstallTarget("Gemini CLI");
+  const openClaw = getAgentInstallTarget("OpenClaw");
+
+  assert.equal(gemini?.snippets.find(snippet => snippet.kind === "mcp")?.text, RATELOOP_GEMINI_MCP_CONFIG);
+  assert.equal(openClaw?.snippets.find(snippet => snippet.kind === "mcp")?.text, RATELOOP_GENERIC_MCP_CONFIG);
 });

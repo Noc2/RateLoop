@@ -144,7 +144,7 @@ belongs in the RateLoop-managed policy or server environment, while tokenless pu
 
 - Hermes can use the same remote MCP shape as OpenClaw.
 - Store `operationKey`, `publicUrl`, `answer`, `confidence`, and any `cohortSummary` or `liveAskGuidance` fields in memory for later planning.
-- Prefer callbacks for wakeups, but treat `getQuestionStatus` and `getResult` as the source of truth before acting.
+- Prefer callbacks for wakeups, but treat `rateloop_get_question_status` and `rateloop_get_result` as the source of truth before acting.
 
 ### ChatGPT and Claude
 
@@ -154,9 +154,22 @@ belongs in the RateLoop-managed policy or server environment, while tokenless pu
 
 ### Gemini CLI and local coding agents
 
-- Use `generic-public-mcp.json` for wallet-direct asks, or `gemini-cli.mcpServers.json` / `generic-remote-mcp.json` for managed token flows.
+- Use `gemini-cli.mcpServers.json` for Gemini CLI's `httpUrl` shape. Use `generic-public-mcp.json` when a local coding agent expects `url` + `transport`, or `generic-remote-mcp.json` for managed token flows.
 - Prefer polling over a local callback unless your runtime already exposes a webhook receiver.
 - Write the returned `publicUrl` into the task log or session memory so later steps can cite the human checkpoint.
+
+## MCP Transport Matrix
+
+| Client shape | Endpoint key | Transport key | Notes |
+| --- | --- | --- | --- |
+| Generic `mcpServers` clients | `url` | `transport: "streamable-http"` | Use `generic-public-mcp.json` or `generic-remote-mcp.json`. |
+| Gemini CLI | `httpUrl` | omitted | Use `gemini-cli.mcpServers.json`; `url` is treated as SSE by Gemini CLI. |
+| Cursor | `url` | omitted | The landing page snippet adds `MCP-Protocol-Version` in headers. |
+| VS Code / Copilot | `url` under `servers` | `type: "http"` | Use the landing page Copilot snippet. |
+| Codex plugin | `url` | `type: "http"` | The bundled plugin config sends `MCP-Protocol-Version`. |
+
+All public examples use `https://www.rateloop.ai/api/mcp/public` without `Authorization`. Managed examples use
+`https://www.rateloop.ai/api/mcp` with `Authorization: Bearer ${RATELOOP_MCP_TOKEN}`.
 
 ### Backend workers
 
