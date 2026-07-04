@@ -721,7 +721,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             )) {
             revert InvalidProof();
         }
-        if (_isRaterBanned(pending.rater)) {
+        if (_isRaterBannedByPinnedRegistry(pending.rater)) {
             earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
             _clearPendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
             delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
@@ -1492,7 +1492,30 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function _isRaterBanned(address rater) internal view returns (bool) {
         _requireConfiguredRaterRegistry();
-        return raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(rater));
+        return _isRaterBannedByPinnedRegistry(rater);
+    }
+
+    function _isRaterBannedByPinnedRegistry(address rater) private view returns (bool banned) {
+        address registry = address(raterRegistry);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0x0dba0580))
+            mstore(add(ptr, 0x04), rater)
+            let ok := staticcall(gas(), registry, ptr, 0x24, ptr, 0x20)
+            if iszero(and(ok, eq(returndatasize(), 0x20))) {
+                mstore(0x00, shl(224, 0xe6c4247b))
+                revert(0x00, 0x04)
+            }
+            let identityKey := mload(ptr)
+            mstore(ptr, shl(224, 0xf8e0a2d6))
+            mstore(add(ptr, 0x04), identityKey)
+            ok := staticcall(gas(), registry, ptr, 0x24, ptr, 0x20)
+            if iszero(and(ok, eq(returndatasize(), 0x20))) {
+                mstore(0x00, shl(224, 0xe6c4247b))
+                revert(0x00, 0x04)
+            }
+            banned := iszero(iszero(mload(ptr)))
+        }
     }
 
     function _requireConfiguredRaterRegistry() private view {

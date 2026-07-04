@@ -1699,6 +1699,61 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
+    function test_PendingLaunchCreditFinalizesAfterProtocolConfigRotation() public {
+        MockLaunchProtocolConfig config = new MockLaunchProtocolConfig(address(registry), address(pool));
+        pool.setRoundClusterReadyAtSource(address(new MockConfiguredClusterSource(address(config))));
+
+        MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
+        frontendRegistry.setEligible(address(this), true);
+        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
+        oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
+        pool.setClusterPayoutOracle(address(oracle));
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            1,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _launchEpochSources(1)
+        );
+        vm.warp(2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        bytes32 commitKey = _commitKey(1);
+        assertEq(
+            pool.recordEarnedRaterRewardWithSourceReady(
+                alice,
+                1,
+                1,
+                commitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a")),
+                uint64(block.timestamp)
+            ),
+            0
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, commitKey, alice, 2_500, keccak256("clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
+
+        config.setLaunchDistributionPool(address(0xBEEF));
+        config.setRaterRegistry(address(0xCAFE));
+
+        uint256 paidAfterRotation = pool.finalizeEarnedRaterRewardCredit(1, 1, commitKey, payout, new bytes32[](0));
+
+        assertEq(paidAfterRotation, 0);
+        assertEq(pool.qualifyingCreditBps(alice), 2_500);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, commitKey));
+    }
+
     function test_RescueStalePendingLaunchCreditRepointsOracleAndDefersAnchors() public {
         _configureLaunchOracle(80, _launchEpochSourcesForRange(80, 80));
         bytes32 commitKey = _commitKey(80);
