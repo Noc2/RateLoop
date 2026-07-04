@@ -23,6 +23,7 @@ import {
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import {
   ensureFrontendOperatorEligible,
+  pinLocalRbtsCorrelationInputSnapshots,
   publishAndFinalizeRbtsSettlementWithKeeper,
   stopCorrelationSnapshotKeeper,
 } from "../helpers/correlation";
@@ -181,6 +182,7 @@ test.describe("Frontend fee claim lifecycle", () => {
       VOTING_ENGINE,
     );
     expect(pending, "Frontend-fee round did not enter RBTS settlement").toBe(true);
+    await pinLocalRbtsCorrelationInputSnapshots(BigInt(contentId!), roundId);
     await publishAndFinalizeRbtsSettlementWithKeeper(BigInt(contentId!), roundId);
 
     return { contentId: contentId!, roundId };

@@ -35,6 +35,7 @@ const E2E_CORRELATION_EPOCH_OFFSET = 1_000_000_000n;
 const E2E_RBTS_CORRELATION_EPOCH_OFFSET = 1_500_000_000n;
 const ROUND_STATE_SETTLED = 1;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const CORRELATION_ARTIFACT_PORT = 9091;
 const CORRELATION_ARTIFACT_ROUTE_PREFIX = "/correlation-artifacts";
@@ -317,6 +318,124 @@ export async function publishAndFinalizeRbtsSettlementWithKeeper(contentId: bigi
     applied,
     `RBTS settlement snapshot was not applied; keeper logs:\n${correlationKeeperLogs.slice(-20).join("\n")}`,
   ).toBe(true);
+}
+
+export async function pinLocalRbtsCorrelationInputSnapshots(contentId: bigint, roundId: bigint) {
+  const databaseUrl = process.env.DATABASE_URL;
+  expect(databaseUrl, "DATABASE_URL must be set for RBTS correlation input snapshot e2e setup").toBeTruthy();
+  const round = await correlationPublicClient.readContract({
+    address: CONTRACT_ADDRESSES.RoundVotingEngine,
+    abi: ROUND_CORE_STATE_ABI,
+    functionName: "roundCore",
+    args: [contentId, roundId],
+  });
+  const expectedRevealedCount = Number(round[3]);
+  expect(expectedRevealedCount, "RBTS settlement fixture needs revealed votes").toBeGreaterThan(0);
+
+  const { Pool } = await import("pg");
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  let lastState: Record<string, unknown> | null = null;
+  try {
+    const ready = await waitForPonderIndexed(
+      async () => {
+        await pool.query(
+          `
+            update vote
+            set
+              correlation_verified_human = coalesce(correlation_verified_human, true),
+              correlation_historical_vote_count = coalesce(correlation_historical_vote_count, 0),
+              correlation_ban_reasons = coalesce(correlation_ban_reasons, '[]')
+            where content_id = $1
+              and round_id = $2
+              and revealed = true
+              and identity_key is not null
+              and identity_holder is not null
+              and identity_key != $3
+              and rbts_weight is not null
+              and rbts_weight > 0
+          `,
+          [contentId.toString(), roundId.toString(), ZERO_HASH],
+        );
+
+        const voteResult = await pool.query<{
+          eligible_count: number;
+          missing_snapshot_count: number;
+        }>(
+          `
+            select
+              count(*)::int as eligible_count,
+              count(*) filter (
+                where correlation_verified_human is null
+                  or correlation_historical_vote_count is null
+                  or correlation_ban_reasons is null
+              )::int as missing_snapshot_count
+            from vote
+            where content_id = $1
+              and round_id = $2
+              and revealed = true
+              and identity_key is not null
+              and identity_holder is not null
+              and identity_key != $3
+              and rbts_weight is not null
+              and rbts_weight > 0
+          `,
+          [contentId.toString(), roundId.toString(), ZERO_HASH],
+        );
+        const roundResult = await pool.query<{
+          rbts_settlement_pending_at: string | null;
+          rbts_settlement_pending_block_number: string | null;
+          rbts_settlement_pending_log_index: number | null;
+          rbts_settlement_pending_tx_hash: string | null;
+        }>(
+          `
+            select
+              rbts_settlement_pending_at,
+              rbts_settlement_pending_block_number,
+              rbts_settlement_pending_log_index,
+              rbts_settlement_pending_tx_hash
+            from "round"
+            where content_id = $1
+              and round_id = $2
+              and state = 5
+              and rbts_settlement_status = 'pending'
+            limit 1
+          `,
+          [contentId.toString(), roundId.toString()],
+        );
+        const voteRow = voteResult.rows[0];
+        const roundRow = roundResult.rows[0];
+        const roundSourceReady =
+          roundRow !== undefined &&
+          roundRow.rbts_settlement_pending_at !== null &&
+          roundRow.rbts_settlement_pending_block_number !== null &&
+          roundRow.rbts_settlement_pending_log_index !== null &&
+          roundRow.rbts_settlement_pending_tx_hash !== null;
+        lastState = {
+          eligibleCount: voteRow?.eligible_count ?? 0,
+          expectedRevealedCount,
+          missingSnapshotCount: voteRow?.missing_snapshot_count ?? 0,
+          roundSourceReady,
+        };
+        return (
+          (voteRow?.eligible_count ?? 0) === expectedRevealedCount &&
+          (voteRow?.missing_snapshot_count ?? 0) === 0 &&
+          roundSourceReady
+        );
+      },
+      120_000,
+      2_000,
+      "rbts-settlement:pin-correlation-inputs",
+    );
+
+    expect(
+      ready,
+      `Ponder did not expose pinned RBTS correlation inputs for ${contentId.toString()}/${roundId.toString()}; last=${JSON.stringify(
+        lastState,
+      )}`,
+    ).toBe(true);
+  } finally {
+    await pool.end();
+  }
 }
 
 async function advancePastTimestamp(deadline: bigint, label: string) {
