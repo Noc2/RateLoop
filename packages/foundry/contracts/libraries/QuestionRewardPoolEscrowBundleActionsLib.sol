@@ -748,6 +748,51 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             && recoveredAllocation >= snapshot.effectiveParticipantUnits;
     }
 
+    function hasQualifiablePreQualificationBundleRoundSet(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        bool hasRejectedSnapshot,
+        uint32 snapshotRawEligibleVoters,
+        uint32 snapshotEffectiveParticipantUnits,
+        uint256 snapshotTotalClaimWeight
+    ) internal view returns (bool) {
+        BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
+        if (roundSetIndex >= bundle.requiredSettledRounds) return false;
+        if (!_isBundleRoundSetComplete(bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex)) {
+            return false;
+        }
+        (bool active,,) = QuestionRewardPoolEscrowWindowLib.previewBundleWindowForRoundSet(
+            votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
+        );
+        if (!active) return false;
+
+        uint256 completerCount = _bundleRoundSetCompleterCount(
+            bundleQuestions, bundleRoundIds, registry, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex
+        );
+        if (completerCount < bundle.requiredCompleters) return false;
+
+        uint256 minEffectiveUnits =
+            bundle.requiredCompleters > MIN_REQUIRED_VOTERS ? bundle.requiredCompleters : MIN_REQUIRED_VOTERS;
+        uint256 allocationFloor = minEffectiveUnits * BPS_SCALE;
+        if (hasRejectedSnapshot) {
+            if (snapshotRawEligibleVoters != completerCount) return false;
+            if (snapshotEffectiveParticipantUnits < minEffectiveUnits * BPS_SCALE || snapshotTotalClaimWeight == 0) {
+                return false;
+            }
+            allocationFloor = snapshotEffectiveParticipantUnits;
+        }
+
+        uint256 allocation = _previewBundleRoundSetAllocation(bundle);
+        return allocation > 0 && allocation <= bundle.unallocatedAmount && allocation >= allocationFloor;
+    }
+
     function refundQuestionBundleReward(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,

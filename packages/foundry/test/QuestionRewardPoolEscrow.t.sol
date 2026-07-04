@@ -9011,6 +9011,51 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function testBundleRefund_SnapshotlessSkipRejectsNonQualifyingCompleterIntersection() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithClose(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, block.timestamp + 3 days
+        );
+
+        address[] memory firstQuestionVoters = _threeVoters();
+        address[] memory secondQuestionVoters = new address[](3);
+        secondQuestionVoters[0] = voter2;
+        secondQuestionVoters[1] = voter3;
+        secondQuestionVoters[2] = voter4;
+        bool[] memory directions = _directions(true, true, false);
+
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(firstQuestionVoters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(secondQuestionVoters, contentIds[1], directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+
+        vm.expectRevert("Round set not qualifiable");
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotBundleRoundSet(bundleId, 0);
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
+
+        vm.warp(block.timestamp + 25 hours);
+        (uint256 replacementFirstRoundId, uint256 replacementSecondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, _threeVoters(), directions);
+        _recordBundleRoundSetTerminals(contentIds, replacementFirstRoundId, replacementSecondRoundId);
+
+        IClusterPayoutOracle.PayoutWeight memory replacementWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], replacementFirstRoundId, 0);
+        bytes32 replacementRoot = oracle.payoutWeightLeaf(replacementWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            oracle, bundleId, 0, 3, 30_000, replacementWeight.effectiveWeight, replacementRoot
+        );
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        assertGt(
+            rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
+                bundleId, 0, voter1, replacementWeight, new bytes32[](0)
+            ),
+            0
+        );
+    }
+
     function testBundleRefund_SnapshotlessClusterRoundSetRejectsExistingOracleSnapshot() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
@@ -9072,6 +9117,63 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(refundAmount, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(4, bundleId, bundleId, 1));
+    }
+
+    function testBundleRefund_PreQualificationRejectedSkipRejectsRawCompleterMismatch() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory firstQuestionVoters = _threeVoters();
+        address[] memory secondQuestionVoters = new address[](3);
+        secondQuestionVoters[0] = voter2;
+        secondQuestionVoters[1] = voter3;
+        secondQuestionVoters[2] = voter4;
+        bool[] memory directions = _directions(true, true, false);
+
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(firstQuestionVoters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(secondQuestionVoters, contentIds[1], directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root
+        );
+
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-bundle-mismatched-raw"));
+
+        vm.expectRevert("Round set not qualifiable");
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotBundleRoundSet(bundleId, 0);
+    }
+
+    function testBundleRefund_PreQualificationRejectedSkipRejectsBelowFloorSnapshot() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRootNoVetoWait(
+            oracle, bundleId, 0, 3, 20_000, payoutWeight.effectiveWeight, root
+        );
+
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-bundle-below-floor"));
+
+        vm.expectRevert("Round set not qualifiable");
+        rewardPoolEscrow.skipPreQualificationRejectedSnapshotBundleRoundSet(bundleId, 0);
     }
 
     function testBundleRefund_PreQualificationParentRejectedSnapshotRoundSetCanBeSkipped() public {
