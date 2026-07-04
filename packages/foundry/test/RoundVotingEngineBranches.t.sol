@@ -20,6 +20,7 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
@@ -513,7 +514,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _setMockAdvisoryLaunchPool(uint16 cap) internal returns (MockAdvisoryLaunchDistributionPool launchPool) {
-        launchPool = new MockAdvisoryLaunchDistributionPool(cap, address(mockRaterIdentityRegistry));
+        return _setMockAdvisoryLaunchPoolForRegistry(cap, address(mockRaterIdentityRegistry));
+    }
+
+    function _setMockAdvisoryLaunchPoolForRegistry(uint16 cap, address raterRegistry_)
+        internal
+        returns (MockAdvisoryLaunchDistributionPool launchPool)
+    {
+        launchPool = new MockAdvisoryLaunchDistributionPool(cap, raterRegistry_);
         launchPool.setAuthorizedCaller(address(rewardDistributor), true);
         launchPool.setAuthorizedCaller(address(advisoryRecorder), true);
         launchPool.setRoundClusterReadyAtSource(address(engine));
@@ -4883,6 +4891,44 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(availability.status), uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.Available));
 
         _recordAdvisory(voter2, contentId, "advisory-verified-cap-verified");
+
+        assertEq(advisoryRecorder.roundUnverifiedAdvisoryCommitCount(contentId, roundId), 1);
+        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 2);
+    }
+
+    function test_DelegatedVerifiedAdvisoryAvailabilityBypassesUnverifiedCommitCap() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        _setMockAdvisoryLaunchPoolForRegistry(1, address(raterRegistry));
+
+        vm.prank(owner);
+        raterRegistry.seedHumanCredential(
+            voter2,
+            uint64(block.timestamp + 30 days),
+            keccak256("rateloop-voter-2"),
+            keccak256("rateloop-evidence-voter-2")
+        );
+
+        vm.prank(voter2);
+        raterRegistry.setDelegate(delegate1);
+        vm.prank(delegate1);
+        raterRegistry.acceptDelegate();
+
+        assertFalse(raterRegistry.hasActiveHumanCredential(delegate1), "raw delegate is not credentialed");
+        IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(delegate1);
+        assertTrue(resolved.hasActiveHumanCredential, "resolved delegate is verified");
+
+        uint256 contentId = _submitContent();
+        _openStakedRound(voter4, contentId, "advisory-delegated-verified-cap-open");
+        _recordAdvisory(voter1, contentId, "advisory-delegated-verified-cap-fill");
+        uint256 roundId = _previewCommitRoundId(engine, contentId);
+
+        vm.prank(delegate1);
+        AdvisoryVoteRecorder.AdvisoryCommitAvailability memory availability =
+            advisoryRecorder.advisoryCommitAvailability(contentId);
+        assertTrue(availability.canCommit, "verified delegate can advisory-commit after unverified cap");
+        assertEq(uint256(availability.status), uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.Available));
+
+        _recordAdvisory(delegate1, contentId, "advisory-delegated-verified-cap-verified");
 
         assertEq(advisoryRecorder.roundUnverifiedAdvisoryCommitCount(contentId, roundId), 1);
         assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 2);

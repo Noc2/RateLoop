@@ -284,7 +284,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         }
         if (
             _unverifiedAdvisoryCommitCapReached(contentId, availability.roundId, maxUnverifiedCommits)
-                && !_hasActiveHumanCredentialForRound(contentId, availability.roundId, msg.sender)
+                && !_hasResolvedActiveHumanCredentialForRound(contentId, availability.roundId, msg.sender)
         ) {
             availability.status = AdvisoryCommitAvailabilityStatus.UnverifiedAdvisoryCapReached;
             return availability;
@@ -920,14 +920,16 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         return roundUnverifiedAdvisoryCommitCount[contentId][roundId] >= maxUnverifiedCommits;
     }
 
-    function _hasActiveHumanCredentialForRound(uint256 contentId, uint256 roundId, address rater)
+    function _hasResolvedActiveHumanCredentialForRound(uint256 contentId, uint256 roundId, address rater)
         internal
         view
         returns (bool)
     {
         if (rater == address(0)) return false;
-        try _roundRaterRegistry(contentId, roundId).hasActiveHumanCredential(rater) returns (bool active) {
-            return active;
+        try _roundRaterRegistry(contentId, roundId).resolveRater(rater) returns (
+            IRaterIdentityRegistry.ResolvedRater memory resolved
+        ) {
+            return resolved.hasActiveHumanCredential;
         } catch {
             return false;
         }
