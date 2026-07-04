@@ -268,7 +268,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             ) {
                 if (voterPool > 0) revert PoolExhausted();
             } else if (surplusBlocked) {
-                reward = RewardMath.calculateVoterReward(scoreWeight, totalScoreWeight, voterPool);
+                reward = claimedCount + 1 == totalRewardClaimants
+                    ? voterPool - claimedAmount
+                    : RewardMath.calculateVoterReward(scoreWeight, totalScoreWeight, voterPool);
                 roundVoterRewardClaimedCount[contentId][roundId] = claimedCount + 1;
                 roundVoterRewardClaimedAmount[contentId][roundId] = claimedAmount + reward;
                 if (reward > 0) {

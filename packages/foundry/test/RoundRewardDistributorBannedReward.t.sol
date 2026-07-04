@@ -278,6 +278,25 @@ contract RoundRewardDistributorBannedRewardTest is Test {
         assertEq(distributor.roundVoterRewardClaimedAmount(CONTENT_ID, ROUND_ID), 300_000);
     }
 
+    function test_BannedLastClaimantRoutesRemainderToTreasury() public {
+        bytes32 identity3 = bytes32(uint256(3));
+        engine.setRoundState(3, 3, 100);
+        engine.setCommitState(COMMIT_1, voter1, 1, 1_000_000, IDENTITY_1);
+        engine.setCommitState(COMMIT_2, voter2, 1, 1_000_000, bytes32(uint256(2)));
+        engine.setCommitState(COMMIT_3, voter3, 1, 1_000_000, identity3);
+        banRegistry.setBanned(identity3, true);
+
+        distributor.exposedClaimRbtsReward(CONTENT_ID, ROUND_ID, COMMIT_1, _commit(voter1), voter1);
+        distributor.exposedClaimRbtsReward(CONTENT_ID, ROUND_ID, COMMIT_2, _commit(voter2), voter2);
+        distributor.exposedClaimRbtsReward(CONTENT_ID, ROUND_ID, COMMIT_3, _commit(voter3), voter3);
+
+        assertEq(lrep.balanceOf(voter1), 1_000_033, "first voter gets truncated share");
+        assertEq(lrep.balanceOf(voter2), 1_000_033, "second voter gets truncated share");
+        assertEq(lrep.balanceOf(voter3), 1_000_000, "banned voter gets stake only");
+        assertEq(lrep.balanceOf(treasury), 34, "blocked final remainder routed");
+        assertEq(distributor.roundVoterRewardClaimedAmount(CONTENT_ID, ROUND_ID), 100);
+    }
+
     function test_ConfiscateBannedRewardCanBeCalledByThirdParty() public {
         banRegistry.setBanned(IDENTITY_1, true);
 
