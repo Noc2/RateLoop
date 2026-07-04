@@ -424,6 +424,53 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         uint8 payoutDomain
     ) private view returns (bool) {
         if (oracleAddr == address(0) || pinnedAt == 0) return false;
+        BundleReward storage bundle = bundleRewards[bundleId];
+        if (roundSetIndex >= bundle.requiredSettledRounds) return false;
+        if (
+            !QuestionRewardPoolEscrowBundleLib.isRoundSetComplete(
+                bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex
+            )
+        ) {
+            return false;
+        }
+
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        uint256 snapshotRoundId = _bundleSnapshotRoundId(roundSetIndex);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot;
+        try oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory loadedSnapshot
+        ) {
+            payoutSnapshot = loadedSnapshot;
+        } catch {
+            return false;
+        }
+        if (
+            payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Proposed
+                && payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Challenged
+                && payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
+        ) {
+            return false;
+        }
+
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        if (proposedAt < pinnedAt) return false;
+        uint64 sourceReadyAt =
+            _bundlePayoutSnapshotSourceReadyAt(bundleQuestions, bundleRoundIds, votingEngine, bundleId, roundSetIndex);
+        if (sourceReadyAt == 0 || proposedAt < sourceReadyAt) return false;
+        if (oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId) != address(this)) {
+            return false;
+        }
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        bytes32 snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        if (oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshotDigest)) return false;
+        if (oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, payoutSnapshot.weightRoot)) return false;
+        if (_isRoundPayoutSnapshotRejectedByCorrelationEpoch(oracle, payoutDomain, bundleId, bundleId, snapshotRoundId)) {
+            return false;
+        }
+        if (payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) return true;
+        if (_finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot)) return true;
+
         return QuestionRewardPoolEscrowBundleActionsLib.hasQualifiableRecoveredBundleReplacementSnapshot(
             bundleRewards,
             bundleQuestions,
