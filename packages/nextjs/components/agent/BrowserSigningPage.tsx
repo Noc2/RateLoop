@@ -14,6 +14,7 @@ import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
+import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useWalletTransactionPlanExecutor } from "~~/hooks/useWalletTransactionPlanExecutor";
 import {
@@ -179,6 +180,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const { executeWalletTransactionPlan } = useWalletTransactionPlanExecutor();
+  const { requireAcceptance } = useTermsAcceptance();
   // WS-1 (2026-05-21 repo audit): the `token` is the bearer credential for this signing intent.
   // Leaving it in the URL leaks it through browser history, the Referer header on any
   // cross-origin navigation, server access logs, and any analytics script allowed by CSP.
@@ -270,6 +272,8 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       notification.error("Connected wallet does not match this signing link.");
       return;
     }
+    const acceptedTerms = await requireAcceptance("submit");
+    if (!acceptedTerms) return;
 
     setIsPreparing(true);
     setError(null);
@@ -339,6 +343,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
     intent?.chainId,
     intent?.requestBody,
     postPrepare,
+    requireAcceptance,
     signTypedDataAsync,
     switchToChain,
   ]);
@@ -357,6 +362,8 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       notification.error("Connected wallet does not match this signing link.");
       return;
     }
+    const acceptedTerms = await requireAcceptance("submit");
+    if (!acceptedTerms) return;
 
     setIsExecuting(true);
     setError(null);
@@ -417,7 +424,17 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
     } finally {
       setIsExecuting(false);
     }
-  }, [address, chain?.id, connectedMismatch, executeWalletTransactionPlan, intent, intentId, switchToChain, token]);
+  }, [
+    address,
+    chain?.id,
+    connectedMismatch,
+    executeWalletTransactionPlan,
+    intent,
+    intentId,
+    requireAcceptance,
+    switchToChain,
+    token,
+  ]);
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
