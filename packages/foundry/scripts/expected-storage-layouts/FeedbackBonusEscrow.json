@@ -91,6 +91,12 @@
       "type": "t_uint64"
     },
     {
+      "slot": 14,
+      "offset": 8,
+      "label": "feedbackBonusPausedAt",
+      "type": "t_uint64"
+    },
+    {
       "slot": 15,
       "offset": 0,
       "label": "__gap",

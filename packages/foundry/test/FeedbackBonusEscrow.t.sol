@@ -1407,6 +1407,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.warp(originalDeadline - 1);
         vm.prank(owner);
         feedbackBonusEscrow.pause();
+        assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), originalDeadline);
 
         vm.warp(originalDeadline + 30 minutes);
         vm.prank(owner);
@@ -1420,6 +1421,32 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         vm.prank(funder);
         assertEq(feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6), 10e6);
+    }
+
+    function testUnpauseDoesNotReopenAlreadyExpiredAwardWindow() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+        _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+        uint256 originalDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+
+        vm.warp(originalDeadline + 1);
+        vm.prank(owner);
+        feedbackBonusEscrow.pause();
+
+        vm.warp(originalDeadline + 30 minutes);
+        vm.prank(owner);
+        feedbackBonusEscrow.unpause();
+
+        assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), originalDeadline);
+
+        vm.prank(funder);
+        vm.expectRevert("Feedback closed");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+        assertEq(forfeitedAmount, BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + BONUS_AMOUNT);
     }
 
     function testExpiredRemainderForfeitsToTreasury() public {

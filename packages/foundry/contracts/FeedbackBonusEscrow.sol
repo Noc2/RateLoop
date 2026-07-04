@@ -77,6 +77,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     address public legacyFeedbackRegistry;
     uint256 public legacyFeedbackRegistryPoolIdUpperBound;
     uint64 public feedbackBonusLastUnpausedAt;
+    uint64 public feedbackBonusPausedAt;
 
     /// @dev Reserved storage gap for future upgrades. Mirrors the pattern used by every other
     ///      upgradeable contract in this protocol so new state can be added without colliding
@@ -415,6 +416,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
+        feedbackBonusPausedAt = block.timestamp.toUint64();
     }
 
     function unpause() external onlyRole(PAUSER_ROLE) {
@@ -515,8 +517,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _feedbackBonusDeadlineAfterPause(uint256 deadline) private view returns (uint256) {
+        if (paused()) return deadline;
+        uint256 pausedAt = feedbackBonusPausedAt;
         uint256 lastUnpausedAt = feedbackBonusLastUnpausedAt;
-        if (lastUnpausedAt == 0) return deadline;
+        if (pausedAt == 0 || lastUnpausedAt < pausedAt || deadline < pausedAt) return deadline;
         uint256 reopenedDeadline = lastUnpausedAt + MIN_FEEDBACK_AWARD_DECISION_SECONDS;
         return reopenedDeadline > deadline ? reopenedDeadline : deadline;
     }
