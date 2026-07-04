@@ -69,7 +69,11 @@ jobs:
                 ;;
             esac
 
-            forge test --offline -vvv --match-path "$suite"
+            if [ "$(basename "$suite")" = "FormalVerification_RoundLifecycle.t.sol" ]; then
+              forge test --offline -vvv --no-cache --match-path "$suite"
+            else
+              forge test --offline -vvv --match-path "$suite"
+            fi
           done
         working-directory: packages/foundry
 
