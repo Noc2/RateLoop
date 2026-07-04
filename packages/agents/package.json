@@ -99,6 +99,7 @@
     "build": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn build:built-workspace-deps\"",
     "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && tsc --noEmit\"",
     "handoff": "tsx src/cli.ts handoff",
+    "lint": "tsx src/cli.ts lint",
     "lint:questions": "tsx src/cli.ts lint",
     "local-ask": "tsx src/cli.ts local-ask",
     "prepack": "yarn build",

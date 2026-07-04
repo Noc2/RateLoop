@@ -253,7 +253,7 @@ async function listExampleQuestionFiles() {
 function usage() {
   return `Usage:
   yarn workspace @rateloop/agents templates
-  yarn workspace @rateloop/agents lint:questions --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents lint --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
