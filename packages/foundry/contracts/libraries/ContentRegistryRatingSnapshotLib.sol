@@ -348,12 +348,32 @@ library ContentRegistryRatingSnapshotLib {
             IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
         ) {
             if (snapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected) {
+                uint64 latestRejectedAt = _latestRatingSnapshotRejectedAt(oracle, snapshot.snapshotKey);
+                if (
+                    latestRejectedAt != 0
+                        && block.timestamp < uint256(latestRejectedAt) + RATING_SNAPSHOT_NO_PROPOSAL_GRACE
+                ) {
+                    return (false, bytes32(0));
+                }
                 return (true, RATING_SNAPSHOT_NO_PROPOSAL_SKIP_REASON);
             }
         } catch {
             return (false, bytes32(0));
         }
         return (false, bytes32(0));
+    }
+
+    function _latestRatingSnapshotRejectedAt(IClusterPayoutOracle oracle, bytes32 snapshotKey)
+        private
+        view
+        returns (uint64 latestRejectedAt)
+    {
+        try oracle.roundPayoutSnapshotRejectedAt(snapshotKey) returns (uint64 rejectedAt) {
+            latestRejectedAt = rejectedAt;
+        } catch { }
+        try oracle.roundPayoutSnapshotCorrelationEpochRejectedAt(snapshotKey) returns (uint64 parentRejectedAt) {
+            if (parentRejectedAt > latestRejectedAt) latestRejectedAt = parentRejectedAt;
+        } catch { }
     }
 
     function _canSkipRatingSnapshotRound(RoundLib.RoundState state, bytes32 appliedDigest) private pure returns (bool) {
