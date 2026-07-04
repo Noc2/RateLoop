@@ -2178,7 +2178,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
+      const response = await fetch(`/api/agent/handoffs/${handoffId}?includeImageData=true`, {
         headers: {
           "x-rateloop-handoff-token": token,
         },
@@ -2881,6 +2881,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         );
         const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
           body: JSON.stringify({
+            includeImageData: true,
             requestBody,
             token,
           }),
@@ -2924,6 +2925,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     try {
       const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
         body: JSON.stringify({
+          includeImageData: true,
           restoreOriginal: true,
           token,
         }),

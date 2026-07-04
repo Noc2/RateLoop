@@ -617,6 +617,16 @@ export const agentAskHandoffOutputSchema = {
     nextAction: { type: "string" },
     operationKey: { type: ["string", "null"] },
     paymentMode: { enum: ["wallet_calls", "x402_authorization"], type: "string" },
+    paymentModeDiagnostics: {
+      additionalProperties: false,
+      properties: {
+        awaitingX402Authorization: { type: "boolean" },
+        mode: { enum: ["wallet_calls", "x402_authorization"], type: "string" },
+        transactionCallCount: { type: "number" },
+      },
+      required: ["awaitingX402Authorization", "mode", "transactionCallCount"],
+      type: "object",
+    },
     originalRequestBody: {
       additionalProperties: true,
       description: "The immutable ask request originally created by the agent.",
@@ -637,8 +647,25 @@ export const agentAskHandoffOutputSchema = {
     transactionPlan: { type: ["object", "null"] },
     updatedAt: { type: "string" },
     walletAddress: { type: ["string", "null"] },
-    x402AuthorizationRequest: { type: ["object", "null"] },
   },
+  required: ["status"],
+  type: "object",
+} satisfies JsonSchema;
+
+const agentAskHandoffCreateOnlyFields = new Set([
+  "handoffId",
+  "handoffToken",
+  "handoffUrl",
+  "resultTool",
+  "statusTool",
+]);
+const agentAskHandoffStatusOutputProperties = Object.fromEntries(
+  Object.entries(agentAskHandoffOutputSchema.properties).filter(([key]) => !agentAskHandoffCreateOnlyFields.has(key)),
+);
+
+export const agentAskHandoffStatusOutputSchema = {
+  additionalProperties: true,
+  properties: agentAskHandoffStatusOutputProperties,
   required: ["status"],
   type: "object",
 } satisfies JsonSchema;

@@ -129,6 +129,10 @@ export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   webhookUrl?: string;
 }
 
+export type LiveAskHumansRequest = AskHumansRequest & {
+  maxPaymentAmount: string | number | bigint;
+};
+
 export interface PrepareImageUploadRequest {
   attachmentId?: string;
   clientRequestId?: string;
@@ -262,20 +266,21 @@ export interface RateLoopAgentGeneratedImage {
 }
 
 export type CreateAskHandoffRequest =
-  | (AskHumansRequest & {
+  | (LiveAskHumansRequest & {
       generatedImages?: RateLoopAgentGeneratedImage[];
       request?: never;
       ttlMs?: number;
     })
   | {
       generatedImages?: RateLoopAgentGeneratedImage[];
-      request: AskHumansRequest;
+      request: LiveAskHumansRequest;
       ttlMs?: number;
     };
 
 export interface AskHandoffLookup {
   handoffId: string;
   handoffToken: string;
+  includeImageData?: boolean;
 }
 
 export interface SigningIntentLookup {
@@ -1769,11 +1774,15 @@ function agentHandoffUrl(
   if (!params.handoffToken.trim()) {
     throw new RateLoopSdkError("handoffToken is required");
   }
-  return new URL(
-    `./handoffs/${params.handoffId.trim()}`,
-    `${agentBaseUrl(config)}/`,
-  ).toString();
-}
+    const url = new URL(
+      `./handoffs/${params.handoffId.trim()}`,
+      `${agentBaseUrl(config)}/`,
+    );
+    if (params.includeImageData) {
+      url.searchParams.set("includeImageData", "true");
+    }
+    return url.toString();
+  }
 
 function agentSigningIntentsUrl(config: NormalizedAgentConfig) {
   return new URL("./signing-intents", `${agentBaseUrl(config)}/`).toString();

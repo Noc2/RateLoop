@@ -38,6 +38,10 @@ function readRequestBodyDraft(value: unknown): JsonObject {
   return value as JsonObject;
 }
 
+function readIncludeImageData(value: unknown) {
+  return value === true || value === "true";
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ handoffId: string }> }) {
   const { handoffId } = await context.params;
 
@@ -50,7 +54,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ han
 
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const assets = await listAgentAskHandoffAssets(handoff.id);
-      return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
+      return buildAgentAskHandoffResponse({
+        assets,
+        handoff,
+        includeImageData: readIncludeImageData(request.nextUrl.searchParams.get("includeImageData")),
+      });
     },
     rateLimit: AGENT_READ_RATE_LIMIT,
     request,
@@ -73,6 +81,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
       const token = readToken((body as { token?: unknown }).token);
+      const includeImageData = readIncludeImageData((body as { includeImageData?: unknown }).includeImageData);
       const shouldRestoreOriginal = (body as { restoreOriginal?: unknown }).restoreOriginal === true;
       const requestBody = shouldRestoreOriginal
         ? null
@@ -100,7 +109,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
 
       const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const updatedAssets = await listAgentAskHandoffAssets(updatedHandoff.id);
-      return buildAgentAskHandoffResponse({ assets: updatedAssets, handoff: updatedHandoff, includeImageData: true });
+      return buildAgentAskHandoffResponse({ assets: updatedAssets, handoff: updatedHandoff, includeImageData });
     },
     rateLimit: AGENT_WRITE_RATE_LIMIT,
     request,

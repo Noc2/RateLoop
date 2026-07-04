@@ -22,6 +22,7 @@ import { X402QuestionConfigError, resolveX402QuestionConfig } from "~~/lib/x402/
 type JsonObject = Record<string, unknown>;
 
 export type AgentAskHandoffPaymentMode = "wallet_calls" | "x402_authorization";
+export const AGENT_HANDOFF_UPLOADING_IMAGES_STALE_MS = 5 * 60_000;
 
 export type AgentAskHandoffStatus =
   | "pending"
@@ -927,6 +928,24 @@ function assertHandoffChainSubmitReady(chainId: number) {
   }
 }
 
+function assertHandoffMaxPaymentAmount(requestBody: JsonObject) {
+  const rawValue = requestBody.maxPaymentAmount;
+  const value =
+    typeof rawValue === "number" || typeof rawValue === "bigint" || typeof rawValue === "string"
+      ? String(rawValue).trim()
+      : "";
+  if (!/^\d+$/.test(value)) {
+    throw new AgentAskHandoffError("maxPaymentAmount is required and must be a non-negative integer string.");
+  }
+}
+
+function isStaleUploadingImageHandoff(handoff: AgentAskHandoffRecord, now = Date.now()) {
+  return (
+    handoff.status === "uploading_images" &&
+    now - handoff.updatedAt.getTime() >= AGENT_HANDOFF_UPLOADING_IMAGES_STALE_MS
+  );
+}
+
 export function buildAgentAskHandoffValidationImageUrls(params: {
   appBaseUrl: string;
   assets: AgentAskHandoffAssetRecord[];
@@ -947,6 +966,7 @@ export function normalizeAgentAskHandoffRequestBody(params: {
     cloneWithImageUrls(requestBody, params.validationImageUrls ?? []),
   );
   const parsed = parseX402QuestionRequest(validationBody);
+  assertHandoffMaxPaymentAmount(requestBody);
   assertHandoffChainSubmitReady(parsed.chainId);
   const paymentMode = resolveAgentAskHandoffPaymentMode({ parsed, requestBody });
   assertAgentAskHandoffFeedbackBonusMode({ parsed, paymentMode, requestBody });
@@ -1075,6 +1095,9 @@ export function buildAgentAskHandoffResponse(params: {
       return "Sign each upload challenge in the browser wallet, then prepare the handoff again with imageSignatures.";
     }
     if (params.handoff.status === "uploading_images") {
+      if (isStaleUploadingImageHandoff(params.handoff)) {
+        return "Image upload appears interrupted. Retry preparation with any required image signatures, or ask the agent for a fresh link if retry fails.";
+      }
       return "Image upload is still processing. Poll rateloop_get_handoff_status for completion or failure.";
     }
     return "Share or open the handoffUrl, review the draft, connect the funding wallet, and submit.";
@@ -1594,7 +1617,12 @@ export function assertHandoffCanPrepare(handoff: AgentAskHandoffRecord) {
   if (handoff.status === "prepared") {
     return;
   }
-  if (handoff.status !== "pending" && handoff.status !== "awaiting_image_signatures" && handoff.status !== "failed") {
+  if (
+    handoff.status !== "pending" &&
+    handoff.status !== "awaiting_image_signatures" &&
+    handoff.status !== "failed" &&
+    !isStaleUploadingImageHandoff(handoff)
+  ) {
     throw new AgentAskHandoffError(`Handoff cannot be prepared from status ${handoff.status}.`, 409);
   }
 }
