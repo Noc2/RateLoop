@@ -908,6 +908,70 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore);
     }
 
+    function testZeroRevealFailedRoundBonusRefundsFunder() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+
+        _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+        _commitFeedbackVote(voter2, contentId, false, 1, address(0));
+        _commitFeedbackVote(voter3, contentId, true, 2, address(0));
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+
+        _warpToRevealFailedDeadline(contentId, roundId);
+        votingEngine.finalizeRevealFailedRound(contentId, roundId);
+        (, RoundLib.RoundState state,, uint16 revealedCount,,,,) = votingEngine.roundCore(contentId, roundId);
+        assertEq(uint256(state), uint256(RoundLib.RoundState.RevealFailed));
+        assertEq(revealedCount, 0);
+
+        vm.warp(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId) + 1);
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        vm.expectEmit(true, true, false, true);
+        emit FeedbackBonusFunderRefunded(poolId, funder, BONUS_AMOUNT);
+        uint256 refundedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        assertEq(refundedAmount, BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore + BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore);
+    }
+
+    function testRevealPresentRevealFailedRoundBonusCanAwardThenForfeitRemainder() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+
+        (bytes32 salt1, bytes32 commitKey1) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+        _commitFeedbackVote(voter2, contentId, false, 1, address(0));
+        _commitFeedbackVote(voter3, contentId, true, 2, address(0));
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        bytes32 feedbackHash = _feedbackHash(contentId, roundId, voter1);
+
+        vm.prank(voter1);
+        feedbackRegistry.publishFeedback(
+            contentId, roundId, commitKey1, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+
+        _warpPastTlockRevealTime(
+            uint256(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).startTime) + EPOCH_DURATION
+        );
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey1, true, 5_000, salt1);
+
+        _warpToRevealFailedDeadline(contentId, roundId);
+        votingEngine.finalizeRevealFailedRound(contentId, roundId);
+        (, RoundLib.RoundState state,, uint16 revealedCount,,,,) = votingEngine.roundCore(contentId, roundId);
+        assertEq(uint256(state), uint256(RoundLib.RoundState.RevealFailed));
+        assertEq(revealedCount, 1);
+
+        vm.prank(funder);
+        assertEq(feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6), 10e6);
+
+        vm.warp(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId) + 1);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        assertEq(forfeitedAmount, BONUS_AMOUNT - 10e6);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + BONUS_AMOUNT - 10e6);
+    }
+
     function testLongerRequestedAwardDeadlineWinsOverMinimumDecisionWindow() public {
         uint256 contentId = _submitQuestion("");
         uint256 requestedDeadline = block.timestamp + 7 days;
@@ -1550,6 +1614,15 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         votingEngine.settleRound(contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.SettlementPending));
+    }
+
+    function _warpToRevealFailedDeadline(uint256 contentId, uint256 roundId) internal {
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        RoundLib.RoundConfig memory roundConfig = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);
+        uint256 votingWindowEnd = uint256(round.startTime) + uint256(roundConfig.maxDuration);
+        uint256 lastRevealableAt = _lastCommitRevealableAfter(votingEngine, contentId, roundId);
+        uint256 revealBase = lastRevealableAt > votingWindowEnd ? lastRevealableAt : votingWindowEnd;
+        vm.warp(revealBase + protocolConfig.revealGracePeriod() * 24 + 1);
     }
 
     function _commitFeedbackVote(address voter, uint256 contentId, bool isUp, uint256 index, address frontend)

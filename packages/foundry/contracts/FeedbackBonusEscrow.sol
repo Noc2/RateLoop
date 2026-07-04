@@ -512,7 +512,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _expiredFeedbackBonusRefundRecipient(FeedbackBonusPool storage pool) internal view returns (address) {
-        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(pool.contentId, pool.roundId);
+        (, RoundLib.RoundState state,, uint16 revealedCount,,,,) = votingEngine.roundCore(pool.contentId, pool.roundId);
+        if (state == RoundLib.RoundState.RevealFailed && revealedCount == 0) return pool.funder;
         if (
             state != RoundLib.RoundState.Settled && state != RoundLib.RoundState.Tied
                 && state != RoundLib.RoundState.RevealFailed
