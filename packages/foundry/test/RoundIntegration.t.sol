@@ -2963,6 +2963,50 @@ contract RoundIntegrationTest is VotingTestBase {
         registry.markDormant(contentId);
     }
 
+    function test_SettlementSideEffectReplayDoesNotRegressDormancyAnchor() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+
+        _commitAllThenReveal(voters, contentId, dirs, STAKE);
+        uint256 staleRoundId = _getActiveOrLatestRoundId(contentId);
+
+        vm.mockCallRevert(
+            address(registry),
+            abi.encodeWithSelector(ContentRegistry.recordPendingRatingSettlement.selector),
+            abi.encodeWithSignature("Error(string)", "rating side effect blocked")
+        );
+        _settleAfterRbtsSeed(votingEngine, contentId, staleRoundId);
+        (,,,,,, uint48 staleSettledAt,) = votingEngine.roundCore(contentId, staleRoundId);
+
+        assertTrue(votingEngine.pendingRatingSettlementReplay(contentId, staleRoundId));
+
+        vm.clearMockedCalls();
+        _installRoundIntegrationClusterPayoutOracle();
+        vm.warp(block.timestamp + 24 hours + 1);
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
+        uint256 laterRoundId = _settleRoundWith(voters, contentId, dirs, STAKE);
+        (,,,,,, uint48 laterSettledAt,) = votingEngine.roundCore(contentId, laterRoundId);
+        assertGt(laterSettledAt, staleSettledAt);
+
+        assertTrue(votingEngine.replayPendingRatingSettlement(contentId, staleRoundId));
+
+        vm.warp(uint256(staleSettledAt) + 30 days + 1);
+        vm.expectRevert();
+        registry.markDormant(contentId);
+
+        vm.warp(uint256(laterSettledAt) + 30 days + 1);
+        registry.markDormant(contentId);
+    }
+
     function test_SettlementSideEffectFailure_CanReplayAfterEngineRotation() public {
         uint256 contentId = _submitContent();
 

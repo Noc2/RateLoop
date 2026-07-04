@@ -108,8 +108,12 @@ library ContentRegistryRatingSnapshotLib {
         assembly ("memory-safe") {
             readyAt48 := readyAt
         }
-        content.lastActivityAt = readyAt48;
-        dormancyAnchorAt[contentId] = readyAt;
+        if (readyAt48 > content.lastActivityAt) {
+            content.lastActivityAt = readyAt48;
+        }
+        if (readyAt > dormancyAnchorAt[contentId]) {
+            dormancyAnchorAt[contentId] = readyAt;
+        }
         if (caller == currentVotingEngine) {
             contentSettlementEngineGeneration[contentId] = callerGeneration;
         }
