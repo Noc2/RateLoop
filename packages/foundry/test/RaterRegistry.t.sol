@@ -372,6 +372,23 @@ contract RaterRegistryTest is Test {
         assertTrue(resolved.hasActiveHumanCredential);
     }
 
+    function test_WorldIdV3ProxyAttestRejectsSameProofReplayByOwner() public {
+        (RaterRegistry v3Registry, MockWorldIDRouter legacyRouter) = _deployV3ProxiedRegistry();
+        uint256[8] memory proof;
+        uint256 nullifierHash = uint256(NULLIFIER_HASH);
+        uint256 signalHash = v3Registry.worldIdSignalHash(rater);
+
+        legacyRouter.setExpectedSignalHash(signalHash);
+        legacyRouter.setExpectedExternalNullifierHash(WORLD_ID_EXTERNAL_NULLIFIER_HASH);
+
+        vm.prank(rater);
+        v3Registry.attestHumanCredentialWithProof(1, nullifierHash, proof);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
+        v3Registry.attestHumanCredentialWithProof(1, nullifierHash, proof);
+    }
+
     function test_GovernanceCanRotateAndFreezeWorldIdV3RouterConfig() public {
         (RaterRegistry v3Registry,) = _deployV3ProxiedRegistry();
         MockWorldIDRouter replacementRouter = new MockWorldIDRouter();

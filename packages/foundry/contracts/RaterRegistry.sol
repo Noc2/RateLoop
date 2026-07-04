@@ -912,6 +912,23 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             root, WORLD_ID_GROUP_ID, signalHash, nullifierHash, worldIdExternalNullifierHash, proof
         );
 
+        bytes32 proofReplayKey = keccak256(
+            abi.encode(
+                "world-id-v3-credential-proof",
+                block.chainid,
+                address(worldIdRouter),
+                WORLD_ID_GROUP_ID,
+                root,
+                worldIdExternalNullifierHash,
+                storedNullifier,
+                signalHash
+            )
+        );
+        if (_usedWorldCredentialProof[WORLD_CREDENTIAL_PROOF_OF_HUMAN][proofReplayKey]) {
+            revert NullifierAlreadyAssigned();
+        }
+        _usedWorldCredentialProof[WORLD_CREDENTIAL_PROOF_OF_HUMAN][proofReplayKey] = true;
+
         uint256 expiresAt = block.timestamp + worldIdCredentialTtl;
         if (expiresAt > type(uint64).max) revert InvalidCredential();
 
