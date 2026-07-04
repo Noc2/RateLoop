@@ -2375,6 +2375,44 @@ async function activatePendingCallbackSubscription(params: {
   return true;
 }
 
+async function enqueuePendingCallbackFailure(params: {
+  body: JsonObject;
+  dependencies: McpToolDependencies;
+  logPrefix: string;
+  operationKey: `0x${string}`;
+  pendingCallback: StoredPendingAgentCallback | null;
+}) {
+  const pending = params.pendingCallback;
+  if (!pending) return;
+  const eventTypes = pending.eventTypes.filter((eventType): eventType is AgentCallbackEventType =>
+    AGENT_CALLBACK_EVENT_TYPES.includes(eventType as AgentCallbackEventType),
+  );
+  if (!eventTypes.includes("question.failed")) return;
+
+  try {
+    await params.dependencies.upsertAgentCallbackSubscription({
+      agentId: pending.agentId,
+      callbackUrl: pending.callbackUrl,
+      eventTypes,
+      secret: pending.secret,
+    });
+    await params.dependencies.enqueueAgentCallbackEvent({
+      agentId: pending.agentId,
+      eventId: callbackEventId(params.operationKey, "question.failed"),
+      eventType: "question.failed",
+      payload: buildAgentCallbackPayload({
+        body: params.body,
+        chainId: typeof params.body.chainId === "number" ? params.body.chainId : 0,
+        clientRequestId: typeof params.body.clientRequestId === "string" ? params.body.clientRequestId : "",
+        eventType: "question.failed",
+        operationKey: params.operationKey,
+      }),
+    });
+  } catch (error) {
+    console.error(`${params.logPrefix} failed callback enqueue failed`, error);
+  }
+}
+
 async function verifyPublicWebhookRegistration(params: {
   args: JsonObject;
   chainId: number;
@@ -3502,24 +3540,46 @@ export async function callPublicRateLoopMcpTool(params: {
             })
           : null;
 
-      const result =
-        paymentMode === "x402_authorization"
-          ? await dependencies.preparePermissionlessNativeX402QuestionSubmissionRequest({
-              feedbackBonus,
-              paymentAuthorization:
-                typeof args.paymentAuthorization === "object" && args.paymentAuthorization
-                  ? (args.paymentAuthorization as Record<string, unknown>)
-                  : null,
-              pendingCallback,
-              payload,
-              walletAddress,
-            })
-          : await dependencies.preparePermissionlessWalletQuestionSubmissionRequest({
-              feedbackBonus,
-              pendingCallback,
-              payload,
-              walletAddress,
-            });
+      let result:
+        | Awaited<ReturnType<typeof preparePermissionlessNativeX402QuestionSubmissionRequest>>
+        | Awaited<ReturnType<typeof preparePermissionlessWalletQuestionSubmissionRequest>>;
+      try {
+        result =
+          paymentMode === "x402_authorization"
+            ? await dependencies.preparePermissionlessNativeX402QuestionSubmissionRequest({
+                feedbackBonus,
+                paymentAuthorization:
+                  typeof args.paymentAuthorization === "object" && args.paymentAuthorization
+                    ? (args.paymentAuthorization as Record<string, unknown>)
+                    : null,
+                pendingCallback,
+                payload,
+                walletAddress,
+              })
+            : await dependencies.preparePermissionlessWalletQuestionSubmissionRequest({
+                feedbackBonus,
+                pendingCallback,
+                payload,
+                walletAddress,
+              });
+      } catch (error) {
+        await enqueuePendingCallbackFailure({
+          body: {
+            chainId: payload.chainId,
+            clientRequestId: payload.clientRequestId,
+            error: error instanceof Error ? error.message : String(error),
+            operationKey: quote.operation.operationKey,
+            paymentMode,
+            status: "failed",
+            wallet: { address: walletAddress, fundingMode: "permissionless_wallet" },
+          },
+          dependencies,
+          logPrefix: "[mcp-public]",
+          operationKey: quote.operation.operationKey,
+          pendingCallback,
+        });
+        throw error;
+      }
       const body = applyFeedbackBonusPaymentFields(normalizeMcpQuestionBody(result.body) as JsonObject, feedbackBonus);
       const warnings: string[] = [];
       try {
@@ -3849,10 +3909,26 @@ export async function callRateLoopMcpTool(params: {
                 walletAddress,
               });
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         await dependencies.updateMcpBudgetReservation({
-          error: error instanceof Error ? error.message : String(error),
+          error: message,
           operationKey: quote.operation.operationKey,
           status: "failed",
+        });
+        await enqueuePendingCallbackFailure({
+          body: {
+            chainId: managedPayload.chainId,
+            clientRequestId: payload.clientRequestId,
+            error: message,
+            operationKey: quote.operation.operationKey,
+            paymentMode,
+            status: "failed",
+            wallet: { address: walletAddress, fundingMode: "agent_wallet" },
+          },
+          dependencies,
+          logPrefix: "[mcp]",
+          operationKey: quote.operation.operationKey,
+          pendingCallback,
         });
         throw error;
       }

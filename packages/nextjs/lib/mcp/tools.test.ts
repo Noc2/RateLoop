@@ -2111,6 +2111,51 @@ test("rateloop_ask_humans stores the default lifecycle webhook events", async ()
   });
 });
 
+test("rateloop_ask_humans enqueues requested failed webhook when preparation fails", async () => {
+  const enqueued: Array<{ eventType: string; payload: unknown }> = [];
+  const registered: unknown[] = [];
+  const reservationUpdates: unknown[] = [];
+
+  __setMcpToolTestOverridesForTests({
+    enqueueAgentCallbackEvent: async params => {
+      enqueued.push(params);
+      return [];
+    },
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+    prepareAgentWalletQuestionSubmissionRequest: async () => {
+      throw new Error("prepare unavailable");
+    },
+    ...quoteOverrides(),
+    updateMcpBudgetReservation: async params => {
+      reservationUpdates.push(params);
+      return null;
+    },
+    upsertAgentCallbackSubscription: async params => {
+      registered.push(params);
+      return null;
+    },
+  });
+
+  await assert.rejects(
+    callRateLoopMcpTool({
+      agent: AGENT,
+      arguments: askArguments({
+        paymentMode: "wallet_calls",
+        webhookEvents: ["question.failed"],
+        webhookSecret: "webhook-secret",
+        webhookUrl: "https://agent.example/rateloop",
+      }),
+      name: "rateloop_ask_humans",
+    }),
+    /prepare unavailable/,
+  );
+
+  assert.equal((reservationUpdates[0] as { status?: string })?.status, "failed");
+  assert.deepEqual((registered[0] as { eventTypes?: string[] })?.eventTypes, ["question.failed"]);
+  assert.equal(enqueued[0]?.eventType, "question.failed");
+  assert.match(JSON.stringify(enqueued[0]?.payload), /prepare unavailable/);
+});
+
 test("rateloop_confirm_ask_transactions marks budget submitted and enqueues submitted callbacks", async () => {
   const enqueued: unknown[] = [];
   const reservationUpdates: unknown[] = [];
