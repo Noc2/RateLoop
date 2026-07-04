@@ -151,21 +151,12 @@ export function SettlementNotifier() {
     [openBrowserNotification],
   );
 
-  // Request notification permission on mount (only if connected)
+  // Track the current permission without triggering a browser permission prompt.
   useEffect(() => {
     if (!address) return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
 
     permissionRef.current = Notification.permission;
-    if (Notification.permission === "default") {
-      Notification.requestPermission()
-        .then(perm => {
-          permissionRef.current = perm;
-        })
-        .catch(() => {
-          // Browser blocked permission request
-        });
-    }
   }, [address]);
 
   // Rebuild the active keys set when votes data changes
