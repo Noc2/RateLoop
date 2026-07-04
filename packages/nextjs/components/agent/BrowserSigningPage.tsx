@@ -442,7 +442,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       <section className="surface-card rounded-lg p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent ask handoff</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent signing handoff</p>
             <h1 className={`${surfaceSectionHeadingClassName} mt-2`}>{readQuestionTitle(intent)}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
               Review this RateLoop ask, connect the wallet that should pay the bounty, then sign and submit the prepared
