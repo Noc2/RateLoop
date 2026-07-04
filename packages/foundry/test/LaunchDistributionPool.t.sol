@@ -1901,6 +1901,30 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), FIRST_COHORT_FULL_SLOT);
     }
 
+    function test_ZeroCapRaterAssignmentStillCountsTowardLaunchCapCurve() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 0;
+        pool.setLaunchRewardPolicy(policy);
+
+        assertEq(_recordFiveEligibleCredits(alice), 0);
+        assertTrue(pool.raterLaunchCapAssigned(alice));
+        assertEq(pool.raterLaunchCap(alice), 0);
+        assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(_eligibleRaterCount(), 1);
+
+        _verify(alice, bytes32("alice-human"));
+        uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
+
+        assertEq(catchUp, FIRST_COHORT_FULL_SLOT);
+        assertEq(_eligibleRaterCount(), 1);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_FULL_SLOT);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_FULL_SLOT);
+
+        assertEq(pool.unlockFullEarnedRaterCap(alice), 0);
+        assertEq(_eligibleRaterCount(), 1);
+    }
+
     function test_UnlockFullEarnedRaterCapPartialPoolDoesNotConsumeFullCatchUpSlot() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.unverifiedEarnedRaterCapBps = 2_500;
@@ -2007,7 +2031,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterLaunchCap(bob), 0);
         assertEq(pool.raterLaunchPaid(bob), 0);
         assertEq(lrep.balanceOf(bob), 0);
-        assertEq(_eligibleRaterCount(), 1);
+        assertEq(_eligibleRaterCount(), 2);
         assertFalse(pool.raterFullLaunchCapUnlocked(bob));
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.unlockFullEarnedRaterCap(bob);

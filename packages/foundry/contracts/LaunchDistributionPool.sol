@@ -808,10 +808,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (!raterLaunchCapAssigned[rater]) {
             uint256 fullCap = currentRaterLaunchCap();
             (cap,) = _assignLaunchCap(rater, fullCap, policy);
-            if (cap > 0) {
-                eligibleRaterCount += 1;
-                emit RaterLaunchCapAssigned(rater, cap, eligibleRaterCount);
-            }
+            eligibleRaterCount += 1;
+            emit RaterLaunchCapAssigned(rater, cap, eligibleRaterCount);
         }
         if (!raterFullLaunchCapUnlocked[rater] && _activeLaunchCredentialClaimedByOther(rater)) {
             return 0;
