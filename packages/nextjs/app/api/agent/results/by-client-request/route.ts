@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
           chainId,
           clientRequestId,
           ...(contentId ? { contentId } : {}),
+          walletAddress,
         },
         name: "rateloop_get_result",
       }),

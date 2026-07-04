@@ -149,6 +149,8 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
   assert.equal(result.distribution.up.share, 0.7);
   assert.equal(result.majorObjections[0]?.type, "concern");
   assert.match(result.majorObjections[0]?.summary ?? "", /RATELOOP_UNTRUSTED_DATA_BEGIN/);
+  assert.equal(result.protocolState.operationStatus, "result_ready");
+  assert.equal(result.protocolState.status, 0);
   assert.match(result.protocolState.question, /RATELOOP_UNTRUSTED_DATA_BEGIN/);
   assert.ok(result.limitations.includes(RATELOOP_UNTRUSTED_DATA_WARNING));
   assert.deepEqual(result.feedbackQuality, {

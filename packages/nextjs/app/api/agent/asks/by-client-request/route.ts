@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     handler: ({ agent }) =>
       callRateLoopMcpTool({
         agent,
-        arguments: { chainId, clientRequestId },
+        arguments: { chainId, clientRequestId, walletAddress },
         name: "rateloop_get_question_status",
       }),
     rateLimit: AGENT_READ_RATE_LIMIT,

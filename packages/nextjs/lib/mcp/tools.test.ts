@@ -643,15 +643,30 @@ test("rateloop_ask_humans dry-run validates without reserving budget or preparin
     name: "rateloop_get_result",
   })) as unknown as {
     answer: string;
+    blockedReason: null;
     cohortSummary: { kind: string; simulatedRevealedAnswers: number };
+    estimatedReadyAt: null;
+    finalityStatus: string;
+    includesVetoWindow: boolean;
+    normalMaxDelaySeconds: number;
     paymentRequired: boolean;
+    protocolState: { operationStatus: string; status: number | null };
+    stalled: boolean;
     targetAudienceMatch: unknown;
     wait: { recoverWith: null };
   };
   assert.equal(syntheticResult.answer, "dry_run_complete");
+  assert.equal(syntheticResult.blockedReason, null);
   assert.equal(syntheticResult.cohortSummary.kind, "dry_run_fixture");
   assert.equal(syntheticResult.cohortSummary.simulatedRevealedAnswers, 3);
+  assert.equal(syntheticResult.estimatedReadyAt, null);
+  assert.equal(syntheticResult.finalityStatus, "final");
+  assert.equal(syntheticResult.includesVetoWindow, false);
+  assert.equal(syntheticResult.normalMaxDelaySeconds, 3600);
   assert.equal(syntheticResult.paymentRequired, false);
+  assert.equal(syntheticResult.protocolState.operationStatus, "dry_run");
+  assert.equal(syntheticResult.protocolState.status, null);
+  assert.equal(syntheticResult.stalled, false);
   assert.equal(syntheticResult.targetAudienceMatch, null);
   assert.equal(syntheticResult.wait.recoverWith, null);
 });

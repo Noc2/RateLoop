@@ -886,6 +886,17 @@ function parseAgentWalletAddress(args: JsonObject, agent: McpAgentAuth): Address
   return rawAddress;
 }
 
+function assertOptionalManagedWalletAddressFilter(args: JsonObject, agent: McpAgentAuth) {
+  const suppliedAddress =
+    typeof args.walletAddress === "string"
+      ? args.walletAddress.trim()
+      : typeof args.agentWalletAddress === "string"
+        ? args.agentWalletAddress.trim()
+        : "";
+  if (!suppliedAddress) return;
+  parseAgentWalletAddress({ walletAddress: suppliedAddress }, agent);
+}
+
 function parsePublicWalletAddress(args: JsonObject): Address {
   const rawAddress =
     typeof args.walletAddress === "string"
@@ -2680,6 +2691,8 @@ function hasOperationLookupArgs(args: JsonObject) {
 }
 
 async function resolveManagedOperationKey(args: JsonObject, agent: McpAgentAuth): Promise<`0x${string}` | null> {
+  assertOptionalManagedWalletAddressFilter(args, agent);
+
   const operationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
   if (operationKey) {
     if (!/^0x[a-fA-F0-9]{64}$/.test(operationKey)) {
@@ -2895,8 +2908,10 @@ function dryRunResultPackage(params: {
       level: "medium",
       score: 0.62,
     },
+    blockedReason: null,
     distribution,
     dissentingView: "One simulated voter objected so agents can exercise objection handling.",
+    estimatedReadyAt: null,
     executionMode: "dry_run",
     featureTest: null,
     feedbackQuality: {
@@ -2905,6 +2920,8 @@ function dryRunResultPackage(params: {
       publicNoteCount: 2,
       sourceUrlCount: 0,
     },
+    finalityStatus: "final",
+    includesVetoWindow: false,
     liveAskGuidance: null,
     limitations: [
       RATELOOP_UNTRUSTED_DATA_WARNING,
@@ -2928,6 +2945,7 @@ function dryRunResultPackage(params: {
       templateId: params.payload?.questions[0]?.templateId ?? template.id,
       templateVersion: params.payload?.questions[0]?.templateVersion ?? template.version,
     },
+    normalMaxDelaySeconds: 3600,
     operation: params.operation,
     paymentRequired: false,
     pollAfterMs: null,
@@ -2936,8 +2954,9 @@ function dryRunResultPackage(params: {
         roundId: "dry-run",
         state: ROUND_STATE.Settled,
       },
+      operationStatus: "dry_run",
       question,
-      status: "dry_run",
+      status: null,
     },
     publicUrl: params.publicUrl ?? null,
     ready: true,
@@ -2956,6 +2975,7 @@ function dryRunResultPackage(params: {
       unit: "dry_run_fixture",
       up: "0",
     },
+    stalled: false,
     targetAudienceMatch: null,
     terminal: true,
     voteCount: 3,
@@ -3266,7 +3286,8 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     pollAfterMs: params.failed ? null : 5_000,
     protocolState: {
       latestRound: null,
-      status: params.status || "not_found",
+      operationStatus: params.status || "not_found",
+      status: null,
     },
     publicUrl: null,
     ready: false,

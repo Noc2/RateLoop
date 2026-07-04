@@ -2378,6 +2378,57 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
 });
 
+test("agent ask handoff complete gives recovery guidance for expired prepared links", async () => {
+  installAskOverrides();
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-expired-after-prepare"),
+        maxPaymentAmount: "1500000",
+        paymentMode: "wallet_calls",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  await dbModule.dbClient.execute({
+    args: [new Date(Date.now() - 1_000), handoffId],
+    sql: "UPDATE agent_ask_handoff_intents SET expires_at = ? WHERE id = ?",
+  });
+
+  const completeResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [`0x${"4".repeat(64)}`],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeBody = (await completeResponse.json()) as Record<string, unknown>;
+
+  assert.equal(completeResponse.status, 410);
+  assert.match(String(completeBody.message), /expired after preparation/);
+  assert.match(String(completeBody.message), /rateloop_confirm_ask_transactions/);
+  assert.match(String(completeBody.message), /do not rebroadcast/);
+});
+
 test("agent ask handoff route retries completion with stored transaction hashes", async () => {
   let confirmCalls = 0;
   const transactionHash = `0x${"4".repeat(64)}` as const;
@@ -3503,6 +3554,28 @@ test("agent status route returns not_found without treating it as a transport er
   assert.equal(body.status, "not_found");
   assert.equal(body.ready, false);
   assert.equal(body.terminal, true);
+});
+
+test("managed by-client-request routes validate forwarded walletAddress filters", async () => {
+  const statusResponse = await asksByClientRoute.GET(
+    makeGet(
+      "https://rateloop.ai/api/agent/asks/by-client-request?chainId=8453&clientRequestId=missing&walletAddress=0x00000000000000000000000000000000000000bb",
+    ),
+  );
+  const statusBody = (await statusResponse.json()) as Record<string, unknown>;
+
+  assert.equal(statusResponse.status, 403);
+  assert.match(String(statusBody.message), /walletAddress does not match/);
+
+  const resultResponse = await resultsByClientRoute.GET(
+    makeGet(
+      "https://rateloop.ai/api/agent/results/by-client-request?chainId=8453&clientRequestId=missing&walletAddress=0x00000000000000000000000000000000000000bb",
+    ),
+  );
+  const resultBody = (await resultResponse.json()) as Record<string, unknown>;
+
+  assert.equal(resultResponse.status, 403);
+  assert.match(String(resultBody.message), /walletAddress does not match/);
 });
 
 test("agent status route supports tokenless operation lookups", async () => {

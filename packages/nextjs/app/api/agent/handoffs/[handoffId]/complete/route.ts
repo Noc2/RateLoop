@@ -45,6 +45,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         const assets = await listAgentAskHandoffAssets(handoff.id);
         return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
       }
+      if (handoff.status === "expired" && handoff.operationKey) {
+        throw new AgentAskHandoffError(
+          `This handoff expired after preparation. If wallet transactions were already submitted, recover by calling rateloop_confirm_ask_transactions with operationKey ${handoff.operationKey} and the submitted transaction hashes; do not rebroadcast the wallet calls. Otherwise ask the agent for a fresh handoff link.`,
+          410,
+        );
+      }
       if (!handoff.operationKey || (handoff.status !== "prepared" && handoff.status !== "failed")) {
         throw new AgentAskHandoffError("Prepare this handoff before completing it.");
       }

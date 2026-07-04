@@ -183,6 +183,7 @@ type AgentResultPackage = {
     downEvidence: string | null;
     effectiveEvidence: string | null;
     latestRound: RoundLike | null;
+    operationStatus: "result_ready" | "not_final";
     question: string;
     ratingSettledRounds: number | null;
     status: number | null;
@@ -740,6 +741,7 @@ export function buildAgentResultPackage(params: {
       downEvidence: downEvidence > 0n ? downEvidence.toString() : null,
       effectiveEvidence: params.content.ratingEffectiveEvidence ?? latestRound?.effectiveEvidence?.toString?.() ?? null,
       latestRound,
+      operationStatus: ready ? "result_ready" : "not_final",
       question: markUntrustedQuestionText(questionText),
       ratingSettledRounds: settledRounds,
       status: params.content.status ?? null,

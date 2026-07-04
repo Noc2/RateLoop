@@ -588,6 +588,9 @@ export const agentAskHandoffOutputSchema = {
   properties: {
     assets: { items: { type: "object" }, type: "array" },
     chainId: { type: ["integer", "null"] },
+    clientRequestId: { type: "string" },
+    completedAt: { type: ["string", "null"] },
+    createdAt: { type: "string" },
     draftRevision: {
       description: "Current editable draft revision. Increments when the browser user saves changes before prepare.",
       type: "integer",
@@ -616,6 +619,7 @@ export const agentAskHandoffOutputSchema = {
     id: { type: "string" },
     nextAction: { type: "string" },
     operationKey: { type: ["string", "null"] },
+    payloadHash: { type: ["string", "null"] },
     paymentMode: { enum: ["wallet_calls", "x402_authorization"], type: "string" },
     paymentModeDiagnostics: {
       additionalProperties: false,
@@ -644,6 +648,7 @@ export const agentAskHandoffOutputSchema = {
     resultTool: { type: "string" },
     status: { type: "string" },
     statusTool: { type: "string" },
+    transactionHashes: { items: { type: "string" }, type: "array" },
     transactionPlan: { type: ["object", "null"] },
     updatedAt: { type: "string" },
     walletAddress: { type: ["string", "null"] },
@@ -1086,6 +1091,11 @@ export const agentQuestionStatusOutputSchema = {
     executionMode: { enum: ["dry_run"], type: "string" },
     feedbackBonus: { type: "object" },
     operationKey: { type: "string" },
+    nextAction: {
+      description:
+        "Recommended next status action. Question status responses use call_rateloop_get_result, poll_rateloop_get_question_status, or manual_review.",
+      type: "string",
+    },
     payloadHash: { type: "string" },
     payment: agentPaymentOutputSchema,
     pollAfterMs: { type: ["integer", "null"] },

@@ -434,6 +434,10 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
       ratingSystem?: string;
     };
     normalMaxDelaySeconds?: number;
+    protocolState?: {
+      operationStatus?: string;
+      status?: number | null;
+    };
     ready?: boolean;
     stalled?: boolean;
     targetAudienceMatch?: unknown;
@@ -449,6 +453,8 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
   assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 0);
   assert.equal(result.methodology?.ratingSystem, "rateloop.robust_bts_binary.v1");
   assert.equal(result.normalMaxDelaySeconds, 3600);
+  assert.equal(result.protocolState?.operationStatus, "not_found");
+  assert.equal(result.protocolState?.status, null);
   assert.equal(result.stalled, false);
   assert.equal(result.targetAudienceMatch, null);
 });
