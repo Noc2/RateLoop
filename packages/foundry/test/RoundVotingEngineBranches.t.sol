@@ -174,6 +174,7 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
     mapping(bytes32 => IClusterPayoutOracle.RoundPayoutSnapshot) internal snapshots;
     address public frontendRegistry;
     bool public allowZeroEffectiveWeight;
+    bool public revertSnapshotKey;
     uint64 public constant FINALIZATION_VETO_WINDOW = 0;
 
     constructor(address frontendRegistry_) {
@@ -186,9 +187,10 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
 
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
-        pure
+        view
         returns (bytes32)
     {
+        if (revertSnapshotKey) revert("snapshot key unavailable");
         return keccak256(abi.encode(domain, rewardPoolId, contentId, roundId));
     }
 
@@ -322,6 +324,10 @@ contract MockClusterPayoutOracleForRoundVotingEngine {
 
     function setAllowZeroEffectiveWeight(bool value) external {
         allowZeroEffectiveWeight = value;
+    }
+
+    function setRevertSnapshotKey(bool value) external {
+        revertSnapshotKey = value;
     }
 
     function verifyPayoutWeight(IClusterPayoutOracle.PayoutWeight calldata payout, bytes32[] calldata)
@@ -1738,6 +1744,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         engine.settleRound(contentId, roundId);
+        vm.warp(block.timestamp + 1 hours);
+
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+        engine.applyRbtsSettlementSnapshot(contentId, roundId, payoutWeights, proofs);
+
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "timeout records no score seed");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[0]), 0, "ck1 stake returned");
+        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[7]), 0, "ck8 stake returned");
+    }
+
+    function test_RbtsSettlementTimeoutReturnsStakesWhenSnapshotKeyReverts() public {
+        (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys) =
+            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+
+        engine.settleRound(contentId, roundId);
+        MockClusterPayoutOracleForRoundVotingEngine oracle =
+            MockClusterPayoutOracleForRoundVotingEngine(ProtocolConfig(protocolConfigAddress).clusterPayoutOracle());
+        oracle.setRevertSnapshotKey(true);
         vm.warp(block.timestamp + 1 hours);
 
         IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](0);
