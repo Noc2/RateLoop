@@ -1359,7 +1359,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         _clearDerivedIdentityBan(owner, sourceKey);
         address lastHolder = _lastRevokedOwnerByProvider[provider][nullifierHash];
         if (lastHolder != owner) _clearDerivedIdentityBan(lastHolder, sourceKey);
-        delete _lastRevokedOwnerByProvider[provider][nullifierHash];
+        if (owner != address(0)) delete _lastRevokedOwnerByProvider[provider][nullifierHash];
     }
 
     function _pairedWorldIdProvider(HumanCredentialProvider provider) private pure returns (HumanCredentialProvider) {

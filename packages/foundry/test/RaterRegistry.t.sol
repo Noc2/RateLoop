@@ -1500,6 +1500,47 @@ contract RaterRegistryTest is Test {
         assertTrue(registry.isIdentityKeyBanned(newAddressKey));
     }
 
+    function test_RebanRevokedCredentialAfterUnbanReappliesAddressBan() public {
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        bytes32 credentialKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        bytes32 addressKey = registry.addressIdentityKey(rater);
+
+        vm.prank(admin);
+        registry.revokeHumanCredential(rater);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(registry.isIdentityKeyBanned(credentialKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+
+        vm.prank(governance);
+        registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+
+        assertFalse(registry.isIdentityKeyBanned(credentialKey));
+        assertFalse(registry.isIdentityKeyBanned(addressKey));
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak again",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(registry.isIdentityKeyBanned(credentialKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+    }
+
     function test_BannedSeededIdentityStaysBannedAfterWorldIdRotation() public {
         MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
