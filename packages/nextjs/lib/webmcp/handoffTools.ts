@@ -138,7 +138,7 @@ export function createHandoffWebMcpTools(readState: () => HandoffWebMcpState): W
         "Read the current RateLoop browser handoff state. This does not sign, fund, submit, or change the draft.",
       execute: () => summarizeHandoffWebMcpStatus(readState()),
       inputSchema: EMPTY_INPUT_SCHEMA,
-      name: "rateloop_handoff_get_status",
+      name: "rateloop_get_handoff_status",
       title: "Get RateLoop Handoff Status",
     },
     {
@@ -150,7 +150,7 @@ export function createHandoffWebMcpTools(readState: () => HandoffWebMcpState): W
         "Validate the current RateLoop handoff draft and report missing browser-visible fields. This does not save or submit.",
       execute: () => validateHandoffWebMcpDraft(readState()),
       inputSchema: EMPTY_INPUT_SCHEMA,
-      name: "rateloop_handoff_validate_draft",
+      name: "rateloop_validate_handoff_draft",
       title: "Validate RateLoop Handoff Draft",
     },
     {
@@ -165,7 +165,7 @@ export function createHandoffWebMcpTools(readState: () => HandoffWebMcpState): W
         requiresUserApproval: true,
       }),
       inputSchema: EMPTY_INPUT_SCHEMA,
-      name: "rateloop_handoff_summarize_next_action",
+      name: "rateloop_summarize_handoff_next_action",
       title: "Summarize RateLoop Handoff Next Action",
     },
   ];

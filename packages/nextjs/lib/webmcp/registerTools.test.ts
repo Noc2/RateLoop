@@ -17,7 +17,7 @@ function validTool(overrides: Partial<WebMcpToolDefinition> = {}): WebMcpToolDef
       properties: {},
       type: "object",
     },
-    name: "rateloop_handoff_get_status",
+    name: "rateloop_get_handoff_status",
     ...overrides,
   };
 }
