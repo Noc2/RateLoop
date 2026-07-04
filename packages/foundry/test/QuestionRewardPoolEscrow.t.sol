@@ -5586,6 +5586,39 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(reward, 0);
     }
 
+    function testRepointRewardPoolOracleRejectsPendingRecoveredRound() public {
+        _ensureTestClusterPayoutOracle(votingEngine);
+        TestClusterPayoutOracle oracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        bytes32 snapshotKey =
+            oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_000);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 rejectedDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        oracle.setRejectedRoundPayoutSnapshotDigest(snapshotKey, rejectedDigest, true);
+        vm.prank(voter2);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+        assertTrue(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
+
+        oracle.setFinalizedRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId, 3, 30_000, 30_001);
+
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow)
+        );
+
+        vm.prank(owner);
+        vm.expectRevert("Recovered round pending");
+        rewardPoolEscrow.repointRewardPoolClusterPayoutOracle(rewardPoolId, address(replacementOracle));
+
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+        assertTrue(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+    }
+
     function testRepointRewardPoolOracleRejectsPriorLiveSnapshotForCurrentRound() public {
         ClusterPayoutOracle originalOracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");

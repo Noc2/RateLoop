@@ -33,6 +33,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         require(rewardPool.id != 0, "Bounty not found");
         require(!rewardPool.refunded && !rewardPool.unallocatedRefunded, "Bounty refunded");
         require(rewardPool.qualifiedRounds == 0 && rewardPool.claimedAmount == 0, "Pool already consumed");
+        require(rewardPool.pendingRecoveredRounds == 0, "Recovered round pending");
         address oldOracle = rewardPoolClusterPayoutOracle[rewardPoolId];
         require(oldOracle != address(0), "Oracle not pinned");
         require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
