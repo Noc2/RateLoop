@@ -3191,6 +3191,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
         rewardPoolCount: 0,
       },
     },
+    blockedReason: params.failed ? "non_terminal_round_state" : "round_not_closed",
     cohortSummary: null,
     confidence: {
       level: "none",
@@ -3198,6 +3199,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     },
     distribution,
     dissentingView: null,
+    estimatedReadyAt: null,
     featureTest: null,
     feedbackQuality: {
       actionability: "none",
@@ -3205,6 +3207,8 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
       publicNoteCount: 0,
       sourceUrlCount: 0,
     },
+    finalityStatus: "not_final",
+    includesVetoWindow: false,
     liveAskGuidance: null,
     limitations: [
       RATELOOP_UNTRUSTED_DATA_WARNING,
@@ -3219,6 +3223,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
       templateId: template.id,
       templateVersion: template.version,
     },
+    normalMaxDelaySeconds: 3600,
     operation: params.operation,
     pollAfterMs: params.failed ? null : 5_000,
     protocolState: {
@@ -3228,6 +3233,8 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     publicUrl: null,
     ready: false,
     result: null,
+    stalled: false,
+    targetAudienceMatch: null,
     wait: {
       code: params.failed ? "failed_submission" : "still_settling",
       recoverWith: params.failed ? "inspect_status_error" : "rateloop_get_question_status",

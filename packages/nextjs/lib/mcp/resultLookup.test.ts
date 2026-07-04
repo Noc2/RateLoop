@@ -425,18 +425,32 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
         };
       };
     };
+    blockedReason?: string | null;
     cohortSummary?: unknown;
+    estimatedReadyAt?: string | null;
+    finalityStatus?: string;
+    includesVetoWindow?: boolean;
     methodology?: {
       ratingSystem?: string;
     };
+    normalMaxDelaySeconds?: number;
     ready?: boolean;
+    stalled?: boolean;
+    targetAudienceMatch?: unknown;
   };
 
   assert.equal(result.ready, false);
+  assert.equal(result.blockedReason, "round_not_closed");
   assert.equal(result.cohortSummary, null);
+  assert.equal(result.estimatedReadyAt, null);
+  assert.equal(result.finalityStatus, "not_final");
+  assert.equal(result.includesVetoWindow, false);
   assert.ok(result.answerScopes?.allAnswers);
   assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 0);
   assert.equal(result.methodology?.ratingSystem, "rateloop.robust_bts_binary.v1");
+  assert.equal(result.normalMaxDelaySeconds, 3600);
+  assert.equal(result.stalled, false);
+  assert.equal(result.targetAudienceMatch, null);
 });
 
 test("rateloop_get_result applies bundle bounty eligibility when loading eligible answers", async () => {
