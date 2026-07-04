@@ -38,13 +38,8 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
         require(newOracle != oldOracle, "Oracle unchanged");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
-        try oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, 0) returns (
-            uint64 proposedAt
-        ) {
-            require(proposedAt == 0, "Oracle snapshot exists");
-        } catch {
-            revert("Invalid oracle");
-        }
+        uint256 targetRoundId = _repointTargetRoundId(rewardPool);
+        _requireNoLiveRoundPayoutSnapshot(oracle, payoutDomain, rewardPoolId, rewardPool.contentId, targetRoundId);
         try oracle.roundPayoutSnapshotConsumer(payoutDomain) returns (address consumer) {
             require(consumer == expectedConsumer, "Oracle consumer mismatch");
         } catch {
@@ -89,6 +84,45 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         bundleRewardClusterPayoutOracle[bundleId] = newOracle;
         bundleRewardClusterPayoutOraclePinnedAt[bundleId] = uint64(block.timestamp);
         emit QuestionBundleClusterPayoutOracleRepointed(bundleId, oldOracle, newOracle);
+    }
+
+    function _repointTargetRoundId(RewardPool storage rewardPool) private view returns (uint256 targetRoundId) {
+        targetRoundId = rewardPool.nextRoundToEvaluate;
+        uint256 pendingPreQualificationRejectedRounds = rewardPool.pendingPreQualificationRejectedRounds;
+        if (pendingPreQualificationRejectedRounds != 0) {
+            require(targetRoundId > pendingPreQualificationRejectedRounds, "Round out of order");
+            targetRoundId -= pendingPreQualificationRejectedRounds;
+        }
+    }
+
+    function _requireNoLiveRoundPayoutSnapshot(
+        IClusterPayoutOracle oracle,
+        uint8 payoutDomain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) private view {
+        try oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId) returns (
+            uint64 proposedAt
+        ) {
+            if (proposedAt == 0) return;
+        } catch {
+            revert("Invalid oracle");
+        }
+
+        try oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
+        ) {
+            require(!_isLiveRoundPayoutSnapshot(snapshot.status), "Oracle snapshot exists");
+        } catch {
+            revert("Invalid oracle");
+        }
+    }
+
+    function _isLiveRoundPayoutSnapshot(IClusterPayoutOracle.SnapshotStatus status) private pure returns (bool) {
+        return status == IClusterPayoutOracle.SnapshotStatus.Proposed
+            || status == IClusterPayoutOracle.SnapshotStatus.Challenged
+            || status == IClusterPayoutOracle.SnapshotStatus.Finalized;
     }
 
     function isConsumed(
