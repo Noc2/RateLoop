@@ -97,6 +97,18 @@
       "type": "t_uint64"
     },
     {
+      "slot": 14,
+      "offset": 16,
+      "label": "feedbackBonusPauseGraceStartedAt",
+      "type": "t_uint64"
+    },
+    {
+      "slot": 14,
+      "offset": 24,
+      "label": "feedbackBonusPauseGraceDeadline",
+      "type": "t_uint64"
+    },
+    {
       "slot": 15,
       "offset": 0,
       "label": "__gap",

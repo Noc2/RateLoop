@@ -78,6 +78,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     uint256 public legacyFeedbackRegistryPoolIdUpperBound;
     uint64 public feedbackBonusLastUnpausedAt;
     uint64 public feedbackBonusPausedAt;
+    uint64 public feedbackBonusPauseGraceStartedAt;
+    uint64 public feedbackBonusPauseGraceDeadline;
 
     /// @dev Reserved storage gap for future upgrades. Mirrors the pattern used by every other
     ///      upgradeable contract in this protocol so new state can be added without colliding
@@ -420,8 +422,15 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function unpause() external onlyRole(PAUSER_ROLE) {
+        uint64 pausedAt = feedbackBonusPausedAt;
+        uint64 previousGraceDeadline = feedbackBonusPauseGraceDeadline;
         _unpause();
-        feedbackBonusLastUnpausedAt = block.timestamp.toUint64();
+        uint64 unpausedAt = block.timestamp.toUint64();
+        feedbackBonusLastUnpausedAt = unpausedAt;
+        if (feedbackBonusPauseGraceStartedAt == 0 || previousGraceDeadline < pausedAt) {
+            feedbackBonusPauseGraceStartedAt = pausedAt;
+        }
+        feedbackBonusPauseGraceDeadline = (block.timestamp + MIN_FEEDBACK_AWARD_DECISION_SECONDS).toUint64();
     }
 
     function _pullExactToken(IERC20 token, address funder, uint256 amount) internal returns (uint256 receivedAmount) {
@@ -517,6 +526,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _feedbackBonusDeadlineAfterPause(uint256 deadline) private view returns (uint256) {
+        uint256 graceStartedAt = feedbackBonusPauseGraceStartedAt;
+        uint256 graceDeadline = feedbackBonusPauseGraceDeadline;
+        if (graceStartedAt != 0 && deadline >= graceStartedAt && graceDeadline > deadline) {
+            deadline = graceDeadline;
+        }
         if (paused()) return deadline;
         uint256 pausedAt = feedbackBonusPausedAt;
         uint256 lastUnpausedAt = feedbackBonusLastUnpausedAt;

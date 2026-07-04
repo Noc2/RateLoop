@@ -1423,6 +1423,41 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6), 10e6);
     }
 
+    function testRepeatedPausePreservesReopenedAwardWindow() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+        _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+        uint256 originalDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+
+        vm.warp(originalDeadline - 1);
+        vm.prank(owner);
+        feedbackBonusEscrow.pause();
+
+        vm.warp(originalDeadline + 30 minutes);
+        vm.prank(owner);
+        feedbackBonusEscrow.unpause();
+        uint256 firstReopenedDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+        assertEq(firstReopenedDeadline, block.timestamp + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS());
+
+        vm.warp(firstReopenedDeadline - 30 minutes);
+        vm.prank(owner);
+        feedbackBonusEscrow.pause();
+        assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), firstReopenedDeadline);
+
+        vm.warp(firstReopenedDeadline + 15 minutes);
+        vm.prank(owner);
+        feedbackBonusEscrow.unpause();
+
+        uint256 secondReopenedDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+        assertEq(secondReopenedDeadline, block.timestamp + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS());
+
+        vm.expectRevert("Not expired");
+        feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        vm.prank(funder);
+        assertEq(feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6), 10e6);
+    }
+
     function testUnpauseDoesNotReopenAlreadyExpiredAwardWindow() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
