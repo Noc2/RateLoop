@@ -40,6 +40,7 @@ const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const CORRELATION_ARTIFACT_PORT = 9091;
 const CORRELATION_ARTIFACT_ROUTE_PREFIX = "/correlation-artifacts";
 const correlationArtifactStorageDirectory = path.join(tmpdir(), `rateloop-correlation-artifacts-${process.pid}`);
+const PG_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ROUND_PAYOUT_SNAPSHOT_PROPOSED_EVENT = parseAbiItem(
   "event RoundPayoutSnapshotProposed(bytes32 indexed snapshotKey,uint8 indexed domain,uint256 indexed rewardPoolId,uint256 contentId,uint256 roundId,uint64 correlationEpochId,address frontendOperator,address proposer,uint32 rawEligibleVoters,uint32 effectiveParticipantUnits,uint256 totalClaimWeight,bytes32 weightRoot,bytes32 reasonRoot,bytes32 artifactHash,string artifactURI,uint64 challengeWindowAtProposal,uint64 finalizationVetoWindowAtProposal)",
 );
@@ -336,11 +337,14 @@ export async function pinLocalRbtsCorrelationInputSnapshots(contentId: bigint, r
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   let lastState: Record<string, unknown> | null = null;
   try {
+    const ponderSchema = await resolveLocalPonderSchema(pool);
+    const voteTable = `${quotePgIdentifier(ponderSchema)}.${quotePgIdentifier("vote")}`;
+    const roundTable = `${quotePgIdentifier(ponderSchema)}.${quotePgIdentifier("round")}`;
     const ready = await waitForPonderIndexed(
       async () => {
         await pool.query(
           `
-            update vote
+            update ${voteTable}
             set
               correlation_verified_human = coalesce(correlation_verified_human, true),
               correlation_historical_vote_count = coalesce(correlation_historical_vote_count, 0),
@@ -369,7 +373,7 @@ export async function pinLocalRbtsCorrelationInputSnapshots(contentId: bigint, r
                   or correlation_historical_vote_count is null
                   or correlation_ban_reasons is null
               )::int as missing_snapshot_count
-            from vote
+            from ${voteTable}
             where content_id = $1
               and round_id = $2
               and revealed = true
@@ -393,7 +397,7 @@ export async function pinLocalRbtsCorrelationInputSnapshots(contentId: bigint, r
               rbts_settlement_pending_block_number,
               rbts_settlement_pending_log_index,
               rbts_settlement_pending_tx_hash
-            from "round"
+            from ${roundTable}
             where content_id = $1
               and round_id = $2
               and state = 5
@@ -436,6 +440,40 @@ export async function pinLocalRbtsCorrelationInputSnapshots(contentId: bigint, r
   } finally {
     await pool.end();
   }
+}
+
+async function resolveLocalPonderSchema(pool: import("pg").Pool) {
+  const configured =
+    process.env.RATELOOP_PONDER_DATABASE_SCHEMA?.trim() || process.env.DATABASE_SCHEMA?.trim();
+  if (configured) return configured;
+
+  const result = await pool.query<{ table_schema: string }>(
+    `
+      select table_schema
+      from information_schema.tables
+      where table_name = 'vote'
+        and table_schema not in ('pg_catalog', 'information_schema')
+      order by
+        case table_schema
+          when 'rateloop_ponder_ci' then 0
+          when 'rateloop_ponder_hardhat' then 1
+          when 'rateloop_ponder' then 2
+          else 3
+        end,
+        table_schema
+      limit 1
+    `,
+  );
+  const schema = result.rows[0]?.table_schema;
+  expect(schema, "Ponder vote table schema should be discoverable for RBTS e2e setup").toBeTruthy();
+  return schema;
+}
+
+function quotePgIdentifier(identifier: string) {
+  if (!PG_IDENTIFIER_PATTERN.test(identifier)) {
+    throw new Error(`Invalid Postgres identifier: ${identifier}`);
+  }
+  return `"${identifier}"`;
 }
 
 async function advancePastTimestamp(deadline: bigint, label: string) {
