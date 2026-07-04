@@ -218,6 +218,8 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
   contentId: bigint,
   roundId: bigint,
 ) {
+  await stopCorrelationSnapshotKeeper();
+
   const challengeWindow = await correlationPublicClient.readContract({
     address: CONTRACT_ADDRESSES.ClusterPayoutOracle,
     abi: ClusterPayoutOracleAbi,
@@ -268,6 +270,8 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
 }
 
 export async function publishAndFinalizeRbtsSettlementWithKeeper(contentId: bigint, roundId: bigint) {
+  await stopCorrelationSnapshotKeeper();
+
   const challengeWindow = await correlationPublicClient.readContract({
     address: CONTRACT_ADDRESSES.ClusterPayoutOracle,
     abi: ClusterPayoutOracleAbi,
@@ -560,6 +564,7 @@ export function startCorrelationSnapshotKeeper(artifactPath?: string): ChildProc
   correlationKeeperArtifactPath = artifactPath ?? null;
   const child = spawn("yarn", ["workspace", "@rateloop/keeper", "start"], {
     cwd: REPO_ROOT,
+    detached: process.platform !== "win32",
     env: {
       ...process.env,
       ...correlationKeeperEnvOverrides(artifactPath),
@@ -572,6 +577,18 @@ export function startCorrelationSnapshotKeeper(artifactPath?: string): ChildProc
     correlationKeeperLogs.push(`[keeper exit] code=${code ?? "null"} signal=${signal ?? "null"}`);
   });
   return child;
+}
+
+function signalCorrelationKeeper(child: ChildProcess, signal: NodeJS.Signals) {
+  if (process.platform !== "win32" && child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // Fall through to signalling the direct child when the process group is gone.
+    }
+  }
+  child.kill(signal);
 }
 
 function collectKeeperOutput(chunk: Buffer) {
@@ -590,17 +607,20 @@ export async function stopCorrelationSnapshotKeeper() {
   correlationKeeper = null;
   correlationKeeperArtifactPath = null;
 
+  if (child) {
+    signalCorrelationKeeper(child, "SIGTERM");
+  }
+
   if (child && child.exitCode === null && !child.killed) {
     await new Promise<void>(resolve => {
       const timeout = setTimeout(() => {
-        child.kill("SIGKILL");
+        signalCorrelationKeeper(child, "SIGKILL");
         resolve();
       }, 5_000);
       child.once("exit", () => {
         clearTimeout(timeout);
         resolve();
       });
-      child.kill("SIGTERM");
     });
   }
   if (artifactPath) await unlink(artifactPath).catch(() => {});
