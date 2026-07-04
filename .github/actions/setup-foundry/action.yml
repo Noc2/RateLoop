@@ -4,12 +4,12 @@ description: "Init nested submodules and install Foundry"
 runs:
   using: "composite"
   steps:
-    - name: Install Foundry v1.5.1
+    - name: Install Foundry v1.7.1
       shell: bash
       env:
-        FOUNDRY_VERSION: v1.5.1
-        FOUNDRY_ARCHIVE: foundry_v1.5.1_linux_amd64.tar.gz
-        FOUNDRY_SHA256: 73640b01bd9ed29fdb4965085099371f8cf0dbbec3e2086cf54564efc4dcfe88
+        FOUNDRY_VERSION: v1.7.1
+        FOUNDRY_ARCHIVE: foundry_v1.7.1_linux_amd64.tar.gz
+        FOUNDRY_SHA256: cf7e688ed0c4c48adffca788b496076e31060b67ac5afe1e43dbb5499c20c88b
       run: |
         if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
           echo "::error::Pinned Foundry install currently supports Linux x86_64 runners only"
