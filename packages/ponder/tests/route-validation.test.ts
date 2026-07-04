@@ -5776,6 +5776,9 @@ describe("registerKeeperRoutes", () => {
     expect(serializedSelect).toContain("vote.revealedAt");
     expect(serializedSelect).not.toContain("round.humanVerifiedCommitCount");
     expect(serializedSelect).toContain("greatest");
+    expect(serializedSelect.indexOf("then 'reveal_failed'")).toBeLessThan(
+      serializedSelect.indexOf("then 'cancel'"),
+    );
     expect(queryBuilders[0]?.from).toHaveBeenCalled();
   });
 

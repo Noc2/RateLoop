@@ -101,11 +101,11 @@ export function registerKeeperRoutes(app: ApiApp) {
         roundId: round.roundId,
         reason: sql<string>`case
           when ${round.revealedCount} >= ${revealQuorum} then 'settle'
-          when ${roundExpired} then 'cancel'
           when ${round.voteCount} >= ${revealQuorum}
             and ${round.revealedCount} < ${revealQuorum}
             and ${revealFailedDeadlinePassed}
             then 'reveal_failed'
+          when ${roundExpired} then 'cancel'
           when ${round.voteCount} > ${round.revealedCount} then 'reveal'
           else 'open'
         end`,
