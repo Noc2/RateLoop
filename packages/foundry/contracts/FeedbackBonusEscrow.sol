@@ -76,11 +76,12 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     mapping(uint256 => address) public feedbackRegistrySnapshot;
     address public legacyFeedbackRegistry;
     uint256 public legacyFeedbackRegistryPoolIdUpperBound;
+    uint64 public feedbackBonusLastUnpausedAt;
 
     /// @dev Reserved storage gap for future upgrades. Mirrors the pattern used by every other
     ///      upgradeable contract in this protocol so new state can be added without colliding
     ///      with inherited OpenZeppelin storage.
-    uint256[46] private __gap;
+    uint256[45] private __gap;
 
     event FeedbackBonusPoolCreated(
         uint256 indexed poolId,
@@ -418,6 +419,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
+        feedbackBonusLastUnpausedAt = block.timestamp.toUint64();
     }
 
     function _pullExactToken(IERC20 token, address funder, uint256 amount) internal returns (uint256 receivedAmount) {
@@ -501,14 +503,22 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
         if (settledAt != 0 && state != RoundLib.RoundState.Open) {
             uint256 decisionDeadline = uint256(settledAt) + MIN_FEEDBACK_AWARD_DECISION_SECONDS;
-            return requestedDeadline > decisionDeadline ? requestedDeadline : decisionDeadline;
+            uint256 deadline = requestedDeadline > decisionDeadline ? requestedDeadline : decisionDeadline;
+            return _feedbackBonusDeadlineAfterPause(deadline);
         }
 
         if (startTime != 0 && (state == RoundLib.RoundState.Open || state == RoundLib.RoundState.SettlementPending)) {
             return type(uint256).max;
         }
 
-        return requestedDeadline;
+        return _feedbackBonusDeadlineAfterPause(requestedDeadline);
+    }
+
+    function _feedbackBonusDeadlineAfterPause(uint256 deadline) private view returns (uint256) {
+        uint256 lastUnpausedAt = feedbackBonusLastUnpausedAt;
+        if (lastUnpausedAt == 0) return deadline;
+        uint256 reopenedDeadline = lastUnpausedAt + MIN_FEEDBACK_AWARD_DECISION_SECONDS;
+        return reopenedDeadline > deadline ? reopenedDeadline : deadline;
     }
 
     function _expiredFeedbackBonusRefundRecipient(FeedbackBonusPool storage pool) internal view returns (address) {

@@ -1398,6 +1398,30 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
     }
 
+    function testUnpauseReopensMinimumAwardWindow() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+        _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+        uint256 originalDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+
+        vm.warp(originalDeadline - 1);
+        vm.prank(owner);
+        feedbackBonusEscrow.pause();
+
+        vm.warp(originalDeadline + 30 minutes);
+        vm.prank(owner);
+        feedbackBonusEscrow.unpause();
+
+        uint256 reopenedDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+        assertEq(reopenedDeadline, block.timestamp + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS());
+
+        vm.expectRevert("Not expired");
+        feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        vm.prank(funder);
+        assertEq(feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6), 10e6);
+    }
+
     function testExpiredRemainderForfeitsToTreasury() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
