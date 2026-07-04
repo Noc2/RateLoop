@@ -45,6 +45,19 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "BOND_AUTHORIZATION_NONCE_TYPEHASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "BPS_SCALE",
     "inputs": [],
     "outputs": [
@@ -317,6 +330,50 @@ export const ConfidentialityEscrowAbi = [
         "name": "released",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "computeBondAuthorizationNonce",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "from",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validBefore",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
