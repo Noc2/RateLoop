@@ -775,7 +775,7 @@ export function AgentSubmissionPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {policySelector}
-            <Link href={DOCS_AI_ROUTE + "#paths"} className="btn btn-outline btn-sm">
+            <Link href={DOCS_AI_ROUTE + "#permanent-agent-setup"} className="btn btn-outline btn-sm">
               Agent docs
               <ArrowTopRightOnSquareIcon className="h-4 w-4" />
             </Link>
@@ -974,7 +974,7 @@ export function AgentSubmissionPanel() {
                 <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
                 <h3 className="mt-1 text-lg font-semibold">Access Token</h3>
               </div>
-              <Link href={DOCS_AI_ROUTE + "#mcp"} className="link link-primary text-sm">
+              <Link href={DOCS_AI_ROUTE + "#permanent-agent-setup"} className="link link-primary text-sm">
                 Agent docs
               </Link>
             </div>
