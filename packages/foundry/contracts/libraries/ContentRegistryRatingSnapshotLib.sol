@@ -138,13 +138,15 @@ library ContentRegistryRatingSnapshotLib {
     }
 
     function repointPendingRatingClusterPayoutOracle(
+        mapping(uint256 => uint256) storage nextRatingSnapshotRoundId,
         ContentRegistryTypes.PendingRatingSettlement storage pending,
+        uint256 latestAppliedRoundId,
         address expectedConsumer,
         uint256 contentId,
         uint256 roundId,
         address newOracle
     ) external {
-        if (!pending.exists || pending.applied) revert InvalidState();
+        if (!pending.exists || pending.applied || latestAppliedRoundId >= roundId) revert InvalidState();
         address oldOracle = pending.clusterPayoutOracle;
         if (oldOracle == address(0) || newOracle == address(0) || newOracle.code.length == 0) revert InvalidState();
         if (newOracle == oldOracle) revert InvalidState();
@@ -165,6 +167,12 @@ library ContentRegistryRatingSnapshotLib {
 
         pending.clusterPayoutOracle = newOracle;
         pending.readyAt = uint48(block.timestamp);
+        if (pending.provisionallySkipped) {
+            pending.provisionallySkipped = false;
+            if (_expectedRatingSnapshotRound(nextRatingSnapshotRoundId, contentId) > roundId) {
+                nextRatingSnapshotRoundId[contentId] = roundId;
+            }
+        }
         emit PendingRatingClusterPayoutOracleRepointed(contentId, roundId, oldOracle, newOracle);
     }
 

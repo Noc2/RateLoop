@@ -1468,7 +1468,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         onlyRole(CONFIG_ROLE)
     {
         ContentRegistryRatingSnapshotLib.repointPendingRatingClusterPayoutOracle(
-            pendingRatingSettlement[contentId][roundId], address(this), contentId, roundId, newOracle
+            nextRatingSnapshotRoundId,
+            pendingRatingSettlement[contentId][roundId],
+            latestAppliedRatingSnapshotRoundId[contentId],
+            address(this),
+            contentId,
+            roundId,
+            newOracle
         );
     }
 

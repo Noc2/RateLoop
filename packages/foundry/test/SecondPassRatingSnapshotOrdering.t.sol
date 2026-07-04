@@ -235,6 +235,67 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         registry.advanceRatingSnapshotCursor(contentId, 1);
     }
 
+    function testPublicRatingRepointSkippedRoundReopensCursorBeforeLaterApply() public {
+        ClusterPayoutOracle originalOracle = _enableClusterPayoutOracle();
+        ClusterPayoutOracle replacementOracle = _newPublicRatingOracle();
+        uint256 contentId = _submitQuestion("rating-repoint-skipped-reopens");
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        vm.warp(block.timestamp + 1 hours);
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+
+        vm.warp(block.timestamp + 24 hours + 1);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, false, true));
+        assertEq(secondRoundId, firstRoundId + 1);
+        (IClusterPayoutOracle.PayoutWeight[] memory secondWeights, bytes32[][] memory secondProofs) =
+            _finalizePublicRatingPayoutSnapshot(originalOracle, contentId, secondRoundId, 3);
+
+        vm.prank(owner);
+        registry.repointPendingRatingClusterPayoutOracle(contentId, firstRoundId, address(replacementOracle));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ContentRegistryRatingSnapshotLib.RatingSnapshotOutOfOrder.selector, firstRoundId)
+        );
+        registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
+
+        vm.prank(address(replacementOracle));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, firstRoundId), 0);
+
+        vm.recordLogs();
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        _assertNoRatingSnapshotSkippedLog(vm.getRecordedLogs());
+
+        vm.warp(block.timestamp + 1 hours + 1);
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingSnapshotSkipped(
+            contentId, firstRoundId, address(replacementOracle), keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
+        );
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, secondRoundId));
+    }
+
+    function testPublicRatingRepointSkippedRoundRevertsAfterLaterApply() public {
+        ClusterPayoutOracle originalOracle = _enableClusterPayoutOracle();
+        ClusterPayoutOracle replacementOracle = _newPublicRatingOracle();
+        uint256 contentId = _submitQuestion("rating-repoint-skipped-closed");
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        vm.warp(block.timestamp + 1 hours);
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+
+        vm.warp(block.timestamp + 24 hours + 1);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, false, true));
+        (IClusterPayoutOracle.PayoutWeight[] memory secondWeights, bytes32[][] memory secondProofs) =
+            _finalizePublicRatingPayoutSnapshot(originalOracle, contentId, secondRoundId, 3);
+        registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, secondRoundId));
+
+        vm.prank(owner);
+        vm.expectRevert(ContentRegistryRatingSnapshotLib.InvalidState.selector);
+        registry.repointPendingRatingClusterPayoutOracle(contentId, firstRoundId, address(replacementOracle));
+    }
+
     function testPublicRatingRejectedSnapshotCanSkipAndStillAcceptReplacement() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("rating-rejected-replacement");
@@ -567,5 +628,11 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
                 fail("rating snapshot skipped too early");
             }
         }
+    }
+
+    function _newPublicRatingOracle() internal returns (ClusterPayoutOracle oracle) {
+        oracle = _newEligibleClusterPayoutOracle();
+        oracle.setOracleConfig(1 hours, 5e6, address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
     }
 }
