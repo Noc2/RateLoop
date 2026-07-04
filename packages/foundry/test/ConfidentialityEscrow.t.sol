@@ -387,7 +387,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             "short-authorization", confidentialityEscrow.BOND_ASSET_USDC(), uint64(1e6)
         );
         IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(authVoter);
-        Eip3009Authorization memory authorization = _bondAuthorization(authVoter, authVoterKey, 1e6);
+        Eip3009Authorization memory authorization = _bondAuthorization(contentId, authVoter, authVoterKey, 1e6);
 
         usdcToken.setAuthorizationTransferShortfall(1);
 
@@ -397,6 +397,36 @@ contract ConfidentialityEscrowTest is VotingTestBase {
 
         assertFalse(confidentialityEscrow.hasActiveBond(contentId, resolved.identityKey));
         assertEq(usdcToken.balanceOf(address(confidentialityEscrow)), 0);
+    }
+
+    function testPostBondWithAuthorizationRequiresPayloadBoundNonce() public {
+        uint256 authVoterKey = 0xA11CE456;
+        address authVoter = vm.addr(authVoterKey);
+        bytes32 authAnchor = keccak256("authorization-payload-voter-world-id");
+
+        vm.startPrank(owner);
+        usdcToken.mint(authVoter, 10_000e6);
+        _seedRaterIdentity(raterRegistry, authVoter, authAnchor);
+        vm.stopPrank();
+
+        uint256 contentA =
+            _submitGatedQuestionWithAsset("authorization-a", confidentialityEscrow.BOND_ASSET_USDC(), uint64(1e6));
+        uint256 contentB =
+            _submitGatedQuestionWithAsset("authorization-b", confidentialityEscrow.BOND_ASSET_USDC(), uint64(1e6));
+        IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(authVoter);
+        Eip3009Authorization memory authorization = _bondAuthorization(contentA, authVoter, authVoterKey, 1e6);
+
+        vm.prank(authVoter);
+        vm.expectRevert("Bad nonce");
+        confidentialityEscrow.postBondWithAuthorization(contentB, authorization);
+        assertFalse(usdcToken.authorizationState(authVoter, authorization.nonce));
+
+        vm.prank(authVoter);
+        confidentialityEscrow.postBondWithAuthorization(contentA, authorization);
+
+        assertTrue(usdcToken.authorizationState(authVoter, authorization.nonce));
+        assertTrue(confidentialityEscrow.hasActiveBond(contentA, resolved.identityKey));
+        assertFalse(confidentialityEscrow.hasActiveBond(contentB, resolved.identityKey));
     }
 
     function testPostBondWithPermitRejectsShortTransferReceipt() public {
@@ -1113,7 +1143,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         );
     }
 
-    function _bondAuthorization(address from, uint256 signerKey, uint256 value)
+    function _bondAuthorization(uint256 contentId, address from, uint256 signerKey, uint256 value)
         internal
         view
         returns (Eip3009Authorization memory authorization)
@@ -1124,11 +1154,19 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             value: value,
             validAfter: block.timestamp - 1,
             validBefore: block.timestamp + 1 days,
-            nonce: keccak256(abi.encodePacked("confidentiality-bond", from, value, block.timestamp)),
+            nonce: bytes32(0),
             v: 0,
             r: bytes32(0),
             s: bytes32(0)
         });
+        authorization.nonce = confidentialityEscrow.computeBondAuthorizationNonce(
+            contentId,
+            authorization.from,
+            authorization.to,
+            authorization.value,
+            authorization.validAfter,
+            authorization.validBefore
+        );
         (authorization.v, authorization.r, authorization.s) = vm.sign(
             signerKey,
             usdcToken.receiveWithAuthorizationDigest(

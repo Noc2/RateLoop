@@ -22,6 +22,14 @@ interface IConfidentialityEscrow {
     function postBondWithAuthorization(uint256 contentId, Eip3009Authorization calldata authorization)
         external
         returns (bytes32 identityKey);
+    function computeBondAuthorizationNonce(
+        uint256 contentId,
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore
+    ) external view returns (bytes32);
     function recordAccessNexus(address frontend, uint256 contentId, address holder) external;
     function recordConfidentialityNexusForRegistry(uint256 contentId, address holder, address registryAddress) external;
     function publishLogRoot(

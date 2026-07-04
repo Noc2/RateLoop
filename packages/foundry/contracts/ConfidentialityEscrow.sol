@@ -75,6 +75,8 @@ contract ConfidentialityEscrow is
     uint256 public constant MAX_MAX_BOND_LOCK_DURATION = 180 days;
     uint256 public constant MAX_LOG_ROOT_EPOCH_LENGTH = 32;
     uint256 public constant MAX_LOG_ROOT_ARTIFACT_URI_LENGTH = 512;
+    bytes32 public constant BOND_AUTHORIZATION_NONCE_TYPEHASH =
+        keccak256("rateloop.confidentiality-bond-authorization-v1");
 
     struct BondPosition {
         address poster;
@@ -274,6 +276,19 @@ contract ConfidentialityEscrow is
         ) {
             revert("Bad authorization");
         }
+        if (
+            authorization.nonce
+                != computeBondAuthorizationNonce(
+                    contentId,
+                    authorization.from,
+                    authorization.to,
+                    authorization.value,
+                    authorization.validAfter,
+                    authorization.validBefore
+                )
+        ) {
+            revert("Bad nonce");
+        }
         IRaterIdentityRegistry.ResolvedRater memory resolved;
         (config, resolved) = _validateBondPost(contentId, msg.sender);
         uint256 balanceBefore = usdcToken.balanceOf(address(this));
@@ -292,6 +307,32 @@ contract ConfidentialityEscrow is
             );
         if (usdcToken.balanceOf(address(this)) - balanceBefore != config.bondAmount) revert("Bad token");
         identityKey = _recordBond(contentId, msg.sender, config, resolved);
+    }
+
+    function computeBondAuthorizationNonce(
+        uint256 contentId,
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore
+    ) public view returns (bytes32) {
+        ConfidentialityConfig memory config = _configs[contentId];
+        return keccak256(
+            abi.encode(
+                BOND_AUTHORIZATION_NONCE_TYPEHASH,
+                block.chainid,
+                address(this),
+                contentId,
+                config.bondAsset,
+                config.bondAmount,
+                from,
+                to,
+                value,
+                validAfter,
+                validBefore
+            )
+        );
     }
 
     function releaseBond(uint256 contentId, bytes32 identityKey)
