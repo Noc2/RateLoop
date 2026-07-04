@@ -27,4 +27,5 @@ Use the package-specific prefixes already present in each `.env.example` file:
 - Next.js public app: `NEXT_PUBLIC_*`
 - Agents local signer: `RATELOOP_LOCAL_SIGNER_*`
 - Agents x402 aliases: `RATELOOP_X402_*`
-- Ponder and keeper services: service-specific `RATELOOP_*` variables where documented
+- Ponder service: `PONDER_*` plus `RATELOOP_PONDER_*` break-glass variables where documented
+- Keeper service: `KEEPER_*`, `PONDER_*`, `METRICS_*`, and contract-address variables from `packages/keeper/.env.example`
