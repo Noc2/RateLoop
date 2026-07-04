@@ -661,12 +661,26 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint8 payoutDomain,
         uint256 bundleId,
         uint256 roundSetIndex,
-        uint256 recoveredAllocation
+        uint256 recoveredAllocation,
+        uint32 recoveredRawEligibleCompleters
     ) internal returns (bool qualified) {
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
         if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return true;
         if (roundSetIndex >= bundle.requiredSettledRounds) return false;
         if (!_isBundleRoundSetComplete(bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex)) {
+            return false;
+        }
+        if (!_recoveredBundleRoundSetRawCountMatchesLive(
+                bundleRewards,
+                bundleQuestions,
+                bundleRoundIds,
+                registry,
+                votingEngine,
+                protocolConfig,
+                bundleId,
+                roundSetIndex,
+                recoveredRawEligibleCompleters
+            )) {
             return false;
         }
         _qualifyBundleRoundSet(
@@ -706,7 +720,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint8 payoutDomain,
         uint256 bundleId,
         uint256 roundSetIndex,
-        uint256 recoveredAllocation
+        uint256 recoveredAllocation,
+        uint32 recoveredRawEligibleCompleters
     ) internal view returns (bool) {
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
         if (roundSetIndex >= bundle.requiredSettledRounds) return false;
@@ -742,10 +757,30 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         uint256 minEffectiveUnits =
             bundle.requiredCompleters > MIN_REQUIRED_VOTERS ? bundle.requiredCompleters : MIN_REQUIRED_VOTERS;
-        return snapshot.rawEligibleVoters == completerCount && completerCount >= bundle.requiredCompleters
+        return recoveredRawEligibleCompleters != 0 && snapshot.rawEligibleVoters == recoveredRawEligibleCompleters
+            && snapshot.rawEligibleVoters == completerCount && completerCount >= bundle.requiredCompleters
             && snapshot.effectiveParticipantUnits >= minEffectiveUnits * BPS_SCALE && snapshot.totalClaimWeight > 0
             && recoveredAllocation > 0 && recoveredAllocation <= bundle.unallocatedAmount
             && recoveredAllocation >= snapshot.effectiveParticipantUnits;
+    }
+
+    function _recoveredBundleRoundSetRawCountMatchesLive(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        uint32 recoveredRawEligibleCompleters
+    ) private view returns (bool) {
+        if (recoveredRawEligibleCompleters == 0) return false;
+        BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
+        uint256 completerCount = _bundleRoundSetCompleterCount(
+            bundleQuestions, bundleRoundIds, registry, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex
+        );
+        return completerCount == recoveredRawEligibleCompleters;
     }
 
     function hasQualifiablePreQualificationBundleRoundSet(

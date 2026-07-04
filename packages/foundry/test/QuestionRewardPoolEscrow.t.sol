@@ -1938,6 +1938,49 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(treasury), treasuryBefore + REWARD_POOL_AMOUNT);
     }
 
+    function testRecoveredBundleSnapshotRoundSetRejectsOriginalRawCompleterShrink() public {
+        _ensureTestClusterPayoutOracle(votingEngine);
+        TestClusterPayoutOracle oracle = TestClusterPayoutOracle(protocolConfig.clusterPayoutOracle());
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, false, true);
+        (uint256 firstRoundId, uint256 secondRoundId) =
+            _settleBundleRoundSetWithoutBundleSync(contentIds, voters, directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        vm.prank(address(oracle));
+        uint64 sourceReadyAt = rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 1);
+        assertGt(sourceReadyAt, 0);
+        if (block.timestamp < sourceReadyAt) vm.warp(sourceReadyAt);
+        bytes32 snapshotKey = oracle.setFinalizedRoundPayoutSnapshotWithRoot(
+            4, bundleId, bundleId, 1, 4, 40_000, 40_000, keccak256("bundle-root-before-raw-shrink")
+        );
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        bytes32 rejectedDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        oracle.setRejectedRoundPayoutSnapshotDigest(snapshotKey, rejectedDigest, true);
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+        oracle.setFinalizedRoundPayoutSnapshotWithRoot(
+            4, bundleId, bundleId, 1, 3, 30_000, 30_000, keccak256("bundle-root-after-raw-shrink")
+        );
+
+        vm.expectRevert("Replacement not qualifiable");
+        rewardPoolEscrow.recoverOrReopenSnapshotBundleRoundSet(bundleId, 0);
+
+        vm.warp(block.timestamp + 30 days + BUNDLE_REFUND_GRACE + BUNDLE_CLAIM_GRACE + 1);
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 refund = rewardPoolEscrow.refundRecoveredQuestionBundleReward(bundleId, _singleRoundSetIndexes(0));
+
+        assertEq(refund, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + REWARD_POOL_AMOUNT);
+    }
+
     function testBundleClusterSnapshotWithWrongConsumerDoesNotQualifyRoundSet() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();

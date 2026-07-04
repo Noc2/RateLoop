@@ -204,6 +204,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
                         votingEngine,
                         protocolConfig,
                         snapshot.allocation,
+                        snapshot.rawEligibleCompleters,
                         bundleId,
                         roundSetIndex,
                         payoutDomain
@@ -277,6 +278,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         require(cachedSnapshotRejected, "Snapshot not rejected");
 
         uint256 allocationToReturn = snapshot.allocation;
+        uint32 rawEligibleCompleters = snapshot.rawEligibleCompleters;
         bundle.unallocatedAmount += allocationToReturn;
         require(bundle.pendingRecoveredRoundSets < type(uint32).max, "Too many recovered round sets");
         unchecked {
@@ -288,6 +290,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         );
         delete bundleRoundSetSnapshots[bundleId][roundSetIndex];
         bundleRoundSetSnapshots[bundleId][roundSetIndex].allocation = allocationToReturn;
+        bundleRoundSetSnapshots[bundleId][roundSetIndex].rawEligibleCompleters = rawEligibleCompleters;
         rejectedRecoveredBundleRoundSet[bundleId][roundSetIndex] = true;
 
         emit RejectedSnapshotBundleRoundSetRecovered(bundleId, roundSetIndex, allocationToReturn);
@@ -358,7 +361,8 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
                 payoutDomain,
                 bundleId,
                 roundSetIndex,
-                recoveredSnapshot.allocation
+                recoveredSnapshot.allocation,
+                recoveredSnapshot.rawEligibleCompleters
             ),
             "Replacement not qualifiable"
         );
@@ -391,7 +395,9 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         uint256 roundSetIndex
     ) external {
         if (!reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex]) return;
-        uint256 recoveredAllocation = bundleRoundSetSnapshots[bundleId][roundSetIndex].allocation;
+        BundleRoundSetSnapshot storage recoveredSnapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
+        uint256 recoveredAllocation = recoveredSnapshot.allocation;
+        uint32 recoveredRawEligibleCompleters = recoveredSnapshot.rawEligibleCompleters;
         bool qualified = QuestionRewardPoolEscrowBundleActionsLib.qualifyRecoveredBundleRoundSet(
             bundleRewards,
             bundleQuestions,
@@ -408,7 +414,8 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             payoutDomain,
             bundleId,
             roundSetIndex,
-            recoveredAllocation
+            recoveredAllocation,
+            recoveredRawEligibleCompleters
         );
         if (qualified) {
             _finishRecoveredRoundSetQualification(
@@ -446,6 +453,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
         uint256 recoveredAllocation,
+        uint32 recoveredRawEligibleCompleters,
         uint256 bundleId,
         uint256 roundSetIndex,
         uint8 payoutDomain
@@ -510,7 +518,8 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             payoutDomain,
             bundleId,
             roundSetIndex,
-            recoveredAllocation
+            recoveredAllocation,
+            recoveredRawEligibleCompleters
         );
     }
 
