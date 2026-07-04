@@ -14,6 +14,7 @@ import {
   readHandoffDetailsUploadError,
   readHandoffDuplicateAskPayloadError,
 } from "./handoffErrors";
+import { formatAgentStatusLabel } from "./statusLabels";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
 import {
   type TargetAudience,
@@ -2080,6 +2081,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [isPreparing, setIsPreparing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [recoveringAssetId, setRecoveringAssetId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftForm, setDraftFormState] = useState<DraftForm | null>(null);
@@ -2262,7 +2264,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   });
   const needsChainSwitch = Boolean(handoffChainId && connectedChainId && connectedChainId !== handoffChainId);
   const isBusy =
-    isPreparing || isExecuting || isSigningMessage || isSigningTypedData || isSavingDraft || switchingChainId !== null;
+    isPreparing ||
+    isExecuting ||
+    isSigningMessage ||
+    isSigningTypedData ||
+    isSavingDraft ||
+    recoveringAssetId !== null ||
+    switchingChainId !== null;
   const hasRetryableFeedbackBonusConfirmation = Boolean(
     token &&
       handoff?.operationKey &&
@@ -2943,6 +2951,41 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
   }, [handoff, handoffId, token]);
 
+  const recoverImageAsset = useCallback(
+    async (asset: HandoffAsset, action: "remove" | "retry") => {
+      if (!handoff) return;
+      setRecoveringAssetId(asset.id);
+      setError(null);
+      setDraftError(null);
+      try {
+        const response = await fetch(`/api/agent/handoffs/${handoffId}/assets/${asset.id}`, {
+          body: JSON.stringify({
+            action,
+            includeImageData: true,
+            token,
+          }),
+          headers: { "content-type": "application/json" },
+          method: "PATCH",
+        });
+        const body = (await response.json()) as Handoff | { error?: string; message?: string };
+        if (!response.ok) throw new Error(readResponseError(body, "Failed to recover image."));
+        setHandoff(body as Handoff);
+        notification.success(
+          action === "retry"
+            ? "Image reset. Submit again to retry the upload."
+            : "Image removed. Review the draft before submitting.",
+        );
+      } catch (recoveryError) {
+        const message = recoveryError instanceof Error ? recoveryError.message : "Failed to recover image.";
+        setError(message);
+        notification.error(message);
+      } finally {
+        setRecoveringAssetId(null);
+      }
+    },
+    [handoff, handoffId, token],
+  );
+
   const prepareHandoff = useCallback(
     async (options: { skipUnsavedDraftCheck?: boolean } = {}) => {
       if (!address) {
@@ -3550,7 +3593,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     isExpiredHandoff ? "bg-error/15 text-error" : ""
                   }`}
                 >
-                  {handoff.status}
+                  {formatAgentStatusLabel(handoff.status)}
                 </p>
               </div>
             </div>
@@ -4193,9 +4236,33 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       <div className="p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-medium">{asset.filename ?? asset.attachmentId}</p>
-                          <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">{asset.status}</span>
+                          <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
+                            {formatAgentStatusLabel(asset.status)}
+                          </span>
                         </div>
                         {asset.error ? <p className="mt-2 text-xs text-error">{asset.error}</p> : null}
+                        {asset.status === "failed" ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {asset.dataUrl ? (
+                              <button
+                                className="btn btn-outline btn-xs"
+                                disabled={isBusy}
+                                type="button"
+                                onClick={() => void recoverImageAsset(asset, "retry")}
+                              >
+                                Retry image
+                              </button>
+                            ) : null}
+                            <button
+                              className="btn btn-outline btn-xs"
+                              disabled={isBusy}
+                              type="button"
+                              onClick={() => void recoverImageAsset(asset, "remove")}
+                            >
+                              Remove image
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   );

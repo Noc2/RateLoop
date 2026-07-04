@@ -29,6 +29,7 @@ type AgentAsksRouteModule = typeof import("./asks/route");
 type AgentHandoffCompleteFeedbackBonusRouteModule =
   typeof import("./handoffs/[handoffId]/complete-feedback-bonus/route");
 type AgentHandoffCompleteRouteModule = typeof import("./handoffs/[handoffId]/complete/route");
+type AgentHandoffAssetRouteModule = typeof import("./handoffs/[handoffId]/assets/[assetId]/route");
 type AgentHandoffPrepareRouteModule = typeof import("./handoffs/[handoffId]/prepare/route");
 type AgentHandoffRouteModule = typeof import("./handoffs/[handoffId]/route");
 type AgentHandoffsRouteModule = typeof import("./handoffs/route");
@@ -79,6 +80,7 @@ let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
 let handoffCompleteFeedbackBonusRoute: AgentHandoffCompleteFeedbackBonusRouteModule;
 let handoffCompleteRoute: AgentHandoffCompleteRouteModule;
+let handoffAssetRoute: AgentHandoffAssetRouteModule;
 let handoffPrepareRoute: AgentHandoffPrepareRouteModule;
 let handoffRoute: AgentHandoffRouteModule;
 let handoffsRoute: AgentHandoffsRouteModule;
@@ -575,6 +577,7 @@ before(async () => {
   callbackRegistryModule = await import("~~/lib/agent-callbacks/registry");
   handoffCompleteFeedbackBonusRoute = await import("./handoffs/[handoffId]/complete-feedback-bonus/route");
   handoffCompleteRoute = await import("./handoffs/[handoffId]/complete/route");
+  handoffAssetRoute = await import("./handoffs/[handoffId]/assets/[assetId]/route");
   handoffPrepareRoute = await import("./handoffs/[handoffId]/prepare/route");
   handoffRoute = await import("./handoffs/[handoffId]/route");
   handoffsRoute = await import("./handoffs/route");
@@ -1577,7 +1580,8 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(body.effectiveTtlMs, 300000);
   assert.deepEqual(body.warnings, []);
   assert.equal(handoffUrl.searchParams.get("token"), null);
-  assert.equal(body.nextAction, "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.");
+  assert.match(String(body.nextAction), /Save handoffId and the private handoffToken/);
+  assert.match(String(body.nextAction), /share handoffUrl/);
 
   const readResponse = await handoffRoute.GET(
     makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
@@ -1740,7 +1744,9 @@ test("agent ask handoff route stages generated image upload metadata before blob
   assert.ok(token);
   assert.equal(asset?.status, "uploading");
   assert.equal(asset?.dataUrl, undefined);
-  assert.match(String(body.nextAction), /Upload each staged image/);
+  assert.match(String(body.nextAction), /Save handoffId and the private handoffToken/);
+  assert.match(String(body.nextAction), /upload each staged image/);
+  assert.match(String(body.nextAction), /poll rateloop_get_handoff_status/);
 
   await handoffsModule.stageAgentAskHandoffAssetUpload({
     assetId: String(asset?.id),
@@ -2251,9 +2257,58 @@ test("agent ask handoff route marks parent failed when signed generated image up
   assert.equal(statusResponse.status, 200);
   assert.equal(statusBody.status, "failed");
   assert.match(String(statusBody.error), /Image upload failed/);
-  assert.match(String(statusBody.nextAction), /fresh handoff link/);
+  assert.match(String(statusBody.nextAction), /Retry the image/);
   assert.equal(statusBody.assets?.[0]?.status, "failed");
   assert.match(String(statusBody.assets?.[0]?.error), /corrupt or incomplete/);
+
+  const retryResponse = await handoffAssetRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}/assets/${statusBody.assets?.[0]?.id}`, {
+      action: "retry",
+      token,
+    }),
+    { params: Promise.resolve({ assetId: String(statusBody.assets?.[0]?.id), handoffId }) },
+  );
+  const retryBody = (await retryResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    status?: string;
+  };
+  assert.equal(retryResponse.status, 200);
+  assert.equal(retryBody.status, "pending");
+  assert.equal(retryBody.assets?.[0]?.status, "staged");
+
+  await dbModule.dbClient.execute({
+    args: ["failed", "still bad", handoffId],
+    sql: `
+      UPDATE agent_ask_handoff_assets
+      SET status = ?,
+          error = ?
+      WHERE handoff_id = ?
+    `,
+  });
+  await dbModule.dbClient.execute({
+    args: ["failed", "still bad", handoffId],
+    sql: `
+      UPDATE agent_ask_handoff_intents
+      SET status = ?,
+          error = ?
+      WHERE id = ?
+    `,
+  });
+
+  const removeResponse = await handoffAssetRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}/assets/${statusBody.assets?.[0]?.id}`, {
+      action: "remove",
+      token,
+    }),
+    { params: Promise.resolve({ assetId: String(statusBody.assets?.[0]?.id), handoffId }) },
+  );
+  const removeBody = (await removeResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    status?: string;
+  };
+  assert.equal(removeResponse.status, 200);
+  assert.equal(removeBody.status, "pending");
+  assert.deepEqual(removeBody.assets, []);
 });
 
 test("agent ask handoff route lets stale uploading image handoffs retry prepare", async () => {

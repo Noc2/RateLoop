@@ -1065,7 +1065,7 @@ export function buildAgentAskHandoffResponse(params: {
       params.handoff.feedbackBonusStatus === "failed_confirmation");
   const nextAction = (() => {
     if (params.handoff.status === "failed" && failedAsset) {
-      return "Image upload failed. Ask the agent for a fresh handoff link with a regenerated or re-exported image.";
+      return "Image upload failed. Retry the image from the handoff page, remove it and add another public context source, or ask the agent for a fresh link with a regenerated or re-exported image.";
     }
     if (uploadingAsset) {
       return "Image upload is still staging. Poll rateloop_get_handoff_status before sharing or preparing the handoff.";
@@ -1334,6 +1334,93 @@ export async function loadAgentAskHandoffAssetUploadTarget(params: {
   }
 
   return { asset, handoff };
+}
+
+function findHandoffAsset(
+  assets: AgentAskHandoffAssetRecord[],
+  assetId: string,
+): AgentAskHandoffAssetRecord | undefined {
+  return assets.find(candidate => candidate.id === assetId || candidate.attachmentId === assetId);
+}
+
+async function resetHandoffAfterAssetRecovery(handoffId: string) {
+  const now = nowDate();
+  await dbClient.execute({
+    sql: `
+      UPDATE agent_ask_handoff_intents
+      SET status = 'pending',
+          prepared_draft_revision = NULL,
+          operation_key = NULL,
+          payload_hash = NULL,
+          transaction_plan = NULL,
+          transaction_hashes = NULL,
+          feedback_bonus_transaction_hashes = NULL,
+          feedback_bonus_status = NULL,
+          feedback_bonus_error = NULL,
+          error = NULL,
+          updated_at = ?
+      WHERE id = ?
+        AND status = 'failed'
+    `,
+    args: [now, handoffId],
+  });
+}
+
+export async function recoverAgentAskHandoffAsset(params: {
+  action: "remove" | "retry";
+  assetId: string;
+  handoffId: string;
+  token: string;
+}) {
+  const handoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
+  assertHandoffCanEditDraft(handoff);
+  const assets = await listAgentAskHandoffAssets(handoff.id);
+  const asset = findHandoffAsset(assets, params.assetId);
+  if (!asset) {
+    throw new AgentAskHandoffError("Handoff image asset was not found.", 404);
+  }
+  if (asset.status !== "failed") {
+    throw new AgentAskHandoffError(`Handoff image asset cannot be recovered from status ${asset.status}.`, 409);
+  }
+
+  if (params.action === "retry") {
+    if (!asset.imageBase64) {
+      throw new AgentAskHandoffError(
+        "This image cannot be retried in the browser because the original bytes are not stored on the handoff.",
+        409,
+      );
+    }
+    await dbClient.execute({
+      sql: `
+        UPDATE agent_ask_handoff_assets
+        SET status = 'staged',
+            image_url = NULL,
+            error = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND handoff_id = ?
+          AND status = 'failed'
+      `,
+      args: [nowDate(), asset.id, handoff.id],
+    });
+  } else {
+    await dbClient.execute({
+      sql: `
+        DELETE FROM agent_ask_handoff_assets
+        WHERE id = ?
+          AND handoff_id = ?
+          AND status = 'failed'
+      `,
+      args: [asset.id, handoff.id],
+    });
+  }
+
+  await resetHandoffAfterAssetRecovery(handoff.id);
+  const nextHandoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
+  return {
+    assets: await listAgentAskHandoffAssets(handoff.id),
+    handoff: nextHandoff,
+  };
 }
 
 export async function stageAgentAskHandoffAssetUpload(params: {
