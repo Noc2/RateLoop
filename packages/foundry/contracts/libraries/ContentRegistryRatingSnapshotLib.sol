@@ -146,7 +146,9 @@ library ContentRegistryRatingSnapshotLib {
         uint256 roundId,
         address newOracle
     ) external {
-        if (!pending.exists || pending.applied || latestAppliedRoundId >= roundId) revert InvalidState();
+        if (!pending.exists || pending.applied || latestAppliedRoundId >= roundId) {
+            revert InvalidState();
+        }
         address oldOracle = pending.clusterPayoutOracle;
         if (oldOracle == address(0) || newOracle == address(0) || newOracle.code.length == 0) revert InvalidState();
         if (newOracle == oldOracle) revert InvalidState();

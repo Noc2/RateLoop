@@ -213,8 +213,7 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
                 artifactURI: "ipfs://rating-round"
             })
         );
-        bytes32 snapshotKey =
-            oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
         uint64 proposedAt =
             oracle.roundPayoutSnapshotProposedAt(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
 
@@ -268,7 +267,10 @@ contract SecondPassRatingSnapshotOrderingTest is SecondPassAuditRegressionBase {
         vm.warp(block.timestamp + 1 hours + 1);
         vm.expectEmit(true, true, true, true, address(registry));
         emit ContentRegistryRatingSnapshotLib.RatingSnapshotSkipped(
-            contentId, firstRoundId, address(replacementOracle), keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
+            contentId,
+            firstRoundId,
+            address(replacementOracle),
+            keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
         );
         registry.advanceRatingSnapshotCursor(contentId, 1);
         registry.applyRatingPayoutSnapshot(contentId, secondRoundId, secondWeights, secondProofs);
