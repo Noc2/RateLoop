@@ -120,11 +120,16 @@ library ContentRegistryRatingSnapshotLib {
 
         if (pending.exists) return true;
 
+        uint48 skipReadyAt = uint48(block.timestamp);
+        if (skipReadyAt < readyAt48) {
+            skipReadyAt = readyAt48;
+        }
+
         pending.votingEngine = caller;
         pending.clusterPayoutOracle = protocolConfig.clusterPayoutOracle();
         pending.upEvidence = upEvidence;
         pending.downEvidence = downEvidence;
-        pending.readyAt = readyAt48;
+        pending.readyAt = skipReadyAt;
         pending.referenceRatingBps = referenceRatingBps;
         pending.exists = true;
 
@@ -159,6 +164,7 @@ library ContentRegistryRatingSnapshotLib {
         }
 
         pending.clusterPayoutOracle = newOracle;
+        pending.readyAt = uint48(block.timestamp);
         emit PendingRatingClusterPayoutOracleRepointed(contentId, roundId, oldOracle, newOracle);
     }
 

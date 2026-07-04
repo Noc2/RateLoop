@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
+import { Test, Vm } from "forge-std/Test.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
@@ -259,6 +259,39 @@ contract ContentRegistryRepointTest is VotingTestBase {
         vm.clearMockedCalls();
     }
 
+    function test_RepointPendingRatingClusterPayoutOracle_RestartsNoProposalSkipGrace() public {
+        uint256 contentId = _submitTestContent();
+        uint256 roundId = 1;
+
+        ClusterPayoutOracle originalOracle = _deployClusterPayoutOracle(address(registry));
+        ClusterPayoutOracle replacementOracle = _deployClusterPayoutOracle(address(registry));
+
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(originalOracle));
+
+        vm.prank(address(votingEngine));
+        registry.recordPendingRatingSettlement(contentId, roundId, 5000, 2, 1);
+
+        vm.warp(block.timestamp + 2 hours);
+        vm.prank(owner);
+        registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(replacementOracle));
+        _mockRatingSourceReady(contentId, roundId);
+
+        vm.recordLogs();
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        Vm.Log[] memory earlyLogs = vm.getRecordedLogs();
+        _assertNoRatingSnapshotSkippedLog(earlyLogs);
+
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingSnapshotSkipped(
+            contentId, roundId, address(replacementOracle), keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
+        );
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+
+        vm.clearMockedCalls();
+    }
+
     function test_RepointPendingRatingClusterPayoutOracle_RevertsWhenNewOracleEqualsOldOracle() public {
         uint256 contentId = _submitTestContent();
         uint256 roundId = 1;
@@ -328,5 +361,14 @@ contract ContentRegistryRepointTest is VotingTestBase {
         vm.prank(owner);
         vm.expectRevert(ContentRegistryRatingSnapshotLib.InvalidState.selector);
         registry.repointPendingRatingClusterPayoutOracle(contentId, 1, address(replacementOracle));
+    }
+
+    function _assertNoRatingSnapshotSkippedLog(Vm.Log[] memory logs) internal {
+        bytes32 skippedTopic = keccak256("RatingSnapshotSkipped(uint256,uint256,address,bytes32)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length != 0 && logs[i].topics[0] == skippedTopic) {
+                fail("rating snapshot skipped too early");
+            }
+        }
     }
 }

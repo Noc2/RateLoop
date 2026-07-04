@@ -299,6 +299,15 @@ contract RoundIntegrationTest is VotingTestBase {
         assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
     }
 
+    function _assertNoRatingSnapshotSkippedLog(Vm.Log[] memory logs) internal {
+        bytes32 skippedTopic = keccak256("RatingSnapshotSkipped(uint256,uint256,address,bytes32)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length != 0 && logs[i].topics[0] == skippedTopic) {
+                fail("rating snapshot skipped too early");
+            }
+        }
+    }
+
     function _submitContent() internal returns (uint256 contentId) {
         contentId = _submitContentWithoutOpeningRound();
         vm.prank(voter1);
@@ -2960,6 +2969,20 @@ contract RoundIntegrationTest is VotingTestBase {
 
         assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
         _assertPublicRatingSourceReadyForPinnedOracle(contentId, roundId);
+
+        vm.recordLogs();
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+        Vm.Log[] memory earlyLogs = vm.getRecordedLogs();
+        _assertNoRatingSnapshotSkippedLog(earlyLogs);
+
+        address oracle = ProtocolConfig(address(votingEngine.protocolConfig())).clusterPayoutOracle();
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingSnapshotSkipped(
+            contentId, roundId, oracle, keccak256("rateloop.rating-snapshot.no-proposal-skip.v1")
+        );
+        registry.advanceRatingSnapshotCursor(contentId, 1);
+
         registry.markDormant(contentId);
     }
 
