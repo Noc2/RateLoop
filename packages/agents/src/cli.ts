@@ -175,7 +175,7 @@ function readPaymentMode(options: CliOptions) {
   )
     return "x402_authorization";
   throw new Error(
-    "--payment-mode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization",
+    "--payment-mode must be wallet_calls, eip3009_usdc_authorization, eip3009_authorization, or x402_authorization",
   );
 }
 
@@ -259,6 +259,7 @@ function usage() {
   yarn workspace @rateloop/agents ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
+  yarn workspace @rateloop/agents handoff-status --handoff-id ahf_... --handoff-token <private-token>
   export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
   yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
   yarn workspace @rateloop/agents wallet
@@ -266,8 +267,21 @@ function usage() {
   yarn workspace @rateloop/agents status --operation-key 0x...
   yarn workspace @rateloop/agents result --operation-key 0x...
 
+Common flags:
+  --file <path>                 Ask JSON for lint, sandbox, quote, ask, handoff, or local-ask
+  --image <path>                Attach a local JPG/PNG/WEBP to handoff; repeat for up to four
+  --generated-image <path>      Alias for --image
+  --ttl-ms <ms>                 Handoff link TTL, 60000-1800000
+  --payment-mode <mode>         local-ask mode: wallet_calls, x402_authorization, eip3009_usdc_authorization, or eip3009_authorization
+  --overwrite                   Allow wallet --generate to replace an existing keystore
+  --operation-key <0x...>       Recover status/result by operation key
+  --client-request-id <id>      Recover status/result by client request id
+  --chain-id <id>               Chain id for client-request-id recovery
+  --wallet-address <0x...>      Wallet address for tokenless client-request-id recovery
+  --content-id <id>             Recover result by submitted content id
+
 Environment:
-  RATELOOP_API_BASE_URL     Hosted RateLoop origin for HTTP and MCP flows
+  RATELOOP_API_BASE_URL     Hosted RateLoop origin for HTTP flows; defaults to https://www.rateloop.ai
   RATELOOP_AGENT_WALLET_ADDRESS  Funded wallet address for tokenless public asks
   RATELOOP_MCP_TOKEN        Optional managed agent bearer token
   RATELOOP_MCP_API_URL      Optional MCP endpoint override
@@ -280,7 +294,9 @@ Environment:
 }
 
 function createAgentClient(
-  config: AgentsRuntimeConfig = loadAgentsRuntimeConfig(),
+  config: AgentsRuntimeConfig = withDefaultAgentApiBaseUrl(
+    loadAgentsRuntimeConfig(),
+  ),
 ) {
   return createRateLoopAgentClient({
     apiBaseUrl: config.apiBaseUrl,
@@ -290,10 +306,10 @@ function createAgentClient(
   });
 }
 
-function withDefaultHandoffApiBaseUrl(
+function withDefaultAgentApiBaseUrl(
   config: AgentsRuntimeConfig,
 ): AgentsRuntimeConfig {
-  return config.apiBaseUrl
+  return config.apiBaseUrl || config.mcpApiUrl
     ? config
     : { ...config, apiBaseUrl: DEFAULT_HANDOFF_API_BASE_URL };
 }
@@ -411,8 +427,8 @@ async function main() {
     }
 
     case "quote": {
-      const config = loadAgentsRuntimeConfig();
-      const agent = createAgentClient();
+      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
+      const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
       const payload = options["dry-run"]
         ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
@@ -429,8 +445,8 @@ async function main() {
 
     case "sandbox":
     case "ask": {
-      const config = loadAgentsRuntimeConfig();
-      const agent = createAgentClient();
+      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
+      const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
       const payload =
         command === "sandbox" || options["dry-run"]
@@ -449,7 +465,7 @@ async function main() {
     }
 
     case "handoff": {
-      const config = withDefaultHandoffApiBaseUrl(loadAgentsRuntimeConfig());
+      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
       const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
       const payloadWithWallet = withConfiguredWalletAddress(
@@ -496,6 +512,18 @@ async function main() {
               request: payload as never,
               ttlMs: readOptionalPositiveInteger(options, "ttl-ms"),
             }),
+      );
+      return;
+    }
+
+    case "handoff-status": {
+      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
+      const agent = createAgentClient(config);
+      printJson(
+        await agent.getAskHandoffStatus({
+          handoffId: requireString(options, "handoff-id"),
+          handoffToken: requireString(options, "handoff-token"),
+        }),
       );
       return;
     }
@@ -573,8 +601,8 @@ async function main() {
     }
 
     case "status": {
-      const config = loadAgentsRuntimeConfig();
-      const agent = createAgentClient();
+      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
+      const agent = createAgentClient(config);
       printJson(
         await agent.getQuestionStatus({
           chainId: readOptionalPositiveInteger(options, "chain-id"),
@@ -596,8 +624,8 @@ async function main() {
     }
 
     case "result": {
-      const config = loadAgentsRuntimeConfig();
-      const agent = createAgentClient();
+      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
+      const agent = createAgentClient(config);
       printJson(
         await agent.getResult({
           chainId: readOptionalPositiveInteger(options, "chain-id"),

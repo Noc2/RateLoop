@@ -66,6 +66,7 @@ yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-revi
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 yarn agents:handoff --file ask.json --image mockup.png
+yarn agents:handoff-status --handoff-id ahf_... --handoff-token "$RATELOOP_HANDOFF_TOKEN"
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
@@ -75,14 +76,29 @@ yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questi
 
 # Recover later without resubmitting.
 yarn agents:status --operation-key 0x...
+yarn agents:status --chain-id 8453 --client-request-id landing-pitch-demo --wallet-address 0x...
 yarn agents:result --operation-key 0x...
+yarn agents:result --content-id 123
 ```
 
-The CLI reads `.env` from the current process environment. `sandbox` and `ask --dry-run` validate the payload and return
-a deterministic synthetic result without requiring a funded wallet. For the default live wallet-direct path, set
-`RATELOOP_API_BASE_URL` and either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask
-payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps,
-balance tooling, callbacks, or audit exports.
+The CLI reads `.env` from the current process environment. Direct HTTP commands default to
+`https://www.rateloop.ai` when neither `RATELOOP_API_BASE_URL` nor `RATELOOP_MCP_API_URL` is set. `sandbox` and
+`ask --dry-run` validate the payload and return a deterministic synthetic result without requiring a funded wallet. For
+the default live wallet-direct path, either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in
+the ask payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy,
+RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
+
+Common CLI flags:
+
+| Command | Flags |
+| --- | --- |
+| `lint`, `sandbox`, `quote`, `ask`, `handoff`, `local-ask` | `--file <ask.json>` |
+| `handoff` | `--image <path>`, `--generated-image <path>`, `--ttl-ms <60000-1800000>` |
+| `handoff-status` | `--handoff-id <id>`, `--handoff-token <private-token>` |
+| `wallet --generate` | `--keystore <path>`, `--overwrite` |
+| `local-ask` | `--payment-mode wallet_calls`, `--payment-mode x402_authorization`, `--payment-mode eip3009_usdc_authorization`, or `--payment-mode eip3009_authorization` |
+| `status` | `--operation-key <0x...>` or `--chain-id <id> --client-request-id <id> --wallet-address <0x...>` |
+| `result` | `--operation-key <0x...>`, `--content-id <id>`, or `--chain-id <id> --client-request-id <id> --wallet-address <0x...>` |
 
 For published-package installs, the same commands are available through the `rateloop-agents` bin:
 
@@ -90,6 +106,7 @@ For published-package installs, the same commands are available through the `rat
 npx rateloop-agents sandbox --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
 npx rateloop-agents quote --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
 npx rateloop-agents handoff --file ask.json --image mockup.png
+npx rateloop-agents handoff-status --handoff-id ahf_... --handoff-token "$RATELOOP_HANDOFF_TOKEN"
 ```
 
 ## First No-Payment Run
@@ -111,10 +128,10 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 1. Fund the user wallet or local signer with Base mainnet LREP or USDC.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
 3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
-4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
+4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`; save the returned `handoffId` and private `handoffToken`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
 5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
-7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.
+7. Poll `rateloop_get_handoff_status` or `rateloop-agents handoff-status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.
 
 Public raw MCP asks can attach signed callbacks by passing `webhookUrl` and `webhookSecret`, signing the returned `webhook_signature_required` message with the paying wallet, then retrying with `webhookChallengeId` and `webhookSignature`. Managed agents can also call `rateloop_get_agent_balance`; balance caps and audit exports require a saved policy and bearer token.
 
