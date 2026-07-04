@@ -408,6 +408,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function recoverSurplus(address to, uint256 amount) external onlyOwner nonReentrant returns (uint256 recovered) {
         if (to == address(0)) revert InvalidAddress();
+        if (owner() != governance) revert InvalidAddress();
         uint256 actualBalance = lrepToken.balanceOf(address(this));
         uint256 surplus = actualBalance > poolBalance ? actualBalance - poolBalance : 0;
         recovered = amount > surplus ? surplus : amount;

@@ -405,6 +405,31 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(interruptedLrep.balanceOf(deployer), 0);
     }
 
+    function test_RecoverSurplusRequiresGovernanceOwnerAfterInterruptedDeployment() public {
+        address deployer = address(0xD00D);
+        address intendedGovernance = address(0xBEEF);
+        LoopReputation interruptedLrep = new LoopReputation(address(this), address(this));
+
+        LaunchDistributionPool interruptedPool;
+        vm.prank(deployer);
+        interruptedPool = new LaunchDistributionPool(address(interruptedLrep), address(registry), intendedGovernance);
+
+        interruptedLrep.mint(address(interruptedPool), 123e6);
+
+        vm.startPrank(deployer);
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        interruptedPool.recoverSurplus(deployer, type(uint256).max);
+        interruptedPool.transferOwnership(intendedGovernance);
+        vm.stopPrank();
+
+        vm.prank(intendedGovernance);
+        uint256 recovered = interruptedPool.recoverSurplus(intendedGovernance, type(uint256).max);
+
+        assertEq(recovered, 123e6);
+        assertEq(interruptedPool.poolBalance(), 0);
+        assertEq(interruptedLrep.balanceOf(intendedGovernance), 123e6);
+    }
+
     function test_SetGovernanceTransfersOwnershipAndRevokesOldOwnerControl() public {
         address oldGovernance = address(this);
         address newGovernance = address(0xBEEF);
