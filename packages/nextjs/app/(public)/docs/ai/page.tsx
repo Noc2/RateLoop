@@ -90,6 +90,19 @@ const directHttpAskPayloadExample = `{
   }
 }`;
 
+const callbackVerificationSnippet = `import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verifyRateLoopCallback({ rawBody, secret, headers }) {
+  const id = headers["x-rateloop-callback-id"];
+  const timestamp = headers["x-rateloop-callback-timestamp"];
+  const signature = headers["x-rateloop-callback-signature"];
+  const expected = "v1=" + createHmac("sha256", secret)
+    .update(\`v1.\${id}.\${timestamp}.\${rawBody}\`)
+    .digest("hex");
+  return Buffer.byteLength(signature) === Buffer.byteLength(expected)
+    && timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}`;
+
 function formatDirectHttpRoutes(origin: string) {
   const normalizedOrigin = origin.replace(/\/$/, "");
   return directHttpEndpoints
@@ -342,8 +355,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>generatedImages</code>.
         </li>
         <li>
-          Give the user the returned handoff URL so they can connect the wallet, review, sign image uploads if needed,
-          and approve funding/submission.
+          Save the returned <code>handoffId</code> and private <code>handoffToken</code>, then give the user the
+          returned handoff URL so they can connect the wallet, review, sign image uploads if needed, and approve
+          funding/submission.
         </li>
         <li>
           Poll <code>rateloop_get_handoff_status</code>, then <code>rateloop_get_question_status</code>, then fetch{" "}
@@ -388,9 +402,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>0</code> everyone, <code>8</code> Proof of Human). Omitted <code>bountyEligibility</code> defaults to{" "}
           <code>0</code>, and either choice is allowed at any bounty size. If a custom <code>roundConfig</code> is
           supplied, <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch
-          policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or
-          above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled
-          below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
+          policy, amount tiers are evaluated in the selected bounty asset&apos;s atomic units: use at least 5 voters at
+          or above 1,000,000,000 atomic units and at least 8 voters at or above 10,000,000,000 atomic units. Three-voter
+          rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed
+          voters, and governance can raise new-ask voter floors as usage grows.
         </li>
         <li>
           Settlement status: a round can close the public verdict before rewards are ready. Treat{" "}
@@ -463,7 +478,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           <code>rateloop_create_ask_handoff_link</code>
         </li>
-        <li>Share the returned handoff URL.</li>
+        <li>
+          Save the returned <code>handoffId</code> and private <code>handoffToken</code>, then share{" "}
+          <code>handoffUrl</code>.
+        </li>
         <li>
           <code>rateloop_get_handoff_status</code>
         </li>
@@ -492,6 +510,51 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>webhookChallengeId</code> and <code>webhookSignature</code>. Callback deliveries are signed with{" "}
         <code>x-rateloop-callback-signature</code>, and status responses include <code>callbackDeliveries</code>.
       </p>
+      <h4 id="callback-webhooks">Callback Webhooks</h4>
+      <p>
+        Supported callback event types are <code>question.submitted</code>, <code>question.settled</code>, and{" "}
+        <code>question.failed</code>. The callback payload&apos;s <code>eventType</code> is the lifecycle event;{" "}
+        <code>callbackDeliveries[].status</code> on polling responses is transport delivery state such as{" "}
+        <code>pending</code>, <code>retrying</code>, <code>delivered</code>, or <code>dead</code>. Polling API{" "}
+        <code>status</code> values are ask/result state and should not be mixed with either callback vocabulary.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>eventType</code>
+            </td>
+            <td>Lifecycle event: submitted, settled, or failed.</td>
+          </tr>
+          <tr>
+            <td>
+              <code>callbackDeliveries[].status</code>
+            </td>
+            <td>Webhook transport state for delivery and retry handling.</td>
+          </tr>
+          <tr>
+            <td>
+              <code>status</code>
+            </td>
+            <td>Polling API ask/result state, not webhook delivery state.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Verify deliveries with HMAC-SHA256 keyed by <code>webhookSecret</code>. Use the exact received body bytes; do
+        not re-stringify parsed JSON unless your receiver intentionally reconstructs RateLoop&apos;s canonical JSON. The
+        signed preimage is <code>{"v1.{x-rateloop-callback-id}.{x-rateloop-callback-timestamp}.{rawBody}"}</code>, and
+        the expected signature header is <code>{"v1=<hex>"}</code>.
+      </p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{callbackVerificationSnippet}</code>
+      </pre>
       <p>
         Agents that do not use MCP can call ask, status, and result flows through JSON routes. The SDK convenience call{" "}
         <code>{'askHumans({ transport: "http" })'}</code>, raw <code>POST /api/agent/asks</code>, MCP, browser handoff,
@@ -503,6 +566,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
       </pre>
+      <p>
+        Audit detail and CSV export routes are for managed bearer-token agents with a saved policy. Public,
+        permissionless agents can recover with <code>rateloop_get_handoff_status</code>,{" "}
+        <code>rateloop_get_question_status</code>, and <code>rateloop_get_result</code>, but audit/export access
+        requires managed controls.
+      </p>
       <p>Direct wallet-call ask JSON payload with Feedback Bonus:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpAskPayloadExample}</code>
@@ -522,8 +591,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Show or log the returned <code>legalNotice</code> before spending.
         </li>
         <li>
-          Prefer browser handoff: call <code>rateloop_create_ask_handoff_link</code> and share the returned{" "}
-          <code>handoffUrl</code>.
+          Prefer browser handoff: call <code>rateloop_create_ask_handoff_link</code>, save <code>handoffId</code> and
+          the private <code>handoffToken</code>, then share the returned <code>handoffUrl</code>.
         </li>
         <li>
           If using raw MCP or direct HTTP wallet calls, execute each returned wallet plan, then confirm the transaction

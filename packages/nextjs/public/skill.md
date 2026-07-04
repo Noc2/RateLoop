@@ -74,7 +74,7 @@ For chat agents, keep the user flow short:
 4. Choose a category/template only if needed.
 5. Call `rateloop_quote_question` and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, do not make a tiny surrogate just to quote; create the handoff and let the browser prepare step price the ask before payment.
 6. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
-7. Give the user the returned `/agent/handoff/{handoffId}#token=...` link. They connect the wallet, review, sign image uploads if needed, and approve funding/submission there.
+7. Save the returned `handoffId` and private `handoffToken`, then give the user the returned `/agent/handoff/{handoffId}#token=...` link. They connect the wallet, review, sign image uploads if needed, and approve funding/submission there.
 8. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status` and `rateloop_get_result`.
 
 Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Avoid pasting raw signature challenges or transaction plans into chat unless the user explicitly asks for the low-level MCP path.
@@ -109,6 +109,13 @@ Main tools:
 - `rateloop_get_result`
 - `rateloop_accept_confidentiality_terms`
 
+Rating tools:
+
+- `rateloop_get_rating_context`
+- `rateloop_prepare_rating_transactions`
+- `rateloop_confirm_rating_transactions`
+- `rateloop_get_rating_status`
+
 Advanced low-level tools:
 
 - `rateloop_ask_humans`
@@ -120,7 +127,29 @@ Advanced low-level tools:
 
 Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do not sign, fund, submit, or replace visible wallet approval.
 
+Audit detail and CSV export require a managed agent policy plus bearer token. Public permissionless agents should recover with `rateloop_get_handoff_status`, `rateloop_get_question_status`, and `rateloop_get_result`.
+
 Use `question.templateInputs.audience` for free-text audience or rubric notes. Use `question.targetAudience` only for structured self-reported targeting values from `rateloop_list_audience_options`; target criteria are hidden from the normal rating UI but are part of the public question metadata preimage, so do not put secrets there.
+
+## Callback Webhooks
+
+Public wallet-mode raw MCP asks can include `webhookUrl`, `webhookSecret`, and optional `webhookEvents`. If the response status is `webhook_signature_required`, sign the returned `message` with the paying wallet, then repeat the ask with `webhookChallengeId` and `webhookSignature`.
+
+Supported event types are `question.submitted`, `question.settled`, and `question.failed`. In callback payloads, `eventType` is the lifecycle event. In polling responses, `callbackDeliveries[].status` is webhook transport state (`pending`, `delivering`, `retrying`, `delivered`, or `dead`). Polling API `status` values are ask/result state and should not be treated as callback delivery state.
+
+Verify callback deliveries with these headers:
+
+- `x-rateloop-callback-id`
+- `x-rateloop-callback-timestamp`
+- `x-rateloop-callback-signature: v1=<hex>`
+
+The signature is HMAC-SHA256 keyed by `webhookSecret` over the exact received body bytes:
+
+```text
+v1.{x-rateloop-callback-id}.{x-rateloop-callback-timestamp}.{rawBody}
+```
+
+Use the raw request body for verification. Do not parse and re-stringify JSON unless your receiver intentionally reconstructs RateLoop's canonical JSON.
 
 ## Workflow
 

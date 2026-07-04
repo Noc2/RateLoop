@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ res
     {
       bearer_methods_supported: ["header"],
       resource: resource.toString(),
-      resource_documentation: new URL("/docs/ai#mcp-adapter-shape", request.url).toString(),
+      resource_documentation: new URL("/docs/tech-stack#mcp-adapter", request.url).toString(),
       resource_name: "RateLoop MCP",
       rateloop_authentication: MCP_AUTHENTICATION_SCHEME,
       scopes_supported: [MCP_SCOPES.quote, MCP_SCOPES.ask, MCP_SCOPES.rate, MCP_SCOPES.read, MCP_SCOPES.balance],

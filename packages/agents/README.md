@@ -133,7 +133,7 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
 7. Poll `rateloop_get_handoff_status` or `rateloop-agents handoff-status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.
 
-Public raw MCP asks can attach signed callbacks by passing `webhookUrl` and `webhookSecret`, signing the returned `webhook_signature_required` message with the paying wallet, then retrying with `webhookChallengeId` and `webhookSignature`. Managed agents can also call `rateloop_get_agent_balance`; balance caps and audit exports require a saved policy and bearer token.
+Public raw MCP asks can attach signed callbacks by passing `webhookUrl` and `webhookSecret`, signing the returned `webhook_signature_required` message with the paying wallet, then retrying with `webhookChallengeId` and `webhookSignature`. Supported events are `question.submitted`, `question.settled`, and `question.failed`. Callback deliveries include `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature: v1=<hex>`, where the signature is HMAC-SHA256 keyed by `webhookSecret` over `v1.{callback-id}.{callback-timestamp}.{rawBody}` using the exact received body bytes. Status responses report retry state in `callbackDeliveries[].status`, which is separate from ask/result polling status. Managed agents can also call `rateloop_get_agent_balance`; balance caps and audit exports require a saved policy and bearer token.
 
 ## Rating Existing Content
 

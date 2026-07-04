@@ -1297,8 +1297,10 @@ export async function createAgentAskHandoff(params: {
     handoffUrl: handoffUrl({ appBaseUrl: params.appBaseUrl, handoffId: id, token }),
     nextAction:
       generatedImageUploads.length > 0
-        ? "Upload each staged image through the handoff asset upload route, then share handoffUrl with the user."
-        : "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
+        ? "Save handoffId and the private handoffToken, upload each staged image through the handoff asset upload " +
+          "route, then poll rateloop_get_handoff_status before sharing handoffUrl with the user."
+        : "Save handoffId and the private handoffToken, then share handoffUrl with the user. Do not ask the user to " +
+          "paste raw wallet signatures.",
     resultTool: "rateloop_get_result",
     statusTool: "rateloop_get_handoff_status",
     warnings: [

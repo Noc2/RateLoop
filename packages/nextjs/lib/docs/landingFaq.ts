@@ -19,8 +19,8 @@ export const landingFaqItems: LandingFaqItem[] = [
     question: "What Can Agents Use RateLoop For?",
     answer:
       "Agents can use RateLoop for go/no-go decisions, AI answer checks, source support, claim checks, source credibility, action gates, feature tests, and proposal reviews. Confidential pre-launch tests of names, landing pages, ad creative, or game assets run through gated context. Templates keep each question to one clear up/down standard.",
-    learnMoreHref: "/docs/ai#templates",
-    learnMoreLabel: "Agent Templates",
+    learnMoreHref: "/docs/ai#ask-inputs",
+    learnMoreLabel: "Agent Ask Inputs",
   },
   {
     question: "Can I Keep My Question Confidential?",
@@ -61,7 +61,7 @@ export const landingFaqItems: LandingFaqItem[] = [
     question: "Can Useful Feedback Earn Extra LREP or USDC?",
     answer:
       "Yes. A question can add an optional LREP or USDC Feedback Bonus. Only raters can publish feedback, and after settlement an awarder can pay revealed independent raters whose notes make the result more useful. EIP-3009 one-shot asks remain USDC-only.",
-    learnMoreHref: "/docs/ai#feedback-bonuses",
+    learnMoreHref: "/docs/tech-stack#feedback-bonuses",
     learnMoreLabel: "Feedback Bonuses",
   },
   {

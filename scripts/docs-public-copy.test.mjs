@@ -46,6 +46,25 @@ const landingFaq = readFileSync(
   new URL("../packages/nextjs/lib/docs/landingFaq.ts", import.meta.url),
   "utf8",
 );
+const docsAiPage = readFileSync(
+  new URL("../packages/nextjs/app/(public)/docs/ai/page.tsx", import.meta.url),
+  "utf8",
+);
+const oauthResourceRoute = readFileSync(
+  new URL(
+    "../packages/nextjs/app/.well-known/oauth-protected-resource/[[...resource]]/route.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const agentSubmissionPanel = readFileSync(
+  new URL("../packages/nextjs/components/submit/AgentSubmissionPanel.tsx", import.meta.url),
+  "utf8",
+);
+const agentsReadme = readFileSync(
+  new URL("../packages/agents/README.md", import.meta.url),
+  "utf8",
+);
 const oracleChallengeFlowDiagram = readFileSync(
   new URL(
     "../packages/nextjs/components/docs/OracleChallengeFlowDiagram.tsx",
@@ -148,14 +167,62 @@ test("static agent docs keep no-payment dry-run guidance", () => {
 });
 
 test("public AI docs use published-package example paths and Node 24", () => {
-  const docsAiPage = readFileSync(
-    new URL("../packages/nextjs/app/(public)/docs/ai/page.tsx", import.meta.url),
-    "utf8",
-  );
-
   assert.match(docsAiPage, /Node 24/);
   assert.match(docsAiPage, /node_modules\/@rateloop\/agents\/examples\/questions\/landing-pitch-review\.json/);
   assert.doesNotMatch(docsAiPage, /npx rateloop-agents sandbox --file packages\/agents\/examples/);
+  assert.match(publicDocs["packages/nextjs/public/docs/ai.md"], /npm install @rateloop\/sdk @rateloop\/agents/);
+  assert.match(publicDocs["packages/nextjs/public/docs/ai.md"], /pure_agent_fast/);
+});
+
+test("public agent docs avoid stale docs anchors", () => {
+  for (const [label, content] of [
+    ["landing FAQ", landingFaq],
+    ["OAuth resource metadata", oauthResourceRoute],
+    ["agent submission panel", agentSubmissionPanel],
+  ]) {
+    assert.doesNotMatch(content, /\/docs\/ai#(?:templates|feedback-bonuses|mcp-adapter-shape|paths|mcp)\b/, label);
+  }
+
+  assert.match(landingFaq, /\/docs\/ai#ask-inputs/);
+  assert.match(landingFaq, /\/docs\/tech-stack#feedback-bonuses/);
+  assert.match(oauthResourceRoute, /\/docs\/tech-stack#mcp-adapter/);
+  assert.match(agentSubmissionPanel, /#permanent-agent-setup/);
+});
+
+test("public agent docs document callback signatures and status vocabularies", () => {
+  for (const [label, content] of [
+    ["rendered AI docs", docsAiPage],
+    ["ai.md", publicDocs["packages/nextjs/public/docs/ai.md"]],
+    ["llms.txt", publicDocs["packages/nextjs/public/llms.txt"]],
+    ["skill.md", publicSkill],
+    ["agents README", agentsReadme],
+  ]) {
+    assert.match(content, /x-rateloop-callback-id/, label);
+    assert.match(content, /x-rateloop-callback-timestamp/, label);
+    assert.match(content, /x-rateloop-callback-signature/, label);
+    assert.match(content, /HMAC-SHA256/, label);
+    assert.match(content, /question\.failed/, label);
+    assert.match(content, /callbackDeliveries\[\]\.status/, label);
+  }
+});
+
+test("public agent docs list rating MCP tools", () => {
+  for (const [label, content] of [
+    ["llms.txt", publicDocs["packages/nextjs/public/llms.txt"]],
+    ["skill.md", publicSkill],
+  ]) {
+    assert.match(content, /rateloop_get_rating_context/, label);
+    assert.match(content, /rateloop_prepare_rating_transactions/, label);
+    assert.match(content, /rateloop_confirm_rating_transactions/, label);
+    assert.match(content, /rateloop_get_rating_status/, label);
+  }
+});
+
+test("rendered agent docs keep voter-floor tiers asset-neutral", () => {
+  assert.match(docsAiPage, /selected bounty asset/);
+  assert.match(docsAiPage, /1,000,000,000 atomic units/);
+  assert.doesNotMatch(docsAiPage, /1000 USDC/);
+  assert.doesNotMatch(docsAiPage, /10000 USDC/);
 });
 
 test("static agent docs mention optional 16:9 image guidance", () => {

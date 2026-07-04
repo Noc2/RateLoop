@@ -27,6 +27,13 @@ codex plugin marketplace add Noc2/RateLoop --ref main --sparse .agents/plugins -
 # Then open Plugins in Codex and install RateLoop from the RateLoop marketplace.
 ```
 
+Node 24 package quickstart:
+
+```sh
+npm install @rateloop/sdk @rateloop/agents
+npx rateloop-agents sandbox --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
+```
+
 Claude Code MCP:
 
 ```sh
@@ -115,7 +122,7 @@ When the user controls the wallet, prefer a browser ask handoff instead of pasti
 4. Call `rateloop_quote_question` with `dryRun: true` or run `rateloop-agents sandbox` to validate the payload without payment.
 5. Call `rateloop_quote_question` for the live ask and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, create the browser handoff directly; the browser prepare step prices the ask before payment.
 6. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
-7. Give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
+7. Save the returned `handoffId` and private `handoffToken`, then give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
 8. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then fetch `rateloop_get_result`.
 
 Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Use raw MCP wallet calls only when the host can sign and execute calls cleanly.
@@ -128,7 +135,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 - Bounty: `amount`, `requiredVoters`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). Omitted `bountyEligibility` defaults to `0`, and either choice is allowed at any bounty size. If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, amount tiers are evaluated in the selected bounty asset's atomic units: use at least 5 voters at or above 1,000,000,000 atomic units and at least 8 voters at or above 10,000,000,000 atomic units. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
 - Settlement status: a round can close the public verdict before rewards are ready. Treat `SettlementPending` / pending result packages as not final for LREP rewards until the RBTS settlement snapshot is applied; LREP or USDC bounty claims also wait for finalized payout roots.
 - Optional Feedback Bonus: extra LREP or USDC for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. Wallet-call asks can use either LREP or USDC for the bonus, independent of the bounty asset; EIP-3009/x402 can one-shot only USDC bounty plus USDC bonus.
-- Round speed: use `roundConfig.questionDurationSeconds` or a preset. The bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that same duration from question creation.
+- Round speed: use `roundConfig.questionDurationSeconds` or a preset. The bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that same duration from question creation. Use `roundPreset: "pure_agent_fast"` only for low-stakes pure-agent asks where a 60 second blind round and small quorum are acceptable.
 - Question fields: title, optional `detailsUrl`/`detailsHash`, category id, tags, optional template id, optional `templateInputs`, and optional `targetAudience`. If the question names exactly two alternatives, use `head_to_head_ab` and fill `templateInputs.optionAKey="A"`, `optionALabel`, `optionBKey="B"`, and `optionBLabel` so the browser handoff opens in A/B mode.
 - Audience fields: use `question.templateInputs.audience` for a free-text audience or rubric note that helps interpret the result package. Use `question.targetAudience` only for structured self-reported targeting from `rateloop_list_audience_options`; invalid aliases such as `developer` are rejected with canonical suggestions such as `engineer`. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets there.
 
@@ -166,7 +173,7 @@ For normal human-wallet asks, use handoff tools in order:
 
 1. `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`; otherwise go straight to handoff for `generatedImages`
 2. `rateloop_create_ask_handoff_link`
-3. share `handoffUrl`
+3. save `handoffId` plus the private `handoffToken`, then share `handoffUrl`
 4. `rateloop_get_handoff_status`
 5. `rateloop_get_question_status`
 6. `rateloop_get_result`
@@ -201,6 +208,43 @@ POST https://www.rateloop.ai/api/agent/asks/{operationKey}/confirm
 POST https://www.rateloop.ai/api/agent/asks/{operationKey}/confirm-feedback-bonus
 GET  https://www.rateloop.ai/api/agent/asks/{operationKey}
 GET  https://www.rateloop.ai/api/agent/results/{operationKey}
+```
+
+Audit detail and CSV export are managed-agent features: use a saved policy and bearer token when you need RateLoop to enforce caps, callbacks, balance tooling, or audit exports. Public permissionless agents should recover with `rateloop_get_handoff_status`, `rateloop_get_question_status`, and `rateloop_get_result`.
+
+### Callback Webhooks
+
+Public wallet-mode raw MCP asks can include `webhookUrl`, `webhookSecret`, and optional `webhookEvents`. If the response status is `webhook_signature_required`, sign the returned `message` with the paying wallet, then repeat the same ask with `webhookChallengeId` and `webhookSignature`.
+
+Supported event types are `question.submitted`, `question.settled`, and `question.failed`. In callback payloads, `eventType` is the lifecycle event. In polling responses, `callbackDeliveries[].status` is webhook transport state (`pending`, `delivering`, `retrying`, `delivered`, or `dead`). Polling API `status` values are ask/result state and should not be treated as callback delivery state.
+
+Verify callback deliveries with these headers:
+
+- `x-rateloop-callback-id`
+- `x-rateloop-callback-timestamp`
+- `x-rateloop-callback-signature: v1=<hex>`
+
+The signature is HMAC-SHA256 keyed by `webhookSecret` over the exact received body bytes:
+
+```text
+v1.{x-rateloop-callback-id}.{x-rateloop-callback-timestamp}.{rawBody}
+```
+
+Use the raw request body for verification. Do not parse and re-stringify JSON unless your receiver intentionally reconstructs RateLoop's canonical JSON.
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verifyRateLoopCallback({ rawBody, secret, headers }) {
+  const id = headers["x-rateloop-callback-id"];
+  const timestamp = headers["x-rateloop-callback-timestamp"];
+  const signature = headers["x-rateloop-callback-signature"];
+  const expected = "v1=" + createHmac("sha256", secret)
+    .update(`v1.${id}.${timestamp}.${rawBody}`)
+    .digest("hex");
+  return Buffer.byteLength(signature) === Buffer.byteLength(expected)
+    && timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
 ```
 
 Direct wallet-call ask JSON payload with Feedback Bonus:
@@ -242,7 +286,7 @@ Direct wallet-call ask JSON payload with Feedback Bonus:
 1. Run a no-payment dry run with `dryRun: true` or `mode: "dry_run"`.
 2. Call `rateloop_quote_question` with the live draft ask. Include optional `feedbackBonus` when written feedback is useful and the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 3. Show or log the returned `legalNotice` before spending.
-4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
+4. Prefer browser handoff: call `rateloop_create_ask_handoff_link`, save `handoffId` and the private `handoffToken`, then share the returned `handoffUrl`.
 5. If using raw MCP or direct HTTP wallet calls, call `rateloop_ask_humans`/`askHumans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue. If the confirmed ask returns a Feedback Bonus transaction plan, execute it and call `rateloop_confirm_feedback_bonus_transactions` or `confirmFeedbackBonusTransactions`.
 
 Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, mixed-asset Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
