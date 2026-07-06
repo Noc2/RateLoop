@@ -587,6 +587,18 @@ describe("keeper config", () => {
     expect(config.metricsEnabled).toBe(expected);
   });
 
+  it("keeps hosted liveness enabled when metrics are disabled", async () => {
+    const { config } = await loadKeeperConfig({
+      PORT: "8080",
+      METRICS_ENABLED: "false",
+    });
+
+    expect(config.metricsEnabled).toBe(false);
+    expect(config.livenessEnabled).toBe(true);
+    expect(config.metricsPort).toBe(8080);
+    expect(config.metricsBindAddress).toBe("0.0.0.0");
+  });
+
   it("rejects invalid METRICS_ENABLED values", async () => {
     await expect(
       loadKeeperConfig({

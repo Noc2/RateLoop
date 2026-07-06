@@ -164,30 +164,36 @@ async function main() {
 
   const walletClient = getWalletClient();
 
-  // Start metrics server
+  // Start the keeper HTTP server. Hosted deployments still need /live when
+  // detailed metrics are disabled.
   let metricsServer: ReturnType<typeof startMetricsServer> | undefined;
-  if (config.metricsEnabled) {
+  if (config.metricsEnabled || config.livenessEnabled) {
+    const artifactDirectory =
+      config.metricsEnabled && config.correlationSnapshots.artifactStorage.mode === "file"
+        ? config.correlationSnapshots.artifactStorage.outputDir
+        : null;
+    const endpoints = config.metricsEnabled
+      ? [
+          "/live",
+          "/metrics",
+          "/health",
+          "/correlation-artifacts/:artifactHash.json",
+        ]
+      : ["/live"];
     setHealthThreshold(config.intervalMs);
     metricsServer = startMetricsServer(
       config.metricsPort,
       config.metricsBindAddress,
       config.metricsAuthToken,
       {
-        artifactDirectory:
-          config.correlationSnapshots.artifactStorage.mode === "file"
-            ? config.correlationSnapshots.artifactStorage.outputDir
-            : null,
+        artifactDirectory,
+        metricsEnabled: config.metricsEnabled,
       },
     );
-    logger.info("Metrics server started", {
+    logger.info(config.metricsEnabled ? "Metrics server started" : "Liveness server started", {
       port: config.metricsPort,
       bindAddress: config.metricsBindAddress,
-      endpoints: [
-        "/live",
-        "/metrics",
-        "/health",
-        "/correlation-artifacts/:artifactHash.json",
-      ],
+      endpoints,
     });
   }
 

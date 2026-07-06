@@ -72,6 +72,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
   const validateKeeperContracts = vi.fn().mockResolvedValue(undefined);
   const setGauge = vi.fn();
   const setWalletBalanceWei = vi.fn();
+  const setHealthThreshold = vi.fn();
+  const startMetricsServer = vi.fn(() => ({ close: vi.fn() }));
   const recordRun = vi.fn();
   const recordMainLoopLockSkip = vi.fn();
   const recordError = vi.fn();
@@ -117,7 +119,10 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       },
       intervalMs: 30_000,
       metricsEnabled: false,
+      livenessEnabled: true,
       metricsPort: 9090,
+      metricsBindAddress: "127.0.0.1",
+      metricsAuthToken: null,
       persistence: {
         databaseUrl: options.databaseUrl ?? null,
         mainLoopLockRequired: options.mainLoopLockRequired ?? false,
@@ -180,8 +185,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     claimConfiguredFrontendFees,
   }));
   vi.doMock("../metrics.js", () => ({
-    startMetricsServer: vi.fn(),
-    setHealthThreshold: vi.fn(),
+    startMetricsServer,
+    setHealthThreshold,
     recordRun,
     recordMainLoopLockSkip,
     recordError,
@@ -216,6 +221,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     getAccount,
     validateKeeperConnectivity,
     claimConfiguredFrontendFees,
+    startMetricsServer,
+    setHealthThreshold,
     processOn,
     setIntervalMock,
     clearIntervalMock,
@@ -229,6 +236,21 @@ afterEach(() => {
 });
 
 describe("keeper index", () => {
+  it("starts the liveness server even when metrics are disabled", async () => {
+    const keeper = await loadKeeperIndex();
+
+    expect(keeper.setHealthThreshold).toHaveBeenCalledWith(30_000);
+    expect(keeper.startMetricsServer).toHaveBeenCalledWith(9090, "127.0.0.1", null, {
+      artifactDirectory: null,
+      metricsEnabled: false,
+    });
+    expect(keeper.logger.info).toHaveBeenCalledWith("Liveness server started", {
+      port: 9090,
+      bindAddress: "127.0.0.1",
+      endpoints: ["/live"],
+    });
+  });
+
   it("reads wallet balance before running the keeper loop", async () => {
     const keeper = await loadKeeperIndex({
       balance: 1_500n,

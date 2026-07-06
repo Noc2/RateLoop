@@ -420,6 +420,7 @@ const ARTIFACT_FILENAME_RE = /^0x[a-fA-F0-9]{64}\.json$/;
 
 interface MetricsServerOptions {
   artifactDirectory?: string | null;
+  metricsEnabled?: boolean;
 }
 
 interface CorrelationArtifactResponse {
@@ -506,6 +507,7 @@ export async function resolveCorrelationArtifactResponse(
 }
 
 function makeHandler(authToken: string | null, options: MetricsServerOptions = {}) {
+  const metricsEnabled = options.metricsEnabled ?? true;
   return async function handler(req: IncomingMessage, res: ServerResponse) {
     // The correlation-artifact route is intentionally served BEFORE the metrics
     // bearer-auth check below: these artifacts are content-addressed, immutable,
@@ -527,6 +529,12 @@ function makeHandler(authToken: string | null, options: MetricsServerOptions = {
         "Content-Length": String(Buffer.byteLength(body)),
       });
       res.end(req.method === "HEAD" ? undefined : body);
+      return;
+    }
+
+    if (!metricsEnabled) {
+      res.writeHead(404);
+      res.end("Not Found\n");
       return;
     }
 
@@ -562,7 +570,8 @@ export function startMetricsServer(
   authToken: string | null = null,
   options: MetricsServerOptions = {},
 ): Server {
-  if (!isLoopbackBind(bindAddress) && (authToken === null || authToken.length < 16)) {
+  const metricsEnabled = options.metricsEnabled ?? true;
+  if (metricsEnabled && !isLoopbackBind(bindAddress) && (authToken === null || authToken.length < 16)) {
     throw new Error(
       `Refusing to start metrics server on non-loopback bind '${bindAddress}' without a ` +
         `METRICS_AUTH_TOKEN (>= 16 chars). Either bind to 127.0.0.1 / ::1 or set the env var.`,

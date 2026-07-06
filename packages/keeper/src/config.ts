@@ -807,6 +807,7 @@ function loadConfig() {
       "METRICS_ENABLED",
       errors,
     ),
+    livenessEnabled: false,
 
     // Logging
     logFormat: readEnumEnv("LOG_FORMAT", LOG_FORMATS, "json", errors),
@@ -867,6 +868,7 @@ function loadConfig() {
       },
     },
   };
+  loadedConfig.livenessEnabled = loadedConfig.metricsEnabled || shouldUseHostedBind;
 
   if (correlationSnapshotsEnabled) {
     if (isProduction && !keeperDatabaseUrl) {

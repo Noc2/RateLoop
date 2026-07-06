@@ -333,4 +333,27 @@ describe("metrics", () => {
       server.close();
     }
   });
+
+  it("serves liveness only when metrics are disabled", async () => {
+    const server = startMetricsServer(0, "0.0.0.0", null, { metricsEnabled: false });
+    try {
+      await once(server, "listening");
+      const address = server.address();
+      if (typeof address !== "object" || address === null) {
+        throw new Error("Expected TCP server address");
+      }
+
+      const live = await requestLocalhost(address.port, "/live");
+      expect(live.statusCode).toBe(200);
+      expect(JSON.parse(live.body)).toEqual({ status: "ok" });
+
+      const health = await requestLocalhost(address.port, "/health");
+      expect(health.statusCode).toBe(404);
+
+      const metrics = await requestLocalhost(address.port, "/metrics");
+      expect(metrics.statusCode).toBe(404);
+    } finally {
+      server.close();
+    }
+  });
 });
