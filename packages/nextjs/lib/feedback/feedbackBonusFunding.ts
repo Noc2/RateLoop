@@ -7,7 +7,7 @@ type FeedbackBonusRoundReadClient = {
   readContract: unknown;
 };
 
-export type FeedbackBonusRoundTarget = {
+type FeedbackBonusRoundTarget = {
   feedbackClosesAt: bigint;
   roundId: bigint;
 };

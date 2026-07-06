@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { isAddress, type Address } from "viem";
 
-export type AgentsRuntimeConfig = {
+type AgentsRuntimeConfig = {
   agentWalletAddress?: Address;
   apiBaseUrl?: string;
   mcpAccessToken?: string;
