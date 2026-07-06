@@ -2596,6 +2596,114 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
 });
 
+test("agent ask handoff complete recovers pending Feedback Bonus plans after reload", async () => {
+  let confirmCalls = 0;
+  let prepareBonusCalls = 0;
+  const mainTransactionHash = `0x${"4".repeat(64)}` as const;
+  installAskOverrides({
+    confirmAgentWalletQuestionSubmissionRequest: async params => {
+      confirmCalls += 1;
+      return {
+        body: {
+          contentId: "content-123",
+          feedbackBonus: {
+            amount: "2000000",
+            asset: "USDC",
+            enabled: true,
+            status: "awaiting_wallet_signature",
+          },
+          operationKey: params.operationKey,
+          status: "submitted",
+          transactionHashes: params.transactionHashes,
+        },
+        status: 200,
+      };
+    },
+    prepareFeedbackBonusQuestionSubmissionRequest: async params => {
+      prepareBonusCalls += 1;
+      return {
+        body: {
+          feedbackBonus: {
+            amount: "2000000",
+            asset: "USDC",
+            status: "awaiting_wallet_signature",
+            transactionPlan: {
+              calls: [{ id: "create-feedback-bonus-pool", to: "0x0000000000000000000000000000000000000003" }],
+              requiresOrderedExecution: true,
+            },
+          },
+          operationKey: params.operationKey,
+          status: "awaiting_wallet_signature",
+        },
+        status: 202,
+      };
+    },
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-feedback-bonus-reload"),
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+        },
+        maxPaymentAmount: "3500000",
+        paymentMode: "wallet_calls",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  const completeResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [mainTransactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeBody = (await completeResponse.json()) as Record<string, unknown>;
+  assert.equal(completeResponse.status, 200);
+  assert.equal(completeBody.status, "submitted");
+  assert.equal(confirmCalls, 1);
+  assert.equal(prepareBonusCalls, 1);
+
+  const reloadedCompleteResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [mainTransactionHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const reloadedCompleteBody = (await reloadedCompleteResponse.json()) as Record<string, unknown>;
+  const reloadedAsk = reloadedCompleteBody.ask as {
+    feedbackBonus?: { transactionPlan?: { calls?: unknown[] } };
+  };
+
+  assert.equal(reloadedCompleteResponse.status, 200);
+  assert.equal(reloadedCompleteBody.status, "submitted");
+  assert.deepEqual(reloadedCompleteBody.transactionHashes, [mainTransactionHash]);
+  assert.equal(reloadedAsk.feedbackBonus?.transactionPlan?.calls?.length, 1);
+  assert.equal(confirmCalls, 2);
+  assert.equal(prepareBonusCalls, 2);
+});
+
 test("agent ask handoff complete gives recovery guidance for expired prepared links", async () => {
   installAskOverrides();
 

@@ -31,6 +31,33 @@ function readIncludeImageData(value: unknown) {
   return value === true || value === "true";
 }
 
+function hasRequestedFeedbackBonus(requestBody: JsonObject) {
+  const feedbackBonus = requestBody.feedbackBonus;
+  if (!feedbackBonus || typeof feedbackBonus !== "object" || Array.isArray(feedbackBonus)) return false;
+  const amount = (feedbackBonus as JsonObject).amount;
+  if (typeof amount === "number") return Number.isFinite(amount) && amount > 0;
+  if (typeof amount === "string") {
+    try {
+      return BigInt(amount.trim()) > 0n;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function canRecoverSubmittedFeedbackBonusPlan(handoff: Awaited<ReturnType<typeof loadAgentAskHandoffByToken>>) {
+  return Boolean(
+    handoff &&
+      handoff.status === "submitted" &&
+      handoff.operationKey &&
+      handoff.transactionHashes.length > 0 &&
+      hasRequestedFeedbackBonus(handoff.requestBody) &&
+      handoff.feedbackBonusTransactionHashes.length === 0 &&
+      handoff.feedbackBonusStatus !== "confirmed",
+  );
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ handoffId: string }> }) {
   const { handoffId } = await context.params;
 
@@ -48,7 +75,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
       if (handoff.status === "submitted") {
         const assets = await listAgentAskHandoffAssets(handoff.id);
-        return buildAgentAskHandoffResponse({ assets, handoff, includeImageData });
+        const response = buildAgentAskHandoffResponse({ assets, handoff, includeImageData });
+        if (!canRecoverSubmittedFeedbackBonusPlan(handoff)) {
+          return response;
+        }
+        const result = (await callPublicRateLoopMcpTool({
+          arguments: {
+            operationKey: handoff.operationKey,
+            transactionHashes: handoff.transactionHashes,
+          },
+          name: "rateloop_confirm_ask_transactions",
+          requestUrl: request.url,
+        })) as JsonObject;
+        return {
+          ...response,
+          ask: result,
+          publicUrl: typeof result.publicUrl === "string" ? result.publicUrl : null,
+        };
       }
       if (handoff.status === "expired" && handoff.operationKey) {
         throw new AgentAskHandoffError(

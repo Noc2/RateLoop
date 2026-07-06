@@ -2310,6 +2310,17 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     handoff?.feedbackBonusStatus === "failed_confirmation"
       ? (handoff.feedbackBonusError ?? "Feedback Bonus confirmation failed.")
       : null;
+  const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
+  const hasRecoverableFeedbackBonusPlan = Boolean(
+    token &&
+      handoff?.status === "submitted" &&
+      feedbackBonusSummary &&
+      handoff.operationKey &&
+      (handoff.transactionHashes?.length ?? 0) > 0 &&
+      (handoff.feedbackBonusTransactionHashes?.length ?? 0) === 0 &&
+      handoff.feedbackBonusStatus !== "confirmed" &&
+      !isBusy,
+  );
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
@@ -2348,6 +2359,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   );
   const canSubmit = Boolean(
     hasRetryableFeedbackBonusConfirmation ||
+      (hasRecoverableFeedbackBonusPlan && address && !connectedMismatch) ||
       (token &&
         address &&
         handoff &&
@@ -2371,7 +2383,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     draftPaymentMode === "wallet_calls" || (draftPaymentMode === "x402_authorization" && draftBountyAsset === "usdc");
   const canDraftFeedbackBonusForBounty = draftBountyAsset === "usdc" || draftBountyAsset === "lrep";
   const canDraftFeedbackBonus = canDraftFeedbackBonusForBounty && canDraftFeedbackBonusForPaymentMode;
-  const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
   const hasDraftFeedbackBonus = draftForm ? draftForm.feedbackBonusAmount !== null : Boolean(feedbackBonusSummary);
   const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
@@ -3412,7 +3423,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
 
     let executableHandoff = handoff;
-    const shouldAutoSaveDraft = hasUnsavedDraft;
+    const shouldAutoSaveDraft = hasUnsavedDraft && !hasRecoverableFeedbackBonusPlan;
     if (shouldAutoSaveDraft) {
       const savedHandoff = await saveDraft({ showSuccess: false });
       if (!savedHandoff) return;
@@ -3423,6 +3434,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (!accepted) return;
 
     const storedHashes = executableHandoff.transactionHashes ?? [];
+    if (hasRecoverableFeedbackBonusPlan && storedHashes.length > 0) {
+      await executeHandoff(executableHandoff, storedHashes);
+      return;
+    }
+
     if (executableHandoff.status === "failed" && storedHashes.length > 0) {
       await executeHandoff(executableHandoff, storedHashes);
       return;
@@ -3440,6 +3456,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     connectedMismatch,
     executeHandoff,
     handoff,
+    hasRecoverableFeedbackBonusPlan,
     hasUnsavedDraft,
     hasRetryableFeedbackBonusConfirmation,
     prepareHandoff,
@@ -3456,6 +3473,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (isSavingDraft) return "Saving...";
     if (switchingChainId !== null) return "Switching...";
     if (hasRetryableFeedbackBonusConfirmation) return isExecuting ? "Retrying..." : "Retry bonus";
+    if (hasRecoverableFeedbackBonusPlan) return isExecuting ? "Preparing bonus..." : "Continue bonus";
     if (isPreparing || isSigningMessage || isSigningTypedData) return "Preparing...";
     return isExecuting ? "Submitting..." : "Submit";
   })();
@@ -3555,6 +3573,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           <div className="flex items-start gap-2">
             <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
             <span>Ask submitted, but Feedback Bonus confirmation needs retry: {feedbackBonusConfirmationError}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {!error && !feedbackBonusConfirmationError && hasRecoverableFeedbackBonusPlan ? (
+        <div className="surface-card-nested rounded-lg p-4 text-sm text-warning">
+          <div className="flex items-start gap-2">
+            <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+            <span>Ask submitted, but Feedback Bonus funding still needs wallet signatures.</span>
           </div>
         </div>
       ) : null}
