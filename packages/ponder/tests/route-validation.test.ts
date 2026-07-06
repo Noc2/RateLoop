@@ -4257,6 +4257,8 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("roundPayoutSnapshot.id");
     expect(serialized).toContain("round.revealedCount");
     expect(serialized).toContain("questionRewardPool.requiredVoters");
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
   });
 
   it("keeps finalized RBTS settlement snapshots discoverable until they are applied", async () => {
@@ -4291,6 +4293,8 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("round.rbtsSettlementStatus");
     expect(serialized).toContain("roundPayoutSnapshot.id");
     expect(serialized).toContain('["roundPayoutSnapshot.status",3]');
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
 
     const body = await response.json();
     expect(body.items[0]).toMatchObject({

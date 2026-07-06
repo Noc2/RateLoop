@@ -45,6 +45,7 @@ import {
   safeLimit,
   safeOffset,
 } from "../utils.js";
+import { buildAllowedContentCondition } from "../moderation.js";
 
 const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_FINALIZED = 3;
@@ -115,6 +116,17 @@ type InputSnapshotSource = {
   sourceLogIndex: number | null;
   sourceTimestamp: bigint | null;
 };
+
+function allowedCandidateContentCondition() {
+  return buildAllowedContentCondition({
+    canonicalUrl: content.canonicalUrl,
+    description: content.description,
+    tags: content.tags,
+    title: content.title,
+    url: content.url,
+    urlHost: content.urlHost,
+  });
+}
 
 function parseStoredBanReasons(value: unknown): string[] {
   if (typeof value !== "string") return [];
@@ -584,6 +596,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       })
       .from(questionRewardPool)
       .innerJoin(round, eq(round.contentId, questionRewardPool.contentId))
+      .innerJoin(content, eq(content.id, questionRewardPool.contentId))
       .leftJoin(
         roundPayoutSnapshot,
         and(
@@ -595,6 +608,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       )
       .where(
         and(
+          allowedCandidateContentCondition(),
           eq(questionRewardPool.refunded, false),
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           eq(round.state, ROUND_STATE.Settled),
@@ -637,6 +651,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           eq(round.roundId, launchEarnedRaterCredit.roundId),
         ),
       )
+      .innerJoin(content, eq(content.id, launchEarnedRaterCredit.contentId))
       .leftJoin(
         roundPayoutSnapshot,
         and(
@@ -648,6 +663,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       )
       .where(
         and(
+          allowedCandidateContentCondition(),
           eq(launchEarnedRaterCredit.pending, true),
           eq(launchEarnedRaterCredit.finalized, false),
           eq(launchEarnedRaterCredit.cancelled, false),
@@ -776,6 +792,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
         snapshotStatus: roundPayoutSnapshot.status,
       })
       .from(round)
+      .innerJoin(content, eq(content.id, round.contentId))
       .leftJoin(
         roundPayoutSnapshot,
         and(
@@ -787,6 +804,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       )
       .where(
         and(
+          allowedCandidateContentCondition(),
           eq(round.state, ROUND_STATE.Settled),
           eq(round.ratingReviewStatus, RATING_REVIEW_STATUS_PENDING),
           sql`${round.revealedCount} > 0`,
@@ -822,6 +840,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
         snapshotStatus: roundPayoutSnapshot.status,
       })
       .from(round)
+      .innerJoin(content, eq(content.id, round.contentId))
       .leftJoin(
         roundPayoutSnapshot,
         and(
@@ -833,6 +852,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       )
       .where(
         and(
+          allowedCandidateContentCondition(),
           eq(round.state, ROUND_STATE.SettlementPending),
           eq(round.rbtsSettlementStatus, "pending"),
           sql`${round.revealedCount} > 0`,
