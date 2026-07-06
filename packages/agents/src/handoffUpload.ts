@@ -4,6 +4,7 @@ import type { HandoffGeneratedImageFile } from "./handoffImages";
 type AgentsRuntimeConfig = {
   apiBaseUrl?: string;
   mcpAccessToken?: string;
+  mcpApiUrl?: string;
 };
 
 type HandoffAssetResponse = {
@@ -25,8 +26,35 @@ const STAGED_UPLOAD_POLL_INTERVAL_MS = 1_000;
 const STAGED_UPLOAD_POLL_TIMEOUT_MS = 90_000;
 export const DEFAULT_HANDOFF_API_BASE_URL = "https://www.rateloop.ai";
 
+function deriveApiBaseUrlFromMcpApiUrl(mcpApiUrl: string | undefined) {
+  if (!mcpApiUrl) return undefined;
+
+  const url = new URL(mcpApiUrl);
+  const pathname = url.pathname.replace(/\/+$/, "");
+  for (const suffix of ["/api/mcp/public", "/api/mcp"]) {
+    if (pathname === suffix || pathname.endsWith(suffix)) {
+      url.pathname = pathname.slice(0, -suffix.length) || "/";
+      url.search = "";
+      url.hash = "";
+      return url.toString().replace(/\/+$/, "");
+    }
+  }
+
+  throw new Error(
+    "RATELOOP_API_BASE_URL is required for staged image handoffs when RATELOOP_MCP_API_URL is not a standard /api/mcp endpoint.",
+  );
+}
+
+function resolveHandoffApiBaseUrl(config: AgentsRuntimeConfig) {
+  return (
+    config.apiBaseUrl ??
+    deriveApiBaseUrlFromMcpApiUrl(config.mcpApiUrl) ??
+    DEFAULT_HANDOFF_API_BASE_URL
+  );
+}
+
 function apiUrl(config: AgentsRuntimeConfig, pathname: string) {
-  const apiBaseUrl = config.apiBaseUrl ?? DEFAULT_HANDOFF_API_BASE_URL;
+  const apiBaseUrl = resolveHandoffApiBaseUrl(config);
   return new URL(
     pathname.replace(/^\/+/, ""),
     `${apiBaseUrl.replace(/\/+$/, "")}/`,

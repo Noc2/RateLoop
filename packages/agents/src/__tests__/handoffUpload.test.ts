@@ -122,4 +122,69 @@ describe("handoff upload helper", () => {
     expect(requestSignals).toHaveLength(2);
     expect(requestSignals.every(signal => signal instanceof AbortSignal)).toBe(true);
   });
+
+  it("derives staged handoff upload APIs from standard MCP endpoints", async () => {
+    const requestedUrls: string[] = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | RequestInfo) => {
+        const url = String(input);
+        requestedUrls.push(url);
+
+        if (url === "https://rateloop.example/prefix/api/agent/handoffs") {
+          return new Response(
+            JSON.stringify({
+              assets: [],
+              handoffId: "handoff_mcp",
+              handoffToken: "token_mcp",
+              handoffUrl: "https://rateloop.example/handoff/handoff_mcp",
+              resultTool: "rateloop_get_result",
+              statusTool: "rateloop_get_handoff_status",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (url === "https://rateloop.example/prefix/api/agent/handoffs/handoff_mcp") {
+          return new Response(
+            JSON.stringify({
+              assets: [],
+              handoffId: "handoff_mcp",
+              handoffToken: "token_mcp",
+              handoffUrl: "https://rateloop.example/handoff/handoff_mcp",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        return new Response("unexpected", { status: 500 });
+      }),
+    );
+
+    await createAskHandoffWithStagedImageUploads({
+      config: {
+        mcpApiUrl: "https://rateloop.example/prefix/api/mcp/public",
+      },
+      generatedImages: [],
+      request: { clientRequestId: "handoff-mcp-derived-origin-test" },
+    });
+
+    expect(requestedUrls).toEqual([
+      "https://rateloop.example/prefix/api/agent/handoffs",
+      "https://rateloop.example/prefix/api/agent/handoffs/handoff_mcp",
+    ]);
+  });
+
+  it("rejects staged handoff uploads when a custom MCP endpoint cannot map to an app origin", async () => {
+    await expect(
+      createAskHandoffWithStagedImageUploads({
+        config: {
+          mcpApiUrl: "https://mcp.example/rpc",
+        },
+        generatedImages: [],
+        request: { clientRequestId: "handoff-custom-mcp-test" },
+      }),
+    ).rejects.toThrow(/RATELOOP_API_BASE_URL is required/);
+  });
 });
