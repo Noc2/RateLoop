@@ -179,6 +179,7 @@ export function registerKeeperRoutes(app: ApiApp) {
             ROUND_STATE.Settled,
             ROUND_STATE.Tied,
             ROUND_STATE.RevealFailed,
+            ROUND_STATE.SettlementPending,
           ]),
           sql`${round.voteCount} > ${round.revealedCount}`,
         ),

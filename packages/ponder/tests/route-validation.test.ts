@@ -5596,7 +5596,7 @@ describe("registerKeeperRoutes", () => {
   });
 
   it("returns keeper work candidates as JSON-safe strings", async () => {
-    mockPonderModules(
+    const { queryBuilders } = mockPonderModules(
       [{ contentId: 9n, roundId: 2n, reason: "settle" }],
       [
         [{ contentId: 9n, roundId: 2n, reason: "cleanup" }],
@@ -5613,6 +5613,7 @@ describe("registerKeeperRoutes", () => {
         ],
       ],
     );
+    const cleanupBuilder = queryBuilders[1]!;
     const { registerKeeperRoutes } = await import(
       "../src/api/routes/keeper-routes.js"
     );
@@ -5640,6 +5641,9 @@ describe("registerKeeperRoutes", () => {
         },
       ],
     });
+    const cleanupWhere = serializeExpression(cleanupBuilder.where.mock.calls[0]?.[0]);
+    expect(cleanupWhere).toContain("round.state");
+    expect(cleanupWhere).toContain(String(ROUND_STATE.SettlementPending));
   });
 
   it("returns proactive round open requests when requested by the keeper", async () => {
