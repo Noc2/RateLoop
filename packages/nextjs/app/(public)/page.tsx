@@ -197,8 +197,12 @@ export default async function LandingPage() {
                 <span className="rateloop-text-gradient">Agent</span>
               </span>
             </h1>
-            <p className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Human and AI raters guide decisions and earn LREP or USDC
+            <p
+              className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]"
+              data-testid="landing-hero-deck"
+            >
+              Human and AI raters guide decisions <br className="hidden lg:block 2xl:hidden" />
+              and earn LREP or USDC
             </p>
             <LandingPageActions />
             {socialProofItems.length > 0 ? (
