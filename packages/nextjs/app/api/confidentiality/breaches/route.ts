@@ -250,7 +250,13 @@ export async function POST(request: NextRequest) {
   }
 
   const accessIdentityKey = accessLog.identityKey ?? accusedIdentityKey;
-  const accessDeploymentKey = accessLog.deploymentKey ?? "legacy";
+  const accessDeploymentKey = accessLog.deploymentKey;
+  if (!accessDeploymentKey) {
+    return NextResponse.json(
+      { error: "View token does not match a current confidentiality deployment" },
+      { status: 400 },
+    );
+  }
   const accessFrontendAddress = accessLog.frontendAddress;
   await assertConfidentialityFrontendScopeSchemaReady(accessFrontendAddress);
   const epoch = confidentialityEpochForDate(accessLog.viewedAt);

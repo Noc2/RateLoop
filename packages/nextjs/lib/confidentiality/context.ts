@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { createHash, createHmac, randomBytes } from "crypto";
-import { and, asc, eq, gte, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 import "server-only";
 import {
   type Abi,
@@ -344,28 +344,13 @@ function normalizeFrontendAddress(value: unknown): `0x${string}` | null {
   return typeof value === "string" && isAddress(value) ? (getAddress(value) as `0x${string}`) : null;
 }
 
-function isLegacyConfidentialityFrontendAddress(value: unknown) {
-  return normalizeFrontendAddress(value) === zeroAddress;
-}
-
-function storedFrontendAddressOrFallback(value: unknown, fallback: `0x${string}`) {
-  return isLegacyConfidentialityFrontendAddress(value) ? fallback : (normalizeFrontendAddress(value) ?? fallback);
-}
-
-function currentOrLegacyQuestionConfidentialityScope(
+function currentQuestionConfidentialityScope(
   deploymentScope: ConfidentialityDeploymentScope,
   frontendAddress: `0x${string}`,
 ) {
-  return or(
-    and(
-      eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
-      eq(questionConfidentiality.frontendAddress, frontendAddress),
-    ),
-    and(
-      eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
-      eq(questionConfidentiality.frontendAddress, zeroAddress),
-    ),
-    and(isNull(questionConfidentiality.deploymentKey), eq(questionConfidentiality.frontendAddress, zeroAddress)),
+  return and(
+    eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+    eq(questionConfidentiality.frontendAddress, frontendAddress),
   );
 }
 
@@ -540,9 +525,9 @@ export async function buildServerConfidentialityTermsPayload(
     payload: {
       ...normalized.payload,
       contentHash: normalizeOptionalBytes32(record.contentHash),
-      deploymentKey: record.deploymentKey ?? normalized.payload.deploymentKey,
+      deploymentKey: normalized.payload.deploymentKey,
       detailsHash: normalizeOptionalBytes32(record.detailsHash),
-      frontendAddress: storedFrontendAddressOrFallback(record.frontendAddress, normalized.payload.frontendAddress),
+      frontendAddress: normalized.payload.frontendAddress,
       identityKey: null,
       mediaTupleHash: normalizeOptionalBytes32(record.mediaTupleHash),
       questionMetadataHash: normalizeOptionalBytes32(record.questionMetadataHash),
@@ -627,33 +612,7 @@ export async function getQuestionConfidentiality(contentId: string, options: Con
       ),
     )
     .limit(1);
-  if (exactRecord) return exactRecord;
-
-  const [legacyFrontendRecord] = await db
-    .select()
-    .from(questionConfidentiality)
-    .where(
-      and(
-        eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
-        eq(questionConfidentiality.frontendAddress, zeroAddress),
-        eq(questionConfidentiality.contentId, normalizedContentId),
-      ),
-    )
-    .limit(1);
-  if (legacyFrontendRecord) return legacyFrontendRecord;
-
-  const [legacyDeploymentRecord] = await db
-    .select()
-    .from(questionConfidentiality)
-    .where(
-      and(
-        isNull(questionConfidentiality.deploymentKey),
-        eq(questionConfidentiality.frontendAddress, zeroAddress),
-        eq(questionConfidentiality.contentId, normalizedContentId),
-      ),
-    )
-    .limit(1);
-  return legacyDeploymentRecord ?? null;
+  return exactRecord ?? null;
 }
 
 export async function upsertQuestionConfidentialityFromMetadata(params: {
@@ -1249,7 +1208,7 @@ export async function publishConfidentialContextAfterSettlement(params: { conten
       .set({ publishedAt: now, updatedAt: now })
       .where(
         and(
-          currentOrLegacyQuestionConfidentialityScope(deploymentScope, frontendAddress),
+          currentQuestionConfidentialityScope(deploymentScope, frontendAddress),
           eq(questionConfidentiality.contentId, contentId),
           eq(questionConfidentiality.gated, true),
           eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
@@ -1300,7 +1259,7 @@ export async function findDueConfidentialDisclosureContent(params: { limit?: num
     .from(questionConfidentiality)
     .where(
       and(
-        currentOrLegacyQuestionConfidentialityScope(deploymentScope, frontendAddress),
+        currentQuestionConfidentialityScope(deploymentScope, frontendAddress),
         eq(questionConfidentiality.gated, true),
         eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
         isNull(questionConfidentiality.publishedAt),

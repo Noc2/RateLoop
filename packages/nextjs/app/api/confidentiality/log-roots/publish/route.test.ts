@@ -171,6 +171,28 @@ test("POST publishes log-root artifacts with Vercel cron bearer auth", async () 
   assert.equal(artifactResponse.headers.get("x-rateloop-deployment-key"), body.deploymentKey);
   assert.equal(artifactResponse.headers.get("x-rateloop-frontend-address"), FRONTEND_ADDRESS);
   assert.deepEqual(await artifactResponse.json(), JSON.parse(String(rows.rows[0].artifact_json)));
+
+  const unscopedArtifactResponse = await logRootArtifactRoute.GET(
+    new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact"),
+    { params: Promise.resolve({ epoch: body.epoch }) },
+  );
+  assert.equal(unscopedArtifactResponse.status, 400);
+  assert.deepEqual(await unscopedArtifactResponse.json(), {
+    error: "deploymentKey and frontendAddress are required",
+  });
+
+  const staleDeploymentArtifactResponse = await logRootArtifactRoute.GET(
+    new NextRequest(
+      `https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact?deploymentKey=${encodeURIComponent(
+        "999:0x9999999999999999999999999999999999999999",
+      )}&frontendAddress=${FRONTEND_ADDRESS}`,
+    ),
+    { params: Promise.resolve({ epoch: body.epoch }) },
+  );
+  assert.equal(staleDeploymentArtifactResponse.status, 404);
+  assert.deepEqual(await staleDeploymentArtifactResponse.json(), {
+    error: "Confidentiality log-root artifact not found",
+  });
 });
 
 test("POST requires an on-chain anchor by default before sealing an epoch", async () => {

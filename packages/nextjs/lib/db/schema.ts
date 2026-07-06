@@ -74,20 +74,19 @@ export const watchedContent = pgTable(
   "watched_content",
   {
     id: serial("id").primaryKey(),
-    deploymentKey: text("deployment_key"),
-    chainId: integer("chain_id"),
-    contentRegistryAddress: text("content_registry_address"),
+    deploymentKey: text("deployment_key").notNull(),
+    chainId: integer("chain_id").notNull(),
+    contentRegistryAddress: text("content_registry_address").notNull(),
     walletAddress: text("wallet_address").notNull(),
     contentId: text("content_id").notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
-    legacyWalletContentUnique: uniqueIndex("watched_content_legacy_wallet_content_unique")
-      .on(table.walletAddress, table.contentId)
-      .where(sql`${table.deploymentKey} IS NULL`),
-    deploymentWalletContentUnique: uniqueIndex("watched_content_deployment_wallet_content_unique")
-      .on(table.deploymentKey, table.walletAddress, table.contentId)
-      .where(sql`${table.deploymentKey} IS NOT NULL`),
+    deploymentWalletContentUnique: uniqueIndex("watched_content_deployment_wallet_content_unique").on(
+      table.deploymentKey,
+      table.walletAddress,
+      table.contentId,
+    ),
     walletCreatedAtIdx: index("watched_content_wallet_created_at_idx").on(table.walletAddress, table.createdAt),
     deploymentWalletCreatedAtIdx: index("watched_content_deployment_wallet_created_at_idx").on(
       table.deploymentKey,
@@ -446,10 +445,10 @@ export type NewQuestionDetails = typeof questionDetails.$inferInsert;
 export const questionConfidentiality = pgTable(
   "question_confidentiality",
   {
-    deploymentKey: text("deployment_key"),
+    deploymentKey: text("deployment_key").notNull(),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
-    frontendAddress: text("frontend_address").notNull().default("0x0000000000000000000000000000000000000000"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     gated: boolean("gated").notNull().default(false),
     bondAsset: text("bond_asset"),
@@ -494,10 +493,10 @@ export const confidentialityTermsAcceptances = pgTable(
     id: serial("id").primaryKey(),
     walletAddress: text("wallet_address").notNull(),
     identityKey: text("identity_key"),
-    deploymentKey: text("deployment_key"),
+    deploymentKey: text("deployment_key").notNull(),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
-    frontendAddress: text("frontend_address").notNull().default("0x0000000000000000000000000000000000000000"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     termsVersion: text("terms_version").notNull(),
     termsDocHash: text("terms_doc_hash").notNull(),
@@ -538,10 +537,10 @@ export const confidentialContextAccessLogs = pgTable(
     id: serial("id").primaryKey(),
     identityKey: text("identity_key"),
     walletAddress: text("wallet_address").notNull(),
-    deploymentKey: text("deployment_key"),
+    deploymentKey: text("deployment_key").notNull(),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
-    frontendAddress: text("frontend_address").notNull().default("0x0000000000000000000000000000000000000000"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     resourceId: text("resource_id").notNull(),
     resourceKind: text("resource_kind").notNull(),
@@ -577,10 +576,10 @@ export const confidentialityBreachReports = pgTable(
     id: serial("id").primaryKey(),
     reporter: text("reporter").notNull(),
     accusedIdentityKey: text("accused_identity_key").notNull(),
-    deploymentKey: text("deployment_key"),
+    deploymentKey: text("deployment_key").notNull(),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
-    frontendAddress: text("frontend_address").notNull().default("0x0000000000000000000000000000000000000000"),
+    frontendAddress: text("frontend_address").notNull(),
     contentId: text("content_id").notNull(),
     evidenceUrl: text("evidence_url"),
     evidenceHash: text("evidence_hash").notNull(),
@@ -609,8 +608,8 @@ export type NewConfidentialityBreachReport = typeof confidentialityBreachReports
 export const confidentialityLogRoots = pgTable(
   "confidentiality_log_roots",
   {
-    deploymentKey: text("deployment_key").notNull().default("legacy"),
-    frontendAddress: text("frontend_address").notNull().default("0x0000000000000000000000000000000000000000"),
+    deploymentKey: text("deployment_key").notNull(),
+    frontendAddress: text("frontend_address").notNull(),
     chainId: integer("chain_id"),
     contentRegistryAddress: text("content_registry_address"),
     epoch: text("epoch").notNull(),

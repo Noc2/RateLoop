@@ -107,6 +107,9 @@ async function insertLegacyQuestionConfidentiality(params: {
   frontendAddress?: string;
   publishedAt?: string | null;
 }) {
+  const currentScope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(currentScope);
+  const deploymentKey = params.deploymentKey === undefined ? currentScope.deploymentKey : params.deploymentKey;
   await dbModule.dbClient.execute(`
     INSERT INTO question_confidentiality (
       deployment_key,
@@ -126,7 +129,7 @@ async function insertLegacyQuestionConfidentiality(params: {
       created_at,
       updated_at
     ) VALUES (
-      ${params.deploymentKey === undefined || params.deploymentKey === null ? "NULL" : `'${params.deploymentKey}'`},
+      ${deploymentKey === null ? "NULL" : `'${deploymentKey}'`},
       NULL,
       NULL,
       '${params.frontendAddress ?? "0x0000000000000000000000000000000000000000"}',
@@ -429,39 +432,34 @@ test("gated after-settlement metadata replays preserve disclosed rows", async ()
   assert.equal(confidentiality.isConfidentialityCurrentlyGated(replayed), false);
 });
 
-test("resolves legacy unscoped confidentiality rows without leaking gated context", async () => {
+test("ignores legacy frontend-scope confidentiality rows", async () => {
   await insertLegacyQuestionConfidentiality({});
 
   const gated = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
-  assert.equal(gated?.gated, true);
-  assert.equal(gated?.deploymentKey, null);
-  assert.equal(gated?.frontendAddress, "0x0000000000000000000000000000000000000000");
+  assert.equal(gated, null);
 
   const serverPayload = await confidentiality.buildServerConfidentialityTermsPayload({
     address: WALLET,
     contentId: CONTENT_ID,
   });
-  assert.equal(serverPayload.ok, true);
-  if (!serverPayload.ok) return;
-  assert.equal(
-    serverPayload.payload.deploymentKey,
-    confidentiality.resolveCurrentConfidentialityDeploymentScope()?.deploymentKey,
-  );
-  assert.equal(serverPayload.payload.frontendAddress, FRONTEND_ADDRESS);
+  assert.deepEqual(serverPayload, {
+    ok: false,
+    status: 404,
+    error: "Confidential context metadata unavailable",
+  });
 });
 
-test("publishes legacy after-settlement confidentiality rows", async () => {
+test("ignores legacy after-settlement confidentiality rows during publication", async () => {
   await insertLegacyQuestionConfidentiality({ disclosurePolicy: "after_settlement" });
 
   const settledAt = new Date("2026-06-11T12:00:00.000Z");
   assert.deepEqual(
     await confidentiality.publishConfidentialContextAfterSettlement({ contentIds: [CONTENT_ID], settledAt }),
-    { published: 1 },
+    { published: 0 },
   );
 
   const disclosed = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
-  assert.equal(disclosed?.publishedAt?.toISOString(), settledAt.toISOString());
-  assert.equal(confidentiality.isConfidentialityCurrentlyGated(disclosed), false);
+  assert.equal(disclosed, null);
 });
 
 test("defaults omitted gated disclosure policy to private forever", async () => {
@@ -519,7 +517,7 @@ test("reconciles due gated disclosure rows after settlement", async () => {
   assert.equal(privateForever?.publishedAt, null);
 });
 
-test("due disclosure reconciliation includes legacy after-settlement rows", async () => {
+test("due disclosure reconciliation ignores legacy after-settlement rows", async () => {
   const settledAt = new Date("2026-06-11T12:34:56.000Z");
   await insertLegacyQuestionConfidentiality({
     contentId: "45",
@@ -530,16 +528,13 @@ test("due disclosure reconciliation includes legacy after-settlement rows", asyn
   );
 
   assert.deepEqual(await confidentiality.reconcileDueConfidentialDisclosure({ limit: 10 }), {
-    checked: 1,
-    due: 1,
+    checked: 0,
+    due: 0,
     errors: [],
-    published: 1,
+    published: 0,
   });
 
-  assert.equal(
-    (await confidentiality.getQuestionConfidentiality("45"))?.publishedAt?.toISOString(),
-    settledAt.toISOString(),
-  );
+  assert.equal(await confidentiality.getQuestionConfidentiality("45"), null);
 });
 
 test("due disclosure reconciliation scans past older unsettled rows", async () => {

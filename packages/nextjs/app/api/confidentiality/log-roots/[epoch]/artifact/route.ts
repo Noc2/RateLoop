@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { assertConfidentialityFrontendScopeSchemaReady } from "~~/lib/confidentiality/context";
+import { getAddress, isAddress } from "viem";
+import {
+  assertConfidentialityFrontendScopeSchemaReady,
+  resolveConfidentialityDeploymentScope,
+  resolveConfidentialityFrontendAddress,
+} from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
 import { confidentialityLogRoots } from "~~/lib/db/schema";
 
@@ -16,7 +21,7 @@ function readDeploymentKey(request: NextRequest) {
 
 function readFrontendAddress(request: NextRequest) {
   const value = request.nextUrl.searchParams.get("frontendAddress")?.trim();
-  return value || null;
+  return value && isAddress(value) ? (getAddress(value) as `0x${string}`) : null;
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ epoch: string }> }) {
@@ -27,8 +32,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const deploymentKey = readDeploymentKey(request);
   const frontendAddress = readFrontendAddress(request);
+  if (!deploymentKey || !frontendAddress) {
+    return NextResponse.json({ error: "deploymentKey and frontendAddress are required" }, { status: 400 });
+  }
+
+  const deploymentScope = resolveConfidentialityDeploymentScope({ deploymentKey });
+  const currentFrontendAddress = resolveConfidentialityFrontendAddress();
+  if (
+    !deploymentScope ||
+    !currentFrontendAddress ||
+    frontendAddress.toLowerCase() !== currentFrontendAddress.toLowerCase()
+  ) {
+    return NextResponse.json({ error: "Confidentiality log-root artifact not found" }, { status: 404 });
+  }
+
   await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
-  const rows = await db
+  const [row] = await db
     .select({
       artifactHash: confidentialityLogRoots.artifactHash,
       artifactJson: confidentialityLogRoots.artifactJson,
@@ -38,22 +57,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     })
     .from(confidentialityLogRoots)
     .where(
-      deploymentKey
-        ? and(
-            eq(confidentialityLogRoots.deploymentKey, deploymentKey),
-            ...(frontendAddress ? [eq(confidentialityLogRoots.frontendAddress, frontendAddress)] : []),
-            eq(confidentialityLogRoots.epoch, epoch),
-          )
-        : eq(confidentialityLogRoots.epoch, epoch),
+      and(
+        eq(confidentialityLogRoots.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialityLogRoots.frontendAddress, currentFrontendAddress),
+        eq(confidentialityLogRoots.epoch, epoch),
+      ),
     )
-    .limit(deploymentKey && frontendAddress ? 1 : 2);
-  if ((!deploymentKey || !frontendAddress) && rows.length > 1) {
-    return NextResponse.json(
-      { error: "deploymentKey and frontendAddress are required for this epoch" },
-      { status: 400 },
-    );
-  }
-  const [row] = rows;
+    .limit(1);
 
   if (!row?.artifactJson) {
     return NextResponse.json({ error: "Confidentiality log-root artifact not found" }, { status: 404 });

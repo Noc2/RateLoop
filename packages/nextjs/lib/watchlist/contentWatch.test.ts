@@ -78,7 +78,7 @@ test("watchlist rows are scoped by deployment", async () => {
   assert.equal((await contentWatch.listWatchedContent(WALLET, BASE_SCOPE)).length, 1);
 });
 
-test("watchlist operations fall back while deployment-scope migration is pending", async () => {
+test("watchlist operations require deployment-scope columns", async () => {
   await dbModule.dbClient.execute('DROP INDEX IF EXISTS "watched_content_deployment_wallet_content_unique"');
   await dbModule.dbClient.execute('DROP INDEX IF EXISTS "watched_content_deployment_wallet_created_at_idx"');
   await dbModule.dbClient.execute('DROP INDEX IF EXISTS "watched_content_legacy_wallet_content_unique"');
@@ -86,15 +86,8 @@ test("watchlist operations fall back while deployment-scope migration is pending
   await dbModule.dbClient.execute('ALTER TABLE "watched_content" DROP COLUMN "chain_id"');
   await dbModule.dbClient.execute('ALTER TABLE "watched_content" DROP COLUMN "content_registry_address"');
 
-  await contentWatch.addWatchedContent(WALLET, "9", BASE_SCOPE);
-
-  const [item] = await contentWatch.listWatchedContent(WALLET, BASE_SCOPE);
-  assert.ok(item, "legacy watchlist row should be readable");
-  assert.equal(item.contentId, "9");
-  assert.equal(item.chainId, BASE_SCOPE.chainId);
-  assert.equal(item.deploymentKey, BASE_SCOPE.deploymentKey);
-  assert.equal(item.contentRegistryAddress, BASE_SCOPE.contentRegistryAddress);
-
-  await contentWatch.removeWatchedContent(WALLET, "9", BASE_SCOPE);
-  assert.equal((await contentWatch.listWatchedContent(WALLET, BASE_SCOPE)).length, 0);
+  await assert.rejects(
+    () => contentWatch.addWatchedContent(WALLET, "9", BASE_SCOPE),
+    /deployment_key|chain_id|content_registry_address|does not exist/i,
+  );
 });

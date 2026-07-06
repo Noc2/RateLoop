@@ -12,5 +12,6 @@ Numbered SQL migrations in this directory are the source of truth for the Next.j
 | `0013_watchlist_notifications_deployment_scope.sql` | Watchlist writes/reads and watched-content notification delivery on chain-scoped deployments (`deployment_key`, `chain_id`, `content_registry_address`) |
 | `0016_free_transaction_reservation_session_token.sql` | Free-transaction confirm session binding (`reservation_session_token` on pending reservations) |
 | `0018_agent_handoff_feedback_bonus_recovery.sql` | Browser handoff Feedback Bonus confirmation retry state after bonus wallet calls are broadcast |
+| `0019_current_deployment_scope_only.sql` | Current-deployment-only watchlist/confidentiality persistence; prunes legacy unscoped rows and removes fallback defaults |
 
 The Drizzle meta snapshot (`meta/0000_snapshot.json`) may lag behind applied migrations; rely on `schema.ts`, numbered SQL files, and `meta/_journal.json` when auditing drift. Regenerate snapshots with `db:generate` after intentional schema edits.

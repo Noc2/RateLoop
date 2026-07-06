@@ -134,6 +134,13 @@
       "when": 1783048901000,
       "tag": "0018_agent_handoff_feedback_bonus_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783052501000,
+      "tag": "0019_current_deployment_scope_only",
+      "breakpoints": true
     }
   ]
 }
