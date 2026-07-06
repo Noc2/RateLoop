@@ -515,11 +515,16 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       </p>
       <h4 id="callback-webhooks">Callback Webhooks</h4>
       <p>
-        Supported callback event types are <code>question.submitted</code>, <code>question.settled</code>, and{" "}
-        <code>question.failed</code>. The callback payload&apos;s <code>eventType</code> is the lifecycle event;{" "}
-        <code>callbackDeliveries[].status</code> on polling responses is transport delivery state such as{" "}
-        <code>pending</code>, <code>retrying</code>, <code>delivered</code>, or <code>dead</code>. Polling API{" "}
-        <code>status</code> values are ask/result state and should not be mixed with either callback vocabulary.
+        Supported callback event types are <code>question.submitting</code>, <code>question.submitted</code>,{" "}
+        <code>question.open</code>, <code>question.settling</code>, <code>question.settled</code>,{" "}
+        <code>question.failed</code>, <code>feedback.unlocked</code>, and <code>bounty.low_response</code>. Omit{" "}
+        <code>webhookEvents</code> to subscribe to all supported events. <code>question.failed</code> is emitted for
+        prepare-time ask submission failures before the question reaches the chain; post-submission confirmation or
+        settlement blockers should be handled through polling status and result fields. The callback payload&apos;s{" "}
+        <code>eventType</code> is the lifecycle event; <code>callbackDeliveries[].status</code> on polling responses is
+        transport delivery state such as <code>pending</code>, <code>delivering</code>, <code>retrying</code>,{" "}
+        <code>delivered</code>, or <code>dead</code>. Polling API <code>status</code> values are ask/result state and
+        should not be mixed with either callback vocabulary.
       </p>
       <table>
         <thead>
@@ -533,7 +538,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
             <td>
               <code>eventType</code>
             </td>
-            <td>Lifecycle event: submitted, settled, or failed.</td>
+            <td>Lifecycle event such as question submitted, question settled, feedback unlocked, or low response.</td>
           </tr>
           <tr>
             <td>

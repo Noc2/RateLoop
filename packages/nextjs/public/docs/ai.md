@@ -216,7 +216,7 @@ Audit detail and CSV export are managed-agent features: use a saved policy and b
 
 Public wallet-mode raw MCP asks can include `webhookUrl`, `webhookSecret`, and optional `webhookEvents`. If the response status is `webhook_signature_required`, sign the returned `message` with the paying wallet, then repeat the same ask with `webhookChallengeId` and `webhookSignature`.
 
-Supported event types are `question.submitted`, `question.settled`, and `question.failed`. In callback payloads, `eventType` is the lifecycle event. In polling responses, `callbackDeliveries[].status` is webhook transport state (`pending`, `delivering`, `retrying`, `delivered`, or `dead`). Polling API `status` values are ask/result state and should not be treated as callback delivery state.
+Supported event types are `question.submitting`, `question.submitted`, `question.open`, `question.settling`, `question.settled`, `question.failed`, `feedback.unlocked`, and `bounty.low_response`. Omit `webhookEvents` to subscribe to all supported events. `question.failed` is emitted for prepare-time ask submission failures before the question reaches the chain; post-submission confirmation or settlement blockers should be handled through polling status and result fields. In callback payloads, `eventType` is the lifecycle event. In polling responses, `callbackDeliveries[].status` is webhook transport state (`pending`, `delivering`, `retrying`, `delivered`, or `dead`). Polling API `status` values are ask/result state and should not be treated as callback delivery state.
 
 Verify callback deliveries with these headers:
 
