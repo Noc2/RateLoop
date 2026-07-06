@@ -5804,6 +5804,10 @@ describe("registerKeeperRoutes", () => {
       rewardPoolBuilder!.where.mock.calls[0]?.[0],
     );
     expect(serializedWhere).toContain("questionRewardPoolRound.id");
+    expect(serializedWhere).toContain("questionRewardPool.bountyOpensAt");
+    expect(serializedWhere).toContain("<=");
+    expect(serializedWhere).toContain("questionRewardPool.bountyClosesAt");
+    expect(serializedWhere).toContain("!=");
     expect(serializedWhere).toContain(
       "questionRewardPoolPreQualificationSkip.id",
     );

@@ -21,7 +21,10 @@ import {
 import { buildCorrelationFinalitySla } from "../correlation-finality-sla.js";
 import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
 import type { ApiApp } from "../shared.js";
-import { jsonBig } from "../shared.js";
+import {
+  jsonBig,
+  questionRewardPoolHasValidBountyWindowExpression,
+} from "../shared.js";
 import { parseStrictUnsignedBigInt, safeLimit } from "../utils.js";
 
 const DEFAULT_KEEPER_WORK_LIMIT = 500;
@@ -305,6 +308,8 @@ export function registerKeeperRoutes(app: ApiApp) {
           eq(questionRewardPool.refunded, false),
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           sql`${questionRewardPool.unallocatedAmount} > 0`,
+          sql`${questionRewardPool.bountyOpensAt} <= ${now}`,
+          questionRewardPoolHasValidBountyWindowExpression(),
           sql`${round.settledAt} is not null`,
           sql`${round.settledAt} > 0`,
           sql`${questionRewardPoolRound.id} is null`,

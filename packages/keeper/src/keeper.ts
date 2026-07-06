@@ -1955,7 +1955,7 @@ function isExpectedRewardPoolQualificationRevert(reason: string): boolean {
 }
 
 function isRewardPoolCursorAdvanceReason(reason: string): boolean {
-  const cursorAdvanceReasons = ["Too few eligible voters", "Bounty not started"];
+  const cursorAdvanceReasons = ["Too few eligible voters"];
   const lower = reason.toLowerCase();
   return cursorAdvanceReasons.some((phrase) =>
     lower.includes(phrase.toLowerCase()),
