@@ -53,6 +53,36 @@ describe("agents runtime config", () => {
     });
   });
 
+  it("derives the tokenless public MCP endpoint from the configured app origin", () => {
+    process.env.RATELOOP_API_BASE_URL = "https://rateloop.example/app";
+
+    expect(loadAgentsRuntimeConfig()).toMatchObject({
+      apiBaseUrl: "https://rateloop.example/app",
+      mcpApiUrl: "https://rateloop.example/app/api/mcp/public",
+    });
+  });
+
+  it("derives the managed MCP endpoint from the configured app origin when a token is set", () => {
+    process.env.RATELOOP_API_BASE_URL = "https://rateloop.example/app";
+    process.env.RATELOOP_MCP_TOKEN = "agent-token";
+
+    expect(loadAgentsRuntimeConfig()).toMatchObject({
+      apiBaseUrl: "https://rateloop.example/app",
+      mcpAccessToken: "agent-token",
+      mcpApiUrl: "https://rateloop.example/app/api/mcp",
+    });
+  });
+
+  it("lets an explicit MCP endpoint override the derived app-origin default", () => {
+    process.env.RATELOOP_API_BASE_URL = "https://rateloop.example/app";
+    process.env.RATELOOP_MCP_API_URL = "https://mcp.rateloop.example/custom";
+
+    expect(loadAgentsRuntimeConfig()).toMatchObject({
+      apiBaseUrl: "https://rateloop.example/app",
+      mcpApiUrl: "https://mcp.rateloop.example/custom",
+    });
+  });
+
   it("requires an explicit endpoint for live-spend commands", () => {
     expect(() => requireExplicitLiveAgentTarget({}, "ask")).toThrow(
       "ask can submit paid RateLoop work and requires an explicit endpoint",

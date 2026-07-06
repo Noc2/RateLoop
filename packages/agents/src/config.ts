@@ -25,6 +25,12 @@ function readOptionalUrl(name: string): string | undefined {
   }
 }
 
+function deriveMcpApiUrl(apiBaseUrl: string | undefined, token: string | undefined) {
+  if (!apiBaseUrl) return undefined;
+  const path = token ? "api/mcp" : "api/mcp/public";
+  return new URL(path, `${apiBaseUrl}/`).toString().replace(/\/+$/, "");
+}
+
 function enforceTokenUrlPolicy(
   name: string,
   value: string | undefined,
@@ -63,7 +69,7 @@ function readOptionalAddress(name: string): Address | undefined {
 export function loadAgentsRuntimeConfig(): AgentsRuntimeConfig {
   const apiBaseUrl = readOptionalUrl("RATELOOP_API_BASE_URL");
   const mcpAccessToken = readEnv("RATELOOP_MCP_TOKEN");
-  const mcpApiUrl = readOptionalUrl("RATELOOP_MCP_API_URL");
+  const mcpApiUrl = readOptionalUrl("RATELOOP_MCP_API_URL") ?? deriveMcpApiUrl(apiBaseUrl, mcpAccessToken);
 
   enforceTokenUrlPolicy("RATELOOP_API_BASE_URL", apiBaseUrl, mcpAccessToken);
   enforceTokenUrlPolicy("RATELOOP_MCP_API_URL", mcpApiUrl, mcpAccessToken);
