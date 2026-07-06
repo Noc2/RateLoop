@@ -11,6 +11,7 @@ import {
   getActiveBountyClosesAt,
   getActiveFeedbackClosesAt,
   getPendingBountyStartBy,
+  getRewardLifecycleStatus,
   getVisibleFeedbackBonusAmount,
   getVisibleRewardOpportunityAmount,
   getVisibleRewardPoolAmount,
@@ -330,6 +331,150 @@ test("claimable allocated payout is not shown as a new bounty opportunity", () =
   assert.equal(getPendingBountyStartBy(item, 10_000), null);
   assert.equal(getVisibleRewardPoolAmount(item, 10_000), 0n);
   assert.equal(getVisibleRewardOpportunityAmount(item, 10_000), 0n);
+});
+
+test("reward lifecycle status surfaces ready allocated payouts without ranking them as new bounties", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/claimable-payout",
+    title: "Claimable old payout",
+    rewardPoolSummary: {
+      totalFunded: 5_000_000n,
+      totalAvailable: 5_000_000n,
+      activeUnallocated: 0n,
+      claimableAllocated: 5_000_000n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: false,
+      nextBountyClosesAt: null,
+    },
+  });
+
+  assert.equal(getRewardLifecycleStatus(item, null, 10_000)?.label, "Payout ready");
+  assert.equal(getVisibleRewardOpportunityAmount(item, 10_000), 0n);
+});
+
+test("reward lifecycle status prioritizes connected viewer bounty states", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/closed-bounty",
+    title: "Closed bounty",
+    rewardPoolSummary: {
+      totalFunded: 5_000_000n,
+      totalAvailable: 0n,
+      activeUnallocated: 0n,
+      claimableAllocated: 0n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 1,
+      hasActiveBounty: false,
+      nextBountyClosesAt: null,
+    },
+  });
+
+  assert.equal(
+    getRewardLifecycleStatus(
+      item,
+      {
+        awaitingBountyAllocationCount: 1,
+        awaitingBountyPayoutCount: 0,
+        claimableBountyCount: 0,
+        contentId: 1n,
+        hasPendingBounty: true,
+        hasPendingFeedbackBonus: false,
+        latestBountyRoundId: 1n,
+        latestFeedbackBonusRoundId: null,
+        pendingBountyCount: 1,
+        pendingFeedbackBonusCount: 0,
+      },
+      10_000,
+    )?.label,
+    "Calculating payout",
+  );
+  assert.equal(
+    getRewardLifecycleStatus(
+      item,
+      {
+        awaitingBountyAllocationCount: 0,
+        awaitingBountyPayoutCount: 1,
+        claimableBountyCount: 0,
+        contentId: 1n,
+        hasPendingBounty: true,
+        hasPendingFeedbackBonus: false,
+        latestBountyRoundId: 1n,
+        latestFeedbackBonusRoundId: null,
+        pendingBountyCount: 1,
+        pendingFeedbackBonusCount: 0,
+      },
+      10_000,
+    )?.label,
+    "Finalizing payout",
+  );
+  assert.equal(
+    getRewardLifecycleStatus(
+      item,
+      {
+        awaitingBountyAllocationCount: 0,
+        awaitingBountyPayoutCount: 0,
+        claimableBountyCount: 1,
+        contentId: 1n,
+        hasPendingBounty: true,
+        hasPendingFeedbackBonus: false,
+        latestBountyRoundId: 1n,
+        latestFeedbackBonusRoundId: null,
+        pendingBountyCount: 1,
+        pendingFeedbackBonusCount: 0,
+      },
+      10_000,
+    )?.label,
+    "Bounty claimable",
+  );
+});
+
+test("reward lifecycle status distinguishes resolving and ended funded bounties", () => {
+  const resolving = makeContentItem({
+    id: 1n,
+    url: "https://example.com/resolving-bounty",
+    title: "Resolving bounty",
+    latestRound: {
+      roundId: 1n,
+      state: 0,
+      voteCount: 3,
+      revealedCount: 2,
+      totalStake: 10_000_000n,
+      upPool: 6_000_000n,
+      downPool: 4_000_000n,
+      startTime: 9_000n,
+      estimatedSettlementTime: 9_900n,
+    },
+    rewardPoolSummary: {
+      totalFunded: 5_000_000n,
+      totalAvailable: 0n,
+      activeUnallocated: 0n,
+      claimableAllocated: 0n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 1,
+      hasActiveBounty: false,
+      nextBountyClosesAt: null,
+    },
+  });
+  const ended = makeContentItem({
+    id: 2n,
+    url: "https://example.com/ended-bounty",
+    title: "Ended bounty",
+    rewardPoolSummary: {
+      totalFunded: 5_000_000n,
+      totalAvailable: 0n,
+      activeUnallocated: 0n,
+      claimableAllocated: 0n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 1,
+      hasActiveBounty: false,
+      nextBountyClosesAt: null,
+    },
+  });
+
+  assert.equal(getRewardLifecycleStatus(resolving, null, 10_000)?.label, "Payout pending");
+  assert.equal(getRewardLifecycleStatus(ended, null, 10_000)?.label, "Bounty ended");
 });
 
 test("stale active bounty deadlines are ignored when no bounty remains", () => {

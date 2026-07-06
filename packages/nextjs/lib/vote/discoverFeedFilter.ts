@@ -1,10 +1,21 @@
 "use client";
 
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import type { ContentItem } from "~~/hooks/useContentFeed";
+import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 
 export const DISCOVER_ALL_FILTER = "All";
 export const DISCOVER_BROKEN_FILTER = "Broken";
 export const DISCOVER_EXPIRED_BOUNTY_FILTER = "Expired";
+
+export type RewardLifecycleStatusTone = "blue" | "green" | "yellow" | "red" | "muted";
+
+export interface RewardLifecycleStatus {
+  label: string;
+  ariaLabel: string;
+  tooltip: string;
+  tone: RewardLifecycleStatusTone;
+}
 
 function getRewardPoolOpportunityAmount(item: ContentItem) {
   return item.rewardPoolSummary?.activeUnallocated ?? item.rewardPoolSummary?.totalAvailable ?? 0n;
@@ -208,6 +219,137 @@ export function getVisibleRewardOpportunityAmount(item: ContentItem, nowSeconds 
     return rewardAmount + feedbackAmount;
   }
   return rewardAmount > feedbackAmount ? rewardAmount : feedbackAmount;
+}
+
+function hasFundedBounty(item: ContentItem) {
+  const rewardSummary = item.rewardPoolSummary;
+  const bundle = item.bundle;
+  return Boolean(
+    (rewardSummary &&
+      (rewardSummary.totalFunded > 0n ||
+        rewardSummary.totalAvailable > 0n ||
+        (rewardSummary.totalClaimed ?? 0n) > 0n ||
+        (rewardSummary.totalVoterClaimed ?? 0n) > 0n ||
+        (rewardSummary.totalFrontendClaimed ?? 0n) > 0n ||
+        (rewardSummary.expiredRewardPoolCount ?? 0) > 0 ||
+        (rewardSummary.activeRewardPoolCount ?? 0) > 0)) ||
+      (bundle && bundle.fundedAmount > 0n),
+  );
+}
+
+function hasClaimableAllocatedBounty(item: ContentItem) {
+  const rewardSummary = item.rewardPoolSummary;
+  if (rewardSummary && (rewardSummary.claimableAllocated ?? 0n) > 0n) return true;
+
+  const bundle = item.bundle;
+  return Boolean(bundle && bundle.allocatedAmount > bundle.claimedAmount);
+}
+
+function hasResolvingBountyRound(item: ContentItem) {
+  const latestRound = item.latestRound ?? item.openRound;
+  if (!latestRound) return false;
+  if (latestRound.state === ROUND_STATE.SettlementPending) return true;
+  if (latestRound.state !== undefined && latestRound.state !== ROUND_STATE.Open) return false;
+  return true;
+}
+
+export function getRewardLifecycleStatus(
+  item: ContentItem,
+  viewerRewardStatus?: ViewerRewardStatus | null,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): RewardLifecycleStatus | null {
+  if (getVisibleRewardPoolAmount(item, nowSeconds) > 0n || getVisibleFeedbackBonusAmount(item, nowSeconds) > 0n) {
+    return null;
+  }
+
+  if ((viewerRewardStatus?.claimableBountyCount ?? 0) > 0) {
+    return {
+      label: "Bounty claimable",
+      ariaLabel: "Bounty claimable",
+      tooltip: "This wallet has an eligible revealed vote with bounty rewards ready to claim.",
+      tone: "green",
+    };
+  }
+
+  if ((viewerRewardStatus?.awaitingBountyPayoutCount ?? 0) > 0) {
+    return {
+      label: "Finalizing payout",
+      ariaLabel: "Bounty payout finalizing",
+      tooltip: "This wallet's bounty allocation is waiting for finalized payout proof before it can be claimed.",
+      tone: "yellow",
+    };
+  }
+
+  if ((viewerRewardStatus?.awaitingBountyAllocationCount ?? 0) > 0) {
+    return {
+      label: "Calculating payout",
+      ariaLabel: "Bounty payout calculating",
+      tooltip: "This wallet has a revealed vote in a qualifying bounty round. The round payout still needs allocation.",
+      tone: "yellow",
+    };
+  }
+
+  if ((viewerRewardStatus?.pendingBountyCount ?? 0) > 0) {
+    return {
+      label: "Payout pending",
+      ariaLabel: "Bounty payout pending",
+      tooltip: "A bounty claim or payout from an earlier round is still pending for this wallet.",
+      tone: "yellow",
+    };
+  }
+
+  if (hasClaimableAllocatedBounty(item)) {
+    return {
+      label: "Payout ready",
+      ariaLabel: "Bounty payout ready",
+      tooltip: "Bounty rewards have been allocated. Eligible revealed voters can claim from the rewards panel.",
+      tone: "green",
+    };
+  }
+
+  if (hasFundedBounty(item) && hasResolvingBountyRound(item)) {
+    return {
+      label: "Payout pending",
+      ariaLabel: "Bounty payout pending",
+      tooltip:
+        "Voting is closed for a funded bounty round. Rewards are waiting on settlement, payout finality, or indexing.",
+      tone: "yellow",
+    };
+  }
+
+  if (shouldShowBountyExpiredStatus(item, nowSeconds)) {
+    return {
+      label: "Bounty ended",
+      ariaLabel: "Bounty ended",
+      tooltip: "The bounty window has closed and there is no active bounty left on this question.",
+      tone: "muted",
+    };
+  }
+
+  if ((viewerRewardStatus?.pendingFeedbackBonusCount ?? 0) > 0) {
+    return {
+      label: "Bonus pending",
+      ariaLabel: "Feedback Bonus pending",
+      tooltip: "A Feedback Bonus review or payment from an earlier round is still pending for this wallet.",
+      tone: "green",
+    };
+  }
+
+  if (shouldShowFeedbackClosedStatus(item, nowSeconds)) {
+    return {
+      label: "Feedback closed",
+      ariaLabel: "Feedback Bonus closed",
+      tooltip: "The Feedback Bonus window has closed and there is no active Feedback Bonus left on this question.",
+      tone: "muted",
+    };
+  }
+
+  return {
+    label: "No active bounty",
+    ariaLabel: "No active bounty or Feedback Bonus",
+    tooltip: "There is no active bounty or Feedback Bonus on this question.",
+    tone: "red",
+  };
 }
 
 export function filterDiscoverCategoryItems(
