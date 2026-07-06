@@ -9,6 +9,7 @@ import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useContentFeedback } from "~~/hooks/useContentFeedback";
+import { resolveContentFeedbackPanelScope } from "~~/lib/feedback/contentFeedbackPanelScope";
 import {
   ADVISORY_ONLY_CONTENT_FEEDBACK_DISABLED_REASON,
   getContentFeedbackSubmitTooltip,
@@ -21,7 +22,6 @@ import {
   type ContentFeedbackItem,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { hasNonZeroCommit } from "~~/lib/vote/commitState";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -155,17 +155,28 @@ export function ContentFeedbackPanel({
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
   const { address } = useAccount();
-  const feedbackScope = useMemo(
-    () => ({
-      chainId: item?.chainId ?? null,
-      deploymentKey: item?.deploymentKey ?? null,
-    }),
-    [item?.chainId, item?.deploymentKey],
+  const hasFeedbackItem = Boolean(item);
+  const itemChainId = item?.chainId ?? null;
+  const itemDeploymentKey = item?.deploymentKey ?? null;
+  const feedbackPanelScope = useMemo(
+    () =>
+      resolveContentFeedbackPanelScope(
+        hasFeedbackItem
+          ? {
+              chainId: itemChainId,
+              deploymentKey: itemDeploymentKey,
+            }
+          : null,
+      ),
+    [hasFeedbackItem, itemChainId, itemDeploymentKey],
   );
   const { feedback, items, isLoading, isSubmitting, submitFeedback, refetchFeedback } = useContentFeedback(
-    item?.id ?? null,
+    feedbackPanelScope.unsupported ? null : (item?.id ?? null),
     address,
-    feedbackScope,
+    {
+      chainId: feedbackPanelScope.chainId,
+      deploymentKey: feedbackPanelScope.deploymentKey,
+    },
   );
   const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("vote_rationale");
   const [body, setBody] = useState("");
@@ -205,15 +216,7 @@ export function ContentFeedbackPanel({
     () => items.some(feedbackItem => feedbackItem.isOwn && isFeedbackForRound(feedbackItem, openRoundId)),
     [items, openRoundId],
   );
-  const configuredFeedbackDeploymentKey = useMemo(() => {
-    if (typeof item?.chainId !== "number") return null;
-    return resolveProtocolDeploymentScope(item.chainId)?.deploymentKey ?? null;
-  }, [item?.chainId]);
-  const feedbackDeploymentUnsupported = Boolean(
-    item?.deploymentKey &&
-      (!configuredFeedbackDeploymentKey ||
-        item.deploymentKey.toLowerCase() !== configuredFeedbackDeploymentKey.toLowerCase()),
-  );
+  const feedbackDeploymentUnsupported = feedbackPanelScope.unsupported;
   const effectiveSubmitBlocker = feedbackDeploymentUnsupported
     ? "Feedback submission is unavailable for this deployment."
     : submitBlocker;
