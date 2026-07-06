@@ -27,6 +27,10 @@ function readToken(value: unknown) {
   throw new AgentAskHandoffError("token is required.");
 }
 
+function readIncludeImageData(value: unknown) {
+  return value === true || value === "true";
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ handoffId: string }> }) {
   const { handoffId } = await context.params;
 
@@ -36,6 +40,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
       const token = readToken((body as { token?: unknown }).token);
+      const includeImageData = readIncludeImageData((body as { includeImageData?: unknown }).includeImageData);
       const transactionHashes = readAgentTransactionHashes(
         (body as { transactionHashes?: unknown }).transactionHashes,
         message => new AgentAskHandoffError(message),
@@ -84,7 +89,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const assets = await listAgentAskHandoffAssets(updatedHandoff.id);
       return {
-        ...buildAgentAskHandoffResponse({ assets, handoff: updatedHandoff, includeImageData: true }),
+        ...buildAgentAskHandoffResponse({ assets, handoff: updatedHandoff, includeImageData }),
         ask: result,
         publicUrl: typeof result.publicUrl === "string" ? result.publicUrl : null,
       };

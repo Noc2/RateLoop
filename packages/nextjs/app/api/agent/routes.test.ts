@@ -1615,6 +1615,73 @@ test("agent ask handoff complete returns image data only when requested", async 
   assert.equal(completeWithImageDataBody.assets?.[0]?.dataUrl, `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`);
 });
 
+test("agent ask handoff Feedback Bonus completion returns image data only when requested", async () => {
+  installAskOverrides();
+
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "concept.png",
+          imageBase64: ONE_PIXEL_PNG_BASE64,
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...handoffQuestionPayload("agent-handoff-bonus-complete-image-data"),
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+        },
+        maxPaymentAmount: "3500000",
+        paymentMode: "wallet_calls",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as { handoffId?: string; handoffUrl?: string };
+  const handoffId = String(body.handoffId);
+  const token = new URLSearchParams(new URL(String(body.handoffUrl)).hash.replace(/^#/, "")).get("token");
+
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.ok(token);
+
+  await dbModule.dbClient.execute({
+    args: ["submitted", OPERATION_KEY, handoffId],
+    sql: "UPDATE agent_ask_handoff_intents SET status = ?, operation_key = ? WHERE id = ?",
+  });
+
+  const transactionHashes = [`0x${"2".repeat(64)}`];
+  const completeResponse = await handoffCompleteFeedbackBonusRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+      token,
+      transactionHashes,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeBody = (await completeResponse.json()) as { assets?: Array<Record<string, unknown>> };
+
+  assert.equal(completeResponse.status, 200, JSON.stringify(completeBody));
+  assert.equal(completeBody.assets?.[0]?.dataUrl, undefined);
+
+  const completeWithImageDataResponse = await handoffCompleteFeedbackBonusRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete-feedback-bonus`, {
+      includeImageData: true,
+      token,
+      transactionHashes,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeWithImageDataBody = (await completeWithImageDataResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+  };
+
+  assert.equal(completeWithImageDataResponse.status, 200, JSON.stringify(completeWithImageDataBody));
+  assert.equal(completeWithImageDataBody.assets?.[0]?.dataUrl, `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`);
+});
+
 test("agent ask handoff route reports clamped TTLs", async () => {
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
