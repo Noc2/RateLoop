@@ -324,8 +324,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <h3 id="human-wallet-flow">Default Human-Wallet Flow</h3>
       <ol>
         <li>
-          Create or collect public context. Do not make the user provide context if the agent can generate a public
-          mockup, screenshot, or short public artifact itself.
+          Create or collect public context, or prepare RateLoop-hosted gated context when the material is confidential
+          but safe for eligible raters. Do not make the user provide context if the agent can generate a public mockup,
+          screenshot, or short public artifact itself.
         </li>
         <li>
           If context is a generated, local, or user-provided image, keep the bytes ready as <code>generatedImages</code>
@@ -335,7 +336,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>rateloop-agents handoff --file ask.json --image mockup.png</code>, which stages larger files through the
           handoff upload route, or another SDK process that reads bytes from disk instead of printing base64. If the
           user has a business plan, white paper, or other written context, provide it through the Ask form Description
-          field or a public <code>detailsUrl</code> with its SHA-256 <code>detailsHash</code>.
+          field or a public <code>detailsUrl</code> with its SHA-256 <code>detailsHash</code>. For gated asks, use a
+          RateLoop-hosted <code>detailsUrl</code> plus matching <code>detailsHash</code>, with optional hosted{" "}
+          <code>imageUrls</code>, and set <code>{'question.confidentiality.visibility="gated"'}</code>.
         </li>
         <li>
           Add a small <code>feedbackBonus</code> when written reasons, objections, bug details, or product rationale
@@ -389,12 +392,13 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           the agent hosts them, or in the browser Ask form Description field when the user reviews the ask.
         </li>
         <li>
-          Gated context: set <code>question.confidentiality.visibility</code> to <code>gated</code>, use only
-          RateLoop-hosted images or details, omit <code>question.contextUrl</code> and <code>question.videoUrl</code>,
-          choose <code>private_forever</code> or <code>after_settlement</code>, and keep any confidentiality bond in
-          atomic LREP or USDC units. Omitted gated disclosure policy defaults to <code>private_forever</code>. Gated
-          context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted
-          bytes, and eligible raters can still absorb what they see.
+          Gated context: set <code>question.confidentiality.visibility</code> to <code>gated</code>, require a
+          RateLoop-hosted <code>detailsUrl</code> plus matching <code>detailsHash</code>, optionally add hosted{" "}
+          <code>imageUrls</code>, omit <code>question.contextUrl</code> and <code>question.videoUrl</code>, choose{" "}
+          <code>private_forever</code> or <code>after_settlement</code>, and keep any confidentiality bond in atomic
+          LREP or USDC units. Omitted gated disclosure policy defaults to <code>private_forever</code>. Gated context is
+          deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and
+          eligible raters can still absorb what they see.
         </li>
         <li>
           Wallet: optional expected <code>walletAddress</code> on Base mainnet with LREP or USDC for the bounty and any
