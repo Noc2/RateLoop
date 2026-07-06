@@ -155,6 +155,73 @@ function voteIdentity(voteRow: {
   return voteRow.identityHolder ?? voteRow.voter;
 }
 
+type RevealedRoundVoteRow = Record<string, any> & {
+  id: string;
+  voter: `0x${string}`;
+  identityHolder?: `0x${string}` | null;
+};
+
+async function snapshotCorrelationInputsForRevealedRoundVotes(params: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+  timestamp: bigint;
+}): Promise<RevealedRoundVoteRow[]> {
+  const roundVotes = (await params.context.db.sql
+    .select()
+    .from(vote)
+    .where(
+      and(
+        eq(vote.contentId, params.contentId),
+        eq(vote.roundId, params.roundId),
+        eq(vote.revealed, true),
+      ),
+    )) as RevealedRoundVoteRow[];
+  const banState = await loadCorrelationBanStateAt(
+    params.context,
+    params.timestamp,
+  );
+  const preSettlementStatsByIdentity = new Map<string, any | null>();
+  const loadPreSettlementVoterStats = async (identityHolder: `0x${string}`) => {
+    const key = identityHolder.toLowerCase();
+    if (!preSettlementStatsByIdentity.has(key)) {
+      preSettlementStatsByIdentity.set(
+        key,
+        await params.context.db.find(voterStats, { voter: identityHolder }),
+      );
+    }
+    return preSettlementStatsByIdentity.get(key) ?? null;
+  };
+
+  for (const v of roundVotes) {
+    const identityHolder = voteIdentity(v);
+    const existingVoterStats =
+      await loadPreSettlementVoterStats(identityHolder);
+    const correlationSnapshot = await snapshotCorrelationInputForAccount({
+      account: identityHolder,
+      banState,
+      context: params.context,
+      historicalVotes: existingVoterStats?.totalSettledVotes ?? 0,
+      identityKey: v.identityKey,
+      timestamp: params.timestamp,
+      voter: v.voter,
+    });
+    await params.context.db.update(vote, { id: v.id }).set({
+      correlationVerifiedHuman: correlationSnapshot.verifiedHuman,
+      correlationHistoricalVoteCount:
+        correlationSnapshot.historicalVoteCount,
+      correlationCredentialProvider: correlationSnapshot.credentialProvider,
+      correlationCredentialNullifierHash:
+        correlationSnapshot.credentialNullifierHash,
+      correlationCredentialVerifiedAt: correlationSnapshot.credentialVerifiedAt,
+      correlationCredentialExpiresAt: correlationSnapshot.credentialExpiresAt,
+      correlationBanReasons: JSON.stringify(correlationSnapshot.banReasons),
+    });
+  }
+
+  return roundVotes;
+}
+
 function defaultRoundConfigFields() {
   return {
     epochDuration: DEFAULT_ROUND_CONFIG.epochDurationSeconds,
@@ -1074,32 +1141,38 @@ ponder.on(
     const existingRound = await context.db.find(round, { id: roundKey });
     if (existingRound) {
       await context.db.update(round, { id: roundKey }).set(update);
-      return;
+    } else {
+      await context.db.insert(round).values({
+        id: roundKey,
+        contentId,
+        roundId,
+        state: ROUND_STATE.SettlementPending,
+        voteCount: 0,
+        revealedCount: 0,
+        totalStake: 0n,
+        upPool: 0n,
+        downPool: 0n,
+        upCount: 0,
+        downCount: 0,
+        referenceRatingBps: 5000,
+        ratingBps: 5000,
+        conservativeRatingBps: 5000,
+        confidenceMass: 0n,
+        effectiveEvidence: 0n,
+        upEvidence: 0n,
+        downEvidence: 0n,
+        settledRounds: 0,
+        lowSince: 0n,
+        ...defaultRoundConfigFields(),
+        ...update,
+      });
     }
 
-    await context.db.insert(round).values({
-      id: roundKey,
+    await snapshotCorrelationInputsForRevealedRoundVotes({
+      context,
       contentId,
       roundId,
-      state: ROUND_STATE.SettlementPending,
-      voteCount: 0,
-      revealedCount: 0,
-      totalStake: 0n,
-      upPool: 0n,
-      downPool: 0n,
-      upCount: 0,
-      downCount: 0,
-      referenceRatingBps: 5000,
-      ratingBps: 5000,
-      conservativeRatingBps: 5000,
-      confidenceMass: 0n,
-      effectiveEvidence: 0n,
-      upEvidence: 0n,
-      downEvidence: 0n,
-      settledRounds: 0,
-      lowSince: 0n,
-      ...defaultRoundConfigFields(),
-      ...update,
+      timestamp: event.block.timestamp,
     });
   },
 );
@@ -1471,16 +1544,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
     }));
 
   // Accuracy tracking — only for revealed votes
-  const roundVotes = await context.db.sql
-    .select()
-    .from(vote)
-    .where(
-      and(
-        eq(vote.contentId, contentId),
-        eq(vote.roundId, roundId),
-        eq(vote.revealed, true),
-      ),
-    );
+  const roundVotes = await snapshotCorrelationInputsForRevealedRoundVotes({
+    context,
+    contentId,
+    roundId,
+    timestamp: event.block.timestamp,
+  });
   const rbtsRound = roundVotes.some(
     (v) =>
       v.rbtsScoreBps !== null ||
@@ -1490,10 +1559,6 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
   );
 
   const categoryId = contentRecord?.categoryId ?? 0n;
-  const banState = await loadCorrelationBanStateAt(
-    context,
-    event.block.timestamp,
-  );
   const preSettlementStatsByIdentity = new Map<string, any | null>();
   const loadPreSettlementVoterStats = async (identityHolder: `0x${string}`) => {
     const key = identityHolder.toLowerCase();
@@ -1510,27 +1575,6 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
     const identityHolder = voteIdentity(v);
     const existingVoterStats =
       await loadPreSettlementVoterStats(identityHolder);
-    const correlationSnapshot = await snapshotCorrelationInputForAccount({
-      account: identityHolder,
-      banState,
-      context,
-      historicalVotes: existingVoterStats?.totalSettledVotes ?? 0,
-      identityKey: v.identityKey,
-      timestamp: event.block.timestamp,
-      voter: v.voter,
-    });
-    await context.db.update(vote, { id: v.id }).set({
-      correlationVerifiedHuman: correlationSnapshot.verifiedHuman,
-      correlationHistoricalVoteCount:
-        correlationSnapshot.historicalVoteCount,
-      correlationCredentialProvider: correlationSnapshot.credentialProvider,
-      correlationCredentialNullifierHash:
-        correlationSnapshot.credentialNullifierHash,
-      correlationCredentialVerifiedAt: correlationSnapshot.credentialVerifiedAt,
-      correlationCredentialExpiresAt: correlationSnapshot.credentialExpiresAt,
-      correlationBanReasons: JSON.stringify(correlationSnapshot.banReasons),
-    });
-
     if (v.isUp === null) continue; // skip unrevealed
     const won = rbtsRound ? (v.rbtsRewardWeight ?? 0n) > 0n : v.isUp === upWins;
     const stakeWon = rbtsRound

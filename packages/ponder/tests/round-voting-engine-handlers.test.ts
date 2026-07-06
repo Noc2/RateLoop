@@ -86,6 +86,7 @@ vi.mock("@rateloop/contracts/protocol", () => ({
     Cancelled: 2,
     Tied: 3,
     RevealFailed: 4,
+    SettlementPending: 5,
   },
   SCORE_SPREAD_POLICY: {
     intensityBps: 15_000,
@@ -1479,6 +1480,80 @@ describe("RoundVotingEngine ponder handlers", () => {
         rbtsMeanScoreBps: 0,
         rbtsForfeitedPool: 5n,
         rbtsForfeitClaimants: 1,
+      },
+    });
+  });
+
+  it("pins correlation input snapshots when RBTS settlement becomes pending", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+      },
+      roundVotes: [
+        {
+          id: `7-2-${voter}`,
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          identityHolder: voter,
+          identityKey: `0x${"11".repeat(32)}`,
+          revealed: true,
+          rbtsWeight: 25n,
+        },
+      ],
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RbtsSettlementPending",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          oracle: "0x0000000000000000000000000000000000000999",
+        },
+        transaction: {
+          hash: `0x${"44".repeat(32)}`,
+        },
+        log: {
+          logIndex: 6,
+        },
+        block: {
+          number: 46n,
+          timestamp: 2_150n,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        state: 5,
+        rbtsSettlementStatus: "pending",
+        rbtsSettlementPendingAt: 2_150n,
+        rbtsSettlementPendingBlockNumber: 46n,
+        rbtsSettlementPendingTxHash: `0x${"44".repeat(32)}`,
+        rbtsSettlementPendingLogIndex: 6,
+      }),
+    });
+    expect(updateCalls).toContainEqual({
+      table: "vote",
+      key: { id: `7-2-${voter}` },
+      values: {
+        correlationVerifiedHuman: false,
+        correlationHistoricalVoteCount: 0,
+        correlationCredentialProvider: null,
+        correlationCredentialNullifierHash: null,
+        correlationCredentialVerifiedAt: null,
+        correlationCredentialExpiresAt: null,
+        correlationBanReasons: "[]",
       },
     });
   });
