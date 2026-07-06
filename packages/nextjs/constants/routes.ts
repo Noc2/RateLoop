@@ -8,7 +8,6 @@ export type AskRouteTab = typeof ASK_MANUAL_ROUTE_TAB | typeof ASK_AGENT_ROUTE_T
 export const RATE_ROUTE = "/rate";
 export const RATE_WAIT_FOR_CONTENT_PARAM = "waitForContent";
 export const RATE_CHAIN_ID_PARAM = "chainId";
-export const RATE_DEPLOYMENT_KEY_PARAM = "deploymentKey";
 
 export const GOVERNANCE_ROUTE = "/governance";
 
@@ -50,8 +49,6 @@ export const ASK_SUBMISSIONS_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, {
 interface RateContentHrefOptions {
   waitForContent?: boolean;
   chainId?: number | string | null;
-  // Accepted for older call sites; public rate links always resolve the current deployment.
-  deploymentKey?: string | null;
 }
 
 function normalizeRateContentChainId(chainId: RateContentHrefOptions["chainId"]) {

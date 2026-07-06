@@ -10,7 +10,6 @@ interface SettlingSoonCandidate {
 
 interface SettlingSoonRateLinkScope {
   chainId?: number | null;
-  deploymentKey?: string | null;
 }
 
 type SettlingSoonNotificationKind = "hour" | "day";

@@ -364,9 +364,6 @@ export function useContentFeedback(
       if (address) {
         params.set("address", address);
       }
-      if (deploymentKey) {
-        params.set("deploymentKey", deploymentKey);
-      }
 
       return readResponseBody<ContentFeedbackListResult>(
         await fetch(`/api/feedback?${params.toString()}`),

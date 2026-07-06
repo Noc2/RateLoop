@@ -22,7 +22,6 @@ interface PonderDeploymentResponse {
 interface ContentShareDataOptions {
   chainId?: number | string | null;
   contentRegistryAddress?: string | null;
-  deploymentKey?: string | null;
   fetchImpl?: typeof fetch;
   origin?: string;
 }

@@ -67,13 +67,15 @@ test("ponder availability route reports a healthy indexer", async () => {
   }
 });
 
-test("ponder availability route checks explicit deployment keys", async () => {
+test("ponder availability route ignores explicit deployment keys", async () => {
   const originalFetch = globalThis.fetch;
-  const deployment = resolveProtocolDeploymentScope(8453);
+  const deployment = resolveProtocolDeploymentScope(31337);
   assert.ok(deployment);
+  const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
     const requestedUrl = getFetchUrl(input);
+    requestedUrls.push(requestedUrl);
     if (requestedUrl.endsWith("/deployment")) {
       return new Response(
         JSON.stringify({
@@ -82,7 +84,7 @@ test("ponder availability route checks explicit deployment keys", async () => {
           contentRegistryAddress: deployment.contentRegistryAddress,
           feedbackRegistryAddress: deployment.feedbackRegistryAddress,
           deploymentKey: deployment.deploymentKey,
-          databaseSchema: "rateloop_ponder_base",
+          databaseSchema: "rateloop_ponder_test",
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
@@ -104,6 +106,8 @@ test("ponder availability route checks explicit deployment keys", async () => {
     assert.equal(body.available, true);
     assert.equal(body.expectedDeploymentKey, deployment.deploymentKey);
     assert.equal(body.ponderDeploymentKey, deployment.deploymentKey);
+    assert.match(requestedUrls[0] ?? "", /\/health$/);
+    assert.match(requestedUrls[1] ?? "", /\/deployment$/);
   } finally {
     globalThis.fetch = originalFetch;
     invalidatePonderCache();
@@ -171,39 +175,61 @@ test("ponder availability route rejects deployment mismatches", async () => {
   }
 });
 
-test("ponder availability route rejects unsupported deployment keys before probing Ponder", async () => {
+test("ponder availability route ignores unsupported deployment keys", async () => {
   const originalFetch = globalThis.fetch;
-  let fetchCalls = 0;
-  globalThis.fetch = (async () => {
-    fetchCalls += 1;
-    return new Response("unexpected", { status: 500 });
+  const deployment = resolveProtocolDeploymentScope(31337);
+  assert.ok(deployment);
+  const requestedUrls: string[] = [];
+  globalThis.fetch = (async input => {
+    const requestedUrl = getFetchUrl(input);
+    requestedUrls.push(requestedUrl);
+    if (requestedUrl.endsWith("/deployment")) {
+      return new Response(JSON.stringify({ configured: true, deploymentKey: deployment.deploymentKey }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response("ok", { status: 200 });
   }) as typeof fetch;
 
   try {
+    invalidatePonderCache();
     const response = await GET(
       makeAvailabilityRequest(
         "http://localhost/api/ponder/availability?deploymentKey=999999:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
       ),
     );
 
-    assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { error: "Unsupported Ponder deployment key" });
-    assert.equal(fetchCalls, 0);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.available, true);
+    assert.equal(body.expectedDeploymentKey, deployment.deploymentKey);
+    assert.deepEqual(
+      requestedUrls.map(url => new URL(url).pathname),
+      ["/health", "/deployment"],
+    );
   } finally {
     globalThis.fetch = originalFetch;
+    invalidatePonderCache();
   }
 });
 
 test("ponder availability route rate limits repeated probes", async () => {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const response = await GET(
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("ok", { status: 200 })) as typeof fetch;
+  try {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const response = await GET(
+        makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"),
+      );
+      assert.equal(response.status, 200);
+    }
+
+    const limited = await GET(
       makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"),
     );
-    assert.equal(response.status, 400);
+    assert.equal(limited.status, 429);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
-
-  const limited = await GET(
-    makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"),
-  );
-  assert.equal(limited.status, 429);
 });

@@ -422,7 +422,11 @@ function withContentDeploymentScopes<T extends PonderContentItem>(
 function getExpectedPonderDeploymentScope(options?: PonderDeploymentOptions): ExpectedPonderDeploymentScope | null {
   const explicitDeploymentKey = normalizeDeploymentKey(options?.deploymentKey);
   if (explicitDeploymentKey) {
-    return { deploymentKey: explicitDeploymentKey };
+    const supportedDeploymentKey = normalizeSupportedPonderDeploymentKey(explicitDeploymentKey);
+    if (!supportedDeploymentKey) {
+      throw new Error("Ponder deployment is not configured for the requested deployment key.");
+    }
+    return { deploymentKey: supportedDeploymentKey };
   }
   if (typeof options?.chainId === "number") {
     const chainDeployment = resolveProtocolDeploymentScope(options.chainId);
@@ -533,7 +537,7 @@ export async function getPonderAvailabilityStatus(
             ponderUrl,
             explicitDeploymentKey ? { deploymentKey: explicitDeploymentKey } : undefined,
           )
-        : await checkPonderAvailabilityThroughApi(explicitDeploymentKey);
+        : await checkPonderAvailabilityThroughApi();
 
     setAvailabilityCacheEntry(cacheKey, {
       status,
@@ -610,15 +614,9 @@ async function checkPonderAvailabilityDirect(
   }
 }
 
-async function checkPonderAvailabilityThroughApi(
-  expectedDeploymentKey?: string | null,
-): Promise<PonderAvailabilityStatus> {
+async function checkPonderAvailabilityThroughApi(): Promise<PonderAvailabilityStatus> {
   try {
     const url = new URL("/api/ponder/availability", window.location.origin);
-    const deploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
-    if (deploymentKey) {
-      url.searchParams.set("deploymentKey", deploymentKey);
-    }
     const res = await fetch(`${url.pathname}${url.search}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),

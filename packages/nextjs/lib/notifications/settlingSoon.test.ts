@@ -103,7 +103,7 @@ test("pickSettlingSoonNotification can fall back to day alerts when hour alerts 
   assert.equal(summary.href, "/rate?content=7");
 });
 
-test("pickSettlingSoonNotification preserves deployment scope in rate links", () => {
+test("pickSettlingSoonNotification builds current rate links without deployment keys", () => {
   const summary = pickSettlingSoonNotification({
     nowSeconds: 1_000,
     items: [
@@ -118,10 +118,9 @@ test("pickSettlingSoonNotification preserves deployment scope in rate links", ()
     seenDayIds: new Set(),
     rateLinkScope: {
       chainId: 8453,
-      deploymentKey: "8453:0xabc123",
     },
   });
 
   assert(summary);
-  assert.equal(summary.href, "/rate?content=1&chainId=8453&deploymentKey=8453%3A0xabc123");
+  assert.equal(summary.href, "/rate?content=1&chainId=8453");
 });

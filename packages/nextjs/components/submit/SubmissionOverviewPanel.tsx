@@ -185,7 +185,6 @@ export function SubmissionOverviewPanel() {
                         <Link
                           href={buildRateContentHref(item.id, {
                             chainId: item.chainId,
-                            deploymentKey: item.deploymentKey,
                           })}
                           className="line-clamp-2 font-medium leading-6 transition-colors hover:text-primary"
                         >
@@ -215,7 +214,6 @@ export function SubmissionOverviewPanel() {
                         <Link
                           href={buildRateContentHref(item.id, {
                             chainId: item.chainId,
-                            deploymentKey: item.deploymentKey,
                           })}
                           className="btn btn-ghost btn-xs rounded-lg"
                           aria-label={`View submission ${item.id.toString()}`}

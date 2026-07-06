@@ -34,7 +34,6 @@ test("selecting content preserves the active category hash and omits deployment 
     buildVoteLocation("https://www.rateloop.ai/rate?q=openlaw#youtube", {
       contentId: 9n,
       chainId: 8453,
-      deploymentKey: " 8453:0xabc ",
     }),
     "https://www.rateloop.ai/rate?q=openlaw&content=9&chainId=8453#youtube",
   );

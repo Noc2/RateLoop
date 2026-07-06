@@ -20,7 +20,7 @@ import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderAvailability } from "~~/hooks/usePonderAvailability";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
 import { buildFallbackMediaItems } from "~~/lib/contentMedia";
-import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { publicEnv } from "~~/utils/env/public";
 
@@ -29,7 +29,6 @@ export type { ContentItem } from "~~/hooks/contentFeed/shared";
 interface ContentFeedDeploymentScopeInput {
   targetChainId: number;
   chainId?: number | string | null;
-  deploymentKey?: string | null;
 }
 
 function normalizeContentFeedChainId(value: ContentFeedDeploymentScopeInput["chainId"]) {
@@ -38,47 +37,16 @@ function normalizeContentFeedChainId(value: ContentFeedDeploymentScopeInput["cha
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function normalizeContentFeedDeploymentKey(value: string | null | undefined) {
-  const normalized = value?.trim().toLowerCase();
-  return normalized ? normalized : null;
-}
-
-function readChainIdFromDeploymentKey(deploymentKey: string | null) {
-  if (!deploymentKey) return null;
-  const [rawChainId] = deploymentKey.split(":");
-  return normalizeContentFeedChainId(rawChainId);
-}
-
-function deploymentKeyMatchesScope(deploymentKey: string | null, keys: readonly (string | null | undefined)[]) {
-  if (!deploymentKey) return true;
-  return keys.some(key => key?.toLowerCase() === deploymentKey);
-}
-
-export function resolveContentFeedDeploymentScope({
-  targetChainId,
-  chainId,
-  deploymentKey,
-}: ContentFeedDeploymentScopeInput) {
+export function resolveContentFeedDeploymentScope({ targetChainId, chainId }: ContentFeedDeploymentScopeInput) {
   const explicitChainId = normalizeContentFeedChainId(chainId);
-  const explicitDeploymentKey = normalizeContentFeedDeploymentKey(deploymentKey);
-  const requestedChainId = explicitChainId ?? readChainIdFromDeploymentKey(explicitDeploymentKey) ?? targetChainId;
+  const requestedChainId = explicitChainId ?? targetChainId;
   const requestedProtocolScope = resolveProtocolDeploymentScope(requestedChainId);
-  const requestedContentScope = resolveContentDeploymentScope(requestedChainId);
-  const requestedScopeKeys = [requestedProtocolScope?.deploymentKey, requestedContentScope?.deploymentKey];
-  const deploymentKeyMatchesRequestedScope = deploymentKeyMatchesScope(explicitDeploymentKey, requestedScopeKeys);
-  const targetProtocolScope = resolveProtocolDeploymentScope(targetChainId);
-  const targetContentScope = resolveContentDeploymentScope(targetChainId);
-  const targetScopeKeys = [targetProtocolScope?.deploymentKey, targetContentScope?.deploymentKey];
 
   return {
     chainId: requestedChainId,
-    protocolDeploymentKey:
-      explicitDeploymentKey && !deploymentKeyMatchesRequestedScope
-        ? explicitDeploymentKey
-        : (requestedProtocolScope?.deploymentKey ?? explicitDeploymentKey ?? `missing:${requestedChainId}`),
-    isSupported: Boolean(requestedProtocolScope) && deploymentKeyMatchesRequestedScope,
-    allowsRpcFallback:
-      requestedChainId === targetChainId && deploymentKeyMatchesScope(explicitDeploymentKey, targetScopeKeys),
+    protocolDeploymentKey: requestedProtocolScope?.deploymentKey ?? `missing:${requestedChainId}`,
+    isSupported: Boolean(requestedProtocolScope),
+    allowsRpcFallback: requestedChainId === targetChainId && Boolean(requestedProtocolScope),
   };
 }
 
@@ -94,9 +62,8 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       resolveContentFeedDeploymentScope({
         targetChainId: targetNetwork.id,
         chainId: options.chainId,
-        deploymentKey: options.deploymentKey,
       }),
-    [options.chainId, options.deploymentKey, targetNetwork.id],
+    [options.chainId, targetNetwork.id],
   );
   const ponderDeploymentKey = contentFeedScope.protocolDeploymentKey;
   const ponderAvailable = usePonderAvailability(rpcFallbackEnabled, ponderDeploymentKey);

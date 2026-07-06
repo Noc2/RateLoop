@@ -116,7 +116,7 @@ test("getContentShareDataForParam redacts gated private-context content", async 
   }
 });
 
-test("getContentShareDataForParam ignores explicit deployment keys when current Ponder matches", async () => {
+test("getContentShareDataForParam uses the current deployment when Ponder matches", async () => {
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
   const currentDeploymentKey = resolveProtocolDeploymentScope(8453)?.deploymentKey;
@@ -154,7 +154,6 @@ test("getContentShareDataForParam ignores explicit deployment keys when current 
   try {
     const shareData = await getContentShareDataForParam("88", {
       chainId: 8453,
-      deploymentKey: "historical-deployment",
       fetchImpl,
       origin: "https://www.rateloop.ai",
     });
@@ -189,7 +188,6 @@ test("getContentShareDataForParam fails closed when current chain deployment doe
   try {
     const shareData = await getContentShareDataForParam("88", {
       chainId: 8453,
-      deploymentKey: "historical-deployment",
       fetchImpl,
       origin: "https://www.rateloop.ai",
     });

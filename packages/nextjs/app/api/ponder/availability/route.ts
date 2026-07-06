@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPonderAvailabilityStatus, normalizeSupportedPonderDeploymentKey } from "~~/services/ponder/client";
+import { getPonderAvailabilityStatus } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +13,7 @@ export async function GET(request: NextRequest) {
   });
   if (limited) return limited;
 
-  const rawDeploymentKey = request.nextUrl.searchParams.get("deploymentKey");
-  const deploymentKey = normalizeSupportedPonderDeploymentKey(rawDeploymentKey);
-  if (rawDeploymentKey?.trim() && !deploymentKey) {
-    return NextResponse.json({ error: "Unsupported Ponder deployment key" }, { status: 400 });
-  }
-
-  const status = await getPonderAvailabilityStatus(deploymentKey);
+  const status = await getPonderAvailabilityStatus();
 
   return NextResponse.json(status, {
     headers: {

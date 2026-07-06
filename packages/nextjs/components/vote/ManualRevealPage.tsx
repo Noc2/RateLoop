@@ -12,7 +12,6 @@ import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { formatTimeRemaining } from "~~/hooks/useActiveVotesWithDeadlines";
 import { ManualRevealVote, useManualRevealVotes } from "~~/hooks/useManualRevealVotes";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 function RevealVoteCard({
   rateLinkScope,
@@ -66,10 +65,8 @@ function RevealVoteCard({
 export function ManualRevealPage() {
   const { address, isConnected } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const deployment = resolveProtocolDeploymentScope(targetNetwork.id);
   const rateLinkScope = {
     chainId: targetNetwork.id,
-    deploymentKey: deployment?.deploymentKey ?? null,
   };
   const { isRestoringWallet } = useWalletRestore();
   const { votes, readyVotes, waitingVotes, isLoading, revealVote, revealingCommitKey } = useManualRevealVotes(address);

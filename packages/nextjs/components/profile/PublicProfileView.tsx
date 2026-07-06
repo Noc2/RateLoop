@@ -780,10 +780,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const { targetNetwork } = useTargetNetwork();
   const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const deploymentKey = deployment?.deploymentKey ?? null;
-  const rateLinkScope = useMemo(
-    () => ({ chainId: targetNetwork.id, deploymentKey }),
-    [deploymentKey, targetNetwork.id],
-  );
+  const rateLinkScope = useMemo(() => ({ chainId: targetNetwork.id }), [targetNetwork.id]);
   const { address: connectedAddress } = useAccount();
   const { openConnectModal } = useRateLoopConnectModal();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
@@ -1652,7 +1649,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
         <ProfileEarnings
           chainId={rateLinkScope.chainId}
-          deploymentKey={rateLinkScope.deploymentKey}
           headerAction={ownProfile ? <ClaimRewardsButton className="w-fit" /> : undefined}
           isLoading={profileLoading}
           items={profileDetail?.recentEarnings ?? []}

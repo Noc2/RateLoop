@@ -1,10 +1,9 @@
-import { RATE_CHAIN_ID_PARAM, RATE_DEPLOYMENT_KEY_PARAM } from "../../constants/routes";
+import { RATE_CHAIN_ID_PARAM } from "../../constants/routes";
 import { VOTE_SHARE_RATING_VERSION_PARAM } from "../social/contentShare";
 
 interface VoteLocationUpdate {
   contentId?: bigint | null;
   chainId?: number | null;
-  deploymentKey?: string | null;
   categoryHash?: string | null;
 }
 
@@ -15,6 +14,8 @@ interface VoteSearchParamsLike {
 interface VoteSearchParamsReader {
   get(name: string): string | null;
 }
+
+const RATE_DEPLOYMENT_KEY_PARAM = "deploymentKey";
 
 function normalizeVoteLocationChainId(value: string | null | undefined) {
   const raw = value?.trim();
@@ -60,7 +61,7 @@ export function buildVoteLocation(currentUrl: string, update: VoteLocationUpdate
       url.searchParams.set("content", update.contentId.toString());
       setContentScopeSearchParams(url, update);
     }
-  } else if (update.chainId !== undefined || update.deploymentKey !== undefined) {
+  } else if (update.chainId !== undefined) {
     setContentScopeSearchParams(url, update);
   }
 

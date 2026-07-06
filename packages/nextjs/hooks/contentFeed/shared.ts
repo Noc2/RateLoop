@@ -203,7 +203,6 @@ export interface UseContentFeedOptions {
   categoryId?: bigint;
   chainId?: number | string | null;
   contentIds?: bigint[];
-  deploymentKey?: string | null;
   enabled?: boolean;
   keepPrevious?: boolean;
   limit?: number;

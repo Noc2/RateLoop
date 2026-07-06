@@ -167,11 +167,9 @@ test("isPonderAvailable proxies browser health checks through Next", async () =>
   assert.equal(requestedCache, "no-store");
 });
 
-test("isPonderAvailable includes explicit deployment keys in browser health checks", async () => {
+test("isPonderAvailable uses the current browser availability endpoint", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  assert.ok(BASE_PONDER_DEPLOYMENT);
-  const deploymentKey = BASE_PONDER_DEPLOYMENT.deploymentKey;
   let requestedUrl = "";
 
   Object.defineProperty(globalThis, "window", {
@@ -190,7 +188,7 @@ test("isPonderAvailable includes explicit deployment keys in browser health chec
   try {
     invalidatePonderCache();
 
-    assert.equal(await isPonderAvailable(deploymentKey), true);
+    assert.equal(await isPonderAvailable(BASE_PONDER_DEPLOYMENT?.deploymentKey), true);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalWindow) {
@@ -201,7 +199,7 @@ test("isPonderAvailable includes explicit deployment keys in browser health chec
     invalidatePonderCache();
   }
 
-  assert.equal(requestedUrl, `/api/ponder/availability?deploymentKey=${encodeURIComponent(deploymentKey)}`);
+  assert.equal(requestedUrl, "/api/ponder/availability");
 });
 
 test("normalizeSupportedPonderDeploymentKey only accepts known deployment keys", () => {

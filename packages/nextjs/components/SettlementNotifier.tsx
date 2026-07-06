@@ -32,7 +32,6 @@ import {
   writeSeenFollowedActivityNotificationKeys,
 } from "~~/lib/notifications/followedActivity";
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { notification } from "~~/utils/scaffold-eth";
 
 const GOVERNANCE_REWARDS_HREF = "/governance";
@@ -50,11 +49,7 @@ type PendingClaimRoundNotification = PendingClaimRewardNotification & {
 export function SettlementNotifier() {
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
-  const rateLinkScope = useMemo(
-    () => ({ chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey ?? null }),
-    [deployment?.deploymentKey, targetNetwork.id],
-  );
+  const rateLinkScope = useMemo(() => ({ chainId: targetNetwork.id }), [targetNetwork.id]);
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [pendingClaimCount, setPendingClaimCount] = useState(0);
   const [claimRecheckTick, setClaimRecheckTick] = useState(0);
