@@ -19,6 +19,7 @@ const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([
 ]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
+export const THIRDWEB_AUTO_CONNECT_TIMEOUT_MS = 5_000;
 const RATELOOP_THIRDWEB_ICON = "/rateloop-logo.svg";
 const RATELOOP_THIRDWEB_LOGIN_HERO = "/thirdweb-login-hero.svg";
 
@@ -385,7 +386,7 @@ export function getThirdwebAutoConnectOptions(): AutoConnectProps | null {
     },
     chain,
     client: thirdwebClient,
-    timeout: 15_000,
+    timeout: THIRDWEB_AUTO_CONNECT_TIMEOUT_MS,
     wallets: getThirdwebWallets(preferredChainId),
   };
 }

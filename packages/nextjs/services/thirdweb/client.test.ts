@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  THIRDWEB_AUTO_CONNECT_TIMEOUT_MS,
   createThirdwebInAppWallet,
   currentThirdwebWalletMatchesWagmiAddress,
   getThirdwebWalletIds,
@@ -21,6 +22,10 @@ function getInAppWalletAuthOptions(wallets: ReturnType<typeof getThirdwebWallets
 
   return config?.auth?.options;
 }
+
+test("thirdweb autoconnect times out quickly enough for stale wallet sessions", () => {
+  assert.equal(THIRDWEB_AUTO_CONNECT_TIMEOUT_MS, 5_000);
+});
 
 test("getThirdwebWalletIds only exposes branded external wallets when matching injected providers exist", () => {
   assert.deepEqual(

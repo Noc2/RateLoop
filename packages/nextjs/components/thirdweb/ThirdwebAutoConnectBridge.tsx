@@ -8,6 +8,16 @@ import { useWalletRestoreActions } from "~~/contexts/WalletRestoreContext";
 import { getThirdwebWagmiSyncOptions, useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { getThirdwebAutoConnectOptions } from "~~/services/thirdweb/client";
 import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
+import { clearWalletState } from "~~/services/thirdweb/walletStateCleanup";
+
+function clearTimedOutAutoConnectState() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearWalletState(window.localStorage);
+  clearWalletState(window.sessionStorage);
+}
 
 function ThirdwebAutoConnectStatus({ status }: { status: "disabled" | "error" | "settled" }) {
   const { setAutoConnectStatus } = useWalletRestoreActions();
@@ -26,6 +36,11 @@ function ThirdwebAutoConnectRunner({ autoConnectOptions }: { autoConnectOptions:
   const autoConnectProps = useMemo<AutoConnectProps>(
     () => ({
       ...autoConnectOptions,
+      onTimeout: () => {
+        autoConnectOptions.onTimeout?.();
+        clearTimedOutAutoConnectState();
+        setAutoConnectStatus("settled");
+      },
       onConnect: (wallet: Wallet, allConnectedWallets: Wallet[]) => {
         autoConnectOptions.onConnect?.(wallet, allConnectedWallets);
         isSyncingToWagmiRef.current = true;
