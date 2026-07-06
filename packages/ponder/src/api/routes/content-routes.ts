@@ -1884,7 +1884,9 @@ export function registerContentRoutes(app: ApiApp) {
     const recentRewards = await db
       .select()
       .from(rewardClaim)
-      .where(eq(rewardClaim.voter, address))
+      .where(
+        or(eq(rewardClaim.voter, address), eq(rewardClaim.stakePayer, address)),
+      )
       .orderBy(desc(rewardClaim.claimedAt))
       .limit(20);
     const [earningsSummary, recentEarnings] = await Promise.all([

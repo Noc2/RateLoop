@@ -2449,6 +2449,52 @@ describe("registerContentRoutes", () => {
     expect(serialized).toContain("content.canonicalUrl");
   });
 
+  it("includes delegated stake-payer rows in profile recent rewards", async () => {
+    const { queryBuilders } = mockPonderModules(
+      [{ address: "0x0000000000000000000000000000000000000001" }],
+      [
+        [{ count: 0 }],
+        [{ count: 0 }],
+        [{ total: 0n }],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+    );
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/profile/0x0000000000000000000000000000000000000001",
+    );
+
+    expect(response.status).toBe(200);
+
+    const rewardPredicates = queryBuilders
+      .flatMap((builder) =>
+        builder.where.mock.calls.map(([value]) => serializeExpression(value)),
+      )
+      .filter((value) => value.includes("rewardClaim.voter"));
+    const voterOrStakePayerPredicates = rewardPredicates.filter(
+      (value) =>
+        value.includes("rewardClaim.voter") &&
+        value.includes("rewardClaim.stakePayer"),
+    );
+
+    expect(voterOrStakePayerPredicates.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("redacts gated undisclosed context from round previews", async () => {
     mockPonderModules(
       [
