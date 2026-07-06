@@ -219,7 +219,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
 
   const loadIntent = useCallback(async () => {
     if (!token) {
-      setError("This handoff link is missing its private token.");
+      setError("This signing link is missing its private token.");
       setIsLoading(false);
       return;
     }
@@ -232,10 +232,10 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         },
       });
       const body = (await response.json()) as SigningIntent | { message?: string; error?: string };
-      if (!response.ok) throw new Error(readResponseError(body, "Failed to load handoff."));
+      if (!response.ok) throw new Error(readResponseError(body, "Failed to load signing intent."));
       setIntent(body as SigningIntent);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load handoff.");
+      setError(loadError instanceof Error ? loadError.message : "Failed to load signing intent.");
     } finally {
       setIsLoading(false);
     }
@@ -258,7 +258,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         method: "POST",
       });
       const body = (await response.json()) as SigningIntent | { message?: string; error?: string };
-      if (!response.ok) throw new Error(readResponseError(body, "Failed to prepare handoff."));
+      if (!response.ok) throw new Error(readResponseError(body, "Failed to prepare signing intent."));
       return body as SigningIntent;
     },
     [address, intentId, token],
@@ -270,7 +270,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       return;
     }
     if (connectedMismatch) {
-      notification.error("Connected wallet does not match this handoff.");
+      notification.error("Connected wallet does not match this signing link.");
       return;
     }
     const acceptedTerms = await requireAcceptance("submit");
@@ -288,7 +288,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       const calls = prepared.transactionPlan?.calls ?? [];
       if (authorizationRequest && calls.length === 0) {
         if (!intent?.chainId) {
-          throw new Error("Handoff is missing a chainId.");
+          throw new Error("Signing intent is missing a chainId.");
         }
         const expectedUsdcAddress = getDefaultUsdcAddress(intent.chainId);
         if (!expectedUsdcAddress) {
@@ -333,7 +333,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       setIntent(prepared);
       notification.success("RateLoop ask is ready for wallet execution.");
     } catch (prepareError) {
-      setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare handoff.");
+      setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare signing intent.");
     } finally {
       setIsPreparing(false);
     }
@@ -360,7 +360,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       return;
     }
     if (connectedMismatch) {
-      notification.error("Connected wallet does not match this handoff.");
+      notification.error("Connected wallet does not match this signing link.");
       return;
     }
     const acceptedTerms = await requireAcceptance("submit");
@@ -442,7 +442,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       <section className="surface-card rounded-lg p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent signing handoff</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent signing link</p>
             <h1 className={`${surfaceSectionHeadingClassName} mt-2`}>{readQuestionTitle(intent)}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
               Review this RateLoop ask, connect the wallet that should pay the bounty, then sign and submit the prepared
@@ -460,7 +460,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
 
       {isLoading ? (
         <div className="surface-card rounded-lg p-6">
-          <span className="loading loading-spinner loading-sm text-primary" /> Loading handoff...
+          <span className="loading loading-spinner loading-sm text-primary" /> Loading signing link...
         </div>
       ) : null}
 
@@ -502,7 +502,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
 
             {connectedMismatch ? (
               <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
-                This handoff expects {intent.walletAddress}. You are connected as {address}.
+                This signing link expects {intent.walletAddress}. You are connected as {address}.
               </p>
             ) : null}
             {needsChainSwitch ? (
@@ -614,8 +614,8 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
               </div>
             ) : (
               <p className="mt-4 text-sm text-base-content/60">
-                Prepare this handoff to fetch the wallet calls. x402 asks may first request a typed-data signature, then
-                return the transaction plan.
+                Prepare this signing link to fetch the wallet calls. x402 asks may first request a typed-data signature,
+                then return the transaction plan.
               </p>
             )}
           </section>

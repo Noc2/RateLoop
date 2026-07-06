@@ -531,7 +531,7 @@ test.describe("Agent browser handoffs", () => {
       page,
       created.signingUrl,
       new RegExp(`/agent/sign/${created.id}$`),
-      "Agent signing handoff",
+      "Agent signing link",
       title,
     );
     await expect(page.getByText("pending")).toBeVisible();
