@@ -1,11 +1,6 @@
-import {
-  ContentRegistryAbi,
-  FeedbackBonusEscrowAbi,
-  ProtocolConfigAbi,
-  RoundVotingEngineAbi,
-} from "@rateloop/contracts/abis";
+import { ContentRegistryAbi, FeedbackBonusEscrowAbi, ProtocolConfigAbi } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
-import { ROUND_STATE, getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
+import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
@@ -44,6 +39,10 @@ import {
   getServerTargetNetworkById,
   getX402UsdcAddressOverride,
 } from "~~/lib/env/server";
+import {
+  FeedbackBonusRoundTargetError,
+  resolveOpenFeedbackBonusRoundTarget,
+} from "~~/lib/feedback/feedbackBonusFunding";
 import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getContentRegistrySubmissionRewardMinimum,
@@ -3111,32 +3110,19 @@ async function resolveFeedbackBonusRoundTarget(params: {
     abi: ContentRegistryAbi,
     functionName: "votingEngine",
   })) as Address;
-  const currentRoundId = (await params.publicClient.readContract({
-    address: votingEngineAddress,
-    abi: RoundVotingEngineAbi,
-    functionName: "currentRoundId",
-    args: [BigInt(params.contentId)],
-  })) as bigint;
-  const roundId = currentRoundId > 0n ? currentRoundId : 1n;
-  const roundCore = (await params.publicClient.readContract({
-    address: votingEngineAddress,
-    abi: RoundVotingEngineAbi,
-    functionName: "roundCore",
-    args: [BigInt(params.contentId), roundId],
-  })) as any;
-  const startTime = BigInt(roundCore?.startTime ?? roundCore?.[0] ?? 0);
-  const state = Number(roundCore?.state ?? roundCore?.[1] ?? -1);
-  if (startTime === 0n || state !== ROUND_STATE.Open) {
-    throw new X402QuestionConflictError(
-      "Feedback Bonus can only be funded while the submitted question round is open.",
-    );
+  try {
+    return await resolveOpenFeedbackBonusRoundTarget({
+      client: params.publicClient,
+      contentId: BigInt(params.contentId),
+      durationSeconds: params.durationSeconds,
+      votingEngineAddress,
+    });
+  } catch (error) {
+    if (error instanceof FeedbackBonusRoundTargetError) {
+      throw new X402QuestionConflictError(error.message);
+    }
+    throw error;
   }
-  const feedbackClosesAt = startTime + params.durationSeconds;
-  const latestBlock = await params.publicClient.getBlock({ blockTag: "latest" });
-  if (feedbackClosesAt <= latestBlock.timestamp) {
-    throw new X402QuestionConflictError("Feedback Bonus close time is in the past.");
-  }
-  return { feedbackClosesAt, roundId };
 }
 
 export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {

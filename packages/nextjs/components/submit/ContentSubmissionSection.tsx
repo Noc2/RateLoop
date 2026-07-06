@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH } from "@rateloop/agents/voteUi";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   type TargetAudience,
   getProfileSelfReportTaxonomy,
@@ -77,6 +75,7 @@ import {
 import { MAX_QUESTION_LENGTH } from "~~/lib/contentTitle";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
+import { resolveOpenFeedbackBonusRoundTarget } from "~~/lib/feedback/feedbackBonusFunding";
 import {
   HEAD_TO_HEAD_AB_QUESTION_TOOLTIP,
   type HeadToHeadTitleMode,
@@ -3019,32 +3018,13 @@ export function ContentSubmissionSection() {
             throw new Error("Public client not available for Feedback Bonus funding.");
           }
 
-          const currentFeedbackRoundId = (await readContract(wagmiConfig, {
-            address: verifiedVotingEngineAddress,
-            abi: RoundVotingEngineAbi,
-            chainId: targetNetwork.id,
-            functionName: "currentRoundId",
-            args: [primarySubmittedContentId],
-          })) as bigint;
-          const feedbackRoundId = currentFeedbackRoundId > 0n ? currentFeedbackRoundId : 1n;
-          const roundCore = (await readContract(wagmiConfig, {
-            address: verifiedVotingEngineAddress,
-            abi: RoundVotingEngineAbi,
-            chainId: targetNetwork.id,
-            functionName: "roundCore",
-            args: [primarySubmittedContentId, feedbackRoundId],
-          })) as any;
-          const roundStartTime = BigInt(roundCore?.startTime ?? roundCore?.[0] ?? 0);
-          const roundState = Number(roundCore?.state ?? roundCore?.[1] ?? -1);
-          if (roundStartTime === 0n || roundState !== ROUND_STATE.Open) {
-            throw new Error("Feedback Bonus can only be funded while the submitted question round is open.");
-          }
-
-          const feedbackBonusClosesAt = roundStartTime + BigInt(questionDurationSeconds);
-          const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
-          if (feedbackBonusClosesAt <= latestBlock.timestamp) {
-            throw new Error("Feedback Bonus close time is in the past.");
-          }
+          const { feedbackClosesAt: feedbackBonusClosesAt, roundId: feedbackRoundId } =
+            await resolveOpenFeedbackBonusRoundTarget({
+              client: publicClient,
+              contentId: primarySubmittedContentId,
+              durationSeconds: BigInt(questionDurationSeconds),
+              votingEngineAddress: verifiedVotingEngineAddress,
+            });
 
           const feedbackApproveWrite = {
             address: feedbackBonusTokenAddress,
