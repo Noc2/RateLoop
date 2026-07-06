@@ -87,6 +87,7 @@ import {
   resolveAutoHeadToHeadTitle,
 } from "~~/lib/headToHeadQuestion";
 import { formatHumanDuration } from "~~/lib/humanDuration";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
@@ -278,6 +279,8 @@ type SaveDraftOptions = {
 };
 
 type SubmittedContentModalState = {
+  chainId?: number | null;
+  deploymentKey?: string | null;
   description: string;
   id: bigint;
   lastActivityAt: string | null;
@@ -1904,6 +1907,7 @@ function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): Su
   const questions = readQuestionSummaries(handoff);
   const primaryQuestion = questions[0];
   return {
+    chainId: handoff?.chainId ?? null,
     description:
       questions.length > 1
         ? `${questions.length} question bundle. Answer all questions to qualify for the bounty.`
@@ -2099,6 +2103,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [savedDraftJson, setSavedDraftJson] = useState("");
   const [draftSourceKey, setDraftSourceKey] = useState("");
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
+  const submittedContentRateLinkScope = useMemo(() => {
+    const contentChainId = submittedContent?.chainId ?? targetNetwork.id;
+    return {
+      chainId: contentChainId,
+      deploymentKey:
+        submittedContent?.deploymentKey ?? resolveProtocolDeploymentScope(contentChainId)?.deploymentKey ?? null,
+    };
+  }, [submittedContent?.chainId, submittedContent?.deploymentKey, targetNetwork.id]);
   const [clientFeedbackBonusRecoveryHashes, setClientFeedbackBonusRecoveryHashes] = useState<string[]>([]);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
   const { data: protocolRoundConfigBounds } = useScaffoldReadContract({
@@ -4286,6 +4298,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       {submittedContent ? (
         <ShareModal
           contentId={submittedContent.id}
+          chainId={submittedContentRateLinkScope.chainId}
+          deploymentKey={submittedContentRateLinkScope.deploymentKey}
           title={submittedContent.title}
           description={submittedContent.description}
           lastActivityAt={submittedContent.lastActivityAt}

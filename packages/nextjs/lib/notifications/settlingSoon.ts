@@ -8,6 +8,11 @@ interface SettlingSoonCandidate {
   estimatedSettlementTime: string | null;
 }
 
+interface SettlingSoonRateLinkScope {
+  chainId?: number | null;
+  deploymentKey?: string | null;
+}
+
 type SettlingSoonNotificationKind = "hour" | "day";
 
 interface SettlingSoonNotificationSummary {
@@ -47,6 +52,7 @@ function sortByEstimatedSettlementTime(items: readonly SettlingSoonCandidate[]) 
 function buildSummary(
   kind: SettlingSoonNotificationKind,
   items: readonly SettlingSoonCandidate[],
+  rateLinkScope?: SettlingSoonRateLinkScope,
 ): SettlingSoonNotificationSummary | null {
   if (items.length === 0) return null;
 
@@ -58,7 +64,7 @@ function buildSummary(
   return {
     kind,
     contentId: primary.contentId,
-    href: buildRateContentHref(primary.contentId),
+    href: buildRateContentHref(primary.contentId, rateLinkScope),
     title:
       kind === "hour"
         ? additionalCount > 0
@@ -79,6 +85,7 @@ export function pickSettlingSoonNotification(options: {
   seenDayIds: ReadonlySet<string>;
   allowHour?: boolean;
   allowDay?: boolean;
+  rateLinkScope?: SettlingSoonRateLinkScope;
 }): SettlingSoonNotificationSummary | null {
   const unseenHourItems: SettlingSoonCandidate[] = [];
   const unseenDayItems: SettlingSoonCandidate[] = [];
@@ -102,12 +109,12 @@ export function pickSettlingSoonNotification(options: {
   }
 
   if (options.allowHour ?? true) {
-    const hourSummary = buildSummary("hour", unseenHourItems);
+    const hourSummary = buildSummary("hour", unseenHourItems, options.rateLinkScope);
     if (hourSummary) return hourSummary;
   }
 
   if (options.allowDay ?? true) {
-    const daySummary = buildSummary("day", unseenDayItems);
+    const daySummary = buildSummary("day", unseenDayItems, options.rateLinkScope);
     if (daySummary) return daySummary;
   }
 

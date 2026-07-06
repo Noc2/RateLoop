@@ -79,11 +79,15 @@ function EarningsMetric({ detail, label, value }: { detail?: string; label: stri
 }
 
 export function ProfileEarnings({
+  chainId,
+  deploymentKey,
   headerAction,
   isLoading,
   items,
   summary,
 }: {
+  chainId?: number | null;
+  deploymentKey?: string | null;
   headerAction?: ReactNode;
   isLoading?: boolean;
   items: PonderProfileEarningItem[];
@@ -164,7 +168,7 @@ export function ProfileEarnings({
                         <td>
                           {item.contentId ? (
                             <Link
-                              href={buildRateContentHref(item.contentId)}
+                              href={buildRateContentHref(item.contentId, { chainId, deploymentKey })}
                               className="font-medium transition-colors hover:text-primary"
                             >
                               {itemTargetLabel(item)}

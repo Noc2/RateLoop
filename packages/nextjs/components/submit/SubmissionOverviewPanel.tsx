@@ -183,7 +183,10 @@ export function SubmissionOverviewPanel() {
                     <tr key={item.id.toString()} className="hover:bg-base-content/[0.04]">
                       <td className="max-w-[28rem]">
                         <Link
-                          href={buildRateContentHref(item.id)}
+                          href={buildRateContentHref(item.id, {
+                            chainId: item.chainId,
+                            deploymentKey: item.deploymentKey,
+                          })}
                           className="line-clamp-2 font-medium leading-6 transition-colors hover:text-primary"
                         >
                           {item.title}
@@ -210,7 +213,10 @@ export function SubmissionOverviewPanel() {
                       <td className="text-sm text-base-content/70">{formatDate(item.createdAt)}</td>
                       <td className="text-right">
                         <Link
-                          href={buildRateContentHref(item.id)}
+                          href={buildRateContentHref(item.id, {
+                            chainId: item.chainId,
+                            deploymentKey: item.deploymentKey,
+                          })}
                           className="btn btn-ghost btn-xs rounded-lg"
                           aria-label={`View submission ${item.id.toString()}`}
                         >

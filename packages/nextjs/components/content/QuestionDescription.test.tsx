@@ -39,6 +39,17 @@ test("QuestionDescription prefers custom labels and fetched question titles", ()
   assert.doesNotMatch(html, /Fallback title/);
 });
 
+test("QuestionDescription preserves referenced content deployment scope when available", () => {
+  const referencedContentById = new Map([
+    ["42", { id: 42n, chainId: 8453, deploymentKey: "8453:0xabc123", title: "Scoped title" }],
+  ]);
+  const html = renderToStaticMarkup(
+    <QuestionDescription description="Compare [[question:42]]." referencedContentById={referencedContentById} />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /href="\/rate\?content=42&amp;chainId=8453&amp;deploymentKey=8453%3A0xabc123"/);
+});
+
 test("QuestionDescription can render a shorter preview before expansion", () => {
   const html = renderToStaticMarkup(
     <QuestionDescription

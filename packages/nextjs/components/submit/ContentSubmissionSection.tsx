@@ -90,6 +90,7 @@ import {
   getContentTagValidationError,
   getContentTitleValidationError,
 } from "~~/lib/moderation/submissionValidation";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
@@ -640,6 +641,11 @@ export function ContentSubmissionSection() {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const { openWalletFunding } = useWalletFunding();
+  const submissionDeployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const submissionRateLinkScope = useMemo(
+    () => ({ chainId: targetNetwork.id, deploymentKey: submissionDeployment?.deploymentKey ?? null }),
+    [submissionDeployment?.deploymentKey, targetNetwork.id],
+  );
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(connectedAddress, targetNetwork.id);
   const {
@@ -4868,6 +4874,8 @@ export function ContentSubmissionSection() {
       {submittedContent ? (
         <ShareModal
           contentId={submittedContent.id}
+          chainId={submissionRateLinkScope.chainId}
+          deploymentKey={submissionRateLinkScope.deploymentKey}
           title={submittedContent.title}
           description={submittedContent.description}
           lastActivityAt={submittedContent.lastActivityAt}

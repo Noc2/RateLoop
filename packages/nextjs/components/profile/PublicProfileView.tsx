@@ -780,6 +780,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const { targetNetwork } = useTargetNetwork();
   const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const deploymentKey = deployment?.deploymentKey ?? null;
+  const rateLinkScope = useMemo(
+    () => ({ chainId: targetNetwork.id, deploymentKey }),
+    [deploymentKey, targetNetwork.id],
+  );
   const { address: connectedAddress } = useAccount();
   const { openConnectModal } = useRateLoopConnectModal();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
@@ -1647,6 +1651,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         </div>
 
         <ProfileEarnings
+          chainId={rateLinkScope.chainId}
+          deploymentKey={rateLinkScope.deploymentKey}
           headerAction={ownProfile ? <ClaimRewardsButton className="w-fit" /> : undefined}
           isLoading={profileLoading}
           items={profileDetail?.recentEarnings ?? []}
@@ -1745,7 +1751,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 return (
                   <Link
                     key={submission.id}
-                    href={buildRateContentHref(submission.id)}
+                    href={buildRateContentHref(submission.id, rateLinkScope)}
                     className="surface-card-nested rounded-2xl p-4 transition-colors hover:bg-base-content/[0.08]"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1818,7 +1824,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                       <tr key={vote.id} className="hover:bg-base-200/40">
                         <td>
                           <Link
-                            href={buildRateContentHref(vote.contentId)}
+                            href={buildRateContentHref(vote.contentId, rateLinkScope)}
                             className="font-medium transition-colors hover:text-primary"
                           >
                             Content #{vote.contentId}

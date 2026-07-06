@@ -11,6 +11,8 @@ import { parseQuestionReferences } from "~~/lib/questionReferences";
 
 export type QuestionReferenceContentSummary = {
   id: bigint | string;
+  chainId?: number | null;
+  deploymentKey?: string | null;
   question?: string;
   title?: string;
 };
@@ -288,7 +290,10 @@ export function QuestionDescription({
       return (
         <Link
           key={`${segment.contentId}-${index}`}
-          href={buildRateContentHref(segment.contentId)}
+          href={buildRateContentHref(segment.contentId, {
+            chainId: summary?.chainId,
+            deploymentKey: summary?.deploymentKey,
+          })}
           aria-label={`Rate related question: ${label}`}
           className="inline-flex max-w-full items-center align-baseline rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-left text-sm font-semibold leading-snug text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary-focus"
         >

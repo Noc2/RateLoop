@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { buildRateContentHref } from "~~/constants/routes";
 import { getClaimableRoundKey } from "~~/hooks/claimableRewards";
 import { useScaffoldWatchContractEvent } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useAllClaimableRewards } from "~~/hooks/useAllClaimableRewards";
 import { useDiscoverSignals } from "~~/hooks/useDiscoverSignals";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
@@ -31,6 +32,7 @@ import {
   writeSeenFollowedActivityNotificationKeys,
 } from "~~/lib/notifications/followedActivity";
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { notification } from "~~/utils/scaffold-eth";
 
 const GOVERNANCE_REWARDS_HREF = "/governance";
@@ -47,6 +49,12 @@ type PendingClaimRoundNotification = PendingClaimRewardNotification & {
  */
 export function SettlementNotifier() {
   const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const rateLinkScope = useMemo(
+    () => ({ chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey ?? null }),
+    [deployment?.deploymentKey, targetNetwork.id],
+  );
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [pendingClaimCount, setPendingClaimCount] = useState(0);
   const [claimRecheckTick, setClaimRecheckTick] = useState(0);
@@ -226,6 +234,7 @@ export function SettlementNotifier() {
           seenDayIds: seenSettlingDayKeysRef.current,
           allowHour: preferences.settlingSoonHour,
           allowDay: preferences.settlingSoonDay,
+          rateLinkScope,
         })
       : null;
 
@@ -271,7 +280,7 @@ export function SettlementNotifier() {
         "success",
         "Followed curator asked",
         `${displayName} asked "${shortTitle}".`,
-        buildRateContentHref(item.contentId),
+        buildRateContentHref(item.contentId, rateLinkScope),
         FOLLOWED_CURATOR_TOAST_ID,
       );
     }
@@ -291,7 +300,7 @@ export function SettlementNotifier() {
         "success",
         "Followed curator resolved",
         `${displayName} ${action} a call on "${shortTitle}".`,
-        buildRateContentHref(item.contentId),
+        buildRateContentHref(item.contentId, rateLinkScope),
         FOLLOWED_CURATOR_TOAST_ID,
       );
     }
@@ -322,6 +331,7 @@ export function SettlementNotifier() {
     hasTrackedDiscoverSignals,
     notifyWithLink,
     preferences,
+    rateLinkScope,
     trackedSignalSourcesLoading,
   ]);
 
@@ -418,7 +428,7 @@ export function SettlementNotifier() {
           "success",
           "Watched Content Resolved!",
           `Watched content resolved! Content #${contentId} round #${args.roundId.toString()} is ready to review.`,
-          buildRateContentHref(contentId),
+          buildRateContentHref(contentId, rateLinkScope),
         );
       }
     },

@@ -9,14 +9,18 @@ import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading"
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, buildRateContentHref } from "~~/constants/routes";
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { formatTimeRemaining } from "~~/hooks/useActiveVotesWithDeadlines";
 import { ManualRevealVote, useManualRevealVotes } from "~~/hooks/useManualRevealVotes";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 function RevealVoteCard({
+  rateLinkScope,
   vote,
   isPending,
   onReveal,
 }: {
+  rateLinkScope: { chainId?: number | null; deploymentKey?: string | null };
   vote: ManualRevealVote;
   isPending: boolean;
   onReveal: (vote: ManualRevealVote) => Promise<boolean>;
@@ -28,7 +32,7 @@ function RevealVoteCard({
       <div className="space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <Link
-            href={buildRateContentHref(vote.contentId)}
+            href={buildRateContentHref(vote.contentId, rateLinkScope)}
             className="text-lg font-semibold hover:text-primary transition-colors"
           >
             Content #{vote.contentId.toString()}
@@ -61,6 +65,12 @@ function RevealVoteCard({
 
 export function ManualRevealPage() {
   const { address, isConnected } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const deployment = resolveProtocolDeploymentScope(targetNetwork.id);
+  const rateLinkScope = {
+    chainId: targetNetwork.id,
+    deploymentKey: deployment?.deploymentKey ?? null,
+  };
   const { isRestoringWallet } = useWalletRestore();
   const { votes, readyVotes, waitingVotes, isLoading, revealVote, revealingCommitKey } = useManualRevealVotes(address);
 
@@ -138,6 +148,7 @@ export function ManualRevealPage() {
                     <RevealVoteCard
                       key={vote.commitKey}
                       vote={vote}
+                      rateLinkScope={rateLinkScope}
                       isPending={revealingCommitKey === vote.commitKey}
                       onReveal={revealVote}
                     />
@@ -153,7 +164,13 @@ export function ManualRevealPage() {
                 <h2 className="text-xl font-semibold">Waiting</h2>
                 <div className="space-y-3">
                   {waitingVotes.map(vote => (
-                    <RevealVoteCard key={vote.commitKey} vote={vote} isPending={false} onReveal={revealVote} />
+                    <RevealVoteCard
+                      key={vote.commitKey}
+                      vote={vote}
+                      rateLinkScope={rateLinkScope}
+                      isPending={false}
+                      onReveal={revealVote}
+                    />
                   ))}
                 </div>
               </section>

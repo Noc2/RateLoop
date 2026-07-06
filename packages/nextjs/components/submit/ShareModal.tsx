@@ -12,6 +12,8 @@ import { type ContentShareContentInput, buildContentShareData } from "~~/lib/soc
 
 interface ShareModalProps {
   contentId: bigint;
+  chainId?: number | null;
+  deploymentKey?: string | null;
   title: string;
   description: string;
   rating?: number | null;
@@ -25,6 +27,8 @@ interface ShareModalProps {
 
 export function ShareModal({
   contentId,
+  chainId,
+  deploymentKey,
   title,
   description,
   rating = null,
@@ -54,6 +58,8 @@ export function ShareModal({
     const shareData = buildContentShareData(
       {
         id: contentId.toString(),
+        chainId,
+        deploymentKey,
         title,
         description,
         rating,
@@ -67,7 +73,19 @@ export function ShareModal({
     );
 
     return { ratingLabel: shareData.rating?.label ?? null, url: shareData.shareUrl };
-  }, [contentId, description, lastActivityAt, openRound, rating, ratingBps, ratingSettledRounds, title, totalVotes]);
+  }, [
+    chainId,
+    contentId,
+    deploymentKey,
+    description,
+    lastActivityAt,
+    openRound,
+    rating,
+    ratingBps,
+    ratingSettledRounds,
+    title,
+    totalVotes,
+  ]);
   const shareUrl = shareDetails.url;
   const truncatedTitle = truncateContentTitle(title);
   const tweetText = shareDetails.ratingLabel
@@ -123,7 +141,7 @@ export function ShareModal({
         <div className="space-y-2.5">
           {/* View content */}
           <Link
-            href={buildRateContentHref(contentId, { waitForContent: true })}
+            href={buildRateContentHref(contentId, { chainId, deploymentKey, waitForContent: true })}
             className={getGradientActionClassName("!w-full")}
             data-motion="idle"
           >
