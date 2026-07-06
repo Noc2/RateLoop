@@ -1,0 +1,29 @@
+{
+  "clientRequestId": "world-cup-2026-48-vs-32-format",
+  "chainId": 8453,
+  "templateId": "head_to_head_ab",
+  "maxPaymentAmount": "3000000",
+  "bounty": {
+    "asset": "USDC",
+    "amount": "2000000",
+    "requiredVoters": "5"
+  },
+  "feedbackBonus": {
+    "asset": "USDC",
+    "amount": "1000000"
+  },
+  "question": {
+    "templateId": "head_to_head_ab",
+    "templateInputs": {
+      "optionAKey": "A",
+      "optionALabel": "Keep 48 teams",
+      "optionBKey": "B",
+      "optionBLabel": "Return to 32 teams"
+    },
+    "title": "Do you prefer A = Keep 48 teams or B = Return to 32 teams?",
+    "description": "Based on the 2026 tournament so far, pick whether the World Cup should keep the expanded 48-team format or return to 32 teams. Feedback: one reason, especially about match quality, fairness, inclusion, or fan experience.",
+    "contextUrl": "https://www.theguardian.com/football/2023/mar/14/world-cup-2026-four-team-groups-104-game-tournament-approval-fifa",
+    "categoryId": "1",
+    "tags": ["sports", "world-cup-2026", "format"]
+  }
+}
