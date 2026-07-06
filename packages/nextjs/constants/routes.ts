@@ -8,6 +8,7 @@ export type AskRouteTab = typeof ASK_MANUAL_ROUTE_TAB | typeof ASK_AGENT_ROUTE_T
 export const RATE_ROUTE = "/rate";
 export const RATE_WAIT_FOR_CONTENT_PARAM = "waitForContent";
 export const RATE_CHAIN_ID_PARAM = "chainId";
+export const RATE_DEPLOYMENT_KEY_PARAM = "deploymentKey";
 
 export const GOVERNANCE_ROUTE = "/governance";
 
@@ -49,6 +50,7 @@ export const ASK_SUBMISSIONS_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, {
 interface RateContentHrefOptions {
   waitForContent?: boolean;
   chainId?: number | string | null;
+  deploymentKey?: string | null;
 }
 
 function normalizeRateContentChainId(chainId: RateContentHrefOptions["chainId"]) {
@@ -59,10 +61,16 @@ function normalizeRateContentChainId(chainId: RateContentHrefOptions["chainId"])
   return parsedChainId.toString();
 }
 
+function normalizeRateContentDeploymentKey(deploymentKey: RateContentHrefOptions["deploymentKey"]) {
+  const normalized = deploymentKey?.trim();
+  return normalized ? normalized : undefined;
+}
+
 export function buildRateContentHref(contentId: string | number | bigint, options?: RateContentHrefOptions) {
   return buildRouteWithSearchParams(RATE_ROUTE, {
     content: contentId.toString(),
     [RATE_CHAIN_ID_PARAM]: normalizeRateContentChainId(options?.chainId),
+    [RATE_DEPLOYMENT_KEY_PARAM]: normalizeRateContentDeploymentKey(options?.deploymentKey),
     ...(options?.waitForContent ? { [RATE_WAIT_FOR_CONTENT_PARAM]: "1" } : {}),
   });
 }
