@@ -25,7 +25,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function parseImageParam(value: string) {
-  const decoded = decodeURIComponent(value);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return null;
+  }
   const match = decoded.match(/^(att_[A-Za-z0-9_-]{16,80})\.webp$/);
   return match?.[1] ?? null;
 }

@@ -661,6 +661,15 @@ test("gated image route throttles guessed ids before lookup", async () => {
   });
 });
 
+test("gated image route returns not found for malformed encoded attachment params", async () => {
+  const response = await getImage(new NextRequest("https://www.rateloop.ai/api/attachments/images/%25.webp"), {
+    params: Promise.resolve({ attachmentId: "%.webp" }),
+  });
+
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), "Not found");
+});
+
 test("gated images throttle repeated authorized resource reads and dedupe access logs", async () => {
   await seedGatedImage();
   const cookie = await acceptTermsAndBuildCookie("nonce-image-throttle");
