@@ -133,6 +133,7 @@ test("buildContentShareData omits the rating label for unrated content", () => {
   assert.match(data.title, /Rate this on RateLoop/);
   assert.match(data.description, /A compact summary for social previews/);
   assert.match(data.ratingVersion, /og4-r-88-na-/);
+  assert.equal(new URL(data.shareUrl).searchParams.get("rv"), data.ratingVersion);
 });
 
 test("buildContentShareData summarizes potential bounty and feedback bonus rewards", () => {
