@@ -1,7 +1,7 @@
 import type { ContentItem } from "~~/hooks/contentFeed/shared";
 import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
-export interface ContentFeedbackPanelScope {
+interface ContentFeedbackPanelScope {
   chainId: number | null;
   deploymentKey: string | null;
   unsupported: boolean;
