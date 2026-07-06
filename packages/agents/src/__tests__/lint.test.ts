@@ -180,6 +180,29 @@ describe("agent question linting", () => {
     expect(summarizeLintFindings(findings).ok).toBe(false);
   });
 
+  it("rejects missing or invalid Feedback Bonus amounts before server submission", () => {
+    for (const amount of [undefined, "0", 0, "-1", "1.5", "1000junk", Number.MAX_SAFE_INTEGER + 1]) {
+      const findings = lintAgentAskRequest({
+        ...VALID_REQUEST,
+        feedbackBonus: {
+          amount,
+          asset: "USDC",
+        },
+      });
+
+      expect(findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            level: "error",
+            message: "Feedback Bonus amount must be a positive atomic integer.",
+            path: "feedbackBonus.amount",
+          }),
+        ]),
+      );
+      expect(summarizeLintFindings(findings).ok).toBe(false);
+    }
+  });
+
   it("rejects legacy timing fields in authored asks", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

@@ -824,6 +824,10 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
     );
   }
   if (isObject(request.feedbackBonus)) {
+    const amount = parseLintPositiveInteger((request.feedbackBonus as JsonObject).amount);
+    if (amount === null) {
+      pushFinding(findings, "error", "feedbackBonus.amount", "Feedback Bonus amount must be a positive atomic integer.");
+    }
     lintOptionalRewardAsset((request.feedbackBonus as JsonObject).asset, "feedbackBonus.asset", findings);
   }
 
