@@ -741,9 +741,10 @@ async function createAskHandoffLink(args: JsonObject, requestUrl: string | undef
 async function getAskHandoffStatus(args: JsonObject) {
   const handoffId = readRequiredStringField(args, "handoffId");
   const handoffToken = readRequiredStringField(args, "handoffToken");
+  const includeImageData = args.includeImageData === true || args.includeImageData === "true";
   const handoff = await loadAgentAskHandoffByToken({ handoffId, token: handoffToken });
   const assets = await listAgentAskHandoffAssets(handoff.id);
-  return buildAgentAskHandoffResponse({ assets, handoff });
+  return buildAgentAskHandoffResponse({ assets, handoff, includeImageData });
 }
 
 function parseMaxPaymentAmount(value: unknown): bigint {

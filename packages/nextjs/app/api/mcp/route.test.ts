@@ -311,6 +311,9 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     };
     required?: string[];
   };
+  const handoffStatusSchema = toolByName.get("rateloop_get_handoff_status")?.inputSchema as {
+    properties?: Record<string, unknown>;
+  };
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
     anyOf?: Array<{ required?: string[] }>;
     properties?: {
@@ -362,6 +365,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.deepEqual(handoffSchema.properties?.request?.required, ["clientRequestId", "bounty", "maxPaymentAmount"]);
   assert.ok(handoffSchema.properties?.request?.properties?.clientRequestId);
   assert.ok(handoffSchema.properties?.request?.properties?.maxPaymentAmount);
+  assert.ok(handoffStatusSchema.properties?.includeImageData);
   assert.deepEqual(askSchema.required, undefined);
   assert.ok(
     askSchema.anyOf?.some(option =>

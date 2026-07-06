@@ -655,6 +655,7 @@ export interface RatingStatusResponse {
 }
 
 export type RateLoopAgentAnswer =
+  | "not_found"
   | "pending"
   | "proceed"
   | "proceed_with_caution"
@@ -662,6 +663,49 @@ export type RateLoopAgentAnswer =
   | "do_not_proceed"
   | "inconclusive"
   | "failed";
+
+export type RateLoopAgentFinalityStatus =
+  | "final"
+  | "waiting_for_round_close"
+  | "normal_finality"
+  | "stalled"
+  | "not_final";
+
+export type RateLoopAgentBlockedReason =
+  | "round_not_closed"
+  | "normal_payout_finality"
+  | "payout_finality_sla_exceeded"
+  | "non_terminal_round_state"
+  | null;
+
+export type RateLoopAgentWaitCode =
+  | "dry_run_complete"
+  | "failed_submission"
+  | "operation_not_found"
+  | "still_settling"
+  | string;
+
+export interface RateLoopAgentResultWait {
+  code?: RateLoopAgentWaitCode;
+  recoverWith?: string | null;
+  [key: string]: unknown;
+}
+
+export interface RateLoopAgentProtocolState {
+  latestRound?: JsonRecord | null;
+  operationStatus?:
+    | "awaiting_wallet_signature"
+    | "dry_run"
+    | "failed"
+    | "not_final"
+    | "not_found"
+    | "result_ready"
+    | "submitted"
+    | "webhook_signature_required"
+    | string;
+  status?: number | null;
+  [key: string]: unknown;
+}
 
 export interface RateLoopAgentResult {
   ready: boolean;
@@ -675,7 +719,19 @@ export interface RateLoopAgentResult {
     [key: string]: unknown;
   };
   cohortSummary?: JsonRecord | null;
+  targetAudienceMatch?: JsonRecord | null;
   distribution?: JsonRecord;
+  answerScopes?: JsonRecord;
+  blockedReason?: RateLoopAgentBlockedReason;
+  estimatedReadyAt?: string | null;
+  finalityStatus?: RateLoopAgentFinalityStatus | string;
+  feedbackQuality?: JsonRecord;
+  includesVetoWindow?: boolean;
+  normalMaxDelaySeconds?: 3600 | number;
+  stalled?: boolean;
+  wait?: RateLoopAgentResultWait;
+  pollAfterMs?: number | null;
+  terminal?: boolean;
   voteCount?: number;
   stakeMass?: JsonRecord;
   rationaleSummary?: string;
@@ -687,7 +743,7 @@ export interface RateLoopAgentResult {
   publicUrl?: string | null;
   methodology?: JsonRecord;
   limitations?: string[];
-  protocolState?: JsonRecord;
+  protocolState?: RateLoopAgentProtocolState;
   [key: string]: unknown;
 }
 

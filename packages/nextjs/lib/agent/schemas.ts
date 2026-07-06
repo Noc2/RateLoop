@@ -604,6 +604,11 @@ export const agentHandoffStatusInputSchema = {
       description: "Private handoff token returned by rateloop_create_ask_handoff_link.",
       type: "string",
     },
+    includeImageData: {
+      description:
+        "When true, include dataUrl base64 for stored staged images. Defaults to metadata-only for routine polling.",
+      type: ["boolean", "string"],
+    },
   },
   required: ["handoffId", "handoffToken"],
   type: "object",

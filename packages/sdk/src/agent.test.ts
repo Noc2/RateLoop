@@ -1016,6 +1016,47 @@ test("ask handoff helpers use direct browser-handoff routes", async () => {
   assert.equal(status.operationKey, `0x${"69".repeat(32)}`);
 });
 
+test("getAskHandoffStatus forwards includeImageData over MCP", async () => {
+  let requestedBody: any;
+  const agent = createRateLoopAgentClient({
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      requestedBody = JSON.parse(String(init?.body));
+      return jsonResponse({
+        result: {
+          structuredContent: {
+            assets: [
+              {
+                attachmentId: "att_image",
+                dataUrl: "data:image/png;base64,AAA=",
+                id: "asset_image",
+                status: "staged",
+              },
+            ],
+            id: "ahf_test",
+            status: "pending",
+          },
+        },
+      });
+    },
+    mcpAccessToken: "agent-token",
+    mcpApiUrl: "https://rateloop.example/api/mcp",
+  });
+
+  const status = await agent.getAskHandoffStatus({
+    handoffId: "ahf_test",
+    handoffToken: "secret",
+    includeImageData: true,
+  });
+
+  assert.equal(requestedBody.params.name, "rateloop_get_handoff_status");
+  assert.deepEqual(requestedBody.params.arguments, {
+    handoffId: "ahf_test",
+    handoffToken: "secret",
+    includeImageData: true,
+  });
+  assert.equal(status.assets?.[0]?.dataUrl, "data:image/png;base64,AAA=");
+});
+
 test("askHumans prefers direct authenticated agent HTTP before MCP framing", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
