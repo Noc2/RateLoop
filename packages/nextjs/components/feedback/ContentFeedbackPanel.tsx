@@ -21,6 +21,7 @@ import {
   type ContentFeedbackItem,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { hasNonZeroCommit } from "~~/lib/vote/commitState";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -154,9 +155,17 @@ export function ContentFeedbackPanel({
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
   const { address } = useAccount();
+  const feedbackScope = useMemo(
+    () => ({
+      chainId: item?.chainId ?? null,
+      deploymentKey: item?.deploymentKey ?? null,
+    }),
+    [item?.chainId, item?.deploymentKey],
+  );
   const { feedback, items, isLoading, isSubmitting, submitFeedback, refetchFeedback } = useContentFeedback(
     item?.id ?? null,
     address,
+    feedbackScope,
   );
   const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("vote_rationale");
   const [body, setBody] = useState("");
@@ -196,12 +205,24 @@ export function ContentFeedbackPanel({
     () => items.some(feedbackItem => feedbackItem.isOwn && isFeedbackForRound(feedbackItem, openRoundId)),
     [items, openRoundId],
   );
+  const configuredFeedbackDeploymentKey = useMemo(() => {
+    if (typeof item?.chainId !== "number") return null;
+    return resolveProtocolDeploymentScope(item.chainId)?.deploymentKey ?? null;
+  }, [item?.chainId]);
+  const feedbackDeploymentUnsupported = Boolean(
+    item?.deploymentKey &&
+      (!configuredFeedbackDeploymentKey ||
+        item.deploymentKey.toLowerCase() !== configuredFeedbackDeploymentKey.toLowerCase()),
+  );
+  const effectiveSubmitBlocker = feedbackDeploymentUnsupported
+    ? "Feedback submission is unavailable for this deployment."
+    : submitBlocker;
   const canSubmitDraft = Boolean(item && bodyLength >= 4 && bodyLength <= CONTENT_FEEDBACK_BODY_MAX_LENGTH);
   const isOwnContent = Boolean(item?.isOwnContent);
   const submitDisabled =
     !canSubmitDraft ||
     isSubmitting ||
-    Boolean(submitBlocker) ||
+    Boolean(effectiveSubmitBlocker) ||
     Boolean(advisoryOnlyFeedbackBlocker) ||
     !isFeedbackOpen ||
     !hasCurrentRoundVote ||
@@ -214,11 +235,11 @@ export function ContentFeedbackPanel({
     hasCurrentRoundFeedback,
     isFeedbackOpen,
     isOwnContent,
-    submitBlocker,
+    submitBlocker: effectiveSubmitBlocker,
   });
   const submitButtonToneClassName =
-    isFeedbackOpen && hasStakedCurrentRoundVote && !submitBlocker ? "vote-feedback" : "vote-light";
-  const feedbackFieldsDisabled = !item || isSubmitting || Boolean(submitBlocker);
+    isFeedbackOpen && hasStakedCurrentRoundVote && !effectiveSubmitBlocker ? "vote-feedback" : "vote-light";
+  const feedbackFieldsDisabled = !item || isSubmitting || Boolean(effectiveSubmitBlocker);
   const panelClassName = isSheet
     ? "flex min-h-0 flex-col overflow-visible"
     : "surface-card flex min-h-0 max-h-[clamp(24rem,46vh,34rem)] flex-col overflow-hidden rounded-lg p-3.5";
@@ -253,8 +274,8 @@ export function ContentFeedbackPanel({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitBlocker) {
-      notification.info(submitBlocker, { duration: 6000 });
+    if (effectiveSubmitBlocker) {
+      notification.info(effectiveSubmitBlocker, { duration: 6000 });
       return;
     }
     if (advisoryOnlyFeedbackBlocker) {

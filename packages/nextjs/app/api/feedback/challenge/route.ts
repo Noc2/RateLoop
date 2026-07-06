@@ -11,6 +11,7 @@ import {
   buildContentFeedbackChallengePayload,
   normalizeContentFeedbackInput,
   normalizeOptionalContentFeedbackChainId,
+  normalizeOptionalContentFeedbackDeploymentKey,
   resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       body?: unknown;
       sourceUrl?: unknown;
       chainId?: unknown;
+      deploymentKey?: unknown;
     };
     // WS-6 (2026-05-21 repo audit): fail-closed when the rate-limit store is unavailable.
     // The downstream `issueSignedActionChallenge` writes to the same store anyway, so an
@@ -56,12 +58,26 @@ export async function POST(request: NextRequest) {
     if (!normalizedChain.ok) {
       return NextResponse.json({ error: normalizedChain.error }, { status: 400 });
     }
+    const normalizedDeploymentKey = normalizeOptionalContentFeedbackDeploymentKey(body.deploymentKey);
+    if (!normalizedDeploymentKey.ok) {
+      return NextResponse.json({ error: normalizedDeploymentKey.error }, { status: 400 });
+    }
     const deployment = resolveContentFeedbackDeploymentScope(normalizedChain.chainId);
     if (!deployment) {
       return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
     }
+    if (
+      normalizedDeploymentKey.deploymentKey &&
+      normalizedDeploymentKey.deploymentKey !== deployment.deploymentKey.toLowerCase()
+    ) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
 
-    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, deployment.chainId);
+    const context = await resolveContentFeedbackRoundContext(
+      normalized.payload.contentId,
+      deployment.chainId,
+      deployment.deploymentKey,
+    );
     const roundId = context.openRoundId;
     if (!roundId || context.currentRoundId !== roundId) {
       return NextResponse.json({ error: "Feedback is only open while voting is active" }, { status: 409 });

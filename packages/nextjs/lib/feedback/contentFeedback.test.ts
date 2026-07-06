@@ -268,6 +268,23 @@ test("normalizes optional content feedback chain ids", () => {
   assert.equal(malformed.error, "Missing or unsupported chainId");
 });
 
+test("normalizes optional content feedback deployment keys", () => {
+  const omitted = contentFeedback.normalizeOptionalContentFeedbackDeploymentKey(undefined);
+  assert.deepEqual(omitted, { ok: true, deploymentKey: undefined });
+
+  const deploymentKey = `${CHAIN_ID}:0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD:0x1111111111111111111111111111111111111111`;
+  const normalized = contentFeedback.normalizeOptionalContentFeedbackDeploymentKey(` ${deploymentKey} `);
+  assert.deepEqual(normalized, {
+    ok: true,
+    deploymentKey: deploymentKey.toLowerCase(),
+  });
+
+  const malformed = contentFeedback.normalizeOptionalContentFeedbackDeploymentKey(`${CHAIN_ID}:not-an-address`);
+  assert.equal(malformed.ok, false);
+  if (malformed.ok) return;
+  assert.equal(malformed.error, "Missing or unsupported deploymentKey");
+});
+
 test("normalizes feature testing feedback types", () => {
   const normalized = contentFeedback.normalizeContentFeedbackInput({
     address: WALLET,
@@ -387,8 +404,6 @@ test("builds round context from terminal and open rounds", () => {
 });
 
 test("resolves open feedback round from on-chain fallback when ponder is stale", async () => {
-  const deployment = resolveProtocolDeploymentScope(CHAIN_ID);
-  assert.ok(deployment);
   let observedContentId: string | undefined;
   let observedChainId: number | undefined;
   let observedContentOptions: unknown;
@@ -409,7 +424,11 @@ test("resolves open feedback round from on-chain fallback when ponder is stale",
     },
   });
 
-  const context = await contentFeedback.resolveContentFeedbackRoundContext("18", CHAIN_ID);
+  const context = await contentFeedback.resolveContentFeedbackRoundContext(
+    "18",
+    CHAIN_ID,
+    TEST_DEPLOYMENT_B.deploymentKey,
+  );
 
   assert.equal(context.openRoundId, "3");
   assert.equal(context.currentRoundId, "3");
@@ -419,11 +438,11 @@ test("resolves open feedback round from on-chain fallback when ponder is stale",
   assert.equal(observedChainId, CHAIN_ID);
   assert.deepEqual(observedContentOptions, {
     chainId: CHAIN_ID,
-    deploymentKey: deployment.deploymentKey,
+    deploymentKey: TEST_DEPLOYMENT_B.deploymentKey,
   });
   assert.deepEqual(observedRoundsOptions, {
     chainId: CHAIN_ID,
-    deploymentKey: deployment.deploymentKey,
+    deploymentKey: TEST_DEPLOYMENT_B.deploymentKey,
   });
 });
 

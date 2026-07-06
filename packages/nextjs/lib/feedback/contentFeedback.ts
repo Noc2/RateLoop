@@ -335,6 +335,25 @@ export function normalizeOptionalContentFeedbackChainId(
   return { ok: true, chainId };
 }
 
+export function normalizeOptionalContentFeedbackDeploymentKey(
+  value: unknown,
+): { ok: true; deploymentKey: string | undefined } | { ok: false; error: string } {
+  if (value === undefined || value === null || value === "") {
+    return { ok: true, deploymentKey: undefined };
+  }
+
+  if (typeof value !== "string") {
+    return { ok: false, error: "Missing or unsupported deploymentKey" };
+  }
+
+  const deploymentKey = value.trim().toLowerCase();
+  if (!/^\d+:0x[a-f0-9]{40}:0x[a-f0-9]{40}$/.test(deploymentKey)) {
+    return { ok: false, error: "Missing or unsupported deploymentKey" };
+  }
+
+  return { ok: true, deploymentKey };
+}
+
 function createContentFeedbackTimestamp(nowMs = Date.now()): Date {
   return new Date(Math.floor(nowMs / 1000) * 1000);
 }
@@ -463,11 +482,12 @@ async function resolveOnchainOpenRoundId(contentId: string, chainId?: number): P
 export async function resolveContentFeedbackRoundContext(
   contentId: string,
   chainId?: number,
+  deploymentKey?: string,
 ): Promise<ContentFeedbackRoundContext> {
   const deployment = resolveContentFeedbackDeploymentScope(chainId);
   const ponderOptions = {
     chainId: deployment?.chainId ?? chainId,
-    deploymentKey: deployment?.deploymentKey,
+    deploymentKey: deploymentKey ?? deployment?.deploymentKey,
   };
   const [contentResult, roundsResult] = await Promise.allSettled([
     (feedbackVoteEligibilityTestOverrides?.getContentById ?? ponderApi.getContentById)(contentId, ponderOptions),

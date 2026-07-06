@@ -33,6 +33,9 @@ interface SignedChallengeResponse {
   sourceUrl?: string | null;
   clientNonce?: string;
   feedbackHash?: string;
+  deploymentKey?: string;
+  contentRegistryAddress?: string;
+  feedbackRegistryAddress?: string;
   error?: string;
 }
 
@@ -48,6 +51,11 @@ interface ContentFeedbackActionResult {
   reason?: "not_connected" | "rejected" | "request_failed";
   error?: string;
   alreadyPublished?: boolean;
+}
+
+interface ContentFeedbackScope {
+  chainId?: number | null;
+  deploymentKey?: string | null;
 }
 
 type PublishedFeedbackResult =
@@ -103,7 +111,11 @@ function readFeedbackSubmissionError(error: unknown, fallback = "Failed to submi
   return message || fallback;
 }
 
-export function useContentFeedback(contentId: bigint | string | number | null | undefined, address?: string) {
+export function useContentFeedback(
+  contentId: bigint | string | number | null | undefined,
+  address?: string,
+  scope: ContentFeedbackScope = {},
+) {
   const queryClient = useQueryClient();
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
@@ -128,10 +140,18 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   const writeTx = useTransactor(localE2ETestWalletClient);
   const normalizedContentId = useMemo(() => normalizeContentId(contentId), [contentId]);
   const normalizedAddress = address?.toLowerCase();
-  const chainId = targetNetwork.id;
+  const chainId = scope.chainId ?? targetNetwork.id;
+  const deploymentKey = scope.deploymentKey?.trim() || null;
   const queryKey = useMemo(
-    () => ["contentFeedback", normalizedContentId ?? "none", normalizedAddress ?? "anonymous", chainId] as const,
-    [chainId, normalizedAddress, normalizedContentId],
+    () =>
+      [
+        "contentFeedback",
+        normalizedContentId ?? "none",
+        normalizedAddress ?? "anonymous",
+        chainId,
+        deploymentKey ?? "default",
+      ] as const,
+    [chainId, deploymentKey, normalizedAddress, normalizedContentId],
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -344,6 +364,9 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       if (address) {
         params.set("address", address);
       }
+      if (deploymentKey) {
+        params.set("deploymentKey", deploymentKey);
+      }
 
       return readResponseBody<ContentFeedbackListResult>(
         await fetch(`/api/feedback?${params.toString()}`),
@@ -379,6 +402,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
               address,
               contentId: normalizedContentId,
               chainId,
+              deploymentKey,
               feedbackType: input.feedbackType,
               body: input.body,
               sourceUrl: input.sourceUrl,
@@ -424,6 +448,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
               body: challenge.body,
               sourceUrl: challenge.sourceUrl,
               chainId: challenge.chainId,
+              deploymentKey: challenge.deploymentKey ?? deploymentKey,
               roundId: challenge.roundId,
               clientNonce: challenge.clientNonce,
               feedbackHash: challenge.feedbackHash,
@@ -456,6 +481,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     [
       address,
       chainId,
+      deploymentKey,
       normalizedContentId,
       publishFeedbackOnchain,
       queryClient,

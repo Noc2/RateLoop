@@ -23,6 +23,7 @@ import {
   normalizeContentFeedbackListInput,
   normalizeContentFeedbackTxHash,
   normalizeOptionalContentFeedbackChainId,
+  normalizeOptionalContentFeedbackDeploymentKey,
   resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
@@ -37,12 +38,14 @@ export async function GET(request: NextRequest) {
   const contentIdParam = request.nextUrl.searchParams.get("contentId");
   const address = request.nextUrl.searchParams.get("address");
   const chainIdParam = request.nextUrl.searchParams.get("chainId");
+  const deploymentKeyParam = request.nextUrl.searchParams.get("deploymentKey");
   const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
     allowOnStoreUnavailable: true,
     extraKeyParts: [
       typeof address === "string" ? address : undefined,
       contentIdParam ?? undefined,
       chainIdParam ?? undefined,
+      deploymentKeyParam ?? undefined,
     ],
   });
   if (limited) return limited;
@@ -59,16 +62,25 @@ export async function GET(request: NextRequest) {
     if (!normalizedChain.ok) {
       return NextResponse.json({ error: normalizedChain.error }, { status: 400 });
     }
+    const normalizedDeploymentKey = normalizeOptionalContentFeedbackDeploymentKey(deploymentKeyParam);
+    if (!normalizedDeploymentKey.ok) {
+      return NextResponse.json({ error: normalizedDeploymentKey.error }, { status: 400 });
+    }
 
     const requestedViewerAddress = normalized.payload.normalizedAddress;
     const deployment = resolveContentFeedbackDeploymentScope(normalizedChain.chainId);
     if (!deployment) {
       return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
     }
-    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, deployment.chainId);
+    const requestedDeploymentKey = normalizedDeploymentKey.deploymentKey ?? deployment.deploymentKey;
+    const context = await resolveContentFeedbackRoundContext(
+      normalized.payload.contentId,
+      deployment.chainId,
+      requestedDeploymentKey,
+    );
     const result = await listContentFeedback({
       chainId: deployment.chainId,
-      deploymentKey: deployment.deploymentKey,
+      deploymentKey: requestedDeploymentKey,
       contentId: normalized.payload.contentId,
       context,
       awarderAddress: requestedViewerAddress,
@@ -103,6 +115,7 @@ export async function POST(request: NextRequest) {
       body?: unknown;
       sourceUrl?: unknown;
       chainId?: unknown;
+      deploymentKey?: unknown;
       roundId?: unknown;
       clientNonce?: unknown;
       commitKey?: unknown;
@@ -138,6 +151,16 @@ export async function POST(request: NextRequest) {
     }
     const deployment = resolveContentFeedbackDeploymentScope(metadata.metadata.chainId);
     if (!deployment) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
+    const normalizedDeploymentKey = normalizeOptionalContentFeedbackDeploymentKey(body.deploymentKey);
+    if (!normalizedDeploymentKey.ok) {
+      return NextResponse.json({ error: normalizedDeploymentKey.error }, { status: 400 });
+    }
+    if (
+      normalizedDeploymentKey.deploymentKey &&
+      normalizedDeploymentKey.deploymentKey !== deployment.deploymentKey.toLowerCase()
+    ) {
       return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
     }
     const commitKey = normalizeContentFeedbackCommitKey(body.commitKey);
@@ -185,7 +208,11 @@ export async function POST(request: NextRequest) {
       return challengeFailure;
     }
 
-    const context = await resolveContentFeedbackRoundContext(payload.contentId, preparedPayload.chainId);
+    const context = await resolveContentFeedbackRoundContext(
+      payload.contentId,
+      preparedPayload.chainId,
+      preparedPayload.deploymentKey,
+    );
     try {
       await assertContentFeedbackVoterEligibility({
         contentId: payload.contentId,
