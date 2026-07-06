@@ -7,6 +7,7 @@ import { FeedVoteCard } from "~~/components/vote/VoteFeedCards";
 import { useMobileHeaderVisibility } from "~~/contexts/MobileHeaderVisibilityContext";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
+import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 import { resolveEndSpacerHeightForLastCardSnap } from "~~/lib/ui/feedScrollSpacer";
 import { VOTE_MOBILE_LAYOUT_MEDIA_QUERY } from "~~/lib/ui/voteRootScrollLock";
 
@@ -22,6 +23,7 @@ interface VoteFeedStageProps {
   enrichedProfiles: Record<string, SubmitterProfile>;
   watchedContentIds: Set<string>;
   followedWallets: Set<string>;
+  viewerRewardStatusByContentId?: ReadonlyMap<string, ViewerRewardStatus>;
   normalizedAddress?: string;
   referencedContentById?: ReadonlyMap<string, QuestionReferenceContentSummary>;
   isCommitting: boolean;
@@ -72,6 +74,7 @@ export function VoteFeedStage({
   enrichedProfiles,
   watchedContentIds,
   followedWallets,
+  viewerRewardStatusByContentId,
   normalizedAddress,
   referencedContentById,
   isCommitting,
@@ -1365,6 +1368,7 @@ export function VoteFeedStage({
               submitterProfile={enrichedProfiles[item.submitter.toLowerCase()]}
               titleId={titleId}
               isActive={isActiveCard}
+              viewerRewardStatus={viewerRewardStatusByContentId?.get(item.id.toString()) ?? null}
               onContentIntent={contentItem => onContentIntent(contentItem)}
               onOpenFeedback={onOpenFeedback}
               onSourceOpen={contentItem => onSourceOpen(contentItem)}

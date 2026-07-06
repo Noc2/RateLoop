@@ -1,6 +1,6 @@
 "use client";
 
-import { type MouseEvent, memo, useCallback, useEffect, useLayoutEffect, useState } from "react";
+import React, { type MouseEvent, memo, useCallback, useEffect, useLayoutEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   ArrowTopRightOnSquareIcon,
@@ -22,18 +22,22 @@ import {
   getSharedRewardDeadlineSeconds,
 } from "~~/components/shared/VotingQuestionCard";
 import { WatchContentButton } from "~~/components/shared/WatchContentButton";
+import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { ConfidentialContextGate } from "~~/components/vote/ConfidentialContextGate";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { type GatedContextManifest, useGatedContextManifest } from "~~/hooks/useGatedContextManifest";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { useUnixTime } from "~~/hooks/useUnixTime";
+import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 import { appendGatedContextAddress, appendOptionalGatedContextAddress } from "~~/lib/attachments/gatedContextFetchUrls";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import { isPrivateContextMetadata } from "~~/lib/vote/confidentialContext";
 import {
+  type RewardLifecycleStatus,
   getActiveBountyClosesAt,
   getActiveFeedbackClosesAt,
+  getRewardLifecycleStatus,
   getVisibleFeedbackBonusAmount,
   getVisibleRewardPoolAmount,
 } from "~~/lib/vote/discoverFeedFilter";
@@ -49,6 +53,8 @@ const MOBILE_VOTE_CARD_MEDIA_QUERY = "(max-width: 767px)";
 const MOBILE_DESCRIPTION_PREVIEW_WORDS = 12;
 const CONTENT_INTENT_INTERACTIVE_SELECTOR =
   "a[href],button,input,select,textarea,summary,iframe,[role='button'],[role='link']";
+const REWARD_CHIP_INFO_ICON_CLASS_NAME = "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]";
+const MUTED_REWARD_CHIP_INFO_ICON_CLASS_NAME = "[&>svg]:text-base-content/50 [&>svg]:hover:text-base-content/75";
 
 function getSourceLabel(url: string) {
   if (!url) return "";
@@ -163,13 +169,23 @@ export function getFeedMediaHeightClassName({
   return "w-full h-[clamp(20rem,56vh,32rem)]";
 }
 
-function NoRewardChip() {
+export function getRewardLifecycleChipClassName(tone: RewardLifecycleStatus["tone"]) {
+  if (tone === "muted") return "reward-chip-muted";
+  return `reward-chip-brand-${tone}`;
+}
+
+export function RewardLifecycleChip({ status }: { status: RewardLifecycleStatus }) {
   return (
     <div
-      className="reward-chip reward-chip-label bg-error text-error-content"
-      aria-label="No active bounty or Feedback Bonus"
+      className={`reward-chip reward-chip-label ${getRewardLifecycleChipClassName(status.tone)}`}
+      aria-label={status.ariaLabel}
     >
-      No active bounty
+      <span>{status.label}</span>
+      <InfoTooltip
+        text={status.tooltip}
+        position="bottom"
+        className={status.tone === "muted" ? MUTED_REWARD_CHIP_INFO_ICON_CLASS_NAME : REWARD_CHIP_INFO_ICON_CLASS_NAME}
+      />
     </div>
   );
 }
@@ -224,6 +240,7 @@ interface FeedVoteCardProps {
   submitterProfile?: SubmitterProfile;
   titleId?: string;
   isActive?: boolean;
+  viewerRewardStatus?: ViewerRewardStatus | null;
   onContentIntent?: (item: ContentItem) => void;
   onOpenFeedback?: (item: ContentItem) => void;
   onSourceOpen?: (item: ContentItem) => void;
@@ -242,6 +259,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
   submitterProfile,
   titleId,
   isActive = true,
+  viewerRewardStatus = null,
   onContentIntent,
   onOpenFeedback,
   onSourceOpen,
@@ -384,6 +402,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
           onToggleFollow={onToggleFollow}
           onToggleWatch={onToggleWatch}
           referencedContentById={referencedContentById}
+          viewerRewardStatus={viewerRewardStatus}
           compact={useCompactCard}
           isMobileViewport={isMobileViewport}
           isActive={isActive}
@@ -408,6 +427,7 @@ interface FeedContentMetaCardProps {
   onToggleWatch: (id: bigint) => void;
   onToggleFollow: (address: string) => void;
   referencedContentById?: ReadonlyMap<string, QuestionReferenceContentSummary>;
+  viewerRewardStatus?: ViewerRewardStatus | null;
   compact?: boolean;
   isMobileViewport?: boolean;
   isActive?: boolean;
@@ -664,6 +684,7 @@ function FeedContentMetaCard({
   onToggleWatch,
   onToggleFollow,
   referencedContentById,
+  viewerRewardStatus = null,
   compact = false,
   isMobileViewport = false,
   isActive = true,
@@ -692,6 +713,7 @@ function FeedContentMetaCard({
     feedbackBonusDeadline,
   });
   const hasVisibleReward = rewardPoolTotal > 0n || feedbackBonusTotal > 0n;
+  const rewardLifecycleStatus = getRewardLifecycleStatus(item, viewerRewardStatus, nowSeconds);
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
   const embeddedBorderClassName = flushMediaEdges ? "" : "border-t border-base-content/10";
@@ -753,7 +775,7 @@ function FeedContentMetaCard({
       {rewardDeadlineChipSeconds !== null ? (
         <SharedRewardDeadlineDisplay deadlineSeconds={rewardDeadlineChipSeconds} nowSeconds={nowSeconds} />
       ) : null}
-      {!hasVisibleReward ? <NoRewardChip /> : null}
+      {!hasVisibleReward && rewardLifecycleStatus ? <RewardLifecycleChip status={rewardLifecycleStatus} /> : null}
     </>
   );
   const questionDescription = (walletAddress?: string) => (

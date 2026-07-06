@@ -1,15 +1,24 @@
+import React from "react";
 import {
   type FeedCardMediaPlatformType,
+  RewardLifecycleChip,
   getFeedMediaHeightClassName,
   getFeedRewardDeadlineChipSeconds,
+  getRewardLifecycleChipClassName,
   resolveFeedCardVisualPlatformType,
   shouldFlushFeedMediaEdges,
   usesNaturalFeedMediaHeight,
 } from "./VoteFeedCards";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { CONTENT_STATUS, type ContentItem } from "~~/hooks/contentFeed/shared";
 import { buildFallbackMediaItems } from "~~/lib/contentMedia";
+
+const require = createRequire(import.meta.url);
+const { renderToStaticMarkup } = require("react-dom/server") as {
+  renderToStaticMarkup: (element: React.ReactElement) => string;
+};
 
 const uploadedImageUrl =
   "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -97,6 +106,25 @@ test("feed reward deadline chip only merges bounty and feedback bonus when deadl
     }),
     null,
   );
+});
+
+test("reward lifecycle chip uses the existing reward chip design classes", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(RewardLifecycleChip, {
+      status: {
+        ariaLabel: "Bounty payout pending",
+        label: "Payout pending",
+        tone: "yellow",
+        tooltip: "Rewards are waiting on settlement, payout finality, or indexing.",
+      },
+    }),
+  );
+
+  assert.equal(getRewardLifecycleChipClassName("yellow"), "reward-chip-brand-yellow");
+  assert.equal(getRewardLifecycleChipClassName("muted"), "reward-chip-muted");
+  assert.match(html, /reward-chip reward-chip-label reward-chip-brand-yellow/);
+  assert.match(html, /aria-label="Bounty payout pending"/);
+  assert.match(html, />Payout pending<\/span>/);
 });
 
 test("feed card image layout uses natural height and flush media edges", () => {

@@ -2319,6 +2319,7 @@ const HomeInner = () => {
                           enrichedProfiles={submitterProfiles}
                           watchedContentIds={watchedContentIds}
                           followedWallets={followedWallets}
+                          viewerRewardStatusByContentId={viewerRewardStatusByContentId}
                           normalizedAddress={normalizedAddress}
                           referencedContentById={referencedContentById}
                           isCommitting={isCommitting}
