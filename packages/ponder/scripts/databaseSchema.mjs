@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { PONDER_NETWORK_CHAIN_IDS } from "../src/protocol-deployment.ts";
 
 export const DEFAULT_PONDER_DATABASE_SCHEMA = "rateloop_ponder";
-export const LEGACY_PONDER_DATABASE_SCHEMA = "ponder";
 
 const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const GENERIC_PONDER_DATABASE_SCHEMA = "ponder";
 const MAX_PONDER_DATABASE_SCHEMA_LENGTH = 45;
 const RAILWAY_DATABASE_SCHEMA_PREFIX = "railway_";
 const PROTOCOL_DEPLOYMENT_DATABASE_SCHEMA_PREFIX = "rateloop_deployment_";
@@ -77,8 +77,7 @@ function canDeriveProtocolDeploymentKeyFromEnvAddresses(env, chainId) {
 }
 
 export function protocolDeploymentKeyFromEnv(env = process.env) {
-  const explicitKey = readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY")
-    ?? readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY");
+  const explicitKey = readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
   if (explicitKey) return explicitKey.toLowerCase();
 
   const chainId = resolvePonderChainId(env);
@@ -157,6 +156,16 @@ function assertValidPonderSchemaName(schema) {
   }
 }
 
+function assertSupportedPonderSchemaOverride({ env, schema, source }) {
+  if (schema === undefined) return;
+  if (schema === GENERIC_PONDER_DATABASE_SCHEMA) {
+    throw new Error(
+      `${source}=ponder is no longer supported. Remove the generic Ponder schema override so RateLoop can use the current deployment-scoped schema.`,
+    );
+  }
+  assertLiveSchemaOverrideSafe({ env, schema, source });
+}
+
 export function resolvePonderDatabaseSchema(env = process.env) {
   const rateloopSchema = readEnv(env, "RATELOOP_PONDER_DATABASE_SCHEMA");
   const databaseSchema = readEnv(env, "DATABASE_SCHEMA");
@@ -169,20 +178,18 @@ export function resolvePonderDatabaseSchema(env = process.env) {
     LIVE_PONDER_NETWORKS.has(ponderNetwork) &&
     protocolDeploymentSchema !== undefined &&
     !isTruthyEnv(readEnv(env, LIVE_SCHEMA_OVERRIDE_FLAG));
-  const isLegacyDatabaseSchema =
-    rateloopSchema === undefined && databaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
   const ignoredLiveSchemaOverride =
-    liveProtocolSchemaPreferred &&
-    (rateloopSchema !== undefined || (databaseSchema !== undefined && !isLegacyDatabaseSchema));
+    liveProtocolSchemaPreferred && (rateloopSchema !== undefined || databaseSchema !== undefined);
 
   if (!liveProtocolSchemaPreferred) {
-    assertLiveSchemaOverrideSafe({
-      env,
-      schema: rateloopSchema,
-      source: "RATELOOP_PONDER_DATABASE_SCHEMA",
-    });
-    if (!isLegacyDatabaseSchema) {
-      assertLiveSchemaOverrideSafe({
+    if (rateloopSchema !== undefined) {
+      assertSupportedPonderSchemaOverride({
+        env,
+        schema: rateloopSchema,
+        source: "RATELOOP_PONDER_DATABASE_SCHEMA",
+      });
+    } else {
+      assertSupportedPonderSchemaOverride({
         env,
         schema: databaseSchema,
         source: "DATABASE_SCHEMA",
@@ -192,7 +199,7 @@ export function resolvePonderDatabaseSchema(env = process.env) {
 
   const schema =
     (liveProtocolSchemaPreferred ? undefined : rateloopSchema) ??
-    (liveProtocolSchemaPreferred || isLegacyDatabaseSchema ? undefined : databaseSchema) ??
+    (liveProtocolSchemaPreferred ? undefined : databaseSchema) ??
     protocolDeploymentSchema ??
     railwaySchema ??
     defaultSchema;
@@ -206,14 +213,13 @@ export function resolvePonderDatabaseSchema(env = process.env) {
         ? "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY"
         : rateloopSchema !== undefined
         ? "RATELOOP_PONDER_DATABASE_SCHEMA"
-        : databaseSchema !== undefined && !isLegacyDatabaseSchema
+        : databaseSchema !== undefined
           ? "DATABASE_SCHEMA"
           : protocolDeploymentSchema !== undefined
             ? "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY"
             : railwaySchema !== undefined
               ? "RAILWAY_DEPLOYMENT_ID"
               : "default",
-    ignoredLegacyDatabaseSchema: isLegacyDatabaseSchema,
     ignoredLiveSchemaOverride,
   };
 }

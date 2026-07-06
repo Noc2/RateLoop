@@ -320,7 +320,9 @@ test("Ponder README says live override conflicts fail closed", () => {
 test("Ponder schema docs prefer deployment-scoped live schemas", () => {
   assert.match(ponderReadme, /leave `RATELOOP_PONDER_DATABASE_SCHEMA` and `DATABASE_SCHEMA` unset/i);
   assert.match(ponderReadme, /protocol deployment-scoped schema/i);
+  assert.match(ponderReadme, /`DATABASE_SCHEMA=ponder` is not supported/i);
   assert.match(ponderEnvExample, /Leave unset for normal live[\s#]+services/i);
   assert.match(ponderEnvExample, /protocol deployment-scoped schemas/i);
+  assert.match(ponderEnvExample, /DATABASE_SCHEMA=ponder is not supported/i);
   assert.doesNotMatch(ponderEnvExample, /RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_base_sepolia/);
 });

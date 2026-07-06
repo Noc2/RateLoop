@@ -31,14 +31,16 @@ describe("Ponder database schema launcher", () => {
     expect(resolvePonderDatabaseSchema({ PONDER_NETWORK: "base" }).schema).toBe("rateloop_ponder_base");
   });
 
-  test("avoids the legacy generic ponder schema with a network-specific schema", () => {
+  test("uses live protocol deployment schemas over generic DATABASE_SCHEMA overrides", () => {
     const result = resolvePonderDatabaseSchema({
       DATABASE_SCHEMA: "ponder",
       PONDER_NETWORK: "base",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: baseDeploymentKey,
     });
 
-    expect(result.schema).toBe("rateloop_ponder_base");
-    expect(result.ignoredLegacyDatabaseSchema).toBe(true);
+    expect(result.schema).toBe(schemaFromProtocolDeploymentKey(baseDeploymentKey));
+    expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+    expect(result.ignoredLiveSchemaOverride).toBe(true);
   });
 
   test("uses Railway deployment IDs for production deployment schemas", () => {
@@ -50,16 +52,14 @@ describe("Ponder database schema launcher", () => {
     expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
   });
 
-  test("uses Railway deployment IDs instead of the legacy generic ponder schema", () => {
-    const result = resolvePonderDatabaseSchema({
-      DATABASE_SCHEMA: "ponder",
-      PONDER_NETWORK: "base",
-      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
-    });
-
-    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
-    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
-    expect(result.ignoredLegacyDatabaseSchema).toBe(true);
+  test("rejects generic DATABASE_SCHEMA without a current protocol deployment schema", () => {
+    expect(() =>
+      resolvePonderDatabaseSchema({
+        DATABASE_SCHEMA: "ponder",
+        PONDER_NETWORK: "base",
+        RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+      }),
+    ).toThrow("DATABASE_SCHEMA=ponder is no longer supported");
   });
 
   test("uses protocol deployment keys before Railway deployment IDs", () => {
@@ -71,6 +71,14 @@ describe("Ponder database schema launcher", () => {
 
     expect(result.schema).toBe(schemaFromProtocolDeploymentKey(baseDeploymentKey));
     expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+  });
+
+  test("does not accept the legacy protocol deployment key alias", () => {
+    expect(protocolDeploymentKeyFromEnv({ RATELOOP_PROTOCOL_DEPLOYMENT_KEY: baseDeploymentKey })).toBeUndefined();
+    expect(resolvePonderDatabaseSchema({ RATELOOP_PROTOCOL_DEPLOYMENT_KEY: baseDeploymentKey })).toMatchObject({
+      schema: DEFAULT_PONDER_DATABASE_SCHEMA,
+      source: "default",
+    });
   });
 
   test("prefers live protocol deployment schemas over stale RateLoop schema overrides", () => {
@@ -204,7 +212,6 @@ describe("Ponder database schema launcher", () => {
 
     expect(result.schema).toBe("rateloop_ponder_custom");
     expect(result.source).toBe("RATELOOP_PONDER_DATABASE_SCHEMA");
-    expect(result.ignoredLegacyDatabaseSchema).toBe(false);
   });
 
   test("rejects schema names that are unsafe to pass to Ponder", () => {
@@ -228,7 +235,6 @@ describe("Ponder database schema launcher", () => {
 
   test("injects the resolved schema into production start arguments", () => {
     const result = buildPonderStartArgs(["--port", "42069"], {
-      DATABASE_SCHEMA: "ponder",
       PONDER_NETWORK: "base",
       RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
     });
@@ -244,7 +250,7 @@ describe("Ponder database schema launcher", () => {
   });
 
   test("leaves explicit CLI schema arguments alone", () => {
-    const env = { DATABASE_SCHEMA: "ponder" };
+    const env = {};
     const result = buildPonderStartArgs(["--schema", "custom"], env);
 
     expect(result.args).toEqual(["start", "--schema", "custom"]);

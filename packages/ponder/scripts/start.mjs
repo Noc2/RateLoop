@@ -186,10 +186,7 @@ export function resolveProtocolDeploymentKeyFromArtifacts({
 }
 
 function withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl) {
-  if (
-    readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY") ||
-    readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY")
-  ) {
+  if (readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY")) {
     return env;
   }
 
@@ -226,14 +223,7 @@ export async function startPonder({
     schemaInfo,
   } = buildPonderStartArgs(argv, launcherEnv);
 
-  if (schemaInfo?.ignoredLegacyDatabaseSchema) {
-    console.warn(
-      `[ponder:start] Ignoring DATABASE_SCHEMA=ponder to avoid colliding with legacy Ponder app metadata; using ${schemaInfo.schema}.`,
-    );
-    console.warn(
-      "[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.",
-    );
-  } else if (schemaInfo?.ignoredLiveSchemaOverride) {
+  if (schemaInfo?.ignoredLiveSchemaOverride) {
     console.warn(
       `[ponder:start] Ignoring live Ponder schema override; using protocol deployment-scoped schema ${schemaInfo.schema}.`,
     );

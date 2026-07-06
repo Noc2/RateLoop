@@ -45,6 +45,7 @@ Within the package directory, additional scripts are available:
 | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local-only fallback when the active chain has no shared deployment metadata                                                                                              |
 | `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local-only fallback when the active chain has no shared deployment metadata                                                                                                 |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Local-only fallback start blocks when the active chain has no shared deployment metadata                                                                                                                    |
+| `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY`  | Optional current protocol deployment key (`chainId:ContentRegistry:FeedbackRegistry`) used to derive the live schema when shared artifacts are unavailable                                                   |
 | `RATELOOP_PONDER_DATABASE_SCHEMA`          | Break-glass schema override for Ponder tables; leave unset for normal live services so `yarn ponder:start` can use Railway or protocol deployment-scoped schemas                                      |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                                                                                                   |
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                                                                                                               |
@@ -66,9 +67,10 @@ on Railway it uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime depl
 new app builds from colliding with older Ponder app metadata. Outside Railway, the launcher derives a
 protocol deployment-scoped schema from the active chain's `ContentRegistry` and `FeedbackRegistry`
 addresses, so a future incident/governance migration that changes contract addresses indexes into a fresh
-schema even if content IDs restart. If neither value is available and `DATABASE_SCHEMA` is unset or still
-set to the generic legacy `ponder` value, the launcher uses RateLoop-owned network fallbacks such as
-`rateloop_ponder_base`. To force a specific live schema, set
+schema even if content IDs restart. If neither value is available and no supported schema override is set,
+the launcher uses RateLoop-owned network fallbacks such as `rateloop_ponder_base`.
+`DATABASE_SCHEMA=ponder` is not supported; remove that old generic override or set a deliberate unique
+recovery schema. To force a specific live schema, set
 `RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true` and choose a unique recovery value such as
 `rateloop_ponder_manual_recovery_202606`; remove the override after the recovery window.
 
@@ -135,7 +137,9 @@ Ponder app`, make sure the service uses `yarn start` (via `packages/ponder/railw
 as `rateloop_ponder_base_sepolia_canary` and uses `railway_<deployment_id>` instead. Remove that
 static value from Railway env vars so future deploys stay on the deployment-scoped schema. For
 non-Railway deployments without shared deployment artifacts, set
-`RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` or `RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value.
+`RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` to the current deployment key or use
+`RATELOOP_PONDER_DATABASE_SCHEMA` with `RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true` for a deliberate
+recovery window.
 Only drop the old schema if you are certain it contains no data you need.
 
 **`humanVerifiedCommitCount` backfill:** After deploying schema changes that add
