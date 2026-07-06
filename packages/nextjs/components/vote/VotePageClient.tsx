@@ -54,6 +54,7 @@ import { extractQuestionReferenceIds } from "~~/lib/questionReferences";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 import { getVisualViewportBottom, resolveMobileDockReservedSpace } from "~~/lib/ui/mobileDockReservedSpace";
 import { VOTE_MOBILE_LAYOUT_MEDIA_QUERY, VOTE_ROOT_SCROLL_LOCK_CLASS_NAME } from "~~/lib/ui/voteRootScrollLock";
+import { getUnsupportedContentActionScopeMessage } from "~~/lib/vote/actionScope";
 import {
   ADVISORY_COMMIT_AVAILABILITY_STATUS,
   type AdvisoryCommitAvailability,
@@ -300,6 +301,10 @@ const HomeInner = () => {
 
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const actionTargetNetwork = useMemo(
+    () => ({ id: targetNetwork.id, name: targetNetwork.name }),
+    [targetNetwork.id, targetNetwork.name],
+  );
   const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
@@ -1474,6 +1479,12 @@ const HomeInner = () => {
         return;
       }
 
+      const unsupportedActionScopeMessage = getUnsupportedContentActionScopeMessage(item, actionTargetNetwork);
+      if (unsupportedActionScopeMessage) {
+        notification.info(unsupportedActionScopeMessage, { duration: 6000 });
+        return;
+      }
+
       if (isVoteCooldownCheckPendingForContent(item.id)) {
         notification.info("Still checking your recent votes. Try again in a moment.", { duration: 3000 });
         return;
@@ -1521,6 +1532,7 @@ const HomeInner = () => {
     },
     [
       address,
+      actionTargetNetwork,
       clearVoteError,
       getContentCooldownSeconds,
       advisoryAvailabilityByContentId,
@@ -1707,6 +1719,16 @@ const HomeInner = () => {
         return;
       }
 
+      const unsupportedActionScopeMessage = getUnsupportedContentActionScopeMessage(
+        { chainId: item.chainId ?? stakeModal.chainId },
+        actionTargetNetwork,
+      );
+      if (unsupportedActionScopeMessage) {
+        notification.info(unsupportedActionScopeMessage, { duration: 6000 });
+        setStakeModal(prev => ({ ...prev, isOpen: false }));
+        return;
+      }
+
       if (isVoteCooldownCheckPendingForContent(stakeModal.contentId)) {
         notification.info("Still checking your recent votes. Try again in a moment.", { duration: 3000 });
         return;
@@ -1782,6 +1804,7 @@ const HomeInner = () => {
       clearVoteError,
       commitVote,
       displayFeed,
+      actionTargetNetwork,
       advisoryAvailabilityByContentId,
       isAdvisoryOnlyRater,
       isVoteCooldownCheckPendingForContent,
@@ -1797,6 +1820,13 @@ const HomeInner = () => {
 
   const handleToggleWatch = useCallback(
     async (contentId: bigint) => {
+      const item = displayFeed.find(entry => entry.id === contentId);
+      const unsupportedActionScopeMessage = getUnsupportedContentActionScopeMessage(item, actionTargetNetwork);
+      if (unsupportedActionScopeMessage) {
+        notification.info(unsupportedActionScopeMessage, { duration: 6000 });
+        return;
+      }
+
       const result = await toggleWatch(contentId);
 
       if (!result.ok) {
@@ -1814,14 +1844,20 @@ const HomeInner = () => {
         return;
       }
 
-      const item = displayFeed.find(entry => entry.id === contentId);
       if (item) {
         markPrimaryInteraction(item.id);
         recordRecommendationSignal(item, "watch_toggle", { selected: result.watched });
       }
       notification.success(result.watched ? "Added to your watchlist" : "Removed from your watchlist");
     },
-    [displayFeed, markPrimaryInteraction, openConnectModal, recordRecommendationSignal, toggleWatch],
+    [
+      actionTargetNetwork,
+      displayFeed,
+      markPrimaryInteraction,
+      openConnectModal,
+      recordRecommendationSignal,
+      toggleWatch,
+    ],
   );
 
   const handleToggleFollow = useCallback(

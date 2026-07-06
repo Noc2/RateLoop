@@ -7,6 +7,7 @@ import { AwardFeedbackBonusModal } from "~~/components/feedback/AwardFeedbackBon
 import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useContentFeedback } from "~~/hooks/useContentFeedback";
 import { resolveContentFeedbackPanelScope } from "~~/lib/feedback/contentFeedbackPanelScope";
@@ -22,6 +23,7 @@ import {
   type ContentFeedbackItem,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
+import { getUnsupportedContentActionScopeMessage } from "~~/lib/vote/actionScope";
 import { hasNonZeroCommit } from "~~/lib/vote/commitState";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -155,9 +157,15 @@ export function ContentFeedbackPanel({
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
   const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const actionTargetNetwork = useMemo(
+    () => ({ id: targetNetwork.id, name: targetNetwork.name }),
+    [targetNetwork.id, targetNetwork.name],
+  );
   const hasFeedbackItem = Boolean(item);
   const itemChainId = item?.chainId ?? null;
   const itemDeploymentKey = item?.deploymentKey ?? null;
+  const feedbackActionScopeBlocker = getUnsupportedContentActionScopeMessage(item, actionTargetNetwork);
   const feedbackPanelScope = useMemo(
     () =>
       resolveContentFeedbackPanelScope(
@@ -197,14 +205,14 @@ export function ContentFeedbackPanel({
     functionName: "voterCommitKey" as any,
     args: [item?.id ?? 0n, openRoundId, address] as any,
     watch: true,
-    query: { enabled: Boolean(item && address && openRoundId > 0n) },
+    query: { enabled: Boolean(item && address && openRoundId > 0n && !feedbackActionScopeBlocker) },
   } as any);
   const { data: myAdvisoryCommitKey } = useScaffoldReadContract({
     contractName: "AdvisoryVoteRecorder" as any,
     functionName: "advisoryCommitKeyByRater" as any,
     args: [item?.id ?? 0n, openRoundId, address] as any,
     watch: true,
-    query: { enabled: Boolean(item && address && openRoundId > 0n) },
+    query: { enabled: Boolean(item && address && openRoundId > 0n && !feedbackActionScopeBlocker) },
   } as any);
   const hasStakedCurrentRoundVote = hasOptimisticStakedCurrentRoundVote || hasNonZeroCommit(myCommitState);
   const hasAdvisoryCurrentRoundVote = hasNonZeroCommit(myAdvisoryCommitKey);
@@ -219,7 +227,9 @@ export function ContentFeedbackPanel({
   const feedbackDeploymentUnsupported = feedbackPanelScope.unsupported;
   const effectiveSubmitBlocker = feedbackDeploymentUnsupported
     ? "Feedback submission is unavailable for this deployment."
-    : submitBlocker;
+    : feedbackActionScopeBlocker
+      ? feedbackActionScopeBlocker
+      : submitBlocker;
   const canSubmitDraft = Boolean(item && bodyLength >= 4 && bodyLength <= CONTENT_FEEDBACK_BODY_MAX_LENGTH);
   const isOwnContent = Boolean(item?.isOwnContent);
   const submitDisabled =
