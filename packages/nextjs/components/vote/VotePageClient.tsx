@@ -887,6 +887,8 @@ const HomeInner = () => {
     initialStakeAmount?: number;
     contentId: bigint;
     chainId?: number | null;
+    contentRegistryAddress?: string | null;
+    deploymentKey?: string | null;
     questionTitle: string;
     categoryId: bigint;
     currentRating: number | null;
@@ -905,6 +907,8 @@ const HomeInner = () => {
     initialStakeAmount: undefined,
     contentId: 0n,
     chainId: null,
+    contentRegistryAddress: null,
+    deploymentKey: null,
     questionTitle: "",
     categoryId: 0n,
     currentRating: null,
@@ -1489,6 +1493,8 @@ const HomeInner = () => {
         initialStakeAmount: isAdvisoryOnlyRater || isZeroLrepVoteView ? 0 : undefined,
         contentId: item.id,
         chainId: item.chainId ?? null,
+        contentRegistryAddress: item.contentRegistryAddress ?? null,
+        deploymentKey: item.deploymentKey ?? null,
         questionTitle: item.question?.trim() || item.title,
         categoryId: item.categoryId,
         currentRating: getVisibleContentRating(item),
@@ -1540,6 +1546,8 @@ const HomeInner = () => {
         initialStakeAmount: undefined,
         contentId: 1n,
         chainId: null,
+        contentRegistryAddress: null,
+        deploymentKey: null,
         questionTitle: "Responsive layout check",
         categoryId: 1n,
         currentRating: 64,
@@ -1708,6 +1716,8 @@ const HomeInner = () => {
         contentId: stakeModal.contentId,
         isUp,
         predictedUpPercent,
+        contentRegistryAddress: item?.contentRegistryAddress ?? stakeModal.contentRegistryAddress ?? null,
+        deploymentKey: item?.deploymentKey ?? stakeModal.deploymentKey ?? null,
         confidentiality: item?.confidentiality ?? stakeModal.confidentiality ?? null,
         contextAccess: item?.contextAccess ?? stakeModal.contextAccess,
         contextVisibility: item?.contextVisibility ?? stakeModal.contextVisibility,
@@ -2419,6 +2429,8 @@ const HomeInner = () => {
           isOpen={stakeModal.isOpen}
           contentId={stakeModal.contentId}
           chainId={stakeModal.chainId}
+          contentRegistryAddress={stakeModal.contentRegistryAddress}
+          deploymentKey={stakeModal.deploymentKey}
           questionTitle={stakeModal.questionTitle}
           categoryId={stakeModal.categoryId}
           currentRating={stakeModal.currentRating}

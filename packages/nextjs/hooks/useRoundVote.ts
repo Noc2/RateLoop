@@ -84,6 +84,8 @@ interface RoundVoteParams {
   isUp: boolean;
   predictedUpPercent: number;
   stakeAmount: number; // In display tokens (e.g., 2.5 = 2.5 LREP)
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
   roundConfig?: VotingConfig | null;
@@ -181,8 +183,12 @@ function withLocalE2ETlockRuntime(runtime: RoundVoteCommitRuntime): RoundVoteCom
   };
 }
 
-async function getConfidentialContextAccessStatus(address: string, contentId: bigint, chainId: number) {
-  return fetchConfidentialityTermsStatus(address, contentId, { chainId });
+async function getConfidentialContextAccessStatus(
+  address: string,
+  contentId: bigint,
+  scope: { chainId: number; contentRegistryAddress?: string | null; deploymentKey?: string | null },
+) {
+  return fetchConfidentialityTermsStatus(address, contentId, scope);
 }
 
 /**
@@ -270,6 +276,8 @@ export function useRoundVote() {
     isUp,
     predictedUpPercent,
     stakeAmount,
+    contentRegistryAddress,
+    deploymentKey,
     frontendCode,
     isOwnContent,
     roundConfig,
@@ -338,7 +346,11 @@ export function useRoundVote() {
       let hasAcceptedTerms = false;
       let hasReadSession = false;
       try {
-        const accessStatus = await getConfidentialContextAccessStatus(address, contentId, targetNetwork.id);
+        const accessStatus = await getConfidentialContextAccessStatus(address, contentId, {
+          chainId: targetNetwork.id,
+          contentRegistryAddress,
+          deploymentKey,
+        });
         hasAcceptedTerms = accessStatus.accepted;
         hasReadSession = accessStatus.hasSession;
         timingLog.emit("confidentiality-terms-checked", { hasAcceptedTerms, hasReadSession });

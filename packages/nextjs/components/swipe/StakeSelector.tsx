@@ -47,6 +47,8 @@ interface StakeSelectorProps {
   isOpen: boolean;
   contentId: bigint;
   chainId?: number | null;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   questionTitle?: string;
   categoryId?: bigint;
   currentRating?: number | null;
@@ -168,6 +170,8 @@ export function StakeSelector({
   isOpen,
   contentId,
   chainId,
+  contentRegistryAddress,
+  deploymentKey,
   questionTitle,
   categoryId,
   currentRating,
@@ -304,7 +308,7 @@ export function StakeSelector({
 
     let cancelled = false;
     setIsCheckingConfidentialTerms(true);
-    fetchConfidentialityTermsStatus(address, contentId, { chainId })
+    fetchConfidentialityTermsStatus(address, contentId, { chainId, contentRegistryAddress, deploymentKey })
       .then(status => {
         if (!cancelled) {
           setHasAcceptedConfidentialTerms(status.accepted);
@@ -326,7 +330,7 @@ export function StakeSelector({
     return () => {
       cancelled = true;
     };
-  }, [address, chainId, contentId, isOpen, privateContext]);
+  }, [address, chainId, contentId, contentRegistryAddress, deploymentKey, isOpen, privateContext]);
 
   useEffect(() => {
     if (!isOpen || !bountyRequirement) return;
