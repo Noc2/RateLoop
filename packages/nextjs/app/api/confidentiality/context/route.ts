@@ -74,9 +74,12 @@ export async function GET(request: NextRequest) {
       ),
   ]);
 
-  const matchingOwner = [...detailsRows, ...imageRows]
-    .map(row => normalizeOwnerAddress(row.ownerWalletAddress))
-    .find(owner => owner === normalized.payload.normalizedAddress);
+  const manifestRows = [...detailsRows, ...imageRows];
+  const matchingOwner =
+    manifestRows.length > 0 &&
+    manifestRows.every(row => normalizeOwnerAddress(row.ownerWalletAddress) === normalized.payload.normalizedAddress)
+      ? normalized.payload.normalizedAddress
+      : null;
   const authorization = await authorizeGatedContextRequest(request, normalized.payload.contentId, {
     deploymentKey: normalized.payload.deploymentKey,
     ownerWalletAddress: matchingOwner,

@@ -472,6 +472,54 @@ test("gated context manifest returns authorized private attachment fetch URLs", 
   ]);
 });
 
+test("gated context manifest requires a gated-reader session for mixed-owner attachments", async () => {
+  await seedGatedDetails();
+  await seedGatedImage();
+  const now = new Date("2026-06-11T12:03:00.000Z");
+  const scope = currentDeploymentScope();
+  await db.insert(questionDetails).values({
+    id: "det_mixedownerdetail1",
+    chainId: scope.chainId,
+    contentId: CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
+    uploaderKind: "wallet",
+    ownerWalletAddress: RATER_WALLET,
+    sizeBytes: 13,
+    sha256: createHash("sha256").update("other details").digest("hex"),
+    normalizedText: "other details",
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const requestUrl = `https://www.rateloop.ai/api/confidentiality/context?contentId=${CONTENT_ID}&address=${WALLET}`;
+  const ownerCookie = await buildSignedOwnerContextCookie(WALLET);
+  const ownerOnly = await getGatedContext(new NextRequest(requestUrl, { headers: { cookie: ownerCookie } }));
+
+  assert.equal(ownerOnly.status, 401);
+  assert.equal(ownerOnly.headers.get("cache-control"), "private, no-store");
+  assert.deepEqual(await ownerOnly.json(), { error: "Signed wallet session required" });
+
+  const gatedCookie = await acceptTermsAndBuildCookie("nonce-mixed-owner-manifest", WALLET);
+  const allowed = await getGatedContext(new NextRequest(requestUrl, { headers: { cookie: gatedCookie } }));
+  const body = (await allowed.json()) as {
+    details: Array<{ id: string }>;
+    images: Array<{ id: string }>;
+  };
+
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(
+    body.details.map(item => item.id),
+    ["det_mixedownerdetail1", DETAILS_ID],
+  );
+  assert.deepEqual(
+    body.images.map(item => item.id),
+    [ATTACHMENT_ID],
+  );
+});
+
 test("pending gated hosted attachments fail closed before content linkage", async () => {
   const now = new Date("2026-06-11T12:00:00.000Z");
   await db.insert(questionDetails).values({
