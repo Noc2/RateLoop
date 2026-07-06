@@ -592,6 +592,33 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects category ids and template versions that the parser would reject", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        categoryId: "not-a-number",
+        templateVersion: 2,
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "question.categoryId must be a safe non-negative integer.",
+          path: "question.categoryId",
+        }),
+        expect.objectContaining({
+          level: "error",
+          message: "question.templateVersion 2 is not supported for generic_rating.",
+          path: "question.templateVersion",
+        }),
+      ]),
+    );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
+  });
+
   it("rejects asks without public context media", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

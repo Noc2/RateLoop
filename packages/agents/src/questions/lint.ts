@@ -1,4 +1,5 @@
 import { findAgentResultTemplate } from "../templates";
+import { DEFAULT_AGENT_TEMPLATE_ID } from "../questionSpecs";
 import {
   HEAD_TO_HEAD_AB_TEMPLATE_ID,
   inferHeadToHeadAbQuestion,
@@ -210,6 +211,17 @@ function lintOptionalSafeNonNegativeInteger(value: unknown, path: string, findin
   const parsed = parseLintNonNegativeInteger(value);
   if (parsed === null || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
     pushFinding(findings, "error", path, `${path} must be a safe non-negative atomic integer.`);
+  }
+}
+
+function lintRequiredSafeNonNegativeInteger(value: unknown, path: string, findings: QuestionLintFinding[]) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    pushFinding(findings, "error", path, `${path} is required.`);
+    return;
+  }
+  const parsed = parseLintNonNegativeInteger(value);
+  if (parsed === null || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    pushFinding(findings, "error", path, `${path} must be a safe non-negative integer.`);
   }
 }
 
@@ -454,11 +466,14 @@ export function lintAgentQuestion(
   inheritedTemplateId?: string,
   inheritedTemplateInputs?: JsonValue,
   inheritedConfidentiality?: unknown,
+  inheritedTemplateVersion?: unknown,
 ): QuestionLintFinding[] {
   const findings: QuestionLintFinding[] = [];
+  const questionRecord = question as Partial<AgentQuestionExample> & { templateVersion?: unknown };
   const title = typeof question.title === "string" ? question.title.trim() : "";
   const description = typeof question.description === "string" ? question.description.trim() : "";
   const templateId = question.templateId ?? inheritedTemplateId;
+  const templateVersionInput = questionRecord.templateVersion ?? inheritedTemplateVersion;
   const templateInputs = isObject(question.templateInputs)
     ? question.templateInputs
     : isObject(inheritedTemplateInputs)
@@ -621,9 +636,7 @@ export function lintAgentQuestion(
   if (hasImageUrls && hasVideoUrl) {
     pushFinding(findings, "error", `${path}.imageUrls`, "Use imageUrls or videoUrl, not both.");
   }
-  if (question.categoryId === undefined || question.categoryId === null || String(question.categoryId).trim() === "") {
-    pushFinding(findings, "error", `${path}.categoryId`, "Category id is required.");
-  }
+  lintRequiredSafeNonNegativeInteger(question.categoryId, `${path}.categoryId`, findings);
   if (!question.tags || tagCount(question.tags) === 0) {
     pushFinding(findings, "error", `${path}.tags`, "At least one public tag is required.");
   }
@@ -654,8 +667,25 @@ export function lintAgentQuestion(
       );
     }
   }
-  if (question.templateId && !findAgentResultTemplate(question.templateId)) {
+  const selectedTemplateId = typeof question.templateId === "string" && question.templateId.trim()
+    ? question.templateId
+    : DEFAULT_AGENT_TEMPLATE_ID;
+  const selectedTemplate = findAgentResultTemplate(selectedTemplateId);
+  if (question.templateId && !selectedTemplate) {
     pushFinding(findings, "error", `${path}.templateId`, `Unknown result template: ${question.templateId}.`);
+  }
+  if (templateVersionInput !== undefined && templateVersionInput !== null) {
+    const templateVersion = parseLintPositiveInteger(templateVersionInput);
+    if (templateVersion === null || templateVersion > BigInt(Number.MAX_SAFE_INTEGER)) {
+      pushFinding(findings, "error", `${path}.templateVersion`, `${path}.templateVersion must be a positive safe integer.`);
+    } else if (selectedTemplate && templateVersion !== BigInt(selectedTemplate.version)) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.templateVersion`,
+        `${path}.templateVersion ${templateVersion.toString()} is not supported for ${selectedTemplate.id}.`,
+      );
+    }
   }
   if (templateId && RANK_BY_RATING_TEMPLATE_IDS.has(templateId) && /\bwhich\s+(answer|option|variant|candidate|response)\b/i.test(title)) {
     pushFinding(
@@ -858,6 +888,7 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
         request.templateId,
         request.templateInputs,
         request.confidentiality,
+        request.templateVersion,
       ),
     );
   });
