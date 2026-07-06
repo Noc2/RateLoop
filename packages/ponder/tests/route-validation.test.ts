@@ -3551,6 +3551,8 @@ describe("registerDataRoutes", () => {
     expect(verifiedHumanWhere ?? "").toContain(
       "raterHumanCredential.expiresAt",
     );
+    expect(verifiedHumanWhere ?? "").toContain("0");
+    expect(verifiedHumanWhere ?? "").toContain("or");
   });
 
   it("rejects vote cooldown requests without valid voters before querying the database", async () => {

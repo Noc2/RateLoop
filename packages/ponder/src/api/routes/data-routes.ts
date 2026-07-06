@@ -2001,7 +2001,7 @@ export function registerDataRoutes(app: ApiApp) {
           and(
             eq(raterHumanCredential.verified, true),
             eq(raterHumanCredential.revoked, false),
-            sql`${raterHumanCredential.expiresAt} > ${nowSeconds}`,
+            sql`(${raterHumanCredential.expiresAt} = 0 or ${raterHumanCredential.expiresAt} > ${nowSeconds})`,
           ),
         ),
     ]);
