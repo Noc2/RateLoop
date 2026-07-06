@@ -7,11 +7,16 @@ import {
 } from "./contentShare";
 import "server-only";
 import { getQuestionConfidentiality, isConfidentialityCurrentlyGated } from "~~/lib/confidentiality/context";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const CONTENT_SHARE_FETCH_TIMEOUT_MS = 2_500;
 
 interface PonderContentDetailResponse {
   content?: ContentShareContentInput | null;
+}
+
+interface PonderDeploymentResponse {
+  deploymentKey?: string | null;
 }
 
 interface ContentShareDataOptions {
@@ -27,6 +32,19 @@ function normalizeShareChainId(value: ContentShareDataOptions["chainId"]): numbe
   if (!/^\d+$/.test(raw)) return null;
   const chainId = Number(raw);
   return Number.isSafeInteger(chainId) && chainId > 0 ? chainId : null;
+}
+
+function normalizeShareDeploymentKey(value: string | null | undefined): string | null {
+  const deploymentKey = value?.trim().toLowerCase();
+  return deploymentKey ? deploymentKey : null;
+}
+
+function resolveExpectedShareDeploymentKey(options: ContentShareDataOptions): string | null {
+  const explicitDeploymentKey = normalizeShareDeploymentKey(options.deploymentKey);
+  if (explicitDeploymentKey) return explicitDeploymentKey;
+
+  const chainId = normalizeShareChainId(options.chainId);
+  return chainId ? normalizeShareDeploymentKey(resolveProtocolDeploymentScope(chainId)?.deploymentKey) : null;
 }
 
 function isPonderContentGated(content: ContentShareContentInput): boolean {
@@ -68,6 +86,24 @@ async function fetchContentForShare(
   return body.content ?? null;
 }
 
+async function ponderDeploymentMatchesShareScope(
+  ponderUrl: string,
+  expectedDeploymentKey: string | null,
+  fetchImpl: typeof fetch,
+): Promise<boolean> {
+  if (!expectedDeploymentKey) return true;
+
+  const url = new URL("deployment", `${ponderUrl.replace(/\/+$/, "")}/`);
+  const response = await fetchImpl(url, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(CONTENT_SHARE_FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) return false;
+
+  const body = (await response.json()) as PonderDeploymentResponse;
+  return normalizeShareDeploymentKey(body.deploymentKey) === expectedDeploymentKey;
+}
+
 export async function getContentShareDataForParam(
   contentParam: unknown,
   options: ContentShareDataOptions = {},
@@ -79,7 +115,13 @@ export async function getContentShareDataForParam(
   }
 
   try {
-    const content = await fetchContentForShare(ponderUrl, contentId, options.fetchImpl ?? fetch);
+    const fetchImpl = options.fetchImpl ?? fetch;
+    const expectedDeploymentKey = resolveExpectedShareDeploymentKey(options);
+    if (!(await ponderDeploymentMatchesShareScope(ponderUrl, expectedDeploymentKey, fetchImpl))) {
+      return null;
+    }
+
+    const content = await fetchContentForShare(ponderUrl, contentId, fetchImpl);
     if (!content) return null;
     const confidentiality = await getQuestionConfidentiality(content.id, {
       chainId: content.chainId ?? normalizeShareChainId(options.chainId),

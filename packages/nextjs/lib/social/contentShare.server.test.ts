@@ -115,6 +115,40 @@ test("getContentShareDataForParam redacts gated private-context content", async 
   }
 });
 
+test("getContentShareDataForParam fails closed when scoped deployment does not match Ponder", async () => {
+  const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
+  process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
+
+  const requestedUrls: string[] = [];
+  const fetchImpl: typeof fetch = async input => {
+    const url = input.toString();
+    requestedUrls.push(url);
+
+    if (url === "https://ponder.example/api/deployment") {
+      return new Response(JSON.stringify({ deploymentKey: "current-deployment" }));
+    }
+
+    throw new Error(`Unexpected content fetch: ${url}`);
+  };
+
+  try {
+    const shareData = await getContentShareDataForParam("88", {
+      deploymentKey: "historical-deployment",
+      fetchImpl,
+      origin: "https://www.rateloop.ai",
+    });
+
+    assert.equal(shareData, null);
+    assert.deepEqual(requestedUrls, ["https://ponder.example/api/deployment"]);
+  } finally {
+    if (originalPonderUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_PONDER_URL;
+    } else {
+      process.env.NEXT_PUBLIC_PONDER_URL = originalPonderUrl;
+    }
+  }
+});
+
 test("getContentShareDataForParam fails closed when Ponder marks content gated", async () => {
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example";
