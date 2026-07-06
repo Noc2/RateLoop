@@ -20,11 +20,67 @@ import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderAvailability } from "~~/hooks/usePonderAvailability";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
 import { buildFallbackMediaItems } from "~~/lib/contentMedia";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { publicEnv } from "~~/utils/env/public";
 
 export type { ContentItem } from "~~/hooks/contentFeed/shared";
+
+interface ContentFeedDeploymentScopeInput {
+  targetChainId: number;
+  chainId?: number | string | null;
+  deploymentKey?: string | null;
+}
+
+function normalizeContentFeedChainId(value: ContentFeedDeploymentScopeInput["chainId"]) {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === "number" ? value : Number(value.trim());
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeContentFeedDeploymentKey(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized ? normalized : null;
+}
+
+function readChainIdFromDeploymentKey(deploymentKey: string | null) {
+  if (!deploymentKey) return null;
+  const [rawChainId] = deploymentKey.split(":");
+  return normalizeContentFeedChainId(rawChainId);
+}
+
+function deploymentKeyMatchesScope(deploymentKey: string | null, keys: readonly (string | null | undefined)[]) {
+  if (!deploymentKey) return true;
+  return keys.some(key => key?.toLowerCase() === deploymentKey);
+}
+
+export function resolveContentFeedDeploymentScope({
+  targetChainId,
+  chainId,
+  deploymentKey,
+}: ContentFeedDeploymentScopeInput) {
+  const explicitChainId = normalizeContentFeedChainId(chainId);
+  const explicitDeploymentKey = normalizeContentFeedDeploymentKey(deploymentKey);
+  const requestedChainId = explicitChainId ?? readChainIdFromDeploymentKey(explicitDeploymentKey) ?? targetChainId;
+  const requestedProtocolScope = resolveProtocolDeploymentScope(requestedChainId);
+  const requestedContentScope = resolveContentDeploymentScope(requestedChainId);
+  const requestedScopeKeys = [requestedProtocolScope?.deploymentKey, requestedContentScope?.deploymentKey];
+  const deploymentKeyMatchesRequestedScope = deploymentKeyMatchesScope(explicitDeploymentKey, requestedScopeKeys);
+  const targetProtocolScope = resolveProtocolDeploymentScope(targetChainId);
+  const targetContentScope = resolveContentDeploymentScope(targetChainId);
+  const targetScopeKeys = [targetProtocolScope?.deploymentKey, targetContentScope?.deploymentKey];
+
+  return {
+    chainId: requestedChainId,
+    protocolDeploymentKey:
+      explicitDeploymentKey && !deploymentKeyMatchesRequestedScope
+        ? explicitDeploymentKey
+        : (requestedProtocolScope?.deploymentKey ?? explicitDeploymentKey ?? `missing:${requestedChainId}`),
+    isSupported: Boolean(requestedProtocolScope) && deploymentKeyMatchesRequestedScope,
+    allowsRpcFallback:
+      requestedChainId === targetChainId && deploymentKeyMatchesScope(explicitDeploymentKey, targetScopeKeys),
+  };
+}
 
 /**
  * Fetch the content feed.
@@ -33,16 +89,23 @@ export type { ContentItem } from "~~/hooks/contentFeed/shared";
 export function useContentFeed(voterAddress?: string, options: UseContentFeedOptions = {}) {
   const { targetNetwork } = useTargetNetwork();
   const rpcFallbackEnabled = publicEnv.rpcFallbackEnabled;
-  const ponderDeploymentKey = useMemo(
-    () => resolveProtocolDeploymentScope(targetNetwork.id)?.deploymentKey ?? `missing:${targetNetwork.id}`,
-    [targetNetwork.id],
+  const contentFeedScope = useMemo(
+    () =>
+      resolveContentFeedDeploymentScope({
+        targetChainId: targetNetwork.id,
+        chainId: options.chainId,
+        deploymentKey: options.deploymentKey,
+      }),
+    [options.chainId, options.deploymentKey, targetNetwork.id],
   );
+  const ponderDeploymentKey = contentFeedScope.protocolDeploymentKey;
   const ponderAvailable = usePonderAvailability(rpcFallbackEnabled, ponderDeploymentKey);
-  const rpcFallbackActive = rpcFallbackEnabled && ponderAvailable === false;
+  const rpcFallbackActive = contentFeedScope.allowsRpcFallback && rpcFallbackEnabled && ponderAvailable === false;
   const isPageVisible = usePageVisibility();
   const categoryId = options.categoryId;
   const contentIds = options.contentIds;
   const enabled = options.enabled ?? true;
+  const queryEnabled = enabled && (contentFeedScope.isSupported || contentFeedScope.allowsRpcFallback);
   const keepPrevious = options.keepPrevious ?? true;
   const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : undefined;
   const offset = options.offset && options.offset > 0 ? Math.floor(options.offset) : 0;
@@ -178,7 +241,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
   const { data: result, isLoading: ponderLoading } = usePonderQuery({
     queryKey: [
       "contentFeed",
-      targetNetwork.id,
+      contentFeedScope.chainId,
       ponderDeploymentKey,
       voterAddress,
       ownSubmitterAddressesKey,
@@ -219,11 +282,11 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
             limit: String(limit),
             offset: String(offset),
           },
-          { chainId: targetNetwork.id, deploymentKey: ponderDeploymentKey },
+          { chainId: contentFeedScope.chainId, deploymentKey: ponderDeploymentKey },
         );
         const feed = response.items.map(item =>
           mapContentItem(
-            { ...item, chainId: item.chainId ?? targetNetwork.id },
+            { ...item, chainId: item.chainId ?? contentFeedScope.chainId },
             voterAddress,
             normalizedOwnSubmitterAddresses,
           ),
@@ -236,12 +299,12 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       }
 
       const items = await ponderApi.getAllContent(params, {
-        chainId: targetNetwork.id,
+        chainId: contentFeedScope.chainId,
         deploymentKey: ponderDeploymentKey,
       });
       const feed = items.map(item =>
         mapContentItem(
-          { ...item, chainId: item.chainId ?? targetNetwork.id },
+          { ...item, chainId: item.chainId ?? contentFeedScope.chainId },
           voterAddress,
           normalizedOwnSubmitterAddresses,
         ),
@@ -257,9 +320,9 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       totalContent: rpcTotalContent,
       hasMore: rpcTotalContent > offset + pagedRpcFeed.length,
     }),
-    rpcEnabled: rpcFallbackEnabled,
+    rpcEnabled: rpcFallbackEnabled && contentFeedScope.allowsRpcFallback,
     availabilityDeploymentKey: ponderDeploymentKey,
-    enabled,
+    enabled: queryEnabled,
     staleTime: 15_000,
     refetchInterval: refetchInterval ?? (isPageVisible ? 30_000 : false),
     keepPrevious,

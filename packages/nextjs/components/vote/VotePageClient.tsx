@@ -78,7 +78,12 @@ import { type DiscoverFeedMode, sortDiscoverFeed } from "~~/lib/vote/feedModes";
 import { rankForYouFeed } from "~~/lib/vote/forYouRanker";
 import { buildLinkedWalletAddresses } from "~~/lib/vote/linkedWalletAddresses";
 import { getLocalVoteCooldownsByContentId } from "~~/lib/vote/localCooldown";
-import { buildVoteContentPinKey, buildVoteContentPinKeyFromUrl, buildVoteLocation } from "~~/lib/vote/location";
+import {
+  buildVoteContentPinKey,
+  buildVoteContentPinKeyFromUrl,
+  buildVoteLocation,
+  readVoteLocationScope,
+} from "~~/lib/vote/location";
 import { mergeRequestedContentIntoFeed, mergeRequestedContentPinIntoFeed } from "~~/lib/vote/requestedContent";
 import { resolveStableSessionFeedOrder } from "~~/lib/vote/stableFeedOrder";
 import {
@@ -250,6 +255,7 @@ const HomeInner = () => {
   const searchQuery = searchParams?.get("q") ?? "";
   const contentParam = searchParams?.get("content");
   const waitForRequestedContent = searchParams?.get(RATE_WAIT_FOR_CONTENT_PARAM) === "1";
+  const requestedContentScope = useMemo(() => readVoteLocationScope(searchParams), [searchParams]);
   const requestedActiveId = useMemo(() => {
     if (!contentParam) return null;
     try {
@@ -585,6 +591,8 @@ const HomeInner = () => {
   } = useContentFeed(address, {
     categoryId: activeCategoryId,
     contentIds: feedContentIds,
+    chainId: requestedContentScope?.chainId,
+    deploymentKey: requestedContentScope?.deploymentKey,
     limit: feedRequestLimit,
     ownSubmitterAddresses,
     searchQuery: searchQuery.trim() || undefined,
@@ -617,6 +625,8 @@ const HomeInner = () => {
   }, [effectiveExternalContentPinId, effectiveRequestedActiveId, feed]);
   const { feed: rawRequestedContentFeed, isLoading: requestedContentLoading } = useContentFeed(address, {
     contentIds: requestedContentIds.length > 0 ? requestedContentIds : undefined,
+    chainId: requestedContentScope?.chainId,
+    deploymentKey: requestedContentScope?.deploymentKey,
     enabled: requestedContentIds.length > 0,
     keepPrevious: false,
     limit: requestedContentIds.length || undefined,
@@ -1221,6 +1231,8 @@ const HomeInner = () => {
   );
   const { feed: referencedContentFeed } = useContentFeed(address, {
     contentIds: missingReferencedContentIds.length > 0 ? missingReferencedContentIds : undefined,
+    chainId: requestedContentScope?.chainId,
+    deploymentKey: requestedContentScope?.deploymentKey,
     enabled: missingReferencedContentIds.length > 0,
     keepPrevious: true,
     limit: missingReferencedContentIds.length || undefined,

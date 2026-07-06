@@ -12,6 +12,22 @@ interface VoteSearchParamsLike {
   entries(): IterableIterator<[string, string]>;
 }
 
+interface VoteSearchParamsReader {
+  get(name: string): string | null;
+}
+
+function normalizeVoteLocationChainId(value: string | null | undefined) {
+  const raw = value?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeVoteLocationDeploymentKey(value: string | null | undefined) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 function normalizeSearchParams(searchParams: URLSearchParams) {
   const normalizedParams = new URLSearchParams();
   const entries = Array.from(searchParams.entries()).sort(([leftKey, leftValue], [rightKey, rightValue]) =>
@@ -77,4 +93,11 @@ export function buildVoteContentPinKey(pathname: string, searchParams: VoteSearc
 export function buildVoteContentPinKeyFromUrl(currentUrl: string) {
   const url = new URL(currentUrl);
   return buildVoteContentPinKey(url.pathname, url.searchParams);
+}
+
+export function readVoteLocationScope(searchParams: VoteSearchParamsReader | null | undefined) {
+  const chainId = normalizeVoteLocationChainId(searchParams?.get(RATE_CHAIN_ID_PARAM));
+  const deploymentKey = normalizeVoteLocationDeploymentKey(searchParams?.get(RATE_DEPLOYMENT_KEY_PARAM));
+  if (chainId === null && deploymentKey === null) return null;
+  return { chainId, deploymentKey };
 }

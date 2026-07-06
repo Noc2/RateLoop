@@ -1,4 +1,9 @@
-import { buildVoteContentPinKey, buildVoteContentPinKeyFromUrl, buildVoteLocation } from "./location";
+import {
+  buildVoteContentPinKey,
+  buildVoteContentPinKeyFromUrl,
+  buildVoteLocation,
+  readVoteLocationScope,
+} from "./location";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -89,4 +94,12 @@ test("content pin keys preserve social rating version params", () => {
 
 test("content pin keys are absent without a content query param", () => {
   assert.equal(buildVoteContentPinKey("/rate", new URLSearchParams("q=openlaw")), null);
+});
+
+test("rate location scope reads valid chain and deployment params", () => {
+  assert.deepEqual(readVoteLocationScope(new URLSearchParams("content=6&chainId=8453&deploymentKey=8453%3A0xabc")), {
+    chainId: 8453,
+    deploymentKey: "8453:0xabc",
+  });
+  assert.deepEqual(readVoteLocationScope(new URLSearchParams("chainId=8453.5&deploymentKey=%20")), null);
 });
