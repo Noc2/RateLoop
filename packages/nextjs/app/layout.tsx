@@ -33,6 +33,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       lang="en"
       className={`${spaceGrotesk.variable} ${inter.variable}`}
       data-theme="dark"
+      suppressHydrationWarning
       style={{ colorScheme: "dark" }}
     >
       <body suppressHydrationWarning>
