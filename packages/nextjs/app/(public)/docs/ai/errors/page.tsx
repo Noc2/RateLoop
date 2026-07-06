@@ -58,6 +58,27 @@ const AIErrorsPage: NextPage = () => {
           </tr>
           <tr>
             <td>
+              <code>invalid_arguments</code>
+            </td>
+            <td>
+              A handoff create, prepare, complete, or asset request is malformed or no longer valid. Handoff-specific
+              payloads usually include <code>originalCode: &quot;AgentAskHandoffError&quot;</code>.
+            </td>
+            <td>
+              Inspect <code>message</code> and, when available, the handoff status <code>nextAction</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>max_payment_exceeded</code>
+            </td>
+            <td>The quoted or prepared ask costs more than the caller&apos;s saved payment cap.</td>
+            <td>
+              Copy <code>maxPaymentAmountHint</code> from a fresh quote or ask the user to approve a higher cap.
+            </td>
+          </tr>
+          <tr>
+            <td>
               <code>mode_unsupported</code>
             </td>
             <td>A raw ask used a legacy no-op execution mode such as sync or async.</td>
@@ -135,6 +156,48 @@ const AIErrorsPage: NextPage = () => {
   "recoverWith": "fix_media_urls",
   "retryable": false,
   "status": 400
+}`}</code>
+      </pre>
+
+      <h3>Browser Handoff Image Cap</h3>
+      <p>Browser handoff images accept JPG, PNG, and WEBP inputs up to 10 MB per image.</p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{`{
+  "code": "invalid_arguments",
+  "originalCode": "AgentAskHandoffError",
+  "message": "generatedImages[0] exceeds the maximum image upload size of 10485760 bytes.",
+  "recoverWith": "fix_tool_arguments",
+  "retryable": false,
+  "status": 400
+}`}</code>
+      </pre>
+
+      <h3>Expired Handoff Link</h3>
+      <p>
+        Expired handoffs cannot be prepared again. If the link expired before funding, create a new link; if it expired
+        after wallet transactions were submitted, use the recovery guidance in the completion error.
+      </p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{`{
+  "code": "invalid_arguments",
+  "originalCode": "AgentAskHandoffError",
+  "message": "Handoff link has expired. Ask the AI agent to generate a new handoff link.",
+  "recoverWith": "fix_tool_arguments",
+  "retryable": false,
+  "status": 410
+}`}</code>
+      </pre>
+
+      <h3>Interrupted Image Staging</h3>
+      <p>
+        File-backed handoffs can return a non-terminal staging status before bytes arrive or moderation finishes. Poll
+        status first; if the image fails or stays interrupted, retry or remove the asset from the handoff page, or ask
+        for a fresh link with the image reattached.
+      </p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{`{
+  "status": "uploading_images",
+  "nextAction": "Image upload is still processing. Poll rateloop_get_handoff_status for completion or failure."
 }`}</code>
       </pre>
 
