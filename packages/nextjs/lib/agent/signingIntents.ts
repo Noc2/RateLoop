@@ -186,6 +186,14 @@ function assertFresh(intent: AgentSigningIntentRecord) {
   }
 }
 
+function assertNoBrowserSigningCallbackFields(requestBody: JsonObject) {
+  if ("webhookUrl" in requestBody || "webhookSecret" in requestBody || "webhookEvents" in requestBody) {
+    throw new McpToolError(
+      "callbacks are not supported on browser signing links; omit webhookUrl, webhookSecret, and webhookEvents.",
+    );
+  }
+}
+
 async function markIntentExpired(intent: AgentSigningIntentRecord) {
   if (intent.status === "expired" || intent.status === "submitted") return;
   const now = nowDate();
@@ -299,6 +307,7 @@ function hasPreparedSigningArtifacts(
 
 export async function createAgentSigningIntent(params: { appBaseUrl: string; requestBody: unknown; ttlMs?: number }) {
   const requestBody = asJsonObject(params.requestBody);
+  assertNoBrowserSigningCallbackFields(requestBody);
   const payload = parseX402QuestionRequest(requestBody);
   if (requestBody.maxPaymentAmount === undefined || requestBody.maxPaymentAmount === null) {
     throw new McpToolError("maxPaymentAmount is required for browser signing links.");

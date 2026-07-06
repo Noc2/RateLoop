@@ -939,6 +939,14 @@ function assertHandoffMaxPaymentAmount(requestBody: JsonObject) {
   }
 }
 
+function assertNoBrowserHandoffCallbackFields(requestBody: JsonObject) {
+  if ("webhookUrl" in requestBody || "webhookSecret" in requestBody || "webhookEvents" in requestBody) {
+    throw new AgentAskHandoffError(
+      "callbacks are not supported on browser handoffs; omit webhookUrl, webhookSecret, and webhookEvents.",
+    );
+  }
+}
+
 function isStaleUploadingImageHandoff(handoff: AgentAskHandoffRecord, now = Date.now()) {
   return (
     handoff.status === "uploading_images" &&
@@ -961,6 +969,7 @@ export function normalizeAgentAskHandoffRequestBody(params: {
   validationImageUrls?: string[];
 }) {
   const requestBody = asJsonObject(params.requestBody, params.fieldName ?? "Handoff request body");
+  assertNoBrowserHandoffCallbackFields(requestBody);
 
   const validationBody = stripHandoffOnlyValidationFields(
     cloneWithImageUrls(requestBody, params.validationImageUrls ?? []),
@@ -1067,6 +1076,9 @@ export function buildAgentAskHandoffResponse(params: {
     if (params.handoff.status === "failed" && failedAsset) {
       return "Image upload failed. Retry the image from the handoff page, remove it and add another public context source, or ask the agent for a fresh link with a regenerated or re-exported image.";
     }
+    if (params.handoff.status === "failed" && uploadingAsset) {
+      return "Image upload was interrupted before the file arrived. Remove it from the handoff page and add another public context source, or ask the agent for a fresh link with the image reattached.";
+    }
     if (uploadingAsset) {
       return "Image upload is still staging. Poll rateloop_get_handoff_status before sharing or preparing the handoff.";
     }
@@ -1165,6 +1177,8 @@ export async function createAgentAskHandoff(params: {
   const originalRequestBody = asJsonObject(params.requestBody, "Handoff request body");
   const inferredHeadToHead = normalizeInferredHeadToHeadAbRequestBody(originalRequestBody);
   const requestBody = inferredHeadToHead.requestBody;
+  assertNoBrowserHandoffCallbackFields(originalRequestBody);
+  assertNoBrowserHandoffCallbackFields(requestBody);
 
   const generatedImages = readGeneratedImages(params.generatedImages);
   const generatedImageUploads = readGeneratedImageUploads(params.generatedImageUploads);
@@ -1360,10 +1374,20 @@ async function resetHandoffAfterAssetRecovery(handoffId: string) {
           error = NULL,
           updated_at = ?
       WHERE id = ?
-        AND status = 'failed'
+        AND status IN ('pending', 'awaiting_image_signatures', 'uploading_images', 'failed')
     `,
     args: [now, handoffId],
   });
+}
+
+function assertHandoffCanRemoveUploadingAsset(handoff: AgentAskHandoffRecord) {
+  assertFresh(handoff);
+  if (handoff.status !== "pending" && handoff.status !== "failed" && handoff.status !== "uploading_images") {
+    throw new AgentAskHandoffError(
+      `Handoff image asset cannot be removed after preparation has started. Current status: ${handoff.status}.`,
+      409,
+    );
+  }
 }
 
 export async function recoverAgentAskHandoffAsset(params: {
@@ -1373,13 +1397,18 @@ export async function recoverAgentAskHandoffAsset(params: {
   token: string;
 }) {
   const handoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
-  assertHandoffCanEditDraft(handoff);
   const assets = await listAgentAskHandoffAssets(handoff.id);
   const asset = findHandoffAsset(assets, params.assetId);
   if (!asset) {
     throw new AgentAskHandoffError("Handoff image asset was not found.", 404);
   }
-  if (asset.status !== "failed") {
+  const removingUploadingAsset = params.action === "remove" && asset.status === "uploading";
+  if (removingUploadingAsset) {
+    assertHandoffCanRemoveUploadingAsset(handoff);
+  } else {
+    assertHandoffCanEditDraft(handoff);
+  }
+  if (asset.status !== "failed" && !removingUploadingAsset) {
     throw new AgentAskHandoffError(`Handoff image asset cannot be recovered from status ${asset.status}.`, 409);
   }
 
@@ -1409,9 +1438,9 @@ export async function recoverAgentAskHandoffAsset(params: {
         DELETE FROM agent_ask_handoff_assets
         WHERE id = ?
           AND handoff_id = ?
-          AND status = 'failed'
+          AND status = ?
       `,
-      args: [asset.id, handoff.id],
+      args: [asset.id, handoff.id, removingUploadingAsset ? "uploading" : "failed"],
     });
   }
 
@@ -1695,7 +1724,9 @@ export function buildAskBodyWithUploadedHandoffImages(params: {
   if (params.assets.length > 0 && imageUrls.length !== params.assets.length) {
     throw new AgentAskHandoffError("All staged images must be uploaded before preparing the ask.");
   }
-  return cloneWithImageUrls(unsealSensitiveAgentRequestFields(params.handoff.requestBody, params.token), imageUrls);
+  const requestBody = unsealSensitiveAgentRequestFields(params.handoff.requestBody, params.token);
+  assertNoBrowserHandoffCallbackFields(requestBody);
+  return cloneWithImageUrls(requestBody, imageUrls);
 }
 
 export function assertHandoffCanPrepare(handoff: AgentAskHandoffRecord) {

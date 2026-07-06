@@ -105,6 +105,10 @@ function readPaymentAuthorization(value: unknown): JsonObject | undefined {
   return value as JsonObject;
 }
 
+function readIncludeImageData(value: unknown) {
+  return value === true || value === "true";
+}
+
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -289,6 +293,7 @@ async function uploadSignedImages(params: {
 async function prepareAsk(params: {
   chainId: number;
   handoffId: string;
+  includeImageData?: boolean;
   paymentAuthorization?: JsonObject;
   requestUrl: string;
   token: string;
@@ -357,7 +362,11 @@ async function prepareAsk(params: {
   const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
   const updatedAssets = await listAgentAskHandoffAssets(updatedHandoff.id);
   return {
-    ...buildAgentAskHandoffResponse({ assets: updatedAssets, handoff: updatedHandoff, includeImageData: true }),
+    ...buildAgentAskHandoffResponse({
+      assets: updatedAssets,
+      handoff: updatedHandoff,
+      includeImageData: params.includeImageData,
+    }),
     ask: prepared,
     confirmUrl: `/api/agent/handoffs/${encodeURIComponent(params.handoffId)}/complete`,
     nextAction:
@@ -381,6 +390,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       const walletAddress = readWalletAddress((body as { walletAddress?: unknown }).walletAddress);
       const requestedChainId = readChainId((body as { chainId?: unknown }).chainId);
       const imageSignatures = readImageSignatures((body as { imageSignatures?: unknown }).imageSignatures);
+      const includeImageData = readIncludeImageData((body as { includeImageData?: unknown }).includeImageData);
       const paymentAuthorization = readPaymentAuthorization(
         (body as { paymentAuthorization?: unknown }).paymentAuthorization,
       );
@@ -406,7 +416,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         const calls = Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [];
         if (calls.length > 0) {
           const assets = await listAgentAskHandoffAssets(handoff.id);
-          return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
+          return buildAgentAskHandoffResponse({ assets, handoff, includeImageData });
         }
       }
 
@@ -423,7 +433,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
         assets = await listAgentAskHandoffAssets(updatedHandoff.id);
         return {
-          ...buildAgentAskHandoffResponse({ assets, handoff: updatedHandoff, includeImageData: true }),
+          ...buildAgentAskHandoffResponse({ assets, handoff: updatedHandoff, includeImageData }),
           nextAction:
             "Sign each upload challenge in the connected wallet, then call prepare again with imageSignatures.",
           uploadChallenges,
@@ -443,6 +453,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         return await prepareAsk({
           chainId,
           handoffId,
+          includeImageData,
           paymentAuthorization,
           requestUrl: request.url,
           token,

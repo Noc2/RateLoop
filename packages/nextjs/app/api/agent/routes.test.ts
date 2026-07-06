@@ -169,18 +169,6 @@ function makePublicGet(url: string, headers: Record<string, string> = {}) {
   });
 }
 
-function parseStoredJson(value: unknown) {
-  return JSON.parse(String(value)) as Record<string, unknown>;
-}
-
-function assertStoredWebhookSecretSealed(value: Record<string, unknown>, ...plaintextSecrets: string[]) {
-  const storedText = JSON.stringify(value);
-  assert.equal("webhookSecret" in value, false);
-  for (const secret of plaintextSecrets) {
-    assert.equal(storedText.includes(secret), false);
-  }
-}
-
 function configureProductionAgentLinks(appUrl?: string) {
   env.NODE_ENV = "production";
   env.VERCEL = "1";
@@ -1318,7 +1306,7 @@ test("agent signing intent route rejects malformed TTLs", async () => {
   assert.equal(body.message, "ttlMs must be a positive integer.");
 });
 
-test("agent signing intent route redacts webhook secrets from browser responses", async () => {
+test("agent signing intent route rejects browser callbacks", async () => {
   installAskOverrides();
 
   const response = await signingIntentsRoute.POST(
@@ -1331,35 +1319,13 @@ test("agent signing intent route redacts webhook secrets from browser responses"
     }),
   );
   const body = (await response.json()) as Record<string, unknown>;
-  const intentId = String(body.id);
-  const signingUrl = new URL(String(body.signingUrl));
-  const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
-  const requestBody = body.requestBody as Record<string, unknown>;
 
-  assert.equal(response.status, 200, JSON.stringify(body));
-  assert.ok(token);
-  assert.equal("webhookSecret" in requestBody, false);
-  assert.equal(requestBody.webhookUrl, "https://agent.example/callback");
-
-  const readResponse = await signingIntentRoute.GET(
-    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
-      "x-rateloop-signing-intent-token": token,
-    }),
-    { params: Promise.resolve({ intentId }) },
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "invalid_arguments");
+  assert.equal(
+    body.message,
+    "callbacks are not supported on browser signing links; omit webhookUrl, webhookSecret, and webhookEvents.",
   );
-  const readBody = (await readResponse.json()) as Record<string, unknown>;
-  const readRequestBody = readBody.requestBody as Record<string, unknown>;
-
-  assert.equal(readResponse.status, 200, JSON.stringify(readBody));
-  assert.equal("webhookSecret" in readRequestBody, false);
-  assert.equal(readRequestBody.webhookUrl, "https://agent.example/callback");
-
-  const stored = await dbModule.dbClient.execute({
-    args: [intentId],
-    sql: "SELECT request_body FROM agent_signing_intents WHERE id = ?",
-  });
-  const storedRequestBody = parseStoredJson(stored.rows[0]?.request_body);
-  assertStoredWebhookSecretSealed(storedRequestBody, "super-secret-callback-key");
 });
 
 test("agent ask handoff route rejects chains unavailable on this server", async () => {
@@ -1432,115 +1398,71 @@ test("agent ask handoff route uses configured production app URL for token links
   }
 });
 
-test("agent ask handoff route redacts webhook secrets from browser responses", async () => {
-  const originalRequest = {
-    ...handoffQuestionPayload("agent-handoff-webhook-secret"),
-    maxPaymentAmount: "1500000",
-    webhookSecret: "super-secret-callback-key",
-    webhookUrl: "https://agent.example/callback",
-  };
-  const editedRequest = {
-    ...originalRequest,
-    question: {
-      ...originalRequest.question,
-      title: "Edited pitch interest",
-    },
-    webhookSecret: "edited-secret-callback-key",
-  };
-
+test("agent ask handoff route rejects browser callbacks", async () => {
   const createResponse = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
-      request: originalRequest,
+      request: {
+        ...handoffQuestionPayload("agent-handoff-webhook-secret"),
+        maxPaymentAmount: "1500000",
+        webhookSecret: "super-secret-callback-key",
+        webhookUrl: "https://agent.example/callback",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+
+  assert.equal(createResponse.status, 400);
+  assert.equal(createBody.code, "invalid_arguments");
+  assert.equal(
+    createBody.message,
+    "callbacks are not supported on browser handoffs; omit webhookUrl, webhookSecret, and webhookEvents.",
+  );
+});
+
+test("agent ask handoff prepare rejects legacy browser callbacks", async () => {
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-legacy-webhook-secret"),
+        maxPaymentAmount: "1500000",
+      },
       ttlMs: 300000,
     }),
   );
   const createBody = (await createResponse.json()) as Record<string, unknown>;
   const handoffId = String(createBody.handoffId);
-  const handoffUrl = new URL(String(createBody.handoffUrl));
-  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
-  const createRequestBody = createBody.requestBody as Record<string, unknown>;
-  const createOriginalRequestBody = createBody.originalRequestBody as Record<string, unknown>;
+  const token = new URLSearchParams(new URL(String(createBody.handoffUrl)).hash.replace(/^#/, "")).get("token");
 
   assert.equal(createResponse.status, 200, JSON.stringify(createBody));
   assert.ok(token);
-  assert.equal("webhookSecret" in createRequestBody, false);
-  assert.equal("webhookSecret" in createOriginalRequestBody, false);
-  assert.equal(createRequestBody.webhookUrl, "https://agent.example/callback");
-  assert.equal(createOriginalRequestBody.webhookUrl, "https://agent.example/callback");
 
-  const storedCreate = await dbModule.dbClient.execute({
-    args: [handoffId],
-    sql: "SELECT request_body, original_request_body FROM agent_ask_handoff_intents WHERE id = ?",
+  const legacyBody = {
+    ...handoffQuestionPayload("agent-handoff-legacy-webhook-secret"),
+    maxPaymentAmount: "1500000",
+    webhookSecret: "super-secret-callback-key",
+    webhookUrl: "https://agent.example/callback",
+  };
+  await dbModule.dbClient.execute({
+    args: [JSON.stringify(legacyBody), JSON.stringify(legacyBody), handoffId],
+    sql: "UPDATE agent_ask_handoff_intents SET request_body = ?, original_request_body = ? WHERE id = ?",
   });
-  const storedCreateRequestBody = parseStoredJson(storedCreate.rows[0]?.request_body);
-  const storedCreateOriginalRequestBody = parseStoredJson(storedCreate.rows[0]?.original_request_body);
-  assertStoredWebhookSecretSealed(storedCreateRequestBody, "super-secret-callback-key");
-  assertStoredWebhookSecretSealed(storedCreateOriginalRequestBody, "super-secret-callback-key");
 
-  const readResponse = await handoffRoute.GET(
-    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
-      "x-rateloop-handoff-token": token,
-    }),
-    { params: Promise.resolve({ handoffId }) },
-  );
-  const readBody = (await readResponse.json()) as Record<string, unknown>;
-  const readRequestBody = readBody.requestBody as Record<string, unknown>;
-  const readOriginalRequestBody = readBody.originalRequestBody as Record<string, unknown>;
-
-  assert.equal(readResponse.status, 200, JSON.stringify(readBody));
-  assert.equal("webhookSecret" in readRequestBody, false);
-  assert.equal("webhookSecret" in readOriginalRequestBody, false);
-
-  const patchResponse = await handoffRoute.PATCH(
-    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
-      requestBody: editedRequest,
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
       token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
     { params: Promise.resolve({ handoffId }) },
   );
-  const patchBody = (await patchResponse.json()) as Record<string, unknown>;
-  const patchRequestBody = patchBody.requestBody as Record<string, unknown>;
-  const patchOriginalRequestBody = patchBody.originalRequestBody as Record<string, unknown>;
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
 
-  assert.equal(patchResponse.status, 200, JSON.stringify(patchBody));
-  assert.equal("webhookSecret" in patchRequestBody, false);
-  assert.equal("webhookSecret" in patchOriginalRequestBody, false);
-  assert.equal((patchRequestBody.question as Record<string, unknown>).title, "Edited pitch interest");
-  assert.equal((patchOriginalRequestBody.question as Record<string, unknown>).title, "Pitch interest");
-
-  const storedPatch = await dbModule.dbClient.execute({
-    args: [handoffId],
-    sql: "SELECT request_body, original_request_body FROM agent_ask_handoff_intents WHERE id = ?",
-  });
-  const storedPatchRequestBody = parseStoredJson(storedPatch.rows[0]?.request_body);
-  const storedPatchOriginalRequestBody = parseStoredJson(storedPatch.rows[0]?.original_request_body);
-  assertStoredWebhookSecretSealed(storedPatchRequestBody, "edited-secret-callback-key");
-  assertStoredWebhookSecretSealed(storedPatchOriginalRequestBody, "super-secret-callback-key");
-
-  const restoreResponse = await handoffRoute.PATCH(
-    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
-      restoreOriginal: true,
-      token,
-    }),
-    { params: Promise.resolve({ handoffId }) },
+  assert.equal(prepareResponse.status, 400);
+  assert.equal(
+    prepareBody.message,
+    "callbacks are not supported on browser handoffs; omit webhookUrl, webhookSecret, and webhookEvents.",
   );
-  const restoreBody = (await restoreResponse.json()) as Record<string, unknown>;
-  const restoreRequestBody = restoreBody.requestBody as Record<string, unknown>;
-  const restoreQuestion = restoreRequestBody.question as Record<string, unknown>;
-
-  assert.equal(restoreResponse.status, 200, JSON.stringify(restoreBody));
-  assert.equal(restoreBody.clientRequestId, originalRequest.clientRequestId);
-  assert.equal(restoreQuestion.title, "Pitch interest");
-  assert.equal("webhookSecret" in restoreRequestBody, false);
-
-  const storedRestore = await dbModule.dbClient.execute({
-    args: [handoffId],
-    sql: "SELECT request_body, original_request_body FROM agent_ask_handoff_intents WHERE id = ?",
-  });
-  const storedRestoreRequestBody = parseStoredJson(storedRestore.rows[0]?.request_body);
-  const storedRestoreOriginalRequestBody = parseStoredJson(storedRestore.rows[0]?.original_request_body);
-  assertStoredWebhookSecretSealed(storedRestoreRequestBody, "super-secret-callback-key");
-  assertStoredWebhookSecretSealed(storedRestoreOriginalRequestBody, "super-secret-callback-key");
 });
 
 test("agent ask handoff route stages generated image bytes behind a browser link", async () => {
@@ -1618,6 +1540,7 @@ test("agent ask handoff route stages generated image bytes behind a browser link
     { params: Promise.resolve({ handoffId }) },
   );
   const prepareBody = (await prepareResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
     chainId?: number;
     status?: string;
     uploadChallenges?: Array<Record<string, unknown>>;
@@ -1626,9 +1549,70 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(prepareResponse.status, 200);
   assert.equal(prepareBody.chainId, HANDOFF_CHAIN_ID);
   assert.equal(prepareBody.status, "awaiting_image_signatures");
+  assert.equal(prepareBody.assets?.[0]?.dataUrl, undefined);
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
   assert.match(String(prepareBody.uploadChallenges?.[0]?.challengeId), /^[a-f0-9]{32}$/);
+});
+
+test("agent ask handoff complete returns image data only when requested", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "concept.png",
+          imageBase64: ONE_PIXEL_PNG_BASE64,
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...handoffQuestionPayload("agent-handoff-complete-image-data"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as { handoffId?: string; handoffUrl?: string };
+  const handoffId = String(body.handoffId);
+  const token = new URLSearchParams(new URL(String(body.handoffUrl)).hash.replace(/^#/, "")).get("token");
+
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.ok(token);
+
+  await dbModule.dbClient.execute({
+    args: ["submitted", handoffId],
+    sql: "UPDATE agent_ask_handoff_intents SET status = ? WHERE id = ?",
+  });
+
+  const transactionHashes = [`0x${"1".repeat(64)}`];
+  const completeResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeBody = (await completeResponse.json()) as { assets?: Array<Record<string, unknown>> };
+
+  assert.equal(completeResponse.status, 200, JSON.stringify(completeBody));
+  assert.equal(completeBody.assets?.[0]?.dataUrl, undefined);
+
+  const completeWithImageDataResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      includeImageData: true,
+      token,
+      transactionHashes,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeWithImageDataBody = (await completeWithImageDataResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+  };
+
+  assert.equal(completeWithImageDataResponse.status, 200, JSON.stringify(completeWithImageDataBody));
+  assert.equal(completeWithImageDataBody.assets?.[0]?.dataUrl, `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`);
 });
 
 test("agent ask handoff route reports clamped TTLs", async () => {
@@ -1790,14 +1774,126 @@ test("agent ask handoff route stages generated image upload metadata before blob
     { params: Promise.resolve({ handoffId }) },
   );
   const prepareBody = (await prepareResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
     status?: string;
     uploadChallenges?: Array<Record<string, unknown>>;
   };
 
   assert.equal(prepareResponse.status, 200);
   assert.equal(prepareBody.status, "awaiting_image_signatures");
+  assert.equal(prepareBody.assets?.[0]?.dataUrl, undefined);
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
+
+  const prepareWithImageDataResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      includeImageData: true,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareWithImageDataBody = (await prepareWithImageDataResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+  };
+
+  assert.equal(prepareWithImageDataResponse.status, 200);
+  assert.equal(prepareWithImageDataBody.assets?.[0]?.dataUrl, `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`);
+});
+
+test("agent ask handoff route lets humans remove interrupted uploading image assets", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImageUploads: [
+        {
+          filename: "concept.png",
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...handoffQuestionPayload("agent-handoff-uploading-remove"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    handoffId?: string;
+    handoffUrl?: string;
+  };
+  const handoffId = String(body.handoffId);
+  const token = new URLSearchParams(new URL(String(body.handoffUrl)).hash.replace(/^#/, "")).get("token");
+  const assetId = String(body.assets?.[0]?.id);
+
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.ok(token);
+  assert.equal(body.assets?.[0]?.status, "uploading");
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 400);
+  assert.equal(prepareBody.code, "invalid_arguments");
+  assert.equal(prepareBody.message, "All staged images must be uploaded before preparing the ask.");
+
+  const statusResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const statusBody = (await statusResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    nextAction?: string;
+    status?: string;
+  };
+
+  assert.equal(statusResponse.status, 200, JSON.stringify(statusBody));
+  assert.equal(statusBody.status, "failed");
+  assert.equal(statusBody.assets?.[0]?.status, "uploading");
+  assert.match(String(statusBody.nextAction), /Image upload was interrupted/);
+
+  const invalidActionResponse = await handoffAssetRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}/assets/${assetId}`, {
+      action: "archive",
+      token,
+    }),
+    { params: Promise.resolve({ assetId, handoffId }) },
+  );
+  const invalidActionBody = (await invalidActionResponse.json()) as Record<string, unknown>;
+
+  assert.equal(invalidActionResponse.status, 400);
+  assert.equal(invalidActionBody.code, "invalid_arguments");
+  assert.equal(invalidActionBody.recoverWith, "fix_tool_arguments");
+  assert.equal(invalidActionBody.retryable, false);
+  assert.equal(invalidActionBody.status, 400);
+
+  const removeResponse = await handoffAssetRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}/assets/${assetId}`, {
+      action: "remove",
+      token,
+    }),
+    { params: Promise.resolve({ assetId, handoffId }) },
+  );
+  const removeBody = (await removeResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    status?: string;
+  };
+
+  assert.equal(removeResponse.status, 200, JSON.stringify(removeBody));
+  assert.equal(removeBody.status, "pending");
+  assert.deepEqual(removeBody.assets, []);
 });
 
 test("agent ask handoff route applies the pending asset position migration before staging images", async () => {

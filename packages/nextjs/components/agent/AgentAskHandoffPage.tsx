@@ -2507,6 +2507,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       const response = await fetch(`/api/agent/handoffs/${handoffId}/prepare`, {
         body: JSON.stringify({
           chainId: prepareChainId,
+          includeImageData: true,
           imageSignatures: options.imageSignatures,
           paymentAuthorization: options.paymentAuthorization,
           token,
@@ -3210,7 +3211,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             });
 
         const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
-          body: JSON.stringify({ token, transactionHashes: hashes }),
+          body: JSON.stringify({ includeImageData: true, token, transactionHashes: hashes }),
           headers: { "content-type": "application/json" },
           method: "POST",
         });
@@ -4241,9 +4242,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           </span>
                         </div>
                         {asset.error ? <p className="mt-2 text-xs text-error">{asset.error}</p> : null}
-                        {asset.status === "failed" ? (
+                        {asset.status === "failed" || asset.status === "uploading" ? (
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {asset.dataUrl ? (
+                            {asset.status === "failed" && asset.dataUrl ? (
                               <button
                                 className="btn btn-outline btn-xs"
                                 disabled={isBusy}
