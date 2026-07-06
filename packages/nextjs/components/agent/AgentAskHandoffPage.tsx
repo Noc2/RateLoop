@@ -3744,7 +3744,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         className={hasQuestionBundle ? "rounded-lg border border-base-content/10 p-4" : ""}
                       >
                         {hasQuestionBundle ? null : (
-                          <div>
+                          <div className="pb-2">
                             <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                               Question type
                             </span>
