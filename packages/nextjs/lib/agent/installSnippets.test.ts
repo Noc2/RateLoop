@@ -10,6 +10,7 @@ import {
   RATELOOP_PUBLIC_MCP_URL,
   RATELOOP_PUBLIC_ORIGIN,
   RATELOOP_SKILL_URL,
+  formatAgentInstallSnippetText,
   getAgentInstallTarget,
 } from "./installSnippets";
 import assert from "node:assert/strict";
@@ -28,6 +29,14 @@ test("standing rule includes pre-deployment guard", () => {
   assert.ok(RATELOOP_AGENT_STANDING_RULE.includes(RATELOOP_CONTRACT_DEPLOYMENT_NOTE));
   assert.match(RATELOOP_CONTRACT_DEPLOYMENT_NOTE, /contracts are not deployed/);
   assert.match(RATELOOP_CONTRACT_DEPLOYMENT_NOTE, /stop before paid submission/);
+});
+
+test("install modal snippet formatting preserves the deployment guard", () => {
+  const formatted = formatAgentInstallSnippetText(`\n\n${RATELOOP_ONE_TIME_AGENT_PROMPT}\n\n`);
+
+  assert.ok(formatted.includes(RATELOOP_CONTRACT_DEPLOYMENT_NOTE));
+  assert.ok(!formatted.startsWith("\n"));
+  assert.ok(!formatted.endsWith("\n"));
 });
 
 test("generic MCP config points at public RateLoop MCP endpoint", () => {

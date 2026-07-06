@@ -269,3 +269,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`,
 export function getAgentInstallTarget(name: string): AgentInstallTarget | undefined {
   return RATELOOP_AGENT_INSTALL_TARGETS.find(target => target.name === name);
 }
+
+export function formatAgentInstallSnippetText(text: string) {
+  return text.replace(/\n{3,}/g, "\n\n").trim();
+}

@@ -8,7 +8,7 @@ import {
   type AgentInstallSnippet,
   type AgentInstallSnippetKind,
   RATELOOP_AGENT_INSTALL_TARGETS,
-  RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
+  formatAgentInstallSnippetText,
 } from "~~/lib/agent/installSnippets";
 import { copyTextToClipboard } from "~~/utils/copyToClipboard";
 import { notification } from "~~/utils/scaffold-eth";
@@ -79,14 +79,6 @@ function getSnippetKindLabel(kind: AgentInstallSnippetKind) {
   }
 }
 
-function getPopupSnippetText(text: string) {
-  return text
-    .replaceAll(` ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`, "")
-    .replaceAll(RATELOOP_CONTRACT_DEPLOYMENT_NOTE, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 export function SupportedAgentsSection() {
   const [activeAgentName, setActiveAgentName] = useState<string | null>(null);
   const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
@@ -126,7 +118,7 @@ export function SupportedAgentsSection() {
   };
 
   const handleSnippetCopy = async (agentName: string, snippet: AgentInstallSnippet, snippetIndex: number) => {
-    const copied = await copyTextToClipboard(getPopupSnippetText(snippet.text));
+    const copied = await copyTextToClipboard(formatAgentInstallSnippetText(snippet.text));
     if (!copied) {
       console.error("Failed to copy RateLoop agent setup snippet.");
       notification.error(`Could not copy ${snippet.label} for ${agentName}.`, {
@@ -235,7 +227,7 @@ export function SupportedAgentsSection() {
                       {activeAgent.snippets.map((snippet, snippetIndex) => {
                         const snippetKey = `${activeAgent.name}-${snippetIndex}`;
                         const isCopied = copiedSnippetKey === snippetKey;
-                        const snippetText = getPopupSnippetText(snippet.text);
+                        const snippetText = formatAgentInstallSnippetText(snippet.text);
                         return (
                           <article
                             key={`${activeAgent.name}-${snippet.label}`}
