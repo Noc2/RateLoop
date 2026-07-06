@@ -101,6 +101,7 @@ Advanced low-level MCP tools:
 - `rateloop_upload_image`
 - `rateloop_get_image_upload_status`
 - `rateloop_confirm_ask_transactions`
+- `rateloop_confirm_feedback_bonus_transactions`
 
 ## Minimum Agent Flow
 
