@@ -139,13 +139,15 @@ test("Ponder Docker runtime uses pinned base and production dependencies", () =>
 
 test("Keeper Docker runtime uses built output and production dependencies", () => {
   const dockerfile = readWorkflow("packages/keeper/Dockerfile");
+  const entrypoint = readWorkflow("packages/keeper/docker-entrypoint.sh");
 
   assert.match(dockerfile, /RUN yarn build:workspace-deps && yarn build/);
   assert.match(
     dockerfile,
     /yarn workspaces focus @rateloop\/keeper --production/,
   );
-  assert.match(dockerfile, /CMD \["yarn", "start:built-dist"\]/);
+  assert.match(dockerfile, /CMD \["sh", "\.\/docker-entrypoint\.sh"\]/);
+  assert.match(entrypoint, /exec su-exec node yarn start:built-dist/);
   assert.match(dockerfile, /path:'\/live'/);
   assert.doesNotMatch(dockerfile, /path:'\/health'/);
   assert.doesNotMatch(dockerfile, /CMD \["yarn", "start:built-workspace-deps"\]/);
