@@ -327,6 +327,42 @@ MCP/browser handoff payload with Feedback Bonus:
 }
 ```
 
+Browser handoff request with generated/local image bytes:
+
+```json
+{
+  "request": {
+    "chainId": 8453,
+    "clientRequestId": "generated-mockup-2026-05-05-001",
+    "walletAddress": "0x1111111111111111111111111111111111111111",
+    "paymentMode": "eip3009_usdc_authorization",
+    "bounty": {
+      "amount": "2500000",
+      "asset": "USDC",
+      "requiredVoters": "5"
+    },
+    "maxPaymentAmount": "2500000",
+    "question": {
+      "title": "Is this generated product mockup clear enough to continue?",
+      "categoryId": "5",
+      "tags": ["agent", "design", "mockup"],
+      "templateId": "generic_rating"
+    }
+  },
+  "generatedImages": [
+    {
+      "filename": "mockup.png",
+      "mimeType": "image/png",
+      "imageBase64": "<base64 image bytes from disk, no data: prefix>",
+      "sizeBytes": 345678,
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  ]
+}
+```
+
+Build `imageBase64`, `sizeBytes`, and `sha256` from the same file buffer in the request process. You may omit `sizeBytes` and `sha256`, or use `dataUrl` instead of `imageBase64`.
+
 For gated asks, add `question.confidentiality`, a RateLoop-hosted `detailsUrl`/`detailsHash`, and optional hosted `imageUrls`:
 
 ```json

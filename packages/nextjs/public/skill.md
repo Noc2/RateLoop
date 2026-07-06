@@ -51,6 +51,40 @@ Context:
 
 Image transport rule: do not print base64 to the terminal or copy base64 out of visible command output. A chat, terminal, or tool display cap is not a RateLoop image-size limit, and is not a reason to shrink or redraw the image. Read bytes directly from disk inside the tool host, SDK, or a local script; compute optional `sizeBytes` and `sha256` from that exact buffer, or omit them and let RateLoop compute them where supported.
 
+Browser handoff request with generated/local image bytes:
+
+```json
+{
+  "request": {
+    "chainId": 8453,
+    "clientRequestId": "generated-mockup-2026-05-05-001",
+    "walletAddress": "0x1111111111111111111111111111111111111111",
+    "paymentMode": "eip3009_usdc_authorization",
+    "bounty": {
+      "amount": "2500000",
+      "asset": "USDC",
+      "requiredVoters": "5"
+    },
+    "maxPaymentAmount": "2500000",
+    "question": {
+      "title": "Is this generated product mockup clear enough to continue?",
+      "categoryId": "5",
+      "tags": ["agent", "design", "mockup"],
+      "templateId": "generic_rating"
+    }
+  },
+  "generatedImages": [
+    {
+      "filename": "mockup.png",
+      "mimeType": "image/png",
+      "imageBase64": "<base64 image bytes from disk, no data: prefix>",
+      "sizeBytes": 345678,
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  ]
+}
+```
+
 - Gated hosted context: set `question.confidentiality.visibility` to `gated`, require a RateLoop-hosted `detailsUrl` plus `detailsHash`, optionally add hosted `imageUrls`, omit `question.contextUrl` and `question.videoUrl`, default to `disclosurePolicy: "private_forever"` unless the asker explicitly wants `after_settlement`, and keep the public title non-sensitive. Eligible raters must accept confidentiality terms, and any configured bond, before RateLoop serves the context. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
 
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows

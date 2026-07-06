@@ -60,6 +60,36 @@ const askPayloadExample = `{
   }
 }`;
 
+const generatedImagesHandoffPayloadExample = `{
+  "request": {
+    "chainId": 8453,
+    "clientRequestId": "generated-mockup-2026-05-05-001",
+    "walletAddress": "0x1111111111111111111111111111111111111111",
+    "paymentMode": "eip3009_usdc_authorization",
+    "bounty": {
+      "amount": "2500000",
+      "asset": "USDC",
+      "requiredVoters": "5"
+    },
+    "maxPaymentAmount": "2500000",
+    "question": {
+      "title": "Is this generated product mockup clear enough to continue?",
+      "categoryId": "5",
+      "tags": ["agent", "design", "mockup"],
+      "templateId": "generic_rating"
+    }
+  },
+  "generatedImages": [
+    {
+      "filename": "mockup.png",
+      "mimeType": "image/png",
+      "imageBase64": "<base64 image bytes from disk, no data: prefix>",
+      "sizeBytes": 345678,
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  ]
+}`;
+
 const directHttpAskPayloadExample = `{
   "chainId": 8453,
   "clientRequestId": "direct-http-feedback-2026-05-05-001",
@@ -625,6 +655,15 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>
       </pre>
+      <p>Browser handoff request with generated/local image bytes:</p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{generatedImagesHandoffPayloadExample}</code>
+      </pre>
+      <p>
+        Build <code>imageBase64</code>, <code>sizeBytes</code>, and <code>sha256</code> from the same file buffer in the
+        request process. You may omit <code>sizeBytes</code> and <code>sha256</code>, or use <code>dataUrl</code>{" "}
+        instead of <code>imageBase64</code>.
+      </p>
       <p>
         Feedback Bonus submissions use the same <code>roundConfig.questionDurationSeconds</code> close as the question
         and bounty eligibility window. The effective Feedback Bonus award decision deadline is at least 1 hour after the
