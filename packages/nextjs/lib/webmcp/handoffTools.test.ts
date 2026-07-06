@@ -93,7 +93,7 @@ test("summarizes the next handoff browser action", () => {
 
 test("creates read-only handoff WebMCP tools", () => {
   const tools = createHandoffWebMcpTools(() => baseState());
-  const statusTool = tools.find(tool => tool.name === "rateloop_get_handoff_status");
+  const statusTool = tools.find(tool => tool.name === "rateloop_get_browser_handoff_status");
   const validateTool = tools.find(tool => tool.name === "rateloop_validate_handoff_draft");
   const actionTool = tools.find(tool => tool.name === "rateloop_summarize_handoff_next_action");
 

@@ -138,7 +138,7 @@ export function createHandoffWebMcpTools(readState: () => HandoffWebMcpState): W
         "Read the current RateLoop browser handoff state. This does not sign, fund, submit, or change the draft.",
       execute: () => summarizeHandoffWebMcpStatus(readState()),
       inputSchema: EMPTY_INPUT_SCHEMA,
-      name: "rateloop_get_handoff_status",
+      name: "rateloop_get_browser_handoff_status",
       title: "Get RateLoop Handoff Status",
     },
     {
