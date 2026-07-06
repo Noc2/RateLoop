@@ -332,6 +332,10 @@ export async function createAskHandoffWithStagedImageUploads(params: {
     handoffId: created.handoffId,
     token: created.handoffToken,
   });
+  const stagedNextAction =
+    typeof staged.nextAction === "string" && staged.nextAction.trim()
+      ? staged.nextAction
+      : undefined;
 
   return {
     ...stripLargeImageFields(created),
@@ -340,6 +344,7 @@ export async function createAskHandoffWithStagedImageUploads(params: {
     handoffToken: created.handoffToken,
     handoffUrl: created.handoffUrl,
     nextAction:
+      stagedNextAction ??
       "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
     resultTool: created.resultTool,
     statusTool: created.statusTool,

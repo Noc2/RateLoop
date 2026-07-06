@@ -39,6 +39,8 @@ describe("handoff upload helper", () => {
               handoffId: "handoff_default",
               handoffToken: "token_default",
               handoffUrl: "https://www.rateloop.ai/agent/handoff/handoff_default",
+              nextAction:
+                "Persist handoffId and handoffToken, then share handoffUrl with the user.",
             }),
             { status: 200, headers: { "content-type": "application/json" } },
           );
@@ -48,7 +50,7 @@ describe("handoff upload helper", () => {
       }),
     );
 
-    await createAskHandoffWithStagedImageUploads({
+    const result = await createAskHandoffWithStagedImageUploads({
       config: {},
       generatedImages: [],
       request: { clientRequestId: "handoff-default-origin-test" },
@@ -58,6 +60,9 @@ describe("handoff upload helper", () => {
       "https://www.rateloop.ai/api/agent/handoffs",
       "https://www.rateloop.ai/api/agent/handoffs/handoff_default",
     ]);
+    expect(result.nextAction).toBe(
+      "Persist handoffId and handoffToken, then share handoffUrl with the user.",
+    );
   });
 
   it("preserves path-prefixed API bases and attaches timeout signals to JSON requests", async () => {
