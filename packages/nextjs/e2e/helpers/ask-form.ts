@@ -150,11 +150,6 @@ export async function continueToFeedbackBonusStep(page: Page): Promise<void> {
     return;
   }
 
-  const bountyStepButton = page.getByRole("button", { name: /^Go to bounty details$/i });
-  if ((await bountyStepButton.getAttribute("aria-current").catch(() => null)) === "step") {
-    return;
-  }
-
   const continueButton = page.getByRole("button", { name: /^Continue$/i });
   await expect(continueButton).toBeVisible({ timeout: 5_000 });
   await expect(continueButton).toBeEnabled();
