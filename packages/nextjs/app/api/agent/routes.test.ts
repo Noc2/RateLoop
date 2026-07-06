@@ -3705,9 +3705,11 @@ test("agent status route returns not_found without treating it as a transport er
   assert.equal(body.status, "not_found");
   assert.equal(body.ready, false);
   assert.equal(body.terminal, true);
+  assert.equal(body.pollAfterMs, null);
+  assert.equal(body.nextAction, "verify_operation_identifiers");
 });
 
-test("managed by-client-request routes validate forwarded walletAddress filters", async () => {
+test("managed by-client-request routes treat walletAddress mismatches as empty filters", async () => {
   const statusResponse = await asksByClientRoute.GET(
     makeGet(
       "https://rateloop.ai/api/agent/asks/by-client-request?chainId=8453&clientRequestId=missing&walletAddress=0x00000000000000000000000000000000000000bb",
@@ -3715,8 +3717,9 @@ test("managed by-client-request routes validate forwarded walletAddress filters"
   );
   const statusBody = (await statusResponse.json()) as Record<string, unknown>;
 
-  assert.equal(statusResponse.status, 403);
-  assert.match(String(statusBody.message), /walletAddress does not match/);
+  assert.equal(statusResponse.status, 200);
+  assert.equal(statusBody.status, "not_found");
+  assert.equal(statusBody.nextAction, "verify_operation_identifiers");
 
   const resultResponse = await resultsByClientRoute.GET(
     makeGet(
@@ -3725,8 +3728,11 @@ test("managed by-client-request routes validate forwarded walletAddress filters"
   );
   const resultBody = (await resultResponse.json()) as Record<string, unknown>;
 
-  assert.equal(resultResponse.status, 403);
-  assert.match(String(resultBody.message), /walletAddress does not match/);
+  assert.equal(resultResponse.status, 200);
+  assert.equal(resultBody.answer, "not_found");
+  assert.equal(resultBody.blockedReason, null);
+  assert.equal(resultBody.pollAfterMs, null);
+  assert.equal(resultBody.recommendedNextAction, "verify_operation_identifiers");
 });
 
 test("agent status route supports tokenless operation lookups", async () => {
@@ -4172,8 +4178,10 @@ test("agent status route includes live ask guidance for underfunded open markets
 });
 
 test("agent results route returns the pending result package before settlement", async () => {
+  await seedManagedAskAudit({ clientRequestId: "pending-result" });
+
   const response = await resultsByClientRoute.GET(
-    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=8453&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=8453&clientRequestId=pending-result"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 

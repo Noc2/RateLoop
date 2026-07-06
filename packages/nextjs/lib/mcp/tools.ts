@@ -886,15 +886,20 @@ function parseAgentWalletAddress(args: JsonObject, agent: McpAgentAuth): Address
   return rawAddress;
 }
 
-function assertOptionalManagedWalletAddressFilter(args: JsonObject, agent: McpAgentAuth) {
+function managedWalletAddressFilterMatches(args: JsonObject, agent: McpAgentAuth) {
   const suppliedAddress =
     typeof args.walletAddress === "string"
       ? args.walletAddress.trim()
       : typeof args.agentWalletAddress === "string"
         ? args.agentWalletAddress.trim()
         : "";
-  if (!suppliedAddress) return;
-  parseAgentWalletAddress({ walletAddress: suppliedAddress }, agent);
+  if (!suppliedAddress) return true;
+  if (!isAddress(suppliedAddress)) {
+    throw new McpToolError("walletAddress must be an EVM address.", 400);
+  }
+  const scopedAddress = agent.walletAddress?.trim() || "";
+  if (!scopedAddress) return true;
+  return scopedAddress.toLowerCase() === suppliedAddress.toLowerCase();
 }
 
 function parsePublicWalletAddress(args: JsonObject): Address {
@@ -2598,7 +2603,13 @@ function agentStatusHints(body: JsonObject, latestRoundState: number | null = nu
 
   return {
     nextAction:
-      status === "failed" ? "manual_review" : ready ? "call_rateloop_get_result" : "poll_rateloop_get_question_status",
+      status === "not_found"
+        ? "verify_operation_identifiers"
+        : status === "failed"
+          ? "manual_review"
+          : ready
+            ? "call_rateloop_get_result"
+            : "poll_rateloop_get_question_status",
     pollAfterMs: terminal ? null : 5_000,
     ready,
     resultTool: ready ? "rateloop_get_result" : null,
@@ -2691,7 +2702,7 @@ function hasOperationLookupArgs(args: JsonObject) {
 }
 
 async function resolveManagedOperationKey(args: JsonObject, agent: McpAgentAuth): Promise<`0x${string}` | null> {
-  assertOptionalManagedWalletAddressFilter(args, agent);
+  if (!managedWalletAddressFilterMatches(args, agent)) return null;
 
   const operationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
   if (operationKey) {
@@ -3228,8 +3239,9 @@ function emptyResultDistribution() {
 function buildPendingQuestionResultPackage(params: { failed: boolean; operation: JsonObject | null; status: string }) {
   const template = defaultAgentResultTemplate();
   const distribution = emptyResultDistribution();
+  const notFound = !params.operation || params.status === "not_found";
   return {
-    answer: params.failed ? "failed" : "pending",
+    answer: notFound ? "not_found" : params.failed ? "failed" : "pending",
     answerScopes: {
       allAnswers: {
         distribution,
@@ -3249,7 +3261,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
         rewardPoolCount: 0,
       },
     },
-    blockedReason: params.failed ? "non_terminal_round_state" : "round_not_closed",
+    blockedReason: notFound ? null : params.failed ? "non_terminal_round_state" : "round_not_closed",
     cohortSummary: null,
     confidence: {
       level: "none",
@@ -3283,10 +3295,10 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     },
     normalMaxDelaySeconds: 3600,
     operation: params.operation,
-    pollAfterMs: params.failed ? null : 5_000,
+    pollAfterMs: notFound || params.failed ? null : 5_000,
     protocolState: {
       latestRound: null,
-      operationStatus: params.status || "not_found",
+      operationStatus: notFound ? "not_found" : params.status,
       status: null,
     },
     publicUrl: null,
@@ -3295,13 +3307,23 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     stalled: false,
     targetAudienceMatch: null,
     wait: {
-      code: params.failed ? "failed_submission" : "still_settling",
-      recoverWith: params.failed ? "inspect_status_error" : "rateloop_get_question_status",
+      code: notFound ? "operation_not_found" : params.failed ? "failed_submission" : "still_settling",
+      recoverWith: notFound
+        ? "verify_operation_identifiers"
+        : params.failed
+          ? "inspect_status_error"
+          : "rateloop_get_question_status",
     },
-    recommendedNextAction: params.failed ? "manual_review" : "wait_for_settlement",
-    rationaleSummary: params.failed
-      ? "The submission failed before a public RateLoop result was available."
-      : "The human result is not ready yet.",
+    recommendedNextAction: notFound
+      ? "verify_operation_identifiers"
+      : params.failed
+        ? "manual_review"
+        : "wait_for_settlement",
+    rationaleSummary: notFound
+      ? "No RateLoop operation matched the supplied identifiers. Verify operationKey or the chainId/clientRequestId/walletAddress tuple before polling again."
+      : params.failed
+        ? "The submission failed before a public RateLoop result was available."
+        : "The human result is not ready yet.",
     sourceUrls: [],
     stakeMass: {
       down: "0",

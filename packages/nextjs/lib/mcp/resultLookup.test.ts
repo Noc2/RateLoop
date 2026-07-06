@@ -412,8 +412,7 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
   const result = (await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
-      chainId: 8453,
-      clientRequestId: "pending-result",
+      operationKey,
     },
     name: "rateloop_get_result",
   })) as {
@@ -453,10 +452,41 @@ test("rateloop_get_result returns schema-shaped pending packages before content 
   assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 0);
   assert.equal(result.methodology?.ratingSystem, "rateloop.robust_bts_binary.v1");
   assert.equal(result.normalMaxDelaySeconds, 3600);
-  assert.equal(result.protocolState?.operationStatus, "not_found");
+  assert.equal(result.protocolState?.operationStatus, "awaiting_wallet_signature");
   assert.equal(result.protocolState?.status, null);
   assert.equal(result.stalled, false);
   assert.equal(result.targetAudienceMatch, null);
+});
+
+test("rateloop_get_result treats missing operations as terminal identifier errors", async () => {
+  const result = (await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: {
+      chainId: 8453,
+      clientRequestId: "missing-result",
+    },
+    name: "rateloop_get_result",
+  })) as {
+    answer?: string;
+    blockedReason?: string | null;
+    pollAfterMs?: number | null;
+    protocolState?: {
+      operationStatus?: string;
+    };
+    recommendedNextAction?: string;
+    wait?: {
+      code?: string;
+      recoverWith?: string | null;
+    };
+  };
+
+  assert.equal(result.answer, "not_found");
+  assert.equal(result.blockedReason, null);
+  assert.equal(result.pollAfterMs, null);
+  assert.equal(result.protocolState?.operationStatus, "not_found");
+  assert.equal(result.wait?.code, "operation_not_found");
+  assert.equal(result.wait?.recoverWith, "verify_operation_identifiers");
+  assert.equal(result.recommendedNextAction, "verify_operation_identifiers");
 });
 
 test("rateloop_get_result applies bundle bounty eligibility when loading eligible answers", async () => {

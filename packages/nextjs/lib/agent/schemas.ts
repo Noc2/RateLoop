@@ -265,6 +265,32 @@ const agentFeedbackBonusInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const agentResultOperationStatusSchema = {
+  description:
+    "Normalized operation/result lifecycle status. Settled result packages use result_ready/not_final; pending packages use the submission lifecycle status or not_found; dry-run fixtures use dry_run.",
+  enum: [
+    "awaiting_wallet_signature",
+    "dry_run",
+    "failed",
+    "not_final",
+    "not_found",
+    "result_ready",
+    "submitted",
+    "webhook_signature_required",
+  ],
+  type: "string",
+} satisfies JsonSchema;
+
+const agentResultProtocolStateSchema = {
+  additionalProperties: true,
+  properties: {
+    latestRound: { type: ["object", "null"] },
+    operationStatus: agentResultOperationStatusSchema,
+    status: { type: ["integer", "null"] },
+  },
+  type: "object",
+} satisfies JsonSchema;
+
 const agentRoundConfigInputSchema = {
   additionalProperties: false,
   properties: {
@@ -1277,7 +1303,7 @@ export const resultPackageOutputSchema = {
     methodology: { type: "object" },
     normalMaxDelaySeconds: { const: 3600, type: "number" },
     operation: { type: ["object", "null"] },
-    protocolState: { type: "object" },
+    protocolState: agentResultProtocolStateSchema,
     publicUrl: { type: ["string", "null"] },
     rationaleSummary: { type: "string" },
     ready: { type: "boolean" },
@@ -1291,6 +1317,7 @@ export const resultPackageOutputSchema = {
         "do_not_proceed",
         "collect_more_votes",
         "manual_review",
+        "verify_operation_identifiers",
         "integration_ready",
       ],
       type: "string",
@@ -1300,7 +1327,7 @@ export const resultPackageOutputSchema = {
       properties: {
         code: {
           description: 'Synthetic wait/result code. Dry-run fixtures use "dry_run_complete".',
-          enum: ["dry_run_complete", "failed_submission", "still_settling"],
+          enum: ["dry_run_complete", "failed_submission", "operation_not_found", "still_settling"],
           type: "string",
         },
         recoverWith: { type: ["string", "null"] },

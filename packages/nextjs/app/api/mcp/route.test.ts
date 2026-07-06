@@ -330,7 +330,11 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     properties?: { mode?: { enum?: string[] } } & Record<string, unknown>;
   };
   const resultOutputSchema = toolByName.get("rateloop_get_result")?.outputSchema as {
-    properties?: { wait?: { properties?: { recoverWith?: { type?: unknown } } } };
+    properties?: {
+      protocolState?: { properties?: { operationStatus?: { enum?: string[] } } };
+      recommendedNextAction?: { enum?: string[] };
+      wait?: { properties?: { code?: { enum?: string[] }; recoverWith?: { type?: unknown } } };
+    };
   };
   const ratingContextSchema = toolByName.get("rateloop_get_rating_context")?.inputSchema as {
     properties?: Record<string, unknown>;
@@ -391,6 +395,10 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.ok(resultSchema.properties?.sandbox);
   assert.deepEqual(resultSchema.properties?.mode?.enum, ["dry_run"]);
   assert.deepEqual(resultOutputSchema.properties?.wait?.properties?.recoverWith?.type, ["string", "null"]);
+  assert.ok(resultOutputSchema.properties?.wait?.properties?.code?.enum?.includes("operation_not_found"));
+  assert.ok(resultOutputSchema.properties?.recommendedNextAction?.enum?.includes("verify_operation_identifiers"));
+  assert.ok(resultOutputSchema.properties?.protocolState?.properties?.operationStatus?.enum?.includes("result_ready"));
+  assert.ok(resultOutputSchema.properties?.protocolState?.properties?.operationStatus?.enum?.includes("not_found"));
   assert.ok(ratingContextSchema.properties?.walletAddress);
   assert.equal(ratingContextSchema.required?.includes("walletAddress"), false);
   assert.ok(acceptTermsSchema.properties?.walletAddress);
@@ -692,7 +700,7 @@ test("category disallowed returns a stable MCP tool error code", async () => {
   assert.equal(structured.originalCode, "McpToolError");
 });
 
-test("pending result returns a full pending result package", async () => {
+test("missing result returns a terminal identifier package", async () => {
   const { body } = await postJson(
     {
       id: 7,
@@ -713,12 +721,14 @@ test("pending result returns a full pending result package", async () => {
   const structured = result.structuredContent as Record<string, unknown>;
   assert.equal(result.isError, false);
   assert.equal(structured.ready, false);
-  assert.equal(structured.answer, "pending");
-  assert.equal(structured.recommendedNextAction, "wait_for_settlement");
+  assert.equal(structured.answer, "not_found");
+  assert.equal(structured.blockedReason, null);
+  assert.equal(structured.pollAfterMs, null);
+  assert.equal(structured.recommendedNextAction, "verify_operation_identifiers");
   assert.ok((structured.limitations as string[]).some(item => item.includes("RATELOOP_UNTRUSTED_DATA")));
   assert.deepEqual(structured.wait, {
-    code: "still_settling",
-    recoverWith: "rateloop_get_question_status",
+    code: "operation_not_found",
+    recoverWith: "verify_operation_identifiers",
   });
 });
 
