@@ -344,6 +344,91 @@ test("upserts gated metadata and flips disclosure after settlement", async () =>
   assert.equal(confidentiality.isConfidentialityCurrentlyGated(disclosed), false);
 });
 
+test("upserted metadata keeps published state aligned with visibility changes", async () => {
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: { visibility: "public" },
+      contentHash: `0x${"1".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"4".repeat(64)}`,
+  });
+
+  const publicRecord = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(publicRecord?.gated, false);
+  assert.ok(publicRecord?.publishedAt);
+  assert.equal(confidentiality.isConfidentialityCurrentlyGated(publicRecord), false);
+
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "private_forever",
+        visibility: "gated",
+      },
+      contentHash: `0x${"2".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"5".repeat(64)}`,
+  });
+
+  const gatedRecord = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(gatedRecord?.gated, true);
+  assert.equal(gatedRecord?.publishedAt, null);
+  assert.equal(confidentiality.isConfidentialityCurrentlyGated(gatedRecord), true);
+
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: { visibility: "public" },
+      contentHash: `0x${"3".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"6".repeat(64)}`,
+  });
+
+  const publicAgain = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(publicAgain?.gated, false);
+  assert.ok(publicAgain?.publishedAt);
+  assert.equal(confidentiality.isConfidentialityCurrentlyGated(publicAgain), false);
+});
+
+test("gated after-settlement metadata replays preserve disclosed rows", async () => {
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+    },
+    questionMetadataHash: `0x${"4".repeat(64)}`,
+  });
+
+  const settledAt = new Date("2026-06-11T12:00:00.000Z");
+  assert.deepEqual(
+    await confidentiality.publishConfidentialContextAfterSettlement({ contentIds: [CONTENT_ID], settledAt }),
+    { published: 1 },
+  );
+
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+    },
+    questionMetadataHash: `0x${"5".repeat(64)}`,
+  });
+
+  const replayed = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(replayed?.gated, true);
+  assert.equal(replayed?.publishedAt?.toISOString(), settledAt.toISOString());
+  assert.equal(confidentiality.isConfidentialityCurrentlyGated(replayed), false);
+});
+
 test("resolves legacy unscoped confidentiality rows without leaking gated context", async () => {
   await insertLegacyQuestionConfidentiality({});
 

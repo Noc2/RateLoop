@@ -675,6 +675,17 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
   const metadata = params.metadata as Record<string, unknown>;
   const confidentiality = parseMetadataConfidentiality(metadata.confidentiality);
   const now = new Date();
+  const existingRecord = await getQuestionConfidentiality(contentId, {
+    chainId: deploymentScope.chainId,
+    contentRegistryAddress: deploymentScope.contentRegistryAddress,
+    deploymentKey: deploymentScope.deploymentKey,
+    frontendAddress,
+  });
+  const publishedAt = confidentiality.gated
+    ? existingRecord?.gated && existingRecord.publishedAt && confidentiality.disclosurePolicy === "after_settlement"
+      ? existingRecord.publishedAt
+      : null
+    : (existingRecord?.publishedAt ?? now);
   await db
     .insert(questionConfidentiality)
     .values({
@@ -690,7 +701,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
       frontendAddress,
       gated: confidentiality.gated,
       mediaTupleHash: normalizeOptionalBytes32(params.metadata.mediaTupleHash),
-      publishedAt: confidentiality.gated ? null : now,
+      publishedAt,
       questionMetadataHash: normalizeOptionalBytes32(
         params.questionMetadataHash ?? params.metadata.questionMetadataHash,
       ),
@@ -713,6 +724,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
         disclosurePolicy: confidentiality.disclosurePolicy,
         gated: confidentiality.gated,
         mediaTupleHash: normalizeOptionalBytes32(params.metadata.mediaTupleHash),
+        publishedAt,
         questionMetadataHash: normalizeOptionalBytes32(
           params.questionMetadataHash ?? params.metadata.questionMetadataHash,
         ),
