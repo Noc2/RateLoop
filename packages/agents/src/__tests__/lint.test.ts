@@ -735,6 +735,42 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects non-object template inputs before parsing", () => {
+    const topLevelFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      templateInputs: "bad",
+    });
+    expect(topLevelFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "templateInputs must be an object when provided.",
+          path: "templateInputs",
+        }),
+      ]),
+    );
+
+    const questionLevelFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: undefined,
+      questions: [
+        {
+          ...VALID_REQUEST.question,
+          templateInputs: "bad",
+        },
+      ],
+    });
+    expect(questionLevelFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "questions.0.templateInputs must be an object when provided.",
+          path: "questions.0.templateInputs",
+        }),
+      ]),
+    );
+  });
+
   it("rejects asks with more than three public tags", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

@@ -511,6 +511,9 @@ export function lintAgentQuestion(
   const description = typeof question.description === "string" ? question.description.trim() : "";
   const templateId = question.templateId ?? inheritedTemplateId;
   const templateVersionInput = questionRecord.templateVersion ?? inheritedTemplateVersion;
+  if (question.templateInputs !== undefined && question.templateInputs !== null && !isObject(question.templateInputs)) {
+    pushFinding(findings, "error", `${path}.templateInputs`, `${path}.templateInputs must be an object when provided.`);
+  }
   const templateInputs = isObject(question.templateInputs)
     ? question.templateInputs
     : isObject(inheritedTemplateInputs)
@@ -908,6 +911,9 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
 
   if (request.templateId && !findAgentResultTemplate(request.templateId)) {
     pushFinding(findings, "error", "templateId", `Unknown result template: ${request.templateId}.`);
+  }
+  if (request.templateInputs !== undefined && request.templateInputs !== null && !isObject(request.templateInputs)) {
+    pushFinding(findings, "error", "templateInputs", "templateInputs must be an object when provided.");
   }
 
   lintRoundConfigAbiBounds(request, findings);
