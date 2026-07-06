@@ -10,51 +10,6 @@ import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { truncateContentTitle } from "~~/lib/contentTitle";
 import { type ContentShareContentInput, buildContentShareData } from "~~/lib/social/contentShare";
 
-export interface FeedbackBonusShareReminder {
-  amountLabel: string;
-  awarderAddress?: string | null;
-  feedbackClosesAt?: bigint | number | string | null;
-}
-
-function parseTimestampMs(value: FeedbackBonusShareReminder["feedbackClosesAt"]): number | null {
-  if (value === null || value === undefined) return null;
-  const raw = typeof value === "bigint" ? value : typeof value === "number" ? BigInt(Math.floor(value)) : BigInt(value);
-  if (raw <= 0n) return null;
-  const ms = Number(raw) * 1000;
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function formatReminderDateTime(value: FeedbackBonusShareReminder["feedbackClosesAt"]) {
-  try {
-    const timestampMs = parseTimestampMs(value);
-    if (timestampMs === null) return null;
-    return new Intl.DateTimeFormat(undefined, {
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      month: "short",
-      timeZoneName: "short",
-      year: "numeric",
-    }).format(new Date(timestampMs));
-  } catch {
-    return null;
-  }
-}
-
-function formatFeedbackCloseReminder(feedbackClosesAt: FeedbackBonusShareReminder["feedbackClosesAt"]) {
-  const closeLabel = formatReminderDateTime(feedbackClosesAt);
-  if (!closeLabel) {
-    return "After the round settles, RateLoop gives the awarder at least 1 hour to allocate the bonus.";
-  }
-  return `Feedback closes ${closeLabel}. After settlement, RateLoop gives the awarder at least 1 hour to allocate the bonus.`;
-}
-
-function shortenReminderAddress(address: string) {
-  const trimmed = address.trim();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return "The awarder";
-  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
-}
-
 interface ShareModalProps {
   contentId: bigint;
   chainId?: number | null;
@@ -66,7 +21,6 @@ interface ShareModalProps {
   totalVotes?: number;
   lastActivityAt?: string | null;
   openRound?: ContentShareContentInput["openRound"];
-  feedbackBonusReminder?: FeedbackBonusShareReminder | null;
   onClose: () => void;
 }
 
@@ -81,7 +35,6 @@ export function ShareModal({
   totalVotes = 0,
   lastActivityAt,
   openRound,
-  feedbackBonusReminder,
   onClose,
 }: ShareModalProps) {
   const { copyToClipboard, isCopiedToClipboard: copied } = useCopyToClipboard({ successDurationMs: 2000 });
@@ -131,7 +84,6 @@ export function ShareModal({
   ]);
   const shareUrl = shareDetails.url;
   const contentHref = buildRateContentHref(contentId, { chainId, waitForContent: true });
-  const feedbackHref = `${contentHref}#feedback`;
   const truncatedTitle = truncateContentTitle(title);
   const tweetText = shareDetails.ratingLabel
     ? `I just submitted "${truncatedTitle}" on RateLoop. Current rating: ${shareDetails.ratingLabel}/10. Rate and build your reputation: ${shareUrl}`
@@ -180,24 +132,6 @@ export function ShareModal({
         <h3 className="mb-2 px-9 text-balance break-words text-center text-lg font-semibold leading-tight">{title}</h3>
         {description ? (
           <p className="mb-6 text-center text-sm text-base-content/70 line-clamp-2">{description}</p>
-        ) : null}
-
-        {feedbackBonusReminder ? (
-          <div className="mb-5 rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-base-content">
-            <p className="font-semibold text-primary">Feedback Bonus reminder</p>
-            <p className="mt-1 text-base-content/75">
-              {feedbackBonusReminder.amountLabel} is funded.{" "}
-              {feedbackBonusReminder.awarderAddress
-                ? `${shortenReminderAddress(feedbackBonusReminder.awarderAddress)} must choose eligible feedback after settlement.`
-                : "The awarder must choose eligible feedback after settlement."}
-            </p>
-            <p className="mt-1 text-base-content/65">
-              {formatFeedbackCloseReminder(feedbackBonusReminder.feedbackClosesAt)}
-            </p>
-            <Link href={feedbackHref} className="mt-2 inline-flex font-semibold text-primary hover:text-primary-focus">
-              Open feedback panel
-            </Link>
-          </div>
         ) : null}
 
         {/* Share buttons */}

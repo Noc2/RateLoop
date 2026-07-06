@@ -32,7 +32,6 @@ import {
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
-import type { FeedbackBonusShareReminder } from "~~/components/submit/ShareModal";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
@@ -740,7 +739,6 @@ export function ContentSubmissionSection() {
     title: string;
     description: string;
     lastActivityAt: string;
-    feedbackBonusReminder?: FeedbackBonusShareReminder | null;
   } | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -3033,7 +3031,6 @@ export function ContentSubmissionSection() {
       reservedRevealCommitment = null;
       let feedbackBonusFunded = false;
       let feedbackBonusFundingError: string | null = null;
-      let feedbackBonusReminder: FeedbackBonusShareReminder | null = null;
       const primarySubmittedContentId = submittedContentIds[0] ?? null;
 
       await attachQuestionDetailsAfterSubmission({
@@ -3085,11 +3082,6 @@ export function ContentSubmissionSection() {
               durationSeconds: BigInt(questionDurationSeconds),
               votingEngineAddress: verifiedVotingEngineAddress,
             });
-          const fundedFeedbackBonusReminder: FeedbackBonusShareReminder = {
-            amountLabel: formatFeedbackBonusAmount(selectedFeedbackBonusAmount, feedbackBonusAsset),
-            awarderAddress: selectedFeedbackBonusAwarderAddress,
-            feedbackClosesAt: feedbackBonusClosesAt.toString(),
-          };
 
           const feedbackApproveWrite = {
             address: feedbackBonusTokenAddress,
@@ -3122,7 +3114,6 @@ export function ContentSubmissionSection() {
               }),
             });
             feedbackBonusFunded = true;
-            feedbackBonusReminder = fundedFeedbackBonusReminder;
           } else {
             const feedbackApproveTxHash = localE2ETestWalletClient
               ? await localE2ETestWalletClient.writeContract(feedbackApproveWrite as any)
@@ -3154,7 +3145,6 @@ export function ContentSubmissionSection() {
               });
             }
             feedbackBonusFunded = true;
-            feedbackBonusReminder = fundedFeedbackBonusReminder;
           }
         } catch (feedbackBonusError) {
           feedbackBonusFundingError =
@@ -3190,7 +3180,6 @@ export function ContentSubmissionSection() {
                 questionCount > 1
                   ? `${questionCount} question bundle. Answer all questions to qualify for the bounty.`
                   : getDetailsPreviewText(primarySubmittedQuestion.trimmedDetailsText),
-              feedbackBonusReminder: feedbackBonusFunded ? feedbackBonusReminder : null,
               lastActivityAt: new Date().toISOString(),
             }
           : null;
@@ -4883,7 +4872,6 @@ export function ContentSubmissionSection() {
           chainId={submissionRateLinkScope.chainId}
           title={submittedContent.title}
           description={submittedContent.description}
-          feedbackBonusReminder={submittedContent.feedbackBonusReminder}
           lastActivityAt={submittedContent.lastActivityAt}
           onClose={handleCloseShareModal}
         />

@@ -52,7 +52,6 @@ import {
 } from "~~/components/shared/PrivateContextRemovalWarning";
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
-import type { FeedbackBonusShareReminder } from "~~/components/submit/ShareModal";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
@@ -282,7 +281,6 @@ type SubmittedContentModalState = {
   chainId?: number | null;
   deploymentKey?: string | null;
   description: string;
-  feedbackBonusReminder?: FeedbackBonusShareReminder | null;
   id: bigint;
   lastActivityAt: string | null;
   title: string;
@@ -1350,22 +1348,6 @@ function readFeedbackBonusSummary(handoff: Handoff | null) {
     amount,
     asset,
     label: formatFeedbackBonusAmount(amount, asset),
-  };
-}
-
-function readFeedbackBonusReminderFromAsk(
-  ask: unknown,
-  fallbackAsset: SubmissionRewardAsset,
-): FeedbackBonusShareReminder | null {
-  if (!isJsonRecord(ask) || !isJsonRecord(ask.feedbackBonus)) return null;
-  if (readString(ask.feedbackBonus.status).toLowerCase() !== "funded") return null;
-  const amount = readPositiveBigInt(ask.feedbackBonus.amount);
-  if (amount === null) return null;
-  const asset = readFeedbackBonusAsset(ask.feedbackBonus, fallbackAsset);
-  return {
-    amountLabel: formatFeedbackBonusAmount(amount, asset),
-    awarderAddress: readString(ask.feedbackBonus.awarder) || null,
-    feedbackClosesAt: readString(ask.feedbackBonus.feedbackClosesAt) || null,
   };
 }
 
@@ -3261,18 +3243,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? targetHandoff.publicUrl ?? null,
         }));
 
-        const submittedFeedbackBonusReminder = readFeedbackBonusReminderFromAsk(
-          nextHandoff.ask,
-          readBountyAsset(targetHandoff),
-        );
         submittedContentForShare =
           readSubmittedContentForShare(targetHandoff, nextHandoff.ask) ?? submittedContentForShare;
-        if (submittedContentForShare && submittedFeedbackBonusReminder) {
-          submittedContentForShare = {
-            ...submittedContentForShare,
-            feedbackBonusReminder: submittedFeedbackBonusReminder,
-          };
-        }
 
         const feedbackBonusPlan = readFeedbackBonusTransactionPlan(nextHandoff.ask);
         if (feedbackBonusPlan) {
@@ -3310,39 +3282,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               feedbackBonusRecoveryHashes,
             );
             persistFeedbackBonusRecoveryHashes(feedbackBonusRecoveryHashes);
-            const confirmedBonusHandoff = await confirmFeedbackBonus({
+            await confirmFeedbackBonus({
               baseHandoff: targetHandoff,
               hashes: feedbackBonusHashes,
               successHandoff: nextHandoff,
             });
-            const confirmedReminder = readFeedbackBonusReminderFromAsk(
-              confirmedBonusHandoff.ask,
-              readBountyAsset(targetHandoff),
-            );
-            if (submittedContentForShare && confirmedReminder) {
-              submittedContentForShare = {
-                ...submittedContentForShare,
-                feedbackBonusReminder: confirmedReminder,
-              };
-            }
           } catch (feedbackBonusError) {
             if (feedbackBonusRecoveryHashes.length > 0) {
               try {
-                const recoveredBonusHandoff = await confirmFeedbackBonus({
+                await confirmFeedbackBonus({
                   baseHandoff: targetHandoff,
                   hashes: feedbackBonusRecoveryHashes,
                   successHandoff: nextHandoff,
                 });
-                const recoveredReminder = readFeedbackBonusReminderFromAsk(
-                  recoveredBonusHandoff.ask,
-                  readBountyAsset(targetHandoff),
-                );
-                if (submittedContentForShare && recoveredReminder) {
-                  submittedContentForShare = {
-                    ...submittedContentForShare,
-                    feedbackBonusReminder: recoveredReminder,
-                  };
-                }
               } catch (confirmError) {
                 const message = readHandoffActionError(confirmError, "Failed to confirm Feedback Bonus.");
                 const recoveryMessage =
@@ -4373,7 +4325,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           chainId={submittedContentRateLinkScope.chainId}
           title={submittedContent.title}
           description={submittedContent.description}
-          feedbackBonusReminder={submittedContent.feedbackBonusReminder}
           lastActivityAt={submittedContent.lastActivityAt}
           onClose={handleCloseShareModal}
         />
