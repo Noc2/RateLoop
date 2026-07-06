@@ -127,8 +127,8 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 
 1. Fund the user wallet or local signer with Base mainnet LREP or USDC.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
-3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
-4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`; save the returned `handoffId` and private `handoffToken`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
+3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`; copy `maxPaymentAmountHint` into `maxPaymentAmount` unless the user chooses a different cap.
+4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`; save the returned `handoffId` and private `handoffToken`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly with a user-approved `maxPaymentAmount`; the browser prepare step prices the ask before payment, and the human payer can edit the cap before funding.
 5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
 7. Poll `rateloop_get_handoff_status` or `rateloop-agents handoff-status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.

@@ -1641,6 +1641,39 @@ test("rateloop_ask_humans still requires cap room for same-asset feedback bonuse
   );
 });
 
+test("rateloop_ask_humans enforces supplied caps during dry-run", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: askArguments({
+          dryRun: true,
+          maxPaymentAmount: "1",
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /Quoted payment exceeds maxPaymentAmount/,
+  );
+
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: askArguments({
+          dryRun: true,
+          maxPaymentAmount: "1",
+          walletAddress: AGENT.walletAddress,
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /Quoted payment exceeds maxPaymentAmount/,
+  );
+});
+
 test("public rateloop_ask_humans dry-run supports mixed-asset feedback bonuses", async () => {
   __setMcpToolTestOverridesForTests({
     ...quoteOverrides(),
@@ -1906,14 +1939,20 @@ test("rateloop_quote_question labels LREP bounty payment metadata", async () => 
     }),
     name: "rateloop_quote_question",
   })) as {
+    chainId: number;
+    maxPaymentAmountHint: string;
     payment: { amount: string; asset: string; bountyAmount: string; tokenAddress: string; totalAmount: string };
+    paymentMode: string;
   };
 
+  assert.equal(body.chainId, 8453);
+  assert.equal(body.maxPaymentAmountHint, "1000000");
   assert.equal(body.payment.asset, "LREP");
   assert.equal(body.payment.amount, "1000000");
   assert.equal(body.payment.bountyAmount, "1000000");
   assert.equal(body.payment.totalAmount, "1000000");
   assert.equal(body.payment.tokenAddress, "0x0000000000000000000000000000000000000004");
+  assert.equal(body.paymentMode, "wallet_calls");
 });
 
 test("rateloop_ask_humans preserves LREP wallet-call payment metadata", async () => {

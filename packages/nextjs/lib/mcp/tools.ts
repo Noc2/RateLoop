@@ -2512,6 +2512,7 @@ function publicWebhookSignatureRequiredBody(params: {
   return {
     ...formatQuoteResult(params.quote, params.payload, params.config, {
       feedbackBonus: params.feedbackBonus,
+      paymentMode: params.paymentMode,
       walletPolicyRequired: false,
     }),
     authMode: "wallet_signature",
@@ -2837,15 +2838,21 @@ function formatQuoteResult(
   params: Awaited<ReturnType<typeof preflightX402QuestionSubmission>>,
   payload: X402QuestionPayload,
   config: ReturnType<typeof resolveX402QuestionConfig>,
-  options: { feedbackBonus?: X402FeedbackBonusRequest | null; walletPolicyRequired?: boolean } = {},
+  options: {
+    feedbackBonus?: X402FeedbackBonusRequest | null;
+    paymentMode?: AskHumansPaymentMode;
+    walletPolicyRequired?: boolean;
+  } = {},
 ) {
   const feedbackBonus = options.feedbackBonus ?? null;
   const bountyAsset = payload.bounty.asset;
   const sameAssetFeedbackBonusAmount = feedbackBonus?.asset === bountyAsset ? feedbackBonus.amount : 0n;
   const totalAmount = params.paymentAmount + sameAssetFeedbackBonusAmount;
+  const paymentMode = options.paymentMode ?? defaultAskHumansPaymentMode({ feedbackBonus, payload });
   const tokenAddress = bountyAsset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
   return {
     canSubmit: true,
+    chainId: payload.chainId,
     fastLane: buildAgentFastLaneGuidance({
       bounty: payload.bounty,
       questionCount: payload.questions.length,
@@ -2854,6 +2861,7 @@ function formatQuoteResult(
     feedbackBonus: buildPendingFeedbackBonusBody(feedbackBonus),
     feedbackBonusGuidance: buildFeedbackBonusGuidance(feedbackBonus, payload),
     legalNotice: buildAgentLegalNotice(),
+    maxPaymentAmountHint: totalAmount.toString(),
     operationKey: params.operation.operationKey,
     payment: {
       amount: totalAmount.toString(),
@@ -2866,6 +2874,7 @@ function formatQuoteResult(
       tokenAddress,
       totalAmount: totalAmount.toString(),
     },
+    paymentMode,
     payloadHash: params.operation.payloadHash,
     questionCount: params.resolvedCategoryIds.length,
     resolvedCategoryIds: params.resolvedCategoryIds.map(categoryId => categoryId.toString()),
@@ -3012,6 +3021,7 @@ function buildDryRunOperationBody(params: {
   const paymentScheme = params.paymentMode === "x402_authorization" ? "eip3009_usdc_authorization" : "wallet_calls";
   const quoteBody = formatQuoteResult(params.quote, params.quotePayload, params.config, {
     feedbackBonus: params.feedbackBonus,
+    paymentMode: params.paymentMode,
     walletPolicyRequired: params.walletPolicyRequired,
   });
   const operation = {
@@ -3530,7 +3540,7 @@ export async function callPublicRateLoopMcpTool(params: {
           });
       const totalPaymentAmount =
         quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus, payload.bounty.asset);
-      if (!dryRun) {
+      if (!dryRun || (args.maxPaymentAmount !== undefined && args.maxPaymentAmount !== null)) {
         const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
         if (totalPaymentAmount > maxPaymentAmount) {
           throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
@@ -3876,7 +3886,7 @@ export async function callRateLoopMcpTool(params: {
       });
       const totalPaymentAmount =
         quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus, payload.bounty.asset);
-      if (!dryRun) {
+      if (!dryRun || (args.maxPaymentAmount !== undefined && args.maxPaymentAmount !== null)) {
         const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
         if (totalPaymentAmount > maxPaymentAmount) {
           throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");

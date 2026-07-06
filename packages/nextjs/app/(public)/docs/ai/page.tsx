@@ -347,12 +347,15 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Call <code>rateloop_quote_question</code> for the live ask and show the cost plus <code>legalNotice</code>{" "}
-          when the ask already uses public URLs or uploaded RateLoop <code>imageUrls</code>. For generated-image-only
-          handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
+          when the ask already uses public URLs or uploaded RateLoop <code>imageUrls</code>. Copy{" "}
+          <code>maxPaymentAmountHint</code> into <code>maxPaymentAmount</code> unless the user chooses a different cap.
+          For generated-image-only handoffs, create the handoff directly with a user-approved{" "}
+          <code>maxPaymentAmount</code>; the browser prepare step prices the ask before payment.
         </li>
         <li>
           Call <code>rateloop_create_ask_handoff_link</code> with the same ask payload and optional{" "}
-          <code>generatedImages</code>.
+          <code>generatedImages</code>. The saved cap is advisory in browser handoff mode because the human payer can
+          edit the draft before preparing and funding.
         </li>
         <li>
           Save the returned <code>handoffId</code> and private <code>handoffToken</code>, then give the user the
