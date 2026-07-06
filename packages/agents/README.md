@@ -67,7 +67,7 @@ yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-revi
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 yarn agents:handoff --file ask.json --image mockup.png
-yarn agents:handoff-status --handoff-id ahf_... --handoff-token "$RATELOOP_HANDOFF_TOKEN"
+yarn agents:handoff-status --handoff-id ahf_... --handoff-token <private-token>
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
@@ -108,7 +108,7 @@ For published-package installs, the same commands are available through the `rat
 npx rateloop-agents sandbox --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
 npx rateloop-agents quote --file node_modules/@rateloop/agents/examples/questions/landing-pitch-review.json
 npx rateloop-agents handoff --file ask.json --image mockup.png
-npx rateloop-agents handoff-status --handoff-id ahf_... --handoff-token "$RATELOOP_HANDOFF_TOKEN"
+npx rateloop-agents handoff-status --handoff-id ahf_... --handoff-token <private-token>
 ```
 
 ## First No-Payment Run
