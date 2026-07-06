@@ -135,6 +135,7 @@ function readLintIntegerString(value: unknown): string | null {
 function readConfidentiality(value: unknown) {
   if (!isObject(value)) {
     return {
+      bondAsset: null,
       bondAmount: 0n,
       disclosurePolicy: null,
       hasBond: false,
@@ -147,6 +148,7 @@ function readConfidentiality(value: unknown) {
   const rawBond = isObject(value.bond) ? value.bond : null;
   const rawBondAmount = rawBond?.amount;
   const rawBondAmountString = readLintIntegerString(rawBondAmount);
+  const bondAsset = typeof rawBond?.asset === "string" ? rawBond.asset.trim().toUpperCase() : null;
   const bondAmount =
     rawBondAmount !== undefined && rawBondAmount !== null
       ? rawBondAmountString !== null && /^\d+$/.test(rawBondAmountString)
@@ -154,6 +156,7 @@ function readConfidentiality(value: unknown) {
         : -1n
       : 0n;
   return {
+    bondAsset: bondAsset || null,
     bondAmount,
     disclosurePolicy,
     hasBond: value.bond !== undefined && value.bond !== null,
@@ -609,6 +612,8 @@ export function lintAgentQuestion(
     }
     if (confidentiality.bondAmount < 0n) {
       pushFinding(findings, "error", `${path}.confidentiality.bond.amount`, "Bond amount must be a non-negative atomic integer.");
+    } else if (confidentiality.bondAsset !== null && !SUPPORTED_REWARD_ASSETS.has(confidentiality.bondAsset)) {
+      pushFinding(findings, "error", `${path}.confidentiality.bond.asset`, "Bond asset must be USDC or LREP.");
     } else if (confidentiality.bondAmount > X402_CONFIDENTIALITY_BOND_UINT64_MAX) {
       pushFinding(
         findings,

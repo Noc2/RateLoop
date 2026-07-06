@@ -440,6 +440,36 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects unsupported gated confidentiality bond assets", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        confidentiality: {
+          bond: {
+            amount: "1000000",
+            asset: "ETH",
+          },
+          visibility: "gated",
+        },
+        contextUrl: undefined,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Bond asset must be USDC or LREP.",
+          path: "question.confidentiality.bond.asset",
+        }),
+      ]),
+    );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
+  });
+
   it("rejects dust gated confidentiality bonds", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
