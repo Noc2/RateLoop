@@ -51,6 +51,24 @@ function formatFeedbackDate(value: string) {
   });
 }
 
+function formatFeedbackBonusDeadline(value: string | number | bigint | null | undefined) {
+  try {
+    if (value === null || value === undefined) return "the award deadline";
+    const timestamp = BigInt(value);
+    if (timestamp <= 0n) return "the award deadline";
+    return new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      month: "short",
+      timeZoneName: "short",
+      year: "numeric",
+    }).format(new Date(Number(timestamp) * 1000));
+  } catch {
+    return "the award deadline";
+  }
+}
+
 function readCommitHash(value: unknown): `0x${string}` | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   return hasNonZeroCommit(candidate) ? (candidate as `0x${string}`) : null;
@@ -267,7 +285,23 @@ export function ContentFeedbackPanel({
       return Date.parse(b.createdAt) - Date.parse(a.createdAt);
     });
   }, [items]);
-  const awardablePools = feedback.awardableFeedbackBonusPools ?? [];
+  const awardablePools = useMemo(
+    () => feedback.awardableFeedbackBonusPools ?? [],
+    [feedback.awardableFeedbackBonusPools],
+  );
+  const nextAwardDeadline = useMemo(() => {
+    const deadlines = awardablePools
+      .map(pool => {
+        try {
+          return BigInt(pool.awardDeadline || pool.feedbackClosesAt);
+        } catch {
+          return null;
+        }
+      })
+      .filter((deadline): deadline is bigint => deadline !== null && deadline > 0n)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return deadlines[0] ?? null;
+  }, [awardablePools]);
   const getOpenPoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
     if (!feedbackItem.isPublic || !hasHexFeedbackHash(feedbackItem) || !feedbackItem.roundId) return [];
 
@@ -326,7 +360,7 @@ export function ContentFeedbackPanel({
   };
 
   return (
-    <section className={panelClassName} aria-label="Question feedback">
+    <section id="feedback" className={panelClassName} aria-label="Question feedback">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold leading-tight text-base-content">
@@ -338,6 +372,21 @@ export function ContentFeedbackPanel({
           {feedback.publicCount}
         </span>
       </div>
+
+      {awardablePools.length > 0 ? (
+        <div className="mt-3 rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-base-content">
+          <div className="flex items-start gap-2">
+            <BanknotesIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="font-semibold text-primary">Feedback Bonus ready to award</p>
+              <p className="mt-1 text-base-content/75">
+                Use the money button on eligible feedback below. Award by{" "}
+                {formatFeedbackBonusDeadline(nextAwardDeadline)}.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <form className="mt-3 flex shrink-0 flex-col gap-2.5" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor={`feedback-type-${item?.id?.toString() ?? "none"}`}>

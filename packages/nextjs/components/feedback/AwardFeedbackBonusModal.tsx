@@ -63,7 +63,10 @@ function formatAwardDeadline(pool: ContentFeedbackBonusPool) {
     if (timestamp <= 0n) return "award window open";
     return `award by ${new Intl.DateTimeFormat(undefined, {
       day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
       month: "short",
+      timeZoneName: "short",
       year: "numeric",
     }).format(new Date(Number(timestamp) * 1000))}`;
   } catch {

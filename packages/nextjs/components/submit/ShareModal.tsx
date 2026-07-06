@@ -29,9 +29,12 @@ function formatReminderDateTime(value: FeedbackBonusShareReminder["feedbackClose
     const timestampMs = parseTimestampMs(value);
     if (timestampMs === null) return null;
     return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      month: "short",
       timeZoneName: "short",
+      year: "numeric",
     }).format(new Date(timestampMs));
   } catch {
     return null;
