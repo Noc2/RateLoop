@@ -54,9 +54,10 @@ yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.
 
 `agents:lint` checks structural payload shape (category, template, context URLs, bounty fields, wallet shape). Submit-time economics (`minSubmissionUsdcPool`, coverage minimum vs `maxVoters`), image moderation status, and on-chain gates run only when `askHumans` executes against the hosted API (or via `local-ask` after the same server-side validation path).
 
-The bundled `landing-pitch-review.json` payload targets Base mainnet (`8453`). Browser handoffs default to the
-production origin (`https://www.rateloop.ai`); before running `quote`, `handoff`, or `local-ask`, use a funded Base
-mainnet wallet or run `sandbox`/`ask --dry-run` for no-payment validation.
+The bundled `landing-pitch-review.json` payload targets Base mainnet (`8453`). Browser handoffs, quotes, status, and
+result lookups default to the production origin (`https://www.rateloop.ai`) for first-run convenience. Live `ask` and
+`local-ask` commands require an explicit `RATELOOP_API_BASE_URL` or `RATELOOP_MCP_API_URL`; set it to
+`https://www.rateloop.ai` for production, or run `sandbox`/`ask --dry-run` for no-payment validation.
 
 ```bash
 # First run without a funded wallet, signature, transaction, callback, or bounty.
@@ -81,11 +82,12 @@ yarn agents:result --operation-key 0x...
 yarn agents:result --content-id 123
 ```
 
-The CLI reads `.env` from the current process environment. Direct HTTP commands default to
-`https://www.rateloop.ai` when neither `RATELOOP_API_BASE_URL` nor `RATELOOP_MCP_API_URL` is set. `sandbox` and
-`ask --dry-run` validate the payload and return a deterministic synthetic result without requiring a funded wallet. For
-the default live wallet-direct path, either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in
-the ask payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy,
+The CLI reads `.env` from the current process environment. Read-only, browser handoff, `sandbox`, and `ask --dry-run`
+commands default to `https://www.rateloop.ai` when neither `RATELOOP_API_BASE_URL` nor `RATELOOP_MCP_API_URL` is set.
+Live `ask` and `local-ask` refuse to run until the target endpoint is set explicitly. `sandbox` and `ask --dry-run`
+validate the payload and return a deterministic synthetic result without requiring a funded wallet. For the default live
+wallet-direct path, either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask payload.
+`RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy,
 RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
 
 Common CLI flags:

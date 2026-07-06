@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { loadAgentsRuntimeConfig } from "../config.js";
+import {
+  loadAgentsRuntimeConfig,
+  requireExplicitLiveAgentTarget,
+} from "../config.js";
 
 const originalEnv = { ...process.env };
 
@@ -48,5 +51,24 @@ describe("agents runtime config", () => {
       mcpAccessToken: "agent-token",
       mcpApiUrl: "http://[::1]:3000/api/mcp",
     });
+  });
+
+  it("requires an explicit endpoint for live-spend commands", () => {
+    expect(() => requireExplicitLiveAgentTarget({}, "ask")).toThrow(
+      "ask can submit paid RateLoop work and requires an explicit endpoint",
+    );
+
+    expect(
+      requireExplicitLiveAgentTarget(
+        { apiBaseUrl: "https://www.rateloop.ai" },
+        "ask",
+      ),
+    ).toMatchObject({ apiBaseUrl: "https://www.rateloop.ai" });
+    expect(
+      requireExplicitLiveAgentTarget(
+        { mcpApiUrl: "https://www.rateloop.ai/api/mcp" },
+        "local-ask",
+      ),
+    ).toMatchObject({ mcpApiUrl: "https://www.rateloop.ai/api/mcp" });
   });
 });

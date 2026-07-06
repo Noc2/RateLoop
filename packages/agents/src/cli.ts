@@ -5,7 +5,10 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
-import { loadAgentsRuntimeConfig } from "./config";
+import {
+  loadAgentsRuntimeConfig,
+  requireExplicitLiveAgentTarget,
+} from "./config";
 import {
   readHandoffGeneratedImageFiles,
   type HandoffGeneratedImageFile,
@@ -281,7 +284,7 @@ Common flags:
   --content-id <id>             Recover result by submitted content id
 
 Environment:
-  RATELOOP_API_BASE_URL     Hosted RateLoop origin for HTTP flows; defaults to https://www.rateloop.ai
+  RATELOOP_API_BASE_URL     Hosted RateLoop origin for HTTP flows; ask/local-ask require an explicit value
   RATELOOP_AGENT_WALLET_ADDRESS  Funded wallet address for tokenless public asks
   RATELOOP_MCP_TOKEN        Optional managed agent bearer token
   RATELOOP_MCP_API_URL      Optional MCP endpoint override
@@ -312,6 +315,10 @@ function withDefaultAgentApiBaseUrl(
   return config.apiBaseUrl || config.mcpApiUrl
     ? config
     : { ...config, apiBaseUrl: DEFAULT_HANDOFF_API_BASE_URL };
+}
+
+function loadExplicitLiveAgentConfig(command: "ask" | "local-ask") {
+  return requireExplicitLiveAgentTarget(loadAgentsRuntimeConfig(), command);
 }
 
 function withConfiguredWalletAddress(
@@ -445,7 +452,10 @@ async function main() {
 
     case "sandbox":
     case "ask": {
-      const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
+      const config =
+        command === "ask" && !options["dry-run"]
+          ? loadExplicitLiveAgentConfig("ask")
+          : withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
       const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
       const payload =
@@ -559,7 +569,9 @@ async function main() {
     }
 
     case "local-ask": {
-      const agent = createAgentClient();
+      const agent = createAgentClient(
+        loadExplicitLiveAgentConfig("local-ask"),
+      );
       const localSignerConfig = loadLocalSignerConfig(
         singleValueOptions(options),
       );

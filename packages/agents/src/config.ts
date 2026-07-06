@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { isAddress, type Address } from "viem";
 
-type AgentsRuntimeConfig = {
+export type AgentsRuntimeConfig = {
   agentWalletAddress?: Address;
   apiBaseUrl?: string;
   mcpAccessToken?: string;
@@ -75,4 +75,15 @@ export function loadAgentsRuntimeConfig(): AgentsRuntimeConfig {
     mcpApiUrl,
     mcpProtocolVersion: readEnv("RATELOOP_MCP_PROTOCOL_VERSION"),
   };
+}
+
+export function requireExplicitLiveAgentTarget(
+  config: AgentsRuntimeConfig,
+  command: "ask" | "local-ask",
+): AgentsRuntimeConfig {
+  if (config.apiBaseUrl || config.mcpApiUrl) return config;
+
+  throw new Error(
+    `${command} can submit paid RateLoop work and requires an explicit endpoint. Set RATELOOP_API_BASE_URL=https://www.rateloop.ai for production, RATELOOP_API_BASE_URL=http://127.0.0.1:3000 for a local stack, or RATELOOP_MCP_API_URL for MCP.`,
+  );
 }
