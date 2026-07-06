@@ -252,16 +252,21 @@ See [`docs/env-parity.md`](../../docs/env-parity.md) for USDC aliases, E2E flags
 
 Runtime setup examples live in `examples/`:
 
+- `generic-public-mcp.json` and `generic-remote-mcp.json`
 - `openclaw.md` and `openclaw.mcpServers.json`
 - `hermes-agent.md`
 - `gemini-cli.md` and `gemini-cli.mcpServers.json`
 - `chat-connectors.md`
+- `generated-mockup-upload.md`
 - `landing-pitch-review.ts`
+- `mockups/`
 
 Question payload examples live in `examples/questions/`:
 
 - `landing-pitch-review.json` — generic audience interest and clarity check
+- `ai-website-feedback-service.json` — AI website generation plus human feedback market-interest ask
 - `ai-answer-quality.json` — AI answer quality review
+- `ai-model-preference-head-to-head.json` — A/B model preference comparison
 - `source-support-check.json` — source-support answer check
 - `claim-verification.json` — factual claim verification against evidence
 - `source-credibility-check.json` — source reliability screening
@@ -271,7 +276,10 @@ Question payload examples live in `examples/questions/`:
 - `proposal-review.json` — proposal readiness review
 - `answer-variant-safety-review.json` — candidate answer preference bundle
 - `generated-image-choice.json` — ranked image-option bundle
+- `generated-mockup-feedback.json` — generated mockup feedback with uploaded image context
 - `local-context-check.json` — public local-context sanity check
+- `codex-vs-claude-head-to-head.json` — A/B pick-one comparison
+- `world-cup-2026-48-teams.json` — public sports-format debate with external details
 
 These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
 

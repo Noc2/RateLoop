@@ -17,6 +17,7 @@ These examples keep one loop stable across runtimes:
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
 - `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses an uploaded RateLoop `imageUrl`
 - `questions/ai-answer-quality.json`: AI answer quality review
+- `questions/ai-model-preference-head-to-head.json`: A/B model preference comparison with `head_to_head_ab`
 - `questions/source-support-check.json`: source-support answer check
 - `questions/claim-verification.json`: factual claim verification
 - `questions/source-credibility-check.json`: source credibility screening
@@ -28,6 +29,8 @@ These examples keep one loop stable across runtimes:
 - `questions/generated-image-choice.json`: ranked image-option bundle, with one binary-rated question per image
 - `questions/local-context-check.json`: local-context sanity check
 - `questions/codex-vs-claude-head-to-head.json`: A/B pick-one comparison with `head_to_head_ab` (Up = A, Down = B)
+- `questions/world-cup-2026-48-teams.json`: public sports-format debate with external details and public context
+- `mockups/`: generated-image assets used by visual-context handoff examples
 - `generic-public-mcp.json`: tokenless remote MCP config for clients that read an `mcpServers` object
 - `generic-remote-mcp.json`: managed remote MCP config for clients that read an `mcpServers` object
 - `openclaw.mcpServers.json`: OpenClaw-oriented `mcpServers` example

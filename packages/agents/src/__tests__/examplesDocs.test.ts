@@ -1,8 +1,35 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 function readPackageFile(path: string) {
   return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+}
+
+function listExampleTopLevelInventory() {
+  return readdirSync(new URL("../../examples", import.meta.url), {
+    withFileTypes: true,
+  })
+    .filter(entry => !entry.name.startsWith("."))
+    .filter(entry => entry.name !== "README.md")
+    .filter(entry => entry.name !== "questions")
+    .map(entry => (entry.isDirectory() ? `${entry.name}/` : entry.name))
+    .sort();
+}
+
+function listQuestionExamples() {
+  return readdirSync(new URL("../../examples/questions", import.meta.url), {
+    withFileTypes: true,
+  })
+    .filter(entry => entry.isFile())
+    .filter(entry => entry.name.endsWith(".json"))
+    .map(entry => entry.name)
+    .sort();
+}
+
+function expectMarkdownInventory(markdown: string, entries: readonly string[]) {
+  for (const entry of entries) {
+    expect(markdown).toContain(`\`${entry}\``);
+  }
 }
 
 describe("agent public examples and docs", () => {
@@ -84,5 +111,18 @@ describe("agent public examples and docs", () => {
     expect(landingPitch).toContain("live Base mainnet deployment");
     expect(landingPitch).toContain("requiresAtomicExecution");
     expect(landingPitch).toContain("Batch every transactionPlan.calls item in one atomic wallet operation");
+  });
+
+  it("keeps README example inventories aligned with checked files", () => {
+    const packageReadme = readPackageFile("README.md");
+    const examplesReadme = readPackageFile("examples/README.md");
+    const topLevelEntries = listExampleTopLevelInventory();
+    const questionEntries = listQuestionExamples();
+
+    expectMarkdownInventory(examplesReadme, [
+      ...topLevelEntries,
+      ...questionEntries.map(entry => `questions/${entry}`),
+    ]);
+    expectMarkdownInventory(packageReadme, [...topLevelEntries, ...questionEntries]);
   });
 });
