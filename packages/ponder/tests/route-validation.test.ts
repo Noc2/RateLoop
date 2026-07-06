@@ -3731,8 +3731,10 @@ describe("registerDataRoutes", () => {
     const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
     expect(selection).toContain("awaitingBountyPayoutCount");
     expect(selection).toContain("questionRewardPoolRound.rewardPoolId");
+    expect(selection).toContain("questionRewardPoolRound.correlationWeightRoot");
     expect(selection).toContain("roundPayoutSnapshot.weightRoot");
     expect(selection).toContain("roundPayoutSnapshot.artifactUri");
+    expect(selection).toContain("is not null");
     expect(selection).not.toContain("questionRewardPool.asset");
     expect(queryBuilder.where).toHaveBeenCalledTimes(2);
     const whereExpressions = queryBuilder.where.mock.calls.map(([value]) =>

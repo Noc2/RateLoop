@@ -1585,13 +1585,33 @@ export function registerDataRoutes(app: ApiApp) {
     if (contentIds.length > 0)
       feedbackConditions.push(inArray(contentFeedback.contentId, contentIds));
 
+    const bountyPayoutProofRequired = sql<boolean>`(
+      ${questionRewardPoolRound.correlationWeightRoot} is not null
+      or ${roundPayoutSnapshot.weightRoot} is not null
+      or ${roundPayoutSnapshot.artifactUri} is not null
+    )`;
+    const bountyPayoutProofReady = sql<boolean>`(
+      ${roundPayoutSnapshot.weightRoot} is not null
+      and ${roundPayoutSnapshot.artifactUri} is not null
+    )`;
     const bountyRows = await db
       .select({
         contentId: vote.contentId,
         pendingBountyCount: sql<number>`count(*)`,
-        claimableBountyCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is not null then 1 else 0 end)`,
+        claimableBountyCount: sql<number>`sum(case
+          when ${questionRewardPoolRound.rewardPoolId} is not null
+            and (not ${bountyPayoutProofRequired} or ${bountyPayoutProofReady})
+          then 1
+          else 0
+        end)`,
         awaitingBountyAllocationCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is null then 1 else 0 end)`,
-        awaitingBountyPayoutCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is not null and (${roundPayoutSnapshot.weightRoot} is null or ${roundPayoutSnapshot.artifactUri} is null) then 1 else 0 end)`,
+        awaitingBountyPayoutCount: sql<number>`sum(case
+          when ${questionRewardPoolRound.rewardPoolId} is not null
+            and ${bountyPayoutProofRequired}
+            and not ${bountyPayoutProofReady}
+          then 1
+          else 0
+        end)`,
         latestBountyRoundId: sql<bigint | null>`max(${vote.roundId})`,
       })
       .from(vote)
