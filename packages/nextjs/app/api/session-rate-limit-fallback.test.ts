@@ -131,13 +131,18 @@ test("notification email session route fails open when the rate limit store is u
   assert.deepEqual(await response.json(), { hasSession: false });
 });
 
-test("free transaction session route fails closed when the rate limit store is unavailable", async () => {
+test("free transaction session route falls back when the rate limit store is unavailable", async () => {
   const response = await freeTransactionSessionRoute.GET(
     makeRequest(`/api/transactions/free/session?address=${encodeURIComponent(TEST_ADDRESS)}&chainId=${TEST_CHAIN_ID}`),
   );
 
-  assert.equal(response.status, 503);
-  assert.equal((await response.json()).code, "service_unavailable");
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.chainId, TEST_CHAIN_ID);
+  assert.equal(body.verified, false);
+  assert.equal(body.remaining, 0);
+  assert.equal(body.walletAddress, TEST_ADDRESS);
+  assert.equal(body.raterIdentityKey, null);
 });
 
 test("feedback submit route fails closed when the rate limit store is unavailable", async () => {
