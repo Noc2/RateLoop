@@ -48,6 +48,20 @@ function readOptionalBytes32(value: unknown) {
   return BYTES32_PATTERN.test(normalized) ? { ok: true as const, value: normalized } : { ok: false as const };
 }
 
+function readOptionalDeploymentKey(value: unknown) {
+  if (value === undefined || value === null || value === "") return { ok: true as const, value: null };
+  if (typeof value !== "string") return { ok: false as const };
+  const deploymentKey = value.trim().toLowerCase();
+  return deploymentKey ? { ok: true as const, value: deploymentKey } : { ok: false as const };
+}
+
+function readOptionalFrontendAddress(value: unknown) {
+  if (value === undefined || value === null || value === "") return { ok: true as const, value: null };
+  return typeof value === "string" && isValidWalletAddress(value)
+    ? { ok: true as const, value: normalizeWalletAddress(value) }
+    : { ok: false as const };
+}
+
 function hashEvidenceArtifactJson(artifactJson: string) {
   return `0x${createHash("sha256").update(artifactJson).digest("hex")}`;
 }
@@ -101,9 +115,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid content id" }, { status: 400 });
   }
 
-  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
-  const frontendAddress = resolveConfidentialityFrontendAddress();
-  if (!deploymentScope || !frontendAddress) {
+  const requestedDeploymentKey = readOptionalDeploymentKey(request.nextUrl.searchParams.get("deploymentKey"));
+  const requestedFrontendAddress = readOptionalFrontendAddress(request.nextUrl.searchParams.get("frontendAddress"));
+  if (!requestedDeploymentKey.ok || !requestedFrontendAddress.ok) {
+    return NextResponse.json({ error: "Invalid confidentiality deployment scope" }, { status: 400 });
+  }
+
+  const currentDeploymentScope = requestedDeploymentKey.value ? null : resolveCurrentConfidentialityDeploymentScope();
+  const deploymentKey = requestedDeploymentKey.value ?? currentDeploymentScope?.deploymentKey ?? null;
+  const frontendAddress = requestedFrontendAddress.value ?? resolveConfidentialityFrontendAddress();
+  if (!deploymentKey || !frontendAddress) {
     return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
   }
 
@@ -113,7 +134,7 @@ export async function GET(request: NextRequest) {
     .from(confidentialityBreachReports)
     .where(
       and(
-        eq(confidentialityBreachReports.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialityBreachReports.deploymentKey, deploymentKey),
         eq(confidentialityBreachReports.frontendAddress, frontendAddress),
         eq(confidentialityBreachReports.contentId, contentId),
       ),
@@ -158,13 +179,17 @@ export async function POST(request: NextRequest) {
   const expectedEvidenceHash = readOptionalBytes32(body.evidenceHash);
   const externalEvidenceHash = readOptionalBytes32(body.externalEvidenceHash);
   const evidenceUrl = readOptionalEvidenceUrl(body.evidenceUrl);
+  const requestedDeploymentKey = readOptionalDeploymentKey(body.deploymentKey);
+  const requestedFrontendAddress = readOptionalFrontendAddress(body.frontendAddress);
 
   if (
     !reporter ||
     !CONTENT_ID_PATTERN.test(contentId) ||
     !BYTES32_PATTERN.test(accusedIdentityKey) ||
     !expectedEvidenceHash.ok ||
-    !externalEvidenceHash.ok
+    !externalEvidenceHash.ok ||
+    !requestedDeploymentKey.ok ||
+    !requestedFrontendAddress.ok
   ) {
     return NextResponse.json({ error: "Missing or invalid breach report fields" }, { status: 400 });
   }
@@ -178,13 +203,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Signed reporter session required" }, { status: 401 });
   }
 
-  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
-  const frontendAddress = resolveConfidentialityFrontendAddress();
-  if (!deploymentScope || !frontendAddress) {
-    return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
-  }
-
-  await assertConfidentialityFrontendScopeSchemaReady(frontendAddress);
   const viewTokenResult = readOptionalViewToken(body.viewToken);
   if (!viewTokenResult.ok) {
     return NextResponse.json({ error: "Invalid view token" }, { status: 400 });
@@ -192,6 +210,13 @@ export async function POST(request: NextRequest) {
 
   if (!viewTokenResult.viewToken) {
     return NextResponse.json({ error: "A matching view token is required to file breach evidence" }, { status: 400 });
+  }
+
+  const currentDeploymentScope = requestedDeploymentKey.value ? null : resolveCurrentConfidentialityDeploymentScope();
+  const deploymentKey = requestedDeploymentKey.value ?? currentDeploymentScope?.deploymentKey ?? null;
+  const frontendAddress = requestedFrontendAddress.value ?? resolveConfidentialityFrontendAddress();
+  if (!deploymentKey || !frontendAddress) {
+    return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
   }
 
   const [accessLog] = await db
@@ -212,7 +237,7 @@ export async function POST(request: NextRequest) {
     .where(
       and(
         eq(confidentialContextAccessLogs.viewToken, viewTokenResult.viewToken),
-        eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialContextAccessLogs.deploymentKey, deploymentKey),
         eq(confidentialContextAccessLogs.frontendAddress, frontendAddress),
         eq(confidentialContextAccessLogs.contentId, contentId),
         eq(confidentialContextAccessLogs.identityKey, accusedIdentityKey),
@@ -225,8 +250,9 @@ export async function POST(request: NextRequest) {
   }
 
   const accessIdentityKey = accessLog.identityKey ?? accusedIdentityKey;
-  const accessDeploymentKey = accessLog.deploymentKey ?? deploymentScope.deploymentKey;
+  const accessDeploymentKey = accessLog.deploymentKey ?? "legacy";
   const accessFrontendAddress = accessLog.frontendAddress;
+  await assertConfidentialityFrontendScopeSchemaReady(accessFrontendAddress);
   const epoch = confidentialityEpochForDate(accessLog.viewedAt);
   const [root] = await db
     .select({
@@ -330,10 +356,10 @@ export async function POST(request: NextRequest) {
     .values({
       accessLogId: accessLog.id,
       accusedIdentityKey,
-      chainId: deploymentScope.chainId,
+      chainId: accessLog.chainId,
       contentId,
-      contentRegistryAddress: deploymentScope.contentRegistryAddress,
-      deploymentKey: deploymentScope.deploymentKey,
+      contentRegistryAddress: accessLog.contentRegistryAddress,
+      deploymentKey: accessDeploymentKey,
       createdAt: now,
       epoch,
       evidenceHash,

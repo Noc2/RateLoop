@@ -76,6 +76,9 @@ function currentDeploymentScope() {
 
 async function insertRootedAccess(
   params: {
+    accessChainId?: number | null;
+    accessContentRegistryAddress?: string | null;
+    accessDeploymentKey?: string;
     anchored?: boolean;
     rootChainId?: number | null;
     rootContentRegistryAddress?: string | null;
@@ -85,13 +88,19 @@ async function insertRootedAccess(
   const viewedAt = new Date("2026-06-11T14:30:00.000Z");
   const epoch = confidentiality.confidentialityEpochForDate(viewedAt);
   const scope = currentDeploymentScope();
+  const accessDeploymentKey = params.accessDeploymentKey ?? scope.deploymentKey;
+  const accessChainId = params.accessChainId === undefined ? scope.chainId : params.accessChainId;
+  const accessContentRegistryAddress =
+    params.accessContentRegistryAddress === undefined
+      ? scope.contentRegistryAddress
+      : params.accessContentRegistryAddress;
   const [accessLog] = await dbModule.db
     .insert(dbSchema.confidentialContextAccessLogs)
     .values({
-      chainId: scope.chainId,
+      chainId: accessChainId,
       contentId: CONTENT_ID,
-      contentRegistryAddress: scope.contentRegistryAddress,
-      deploymentKey: scope.deploymentKey,
+      contentRegistryAddress: accessContentRegistryAddress,
+      deploymentKey: accessDeploymentKey,
       frontendAddress: FRONTEND_ADDRESS,
       identityKey: IDENTITY_KEY,
       resourceId: "det_private001",
@@ -101,10 +110,10 @@ async function insertRootedAccess(
       walletAddress: ACCUSED_WALLET,
     })
     .returning({ id: dbSchema.confidentialContextAccessLogs.id });
-  const rootDeploymentKey = params.rootDeploymentKey ?? scope.deploymentKey;
-  const rootChainId = params.rootChainId === undefined ? scope.chainId : params.rootChainId;
+  const rootDeploymentKey = params.rootDeploymentKey ?? accessDeploymentKey;
+  const rootChainId = params.rootChainId === undefined ? accessChainId : params.rootChainId;
   const rootContentRegistryAddress =
-    params.rootContentRegistryAddress === undefined ? scope.contentRegistryAddress : params.rootContentRegistryAddress;
+    params.rootContentRegistryAddress === undefined ? accessContentRegistryAddress : params.rootContentRegistryAddress;
   await dbModule.db.insert(dbSchema.confidentialityLogRoots).values({
     accessCount: 1,
     acceptanceCount: 0,
@@ -239,6 +248,42 @@ test("breach reports bind a matching view token to access-log and log-root evide
   assert.deepEqual(await artifactResponse.json(), proof);
 });
 
+test("breach reports can be filed for an explicitly scoped historical deployment", async () => {
+  const scope = currentDeploymentScope();
+  const historicalRegistry = "0x2222222222222222222222222222222222222222";
+  const historicalDeploymentKey = `${scope.chainId}:${historicalRegistry}`;
+  const { accessLog, epoch } = await insertRootedAccess({
+    accessContentRegistryAddress: historicalRegistry,
+    accessDeploymentKey: historicalDeploymentKey,
+  });
+
+  const response = await breachesRoute.POST(
+    await breachRequest({
+      accusedIdentityKey: IDENTITY_KEY,
+      contentId: CONTENT_ID,
+      deploymentKey: historicalDeploymentKey,
+      externalEvidenceHash: EVIDENCE_HASH,
+      reporter: REPORTER,
+      viewToken: VIEW_TOKEN,
+    }),
+  );
+
+  const body = (await response.json()) as { id: number; ok: boolean };
+  assert.equal(response.status, 201);
+  assert.equal(body.ok, true);
+
+  const rows = await dbModule.dbClient.execute(
+    "SELECT access_log_id, chain_id, content_registry_address, deployment_key, epoch, frontend_address FROM confidentiality_breach_reports",
+  );
+  assert.equal(rows.rowCount, 1);
+  assert.equal(rows.rows[0].access_log_id, accessLog.id);
+  assert.equal(rows.rows[0].chain_id, scope.chainId);
+  assert.equal(rows.rows[0].content_registry_address, historicalRegistry);
+  assert.equal(rows.rows[0].deployment_key, historicalDeploymentKey);
+  assert.equal(rows.rows[0].epoch, epoch);
+  assert.equal(rows.rows[0].frontend_address, FRONTEND_ADDRESS);
+});
+
 test("breach reports reject caller-supplied evidenceHash values that do not match the artifact", async () => {
   await insertRootedAccess();
 
@@ -332,6 +377,20 @@ test("breach listings only return reports for the current deployment", async () 
   assert.deepEqual(
     body.reports.map(report => report.id),
     [1],
+  );
+
+  const scopedListResponse = await breachesRoute.GET(
+    new NextRequest(
+      `https://rateloop.ai/api/confidentiality/breaches?contentId=${CONTENT_ID}&deploymentKey=${encodeURIComponent(
+        `${scope.chainId}:0x2222222222222222222222222222222222222222`,
+      )}`,
+    ),
+  );
+  const scopedBody = (await scopedListResponse.json()) as { reports: Array<{ id: number }> };
+  assert.equal(scopedListResponse.status, 200);
+  assert.deepEqual(
+    scopedBody.reports.map(report => report.id),
+    [2],
   );
 });
 
