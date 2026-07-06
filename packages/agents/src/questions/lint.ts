@@ -374,6 +374,30 @@ function lintBoundedInteger(
   pushFinding(findings, "error", path, `${path} must be at most ${maxValue}.`);
 }
 
+function lintBoundedPositiveInteger(
+  value: unknown,
+  path: string,
+  maxValue: bigint,
+  findings: QuestionLintFinding[],
+): bigint | null {
+  if (value === undefined || value === null) return null;
+  const raw = readLintIntegerString(value);
+  if (raw === null || !/^\d+$/.test(raw)) {
+    pushFinding(findings, "error", path, `${path} must be a positive integer.`);
+    return null;
+  }
+  const parsed = BigInt(raw);
+  if (parsed <= 0n) {
+    pushFinding(findings, "error", path, `${path} must be a positive integer.`);
+    return null;
+  }
+  if (parsed > maxValue) {
+    pushFinding(findings, "error", path, `${path} must be at most ${maxValue}.`);
+    return null;
+  }
+  return parsed;
+}
+
 function lintRoundPreset(
   value: unknown,
   path: string,
@@ -441,24 +465,32 @@ function lintRoundConfigAbiBounds(
   if (!roundConfigInfo) return;
 
   const { pathPrefix, roundConfig } = roundConfigInfo;
-  lintBoundedInteger(
+  lintBoundedPositiveInteger(
     roundConfig.questionDurationSeconds,
     `${pathPrefix}.questionDurationSeconds`,
     ROUND_CONFIG_UINT32_MAX,
     findings,
   );
-  lintBoundedInteger(
+  const minVoters = lintBoundedPositiveInteger(
     roundConfig.minVoters,
     `${pathPrefix}.minVoters`,
     ROUND_CONFIG_UINT16_MAX,
     findings,
   );
-  lintBoundedInteger(
+  const maxVoters = lintBoundedPositiveInteger(
     roundConfig.maxVoters,
     `${pathPrefix}.maxVoters`,
     ROUND_CONFIG_UINT16_MAX,
     findings,
   );
+  if (minVoters !== null && maxVoters !== null && maxVoters < minVoters) {
+    pushFinding(
+      findings,
+      "error",
+      `${pathPrefix}.maxVoters`,
+      `${pathPrefix}.maxVoters must be greater than or equal to ${pathPrefix}.minVoters.`,
+    );
+  }
 }
 
 export function lintAgentQuestion(

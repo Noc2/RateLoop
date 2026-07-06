@@ -1065,6 +1065,44 @@ describe("round config voter alignment linting", () => {
     );
   });
 
+  it("flags round config values that the parser rejects as invalid", () => {
+    const zeroDurationFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      roundConfig: {
+        questionDurationSeconds: "0",
+        maxVoters: "3",
+        minVoters: "3",
+      },
+    });
+    expect(zeroDurationFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "roundConfig.questionDurationSeconds",
+        }),
+      ]),
+    );
+
+    const invertedVotersFindings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        roundConfig: {
+          maxVoters: "2",
+          minVoters: "3",
+        },
+      },
+    });
+    expect(invertedVotersFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.roundConfig.maxVoters",
+        }),
+      ]),
+    );
+  });
+
   it("flags a question-level roundConfig.minVoters mismatch against the default quorum", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
