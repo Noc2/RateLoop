@@ -180,6 +180,7 @@ test("root workspace test scripts lock shared dist and include non-contract suit
   );
   assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn next:test/);
   assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn workspace @rateloop\/keeper test/);
+  assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn promo-video:check-types/);
   assert.match(manifest.scripts?.["test:all"] ?? "", /yarn foundry:test && yarn test:ts/);
 });
 

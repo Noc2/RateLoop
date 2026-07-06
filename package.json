@@ -92,6 +92,7 @@
     "keeper:check-types": "yarn workspace @rateloop/keeper check-types",
     "node-utils:build": "yarn workspace @rateloop/node-utils build",
     "node-utils:check-types": "yarn workspace @rateloop/node-utils check-types",
+    "promo-video:check-types": "yarn workspace @rateloop/promo-video check-types",
     "node-utils:test": "yarn workspace @rateloop/node-utils test",
     "sdk:test": "yarn workspace @rateloop/sdk test",
     "sdk:check-types": "yarn workspace @rateloop/sdk check-types",
@@ -100,7 +101,7 @@
     "e2e:ci:app": "yarn workspace @rateloop/nextjs e2e:ci:app",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",
-    "test:ts": "node scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn test:node && yarn contracts:test && yarn node-utils:test && yarn sdk:test && yarn next:test && yarn next:check-types && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test\""
+    "test:ts": "node scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn promo-video:check-types && yarn test:node && yarn contracts:test && yarn node-utils:test && yarn sdk:test && yarn next:test && yarn next:check-types && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test\""
   },
   "devDependencies": {
     "husky": "~9.1.6",
