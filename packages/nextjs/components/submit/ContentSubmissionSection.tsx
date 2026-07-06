@@ -165,6 +165,11 @@ type RemovedPublicContextSnapshot = {
   videoUrl: string;
 };
 
+type SubmissionReceipt = {
+  logs: { address: string; data: `0x${string}`; topics: `0x${string}`[] }[];
+  transactionHash?: unknown;
+};
+
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add media context below",
   videoPlaceholder: "Paste a YouTube URL, e.g. https://youtube.com/watch?v=...",
@@ -1736,6 +1741,8 @@ export function ContentSubmissionSection() {
     contractName: "ContentRegistry",
     functionName: "nextContentId",
   });
+  const buildExpectedSubmittedContentIds = (firstContentId: bigint, count: number) =>
+    Array.from({ length: count }, (_, index) => firstContentId + BigInt(index));
   const extractSubmittedContentIds = (logs: { address: string; data: `0x${string}`; topics: `0x${string}`[] }[]) => {
     if (!registryInfo) {
       return [];
@@ -2445,6 +2452,7 @@ export function ContentSubmissionSection() {
     try {
       let submittedContentIds: bigint[] = [];
       let submissionTransactionHashes: `0x${string}`[] = [];
+      let deferredSubmissionReceipts: Promise<SubmissionReceipt[]> | null = null;
       const publicClient = getPublicClient(wagmiConfig, { chainId: targetNetwork.id as any });
       const readRegistryNextContentId = async () => {
         try {
@@ -2831,8 +2839,9 @@ export function ContentSubmissionSection() {
 
       if (canUseBatchedSubmitCalls) {
         await waitForReservedSubmissionReveal();
+        const expectedFirstContentId = nextContentIdBeforeSubmit;
         const expectedNextContentId =
-          nextContentIdBeforeSubmit !== null ? nextContentIdBeforeSubmit + BigInt(bundleQuestions.length) : null;
+          expectedFirstContentId !== null ? expectedFirstContentId + BigInt(bundleQuestions.length) : null;
         const submitCalls = [
           {
             abi: ERC20_APPROVAL_ABI,
@@ -2876,34 +2885,61 @@ export function ContentSubmissionSection() {
           }),
         } as const;
         const callsResult =
-          publicClient && expectedNextContentId !== null
-            ? await raceTransactionWithPostcondition({
-                onPostconditionSuccessThenTransactionError: error => {
-                  console.warn("[content-submission] submit postcondition succeeded before thirdweb status settled.", {
-                    error,
-                    expectedNextContentId: expectedNextContentId.toString(),
+          publicClient && expectedFirstContentId !== null && expectedNextContentId !== null
+            ? await (async () => {
+                const submitTransactionPromise = executeSponsoredCalls(submitBatchCalls, submitBatchOptions);
+                const raceResult = await raceTransactionWithPostcondition({
+                  onPostconditionSuccessThenTransactionError: error => {
+                    console.warn(
+                      "[content-submission] submit postcondition succeeded before thirdweb status settled.",
+                      {
+                        error,
+                        expectedNextContentId: expectedNextContentId.toString(),
+                      },
+                    );
+                  },
+                  transaction: () => submitTransactionPromise,
+                  waitForPostcondition: shouldStop =>
+                    waitForTransactionPostcondition(
+                      () =>
+                        hasQuestionSubmittedPostcondition({
+                          client: publicClient,
+                          contentRegistryAddress: registryAddress,
+                          expectedNextContentId,
+                        }),
+                      "question-submit-postcondition",
+                      {
+                        pollingIntervalMs: getSubmitReceiptPollingInterval(targetNetwork.id),
+                        shouldStop,
+                      },
+                    ),
+                });
+                if (raceResult.confirmation !== "postcondition") {
+                  return raceResult.result;
+                }
+
+                submittedContentIds = buildExpectedSubmittedContentIds(expectedFirstContentId, bundleQuestions.length);
+                deferredSubmissionReceipts = submitTransactionPromise
+                  .then(result => (result.receipts ?? []) as SubmissionReceipt[])
+                  .catch(error => {
+                    console.warn(
+                      "[content-submission] unable to recover sponsored submit receipts after postcondition.",
+                      {
+                        error,
+                        expectedNextContentId: expectedNextContentId.toString(),
+                      },
+                    );
+                    return [];
                   });
-                },
-                transaction: () => executeSponsoredCalls(submitBatchCalls, submitBatchOptions),
-                waitForPostcondition: shouldStop =>
-                  waitForTransactionPostcondition(
-                    () =>
-                      hasQuestionSubmittedPostcondition({
-                        client: publicClient,
-                        contentRegistryAddress: registryAddress,
-                        expectedNextContentId,
-                      }),
-                    "question-submit-postcondition",
-                    {
-                      pollingIntervalMs: getSubmitReceiptPollingInterval(targetNetwork.id),
-                      shouldStop,
-                    },
-                  ),
-              }).then(result => (result.confirmation === "postcondition" ? { receipts: [] } : result.result))
+                return { receipts: [] as SubmissionReceipt[] };
+              })()
             : await executeSponsoredCalls(submitBatchCalls, submitBatchOptions);
 
         const submissionReceipts = callsResult.receipts ?? [];
-        submittedContentIds = extractSubmittedContentIds(submissionReceipts.flatMap(receipt => receipt.logs));
+        const receiptContentIds = extractSubmittedContentIds(submissionReceipts.flatMap(receipt => receipt.logs));
+        if (receiptContentIds.length > 0) {
+          submittedContentIds = receiptContentIds;
+        }
         submissionTransactionHashes = extractReceiptTransactionHashes(submissionReceipts);
       } else {
         const approveWrite = {
@@ -3003,6 +3039,26 @@ export function ContentSubmissionSection() {
       }).catch(error => {
         console.warn("Unable to attach question details to submitted content.", error);
       });
+      const recoveredSubmissionReceipts = deferredSubmissionReceipts as Promise<SubmissionReceipt[]> | null;
+      if (submissionTransactionHashes.length === 0 && recoveredSubmissionReceipts) {
+        void recoveredSubmissionReceipts
+          .then((receipts: SubmissionReceipt[]) => {
+            const recoveredTransactionHashes = extractReceiptTransactionHashes(receipts);
+            if (recoveredTransactionHashes.length === 0) {
+              return;
+            }
+
+            const recoveredContentIds = extractSubmittedContentIds(receipts.flatMap(receipt => receipt.logs));
+            return attachQuestionDetailsAfterSubmission({
+              contentIds: recoveredContentIds.length > 0 ? recoveredContentIds : submittedContentIds,
+              questions: bundleQuestions,
+              transactionHashes: recoveredTransactionHashes,
+            });
+          })
+          .catch(error => {
+            console.warn("Unable to attach question details after sponsored submit receipt recovery.", error);
+          });
+      }
 
       if (
         shouldFundFeedbackBonus &&
