@@ -85,15 +85,16 @@ function looksLikeYouTubeVideoUrl(value: unknown): boolean {
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== "https:") return false;
+    if (parsed.username || parsed.password) return false;
     const host = parsed.hostname.toLowerCase();
-    if (host === "youtu.be") return parsed.pathname.length > 1;
+    if (host === "youtu.be") return /^[\w-]+$/.test(parsed.pathname.slice(1).split("/")[0] ?? "");
     if (host === "www.youtube.com" && parsed.pathname.startsWith("/embed/")) {
-      return parsed.pathname.length > "/embed/".length;
+      return /^[\w-]+$/.test(parsed.pathname.split("/embed/")[1]?.split("/")[0] ?? "");
     }
     return (
       (host === "youtube.com" || host === "www.youtube.com" || host === "m.youtube.com") &&
       parsed.pathname === "/watch" &&
-      parsed.searchParams.has("v")
+      /^[\w-]+$/.test(parsed.searchParams.get("v") ?? "")
     );
   } catch {
     return false;

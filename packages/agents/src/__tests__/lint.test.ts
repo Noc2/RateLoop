@@ -311,6 +311,35 @@ describe("agent question linting", () => {
     });
   });
 
+  it("rejects unsupported YouTube video URL shapes", () => {
+    for (const videoUrl of [
+      "https://user:pass@www.youtube.com/watch?v=jNQXAC9IVRw",
+      "https://www.youtube.com/watch?v=",
+      "https://youtu.be/",
+      "https://www.youtube.com/embed/",
+    ]) {
+      const findings = lintAgentAskRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          contextUrl: undefined,
+          imageUrls: [],
+          videoUrl,
+        },
+      });
+
+      expect(findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            level: "error",
+            message: "Video URL must be a supported YouTube HTTPS URL.",
+            path: "question.videoUrl",
+          }),
+        ]),
+      );
+    }
+  });
+
   it("rejects public asks that mix image and video context", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

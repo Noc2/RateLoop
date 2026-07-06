@@ -1175,9 +1175,14 @@ export function parseX402QuestionRequest(
     );
   }
 
-  const rawQuestions = Array.isArray(value.questions)
-    ? value.questions
-    : [isObject(value.question) ? value.question : value];
+  if (value.question !== undefined && value.question !== null && value.questions !== undefined && value.questions !== null) {
+    throw new X402QuestionInputError("Use either question or questions, not both.");
+  }
+  if (value.questions !== undefined && !Array.isArray(value.questions)) {
+    throw new X402QuestionInputError("questions must be an array.");
+  }
+
+  const rawQuestions = Array.isArray(value.questions) ? value.questions : [isObject(value.question) ? value.question : value];
   if (rawQuestions.length === 0) {
     throw new X402QuestionInputError("At least one question is required.");
   }

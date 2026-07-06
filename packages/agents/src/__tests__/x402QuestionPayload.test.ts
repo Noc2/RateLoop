@@ -91,6 +91,33 @@ describe("x402 question integer parsing", () => {
   });
 });
 
+describe("x402 question request shape", () => {
+  it("rejects payloads that include both question and questions", () => {
+    expect(() =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        questions: [
+          {
+            ...VALID_REQUEST.question,
+            title: "Does this alternate question read as intended?",
+          },
+        ],
+      }),
+    ).toThrow("Use either question or questions, not both.");
+  });
+
+  it("rejects non-array questions fields", () => {
+    const { question, ...baseRequest } = VALID_REQUEST;
+
+    expect(() =>
+      parseX402QuestionRequest({
+        ...baseRequest,
+        questions: question,
+      }),
+    ).toThrow("questions must be an array.");
+  });
+});
+
 describe("x402 question attachment origins", () => {
   it("rejects production uploaded images from hostile configured app origins", () => {
     process.env.NODE_ENV = "production";
