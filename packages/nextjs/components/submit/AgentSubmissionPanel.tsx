@@ -772,6 +772,11 @@ export function AgentSubmissionPanel() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
             <h1 className={surfaceSectionHeadingClassName}>Agent Access</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
+              Use this panel for funded agent wallets, local signer setup, and optional managed controls. For
+              user-funded asks, agents should create a browser handoff link so the human reviews, signs, and submits
+              from their own wallet.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {policySelector}
