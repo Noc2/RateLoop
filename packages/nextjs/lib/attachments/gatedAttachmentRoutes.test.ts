@@ -522,7 +522,7 @@ test("pending gated hosted attachments fail closed before content linkage", asyn
   assert.equal(await image.text(), "Not found");
 });
 
-test("unlinked public details are not served before submission", async () => {
+test("unlinked public details serve with no-store headers before content linkage", async () => {
   const now = new Date("2026-06-11T12:00:00.000Z");
   await db.insert(questionDetails).values({
     id: DETAILS_ID,
@@ -540,8 +540,11 @@ test("unlinked public details are not served before submission", async () => {
   const details = await getDetails(new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}`), {
     params: Promise.resolve({ detailsId: DETAILS_ID }),
   });
-  assert.equal(details.status, 404);
+  assert.equal(details.status, 200);
+  assert.equal(await details.text(), DETAILS_TEXT);
   assert.equal(details.headers.get("cache-control"), "private, no-store");
+  assert.equal(details.headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.match(details.headers.get("x-rateloop-details-hash") ?? "", /^0x[a-f0-9]{64}$/);
 });
 
 test("unlinked public images serve preview variants before submission", async () => {

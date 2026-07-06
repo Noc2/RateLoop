@@ -63,12 +63,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   if (!details.contentId) {
-    return NextResponse.json(
-      { error: "Question details not found." },
-      details.requiresGatedAccess
-        ? GATED_DETAILS_NOT_FOUND_RESPONSE
-        : { headers: UNLINKED_DETAILS_RESPONSE_HEADERS, status: 404 },
-    );
+    if (details.requiresGatedAccess) {
+      return NextResponse.json({ error: "Question details not found." }, GATED_DETAILS_NOT_FOUND_RESPONSE);
+    }
+
+    return new NextResponse(details.normalizedText, {
+      headers: {
+        ...UNLINKED_DETAILS_RESPONSE_HEADERS,
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-RateLoop-Details-Hash": `0x${details.sha256}`,
+      },
+    });
   }
 
   const detailsDeploymentScope = {
