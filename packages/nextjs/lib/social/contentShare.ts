@@ -403,9 +403,6 @@ function setContentShareScopeParams(url: URL, content: ContentShareContentInput)
   if (typeof content.chainId === "number" && Number.isSafeInteger(content.chainId) && content.chainId > 0) {
     url.searchParams.set("chainId", String(content.chainId));
   }
-  if (content.deploymentKey?.trim()) {
-    url.searchParams.set("deploymentKey", content.deploymentKey.trim());
-  }
 }
 
 function buildVoteShareUrl(origin: string, content: ContentShareContentInput, ratingVersion?: string): string {

@@ -40,9 +40,6 @@ function normalizeShareDeploymentKey(value: string | null | undefined): string |
 }
 
 function resolveExpectedShareDeploymentKey(options: ContentShareDataOptions): string | null {
-  const explicitDeploymentKey = normalizeShareDeploymentKey(options.deploymentKey);
-  if (explicitDeploymentKey) return explicitDeploymentKey;
-
   const chainId = normalizeShareChainId(options.chainId);
   return chainId ? normalizeShareDeploymentKey(resolveProtocolDeploymentScope(chainId)?.deploymentKey) : null;
 }
@@ -126,7 +123,7 @@ export async function getContentShareDataForParam(
     const confidentiality = await getQuestionConfidentiality(content.id, {
       chainId: content.chainId ?? normalizeShareChainId(options.chainId),
       contentRegistryAddress: content.contentRegistryAddress ?? options.contentRegistryAddress,
-      deploymentKey: content.deploymentKey ?? options.deploymentKey,
+      deploymentKey: content.deploymentKey ?? expectedDeploymentKey,
     }).catch(() => null);
     const shareContent =
       isPonderContentGated(content) || isConfidentialityCurrentlyGated(confidentiality)

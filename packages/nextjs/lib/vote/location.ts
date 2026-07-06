@@ -23,11 +23,6 @@ function normalizeVoteLocationChainId(value: string | null | undefined) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function normalizeVoteLocationDeploymentKey(value: string | null | undefined) {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
 function normalizeSearchParams(searchParams: URLSearchParams) {
   const normalizedParams = new URLSearchParams();
   const entries = Array.from(searchParams.entries()).sort(([leftKey, leftValue], [rightKey, rightValue]) =>
@@ -48,12 +43,7 @@ function setContentScopeSearchParams(url: URL, update: VoteLocationUpdate) {
     url.searchParams.delete(RATE_CHAIN_ID_PARAM);
   }
 
-  const deploymentKey = update.deploymentKey?.trim();
-  if (deploymentKey) {
-    url.searchParams.set(RATE_DEPLOYMENT_KEY_PARAM, deploymentKey);
-  } else {
-    url.searchParams.delete(RATE_DEPLOYMENT_KEY_PARAM);
-  }
+  url.searchParams.delete(RATE_DEPLOYMENT_KEY_PARAM);
 }
 
 export function buildVoteLocation(currentUrl: string, update: VoteLocationUpdate) {
@@ -97,7 +87,6 @@ export function buildVoteContentPinKeyFromUrl(currentUrl: string) {
 
 export function readVoteLocationScope(searchParams: VoteSearchParamsReader | null | undefined) {
   const chainId = normalizeVoteLocationChainId(searchParams?.get(RATE_CHAIN_ID_PARAM));
-  const deploymentKey = normalizeVoteLocationDeploymentKey(searchParams?.get(RATE_DEPLOYMENT_KEY_PARAM));
-  if (chainId === null && deploymentKey === null) return null;
-  return { chainId, deploymentKey };
+  if (chainId === null) return null;
+  return { chainId, deploymentKey: null };
 }

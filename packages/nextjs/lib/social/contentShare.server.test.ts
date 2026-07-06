@@ -1,6 +1,7 @@
 import { getContentShareDataForParam } from "./contentShare.server";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 test("getContentShareDataForParam preserves Ponder base path prefixes", async () => {
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
@@ -115,7 +116,61 @@ test("getContentShareDataForParam redacts gated private-context content", async 
   }
 });
 
-test("getContentShareDataForParam fails closed when scoped deployment does not match Ponder", async () => {
+test("getContentShareDataForParam ignores explicit deployment keys when current Ponder matches", async () => {
+  const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
+  process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
+  const currentDeploymentKey = resolveProtocolDeploymentScope(8453)?.deploymentKey;
+  assert.ok(currentDeploymentKey);
+
+  const requestedUrls: string[] = [];
+  const fetchImpl: typeof fetch = async input => {
+    const url = input.toString();
+    requestedUrls.push(url);
+
+    if (url === "https://ponder.example/api/deployment") {
+      return new Response(JSON.stringify({ deploymentKey: currentDeploymentKey }));
+    }
+
+    if (url === "https://ponder.example/api/content/88") {
+      return new Response(
+        JSON.stringify({
+          content: {
+            id: "88",
+            title: "A current deployment question",
+            description: "A compact summary for social previews.",
+            rating: 50,
+            ratingBps: 5_000,
+            totalVotes: 1,
+            lastActivityAt: "1776160800",
+            openRound: null,
+          },
+        }),
+      );
+    }
+
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  try {
+    const shareData = await getContentShareDataForParam("88", {
+      chainId: 8453,
+      deploymentKey: "historical-deployment",
+      fetchImpl,
+      origin: "https://www.rateloop.ai",
+    });
+
+    assert.equal(shareData?.contentId, "88");
+    assert.deepEqual(requestedUrls, ["https://ponder.example/api/deployment", "https://ponder.example/api/content/88"]);
+  } finally {
+    if (originalPonderUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_PONDER_URL;
+    } else {
+      process.env.NEXT_PUBLIC_PONDER_URL = originalPonderUrl;
+    }
+  }
+});
+
+test("getContentShareDataForParam fails closed when current chain deployment does not match Ponder", async () => {
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
 
@@ -125,7 +180,7 @@ test("getContentShareDataForParam fails closed when scoped deployment does not m
     requestedUrls.push(url);
 
     if (url === "https://ponder.example/api/deployment") {
-      return new Response(JSON.stringify({ deploymentKey: "current-deployment" }));
+      return new Response(JSON.stringify({ deploymentKey: "historical-deployment" }));
     }
 
     throw new Error(`Unexpected content fetch: ${url}`);
@@ -133,6 +188,7 @@ test("getContentShareDataForParam fails closed when scoped deployment does not m
 
   try {
     const shareData = await getContentShareDataForParam("88", {
+      chainId: 8453,
       deploymentKey: "historical-deployment",
       fetchImpl,
       origin: "https://www.rateloop.ai",

@@ -29,14 +29,14 @@ test("switching feed views clears requested content scope without changing the a
   );
 });
 
-test("selecting content preserves the active category hash", () => {
+test("selecting content preserves the active category hash and omits deployment keys", () => {
   assert.equal(
     buildVoteLocation("https://www.rateloop.ai/rate?q=openlaw#youtube", {
       contentId: 9n,
       chainId: 8453,
       deploymentKey: " 8453:0xabc ",
     }),
-    "https://www.rateloop.ai/rate?q=openlaw&content=9&chainId=8453&deploymentKey=8453%3A0xabc#youtube",
+    "https://www.rateloop.ai/rate?q=openlaw&content=9&chainId=8453#youtube",
   );
 });
 
@@ -96,10 +96,10 @@ test("content pin keys are absent without a content query param", () => {
   assert.equal(buildVoteContentPinKey("/rate", new URLSearchParams("q=openlaw")), null);
 });
 
-test("rate location scope reads valid chain and deployment params", () => {
+test("rate location scope reads valid chain params and ignores deployment keys", () => {
   assert.deepEqual(readVoteLocationScope(new URLSearchParams("content=6&chainId=8453&deploymentKey=8453%3A0xabc")), {
     chainId: 8453,
-    deploymentKey: "8453:0xabc",
+    deploymentKey: null,
   });
   assert.deepEqual(readVoteLocationScope(new URLSearchParams("chainId=8453.5&deploymentKey=%20")), null);
 });

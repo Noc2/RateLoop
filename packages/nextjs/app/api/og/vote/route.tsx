@@ -467,21 +467,19 @@ function EmergencyFallbackImage() {
 export async function GET(request: NextRequest) {
   const contentParam = request.nextUrl.searchParams.get("content");
   const chainIdParam = request.nextUrl.searchParams.get("chainId");
-  const deploymentKeyParam = request.nextUrl.searchParams.get("deploymentKey");
   const routeLimited = await checkRateLimit(request, ROUTE_RATE_LIMIT, {
     routeKey: ROUTE_RATE_LIMIT_KEY,
   });
   if (routeLimited) return routeLimited;
 
   const limited = await checkRateLimit(request, RESOURCE_RATE_LIMIT, {
-    extraKeyParts: [contentParam, chainIdParam ?? undefined, deploymentKeyParam ?? undefined],
+    extraKeyParts: [contentParam, chainIdParam ?? undefined],
     routeKey: RESOURCE_RATE_LIMIT_KEY,
   });
   if (limited) return limited;
 
   const shareData = await getContentShareDataForParam(contentParam, {
     chainId: chainIdParam,
-    deploymentKey: deploymentKeyParam,
     origin: request.nextUrl.origin,
   });
   const requestedRatingVersion = request.nextUrl.searchParams.get(VOTE_SHARE_RATING_VERSION_PARAM);

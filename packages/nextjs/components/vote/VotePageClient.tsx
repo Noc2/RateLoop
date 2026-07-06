@@ -2453,7 +2453,6 @@ const HomeInner = () => {
         <ShareContentModal
           contentId={shareSheetItem.id}
           chainId={shareSheetItem.chainId}
-          deploymentKey={shareSheetItem.deploymentKey}
           title={shareSheetItem.title}
           description={shareSheetItem.description}
           rating={getVisibleContentRating(shareSheetItem)}

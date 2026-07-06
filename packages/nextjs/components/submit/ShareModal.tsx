@@ -13,7 +13,6 @@ import { type ContentShareContentInput, buildContentShareData } from "~~/lib/soc
 interface ShareModalProps {
   contentId: bigint;
   chainId?: number | null;
-  deploymentKey?: string | null;
   title: string;
   description: string;
   rating?: number | null;
@@ -28,7 +27,6 @@ interface ShareModalProps {
 export function ShareModal({
   contentId,
   chainId,
-  deploymentKey,
   title,
   description,
   rating = null,
@@ -59,7 +57,6 @@ export function ShareModal({
       {
         id: contentId.toString(),
         chainId,
-        deploymentKey,
         title,
         description,
         rating,
@@ -76,7 +73,6 @@ export function ShareModal({
   }, [
     chainId,
     contentId,
-    deploymentKey,
     description,
     lastActivityAt,
     openRound,
@@ -141,7 +137,7 @@ export function ShareModal({
         <div className="space-y-2.5">
           {/* View content */}
           <Link
-            href={buildRateContentHref(contentId, { chainId, deploymentKey, waitForContent: true })}
+            href={buildRateContentHref(contentId, { chainId, waitForContent: true })}
             className={getGradientActionClassName("!w-full")}
             data-motion="idle"
           >

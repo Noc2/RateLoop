@@ -87,7 +87,6 @@ import {
   resolveAutoHeadToHeadTitle,
 } from "~~/lib/headToHeadQuestion";
 import { formatHumanDuration } from "~~/lib/humanDuration";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
@@ -2107,10 +2106,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     const contentChainId = submittedContent?.chainId ?? targetNetwork.id;
     return {
       chainId: contentChainId,
-      deploymentKey:
-        submittedContent?.deploymentKey ?? resolveProtocolDeploymentScope(contentChainId)?.deploymentKey ?? null,
     };
-  }, [submittedContent?.chainId, submittedContent?.deploymentKey, targetNetwork.id]);
+  }, [submittedContent?.chainId, targetNetwork.id]);
   const [clientFeedbackBonusRecoveryHashes, setClientFeedbackBonusRecoveryHashes] = useState<string[]>([]);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
   const { data: protocolRoundConfigBounds } = useScaffoldReadContract({
@@ -4299,7 +4296,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         <ShareModal
           contentId={submittedContent.id}
           chainId={submittedContentRateLinkScope.chainId}
-          deploymentKey={submittedContentRateLinkScope.deploymentKey}
           title={submittedContent.title}
           description={submittedContent.description}
           lastActivityAt={submittedContent.lastActivityAt}

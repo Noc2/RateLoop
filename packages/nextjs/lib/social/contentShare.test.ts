@@ -100,7 +100,7 @@ test("buildContentShareData includes the rating in metadata and versioned share 
   assert.equal(imageUrl.searchParams.get("rv"), data.ratingVersion);
 });
 
-test("buildContentShareData carries deployment scope in share urls", () => {
+test("buildContentShareData omits deployment keys from public share urls", () => {
   const data = buildContentShareData(
     {
       ...baseContent,
@@ -113,9 +113,9 @@ test("buildContentShareData carries deployment scope in share urls", () => {
   const imageUrl = new URL(data.imageUrl);
 
   assert.equal(shareUrl.searchParams.get("chainId"), "8453");
-  assert.equal(shareUrl.searchParams.get("deploymentKey"), "8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(shareUrl.searchParams.get("deploymentKey"), null);
   assert.equal(imageUrl.searchParams.get("chainId"), "8453");
-  assert.equal(imageUrl.searchParams.get("deploymentKey"), "8453:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(imageUrl.searchParams.get("deploymentKey"), null);
 });
 
 test("buildContentShareData omits the rating label for unrated content", () => {

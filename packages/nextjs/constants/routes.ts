@@ -50,6 +50,7 @@ export const ASK_SUBMISSIONS_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, {
 interface RateContentHrefOptions {
   waitForContent?: boolean;
   chainId?: number | string | null;
+  // Accepted for older call sites; public rate links always resolve the current deployment.
   deploymentKey?: string | null;
 }
 
@@ -61,16 +62,10 @@ function normalizeRateContentChainId(chainId: RateContentHrefOptions["chainId"])
   return parsedChainId.toString();
 }
 
-function normalizeRateContentDeploymentKey(deploymentKey: RateContentHrefOptions["deploymentKey"]) {
-  const normalizedDeploymentKey = deploymentKey?.trim();
-  return normalizedDeploymentKey ? normalizedDeploymentKey : undefined;
-}
-
 export function buildRateContentHref(contentId: string | number | bigint, options?: RateContentHrefOptions) {
   return buildRouteWithSearchParams(RATE_ROUTE, {
     content: contentId.toString(),
     [RATE_CHAIN_ID_PARAM]: normalizeRateContentChainId(options?.chainId),
-    [RATE_DEPLOYMENT_KEY_PARAM]: normalizeRateContentDeploymentKey(options?.deploymentKey),
     ...(options?.waitForContent ? { [RATE_WAIT_FOR_CONTENT_PARAM]: "1" } : {}),
   });
 }
