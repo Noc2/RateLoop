@@ -203,6 +203,24 @@ describe("agent question linting", () => {
     }
   });
 
+  it("rejects unknown top-level ask fields", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      typoField: true,
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Unknown top-level field: typoField",
+          path: "typoField",
+        }),
+      ]),
+    );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
+  });
+
   it("rejects legacy timing fields in authored asks", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

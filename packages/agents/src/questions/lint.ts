@@ -33,6 +33,7 @@ import {
   findBlockedContentTags,
   getContentTitleValidationError,
 } from "@rateloop/node-utils/submissionValidation";
+import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
 import {
   X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   X402_MAX_QUESTION_BUNDLE_COUNT,
@@ -831,6 +832,12 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
   }
 
   const request = input as Partial<AgentAskExample>;
+  for (const key of Object.keys(input)) {
+    if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
+      pushFinding(findings, "error", key, `Unknown top-level field: ${key}`);
+    }
+  }
+
   const requireChainId = options.requireChainId ?? true;
   const clientRequestId = typeof request.clientRequestId === "string" ? request.clientRequestId.trim() : "";
   if (!clientRequestId) {
