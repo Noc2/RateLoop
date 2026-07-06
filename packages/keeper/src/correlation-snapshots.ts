@@ -1516,6 +1516,23 @@ async function publishCorrelationSnapshotArtifact(
         });
       }
     } else if (status === STATUS.Finalized) {
+      const finalizedClusterRoot = existing.clusterRoot;
+      const artifactClusterRoot = epoch.clusterRoot.toLowerCase();
+      if (
+        finalizedClusterRoot &&
+        finalizedClusterRoot !== artifactClusterRoot
+      ) {
+        logger.warn(
+          "Skipping round payout snapshots because finalized correlation epoch root differs from artifact",
+          {
+            epochId: epochId.toString(),
+            finalizedClusterRoot,
+            artifactClusterRoot: epoch.clusterRoot,
+            artifactHash: epoch.artifactHash,
+          },
+        );
+        continue;
+      }
       coveredEpochIds.add(epochId.toString());
     } else if (status === STATUS.Challenged) {
       logger.debug("Skipping challenged correlation epoch snapshot", {

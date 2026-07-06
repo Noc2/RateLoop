@@ -1154,6 +1154,76 @@ describe("resolveRounds", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  it("treats missing cluster snapshots as expected qualification waits", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      qualifyRoundErrors: {
+        "42:3": "SnapshotNotFound()",
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(0);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "qualifyRound",
+        args: [42n, 3n],
+      }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "advanceQualificationCursor",
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
   it("syncs bounded question bundle terminals returned by Ponder work discovery", async () => {
     mockConfig.keeperWorkDiscovery.enabled = true;
     mockConfig.rewardPoolQualifications.maxBundleSyncsPerTick = 1;

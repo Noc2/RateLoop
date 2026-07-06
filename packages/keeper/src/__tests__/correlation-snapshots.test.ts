@@ -132,6 +132,7 @@ async function loadPublisher(
     frontendRegistry?: `0x${string}` | undefined;
     frontendEligible?: boolean;
     epochStatus?: number;
+    epochClusterRoot?: `0x${string}` | null;
     roundStatus?: number;
   } = {},
 ) {
@@ -177,7 +178,13 @@ async function loadPublisher(
           : "0x0000000000000000000000000000000000000000";
       }
       if (functionName === "correlationEpochSnapshot")
-        return { status: options.epochStatus ?? 0 };
+        return {
+          status: options.epochStatus ?? 0,
+          clusterRoot:
+            options.epochClusterRoot === undefined
+              ? `0x${"1".repeat(64)}`
+              : options.epochClusterRoot,
+        };
       if (functionName === "roundPayoutSnapshotConsumer")
         return SNAPSHOT_CONSUMER;
       if (functionName === "roundPayoutSnapshotSourceReadyAt") return 100n;
@@ -1100,6 +1107,38 @@ describe("correlation snapshot publisher", () => {
     expect(publisher.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "proposeRoundPayoutSnapshot",
+      }),
+    );
+  });
+
+  it("does not propose round snapshots against a finalized epoch with a different root", async () => {
+    const publisher = await loadPublisher({
+      epochStatus: 3,
+      epochClusterRoot: `0x${"9".repeat(64)}`,
+      roundStatus: 0,
+    });
+
+    const result = await publisher.publishConfiguredCorrelationSnapshots(
+      publisher.publicClient as never,
+      publisher.walletClient as never,
+      publisher.chain as never,
+      publisher.account as never,
+      publisher.logger,
+    );
+
+    expect(result.roundSnapshotsProposed).toBe(0);
+    expect(publisher.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "proposeRoundPayoutSnapshot",
+      }),
+    );
+    expect(publisher.logger.warn).toHaveBeenCalledWith(
+      "Skipping round payout snapshots because finalized correlation epoch root differs from artifact",
+      expect.objectContaining({
+        epochId: "1",
+        finalizedClusterRoot: `0x${"9".repeat(64)}`,
+        artifactClusterRoot: `0x${"1".repeat(64)}`,
+        artifactHash: `0x${"3".repeat(64)}`,
       }),
     );
   });
