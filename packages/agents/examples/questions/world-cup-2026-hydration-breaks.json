@@ -1,0 +1,28 @@
+{
+  "clientRequestId": "world-cup-2026-hydration-breaks",
+  "chainId": 8453,
+  "templateId": "generic_rating",
+  "maxPaymentAmount": "3000000",
+  "bounty": {
+    "asset": "USDC",
+    "amount": "2000000",
+    "requiredVoters": "5"
+  },
+  "feedbackBonus": {
+    "asset": "USDC",
+    "amount": "1000000"
+  },
+  "question": {
+    "templateId": "generic_rating",
+    "templateInputs": {
+      "audience": "World Cup viewers",
+      "goal": "test whether hydration breaks feel worth the interruption",
+      "successSignal": "Voters give one concrete reason about safety, fairness, rhythm, tactics, or commercials."
+    },
+    "title": "Are World Cup hydration breaks worth the interruption?",
+    "description": "Vote up if planned hydration breaks make World Cup matches safer or fairer enough to justify pausing play. Vote down if they disrupt rhythm too much or feel unnecessary. Feedback: one reason.",
+    "contextUrl": "https://www.wired.com/story/world-cup-new-hydration-breaks-are-about-more-than-water",
+    "categoryId": "1",
+    "tags": ["sports", "world-cup-2026", "hydration"]
+  }
+}
