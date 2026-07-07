@@ -4147,6 +4147,12 @@ describe("registerCorrelationRoutes", () => {
     );
     expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.consumedAt");
     expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.vetoEndsAt");
+    expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.rawEligibleVoters");
+    expect(roundSnapshotWhere).toContain(
+      "roundPayoutSnapshot.effectiveParticipantUnits",
+    );
+    expect(roundSnapshotWhere).toContain("roundPayoutSnapshot.totalClaimWeight");
+    expect(roundSnapshotWhere).toContain("questionRewardPool.requiredVoters");
     const epochSnapshotWhere = serializeExpression(
       queryBuilders[2]?.where.mock.calls[0]?.[0],
     );
@@ -5778,7 +5784,7 @@ describe("registerKeeperRoutes", () => {
     expect(serializedOrderBy).toContain("feedbackBonusPool.id");
   });
 
-  it("filters skipped reward-pool qualification rounds unless a finalized replacement snapshot exists", async () => {
+  it("filters skipped reward-pool qualification rounds unless a finalized replacement snapshot can qualify", async () => {
     const { queryBuilders } = mockPonderModules([], [[], [], [], [], []]);
     const { registerKeeperRoutes } = await import(
       "../src/api/routes/keeper-routes.js"
@@ -5824,6 +5830,12 @@ describe("registerKeeperRoutes", () => {
       "questionRewardPoolPreQualificationSkip.id",
     );
     expect(serializedWhere).toContain("roundPayoutSnapshot.id");
+    expect(serializedWhere).toContain("roundPayoutSnapshot.rawEligibleVoters");
+    expect(serializedWhere).toContain(
+      "roundPayoutSnapshot.effectiveParticipantUnits",
+    );
+    expect(serializedWhere).toContain("roundPayoutSnapshot.totalClaimWeight");
+    expect(serializedWhere).toContain("questionRewardPool.requiredVoters");
     expect(serializedWhere).toContain("is null");
     expect(serializedWhere).toContain("is not null");
   });

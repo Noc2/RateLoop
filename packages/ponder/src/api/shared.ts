@@ -9,7 +9,12 @@ import {
 import type { Context, Hono } from "hono";
 import { and, desc, eq, inArray, replaceBigInts, sql } from "ponder";
 import { db } from "ponder:api";
-import { feedbackBonusPool, questionRewardPool, round } from "ponder:schema";
+import {
+  feedbackBonusPool,
+  questionRewardPool,
+  round,
+  roundPayoutSnapshot,
+} from "ponder:schema";
 import { isValidAddress, safeBigInt } from "./utils.js";
 
 export type ApiApp = Hono;
@@ -18,6 +23,8 @@ export const DISCOVER_MODULE_LIMIT = 6;
 export const SETTLING_SOON_WINDOW_SECONDS = 24 * 60 * 60;
 export const NOTIFICATION_EMAIL_LOOKBACK_SECONDS = 48 * 60 * 60;
 export const AVATAR_CATEGORY_WINDOW_SECONDS = 90 * 24 * 60 * 60;
+const REWARD_POOL_MIN_EFFECTIVE_PARTICIPANT_UNITS = 3;
+const REWARD_POOL_BPS_SCALE = 10_000;
 
 export function jsonBig(c: Context, data: unknown, status?: number) {
   const payload = replaceBigInts(data, (value: bigint) => String(value));
@@ -29,6 +36,20 @@ export function humanVerifiedCommitQuorumMet(
   minVoters: number | null | undefined,
 ): boolean {
   return humanVerifiedCommitCount >= Math.max(minVoters ?? 0, 3);
+}
+
+export function questionRewardPayoutSnapshotCanQualifyExpression() {
+  return sql<boolean>`(
+    ${roundPayoutSnapshot.rawEligibleVoters} >= ${questionRewardPool.requiredVoters}
+    and ${roundPayoutSnapshot.effectiveParticipantUnits} >= (
+      case
+        when ${questionRewardPool.requiredVoters} > ${REWARD_POOL_MIN_EFFECTIVE_PARTICIPANT_UNITS}
+          then ${questionRewardPool.requiredVoters}
+        else ${REWARD_POOL_MIN_EFFECTIVE_PARTICIPANT_UNITS}
+      end
+    ) * ${REWARD_POOL_BPS_SCALE}
+    and ${roundPayoutSnapshot.totalClaimWeight} > 0
+  )`;
 }
 
 export function parseBigIntList(value: string | undefined, max = 50) {

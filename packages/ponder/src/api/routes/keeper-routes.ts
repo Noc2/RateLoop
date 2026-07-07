@@ -24,6 +24,7 @@ import type { ApiApp } from "../shared.js";
 import {
   jsonBig,
   questionRewardPoolHasValidBountyWindowExpression,
+  questionRewardPayoutSnapshotCanQualifyExpression,
 } from "../shared.js";
 import { parseStrictUnsignedBigInt, safeLimit } from "../utils.js";
 
@@ -320,7 +321,10 @@ export function registerKeeperRoutes(app: ApiApp) {
           sql`${questionRewardPoolRound.id} is null`,
           or(
             sql`${questionRewardPoolPreQualificationSkip.id} is null`,
-            sql`${roundPayoutSnapshot.id} is not null`,
+            and(
+              sql`${roundPayoutSnapshot.id} is not null`,
+              questionRewardPayoutSnapshotCanQualifyExpression(),
+            ),
           ),
           sql`(
             ${questionRewardPool.bountyClosesAt} = 0

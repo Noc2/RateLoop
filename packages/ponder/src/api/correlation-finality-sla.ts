@@ -17,7 +17,10 @@ import {
   round,
   roundPayoutSnapshot,
 } from "ponder:schema";
-import { questionRewardPoolHasValidBountyWindowExpression } from "./shared.js";
+import {
+  questionRewardPoolHasValidBountyWindowExpression,
+  questionRewardPayoutSnapshotCanQualifyExpression,
+} from "./shared.js";
 
 const SNAPSHOT_STATUS = {
   Proposed: 1,
@@ -416,14 +419,31 @@ export async function buildCorrelationFinalitySla(
     db
       .select()
       .from(roundPayoutSnapshot)
+      .leftJoin(
+        questionRewardPool,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_QUESTION_REWARD),
+          eq(questionRewardPool.id, roundPayoutSnapshot.rewardPoolId),
+          eq(questionRewardPool.contentId, roundPayoutSnapshot.contentId),
+        ),
+      )
       .where(
-        or(
-          eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Proposed),
+        and(
+          or(
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Proposed),
+            and(
+              eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Finalized),
+              or(
+                sql`${roundPayoutSnapshot.consumedAt} is null`,
+                sql`${roundPayoutSnapshot.vetoEndsAt} > ${nowSeconds}`,
+              ),
+            ),
+          ),
           and(
-            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS.Finalized),
             or(
-              sql`${roundPayoutSnapshot.consumedAt} is null`,
-              sql`${roundPayoutSnapshot.vetoEndsAt} > ${nowSeconds}`,
+              sql`${roundPayoutSnapshot.domain} != ${PAYOUT_DOMAIN_QUESTION_REWARD}`,
+              sql`${questionRewardPool.id} is null`,
+              questionRewardPayoutSnapshotCanQualifyExpression(),
             ),
           ),
         ),
