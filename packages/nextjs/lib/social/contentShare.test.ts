@@ -70,7 +70,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-second timestamps", ()
       ...baseContent,
       lastActivityAt: "1776160800",
     }),
-    "og5-r-88-6700-12-0-1776160800-none-none",
+    "og6-r-88-6700-12-0-1776160800-none-none",
   );
 });
 
@@ -80,7 +80,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-millisecond timestamps
       ...baseContent,
       lastActivityAt: "1776160800000",
     }),
-    "og5-r-88-6700-12-0-1776160800-none-none",
+    "og6-r-88-6700-12-0-1776160800-none-none",
   );
 });
 
@@ -132,7 +132,7 @@ test("buildContentShareData omits the rating label for unrated content", () => {
   assert.equal(data.rating, null);
   assert.match(data.title, /Rate this on RateLoop/);
   assert.match(data.description, /A compact summary for social previews/);
-  assert.match(data.ratingVersion, /og5-r-88-na-/);
+  assert.match(data.ratingVersion, /og6-r-88-na-/);
   assert.equal(new URL(data.shareUrl).searchParams.get("rv"), data.ratingVersion);
 });
 

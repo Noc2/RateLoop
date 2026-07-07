@@ -4,7 +4,7 @@ import { detectPlatform, getThumbnailUrl } from "~~/utils/platforms";
 
 export const VOTE_SHARE_RATING_VERSION_PARAM = "rv";
 
-const VOTE_SHARE_CARD_VERSION = "og5";
+const VOTE_SHARE_CARD_VERSION = "og6";
 const TITLE_MAX_LENGTH = 96;
 const DESCRIPTION_MAX_LENGTH = 180;
 const ALT_MAX_LENGTH = 180;
