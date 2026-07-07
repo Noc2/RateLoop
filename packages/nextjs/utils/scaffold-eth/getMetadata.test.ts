@@ -164,8 +164,8 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
   });
   assert.equal(metadata.description, "AI Asks, Humans Earn");
   assert.equal(metadata.openGraph?.description, "AI Asks, Humans Earn");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "http://localhost:4321/og-image.jpg");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "http://localhost:4321/twitter-image.jpg");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "http://localhost:4321/og-image.jpg?v=20260707");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "http://localhost:4321/twitter-image.jpg?v=20260707");
   assert.equal(metadata.openGraph?.images?.[0]?.alt, socialImageAlt);
   assert.equal(metadata.twitter?.images?.[0]?.alt, socialImageAlt);
   assert.equal(metadata.icons?.icon?.[0]?.url, "/favicon.png");
@@ -192,8 +192,8 @@ test("getMetadata prefers the production hostname for social metadata", () => {
   );
 
   assert.equal(metadata.metadataBase, "https://rateloop.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/og-image.jpg");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/twitter-image.jpg");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/og-image.jpg?v=20260707");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/twitter-image.jpg?v=20260707");
   assert.deepEqual(metadata.title, {
     default: "RateLoop — AI Asks, Humans Earn",
     template: "%s | RateLoop",
@@ -216,6 +216,6 @@ test("getMetadata uses the preview hostname when production metadata is unavaila
   );
 
   assert.equal(metadata.metadataBase, "https://rateloop-preview.vercel.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/og-image.jpg");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/twitter-image.jpg");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/og-image.jpg?v=20260707");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/twitter-image.jpg?v=20260707");
 });

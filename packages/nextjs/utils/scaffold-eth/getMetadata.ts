@@ -32,13 +32,14 @@ function resolveMetadataBaseUrl() {
 }
 
 const titleTemplate = "%s | RateLoop";
+const socialImageVersion = "20260707";
 const socialImageAlt =
   "RateLoop social image with the RateLoop wordmark, the subtitle Level Up Your Agent, and the orbital loop mark";
 
 export const getMetadata = ({ title, description }: { title: string; description: string }): Metadata => {
   const baseUrl = resolveMetadataBaseUrl();
-  const openGraphImageUrl = `${baseUrl}/og-image.jpg`;
-  const twitterImageUrl = `${baseUrl}/twitter-image.jpg`;
+  const openGraphImageUrl = `${baseUrl}/og-image.jpg?v=${socialImageVersion}`;
+  const twitterImageUrl = `${baseUrl}/twitter-image.jpg?v=${socialImageVersion}`;
 
   return {
     metadataBase: new URL(baseUrl),
