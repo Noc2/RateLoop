@@ -32,13 +32,19 @@ function makeClients(options: {
   estimate?: bigint;
   estimateError?: Error;
   omitEstimate?: boolean;
+  simulateError?: Error;
 }) {
   const estimateContractGas = vi.fn(async () => {
     if (options.estimateError) throw options.estimateError;
     return options.estimate ?? 100_000n;
   });
+  const simulateContract = vi.fn(async () => {
+    if (options.simulateError) throw options.simulateError;
+    return { request: makeRequest() };
+  });
   const publicClient = {
     ...(options.omitEstimate ? {} : { estimateContractGas }),
+    simulateContract,
     waitForTransactionReceipt: vi
       .fn()
       .mockResolvedValue({ status: "success" }),
@@ -46,7 +52,7 @@ function makeClients(options: {
   const walletClient = {
     writeContract: vi.fn().mockResolvedValue("0xhash"),
   };
-  return { publicClient, walletClient, estimateContractGas };
+  return { publicClient, walletClient, estimateContractGas, simulateContract };
 }
 
 describe("writeContractAndConfirm", () => {
@@ -202,7 +208,9 @@ describe("writeContractAndConfirm", () => {
   });
 
   it("throws when the mined transaction reverted on-chain", async () => {
-    const { publicClient, walletClient } = makeClients({ estimate: 100_000n });
+    const { publicClient, walletClient, simulateContract } = makeClients({
+      estimate: 100_000n,
+    });
     publicClient.waitForTransactionReceipt.mockResolvedValue({
       status: "reverted",
     });
@@ -215,6 +223,31 @@ describe("writeContractAndConfirm", () => {
       ),
     ).rejects.toThrow(/reverted on-chain/);
     expect(walletClient.writeContract).toHaveBeenCalledTimes(1);
+    expect(simulateContract).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        gas: expect.anything(),
+      }),
+    );
+  });
+
+  it("recovers a simulation reason after a mined transaction reverted on-chain", async () => {
+    const { publicClient, walletClient, simulateContract } = makeClients({
+      estimate: 100_000n,
+      simulateError: new Error("Too few eligible voters"),
+    });
+    publicClient.waitForTransactionReceipt.mockResolvedValue({
+      status: "reverted",
+    });
+
+    await expect(
+      writeContractAndConfirm(
+        publicClient as never,
+        walletClient as never,
+        makeRequest(),
+      ),
+    ).rejects.toThrow(/Too few eligible voters/);
+    expect(walletClient.writeContract).toHaveBeenCalledTimes(1);
+    expect(simulateContract).toHaveBeenCalledTimes(1);
   });
 
   it("retries transient RPC failures during gas estimation", async () => {

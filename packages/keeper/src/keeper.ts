@@ -2381,7 +2381,8 @@ async function withTransientWriteRetry<T>(
 }
 
 export async function writeContractAndConfirm(
-  publicClient: Pick<PublicClient, "waitForTransactionReceipt">,
+  publicClient: Pick<PublicClient, "waitForTransactionReceipt"> &
+    Partial<Pick<PublicClient, "estimateContractGas" | "simulateContract">>,
   walletClient: WalletClient,
   request: Parameters<WalletClient["writeContract"]>[0],
 ): Promise<`0x${string}`> {
@@ -2451,6 +2452,28 @@ export async function writeContractAndConfirm(
       waitForReceipt.call(publicClient, { hash }),
     );
     if (receipt && receipt.status === "reverted") {
+      const simulateContract = publicClient.simulateContract;
+      if (simulateContract) {
+        const {
+          gas: _gas,
+          gasPrice: _gasPrice,
+          maxFeePerGas: _maxFeePerGas,
+          maxPriorityFeePerGas: _maxPriorityFeePerGas,
+          nonce: _nonce,
+          ...simulationRequest
+        } = request as Parameters<PublicClient["simulateContract"]>[0] & {
+          gas?: bigint;
+          gasPrice?: bigint;
+          maxFeePerGas?: bigint;
+          maxPriorityFeePerGas?: bigint;
+          nonce?: number;
+        };
+        try {
+          await simulateContract.call(publicClient, simulationRequest);
+        } catch (error) {
+          throw error;
+        }
+      }
       throw new Error(`Transaction ${hash} reverted on-chain`);
     }
   }

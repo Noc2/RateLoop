@@ -1,5 +1,14 @@
+import { BaseError, encodeAbiParameters, encodeErrorResult } from "viem";
 import { describe, it, expect } from "vitest";
+import { QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
 import { getRevertReason, isExpectedRevert } from "../revert-utils.js";
+
+function solidityErrorString(reason: string) {
+  return `0x08c379a0${encodeAbiParameters(
+    [{ type: "string" }],
+    [reason],
+  ).slice(2)}` as `0x${string}`;
+}
 
 describe("isExpectedRevert", () => {
   const benign = [
@@ -57,5 +66,32 @@ describe("getRevertReason", () => {
   it("prefers shortMessage over message", () => {
     const err = { shortMessage: "short", message: "long message" };
     expect(getRevertReason(err)).toBe("short");
+  });
+
+  it("extracts standard Solidity Error(string) revert data", () => {
+    const cause = new Error("execution reverted") as Error & {
+      data: `0x${string}`;
+    };
+    cause.data = solidityErrorString("Too few eligible voters");
+    const error = new BaseError("execution reverted", {
+      cause,
+    });
+
+    expect(getRevertReason(error)).toBe("Too few eligible voters");
+  });
+
+  it("decodes QuestionRewardPoolEscrow custom errors", () => {
+    const cause = new Error("execution reverted") as Error & {
+      data: `0x${string}`;
+    };
+    cause.data = encodeErrorResult({
+      abi: QuestionRewardPoolEscrowAbi,
+      errorName: "RewardPoolCursorNeedsAdvance",
+    });
+    const error = new BaseError("execution reverted", {
+      cause,
+    });
+
+    expect(getRevertReason(error)).toBe("RewardPoolCursorNeedsAdvance");
   });
 });
