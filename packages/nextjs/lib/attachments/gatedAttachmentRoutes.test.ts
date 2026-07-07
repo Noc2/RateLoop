@@ -646,6 +646,21 @@ test("public images serve and backfill requested display variants", async () => 
   assert.ok(await readLocalImageAttachment(feedPathname));
 });
 
+test("known recovered public images serve when the attachment record is unavailable", async () => {
+  const recoveredAttachmentId = "att_f9a37077f6dc4fd3a0de652cbd7b2b14";
+  const response = await getImage(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${recoveredAttachmentId}.webp?variant=feed`),
+    { params: Promise.resolve({ attachmentId: `${recoveredAttachmentId}.webp` }) },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/webp");
+  assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assert.equal(response.headers.get("etag"), "83ca5f7ceb37e863c45164ba97e4928ca4d3e7f8be78c0200a01879ceada6fb8");
+  const buffer = Buffer.from(await response.arrayBuffer());
+  assert.equal(createHash("sha256").update(buffer).digest("hex"), response.headers.get("etag"));
+});
+
 test("gated images require accepted wallet sessions and return watermarked no-store bytes", async () => {
   await seedGatedImage();
   const denied = await getImage(

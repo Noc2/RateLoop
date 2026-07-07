@@ -1656,6 +1656,55 @@ test("confirmAgentWalletQuestionSubmissionRequest links gated native x402 attach
   assert.equal(imageResult.rows[0]?.content_id, "123");
 });
 
+test("confirmAgentWalletQuestionSubmissionRequest links stored public image attachments without media logs", async () => {
+  const imageId = "att_x402publicstored1";
+  const imageUrl = `https://www.rateloop.ai/api/attachments/images/${imageId}.webp#sha256=0x${"a".repeat(64)}`;
+  const payload = buildPayloadWithImageUrl("wallet-confirm-public-stored-image", imageUrl);
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"c".repeat(64)}` as const;
+
+  await insertQuestionImageAttachment({
+    agentId: "agent-wallet",
+    id: imageId,
+    ownerWalletAddress: walletAddress,
+    status: "approved",
+  });
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: getExpectedContentHash(record),
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [transactionHash],
+  });
+
+  const imageResult = await dbClient.execute({
+    sql: "SELECT content_id FROM question_image_attachments WHERE id = ?",
+    args: [imageId],
+  });
+  assert.equal(imageResult.rows[0]?.content_id, "123");
+});
+
 test("confirmAgentWalletQuestionSubmissionRequest keeps image submissions retryable when media validator lookup fails", async () => {
   const imageId = "att_x402retryimage01";
   const imageUrl = `https://www.rateloop.ai/api/attachments/images/${imageId}.webp#sha256=0x${"a".repeat(64)}`;

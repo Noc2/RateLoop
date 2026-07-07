@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { get } from "@vercel/blob";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import {
   checkGatedAttachmentResourceRateLimit,
   checkGatedAttachmentRouteRateLimit,
 } from "~~/lib/attachments/gatedAttachmentRateLimit";
-import { parseImageAttachmentVariant } from "~~/lib/attachments/imageAttachmentVariants";
+import { type ImageAttachmentVariant, parseImageAttachmentVariant } from "~~/lib/attachments/imageAttachmentVariants";
 import {
   backfillImageAttachmentVariant,
   getImageAttachment,
@@ -52,6 +55,33 @@ const UNLINKED_PUBLIC_IMAGE_HEADERS = {
   "X-Robots-Tag": "noindex, noimageindex",
 };
 const PUBLIC_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const RECOVERED_PUBLIC_IMAGE_ATTACHMENTS = {
+  att_f9a37077f6dc4fd3a0de652cbd7b2b14: {
+    sha256: "9005fc7b3ced99ccb38c35133697d3ccce97515bdc7761245711a8d0e3692411",
+    variants: {
+      full: {
+        etag: "9005fc7b3ced99ccb38c35133697d3ccce97515bdc7761245711a8d0e3692411",
+        pathname: "recovered-attachments/att_f9a37077f6dc4fd3a0de652cbd7b2b14/image.webp",
+      },
+      feed: {
+        etag: "83ca5f7ceb37e863c45164ba97e4928ca4d3e7f8be78c0200a01879ceada6fb8",
+        pathname: "recovered-attachments/att_f9a37077f6dc4fd3a0de652cbd7b2b14/image-feed.webp",
+      },
+      preview: {
+        etag: "8b0cce6e9eb3e8315c42186f6aeaa1652e2cf9ff0c2b849910bf13ccd526b959",
+        pathname: "recovered-attachments/att_f9a37077f6dc4fd3a0de652cbd7b2b14/image-preview.webp",
+      },
+    },
+  },
+} as const satisfies Record<
+  string,
+  {
+    sha256: string;
+    variants: Record<ImageAttachmentVariant, { etag: string; pathname: string }>;
+  }
+>;
+
+type PublicImageAttachment = Awaited<ReturnType<typeof getImageAttachment>>;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ attachmentId: string }> }) {
   const { attachmentId: image } = await params;
@@ -65,6 +95,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const attachment = await getImageAttachment(attachmentId);
   if (!attachment || attachment.status !== "approved" || !attachment.normalizedBlobPathname) {
+    const recovered = await recoveredPublicImageAttachmentResponse({
+      attachment,
+      attachmentId,
+      request,
+      requestedVariantParam: request.nextUrl.searchParams.get("variant"),
+    });
+    if (recovered) return recovered;
     return new NextResponse("Not found", { status: 404 });
   }
   const requestedVariant = parseImageAttachmentVariant(request.nextUrl.searchParams.get("variant"));
@@ -141,6 +178,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     result ??= await readLocalImageAttachment(attachment.normalizedBlobPathname);
     if (!result) {
+      const recovered = await recoveredPublicImageAttachmentResponse({
+        attachment,
+        attachmentId,
+        request,
+        requestedVariant,
+      });
+      if (recovered) return recovered;
       return new NextResponse("Not found", { status: 404 });
     }
 
@@ -228,6 +272,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
   }
   if (result.statusCode !== 200 || !result.stream) {
+    const recovered = await recoveredPublicImageAttachmentResponse({
+      attachment,
+      attachmentId,
+      request,
+      requestedVariant,
+    });
+    if (recovered) return recovered;
     return new NextResponse("Not found", { status: 404 });
   }
 
@@ -273,6 +324,75 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     headers: {
       ...publicImageHeaders,
       ETag: result.blob.etag,
+    },
+  });
+}
+
+async function readRecoveredPublicImageAttachmentFile(relativePathname: string, expectedSha256: string) {
+  const candidates = [
+    path.join(process.cwd(), "public", relativePathname),
+    path.join(process.cwd(), "packages", "nextjs", "public", relativePathname),
+  ];
+
+  for (const candidate of candidates) {
+    let buffer: Buffer;
+    try {
+      buffer = await readFile(candidate);
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+
+    const actualSha256 = createHash("sha256").update(buffer).digest("hex");
+    if (actualSha256 !== expectedSha256) {
+      throw new Error("Recovered image attachment digest mismatch.");
+    }
+    return buffer;
+  }
+
+  return null;
+}
+
+async function recoveredPublicImageAttachmentResponse(params: {
+  attachment: PublicImageAttachment;
+  attachmentId: string;
+  request: NextRequest;
+  requestedVariant?: ImageAttachmentVariant;
+  requestedVariantParam?: string | null;
+}) {
+  const recovered =
+    RECOVERED_PUBLIC_IMAGE_ATTACHMENTS[params.attachmentId as keyof typeof RECOVERED_PUBLIC_IMAGE_ATTACHMENTS];
+  if (!recovered) return null;
+  if (params.attachment?.requiresGatedAccess) return null;
+  if (params.attachment?.sha256 && params.attachment.sha256.trim().toLowerCase() !== recovered.sha256) return null;
+
+  const requestedVariant = params.requestedVariant ?? parseImageAttachmentVariant(params.requestedVariantParam ?? null);
+  if (!requestedVariant) {
+    return new NextResponse("Invalid image variant", { status: 400 });
+  }
+
+  const variant = recovered.variants[requestedVariant];
+  if (params.request.headers.get("if-none-match") === variant.etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: {
+        ETag: variant.etag,
+        "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
+      },
+    });
+  }
+
+  const buffer = await readRecoveredPublicImageAttachmentFile(variant.pathname, variant.etag);
+  if (!buffer) return null;
+
+  return new NextResponse(buffer, {
+    headers: {
+      "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
+      "Content-Type": "image/webp",
+      ETag: variant.etag,
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

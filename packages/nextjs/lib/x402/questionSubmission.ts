@@ -2674,7 +2674,6 @@ async function attachStoredQuestionAttachments(params: {
   if (attachments.length === 0) return;
 
   for (const [index, attachment] of attachments.entries()) {
-    if (!attachment.gated) continue;
     const contentId = params.contentIds[index];
     if (contentId === undefined) continue;
     const contentIdString = contentId.toString();
