@@ -11,6 +11,7 @@ function matchesMiddleware(pathname: string): boolean {
 
 test("middleware skips social card image endpoints", () => {
   assert.equal(matchesMiddleware("/api/og/vote"), false);
+  assert.equal(matchesMiddleware("/og/vote"), false);
   assert.equal(matchesMiddleware("/og-image.jpg"), false);
   assert.equal(matchesMiddleware("/twitter-image.jpg"), false);
   assert.equal(matchesMiddleware("/rate"), true);
