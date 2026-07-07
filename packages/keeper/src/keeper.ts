@@ -2127,6 +2127,7 @@ async function _rewardPoolQualificationSourceReady(
         address: escrow,
         abi: QuestionRewardPoolEscrowAbi,
         functionName: "roundPayoutSnapshotSourceReadyAt",
+        account: config.contracts.clusterPayoutOracle,
         args: [
           PAYOUT_DOMAIN_QUESTION_REWARD,
           candidate.rewardPoolId,

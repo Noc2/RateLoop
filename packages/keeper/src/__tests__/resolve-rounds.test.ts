@@ -11,6 +11,8 @@ const ADVISORY_COMMIT_KEY =
   "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" as const;
 const QUESTION_REWARD_POOL_ESCROW =
   "0x6666666666666666666666666666666666666666" as const;
+const CLUSTER_PAYOUT_ORACLE =
+  "0x9999999999999999999999999999999999999999" as const;
 const FEEDBACK_BONUS_ESCROW =
   "0x7777777777777777777777777777777777777777" as const;
 const FEEDBACK_REGISTRY =
@@ -34,6 +36,7 @@ const {
       contentRegistry: "0x2222222222222222222222222222222222222222",
       feedbackRegistry: "0x8888888888888888888888888888888888888888",
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
+      clusterPayoutOracle: "0x9999999999999999999999999999999999999999",
       feedbackBonusEscrow: "0x7777777777777777777777777777777777777777",
     },
     ponderBaseUrl: "https://ponder.example.test",
@@ -427,9 +430,11 @@ function makeHarness(options: {
       async ({
         functionName,
         args = [],
+        account,
       }: {
         functionName: string;
         args?: readonly unknown[];
+        account?: `0x${string}`;
       }) => {
         switch (functionName) {
           case "nextContentId":
@@ -484,6 +489,7 @@ function makeHarness(options: {
             );
           case "roundPayoutSnapshotSourceReadyAt": {
             const key = `${String(args[1])}:${String(args[2])}:${String(args[3])}`;
+            if (account !== CLUSTER_PAYOUT_ORACLE) return 0n;
             return rewardPoolQualificationSourceReadyAt[key] ?? 1n;
           }
           case "contents": {
