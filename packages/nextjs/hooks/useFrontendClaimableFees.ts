@@ -29,6 +29,18 @@ interface FrontendClaimableFeePage {
 
 const PAGE_SIZE = 10;
 
+function isFrontendClaimableFeePage(value: unknown): value is FrontendClaimableFeePage {
+  if (!value || typeof value !== "object") return false;
+  const page = value as Partial<FrontendClaimableFeePage>;
+  return (
+    Array.isArray(page.items) &&
+    typeof page.hasMore === "boolean" &&
+    typeof page.nextOffset === "number" &&
+    typeof page.scannedRounds === "number" &&
+    typeof page.totalRounds === "number"
+  );
+}
+
 export async function fetchClaimableFrontendFeePage(
   frontend: `0x${string}`,
   chainId: number,
@@ -38,13 +50,22 @@ export async function fetchClaimableFrontendFeePage(
   const response = await fetch(
     `/api/frontend/claimable-fees?frontend=${frontend}&chainId=${chainId}&limit=${limit}&offset=${offset}`,
   );
+  const body = (await response.json().catch(() => null)) as unknown;
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error || "Failed to fetch claimable frontend fees");
+    if (isFrontendClaimableFeePage(body) && body.degraded === true) {
+      return body;
+    }
+
+    const errorBody = body as { error?: string } | null;
+    throw new Error(errorBody?.error || "Failed to fetch claimable frontend fees");
   }
 
-  return (await response.json()) as FrontendClaimableFeePage;
+  if (!isFrontendClaimableFeePage(body)) {
+    throw new Error("Invalid claimable frontend fees response");
+  }
+
+  return body;
 }
 
 export function useFrontendClaimableFees(frontend?: `0x${string}`, chainId?: number) {
