@@ -119,15 +119,21 @@ export async function getContentShareDataForParam(
 
     const content = await fetchContentForShare(ponderUrl, contentId, fetchImpl);
     if (!content) return null;
-    const confidentiality = await getQuestionConfidentiality(content.id, {
+    const scopedContent: ContentShareContentInput = {
+      ...content,
       chainId: content.chainId ?? normalizeShareChainId(options.chainId),
       contentRegistryAddress: content.contentRegistryAddress ?? options.contentRegistryAddress,
       deploymentKey: content.deploymentKey ?? expectedDeploymentKey,
+    };
+    const confidentiality = await getQuestionConfidentiality(scopedContent.id, {
+      chainId: scopedContent.chainId,
+      contentRegistryAddress: scopedContent.contentRegistryAddress,
+      deploymentKey: scopedContent.deploymentKey,
     }).catch(() => null);
     const shareContent =
-      isPonderContentGated(content) || isConfidentialityCurrentlyGated(confidentiality)
-        ? redactGatedShareContent(content)
-        : content;
+      isPonderContentGated(scopedContent) || isConfidentialityCurrentlyGated(confidentiality)
+        ? redactGatedShareContent(scopedContent)
+        : scopedContent;
     return buildContentShareData(shareContent, options.origin ?? getContentShareOrigin());
   } catch {
     return null;
