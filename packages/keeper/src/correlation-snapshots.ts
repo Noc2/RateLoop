@@ -26,6 +26,7 @@ import {
 } from "./correlation-artifact-builder.js";
 import { areCorrelationCandidatesPonderFresh } from "./correlation-ponder-freshness.js";
 import {
+  readCachedCorrelationArtifact,
   runWithCorrelationSnapshotPublishLock,
   writeCachedCorrelationArtifact,
 } from "./keeper-state.js";
@@ -1190,8 +1191,17 @@ async function publishAutomaticCorrelationSnapshots(
     account,
     logger,
   );
+  const fingerprint = correlationSnapshotCandidateFingerprint(candidates);
   if (!preflight.needsArtifactBuild) {
-    return preflight.result;
+    return applyCachedAutomaticCorrelationSnapshotConsumers(
+      fingerprint,
+      publicClient,
+      walletClient,
+      chain,
+      account,
+      logger,
+      preflight.result,
+    );
   }
 
   if (!(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger, {
@@ -1200,7 +1210,6 @@ async function publishAutomaticCorrelationSnapshots(
     return preflight.result;
   }
 
-  const fingerprint = correlationSnapshotCandidateFingerprint(candidates);
   if (preflight.hasRejectedRoundSnapshots) {
     logger.debug(
       "Rebuilding automatic correlation snapshot artifact after rejected round payout snapshot",
@@ -1243,6 +1252,56 @@ async function publishAutomaticCorrelationSnapshots(
       rejectedEpochIds: preflight.rejectedEpochIds,
     },
   );
+}
+
+async function applyCachedAutomaticCorrelationSnapshotConsumers(
+  fingerprint: `0x${string}`,
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  initialResult: CorrelationSnapshotPublisherResult,
+): Promise<CorrelationSnapshotPublisherResult> {
+  const cached = await readCachedCorrelationArtifact(fingerprint, logger);
+  if (!cached) {
+    return initialResult;
+  }
+
+  const restored =
+    await restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
+      cached.canonicalJson,
+    );
+  if (!restored || restored.artifactHash !== cached.artifactHash) {
+    logger.warn(
+      "Skipping cached automatic correlation artifact consumer replay because cache restore failed",
+      {
+        artifactHash: cached.artifactHash,
+        fingerprint,
+      },
+    );
+    return initialResult;
+  }
+
+  const result = { ...initialResult };
+  result.ratingSnapshotsApplied += await applyFinalizedRatingSnapshotsFromArtifact(
+    restored.artifact,
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+  );
+  result.rbtsSettlementSnapshotsApplied +=
+    await applyFinalizedRbtsSettlementSnapshotsFromArtifact(
+      restored.artifact,
+      publicClient,
+      walletClient,
+      chain,
+      account,
+      logger,
+    );
+  return result;
 }
 
 async function preflightAutomaticCorrelationSnapshots(

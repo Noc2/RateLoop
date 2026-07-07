@@ -24,6 +24,11 @@ interface CachedCorrelationArtifactWrite {
   logger: Logger;
 }
 
+interface CachedCorrelationArtifactRead {
+  artifactHash: `0x${string}`;
+  canonicalJson: string;
+}
+
 interface PendingCacheWrite {
   params: CachedCorrelationArtifactWrite;
   failedAttempts: number;
@@ -453,6 +458,42 @@ export async function writeCachedCorrelationArtifact(params: {
     clearPendingCacheWrite(params);
   } catch (error) {
     rememberFailedCacheWrite(params, error);
+  }
+}
+
+export async function readCachedCorrelationArtifact(
+  fingerprint: `0x${string}`,
+  logger: Logger,
+): Promise<CachedCorrelationArtifactRead | null> {
+  let activePool: pg.Pool | null = null;
+  try {
+    activePool = await ensureSchema(logger);
+  } catch {
+    return null;
+  }
+  if (!activePool) {
+    return null;
+  }
+
+  try {
+    const result = await activePool.query<CachedCorrelationArtifactRead>(
+      `
+        select artifact_hash as "artifactHash", canonical_json as "canonicalJson"
+        from keeper_correlation_artifacts
+        where fingerprint = $1
+        limit 1
+      `,
+      [fingerprint],
+    );
+    return result.rows[0] ?? null;
+  } catch (error) {
+    warnPersistenceOnce(
+      logger,
+      "artifact-cache-read",
+      "Keeper persistence artifact cache read failed",
+      error,
+    );
+    return null;
   }
 }
 

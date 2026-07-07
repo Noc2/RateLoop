@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { PAYOUT_DOMAIN_PUBLIC_RATING } from "@rateloop/node-utils/correlationScoring";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;
@@ -890,6 +891,176 @@ describe("correlation snapshot publisher", () => {
     expect(logger.warn).not.toHaveBeenCalledWith(
       "Skipping round payout snapshots because finalized correlation epoch root differs from artifact",
       expect.anything(),
+    );
+  });
+
+  it("applies finalized rating snapshots from cached automatic artifacts when no rebuild is needed", async () => {
+    vi.resetModules();
+    vi.doMock("../config.js", () => ({
+      config: {
+        contracts: {
+          clusterPayoutOracle: ORACLE,
+          contentRegistry: CONTENT_REGISTRY,
+          votingEngine: VOTING_ENGINE,
+        },
+        correlationSnapshots: {
+          enabled: true,
+          mode: "auto",
+          artifactPath: undefined,
+          frontendRegistry: FRONTEND_REGISTRY,
+          maxRoundsPerTick: 20,
+          artifactStorage: {
+            mode: "data-uri",
+            outputDir: "correlation-artifacts",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
+          },
+        },
+      },
+    }));
+
+    const fingerprint = `0x${"b".repeat(64)}` as const;
+    const publicArtifact = {
+      roundPayoutSnapshots: [
+        {
+          domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+          rewardPoolId: "0",
+          contentId: "9",
+          roundId: "1",
+          payoutWeights: [],
+        },
+      ],
+    };
+    const canonicalJson = JSON.stringify(publicArtifact);
+    const artifactHash = canonicalJsonHash(publicArtifact);
+    const artifactURI = `data:application/json;base64,${Buffer.from(
+      canonicalJson,
+    ).toString("base64")}`;
+    const restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson = vi
+      .fn()
+      .mockResolvedValue({
+        artifact: {
+          correlationEpochs: [],
+          roundPayoutSnapshots: [
+            {
+              domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+              rewardPoolId: "0",
+              contentId: "9",
+              roundId: "1",
+              correlationEpochId: "2",
+              rawEligibleVoters: 5,
+              effectiveParticipantUnits: 50_000,
+              totalClaimWeight: "100",
+              weightRoot: `0x${"4".repeat(64)}`,
+              reasonRoot: `0x${"5".repeat(64)}`,
+              artifactHash,
+              artifactURI,
+            },
+          ],
+        },
+        artifactHash,
+        artifactURI,
+        canonicalJson,
+        canonicalBytes: Buffer.byteLength(canonicalJson),
+        candidateCount: 1,
+        roundSnapshotCount: 1,
+        epochCount: 0,
+      });
+    const buildConfiguredCorrelationSnapshotArtifactForCandidates = vi.fn();
+    vi.doMock("../correlation-artifact-builder.js", () => ({
+      loadConfiguredCorrelationSnapshotCandidates: vi.fn().mockResolvedValue([
+        {
+          domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+          rewardPoolId: 0n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ]),
+      correlationSnapshotCandidateFingerprint: vi.fn(() => fingerprint),
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson,
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    }));
+
+    const readCachedCorrelationArtifact = vi.fn().mockResolvedValue({
+      artifactHash,
+      canonicalJson,
+    });
+    vi.doMock("../keeper-state.js", () => ({
+      runWithCorrelationSnapshotPublishLock: vi.fn((_logger, _fallback, run) =>
+        run(),
+      ),
+      readCachedCorrelationArtifact,
+      writeCachedCorrelationArtifact: vi.fn(),
+    }));
+
+    const readContract = vi.fn(
+      async ({
+        args,
+        functionName,
+      }: {
+        args?: readonly unknown[];
+        functionName: string;
+      }) => {
+        if (functionName === "correlationEpochSnapshot") {
+          return {
+            status: 3,
+            clusterRoot:
+              args?.[0] === 2n ? `0x${"1".repeat(64)}` : `0x${"9".repeat(64)}`,
+          };
+        }
+        if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+        if (functionName === "getRoundPayoutSnapshot")
+          return { status: 3, correlationEpochId: 2n, finalizedAt: 100n };
+        if (functionName === "isRoundPayoutSnapshotOutsideVetoWindow")
+          return true;
+        if (functionName === "roundLifecycleState")
+          return { cleanupRemaining: 0n };
+        if (functionName === "isRoundPayoutSnapshotConsumed") return false;
+        throw new Error(`unexpected readContract(${functionName})`);
+      },
+    );
+    const writeContract = vi.fn().mockResolvedValue("0xhash");
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const { publishConfiguredCorrelationSnapshots } = await import(
+      "../correlation-snapshots.js"
+    );
+
+    const result = await publishConfiguredCorrelationSnapshots(
+      {
+        readContract,
+        getBlock: vi.fn().mockResolvedValue({ timestamp: 200n }),
+        waitForTransactionReceipt: vi.fn().mockResolvedValue({
+          status: "success",
+        }),
+      } as never,
+      { writeContract } as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger,
+    );
+
+    expect(result.ratingSnapshotsApplied).toBe(1);
+    expect(result.roundSnapshotsProposed).toBe(0);
+    expect(
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    ).not.toHaveBeenCalled();
+    expect(readCachedCorrelationArtifact).toHaveBeenCalledWith(
+      fingerprint,
+      logger,
+    );
+    expect(
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson,
+    ).toHaveBeenCalledWith(canonicalJson);
+    expect(writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "applyRatingPayoutSnapshot",
+        args: [9n, 1n, [], []],
+      }),
     );
   });
 
