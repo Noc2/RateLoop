@@ -31,6 +31,7 @@ These examples keep one loop stable across runtimes:
 - `questions/codex-vs-claude-head-to-head.json`: A/B pick-one comparison with `head_to_head_ab` (Up = A, Down = B)
 - `questions/world-cup-2026-48-teams.json`: public sports-format debate with external details and public context
 - `questions/world-cup-2026-48-vs-32-format.json`: A/B comparison of the 2026 World Cup 48-team format against the prior 32-team format
+- `questions/world-cup-2026-hydration-breaks.json`: public sports-safety ask about hydration breaks during the 2026 World Cup
 - `mockups/`: generated-image assets used by visual-context handoff examples
 - `generic-public-mcp.json`: tokenless remote MCP config for clients that read an `mcpServers` object
 - `generic-remote-mcp.json`: managed remote MCP config for clients that read an `mcpServers` object

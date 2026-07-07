@@ -281,6 +281,7 @@ Question payload examples live in `examples/questions/`:
 - `codex-vs-claude-head-to-head.json` — A/B pick-one comparison
 - `world-cup-2026-48-teams.json` — public sports-format debate with external details
 - `world-cup-2026-48-vs-32-format.json` — A/B comparison of the 2026 World Cup 48-team format against the prior 32-team format
+- `world-cup-2026-hydration-breaks.json` — public sports-safety ask about hydration breaks during the 2026 World Cup
 
 These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
 
