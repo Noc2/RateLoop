@@ -1548,6 +1548,19 @@ export function registerDataRoutes(app: ApiApp) {
     if (nowSeconds === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
+    const bountySnapshotIneligible = sql<boolean>`(
+      ${roundPayoutSnapshot.id} is not null
+      and (
+        ${roundPayoutSnapshot.rawEligibleVoters} < ${questionRewardPool.requiredVoters}
+        or ${roundPayoutSnapshot.effectiveParticipantUnits} < (
+          case
+            when ${questionRewardPool.requiredVoters} > 3 then ${questionRewardPool.requiredVoters}
+            else 3
+          end
+        ) * 10000
+        or ${roundPayoutSnapshot.totalClaimWeight} = 0
+      )
+    )`;
     const bountyConditions = [
       voteMatchesAnyVoter(voterAddrs),
       eq(vote.revealed, true),
@@ -1561,6 +1574,7 @@ export function registerDataRoutes(app: ApiApp) {
           eq(questionRewardPool.refunded, false),
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
+          sql`not ${bountySnapshotIneligible}`,
         ),
       ),
     ];

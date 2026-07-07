@@ -538,12 +538,16 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       consumedAt: "roundPayoutSnapshot.consumedAt",
       contentId: "roundPayoutSnapshot.contentId",
       domain: "roundPayoutSnapshot.domain",
+      effectiveParticipantUnits:
+        "roundPayoutSnapshot.effectiveParticipantUnits",
       finalizedAt: "roundPayoutSnapshot.finalizedAt",
       id: "roundPayoutSnapshot.id",
       proposedAt: "roundPayoutSnapshot.proposedAt",
+      rawEligibleVoters: "roundPayoutSnapshot.rawEligibleVoters",
       rewardPoolId: "roundPayoutSnapshot.rewardPoolId",
       roundId: "roundPayoutSnapshot.roundId",
       status: "roundPayoutSnapshot.status",
+      totalClaimWeight: "roundPayoutSnapshot.totalClaimWeight",
       updatedAt: "roundPayoutSnapshot.updatedAt",
       vetoEndsAt: "roundPayoutSnapshot.vetoEndsAt",
       weightRoot: "roundPayoutSnapshot.weightRoot",
@@ -3742,6 +3746,12 @@ describe("registerDataRoutes", () => {
     );
     expect(whereExpressions[0]).toContain("vote.revealed");
     expect(whereExpressions[0]).toContain("questionRewardPoolClaim.id");
+    expect(whereExpressions[0]).toContain("roundPayoutSnapshot.rawEligibleVoters");
+    expect(whereExpressions[0]).toContain(
+      "roundPayoutSnapshot.effectiveParticipantUnits",
+    );
+    expect(whereExpressions[0]).toContain("roundPayoutSnapshot.totalClaimWeight");
+    expect(whereExpressions[0]).toContain("questionRewardPool.requiredVoters");
     expect(whereExpressions[1]).toContain("contentFeedback.author");
     expect(whereExpressions[1]).toContain("feedbackBonusPool.awardDeadline");
     expect(queryBuilder.groupBy).toHaveBeenCalledWith("vote.contentId");

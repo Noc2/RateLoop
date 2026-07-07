@@ -2029,6 +2029,26 @@ async function _advanceRewardPoolQualificationCursor(
     "keeper_reward_pool_qualification_cursor_advance_attempts_total",
   );
   try {
+    const simulation = await publicClient.simulateContract({
+      chain,
+      account,
+      address: escrow,
+      abi: QuestionRewardPoolEscrowAbi,
+      functionName: "advanceQualificationCursor",
+      args: [candidate.rewardPoolId, 1n],
+    });
+    const [skipped] = simulation.result as readonly [bigint, bigint];
+    if (skipped === 0n) {
+      logger.debug("Skipped reward pool qualification cursor advance", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        triggerError: triggerReason,
+        reason: "no rounds advanced",
+      });
+      return;
+    }
+
     await writeContractAndConfirm(publicClient, walletClient, {
       chain,
       account,

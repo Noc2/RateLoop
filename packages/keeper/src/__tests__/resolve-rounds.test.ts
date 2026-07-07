@@ -357,6 +357,7 @@ function makeHarness(options: {
   rewardPoolQualificationSourceReadyAt?: Record<string, bigint>;
   settleRoundResultState?: RoundStateValue;
   estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
+  advanceQualificationCursorResult?: readonly [bigint, bigint];
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -426,6 +427,32 @@ function makeHarness(options: {
     ...(options.estimateContractGas
       ? { estimateContractGas: vi.fn(options.estimateContractGas) }
       : {}),
+    simulateContract: vi.fn(
+      async ({
+        functionName,
+        args = [],
+      }: {
+        functionName: string;
+        args?: readonly unknown[];
+      }) => {
+        if (functionName === "advanceQualificationCursor") {
+          return {
+            result: options.advanceQualificationCursorResult ?? [1n, 0n],
+            request: {
+              functionName,
+              args,
+            },
+          };
+        }
+        return {
+          result: undefined,
+          request: {
+            functionName,
+            args,
+          },
+        };
+      },
+    ),
     readContract: vi.fn(
       async ({
         functionName,
@@ -1163,6 +1190,76 @@ describe("resolveRounds", () => {
     expect(rewardPoolWrites).toEqual([
       { functionName: "advanceQualificationCursor", args: [42n, 1n] },
     ]);
+  });
+
+  it("does not broadcast cursor advances when simulation says no rounds advance", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      advanceQualificationCursorResult: [0n, 4n],
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              requiredVoters: "3",
+              snapshotRawEligibleVoters: "3",
+              snapshotEffectiveParticipantUnits: "22500",
+              snapshotTotalClaimWeight: "22500",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(0);
+    expect(publicClient.simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "advanceQualificationCursor",
+        args: [42n, 1n],
+      }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "advanceQualificationCursor",
+      }),
+    );
   });
 
   it("does not advance reward pool cursor before the bounty window opens", async () => {
