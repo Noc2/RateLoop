@@ -618,6 +618,331 @@ describe("correlation snapshot publisher", () => {
     );
   });
 
+  it("builds automatic artifacts under a fresh epoch when the default epoch is finalized", async () => {
+    vi.resetModules();
+    vi.doMock("../config.js", () => ({
+      config: {
+        contracts: {
+          clusterPayoutOracle: ORACLE,
+        },
+        correlationSnapshots: {
+          enabled: true,
+          mode: "auto",
+          artifactPath: undefined,
+          frontendRegistry: FRONTEND_REGISTRY,
+          maxRoundsPerTick: 20,
+          artifactStorage: {
+            mode: "data-uri",
+            outputDir: "correlation-artifacts",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
+          },
+        },
+      },
+    }));
+
+    const fingerprint = `0x${"d".repeat(64)}` as const;
+    const buildConfiguredCorrelationSnapshotArtifactForCandidates = vi
+      .fn()
+      .mockResolvedValue({
+        artifact: {
+          correlationEpochs: [
+            {
+              epochId: "2",
+              fromRoundId: "1",
+              toRoundId: "1",
+              clusterRoot: `0x${"1".repeat(64)}`,
+              parameterHash: `0x${"2".repeat(64)}`,
+              artifactHash: `0x${"3".repeat(64)}`,
+              artifactURI: "ipfs://fresh-epoch",
+            },
+          ],
+          roundPayoutSnapshots: [
+            {
+              domain: 1,
+              rewardPoolId: "7",
+              contentId: "9",
+              roundId: "1",
+              correlationEpochId: "2",
+              rawEligibleVoters: 5,
+              effectiveParticipantUnits: 50_000,
+              totalClaimWeight: "100",
+              weightRoot: `0x${"4".repeat(64)}`,
+              reasonRoot: `0x${"5".repeat(64)}`,
+              artifactHash: `0x${"3".repeat(64)}`,
+              artifactURI: "ipfs://fresh-round",
+            },
+          ],
+        },
+        artifactHash: `0x${"6".repeat(64)}`,
+        canonicalJson: "{\"freshEpoch\":true}",
+        canonicalBytes: 19,
+        candidateCount: 1,
+        roundSnapshotCount: 1,
+        epochCount: 1,
+      });
+    vi.doMock("../correlation-artifact-builder.js", () => ({
+      loadConfiguredCorrelationSnapshotCandidates: vi.fn().mockResolvedValue([
+        {
+          domain: 1,
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ]),
+      correlationSnapshotCandidateFingerprint: vi.fn(() => fingerprint),
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: mockRestoreFromCanonical,
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    }));
+
+    const writeCachedCorrelationArtifact = vi.fn();
+    vi.doMock("../keeper-state.js", () => ({
+      runWithCorrelationSnapshotPublishLock: vi.fn((_logger, _fallback, run) =>
+        run(),
+      ),
+      readCachedCorrelationArtifact: vi.fn(),
+      writeCachedCorrelationArtifact,
+    }));
+
+    const readContract = vi.fn(
+      async ({
+        args,
+        functionName,
+      }: {
+        args?: readonly unknown[];
+        functionName: string;
+      }) => {
+        if (functionName === "correlationEpochSnapshot") {
+          return { status: args?.[0] === 1n ? 3 : 0 };
+        }
+        if (functionName === "authorizedSnapshotFrontend") {
+          return "0x9999999999999999999999999999999999999999";
+        }
+        if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+        if (functionName === "roundPayoutSnapshotConsumer")
+          return SNAPSHOT_CONSUMER;
+        if (functionName === "roundPayoutSnapshotSourceReadyAt") return 100n;
+        if (functionName === "getRoundPayoutSnapshot")
+          throw new Error("SnapshotNotFound");
+        throw new Error(`unexpected readContract(${functionName})`);
+      },
+    );
+    const getBlock = vi.fn().mockResolvedValue({ timestamp: 200n });
+    const writeContract = vi.fn().mockResolvedValue("0xhash");
+    const waitForTransactionReceipt = vi.fn().mockResolvedValue({
+      status: "success",
+    });
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const { publishConfiguredCorrelationSnapshots } = await import(
+      "../correlation-snapshots.js"
+    );
+
+    const result = await publishConfiguredCorrelationSnapshots(
+      { readContract, getBlock, waitForTransactionReceipt } as never,
+      { writeContract } as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger,
+    );
+
+    expect(result.epochsProposed).toBe(1);
+    expect(result.roundSnapshotsProposed).toBe(1);
+    expect(
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    ).toHaveBeenCalledWith(
+      [
+        {
+          domain: 1,
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ],
+      logger,
+      { correlationEpochId: 2n, ponderNowSeconds: undefined },
+    );
+    expect(writeCachedCorrelationArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fingerprint,
+        artifactHash: `0x${"6".repeat(64)}`,
+        canonicalJson: "{\"freshEpoch\":true}",
+      }),
+    );
+    expect(writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "proposeCorrelationEpoch",
+        args: expect.arrayContaining([2n]),
+      }),
+    );
+  });
+
+  it("rebuilds automatic artifacts with the existing non-default epoch for finalized snapshots", async () => {
+    vi.resetModules();
+    vi.doMock("../config.js", () => ({
+      config: {
+        contracts: {
+          clusterPayoutOracle: ORACLE,
+          votingEngine: "0x4444444444444444444444444444444444444444",
+        },
+        correlationSnapshots: {
+          enabled: true,
+          mode: "auto",
+          artifactPath: undefined,
+          frontendRegistry: FRONTEND_REGISTRY,
+          maxRoundsPerTick: 20,
+          artifactStorage: {
+            mode: "data-uri",
+            outputDir: "correlation-artifacts",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
+          },
+        },
+      },
+    }));
+
+    const fingerprint = `0x${"a".repeat(64)}` as const;
+    const buildConfiguredCorrelationSnapshotArtifactForCandidates = vi
+      .fn()
+      .mockResolvedValue({
+        artifact: {
+          correlationEpochs: [
+            {
+              epochId: "2",
+              fromRoundId: "1",
+              toRoundId: "1",
+              clusterRoot: `0x${"1".repeat(64)}`,
+              parameterHash: `0x${"2".repeat(64)}`,
+              artifactHash: `0x${"3".repeat(64)}`,
+              artifactURI: "ipfs://existing-epoch",
+            },
+          ],
+          roundPayoutSnapshots: [
+            {
+              domain: 3,
+              rewardPoolId: "0",
+              contentId: "9",
+              roundId: "1",
+              correlationEpochId: "2",
+              rawEligibleVoters: 5,
+              effectiveParticipantUnits: 50_000,
+              totalClaimWeight: "100",
+              weightRoot: `0x${"4".repeat(64)}`,
+              reasonRoot: `0x${"5".repeat(64)}`,
+              artifactHash: `0x${"6".repeat(64)}`,
+              artifactURI: "ipfs://existing-round",
+            },
+          ],
+        },
+        artifactHash: `0x${"6".repeat(64)}`,
+        canonicalJson: "{\"existingEpoch\":true}",
+        canonicalBytes: 22,
+        candidateCount: 1,
+        roundSnapshotCount: 1,
+        epochCount: 1,
+      });
+    vi.doMock("../correlation-artifact-builder.js", () => ({
+      loadConfiguredCorrelationSnapshotCandidates: vi.fn().mockResolvedValue([
+        {
+          domain: 3,
+          rewardPoolId: 0n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ]),
+      correlationSnapshotCandidateFingerprint: vi.fn(() => fingerprint),
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: mockRestoreFromCanonical,
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    }));
+
+    const writeCachedCorrelationArtifact = vi.fn();
+    vi.doMock("../keeper-state.js", () => ({
+      runWithCorrelationSnapshotPublishLock: vi.fn((_logger, _fallback, run) =>
+        run(),
+      ),
+      readCachedCorrelationArtifact: vi.fn(),
+      writeCachedCorrelationArtifact,
+    }));
+
+    const readContract = vi.fn(
+      async ({
+        args,
+        functionName,
+      }: {
+        args?: readonly unknown[];
+        functionName: string;
+      }) => {
+        if (functionName === "correlationEpochSnapshot") {
+          return {
+            status: 3,
+            clusterRoot:
+              args?.[0] === 2n ? `0x${"1".repeat(64)}` : `0x${"9".repeat(64)}`,
+          };
+        }
+        if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+        if (functionName === "getRoundPayoutSnapshot")
+          return { status: 3, correlationEpochId: 2n, finalizedAt: 100n };
+        if (functionName === "isRoundPayoutSnapshotOutsideVetoWindow")
+          return false;
+        if (functionName === "roundPayoutSnapshotVetoDeadline")
+          return 999_999_999n;
+        throw new Error(`unexpected readContract(${functionName})`);
+      },
+    );
+    const getBlock = vi.fn().mockResolvedValue({ timestamp: 200n });
+    const writeContract = vi.fn().mockResolvedValue("0xhash");
+    const waitForTransactionReceipt = vi.fn().mockResolvedValue({
+      status: "success",
+    });
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const { publishConfiguredCorrelationSnapshots } = await import(
+      "../correlation-snapshots.js"
+    );
+
+    await publishConfiguredCorrelationSnapshots(
+      { readContract, getBlock, waitForTransactionReceipt } as never,
+      { writeContract } as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger,
+    );
+
+    expect(
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    ).toHaveBeenCalledWith(
+      [
+        {
+          domain: 3,
+          rewardPoolId: 0n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ],
+      logger,
+      { correlationEpochId: 2n, ponderNowSeconds: undefined },
+    );
+    expect(writeCachedCorrelationArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fingerprint,
+        artifactHash: `0x${"6".repeat(64)}`,
+        canonicalJson: "{\"existingEpoch\":true}",
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Skipping round payout snapshots because finalized correlation epoch root differs from artifact",
+      expect.anything(),
+    );
+  });
+
   it("rebuilds automatic artifacts when a normalized round snapshot is rejected", async () => {
     vi.resetModules();
     vi.doMock("../config.js", () => ({
