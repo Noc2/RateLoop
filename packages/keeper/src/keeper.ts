@@ -53,7 +53,10 @@ import {
   parseTlockCiphertextMetadata,
 } from "@rateloop/contracts/voting";
 import { buildCommitKey } from "@rateloop/contracts/votingCore";
-import { PONDER_HTTP_FETCH_TIMEOUT_MS } from "@rateloop/node-utils/correlationScoring";
+import {
+  PAYOUT_DOMAIN_QUESTION_REWARD,
+  PONDER_HTTP_FETCH_TIMEOUT_MS,
+} from "@rateloop/node-utils/correlationScoring";
 import {
   type CommitData,
   type RoundData,
@@ -2041,6 +2044,17 @@ async function _qualifyRewardPoolRounds(
     0,
     rewardPoolQualifications.maxRoundsPerTick,
   )) {
+    if (
+      !(await _rewardPoolQualificationSourceReady(
+        publicClient,
+        logger,
+        escrow,
+        candidate,
+      ))
+    ) {
+      continue;
+    }
+
     try {
       await writeContractAndConfirm(publicClient, walletClient, {
         chain,
@@ -2099,6 +2113,60 @@ async function _qualifyRewardPoolRounds(
   }
 
   return qualified;
+}
+
+async function _rewardPoolQualificationSourceReady(
+  publicClient: PublicClient,
+  logger: Logger,
+  escrow: `0x${string}`,
+  candidate: KeeperWorkRewardPoolQualificationCandidate,
+): Promise<boolean> {
+  try {
+    const sourceReadyAt = BigInt(
+      (await publicClient.readContract({
+        address: escrow,
+        abi: QuestionRewardPoolEscrowAbi,
+        functionName: "roundPayoutSnapshotSourceReadyAt",
+        args: [
+          PAYOUT_DOMAIN_QUESTION_REWARD,
+          candidate.rewardPoolId,
+          candidate.contentId,
+          candidate.roundId,
+        ],
+      })) as bigint | number | string,
+    );
+    if (sourceReadyAt === 0n) {
+      logger.debug("Skipped reward pool qualification candidate", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        error: "Cluster source pending",
+      });
+      return false;
+    }
+
+    const block = await publicClient.getBlock();
+    if (sourceReadyAt > block.timestamp) {
+      logger.debug("Skipped reward pool qualification candidate", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        sourceReadyAt: sourceReadyAt.toString(),
+        blockTimestamp: block.timestamp.toString(),
+        error: "Cluster source not ready yet",
+      });
+      return false;
+    }
+    return true;
+  } catch (err: unknown) {
+    logger.warn("Failed to read reward pool qualification source readiness", {
+      rewardPoolId: candidate.rewardPoolId.toString(),
+      contentId: candidate.contentId.toString(),
+      roundId: candidate.roundId.toString(),
+      error: getRevertReason(err),
+    });
+    return false;
+  }
 }
 
 function isExpectedBundleTerminalSyncRevert(reason: string): boolean {

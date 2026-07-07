@@ -351,6 +351,7 @@ function makeHarness(options: {
   commitRevealDataErrorFor?: readonly `0x${string}`[];
   revealVoteErrorFor?: readonly `0x${string}`[];
   qualifyRoundErrors?: Record<string, string>;
+  rewardPoolQualificationSourceReadyAt?: Record<string, bigint>;
   settleRoundResultState?: RoundStateValue;
   estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
 }) {
@@ -373,6 +374,8 @@ function makeHarness(options: {
   const commitRevealDataErrorFor = new Set(options.commitRevealDataErrorFor ?? []);
   const revealVoteErrorFor = new Set(options.revealVoteErrorFor ?? []);
   const qualifyRoundErrors = options.qualifyRoundErrors ?? {};
+  const rewardPoolQualificationSourceReadyAt =
+    options.rewardPoolQualificationSourceReadyAt ?? {};
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
   const advisoryCommits = options.advisoryCommits ?? {};
@@ -479,6 +482,10 @@ function makeHarness(options: {
               options.questionRewardPoolEscrow ??
               "0x0000000000000000000000000000000000000000"
             );
+          case "roundPayoutSnapshotSourceReadyAt": {
+            const key = `${String(args[1])}:${String(args[2])}:${String(args[3])}`;
+            return rewardPoolQualificationSourceReadyAt[key] ?? 1n;
+          }
           case "contents": {
             const lastActivityAt = dormancyEligible
               ? now - mockConfig.dormancyPeriod - 1n
@@ -934,6 +941,77 @@ describe("resolveRounds", () => {
         address: QUESTION_REWARD_POOL_ESCROW,
         functionName: "qualifyRound",
         args: [42n, 3n],
+      }),
+    );
+  });
+
+  it("skips reward pool qualification when the escrow source is not ready", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      rewardPoolQualificationSourceReadyAt: {
+        "42:9:3": 0n,
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "qualifyRound",
+      }),
+    );
+    expect(logger.debug).toHaveBeenCalledWith(
+      "Skipped reward pool qualification candidate",
+      expect.objectContaining({
+        rewardPoolId: "42",
+        contentId: "9",
+        roundId: "3",
+        error: "Cluster source pending",
       }),
     );
   });
