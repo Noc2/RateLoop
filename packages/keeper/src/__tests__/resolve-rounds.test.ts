@@ -1098,6 +1098,73 @@ describe("resolveRounds", () => {
     ]);
   });
 
+  it("pre-advances finalized cluster snapshot rounds below the effective participant floor", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              roundId: "3",
+              requiredVoters: "3",
+              snapshotRawEligibleVoters: "3",
+              snapshotEffectiveParticipantUnits: "22500",
+              snapshotTotalClaimWeight: "22500",
+              reason: "reward_pool_qualification",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolRoundsQualified).toBe(0);
+    const rewardPoolWrites = walletClient.writeContract.mock.calls.map(
+      ([request]) => ({
+        functionName: request.functionName,
+        args: request.args,
+      }),
+    );
+    expect(rewardPoolWrites).toEqual([
+      { functionName: "advanceQualificationCursor", args: [42n, 1n] },
+    ]);
+  });
+
   it("does not advance reward pool cursor before the bounty window opens", async () => {
     mockConfig.keeperWorkDiscovery.enabled = true;
 

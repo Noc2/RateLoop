@@ -132,6 +132,10 @@ interface KeeperWorkRewardPoolQualificationCandidate {
   rewardPoolId: bigint;
   contentId: bigint;
   roundId: bigint;
+  requiredVoters?: bigint;
+  snapshotRawEligibleVoters?: bigint;
+  snapshotEffectiveParticipantUnits?: bigint;
+  snapshotTotalClaimWeight?: bigint;
   reason?: string;
 }
 interface KeeperWorkBundleTerminalSyncCandidate {
@@ -209,6 +213,8 @@ export function resetKeeperStateForTests(): void {
 const decryptFailureCount = new Map<string, number>();
 const MAX_DECRYPT_RETRIES = 10;
 const MAX_DECRYPT_FAILURE_ENTRIES = 10_000;
+const REWARD_POOL_MIN_EFFECTIVE_PARTICIPANT_UNITS = 3n;
+const REWARD_POOL_BPS_SCALE = 10_000n;
 
 // KEEPER-1 (2026-05-21 repo audit): cache the last RPC-observed block timestamp so that an RPC
 // outage does not force the keeper onto a raw `Date.now()` fallback. The system clock is
@@ -921,6 +927,16 @@ function parseKeeperWorkRewardPoolQualificationArray(
       rewardPoolId,
       contentId,
       roundId,
+      requiredVoters: parseOptionalNonNegativeBigInt(record.requiredVoters),
+      snapshotRawEligibleVoters: parseOptionalNonNegativeBigInt(
+        record.snapshotRawEligibleVoters,
+      ),
+      snapshotEffectiveParticipantUnits: parseOptionalNonNegativeBigInt(
+        record.snapshotEffectiveParticipantUnits,
+      ),
+      snapshotTotalClaimWeight: parseOptionalNonNegativeBigInt(
+        record.snapshotTotalClaimWeight,
+      ),
       reason: typeof record.reason === "string" ? record.reason : undefined,
     });
   }
@@ -1967,6 +1983,38 @@ function isRewardPoolCursorAdvanceReason(reason: string): boolean {
   );
 }
 
+function getRewardPoolPreAdvanceReason(
+  candidate: KeeperWorkRewardPoolQualificationCandidate,
+): string | null {
+  const requiredVoters = candidate.requiredVoters;
+  const rawEligibleVoters = candidate.snapshotRawEligibleVoters;
+  const effectiveParticipantUnits =
+    candidate.snapshotEffectiveParticipantUnits;
+  const totalClaimWeight = candidate.snapshotTotalClaimWeight;
+  if (
+    requiredVoters === undefined ||
+    rawEligibleVoters === undefined ||
+    effectiveParticipantUnits === undefined ||
+    totalClaimWeight === undefined
+  ) {
+    return null;
+  }
+
+  const minEffectiveUnits =
+    (requiredVoters > REWARD_POOL_MIN_EFFECTIVE_PARTICIPANT_UNITS
+      ? requiredVoters
+      : REWARD_POOL_MIN_EFFECTIVE_PARTICIPANT_UNITS) * REWARD_POOL_BPS_SCALE;
+  if (
+    rawEligibleVoters < requiredVoters ||
+    effectiveParticipantUnits < minEffectiveUnits ||
+    totalClaimWeight === 0n
+  ) {
+    return "Too few eligible voters";
+  }
+
+  return null;
+}
+
 async function _advanceRewardPoolQualificationCursor(
   publicClient: PublicClient,
   walletClient: WalletClient,
@@ -2052,6 +2100,27 @@ async function _qualifyRewardPoolRounds(
         candidate,
       ))
     ) {
+      continue;
+    }
+
+    const preAdvanceReason = getRewardPoolPreAdvanceReason(candidate);
+    if (preAdvanceReason) {
+      await _advanceRewardPoolQualificationCursor(
+        publicClient,
+        walletClient,
+        chain,
+        account,
+        logger,
+        escrow,
+        candidate,
+        preAdvanceReason,
+      );
+      logger.debug("Skipped reward pool qualification candidate", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        error: preAdvanceReason,
+      });
       continue;
     }
 

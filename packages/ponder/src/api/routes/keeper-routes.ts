@@ -265,6 +265,11 @@ export function registerKeeperRoutes(app: ApiApp) {
         rewardPoolId: questionRewardPool.id,
         contentId: questionRewardPool.contentId,
         roundId: round.roundId,
+        requiredVoters: questionRewardPool.requiredVoters,
+        snapshotRawEligibleVoters: roundPayoutSnapshot.rawEligibleVoters,
+        snapshotEffectiveParticipantUnits:
+          roundPayoutSnapshot.effectiveParticipantUnits,
+        snapshotTotalClaimWeight: roundPayoutSnapshot.totalClaimWeight,
         reason: sql<string>`'reward_pool_qualification'`,
       })
       .from(questionRewardPool)
