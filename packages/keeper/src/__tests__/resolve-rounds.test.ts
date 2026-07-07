@@ -1164,7 +1164,8 @@ describe("resolveRounds", () => {
       now: 3_000_000n,
       questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
       qualifyRoundErrors: {
-        "42:3": "SnapshotNotFound()",
+        "42:3":
+          'The contract function "qualifyRound" reverted with the following signature:\n0x48040a96',
       },
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

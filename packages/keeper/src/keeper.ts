@@ -1947,6 +1947,7 @@ function isExpectedRewardPoolQualificationRevert(reason: string): boolean {
     "Cluster snapshot pending",
     "Cluster source stale",
     "SnapshotNotFound",
+    "0x48040a96",
     "SnapshotConsumed",
     "EnforcedPause",
     "Pausable",
