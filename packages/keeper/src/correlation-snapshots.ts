@@ -1206,7 +1206,10 @@ async function publishAutomaticCorrelationSnapshots(
   const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
     candidates,
     logger,
-    { ponderNowSeconds: options.ponderNowSeconds },
+    {
+      correlationEpochId: preflight.correlationEpochId,
+      ponderNowSeconds: options.ponderNowSeconds,
+    },
   );
   if (built.artifactHash && built.canonicalJson) {
     await writeCachedCorrelationArtifact({
@@ -1245,11 +1248,13 @@ async function preflightAutomaticCorrelationSnapshots(
 ): Promise<{
   result: CorrelationSnapshotPublisherResult;
   needsArtifactBuild: boolean;
+  correlationEpochId?: bigint;
   rejectedEpochIds: Set<string>;
   hasRejectedRoundSnapshots: boolean;
 }> {
   const result = emptyResult();
   let needsArtifactBuild = false;
+  let needsFreshCorrelationEpoch = false;
   let hasRejectedRoundSnapshots = false;
   const rejectedEpochIds = new Set<string>();
   const epochFinalizedById = new Map<string, boolean>();
@@ -1345,6 +1350,9 @@ async function preflightAutomaticCorrelationSnapshots(
         )
       ) {
         needsArtifactBuild = true;
+        if (epochFinalized && roundStatus === STATUS.None) {
+          needsFreshCorrelationEpoch = true;
+        }
       }
     } else if (roundStatus === STATUS.Proposed) {
       try {
@@ -1379,7 +1387,68 @@ async function preflightAutomaticCorrelationSnapshots(
     }
   }
 
-  return { result, needsArtifactBuild, rejectedEpochIds, hasRejectedRoundSnapshots };
+  const correlationEpochId = needsFreshCorrelationEpoch
+    ? await nextAvailableCorrelationEpochId(candidates, publicClient, logger)
+    : undefined;
+  if (needsFreshCorrelationEpoch && correlationEpochId === undefined) {
+    return {
+      result,
+      needsArtifactBuild: false,
+      rejectedEpochIds,
+      hasRejectedRoundSnapshots,
+    };
+  }
+
+  return {
+    result,
+    needsArtifactBuild,
+    correlationEpochId,
+    rejectedEpochIds,
+    hasRejectedRoundSnapshots,
+  };
+}
+
+async function nextAvailableCorrelationEpochId(
+  candidates: readonly CorrelationRoundCandidate[],
+  publicClient: PublicClient,
+  logger: Logger,
+): Promise<bigint | undefined> {
+  if (candidates.length === 0) return undefined;
+
+  let epochId =
+    candidates.reduce(
+      (max, candidate) => (candidate.roundId > max ? candidate.roundId : max),
+      0n,
+    ) + 1n;
+
+  for (let attempt = 0; attempt < 256; attempt++) {
+    const summary = await readCorrelationEpochSnapshotSummary(
+      publicClient,
+      epochId,
+    );
+    if (summary.status === STATUS.None) {
+      logger.info("Using fresh correlation epoch id for automatic artifact", {
+        epochId: epochId.toString(),
+      });
+      return epochId;
+    }
+    epochId += 1n;
+  }
+
+  logger.warn(
+    "Unable to find an unused correlation epoch id for automatic artifact",
+    {
+      fromEpochId: (
+        candidates.reduce(
+          (max, candidate) =>
+            candidate.roundId > max ? candidate.roundId : max,
+          0n,
+        ) + 1n
+      ).toString(),
+      attempts: 256,
+    },
+  );
+  return undefined;
 }
 
 async function publishCorrelationSnapshotArtifact(
