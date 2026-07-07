@@ -781,6 +781,118 @@ describe("correlation snapshot publisher", () => {
     );
   });
 
+  it("does not rebuild automatic artifacts for finalized non-default epoch snapshots", async () => {
+    vi.resetModules();
+    vi.doMock("../config.js", () => ({
+      config: {
+        contracts: {
+          clusterPayoutOracle: ORACLE,
+          votingEngine: "0x4444444444444444444444444444444444444444",
+        },
+        correlationSnapshots: {
+          enabled: true,
+          mode: "auto",
+          artifactPath: undefined,
+          frontendRegistry: FRONTEND_REGISTRY,
+          maxRoundsPerTick: 20,
+          artifactStorage: {
+            mode: "data-uri",
+            outputDir: "correlation-artifacts",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
+          },
+        },
+      },
+    }));
+
+    const fingerprint = `0x${"a".repeat(64)}` as const;
+    const buildConfiguredCorrelationSnapshotArtifactForCandidates = vi.fn();
+    vi.doMock("../correlation-artifact-builder.js", () => ({
+      loadConfiguredCorrelationSnapshotCandidates: vi.fn().mockResolvedValue([
+        {
+          domain: 3,
+          rewardPoolId: 0n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ]),
+      correlationSnapshotCandidateFingerprint: vi.fn(() => fingerprint),
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: mockRestoreFromCanonical,
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    }));
+
+    const writeCachedCorrelationArtifact = vi.fn();
+    vi.doMock("../keeper-state.js", () => ({
+      runWithCorrelationSnapshotPublishLock: vi.fn((_logger, _fallback, run) =>
+        run(),
+      ),
+      readCachedCorrelationArtifact: vi.fn(),
+      writeCachedCorrelationArtifact,
+    }));
+
+    const readContract = vi.fn(
+      async ({
+        args,
+        functionName,
+      }: {
+        args?: readonly unknown[];
+        functionName: string;
+      }) => {
+        if (functionName === "correlationEpochSnapshot") {
+          return {
+            status: 3,
+            clusterRoot:
+              args?.[0] === 2n ? `0x${"1".repeat(64)}` : `0x${"9".repeat(64)}`,
+          };
+        }
+        if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+        if (functionName === "getRoundPayoutSnapshot")
+          return { status: 3, correlationEpochId: 2n, finalizedAt: 100n };
+        if (functionName === "isRoundPayoutSnapshotOutsideVetoWindow")
+          return false;
+        if (functionName === "roundPayoutSnapshotVetoDeadline")
+          return 999_999_999n;
+        throw new Error(`unexpected readContract(${functionName})`);
+      },
+    );
+    const getBlock = vi.fn().mockResolvedValue({ timestamp: 200n });
+    const writeContract = vi.fn().mockResolvedValue("0xhash");
+    const waitForTransactionReceipt = vi.fn().mockResolvedValue({
+      status: "success",
+    });
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const { publishConfiguredCorrelationSnapshots } = await import(
+      "../correlation-snapshots.js"
+    );
+
+    const result = await publishConfiguredCorrelationSnapshots(
+      { readContract, getBlock, waitForTransactionReceipt } as never,
+      { writeContract } as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger,
+    );
+
+    expect(result.epochsProposed).toBe(0);
+    expect(result.epochsFinalized).toBe(0);
+    expect(result.roundSnapshotsProposed).toBe(0);
+    expect(result.roundSnapshotsFinalized).toBe(0);
+    expect(
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    ).not.toHaveBeenCalled();
+    expect(writeCachedCorrelationArtifact).not.toHaveBeenCalled();
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Skipping round payout snapshots because finalized correlation epoch root differs from artifact",
+      expect.anything(),
+    );
+  });
+
   it("rebuilds automatic artifacts when a normalized round snapshot is rejected", async () => {
     vi.resetModules();
     vi.doMock("../config.js", () => ({

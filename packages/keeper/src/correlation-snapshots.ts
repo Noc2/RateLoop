@@ -131,6 +131,7 @@ interface CorrelationEpochSnapshotSummary {
 
 interface RoundPayoutProposalSummary {
   status: number;
+  correlationEpochId?: bigint;
   finalizedAt: bigint;
 }
 
@@ -368,12 +369,18 @@ async function readRoundPayoutSnapshotSummary(
       abi: ClusterPayoutOracleAbi,
       functionName: "getRoundPayoutSnapshot",
       args: [source.domain, rewardPoolId, contentId, roundId],
-    })) as { status?: unknown; finalizedAt?: unknown };
+    })) as {
+      status?: unknown;
+      correlationEpochId?: unknown;
+      finalizedAt?: unknown;
+    };
 
+    const correlationEpochId = normalizeBigIntValue(snapshot.correlationEpochId);
     const finalizedAt = snapshot.finalizedAt;
     const finalizedAtValue = normalizeBigIntString(finalizedAt);
     return {
       status: normalizeNumber(snapshot.status) ?? STATUS.None,
+      correlationEpochId: correlationEpochId ?? undefined,
       finalizedAt:
         typeof finalizedAt === "bigint"
           ? finalizedAt
@@ -1255,6 +1262,7 @@ async function preflightAutomaticCorrelationSnapshots(
   const result = emptyResult();
   let needsArtifactBuild = false;
   let needsFreshCorrelationEpoch = false;
+  let artifactCorrelationEpochId: bigint | undefined;
   let hasRejectedRoundSnapshots = false;
   const rejectedEpochIds = new Set<string>();
   const epochFinalizedById = new Map<string, boolean>();
@@ -1332,6 +1340,28 @@ async function preflightAutomaticCorrelationSnapshots(
       candidate,
     );
     const roundStatus = existingRound.status;
+    if (
+      existingRound.correlationEpochId !== undefined &&
+      existingRound.correlationEpochId !== candidate.roundId &&
+      (roundStatus === STATUS.Proposed || roundStatus === STATUS.Finalized)
+    ) {
+      artifactCorrelationEpochId ??= existingRound.correlationEpochId;
+      if (artifactCorrelationEpochId !== existingRound.correlationEpochId) {
+        logger.warn(
+          "Skipping automatic correlation artifact rebuild because candidates use multiple correlation epoch ids",
+          {
+            firstCorrelationEpochId: artifactCorrelationEpochId.toString(),
+            nextCorrelationEpochId: existingRound.correlationEpochId.toString(),
+          },
+        );
+        return {
+          result,
+          needsArtifactBuild: false,
+          rejectedEpochIds,
+          hasRejectedRoundSnapshots,
+        };
+      }
+    }
 
     if (roundStatus === STATUS.None || roundStatus === STATUS.Rejected) {
       if (roundStatus === STATUS.Rejected) {
@@ -1365,7 +1395,11 @@ async function preflightAutomaticCorrelationSnapshots(
           args: [snapshotKey],
         });
         result.roundSnapshotsFinalized += 1;
-        if (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING || candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT) {
+        if (
+          existingRound.correlationEpochId === candidate.roundId &&
+          (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING ||
+            candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT)
+        ) {
           needsArtifactBuild = true;
         }
         logger.info("Finalized round payout snapshot", { snapshotKey });
@@ -1381,15 +1415,18 @@ async function preflightAutomaticCorrelationSnapshots(
       });
     } else if (
       roundStatus === STATUS.Finalized &&
+      existingRound.correlationEpochId === candidate.roundId &&
       (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING || candidate.domain === PAYOUT_DOMAIN_RBTS_SETTLEMENT)
     ) {
       needsArtifactBuild = true;
     }
   }
 
-  const correlationEpochId = needsFreshCorrelationEpoch
-    ? await nextAvailableCorrelationEpochId(candidates, publicClient, logger)
-    : undefined;
+  const correlationEpochId =
+    artifactCorrelationEpochId ??
+    (needsFreshCorrelationEpoch
+      ? await nextAvailableCorrelationEpochId(candidates, publicClient, logger)
+      : undefined);
   if (needsFreshCorrelationEpoch && correlationEpochId === undefined) {
     return {
       result,
