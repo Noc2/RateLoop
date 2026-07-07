@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
   });
   if (limited) return limited;
 
-  const status = await getPonderAvailabilityStatus();
+  const deploymentKey = request.nextUrl.searchParams.get("deploymentKey");
+  const status = await getPonderAvailabilityStatus(deploymentKey);
 
   return NextResponse.json(status, {
     headers: {

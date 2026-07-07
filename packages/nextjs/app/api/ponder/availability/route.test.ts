@@ -67,10 +67,12 @@ test("ponder availability route reports a healthy indexer", async () => {
   }
 });
 
-test("ponder availability route ignores explicit deployment keys", async () => {
+test("ponder availability route honors explicit deployment keys", async () => {
   const originalFetch = globalThis.fetch;
   const deployment = resolveProtocolDeploymentScope(31337);
+  const requestedDeployment = resolveProtocolDeploymentScope(8453);
   assert.ok(deployment);
+  assert.ok(requestedDeployment);
   const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
@@ -97,14 +99,15 @@ test("ponder availability route ignores explicit deployment keys", async () => {
 
     const response = await GET(
       makeAvailabilityRequest(
-        `http://localhost/api/ponder/availability?deploymentKey=${encodeURIComponent(deployment.deploymentKey)}`,
+        `http://localhost/api/ponder/availability?deploymentKey=${encodeURIComponent(requestedDeployment.deploymentKey)}`,
       ),
     );
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(body.available, true);
-    assert.equal(body.expectedDeploymentKey, deployment.deploymentKey);
+    assert.equal(body.available, false);
+    assert.equal(body.reason, "deployment_mismatch");
+    assert.equal(body.expectedDeploymentKey, requestedDeployment.deploymentKey);
     assert.equal(body.ponderDeploymentKey, deployment.deploymentKey);
     assert.match(requestedUrls[0] ?? "", /\/health$/);
     assert.match(requestedUrls[1] ?? "", /\/deployment$/);
@@ -175,21 +178,13 @@ test("ponder availability route rejects deployment mismatches", async () => {
   }
 });
 
-test("ponder availability route ignores unsupported deployment keys", async () => {
+test("ponder availability route rejects unsupported deployment keys without probing", async () => {
   const originalFetch = globalThis.fetch;
-  const deployment = resolveProtocolDeploymentScope(31337);
-  assert.ok(deployment);
   const requestedUrls: string[] = [];
   globalThis.fetch = (async input => {
     const requestedUrl = getFetchUrl(input);
     requestedUrls.push(requestedUrl);
-    if (requestedUrl.endsWith("/deployment")) {
-      return new Response(JSON.stringify({ configured: true, deploymentKey: deployment.deploymentKey }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    return new Response("ok", { status: 200 });
+    return new Response("unexpected", { status: 500 });
   }) as typeof fetch;
 
   try {
@@ -202,12 +197,13 @@ test("ponder availability route ignores unsupported deployment keys", async () =
 
     assert.equal(response.status, 200);
     const body = await response.json();
-    assert.equal(body.available, true);
-    assert.equal(body.expectedDeploymentKey, deployment.deploymentKey);
-    assert.deepEqual(
-      requestedUrls.map(url => new URL(url).pathname),
-      ["/health", "/deployment"],
+    assert.equal(body.available, false);
+    assert.equal(body.reason, "deployment_unconfigured");
+    assert.equal(
+      body.expectedDeploymentKey,
+      "999999:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
     );
+    assert.deepEqual(requestedUrls, []);
   } finally {
     globalThis.fetch = originalFetch;
     invalidatePonderCache();

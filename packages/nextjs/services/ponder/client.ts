@@ -537,7 +537,7 @@ export async function getPonderAvailabilityStatus(
             ponderUrl,
             explicitDeploymentKey ? { deploymentKey: explicitDeploymentKey } : undefined,
           )
-        : await checkPonderAvailabilityThroughApi();
+        : await checkPonderAvailabilityThroughApi(explicitDeploymentKey);
 
     setAvailabilityCacheEntry(cacheKey, {
       status,
@@ -614,9 +614,14 @@ async function checkPonderAvailabilityDirect(
   }
 }
 
-async function checkPonderAvailabilityThroughApi(): Promise<PonderAvailabilityStatus> {
+async function checkPonderAvailabilityThroughApi(
+  expectedDeploymentKey?: string | null,
+): Promise<PonderAvailabilityStatus> {
   try {
     const url = new URL("/api/ponder/availability", window.location.origin);
+    if (expectedDeploymentKey) {
+      url.searchParams.set("deploymentKey", expectedDeploymentKey);
+    }
     const res = await fetch(`${url.pathname}${url.search}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),

@@ -171,6 +171,7 @@ test("isPonderAvailable uses the current browser availability endpoint", async (
   const originalFetch = globalThis.fetch;
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   let requestedUrl = "";
+  assert.ok(BASE_PONDER_DEPLOYMENT);
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -188,7 +189,7 @@ test("isPonderAvailable uses the current browser availability endpoint", async (
   try {
     invalidatePonderCache();
 
-    assert.equal(await isPonderAvailable(BASE_PONDER_DEPLOYMENT?.deploymentKey), true);
+    assert.equal(await isPonderAvailable(BASE_PONDER_DEPLOYMENT.deploymentKey), true);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalWindow) {
@@ -199,7 +200,10 @@ test("isPonderAvailable uses the current browser availability endpoint", async (
     invalidatePonderCache();
   }
 
-  assert.equal(requestedUrl, "/api/ponder/availability");
+  assert.equal(
+    requestedUrl,
+    `/api/ponder/availability?deploymentKey=${encodeURIComponent(BASE_PONDER_DEPLOYMENT.deploymentKey)}`,
+  );
 });
 
 test("normalizeSupportedPonderDeploymentKey only accepts known deployment keys", () => {
