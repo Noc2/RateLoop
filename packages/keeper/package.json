@@ -9,7 +9,7 @@
     "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && tsc --noEmit\"",
     "start": "yarn build:workspace-deps && yarn build && yarn start:built-dist",
     "start:built-workspace-deps": "yarn build && yarn start:built-dist",
-    "start:built-dist": "node dist/index.js",
+    "start:built-dist": "NODE_ENV=production node dist/index.js",
     "dev": "yarn build:workspace-deps && tsx watch src/index.ts",
     "dev:built-workspace-deps": "tsx watch src/index.ts",
     "build:correlation-artifact": "tsx src/build-correlation-artifact.ts",

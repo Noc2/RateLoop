@@ -125,6 +125,25 @@ test("Railway service start commands, watch patterns, and health checks pin prod
   assert.match(ponder, /healthcheckTimeout = 120/);
 });
 
+test("Keeper and Ponder package start scripts force production mode", () => {
+  const keeper = JSON.parse(readWorkflow("packages/keeper/package.json"));
+  const ponder = JSON.parse(readWorkflow("packages/ponder/package.json"));
+
+  assert.equal(
+    keeper.scripts["start:built-dist"],
+    "NODE_ENV=production node dist/index.js",
+  );
+  assert.match(keeper.scripts.start, /yarn start:built-dist/);
+  assert.match(keeper.scripts["start:built-workspace-deps"], /yarn start:built-dist/);
+
+  assert.equal(
+    ponder.scripts["start:built-workspace-deps"],
+    "NODE_ENV=production node ./scripts/start.mjs",
+  );
+  assert.equal(ponder.scripts.start, "yarn build:workspace-deps && yarn start:built-workspace-deps");
+  assert.equal(ponder.scripts["start:built-contracts"], "yarn start:built-workspace-deps");
+});
+
 test("Ponder Docker runtime uses pinned base and production dependencies", () => {
   const dockerfile = readWorkflow("packages/ponder/Dockerfile");
 
