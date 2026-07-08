@@ -472,6 +472,21 @@ function normalizeQuestionDetails(
   };
 }
 
+function assertNoIgnoredTopLevelQuestionDetails(value: Record<string, unknown>) {
+  const usesNestedQuestions =
+    (value.question !== undefined && value.question !== null) ||
+    (value.questions !== undefined && value.questions !== null);
+  if (!usesNestedQuestions) return;
+
+  for (const field of ["detailsUrl", "detailsHash"] as const) {
+    if (value[field] !== undefined && value[field] !== null) {
+      throw new X402QuestionInputError(
+        `${field} must be placed on each question when using question or questions.`,
+      );
+    }
+  }
+}
+
 function normalizeOrigin(value: string | null | undefined) {
   const trimmed = value?.trim();
   if (!trimmed) return null;
@@ -1178,6 +1193,7 @@ export function parseX402QuestionRequest(
   if (value.question !== undefined && value.question !== null && value.questions !== undefined && value.questions !== null) {
     throw new X402QuestionInputError("Use either question or questions, not both.");
   }
+  assertNoIgnoredTopLevelQuestionDetails(value);
   if (value.questions !== undefined && !Array.isArray(value.questions)) {
     throw new X402QuestionInputError("questions must be an array.");
   }

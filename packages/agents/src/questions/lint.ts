@@ -835,6 +835,7 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
   }
 
   const request = input as Partial<AgentAskExample>;
+  const requestRecord = input as JsonObject;
   for (const key of Object.keys(input)) {
     if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
       pushFinding(findings, "error", key, `Unknown top-level field: ${key}`);
@@ -930,6 +931,21 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
   }
   if (request.question && request.questions) {
     pushFinding(findings, "error", "questions", "Use either question or questions, not both.");
+  }
+  const usesNestedQuestions =
+    (request.question !== undefined && request.question !== null) ||
+    (request.questions !== undefined && request.questions !== null);
+  if (usesNestedQuestions) {
+    for (const field of ["detailsUrl", "detailsHash"] as const) {
+      if (requestRecord[field] !== undefined && requestRecord[field] !== null) {
+        pushFinding(
+          findings,
+          "error",
+          field,
+          `${field} must be placed on each question when using question or questions.`,
+        );
+      }
+    }
   }
   questions.forEach((question, index) => {
     findings.push(

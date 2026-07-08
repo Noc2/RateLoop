@@ -106,6 +106,16 @@ describe("x402 question request shape", () => {
     ).toThrow("Use either question or questions, not both.");
   });
 
+  it("rejects top-level details fields when a nested question is provided", () => {
+    expect(() =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        detailsHash: `0x${"4".repeat(64)}`,
+        detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+      }),
+    ).toThrow("detailsUrl must be placed on each question when using question or questions.");
+  });
+
   it("rejects non-array questions fields", () => {
     const { question, ...baseRequest } = VALID_REQUEST;
 

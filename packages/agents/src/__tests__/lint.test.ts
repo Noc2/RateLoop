@@ -53,6 +53,27 @@ describe("agent question linting", () => {
     });
   });
 
+  it("rejects top-level details fields when a nested question is provided", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      detailsHash: DETAILS_HASH,
+      detailsUrl: DETAILS_URL,
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "detailsUrl",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "detailsHash",
+        }),
+      ]),
+    );
+  });
+
   it("rejects missing or unsafe chain ids before quote or submission", () => {
     const { chainId: _chainId, ...withoutChainId } = VALID_REQUEST;
 
