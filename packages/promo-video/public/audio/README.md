@@ -8,3 +8,8 @@
 - `music.mp3` - "Travel Promo" by The_Mountain, downloaded from Pixabay:
   https://pixabay.com/music/main-title-travel-promo-158075/
   The track is listed as free for use under the Pixabay Content License.
+- To audition AI-generated alternatives, run `npm run generate:elevenlabs-music`
+  (ElevenLabs Music). It writes throwaway `music-test-*.mp3` candidates
+  (gitignored); preview one without touching the production video via
+  `remotion render src/index.ts RateLoopPromo out/preview.mp4 --props='{"musicSrc":"audio/music-test-<name>.mp3"}'`.
+  Copy a winner over `music.mp3` to adopt it.

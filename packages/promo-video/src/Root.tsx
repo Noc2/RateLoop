@@ -9,5 +9,6 @@ export const RemotionRoot = () => (
     fps={PROMO_FPS}
     width={1920}
     height={1080}
+    defaultProps={{ musicSrc: "audio/music.mp3" }}
   />
 );

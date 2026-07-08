@@ -96,9 +96,9 @@ const musicVolume = (frame: number) => {
   return base * duck * fadeIn * fadeOut;
 };
 
-export const RateLoopPromo = () => (
+export const RateLoopPromo = ({ musicSrc = "audio/music.mp3" }: { musicSrc?: string }) => (
   <AbsoluteFill style={{ background: colors.surface }}>
-    <Audio src={staticFile("audio/music.mp3")} volume={musicVolume} />
+    <Audio src={staticFile(musicSrc)} volume={musicVolume} />
     {BEATS.map(({ start, duration, vo, Scene, fadeIn, fadeOut }) => (
       <Sequence key={vo} from={start} durationInFrames={duration}>
         <SceneFade fadeIn={fadeIn} fadeOut={fadeOut}>
