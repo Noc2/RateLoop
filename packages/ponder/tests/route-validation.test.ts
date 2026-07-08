@@ -5435,6 +5435,74 @@ describe("registerCorrelationRoutes", () => {
     });
   });
 
+  it("excludes question submitter identities from bundle payout votes", async () => {
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          id: 7n,
+          funder: "0x00000000000000000000000000000000000000f1",
+          funderIdentityKey: `0x${"f".repeat(64)}`,
+          questionCount: 1,
+          bountyEligibility: 0,
+          bountyOpensAt: 100n,
+          bountyClosesAt: 200n,
+          bountyWindowSeconds: 100n,
+          failed: false,
+          refunded: false,
+        },
+      ],
+      [
+        [
+          {
+            contentId: 9n,
+            roundId: 2n,
+            bundleIndex: 0,
+            sourceBlockNumber: 123n,
+            sourceTxHash: `0x${"1".repeat(64)}`,
+            sourceLogIndex: 4,
+            sourceTimestamp: 150n,
+          },
+        ],
+        [
+          {
+            questionMetadataHash: null,
+            questionMetadataUri: null,
+            resultSpecHash: null,
+            settledAt: null,
+            settledBlockNumber: 123n,
+            settledTxHash: `0x${"1".repeat(64)}`,
+            settledLogIndex: 4,
+          },
+        ],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/bundle-round-votes?rewardPoolId=7&contentId=7&roundId=1&limit=1&offset=0&now=180",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toEqual([]);
+    const voteBuilder = queryBuilders[3]!;
+    const serializedWhere = serializeExpression(
+      voteBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("content.submitter");
+    expect(serializedWhere).toContain("content.submitterIdentity");
+    expect(serializedWhere).toContain("content.submitterIdentityKey");
+    expect(serializedWhere).toContain("vote.identityHolder");
+    expect(serializedWhere).toContain("vote.identityKey");
+    expect(serializedWhere).toContain("is null");
+  });
+
   it("excludes rounds settled after the requested round from the base-rate window", async () => {
     const { queryBuilders } = mockPonderModules(
       [],

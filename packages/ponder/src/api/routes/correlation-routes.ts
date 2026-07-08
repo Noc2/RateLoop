@@ -1411,6 +1411,8 @@ export function registerCorrelationRoutes(app: ApiApp) {
             sql`${vote.identityHolder} != ${bundle.funder}`,
             sql`${vote.identityKey} != ${bundle.funderIdentityKey}`,
             sql`${vote.identityHolder} != ${content.submitter}`,
+            sql`(${content.submitterIdentity} is null or ${vote.identityHolder} != ${content.submitterIdentity})`,
+            sql`(${content.submitterIdentityKey} is null or ${vote.identityKey} != ${content.submitterIdentityKey})`,
             sql`(
             ${bundle.bountyClosesAt} != 0
             and ${bundle.bountyOpensAt} <= ${bundle.bountyClosesAt}
