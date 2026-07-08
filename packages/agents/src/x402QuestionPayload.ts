@@ -671,8 +671,11 @@ function isYouTubeVideoUrl(url: string): boolean {
 
 function normalizeTags(value: unknown): { tags: string; tagList: string[] } {
   const rawTags = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  if (rawTags.some((tag) => typeof tag !== "string")) {
+    throw new X402QuestionInputError("tags entries must be strings.");
+  }
   const tagList = rawTags
-    .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
+    .map((tag) => tag.trim())
     .filter(Boolean)
     .slice(0, 4);
 

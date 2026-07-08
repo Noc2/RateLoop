@@ -162,6 +162,18 @@ describe("x402 question request shape", () => {
       }),
     ).toThrow("questions[0].roundPreset must be set at the top level for bundled questions.");
   });
+
+  it("rejects non-string tag array entries", () => {
+    expect(() =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          tags: ["Media", 42],
+        },
+      }),
+    ).toThrow("tags entries must be strings.");
+  });
 });
 
 describe("x402 question attachment origins", () => {

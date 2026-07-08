@@ -686,12 +686,16 @@ export function lintAgentQuestion(
   if (question.tags && !Array.isArray(question.tags) && typeof question.tags !== "string") {
     pushFinding(findings, "error", `${path}.tags`, "Tags must be an array or comma-separated string.");
   } else if (question.tags) {
+    const hasNonStringTag = Array.isArray(question.tags) && question.tags.some((tag) => typeof tag !== "string");
+    if (hasNonStringTag) {
+      pushFinding(findings, "error", `${path}.tags`, "Tags array entries must be strings.");
+    }
     const tagList = Array.isArray(question.tags)
-      ? question.tags.map((tag) => String(tag).trim()).filter(Boolean)
-      : String(question.tags)
-          .split(",")
+      ? question.tags
+          .filter((tag): tag is string => typeof tag === "string")
           .map((tag) => tag.trim())
-          .filter(Boolean);
+          .filter(Boolean)
+      : String(question.tags).split(",").map((tag) => tag.trim()).filter(Boolean);
     const blockedTags = findBlockedContentTags(tagList);
     if (tagList.length > MAX_PUBLIC_TAGS) {
       pushFinding(

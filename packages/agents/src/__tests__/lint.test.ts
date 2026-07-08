@@ -773,6 +773,26 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects non-string tag array entries", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        tags: ["agent", 42],
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Tags array entries must be strings.",
+          path: "question.tags",
+        }),
+      ]),
+    );
+  });
+
   it("rejects non-object template inputs before parsing", () => {
     const topLevelFindings = lintAgentAskRequest({
       ...VALID_REQUEST,
