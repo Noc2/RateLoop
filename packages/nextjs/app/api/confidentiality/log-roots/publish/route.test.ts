@@ -195,6 +195,40 @@ test("POST publishes log-root artifacts with Vercel cron bearer auth", async () 
   });
 });
 
+test("published log-root artifact URLs remain readable after frontend rotation", async () => {
+  const response = await logRootPublishRoute.POST(
+    new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish", {
+      body: JSON.stringify({ anchor: false, epoch: "2026-06-12" }),
+      headers: new Headers({ authorization: "Bearer cron-secret" }),
+      method: "POST",
+    }),
+  );
+
+  const body = (await response.json()) as {
+    artifactUrl: string;
+    deploymentKey: string;
+    epoch: string;
+    ok: boolean;
+  };
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+
+  const previousFrontend = env.NEXT_PUBLIC_FRONTEND_CODE;
+  env.NEXT_PUBLIC_FRONTEND_CODE = "0x4444444444444444444444444444444444444444";
+  try {
+    const artifactResponse = await logRootArtifactRoute.GET(new NextRequest(body.artifactUrl), {
+      params: Promise.resolve({ epoch: body.epoch }),
+    });
+
+    assert.equal(artifactResponse.status, 200);
+    assert.equal(artifactResponse.headers.get("x-rateloop-deployment-key"), body.deploymentKey);
+    assert.equal(artifactResponse.headers.get("x-rateloop-frontend-address"), FRONTEND_ADDRESS);
+    assert.equal((await artifactResponse.json()).frontendAddress, FRONTEND_ADDRESS);
+  } finally {
+    restoreEnv("NEXT_PUBLIC_FRONTEND_CODE", previousFrontend);
+  }
+});
+
 test("POST requires an on-chain anchor by default before sealing an epoch", async () => {
   const response = await logRootPublishRoute.POST(
     new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish", {

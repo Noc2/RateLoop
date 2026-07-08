@@ -4,7 +4,6 @@ import { getAddress, isAddress } from "viem";
 import {
   assertConfidentialityFrontendScopeSchemaReady,
   resolveConfidentialityDeploymentScope,
-  resolveConfidentialityFrontendAddress,
 } from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
 import { confidentialityLogRoots } from "~~/lib/db/schema";
@@ -37,12 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const deploymentScope = resolveConfidentialityDeploymentScope({ deploymentKey });
-  const currentFrontendAddress = resolveConfidentialityFrontendAddress();
-  if (
-    !deploymentScope ||
-    !currentFrontendAddress ||
-    frontendAddress.toLowerCase() !== currentFrontendAddress.toLowerCase()
-  ) {
+  if (!deploymentScope) {
     return NextResponse.json({ error: "Confidentiality log-root artifact not found" }, { status: 404 });
   }
 
@@ -59,7 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .where(
       and(
         eq(confidentialityLogRoots.deploymentKey, deploymentScope.deploymentKey),
-        eq(confidentialityLogRoots.frontendAddress, currentFrontendAddress),
+        eq(confidentialityLogRoots.frontendAddress, frontendAddress),
         eq(confidentialityLogRoots.epoch, epoch),
       ),
     )
