@@ -932,6 +932,20 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
   if (request.question && request.questions) {
     pushFinding(findings, "error", "questions", "Use either question or questions, not both.");
   }
+  if (questions.length > 1) {
+    questions.forEach((question, index) => {
+      for (const field of ["roundConfig", "roundPreset"] as const) {
+        if (question[field] !== undefined && question[field] !== null) {
+          pushFinding(
+            findings,
+            "error",
+            `questions.${index}.${field}`,
+            `${field} must be set at the top level for bundled questions.`,
+          );
+        }
+      }
+    });
+  }
   const usesNestedQuestions =
     (request.question !== undefined && request.question !== null) ||
     (request.questions !== undefined && request.questions !== null);

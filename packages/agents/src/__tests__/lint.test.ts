@@ -836,6 +836,40 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects per-question round timing on bundled asks", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: undefined,
+      questions: [
+        {
+          ...VALID_REQUEST.question,
+          roundPreset: "pure_agent_fast",
+        },
+        {
+          ...VALID_REQUEST.question,
+          roundConfig: { questionDurationSeconds: "300" },
+          title: "Is this alternate option ready for review?",
+        },
+      ],
+      templateId: "ranked_option_member",
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "roundPreset must be set at the top level for bundled questions.",
+          path: "questions.0.roundPreset",
+        }),
+        expect.objectContaining({
+          level: "error",
+          message: "roundConfig must be set at the top level for bundled questions.",
+          path: "questions.1.roundConfig",
+        }),
+      ]),
+    );
+  });
+
   it("warns when ranked option questions imply hidden selectable answers", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

@@ -487,6 +487,21 @@ function assertNoIgnoredTopLevelQuestionDetails(value: Record<string, unknown>) 
   }
 }
 
+function assertNoQuestionLevelBundleRoundConfig(rawQuestions: readonly unknown[]) {
+  if (rawQuestions.length <= 1) return;
+
+  rawQuestions.forEach((question, index) => {
+    if (!isObject(question)) return;
+    for (const field of ["roundConfig", "roundPreset"] as const) {
+      if (question[field] !== undefined && question[field] !== null) {
+        throw new X402QuestionInputError(
+          `questions[${index}].${field} must be set at the top level for bundled questions.`,
+        );
+      }
+    }
+  });
+}
+
 function normalizeOrigin(value: string | null | undefined) {
   const trimmed = value?.trim();
   if (!trimmed) return null;
@@ -1205,6 +1220,7 @@ export function parseX402QuestionRequest(
   if (rawQuestions.length > X402_MAX_QUESTION_BUNDLE_COUNT) {
     throw new X402QuestionInputError(`At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`);
   }
+  assertNoQuestionLevelBundleRoundConfig(rawQuestions);
 
   const firstQuestion = isObject(rawQuestions[0]) ? rawQuestions[0] : {};
   const rawBounty = normalizeBounty(value.bounty);

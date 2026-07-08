@@ -126,6 +126,42 @@ describe("x402 question request shape", () => {
       }),
     ).toThrow("questions must be an array.");
   });
+
+  it("rejects per-question round timing on bundled requests", () => {
+    const { question, ...baseRequest } = VALID_REQUEST;
+
+    expect(() =>
+      parseX402QuestionRequest({
+        ...baseRequest,
+        questions: [
+          question,
+          {
+            ...question,
+            roundConfig: {
+              questionDurationSeconds: "300",
+            },
+            title: "Is this alternate mockup ready?",
+          },
+        ],
+      }),
+    ).toThrow("questions[1].roundConfig must be set at the top level for bundled questions.");
+
+    expect(() =>
+      parseX402QuestionRequest({
+        ...baseRequest,
+        questions: [
+          {
+            ...question,
+            roundPreset: "pure_agent_fast",
+          },
+          {
+            ...question,
+            title: "Is this alternate mockup ready?",
+          },
+        ],
+      }),
+    ).toThrow("questions[0].roundPreset must be set at the top level for bundled questions.");
+  });
 });
 
 describe("x402 question attachment origins", () => {
