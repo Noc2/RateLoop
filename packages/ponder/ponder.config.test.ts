@@ -198,6 +198,18 @@ describe("ponder config", () => {
     ).rejects.toThrow("PONDER_RPC_URL_8453 must use HTTPS for base.");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
+  it("allows local hardhat RPC during production-mode E2E startup", async () => {
+    const { default: config } = await loadPonderConfig({
+      NODE_ENV: "production",
+      PONDER_NETWORK: "hardhat",
+      PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+    });
+
+    const loadedConfig = config as any;
+
+    expect(loadedConfig.networks.hardhat.chainId).toBe(31337);
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
   it("uses start block 0 for local hardhat even when artifacts contain deployment blocks", async () => {
     expect(chain31337?.ContentRegistry?.address).toBeDefined();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

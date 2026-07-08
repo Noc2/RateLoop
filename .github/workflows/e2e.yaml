@@ -168,6 +168,8 @@ jobs:
           RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
+          CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+          RATE_LIMIT_TRUSTED_IP_HEADERS: x-forwarded-for
         run: yarn workspace @rateloop/ponder start:built-contracts --port 42069 &
 
       - name: Start Next.js (production)
@@ -361,6 +363,8 @@ jobs:
           RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
+          CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+          RATE_LIMIT_TRUSTED_IP_HEADERS: x-forwarded-for
         run: yarn workspace @rateloop/ponder start:built-contracts --port 42069 &
 
       - name: Start Next.js (production)

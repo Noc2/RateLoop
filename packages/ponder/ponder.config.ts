@@ -156,7 +156,7 @@ function getRpcUrl(network: PonderNetworkName): string {
       url.hostname === "127.0.0.1" ||
       url.hostname === "::1";
 
-    if (isProduction && isLocalhost) {
+    if (network !== "hardhat" && isProduction && isLocalhost) {
       throw new Error(`${key} must not point to localhost in production.`);
     }
     if (network !== "hardhat" && url.protocol !== "https:") {
