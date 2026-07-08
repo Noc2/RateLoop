@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">RateLoop Ask Agent handoff hero</title>
+  <desc id="desc">A clean RateLoop branded hero image asking whether the RateLoop handoff flow works for an agent or AI.</desc>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="56%" r="62%">
+      <stop offset="0%" stop-color="#172031"/>
+      <stop offset="38%" stop-color="#0d1320"/>
+      <stop offset="100%" stop-color="#040507"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#03CEA4" stop-opacity="0.22"/>
+      <stop offset="42%" stop-color="#359EEE" stop-opacity="0.12"/>
+      <stop offset="76%" stop-color="#EF476F" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brandWord" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#359EEE"/>
+      <stop offset="34%" stop-color="#03CEA4"/>
+      <stop offset="68%" stop-color="#FFC43D"/>
+      <stop offset="100%" stop-color="#EF476F"/>
+    </linearGradient>
+    <linearGradient id="ring-0" x1="64" y1="21" x2="85.5" y2="26.761" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC43D"/>
+      <stop offset="1" stop-color="#FFC43D"/>
+    </linearGradient>
+    <linearGradient id="ring-1" x1="85.5" y1="26.761" x2="101.239" y2="42.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC43D"/>
+      <stop offset="1" stop-color="#FFC43D"/>
+    </linearGradient>
+    <linearGradient id="ring-2" x1="101.239" y1="42.5" x2="107" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC43D"/>
+      <stop offset="1" stop-color="#FFC43D"/>
+    </linearGradient>
+    <linearGradient id="ring-3" x1="107" y1="64" x2="101.239" y2="85.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC43D"/>
+      <stop offset="1" stop-color="#EF476F"/>
+    </linearGradient>
+    <linearGradient id="ring-4" x1="101.239" y1="85.5" x2="85.5" y2="101.239" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EF476F"/>
+      <stop offset="1" stop-color="#EF476F"/>
+    </linearGradient>
+    <linearGradient id="ring-5" x1="85.5" y1="101.239" x2="64" y2="107" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EF476F"/>
+      <stop offset="1" stop-color="#EF476F"/>
+    </linearGradient>
+    <linearGradient id="ring-6" x1="64" y1="107" x2="42.5" y2="101.239" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EF476F"/>
+      <stop offset="1" stop-color="#EF476F"/>
+    </linearGradient>
+    <linearGradient id="ring-7" x1="42.5" y1="101.239" x2="26.761" y2="85.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EF476F"/>
+      <stop offset="1" stop-color="#359EEE"/>
+    </linearGradient>
+    <linearGradient id="ring-8" x1="26.761" y1="85.5" x2="21" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#359EEE"/>
+      <stop offset="1" stop-color="#359EEE"/>
+    </linearGradient>
+    <linearGradient id="ring-9" x1="21" y1="64" x2="26.761" y2="42.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#359EEE"/>
+      <stop offset="1" stop-color="#359EEE"/>
+    </linearGradient>
+    <linearGradient id="ring-10" x1="26.761" y1="42.5" x2="42.5" y2="26.761" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#359EEE"/>
+      <stop offset="1" stop-color="#03CEA4"/>
+    </linearGradient>
+    <linearGradient id="ring-11" x1="42.5" y1="26.761" x2="64" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#03CEA4"/>
+      <stop offset="1" stop-color="#FFC43D"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bgGlow)"/>
+  <ellipse cx="800" cy="600" rx="460" ry="260" fill="url(#halo)"/>
+
+  <g transform="translate(738 36)">
+    <g fill="none" stroke-width="10" stroke-linecap="butt" stroke-linejoin="round">
+      <path d="M64 21 A43 43 0 0 1 85.5 26.761" stroke="url(#ring-0)"/>
+      <path d="M85.5 26.761 A43 43 0 0 1 101.239 42.5" stroke="url(#ring-1)"/>
+      <path d="M101.239 42.5 A43 43 0 0 1 107 64" stroke="url(#ring-2)"/>
+      <path d="M107 64 A43 43 0 0 1 101.239 85.5" stroke="url(#ring-3)"/>
+      <path d="M101.239 85.5 A43 43 0 0 1 85.5 101.239" stroke="url(#ring-4)"/>
+      <path d="M85.5 101.239 A43 43 0 0 1 64 107" stroke="url(#ring-5)"/>
+      <path d="M64 107 A43 43 0 0 1 42.5 101.239" stroke="url(#ring-6)"/>
+      <path d="M42.5 101.239 A43 43 0 0 1 26.761 85.5" stroke="url(#ring-7)"/>
+      <path d="M26.761 85.5 A43 43 0 0 1 21 64" stroke="url(#ring-8)"/>
+      <path d="M21 64 A43 43 0 0 1 26.761 42.5" stroke="url(#ring-9)"/>
+      <path d="M26.761 42.5 A43 43 0 0 1 42.5 26.761" stroke="url(#ring-10)"/>
+      <path d="M42.5 26.761 A43 43 0 0 1 64 21" stroke="url(#ring-11)"/>
+    </g>
+  </g>
+
+  <text x="800" y="254" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="76" font-weight="800" fill="#f5f7fb">Did the <tspan fill="url(#brandWord)">RateLoop</tspan></text>
+  <text x="800" y="338" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="76" font-weight="800" fill="#f5f7fb">handoff work for your agent?</text>
+
+  <rect x="290" y="390" width="1020" height="250" rx="28" fill="#17191d" stroke="#272c34" filter="url(#shadow)"/>
+  <rect x="290" y="390" width="1020" height="72" rx="28" fill="#1c2026"/>
+  <circle cx="336" cy="426" r="11" fill="url(#brandWord)"/>
+  <text x="366" y="437" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="700" fill="#f5f7fb">RateLoop Ask &gt; Agent</text>
+  <text x="1080" y="437" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="22" fill="#a6afbf">browser handoff</text>
+
+  <g transform="translate(360 500)">
+    <rect x="0" y="0" width="116" height="116" rx="24" fill="#10141a" stroke="#2a303b"/>
+    <circle cx="58" cy="34" r="16" fill="#359EEE"/>
+    <rect x="26" y="56" width="64" height="20" rx="10" fill="#03CEA4"/>
+    <rect x="20" y="84" width="76" height="12" rx="6" fill="#2c3542"/>
+  </g>
+
+  <rect x="520" y="500" width="710" height="116" rx="22" fill="#1a2838" stroke="#29598a"/>
+  <text x="556" y="548" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="34" font-weight="500" fill="#f5f7fb">Test RateLoop with your agent.</text>
+  <text x="556" y="592" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="34" font-weight="500" fill="#f5f7fb">Tell us what worked or broke.</text>
+
+  <g transform="translate(372 710)">
+    <circle cx="10" cy="10" r="7" fill="#03CEA4"/>
+    <text x="34" y="18" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="28" fill="#eef2f8">Clear to review</text>
+    <circle cx="350" cy="10" r="7" fill="#FFC43D"/>
+    <text x="374" y="18" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="28" fill="#eef2f8">Safe to approve</text>
+    <circle cx="682" cy="10" r="7" fill="#EF476F"/>
+    <text x="706" y="18" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="28" fill="#eef2f8">Worth using again</text>
+  </g>
+
+  <g transform="translate(102 782)">
+    <rect x="0" y="-12" width="88" height="8" rx="4" fill="url(#brandWord)"/>
+    <text x="0" y="38" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="34" font-weight="700" fill="#f5f7fb">One question. Real judgment. Before your agent acts.</text>
+  </g>
+</svg>

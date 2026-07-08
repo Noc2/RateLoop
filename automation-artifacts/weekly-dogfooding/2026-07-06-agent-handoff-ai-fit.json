@@ -1,0 +1,24 @@
+{
+  "clientRequestId": "weekly-dogfooding-agent-handoff-ai-fit-2026-07-06",
+  "chainId": 8453,
+  "templateId": "generic_rating",
+  "maxPaymentAmount": "1000000",
+  "bounty": {
+    "asset": "USDC",
+    "amount": "1000000",
+    "requiredVoters": "3"
+  },
+  "question": {
+    "templateId": "generic_rating",
+    "templateInputs": {
+      "audience": "agent and AI builders testing a real RateLoop handoff path",
+      "goal": "determine whether the RateLoop Ask > Agent browser handoff works when used with an actual agent or AI workflow",
+      "successSignal": "Did the RateLoop handoff flow work when you tried it with your agent or AI?"
+    },
+    "title": "Did the RateLoop handoff work for your agent?",
+    "description": "Try RateLoop's For Agents docs and Ask > Agent browser handoff with your own agent or AI workflow. Rate high only if the flow worked end to end. In feedback, say what worked, what broke or confused you, and what RateLoop should improve or fix.",
+    "contextUrl": "https://www.rateloop.ai/docs/ai",
+    "categoryId": "1",
+    "tags": ["agent", "handoff", "ai-fit"]
+  }
+}
