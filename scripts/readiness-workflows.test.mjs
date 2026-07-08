@@ -104,8 +104,9 @@ test("Railway service start commands, watch patterns, and health checks pin prod
 
   assert.match(
     keeper,
-    /startCommand = "yarn start:built-dist"/,
+    /startCommand = "sh \.\/docker-entrypoint\.sh"/,
   );
+  assert.doesNotMatch(keeper, /startCommand = "yarn start:built-dist"/);
   assert.match(
     ponder,
     /startCommand = "yarn start:built-workspace-deps"/,

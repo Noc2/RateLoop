@@ -16,6 +16,6 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "yarn start:built-dist"
+startCommand = "sh ./docker-entrypoint.sh"
 healthcheckPath = "/live"
 healthcheckTimeout = 120
