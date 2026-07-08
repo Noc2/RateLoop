@@ -690,6 +690,23 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects bounty amounts below the parser minimum", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: { ...VALID_REQUEST.bounty, amount: "999999" },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Bounty amount must be at least 1000000 atomic units.",
+          path: "bounty.amount",
+        }),
+      ]),
+    );
+  });
+
   it("rejects category ids and template versions that the parser would reject", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

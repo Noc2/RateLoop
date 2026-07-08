@@ -37,6 +37,7 @@ import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402Questio
 import {
   X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   X402_MAX_QUESTION_BUNDLE_COUNT,
+  X402_MIN_SUBMISSION_BOUNTY,
   X402_PURE_AGENT_FAST_ROUND_PRESET_ID,
   isAllowedX402HostedDetailsUrl,
   isAllowedX402UploadedImageUrl,
@@ -874,6 +875,13 @@ export function lintAgentAskRequest(input: unknown, options: AgentAskLintOptions
     const amount = parseLintPositiveInteger(request.bounty.amount);
     if (amount === null) {
       pushFinding(findings, "error", "bounty.amount", "Bounty amount must be a positive atomic integer.");
+    } else if (amount < X402_MIN_SUBMISSION_BOUNTY) {
+      pushFinding(
+        findings,
+        "error",
+        "bounty.amount",
+        `Bounty amount must be at least ${X402_MIN_SUBMISSION_BOUNTY} atomic units.`,
+      );
     } else {
       const requiredVoters = parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS;
       lintBoundedInteger(

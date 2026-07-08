@@ -15,6 +15,11 @@ const atomicAmountSchema = {
   type: "string",
 };
 
+const bountyAmountSchema = {
+  ...atomicAmountSchema,
+  description: "Bounty amount as a base-10 atomic token string. Must be at least 1000000 atomic units.",
+};
+
 const chainIdSchema = {
   description:
     "Target RateLoop deployment EVM chain id. Browser handoffs keep this saved chain during prepare; the connected wallet may need to switch to it before execution.",
@@ -224,7 +229,7 @@ const agentQuestionInputSchema = {
 const agentBountyInputSchema = {
   additionalProperties: false,
   properties: {
-    amount: atomicAmountSchema,
+    amount: bountyAmountSchema,
     asset: {
       default: "USDC",
       enum: ["USDC", "usdc", "LREP", "lrep"],
