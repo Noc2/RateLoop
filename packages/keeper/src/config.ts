@@ -52,7 +52,7 @@ function parseBooleanEnv(
 function requireUrlEnv(
   name: string,
   errors: string[],
-  options: { requireHttps?: boolean } = {},
+  options: { requireHttps?: boolean; allowLocalhostInProduction?: boolean } = {},
 ): string {
   const value = readEnv(name);
   if (!value) {
@@ -67,7 +67,7 @@ function requireUrlEnv(
       url.hostname === "127.0.0.1" ||
       url.hostname === "::1";
 
-    if (isProduction && isLocalhost) {
+    if (isProduction && isLocalhost && !options.allowLocalhostInProduction) {
       errors.push(`${name} must not point to localhost in production`);
     }
     if (options.requireHttps && url.protocol !== "https:") {
@@ -523,8 +523,8 @@ function loadConfig() {
       )
     : false;
   const ponderBaseUrl = readOptionalUrlEnv("PONDER_BASE_URL", errors, {
-    rejectLocalhostInProduction: true,
-    requireHttpsInProduction: true,
+    rejectLocalhostInProduction: chainId !== LOCAL_HARDHAT_CHAIN_ID,
+    requireHttpsInProduction: chainId !== LOCAL_HARDHAT_CHAIN_ID,
   });
 
   if (!keystoreAccount && !privateKey) {
@@ -590,6 +590,7 @@ function loadConfig() {
     // Network
     rpcUrl: requireUrlEnv("RPC_URL", errors, {
       requireHttps: chainId !== LOCAL_HARDHAT_CHAIN_ID,
+      allowLocalhostInProduction: chainId === LOCAL_HARDHAT_CHAIN_ID,
     }),
     chainId,
     chainName:

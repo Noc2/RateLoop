@@ -222,6 +222,20 @@ describe("keeper config", () => {
     ).rejects.toThrow("PONDER_KEEPER_WORK_TOKEN is required in production");
   });
 
+  it("allows local hardhat RPC and Ponder URLs during production-mode E2E startup", async () => {
+    const { config } = await loadKeeperConfig({
+      NODE_ENV: "production",
+      RPC_URL: "http://127.0.0.1:8545",
+      PONDER_BASE_URL: "http://127.0.0.1:42069",
+      PONDER_KEEPER_WORK_TOKEN: "rateloop-e2e-keeper-work-token",
+      KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+    });
+
+    expect(config.rpcUrl).toBe("http://127.0.0.1:8545");
+    expect(config.ponderBaseUrl).toBe("http://127.0.0.1:42069");
+    expect(config.persistence.mainLoopLockRequired).toBe(false);
+  });
+
   it("allows production operators to explicitly opt out of main-loop locks", async () => {
     const { config } = await loadKeeperConfig({
       KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
@@ -405,10 +419,19 @@ describe("keeper config", () => {
 
   it("rejects localhost RPC URLs in production", async () => {
     await expect(
-      loadKeeperConfig({
-        NODE_ENV: "production",
-        RPC_URL: "http://localhost:8545",
-      }),
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "8453",
+          NODE_ENV: "production",
+          RPC_URL: "http://localhost:8545",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+      ),
     ).rejects.toThrow("RPC_URL must not point to localhost in production");
   });
 
@@ -479,19 +502,37 @@ describe("keeper config", () => {
 
   it("rejects local or non-HTTPS Ponder API base URLs in production", async () => {
     await expect(
-      loadKeeperConfig({
-        NODE_ENV: "production",
-        PONDER_BASE_URL: "http://localhost:42069",
-      }),
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "8453",
+          NODE_ENV: "production",
+          PONDER_BASE_URL: "http://localhost:42069",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+      ),
     ).rejects.toThrow(
       "PONDER_BASE_URL must not point to localhost in production",
     );
 
     await expect(
-      loadKeeperConfig({
-        NODE_ENV: "production",
-        PONDER_BASE_URL: "http://ponder.example.com",
-      }),
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "8453",
+          NODE_ENV: "production",
+          PONDER_BASE_URL: "http://ponder.example.com",
+          KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+      ),
     ).rejects.toThrow("PONDER_BASE_URL must be an HTTPS URL in production");
   });
 
