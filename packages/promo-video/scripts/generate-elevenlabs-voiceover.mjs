@@ -36,9 +36,9 @@ if (!apiKey) {
 }
 
 const model = process.env.PROMO_ELEVENLABS_MODEL ?? "eleven_multilingual_v2";
-// "Brian" — warm, mid-deep American male from the ElevenLabs premade library.
+// "Matilda" — warm, upbeat, professional American female from the ElevenLabs premade library.
 // Run `npm run generate:elevenlabs-voiceover -- --list-voices` to browse alternatives.
-const voiceId = process.env.PROMO_ELEVENLABS_VOICE_ID ?? "nPczCjzI2devNBz1zQrb";
+const voiceId = process.env.PROMO_ELEVENLABS_VOICE_ID ?? "XrExE9yKIg1WjnnlVkGX";
 const voiceSettings = {
   stability: Number(process.env.PROMO_ELEVENLABS_STABILITY ?? 0.4),
   similarity_boost: Number(process.env.PROMO_ELEVENLABS_SIMILARITY ?? 0.75),

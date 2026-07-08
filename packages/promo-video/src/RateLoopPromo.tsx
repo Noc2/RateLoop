@@ -39,16 +39,16 @@ type Beat = {
 
 const starts = [0, HOOK, HOOK + ASK, HOOK + ASK + HANDOFF, HOOK + ASK + HANDOFF + RATERS];
 const BEATS: Beat[] = [
-  { start: 0, duration: HOOK, vo: "audio/vo-01-hook.m4a", voDurationInFrames: 135, Scene: Hook, fadeIn: 6 },
-  { start: starts[1], duration: ASK, vo: "audio/vo-02-ask.m4a", voDurationInFrames: 198, Scene: AgentAsk },
-  { start: starts[2], duration: HANDOFF, vo: "audio/vo-03-handoff.m4a", voDurationInFrames: 149, Scene: Handoff },
-  { start: starts[3], duration: RATERS, vo: "audio/vo-04-raters.m4a", voDurationInFrames: 214, Scene: Raters },
-  { start: starts[4], duration: SETTLE, vo: "audio/vo-05-settle.m4a", voDurationInFrames: 113, Scene: Settle },
+  { start: 0, duration: HOOK, vo: "audio/vo-01-hook.m4a", voDurationInFrames: 138, Scene: Hook, fadeIn: 6 },
+  { start: starts[1], duration: ASK, vo: "audio/vo-02-ask.m4a", voDurationInFrames: 201, Scene: AgentAsk },
+  { start: starts[2], duration: HANDOFF, vo: "audio/vo-03-handoff.m4a", voDurationInFrames: 148, Scene: Handoff },
+  { start: starts[3], duration: RATERS, vo: "audio/vo-04-raters.m4a", voDurationInFrames: 243, Scene: Raters },
+  { start: starts[4], duration: SETTLE, vo: "audio/vo-05-settle.m4a", voDurationInFrames: 126, Scene: Settle },
   {
     start: starts[4] + SETTLE,
     duration: REPORT,
     vo: "audio/vo-06-report.m4a",
-    voDurationInFrames: 207,
+    voDurationInFrames: 221,
     Scene: Report,
   },
   {
