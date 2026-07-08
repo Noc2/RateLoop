@@ -33,6 +33,7 @@ export const CORRELATION_E2E_STAKE = 10_000_000n;
 const FRONTEND_STAKE = 1_000_000_000n;
 const E2E_CORRELATION_EPOCH_OFFSET = 1_000_000_000n;
 const E2E_RBTS_CORRELATION_EPOCH_OFFSET = 1_500_000_000n;
+const E2E_KEEPER_WORK_TOKEN = "rateloop-e2e-keeper-work-token";
 const ROUND_STATE_SETTLED = 1;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -629,11 +630,14 @@ export async function stopCorrelationSnapshotKeeper() {
 
 function correlationKeeperEnvOverrides(artifactPath?: string) {
   const publishFileArtifact = Boolean(artifactPath);
+  const keeperDatabaseUrl = process.env.KEEPER_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim();
 
   return {
     CHAIN_ID: "31337",
     RPC_URL: E2E_RPC_URL,
     PONDER_BASE_URL: PONDER_URL,
+    PONDER_KEEPER_WORK_TOKEN: process.env.PONDER_KEEPER_WORK_TOKEN?.trim() || E2E_KEEPER_WORK_TOKEN,
+    KEEPER_DATABASE_URL: keeperDatabaseUrl,
     KEEPER_PRIVATE_KEY: ANVIL_ACCOUNTS.account1.privateKey,
     KEEPER_INTERVAL_MS: "1000",
     KEEPER_STARTUP_JITTER_MS: "0",

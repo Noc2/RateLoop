@@ -245,6 +245,8 @@ jobs:
           NOTIFICATION_DELIVERY_SECRET: rateloop-e2e-confidentiality-secret
           # Anvil/Hardhat account #2 — well-known test key, no real funds
           KEEPER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+          PONDER_KEEPER_WORK_TOKEN: rateloop-e2e-keeper-work-token
+          KEEPER_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
           KEEPER_INTERVAL_MS: "5000"
 
       - name: Upload Playwright report
