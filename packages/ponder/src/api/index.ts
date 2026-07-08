@@ -61,6 +61,9 @@ app.onError((err, c) => {
 
 const rateLimiter = new RateLimiter(120, 60_000, 60_000);
 const isProduction = process.env.NODE_ENV === "production";
+const isLocalE2EProductionBuild =
+  process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
+  process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 const rateLimitMisconfigured = isProduction && !hasTrustedRateLimitHeadersConfigured();
 
 if (rateLimitMisconfigured) {
@@ -120,7 +123,7 @@ app.use("/*", async (c, next) => {
   });
 
   const isLoopbackRequest =
-    process.env.NODE_ENV !== "production"
+    (!isProduction || isLocalE2EProductionBuild)
     && (isLoopbackRateLimitIdentifier(identifier) || isLoopbackRequestUrl(c.req.url));
 
   if (isLoopbackRequest) {

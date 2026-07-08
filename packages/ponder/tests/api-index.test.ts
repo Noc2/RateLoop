@@ -82,6 +82,21 @@ describe("ponder api bootstrap", () => {
     expect(response.status).toBe(404);
   });
 
+  it("keeps loopback E2E requests outside the production limiter when local E2E flags are set", async () => {
+    const { default: app } = await loadApp({
+      NODE_ENV: "production",
+      CORS_ORIGIN: "http://localhost:3000,http://127.0.0.1:3000",
+      RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
+      RATELOOP_E2E_PRODUCTION_BUILD: "true",
+      NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true",
+    });
+
+    for (let i = 0; i < 130; i += 1) {
+      const response = await app.request("http://127.0.0.1:42069/content");
+      expect(response.status).toBe(404);
+    }
+  });
+
   it("does not partially parse malformed replica counts", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { default: app } = await loadApp({

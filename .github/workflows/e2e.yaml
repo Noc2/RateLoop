@@ -164,6 +164,8 @@ jobs:
 
       - name: Start Ponder indexer
         env:
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
           RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
@@ -359,6 +361,8 @@ jobs:
 
       - name: Start Ponder indexer
         env:
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
           DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rateloop_app
           RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
