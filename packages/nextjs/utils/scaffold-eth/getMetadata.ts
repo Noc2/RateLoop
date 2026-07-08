@@ -32,7 +32,7 @@ function resolveMetadataBaseUrl() {
 }
 
 const titleTemplate = "%s | RateLoop";
-const socialImageVersion = "20260707b";
+const socialImageVersion = "20260708a";
 const socialImageAlt =
   "RateLoop social image with the RateLoop wordmark, the subtitle Level Up Your Agent, and the orbital loop mark";
 
