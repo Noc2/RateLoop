@@ -22,9 +22,12 @@ test("promo voiceover generators share the same clip source", () => {
     ],
   );
 
+  const elevenlabsGenerator = readFileSync(join(scriptsDir, "generate-elevenlabs-voiceover.mjs"), "utf8");
   const openaiGenerator = readFileSync(join(scriptsDir, "generate-openai-voiceover.mjs"), "utf8");
   const offlineGenerator = readFileSync(join(scriptsDir, "generate-voiceover.zsh"), "utf8");
 
+  assert.match(elevenlabsGenerator, /import \{ clips \} from "\.\/voiceover-clips\.mjs";/);
+  assert.doesNotMatch(elevenlabsGenerator, /const clips = \[/);
   assert.match(openaiGenerator, /import \{ clips \} from "\.\/voiceover-clips\.mjs";/);
   assert.doesNotMatch(openaiGenerator, /const clips = \[/);
   assert.match(offlineGenerator, /voiceover-clips\.mjs" --tsv/);
