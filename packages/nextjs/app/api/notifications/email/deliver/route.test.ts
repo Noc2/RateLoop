@@ -100,6 +100,16 @@ test("notification delivery route accepts Vercel cron GET bearer auth", async ()
   assert.deepEqual(await response.json(), { error: "Notification delivery is not configured" });
 });
 
+test("notification delivery route requires delivery secret after Vercel cron auth", async () => {
+  env.CRON_SECRET = "cron-secret";
+  delete env.NOTIFICATION_DELIVERY_SECRET;
+
+  const response = await route.GET(cronRequest());
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "Notification delivery is not configured" });
+});
+
 test("notification delivery route rejects unauthorized Vercel cron GET requests", async () => {
   env.CRON_SECRET = "cron-secret";
 
