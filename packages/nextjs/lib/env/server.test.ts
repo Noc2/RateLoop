@@ -328,6 +328,16 @@ test("getX402UsdcAddressOverride rejects conflicting USDC env vars", () => {
   assert.throws(() => getX402UsdcAddressOverride(), /must match when multiple are set/);
 });
 
+test("getX402UsdcAddressOverride rejects malformed public USDC env vars", () => {
+  env.NEXT_PUBLIC_USDC_ADDRESS = "0x1234";
+  assert.throws(() => getX402UsdcAddressOverride(), /NEXT_PUBLIC_USDC_ADDRESS must be a valid EVM address/);
+});
+
+test("getX402UsdcAddressOverride rejects malformed chain-scoped USDC env vars", () => {
+  env.NEXT_PUBLIC_USDC_ADDRESS_8453 = "0x1234";
+  assert.throws(() => getX402UsdcAddressOverride(8453), /NEXT_PUBLIC_USDC_ADDRESS_8453 must be a valid EVM address/);
+});
+
 test("getX402UsdcAddressOverride requires a public USDC var when only server override is set", () => {
   delete env.NEXT_PUBLIC_USDC_ADDRESS;
   delete env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;

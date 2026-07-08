@@ -1,4 +1,5 @@
 import "server-only";
+import { isAddress } from "viem";
 import { RPC_OVERRIDES } from "~~/config/shared";
 import { resolveOptionalAppUrl, resolveTrustedRateLoopAppUrl } from "~~/lib/env/appUrl";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
@@ -196,26 +197,36 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
   return readEnv("THIRDWEB_SERVER_VERIFIER_SECRET");
 }
 
-function readChainScopedEnv(name: string, chainId: number | undefined): string | undefined {
-  return chainId === undefined ? undefined : readEnv(`${name}_${chainId}`);
+function readChainScopedNamedEnv(
+  name: string,
+  chainId: number | undefined,
+): { name: string; value: string | undefined } {
+  if (chainId !== undefined) {
+    const scopedName = `${name}_${chainId}`;
+    const scopedValue = readEnv(scopedName);
+    if (scopedValue !== undefined) {
+      return { name: scopedName, value: scopedValue };
+    }
+  }
+
+  return { name, value: readEnv(name) };
+}
+
+function normalizeAddressEnv(name: string, rawValue: string | undefined): `0x${string}` | undefined {
+  if (rawValue === undefined) return undefined;
+  if (!isAddress(rawValue)) {
+    throw new Error(`${name} must be a valid EVM address.`);
+  }
+  return rawValue.toLowerCase() as `0x${string}`;
 }
 
 export function getX402UsdcAddressOverride(chainId?: number): `0x${string}` | undefined {
-  const publicUsdc = (
-    readChainScopedEnv("NEXT_PUBLIC_USDC_ADDRESS", chainId) ?? readEnv("NEXT_PUBLIC_USDC_ADDRESS")
-  )?.trim();
-  const publicX402Usdc = (
-    readChainScopedEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS", chainId) ??
-    readEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS")
-  )?.trim();
-  const serverUsdc = (
-    readChainScopedEnv("RATELOOP_X402_USDC_ADDRESS", chainId) ?? readEnv("RATELOOP_X402_USDC_ADDRESS")
-  )?.trim();
-  const normalizedPublic = publicUsdc?.startsWith("0x") ? (publicUsdc.toLowerCase() as `0x${string}`) : undefined;
-  const normalizedPublicX402 = publicX402Usdc?.startsWith("0x")
-    ? (publicX402Usdc.toLowerCase() as `0x${string}`)
-    : undefined;
-  const normalizedServer = serverUsdc?.startsWith("0x") ? (serverUsdc.toLowerCase() as `0x${string}`) : undefined;
+  const publicUsdc = readChainScopedNamedEnv("NEXT_PUBLIC_USDC_ADDRESS", chainId);
+  const publicX402Usdc = readChainScopedNamedEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS", chainId);
+  const serverUsdc = readChainScopedNamedEnv("RATELOOP_X402_USDC_ADDRESS", chainId);
+  const normalizedPublic = normalizeAddressEnv(publicUsdc.name, publicUsdc.value);
+  const normalizedPublicX402 = normalizeAddressEnv(publicX402Usdc.name, publicX402Usdc.value);
+  const normalizedServer = normalizeAddressEnv(serverUsdc.name, serverUsdc.value);
 
   const configured = [normalizedPublic, normalizedPublicX402, normalizedServer].filter(
     (value): value is `0x${string}` => value !== undefined,
