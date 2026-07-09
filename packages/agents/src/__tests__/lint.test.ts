@@ -1149,12 +1149,24 @@ describe("round config voter alignment linting", () => {
     );
   });
 
-  it("rejects non-integer bounty eligibility values", () => {
+  it("accepts named bounty eligibility aliases", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
       bounty: {
         ...VALID_REQUEST.bounty,
         bountyEligibility: "proof_of_human",
+      },
+    });
+
+    expect(summarizeLintFindings(findings).ok).toBe(true);
+  });
+
+  it("rejects unknown bounty eligibility aliases", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        bountyEligibility: "humans_only",
       },
     });
 

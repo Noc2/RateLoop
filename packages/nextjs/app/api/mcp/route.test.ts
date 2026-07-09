@@ -317,7 +317,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
     anyOf?: Array<{ required?: string[] }>;
     properties?: {
-      bounty?: { properties?: { bountyEligibility?: { default?: unknown; description?: string } } };
+      bounty?: { properties?: { bountyEligibility?: { default?: unknown; description?: string; enum?: unknown[] } } };
       feedbackBonus?: { properties?: { asset?: { enum?: string[] } } };
       mode?: { enum?: string[] };
     };
@@ -384,6 +384,14 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   );
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
   assert.equal(askSchema.properties?.bounty?.properties?.bountyEligibility?.default, undefined);
+  assert.deepEqual(askSchema.properties?.bounty?.properties?.bountyEligibility?.enum, [
+    0,
+    8,
+    "0",
+    "8",
+    "everyone",
+    "proof_of_human",
+  ]);
   assert.match(
     askSchema.properties?.bounty?.properties?.bountyEligibility?.description ?? "",
     /Omit to use RateLoop's launch default/,

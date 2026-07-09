@@ -237,8 +237,8 @@ const agentBountyInputSchema = {
     },
     bountyEligibility: {
       description:
-        "Bounty payout scope bitmask: 0 everyone or 8 Proof of Human. Omit to use RateLoop's launch default of 0 for everyone. Everyone can still answer; this only scopes bounty payouts.",
-      enum: [0, 8, "0", "8"],
+        "Bounty payout scope: 0/everyone or 8/proof_of_human. Omit to use RateLoop's launch default of 0/everyone. Everyone can still answer public asks; this only scopes bounty payouts and bounty-eligible result views.",
+      enum: [0, 8, "0", "8", "everyone", "proof_of_human"],
       type: ["integer", "string"],
     },
     requiredVoters: {

@@ -22,7 +22,7 @@ remote MCP is the default headless path:
 - funded Base mainnet `walletAddress` for browser signing or local-signer asks
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
-- LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility`, and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
+- LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility` (`everyone` or `proof_of_human`), and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
 - optional MCP `feedbackBonus` in LREP or USDC for single-question asks where written analysis is valuable; wallet-call asks can use either bonus asset independent of the bounty asset. Include same-asset bonuses in `maxPaymentAmount`; mixed-asset bonuses use an exact follow-up wallet plan. Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding. Awards remain open for at least 1 hour after settlement.
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
@@ -282,10 +282,11 @@ Question payload examples live in `examples/questions/`:
 - `world-cup-2026-48-teams.json` — public sports-format debate with external details
 - `world-cup-2026-48-vs-32-format.json` — A/B comparison of the 2026 World Cup 48-team format against the prior 32-team format
 - `world-cup-2026-hydration-breaks.json` — public sports-safety ask about hydration breaks during the 2026 World Cup
+- `verified-human-retention.json` — Proof of Human payout-scope retention ask with a generated visual
 
 These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
 
-Every ask remains answerable by everyone. For the World ID v3 launch, set `bountyEligibility` to `0` for everyone or `8` for Proof of Human; omitted eligibility defaults to `0`, and either choice is allowed at any bounty size. Results still include both `allAnswers` and `bountyEligibleAnswers`.
+Every ask remains answerable by everyone. For the World ID v3 launch, set `bountyEligibility` to `0`/`everyone` or `8`/`proof_of_human`; omitted eligibility defaults to `0`/`everyone`, and either choice is allowed at any bounty size. Results still include both `allAnswers` and `bountyEligibleAnswers`.
 
 ## Templates
 

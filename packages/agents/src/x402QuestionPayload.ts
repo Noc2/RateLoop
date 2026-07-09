@@ -3,6 +3,7 @@ import {
   CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
   MIN_NONZERO_CONFIDENTIALITY_BOND,
   USDC_BY_CHAIN_ID,
+  BOUNTY_ELIGIBILITY_OPEN,
   BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
   requiredQuestionRewardParticipants,
 } from "@rateloop/contracts/protocol";
@@ -51,7 +52,16 @@ const QUESTION_DETAILS_PATH_PATTERN = /^(?:\/.*)?\/api\/attachments\/details\/de
 const IMAGE_ATTACHMENT_PATH_PATTERN = /^(?:\/.*)?\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
 const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
+const X402_BOUNTY_ELIGIBILITY_OPEN = BOUNTY_ELIGIBILITY_OPEN;
 const X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+const X402_BOUNTY_ELIGIBILITY_ERROR =
+  "bounty.bountyEligibility must be 0/everyone or 8/proof_of_human.";
+const X402_BOUNTY_ELIGIBILITY_ALIASES: Record<string, number> = {
+  everyone: X402_BOUNTY_ELIGIBILITY_OPEN,
+  open: X402_BOUNTY_ELIGIBILITY_OPEN,
+  proof_of_human: X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN,
+  "proof-of-human": X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN,
+};
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-payment-v4"));
 const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v7"));
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
@@ -853,7 +863,25 @@ function normalizeChainId(value: unknown, fallbackChainId?: number): number {
 
 function isSupportedBountyEligibility(value: number): boolean {
   if (!Number.isSafeInteger(value) || value < 0 || value > 255) return false;
-  return value === 0 || value === X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN;
+  return value === X402_BOUNTY_ELIGIBILITY_OPEN || value === X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN;
+}
+
+function parseBountyEligibility(value: unknown): number {
+  if (value === undefined || value === null) return X402_BOUNTY_ELIGIBILITY_OPEN;
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    const alias = X402_BOUNTY_ELIGIBILITY_ALIASES[normalized.toLowerCase()];
+    if (alias !== undefined) return alias;
+    if (normalized && !/^\d+$/.test(normalized)) {
+      throw new X402QuestionInputError(X402_BOUNTY_ELIGIBILITY_ERROR);
+    }
+  }
+
+  const parsed = Number(parseNonNegativeInteger(value, "bounty.bountyEligibility"));
+  if (!isSupportedBountyEligibility(parsed)) {
+    throw new X402QuestionInputError(X402_BOUNTY_ELIGIBILITY_ERROR);
+  }
+  return parsed;
 }
 
 function parseOptionalNonNegativeBountyInteger(value: unknown, fieldName: string, fallback: bigint): bigint {
@@ -900,13 +928,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   const bountyStartBy = 0n;
   const bountyWindowSeconds = 0n;
   const feedbackWindowSeconds = 0n;
-  const hasExplicitBountyEligibility = value.bountyEligibility !== undefined && value.bountyEligibility !== null;
-  const bountyEligibility = Number(
-    parseNonNegativeInteger(
-      hasExplicitBountyEligibility ? value.bountyEligibility : 0n,
-      "bounty.bountyEligibility",
-    ),
-  );
+  const bountyEligibility = parseBountyEligibility(value.bountyEligibility);
 
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
     throw new X402QuestionInputError(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
@@ -923,11 +945,6 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   }
   if (amount < requiredVoters * requiredSettledRounds) {
     throw new X402QuestionInputError("bounty.amount is too small for the selected voter requirements.");
-  }
-  if (!isSupportedBountyEligibility(bountyEligibility)) {
-    throw new X402QuestionInputError(
-      "bounty.bountyEligibility must be 0 for everyone or 8 for Proof of Human.",
-    );
   }
   return {
     asset,

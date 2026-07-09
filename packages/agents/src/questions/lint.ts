@@ -25,6 +25,8 @@ const SUPPORTED_REWARD_ASSETS = new Set(["LREP", "USDC"]);
 const MAX_PUBLIC_TAGS = 3;
 const MAX_QUESTION_IMAGE_URLS = 4;
 import {
+  BOUNTY_ELIGIBILITY_OPEN,
+  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
   MIN_NONZERO_CONFIDENTIALITY_BOND,
   requiredQuestionRewardParticipants,
 } from "@rateloop/contracts/protocol";
@@ -47,6 +49,13 @@ const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
 const HIDDEN_CHOICE_TITLE_PATTERN = /\bwhich\s+(option|variant|candidate|direction|price|pricing|range)\b/i;
 const VS_TITLE_PATTERN = /\b(vs\.?|versus)\b/i;
+const BOUNTY_ELIGIBILITY_ERROR = "bounty.bountyEligibility must be 0/everyone or 8/proof_of_human.";
+const BOUNTY_ELIGIBILITY_ALIASES: Record<string, bigint> = {
+  everyone: BigInt(BOUNTY_ELIGIBILITY_OPEN),
+  open: BigInt(BOUNTY_ELIGIBILITY_OPEN),
+  proof_of_human: BigInt(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN),
+  "proof-of-human": BigInt(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN),
+};
 
 export type AgentAskLintOptions = {
   requireChainId?: boolean;
@@ -326,13 +335,17 @@ function lintBountyEligibility(request: Partial<AgentAskExample>, findings: Ques
   const raw = (request.bounty as JsonObject).bountyEligibility;
   if (raw === undefined || raw === null) return;
 
+  if (typeof raw === "string") {
+    const alias = BOUNTY_ELIGIBILITY_ALIASES[raw.trim().toLowerCase()];
+    if (alias === BigInt(BOUNTY_ELIGIBILITY_OPEN) || alias === BigInt(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN)) return;
+  }
   const parsed = parseLintNonNegativeInteger(raw);
-  if (parsed === 0n || parsed === 8n) return;
+  if (parsed === BigInt(BOUNTY_ELIGIBILITY_OPEN) || parsed === BigInt(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN)) return;
   pushFinding(
     findings,
     "error",
     "bounty.bountyEligibility",
-    "bounty.bountyEligibility must be 0 for everyone or 8 for Proof of Human.",
+    BOUNTY_ELIGIBILITY_ERROR,
   );
 }
 

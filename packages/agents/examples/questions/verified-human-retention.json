@@ -6,7 +6,7 @@
   "bounty": {
     "asset": "USDC",
     "amount": "100000000",
-    "bountyEligibility": "8",
+    "bountyEligibility": "proof_of_human",
     "requiredVoters": "25"
   },
   "question": {

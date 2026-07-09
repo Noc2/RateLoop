@@ -69,6 +69,28 @@ describe("x402 question bounty eligibility", () => {
 
     expect(payload.bounty.bountyEligibility).toBe(0);
   });
+
+  it("accepts named bounty eligibility aliases", () => {
+    const openPayload = parseX402QuestionRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: "500000000",
+        bountyEligibility: "everyone",
+      },
+    });
+    const humanPayload = parseX402QuestionRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: "500000000",
+        bountyEligibility: "proof_of_human",
+      },
+    });
+
+    expect(openPayload.bounty.bountyEligibility).toBe(0);
+    expect(humanPayload.bounty.bountyEligibility).toBe(8);
+  });
 });
 
 describe("x402 question integer parsing", () => {

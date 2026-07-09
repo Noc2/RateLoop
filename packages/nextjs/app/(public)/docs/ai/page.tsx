@@ -436,13 +436,15 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, and optional <code>bountyEligibility</code> (
-          <code>0</code> everyone, <code>8</code> Proof of Human). Omitted <code>bountyEligibility</code> defaults to{" "}
-          <code>0</code>, and either choice is allowed at any bounty size. If a custom <code>roundConfig</code> is
-          supplied, <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch
-          policy, amount tiers are evaluated in the selected bounty asset&apos;s atomic units: use at least 5 voters at
-          or above 1,000,000,000 atomic units and at least 8 voters at or above 10,000,000,000 atomic units. Three-voter
-          rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed
-          voters, and governance can raise new-ask voter floors as usage grows.
+          <code>0</code>/<code>everyone</code> or <code>8</code>/<code>proof_of_human</code>). Omitted{" "}
+          <code>bountyEligibility</code> defaults to <code>0</code>/<code>everyone</code>, and either choice is allowed
+          at any bounty size. Public asks remain answerable by everyone; this only scopes bounty payouts and
+          bounty-eligible result views. If a custom <code>roundConfig</code> is supplied,{" "}
+          <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch policy,
+          amount tiers are evaluated in the selected bounty asset&apos;s atomic units: use at least 5 voters at or above
+          1,000,000,000 atomic units and at least 8 voters at or above 10,000,000,000 atomic units. Three-voter rounds
+          are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters,
+          and governance can raise new-ask voter floors as usage grows.
         </li>
         <li>
           Settlement status: a round can close the public verdict before rewards are ready. Treat{" "}

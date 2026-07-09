@@ -45,7 +45,7 @@ export type AgentAskExample = {
   bounty: {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
-    bountyEligibility?: 0 | 8 | string | number;
+    bountyEligibility?: 0 | 8 | "0" | "8" | "everyone" | "proof_of_human" | string | number;
     requiredVoters?: string | number | bigint;
   };
   chainId?: number;

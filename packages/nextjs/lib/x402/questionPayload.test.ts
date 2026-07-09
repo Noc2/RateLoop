@@ -882,6 +882,16 @@ test("parseX402QuestionRequest defaults large bounties to open eligibility", () 
     },
   });
   assert.equal(explicitHuman.bounty.bountyEligibility, 8);
+
+  const aliasHuman = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      amount: "500000000",
+      bountyEligibility: "proof_of_human",
+    },
+  });
+  assert.equal(aliasHuman.bounty.bountyEligibility, 8);
 });
 
 test("parseX402QuestionRequest rejects bounty and round voter mismatches", () => {
@@ -1025,7 +1035,7 @@ test("parseX402QuestionRequest accepts Proof of Human bounty scope", () => {
     ...VALID_REQUEST,
     bounty: {
       ...VALID_REQUEST.bounty,
-      bountyEligibility: "8",
+      bountyEligibility: "proof_of_human",
     },
   });
 
@@ -1043,7 +1053,7 @@ test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
             bountyEligibility,
           },
         }),
-      /bountyEligibility must be 0 for everyone or 8 for Proof of Human/,
+      /bountyEligibility must be 0\/everyone or 8\/proof_of_human/,
     );
   }
 });
