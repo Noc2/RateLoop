@@ -409,6 +409,7 @@ export const questionRewardPool = onchainTable(
     voterClaimedAmount: t.bigint().notNull(),
     frontendClaimedAmount: t.bigint().notNull(),
     refundedAmount: t.bigint().notNull(),
+    forfeitedAmount: t.bigint().notNull(),
     requiredVoters: t.integer().notNull(),
     requiredSettledRounds: t.integer().notNull(),
     qualifiedRounds: t.integer().notNull(),

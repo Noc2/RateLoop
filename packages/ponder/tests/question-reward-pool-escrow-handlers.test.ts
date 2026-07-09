@@ -57,6 +57,7 @@ function resolveSetter(
     completedRoundSetCount: 0,
     frontendClaimedAmount: 0n,
     fundedAmount: 100_000_000n,
+    forfeitedAmount: 0n,
     qualifiedRounds: 0,
     refundedAmount: 0n,
     requiredSettledRounds: 2,
@@ -185,6 +186,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         submitterIdentityKey: SUBMITTER_IDENTITY_KEY,
         fundedAmount: 100_000_000n,
         unallocatedAmount: 100_000_000n,
+        forfeitedAmount: 0n,
         frontendFeeBps: 300,
         bountyKind: 0,
         bountyEligibility: 2,
@@ -532,6 +534,55 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
             refundedAmount: 50_000_000n,
             unallocatedAmount: 0n,
           }),
+        }),
+      ]),
+    );
+  });
+
+  it("tracks reward pool forfeitures separately from funder refunds", async () => {
+    const { db, updates } = createDb(
+      {
+        'questionRewardPool:{"id":"7"}': { id: 7n, contentId: 1n },
+        content: { id: 1n },
+      },
+      {
+        refundedAmount: 5_000_000n,
+        forfeitedAmount: 2_000_000n,
+        unallocatedAmount: 50_000_000n,
+      },
+    );
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolForfeited",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          treasury: "0x00000000000000000000000000000000000000e1",
+          amount: 10_000_000n,
+        },
+        block: { number: 13n, timestamp: 2_000n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "questionRewardPool",
+          key: { id: 7n },
+          values: expect.objectContaining({
+            refundedAmount: 15_000_000n,
+            forfeitedAmount: 12_000_000n,
+            unallocatedAmount: 0n,
+            updatedAt: 2_000n,
+          }),
+        }),
+        expect.objectContaining({
+          table: "content",
+          key: { id: 1n },
+          values: expect.objectContaining({ lastActivityAt: 2_000n }),
         }),
       ]),
     );

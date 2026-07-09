@@ -1989,6 +1989,7 @@ export function registerDataRoutes(app: ApiApp) {
     const [
       [stats],
       [rewardPoolStats],
+      [questionRewardPoolForfeitStats],
       [bundleRewardStats],
       [feedbackBonusAwardStats],
       [feedbackBonusPoolStats],
@@ -2006,6 +2007,11 @@ export function registerDataRoutes(app: ApiApp) {
           totalQuestionRewardsPaidToFrontends: sql<bigint>`coalesce(sum(${questionRewardPoolClaim.frontendFee}), 0)`,
         })
         .from(questionRewardPoolClaim),
+      db
+        .select({
+          totalQuestionRewardPoolsForfeited: sql<bigint>`coalesce(sum(${questionRewardPool.forfeitedAmount}), 0)`,
+        })
+        .from(questionRewardPool),
       db
         .select({
           totalQuestionBundleRewardsPaid: sql<bigint>`coalesce(sum(${questionBundleClaim.grossAmount}), 0)`,
@@ -2059,6 +2065,8 @@ export function registerDataRoutes(app: ApiApp) {
         rewardPoolStats?.totalQuestionRewardsPaidToVoters ?? 0n,
       totalQuestionRewardsPaidToFrontends:
         rewardPoolStats?.totalQuestionRewardsPaidToFrontends ?? 0n,
+      totalQuestionRewardPoolsForfeited:
+        questionRewardPoolForfeitStats?.totalQuestionRewardPoolsForfeited ?? 0n,
       totalQuestionBundleRewardsPaid:
         bundleRewardStats?.totalQuestionBundleRewardsPaid ?? 0n,
       totalQuestionBundleRewardsPaidToVoters:

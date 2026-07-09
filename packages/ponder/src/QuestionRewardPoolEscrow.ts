@@ -60,6 +60,7 @@ type RewardPoolAccountingRow = {
   allocatedAmount: bigint;
   claimedAmount: bigint;
   refundedAmount: bigint;
+  forfeitedAmount: bigint;
   qualifiedRounds: number;
   requiredSettledRounds: number;
 };
@@ -125,12 +126,16 @@ function applyRewardPoolResidueUpdate(
   row: RewardPoolAccountingRow,
   amount: bigint,
   timestamp: bigint,
+  options: { forfeited?: boolean } = {},
 ) {
   if (isCompleteRewardPoolRefund(row, amount)) {
     return {
       unallocatedAmount: 0n,
       allocatedAmount: 0n,
       refundedAmount: row.refundedAmount + amount,
+      ...(options.forfeited
+        ? { forfeitedAmount: row.forfeitedAmount + amount }
+        : {}),
       refunded: true,
       updatedAt: timestamp,
     };
@@ -139,6 +144,9 @@ function applyRewardPoolResidueUpdate(
   return {
     unallocatedAmount: 0n,
     refundedAmount: row.refundedAmount + amount,
+    ...(options.forfeited
+      ? { forfeitedAmount: row.forfeitedAmount + amount }
+      : {}),
     updatedAt: timestamp,
   };
 }
@@ -215,6 +223,7 @@ ponder.on(
         voterClaimedAmount: 0n,
         frontendClaimedAmount: 0n,
         refundedAmount: 0n,
+        forfeitedAmount: 0n,
         requiredVoters: Number(requiredVoters),
         requiredSettledRounds: Number(requiredSettledRounds),
         qualifiedRounds: 0,
@@ -295,7 +304,9 @@ ponder.on(
     await context.db
       .update(questionRewardPool, { id: rewardPoolId })
       .set((row) =>
-        applyRewardPoolResidueUpdate(row, amount, event.block.timestamp),
+        applyRewardPoolResidueUpdate(row, amount, event.block.timestamp, {
+          forfeited: true,
+        }),
       );
 
     if (existingRewardPool) {

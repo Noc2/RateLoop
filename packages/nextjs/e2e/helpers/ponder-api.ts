@@ -178,6 +178,7 @@ export async function getStats(baseURL = PONDER_URL): Promise<{
   totalQuestionRewardsPaid: string;
   totalQuestionRewardsPaidToVoters: string;
   totalQuestionRewardsPaidToFrontends: string;
+  totalQuestionRewardPoolsForfeited: string;
   totalFeedbackBonusesForfeited: string;
   totalVerifiedHumans: number | string;
 }> {
