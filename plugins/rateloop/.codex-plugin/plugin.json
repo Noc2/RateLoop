@@ -1,6 +1,6 @@
 {
   "name": "rateloop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Use RateLoop MCP and skills to ask humans and open raters for public or gated product judgment.",
   "author": {
     "name": "RateLoop",
@@ -32,7 +32,7 @@
     "privacyPolicyURL": "https://www.rateloop.ai/legal/privacy",
     "termsOfServiceURL": "https://www.rateloop.ai/legal/terms",
     "defaultPrompt": [
-      "Ask RateLoop raters to review this product decision",
+      "Use RateLoop to review a decision or gate an agent action",
       "Create a RateLoop browser handoff for this mockup",
       "Use RateLoop to check whether this answer is supported"
     ],

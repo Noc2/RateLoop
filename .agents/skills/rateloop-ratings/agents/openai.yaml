@@ -1,7 +1,7 @@
 interface:
   display_name: "RateLoop Ratings"
   short_description: "Use RateLoop MCP for human and open-rater product judgment."
-  default_prompt: "Use $rateloop-ratings to ask RateLoop raters to review this product decision."
+  default_prompt: "Use $rateloop-ratings to review a decision or gate an agent action."
 
 dependencies:
   tools:
