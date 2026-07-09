@@ -121,6 +121,7 @@ test("caches versioned vote social cards for crawlers", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/png");
+  assert.match(response.headers.get("content-length") ?? "", /^\d+$/);
   assert.equal(response.headers.get("cache-control"), "public, max-age=86400, immutable");
   assert.equal(
     response.headers.get("cdn-cache-control"),
@@ -164,6 +165,7 @@ test("keeps content vote social cards uncached without the current rating versio
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
+    assert.match(response.headers.get("content-length") ?? "", /^\d+$/);
     assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
     assert.equal(response.headers.get("cdn-cache-control"), null);
     assert.equal(response.headers.get("vercel-cdn-cache-control"), null);
@@ -176,6 +178,7 @@ test("keeps fallback vote social cards uncached", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/png");
+  assert.match(response.headers.get("content-length") ?? "", /^\d+$/);
   assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
   assert.equal(response.headers.get("cdn-cache-control"), null);
   assert.equal(response.headers.get("vercel-cdn-cache-control"), null);

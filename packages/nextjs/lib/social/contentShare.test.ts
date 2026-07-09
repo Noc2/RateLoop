@@ -95,7 +95,7 @@ test("buildContentShareData includes the rating in metadata and versioned share 
   assert.equal(shareUrl.pathname, "/rate");
   assert.equal(shareUrl.searchParams.get("content"), "88");
   assert.equal(shareUrl.searchParams.get("rv"), data.ratingVersion);
-  assert.equal(imageUrl.pathname, "/og/vote");
+  assert.equal(imageUrl.pathname, "/og/vote.png");
   assert.equal(imageUrl.searchParams.get("content"), "88");
   assert.equal(imageUrl.searchParams.get("rv"), data.ratingVersion);
 });
@@ -114,6 +114,7 @@ test("buildContentShareData omits deployment keys from public share urls", () =>
 
   assert.equal(shareUrl.searchParams.get("chainId"), "8453");
   assert.equal(shareUrl.searchParams.get("deploymentKey"), null);
+  assert.equal(imageUrl.pathname, "/og/vote.png");
   assert.equal(imageUrl.searchParams.get("chainId"), "8453");
   assert.equal(imageUrl.searchParams.get("deploymentKey"), null);
 });

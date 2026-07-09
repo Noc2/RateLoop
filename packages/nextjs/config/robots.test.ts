@@ -23,6 +23,7 @@ test("robots.txt explicitly lets Twitterbot fetch social card images", () => {
 
   assert.match(twitterbot, /^Allow: \/api\/og\/$/m);
   assert.match(twitterbot, /^Allow: \/og\/$/m);
+  assert.match(twitterbot, /^Allow: \/og\/vote\.png$/m);
   assert.match(twitterbot, /^Allow: \/og-image\.jpg$/m);
   assert.match(twitterbot, /^Allow: \/twitter-image\.jpg$/m);
   assert.doesNotMatch(twitterbot, /^Disallow: \/api\/$/m);

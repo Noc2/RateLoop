@@ -416,7 +416,7 @@ function buildVoteShareUrl(origin: string, content: ContentShareContentInput, ra
 }
 
 function buildVoteShareImageUrl(origin: string, content: ContentShareContentInput, ratingVersion: string): string {
-  const url = new URL("/og/vote", `${origin.replace(/\/+$/, "")}/`);
+  const url = new URL("/og/vote.png", `${origin.replace(/\/+$/, "")}/`);
   url.searchParams.set("content", content.id);
   setContentShareScopeParams(url, content);
   url.searchParams.set(VOTE_SHARE_RATING_VERSION_PARAM, ratingVersion);

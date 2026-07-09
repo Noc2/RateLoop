@@ -464,6 +464,22 @@ function EmergencyFallbackImage() {
   );
 }
 
+async function buildPngResponse(image: React.ReactElement, headers: Record<string, string>): Promise<Response> {
+  const imageResponse = new ImageResponse(image, {
+    ...imageSize,
+    headers,
+  });
+  const body = await imageResponse.arrayBuffer();
+  const responseHeaders = new Headers(imageResponse.headers);
+  responseHeaders.set("Content-Length", String(body.byteLength));
+  responseHeaders.set("Content-Type", "image/png");
+  return new Response(body, {
+    headers: responseHeaders,
+    status: imageResponse.status,
+    statusText: imageResponse.statusText,
+  });
+}
+
 export async function GET(request: NextRequest) {
   const contentParam = request.nextUrl.searchParams.get("content");
   const chainIdParam = request.nextUrl.searchParams.get("chainId");
@@ -494,15 +510,9 @@ export async function GET(request: NextRequest) {
   const image = renderShareData ? <RatingShareImage shareData={renderShareData} /> : <FallbackShareImage />;
 
   try {
-    return new ImageResponse(image, {
-      ...imageSize,
-      headers: hasCurrentRatingVersion ? versionedResponseHeaders : fallbackResponseHeaders,
-    });
+    return await buildPngResponse(image, hasCurrentRatingVersion ? versionedResponseHeaders : fallbackResponseHeaders);
   } catch (error) {
     console.error("[og/vote] Failed to render social card", error);
-    return new ImageResponse(<EmergencyFallbackImage />, {
-      ...imageSize,
-      headers: fallbackResponseHeaders,
-    });
+    return buildPngResponse(<EmergencyFallbackImage />, fallbackResponseHeaders);
   }
 }

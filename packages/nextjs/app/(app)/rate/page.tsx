@@ -28,6 +28,8 @@ export async function generateMetadata({ searchParams }: RatePageProps): Promise
       images: [
         {
           url: shareData.imageUrl,
+          secureUrl: shareData.imageUrl,
+          type: "image/png",
           width: 1200,
           height: 630,
           alt: shareData.imageAlt,
@@ -41,6 +43,8 @@ export async function generateMetadata({ searchParams }: RatePageProps): Promise
       images: [
         {
           url: shareData.imageUrl,
+          secureUrl: shareData.imageUrl,
+          type: "image/png",
           width: 1200,
           height: 630,
           alt: shareData.imageAlt,
