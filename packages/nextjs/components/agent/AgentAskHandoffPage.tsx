@@ -78,6 +78,12 @@ import {
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
 import {
+  BOUNTY_ELIGIBILITY_OPEN,
+  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
+  getBountyEligibilityLabel,
+  isSupportedBountyEligibility,
+} from "~~/lib/bountyEligibility";
+import {
   HEAD_TO_HEAD_AB_QUESTION_TOOLTIP,
   type HeadToHeadTitleMode,
   getHeadToHeadOptionValidationError,
@@ -263,6 +269,7 @@ type DraftQuestionForm = {
 type DraftForm = {
   bountyAmount: string;
   bountyAsset: SubmissionRewardAsset;
+  bountyEligibility: number;
   feedbackBonusAmount: string | null;
   feedbackBonusAsset: FeedbackBonusAsset | null;
   questions: DraftQuestionForm[];
@@ -309,6 +316,8 @@ const FEEDBACK_BONUS_RECOVERY_STORAGE_PREFIX = "rateloop.feedbackBonusRecovery."
 
 const BOUNTY_AMOUNT_TOOLTIP =
   "LREP or USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
+const BOUNTY_ELIGIBILITY_TOOLTIP =
+  "Everyone can answer public asks. This selects which revealed answers can qualify for the bounty payout and the eligible result view.";
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
   "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
 const CONFIDENTIALITY_BOND_TOOLTIP =
@@ -328,6 +337,16 @@ const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
   disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
   visibility: "public",
 };
+const HANDOFF_BOUNTY_ELIGIBILITY_OPTIONS = [
+  {
+    label: "Everyone",
+    mode: BOUNTY_ELIGIBILITY_OPEN,
+  },
+  {
+    label: getBountyEligibilityLabel(BOUNTY_ELIGIBILITY_VERIFIED_HUMAN),
+    mode: BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
+  },
+] as const;
 
 function feedbackBonusRecoveryStorageKey(handoffId: string) {
   return `${FEEDBACK_BONUS_RECOVERY_STORAGE_PREFIX}${handoffId}`;
@@ -1332,6 +1351,21 @@ function readBountyAsset(handoff: Handoff | null): SubmissionRewardAsset {
   return readString(bounty.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
 }
 
+function readBountyEligibility(handoff: Handoff | null) {
+  const bounty = handoff?.requestBody?.bounty;
+  if (!isJsonRecord(bounty)) return BOUNTY_ELIGIBILITY_OPEN;
+  const raw = bounty.bountyEligibility;
+  if (typeof raw !== "string" && typeof raw !== "number" && typeof raw !== "bigint") {
+    return BOUNTY_ELIGIBILITY_OPEN;
+  }
+  try {
+    const parsed = Number(BigInt(raw));
+    return isSupportedBountyEligibility(parsed) ? parsed : BOUNTY_ELIGIBILITY_OPEN;
+  } catch {
+    return BOUNTY_ELIGIBILITY_OPEN;
+  }
+}
+
 function readFeedbackBonusAsset(feedbackBonus: JsonRecord, fallbackAsset: SubmissionRewardAsset): FeedbackBonusAsset {
   const asset = readString(feedbackBonus.asset).toUpperCase();
   if (!asset) return fallbackAsset;
@@ -1426,6 +1460,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
   return {
     bountyAmount: formatSubmissionRewardInput(readBountyAmountAtomic(handoff), bountyAsset),
     bountyAsset,
+    bountyEligibility: readBountyEligibility(handoff),
     feedbackBonusAmount: feedbackBonusSummary
       ? formatFeedbackBonusInput(feedbackBonusSummary.amount, feedbackBonusSummary.asset)
       : null,
@@ -1808,6 +1843,7 @@ async function buildDraftRequestBody(
     ...(isJsonRecord(requestBody.bounty) ? requestBody.bounty : {}),
     amount: bountyAmount.toString(),
     asset: form.bountyAsset === "lrep" ? "LREP" : "USDC",
+    bountyEligibility: form.bountyEligibility.toString(),
     requiredVoters: minVoters.toString(),
   };
   const draftBounty = requestBody.bounty as JsonRecord;
@@ -1945,6 +1981,10 @@ function readDraftBountyAmountAtomic(form: DraftForm | null, handoff: Handoff | 
 
 function readDraftBountyAsset(form: DraftForm | null, handoff: Handoff | null): SubmissionRewardAsset {
   return form?.bountyAsset ?? readBountyAsset(handoff);
+}
+
+function readDraftBountyEligibility(form: DraftForm | null, handoff: Handoff | null) {
+  return form?.bountyEligibility ?? readBountyEligibility(handoff);
 }
 
 function readDraftBountyLrepAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
@@ -2310,6 +2350,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
   const draftBountyAsset = draftForm?.bountyAsset ?? readBountyAsset(handoff);
+  const draftBountyEligibility = readDraftBountyEligibility(draftForm, handoff);
   const configuredDraftMinimumRewardAmount =
     draftBountyAsset === "lrep"
       ? typeof minSubmissionLrepPool === "bigint"
@@ -2461,6 +2502,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   }, [draftForm?.questions, hasImageContext, questionSummaries]);
   const webMcpState = useMemo<HandoffWebMcpState>(
     () => ({
+      bountyEligibilityLabel: getBountyEligibilityLabel(draftBountyEligibility),
+      bountyEligibilityMode: draftBountyEligibility,
       bountyLabel: readDraftBountyLabel(draftForm, handoff),
       canPrepare: Boolean(connectedChainId && canPrepareHandoff(handoff)),
       canSaveDraft,
@@ -2491,6 +2534,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       canSubmit,
       connectedChainId,
       connectedMismatch,
+      draftBountyEligibility,
       draftError,
       draftForm,
       error,
@@ -2544,7 +2588,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   );
 
   const updateDraftField = useCallback(
-    (field: keyof Omit<DraftForm, "questions">, value: string) => {
+    (field: keyof Omit<DraftForm, "questions" | "bountyEligibility">, value: string) => {
       setDraftForm(current => (current ? { ...current, [field]: value } : current));
       setDraftError(null);
     },
@@ -2582,6 +2626,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           feedbackBonusAsset: current.feedbackBonusAmount === null ? null : feedbackBonusAsset,
         };
       });
+      setDraftError(null);
+    },
+    [setDraftForm],
+  );
+
+  const updateDraftBountyEligibility = useCallback(
+    (bountyEligibility: number) => {
+      if (!isSupportedBountyEligibility(bountyEligibility)) return;
+      setDraftForm(current => (current ? { ...current, bountyEligibility } : current));
       setDraftError(null);
     },
     [setDraftForm],
@@ -4067,6 +4120,41 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     </div>
                     {draftBountyAmountError ? (
                       <p className="mt-2 text-xs leading-relaxed text-error">{draftBountyAmountError}</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/70">
+                      Bounty eligibility
+                      <InfoTooltip text={BOUNTY_ELIGIBILITY_TOOLTIP} position="top" className="text-base-content/45" />
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {HANDOFF_BOUNTY_ELIGIBILITY_OPTIONS.map(option => {
+                        const checked = draftBountyEligibility === option.mode;
+                        return (
+                          <label
+                            key={option.mode}
+                            className={`flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                              checked ? "choice-row-active" : "choice-row-inactive"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              className="radio radio-primary radio-sm shrink-0"
+                              checked={checked}
+                              disabled={!canEditDraft}
+                              name="agent-ask-bounty-eligibility"
+                              onChange={() => updateDraftBountyEligibility(option.mode)}
+                            />
+                            <span className="font-medium">{option.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {draftBountyEligibility !== BOUNTY_ELIGIBILITY_OPEN ? (
+                      <p className="text-xs leading-relaxed text-base-content/55">
+                        Public answers can still be submitted; only {getBountyEligibilityLabel(draftBountyEligibility)}{" "}
+                        answers qualify for the bounty and eligible result view.
+                      </p>
                     ) : null}
                   </div>
                 </div>

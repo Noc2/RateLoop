@@ -9,6 +9,8 @@ import { test } from "node:test";
 
 function baseState(overrides: Partial<HandoffWebMcpState> = {}): HandoffWebMcpState {
   return {
+    bountyEligibilityLabel: "Everyone",
+    bountyEligibilityMode: 0,
     bountyLabel: "2.5 USDC",
     canPrepare: true,
     canSaveDraft: false,
@@ -91,6 +93,27 @@ test("summarizes the next handoff browser action", () => {
   );
 });
 
+test("summarizes bounty eligibility for browser agents", () => {
+  const tools = createHandoffWebMcpTools(() =>
+    baseState({
+      bountyEligibilityLabel: "Proof of Human",
+      bountyEligibilityMode: 8,
+    }),
+  );
+  const statusTool = tools.find(tool => tool.name === "rateloop_get_browser_handoff_status");
+
+  assert.deepEqual(
+    {
+      bountyEligibilityLabel: (statusTool?.execute({}) as { bountyEligibilityLabel?: unknown }).bountyEligibilityLabel,
+      bountyEligibilityMode: (statusTool?.execute({}) as { bountyEligibilityMode?: unknown }).bountyEligibilityMode,
+    },
+    {
+      bountyEligibilityLabel: "Proof of Human",
+      bountyEligibilityMode: 8,
+    },
+  );
+});
+
 test("creates read-only handoff WebMCP tools", () => {
   const tools = createHandoffWebMcpTools(() => baseState());
   const statusTool = tools.find(tool => tool.name === "rateloop_get_browser_handoff_status");
@@ -102,6 +125,8 @@ test("creates read-only handoff WebMCP tools", () => {
   assert.equal(validateTool?.annotations?.readOnlyHint, true);
   assert.equal(actionTool?.annotations?.readOnlyHint, true);
   assert.deepEqual(statusTool?.execute({}), {
+    bountyEligibilityLabel: "Everyone",
+    bountyEligibilityMode: 0,
     bountyLabel: "2.5 USDC",
     canSaveDraft: false,
     canSubmit: true,

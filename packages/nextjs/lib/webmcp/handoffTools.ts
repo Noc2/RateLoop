@@ -8,6 +8,8 @@ export type HandoffWebMcpQuestion = {
 };
 
 export type HandoffWebMcpState = {
+  bountyEligibilityLabel: string;
+  bountyEligibilityMode: number;
   bountyLabel: string;
   canPrepare: boolean;
   canSaveDraft: boolean;
@@ -104,6 +106,8 @@ export function getHandoffWebMcpNextAction(state: HandoffWebMcpState) {
 
 function summarizeHandoffWebMcpStatus(state: HandoffWebMcpState) {
   return {
+    bountyEligibilityLabel: state.bountyEligibilityLabel,
+    bountyEligibilityMode: state.bountyEligibilityMode,
     bountyLabel: state.bountyLabel,
     canSaveDraft: state.canSaveDraft,
     canSubmit: state.canSubmit,
