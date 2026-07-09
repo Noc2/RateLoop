@@ -1267,7 +1267,7 @@ describe("resolveRounds", () => {
     ]);
   });
 
-  it("does not broadcast cursor advances when simulation says no rounds advance", async () => {
+  it("sweeps reward pool residue when stale qualification candidates cannot advance the cursor", async () => {
     mockConfig.keeperWorkDiscovery.enabled = true;
 
     const { publicClient, walletClient } = makeHarness({
@@ -1324,6 +1324,7 @@ describe("resolveRounds", () => {
     );
 
     expect(result.rewardPoolRoundsQualified).toBe(0);
+    expect(result.rewardPoolResidueSweeps).toBe(1);
     expect(publicClient.simulateContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "advanceQualificationCursor",
@@ -1333,6 +1334,13 @@ describe("resolveRounds", () => {
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "advanceQualificationCursor",
+      }),
+    );
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "refundExpiredRewardPool",
+        args: [42n],
       }),
     );
   });

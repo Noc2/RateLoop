@@ -165,6 +165,14 @@ interface KeeperWorkDiscovery {
   rewardPoolResidueSweeps: KeeperWorkRewardPoolResidueSweepCandidate[];
   bundleTerminalSyncs: KeeperWorkBundleTerminalSyncCandidate[];
 }
+interface RewardPoolQualificationResult {
+  qualified: number;
+  residueSweepCandidates: KeeperWorkRewardPoolResidueSweepCandidate[];
+}
+type RewardPoolQualificationCursorAdvanceResult =
+  | "advanced"
+  | "unchanged"
+  | "failed";
 interface PonderDeploymentMetadata {
   chainId?: unknown;
   contentRegistryAddress?: unknown;
@@ -1895,7 +1903,7 @@ export async function resolveRounds(
     engineAddr,
   );
 
-  result.rewardPoolRoundsQualified += await _qualifyRewardPoolRounds(
+  const rewardPoolQualificationResult = await _qualifyRewardPoolRounds(
     publicClient,
     walletClient,
     chain,
@@ -1904,6 +1912,7 @@ export async function resolveRounds(
     registryAddr,
     discovery.rewardPoolQualifications,
   );
+  result.rewardPoolRoundsQualified += rewardPoolQualificationResult.qualified;
 
   result.questionBundleTerminalSyncs += await _syncQuestionBundleTerminals(
     publicClient,
@@ -1915,6 +1924,10 @@ export async function resolveRounds(
     discovery.bundleTerminalSyncs,
   );
 
+  const rewardPoolResidueSweeps = mergeRewardPoolResidueSweepCandidates(
+    discovery.rewardPoolResidueSweeps,
+    rewardPoolQualificationResult.residueSweepCandidates,
+  );
   result.rewardPoolResidueSweeps += await _sweepExpiredRewardPoolResidue(
     publicClient,
     walletClient,
@@ -1922,7 +1935,7 @@ export async function resolveRounds(
     account,
     logger,
     registryAddr,
-    discovery.rewardPoolResidueSweeps,
+    rewardPoolResidueSweeps,
   );
 
   result.feedbackBonusPoolsForfeited += await _forfeitExpiredFeedbackBonuses(
@@ -2083,6 +2096,22 @@ function getRewardPoolPreAdvanceReason(
   return null;
 }
 
+function mergeRewardPoolResidueSweepCandidates(
+  ...sources: readonly (readonly KeeperWorkRewardPoolResidueSweepCandidate[])[]
+): KeeperWorkRewardPoolResidueSweepCandidate[] {
+  const candidates: KeeperWorkRewardPoolResidueSweepCandidate[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    for (const candidate of source) {
+      const key = candidate.rewardPoolId.toString();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(candidate);
+    }
+  }
+  return candidates;
+}
+
 async function _advanceRewardPoolQualificationCursor(
   publicClient: PublicClient,
   walletClient: WalletClient,
@@ -2092,7 +2121,7 @@ async function _advanceRewardPoolQualificationCursor(
   escrow: `0x${string}`,
   candidate: KeeperWorkRewardPoolQualificationCandidate,
   triggerReason: string,
-): Promise<void> {
+): Promise<RewardPoolQualificationCursorAdvanceResult> {
   incrementCounter(
     "keeper_reward_pool_qualification_cursor_advance_attempts_total",
   );
@@ -2114,7 +2143,7 @@ async function _advanceRewardPoolQualificationCursor(
         triggerError: triggerReason,
         reason: "no rounds advanced",
       });
-      return;
+      return "unchanged";
     }
 
     await writeContractAndConfirm(publicClient, walletClient, {
@@ -2134,6 +2163,7 @@ async function _advanceRewardPoolQualificationCursor(
       roundId: candidate.roundId.toString(),
       triggerError: triggerReason,
     });
+    return "advanced";
   } catch (err: unknown) {
     const reason = getRevertReason(err);
     incrementCounter(
@@ -2146,6 +2176,7 @@ async function _advanceRewardPoolQualificationCursor(
       triggerError: triggerReason,
       error: reason,
     });
+    return "failed";
   }
 }
 
@@ -2157,7 +2188,7 @@ async function _qualifyRewardPoolRounds(
   logger: Logger,
   registryAddr: `0x${string}`,
   candidates: readonly KeeperWorkRewardPoolQualificationCandidate[],
-): Promise<number> {
+): Promise<RewardPoolQualificationResult> {
   const rewardPoolQualifications = config.rewardPoolQualifications ?? {
     enabled: true,
     maxRoundsPerTick: 25,
@@ -2169,13 +2200,14 @@ async function _qualifyRewardPoolRounds(
     rewardPoolQualifications.maxRoundsPerTick <= 0 ||
     candidates.length === 0
   ) {
-    return 0;
+    return { qualified: 0, residueSweepCandidates: [] };
   }
 
   const escrow = await _readQuestionRewardPoolEscrow(publicClient, registryAddr);
-  if (!escrow) return 0;
+  if (!escrow) return { qualified: 0, residueSweepCandidates: [] };
 
   let qualified = 0;
+  const residueSweepCandidates: KeeperWorkRewardPoolResidueSweepCandidate[] = [];
   for (const candidate of candidates.slice(
     0,
     rewardPoolQualifications.maxRoundsPerTick,
@@ -2193,7 +2225,7 @@ async function _qualifyRewardPoolRounds(
 
     const preAdvanceReason = getRewardPoolPreAdvanceReason(candidate);
     if (preAdvanceReason) {
-      await _advanceRewardPoolQualificationCursor(
+      const cursorAdvanceResult = await _advanceRewardPoolQualificationCursor(
         publicClient,
         walletClient,
         chain,
@@ -2203,6 +2235,13 @@ async function _qualifyRewardPoolRounds(
         candidate,
         preAdvanceReason,
       );
+      if (cursorAdvanceResult === "unchanged") {
+        residueSweepCandidates.push({
+          rewardPoolId: candidate.rewardPoolId,
+          contentId: candidate.contentId,
+          reason: "stale_reward_pool_qualification_candidate",
+        });
+      }
       logger.debug("Skipped reward pool qualification candidate", {
         rewardPoolId: candidate.rewardPoolId.toString(),
         contentId: candidate.contentId.toString(),
@@ -2231,7 +2270,7 @@ async function _qualifyRewardPoolRounds(
     } catch (err: unknown) {
       const reason = getRevertReason(err);
       if (isRewardPoolCursorAdvanceReason(reason)) {
-        await _advanceRewardPoolQualificationCursor(
+        const cursorAdvanceResult = await _advanceRewardPoolQualificationCursor(
           publicClient,
           walletClient,
           chain,
@@ -2241,6 +2280,13 @@ async function _qualifyRewardPoolRounds(
           candidate,
           reason,
         );
+        if (cursorAdvanceResult === "unchanged") {
+          residueSweepCandidates.push({
+            rewardPoolId: candidate.rewardPoolId,
+            contentId: candidate.contentId,
+            reason: "stale_reward_pool_qualification_candidate",
+          });
+        }
         logger.debug("Skipped reward pool qualification candidate", {
           rewardPoolId: candidate.rewardPoolId.toString(),
           contentId: candidate.contentId.toString(),
@@ -2269,7 +2315,7 @@ async function _qualifyRewardPoolRounds(
     }
   }
 
-  return qualified;
+  return { qualified, residueSweepCandidates };
 }
 
 async function _rewardPoolQualificationSourceReady(
