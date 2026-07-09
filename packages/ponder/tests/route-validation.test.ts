@@ -430,6 +430,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       funderIdentityKey: "questionRewardPool.funderIdentityKey",
       fundedAmount: "questionRewardPool.fundedAmount",
       id: "questionRewardPool.id",
+      nonRefundable: "questionRewardPool.nonRefundable",
       payerIdentity: "questionRewardPool.payerIdentity",
       payerIdentityKey: "questionRewardPool.payerIdentityKey",
       qualifiedRounds: "questionRewardPool.qualifiedRounds",
@@ -5745,6 +5746,19 @@ describe("registerKeeperRoutes", () => {
             reason: "feedback_bonus_forfeit",
           },
         ],
+        [],
+        [],
+        [
+          {
+            rewardPoolId: 7n,
+            contentId: 9n,
+            bountyClosesAt: 95n,
+            unallocatedAmount: 1_000_000n,
+            nonRefundable: true,
+            reason: "reward_pool_residue_sweep",
+          },
+        ],
+        [],
       ],
     );
     const cleanupBuilder = queryBuilders[1]!;
@@ -5772,6 +5786,16 @@ describe("registerKeeperRoutes", () => {
           awardDeadline: "90",
           remainingAmount: "1000000",
           reason: "feedback_bonus_forfeit",
+        },
+      ],
+      rewardPoolResidueSweeps: [
+        {
+          rewardPoolId: "7",
+          contentId: "9",
+          bountyClosesAt: "95",
+          unallocatedAmount: "1000000",
+          nonRefundable: true,
+          reason: "reward_pool_residue_sweep",
         },
       ],
     });
@@ -5906,6 +5930,39 @@ describe("registerKeeperRoutes", () => {
     expect(serializedWhere).toContain("questionRewardPool.requiredVoters");
     expect(serializedWhere).toContain("is null");
     expect(serializedWhere).toContain("is not null");
+  });
+
+  it("returns expired reward-pool residue sweep candidates only after qualification work clears", async () => {
+    const { queryBuilders } = mockPonderModules([], [[], [], [], [], [], [], []]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+    );
+
+    expect(response.status).toBe(200);
+    const residueBuilder = queryBuilders[6]!;
+    expect(residueBuilder.limit).toHaveBeenCalledWith(5);
+
+    const serializedWhere = serializeExpression(
+      residueBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("questionRewardPool.refunded");
+    expect(serializedWhere).toContain("questionRewardPool.qualifiedRounds");
+    expect(serializedWhere).toContain("questionRewardPool.requiredSettledRounds");
+    expect(serializedWhere).toContain("questionRewardPool.unallocatedAmount");
+    expect(serializedWhere).toContain("questionRewardPool.bountyWindowSeconds");
+    expect(serializedWhere).toContain("questionRewardPool.bountyClosesAt");
+    expect(serializedWhere).toContain("questionRewardPool.bountyStartBy");
+    expect(serializedWhere).toContain("questionRewardPoolRound.rewardPoolId");
+    expect(serializedWhere).toContain(
+      "questionRewardPoolPreQualificationSkip.rewardPoolId",
+    );
+    expect(serializedWhere).toContain("not exists");
   });
 
   it("uses voteCount quorum for reveal_failed keeper hints", async () => {

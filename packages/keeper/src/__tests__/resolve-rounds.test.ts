@@ -354,6 +354,7 @@ function makeHarness(options: {
   commitRevealDataErrorFor?: readonly `0x${string}`[];
   revealVoteErrorFor?: readonly `0x${string}`[];
   qualifyRoundErrors?: Record<string, string>;
+  rewardPoolResidueSweepErrors?: Record<string, string>;
   rewardPoolQualificationSourceReadyAt?: Record<string, bigint>;
   settleRoundResultState?: RoundStateValue;
   estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
@@ -378,6 +379,8 @@ function makeHarness(options: {
   const commitRevealDataErrorFor = new Set(options.commitRevealDataErrorFor ?? []);
   const revealVoteErrorFor = new Set(options.revealVoteErrorFor ?? []);
   const qualifyRoundErrors = options.qualifyRoundErrors ?? {};
+  const rewardPoolResidueSweepErrors =
+    options.rewardPoolResidueSweepErrors ?? {};
   const rewardPoolQualificationSourceReadyAt =
     options.rewardPoolQualificationSourceReadyAt ?? {};
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
@@ -661,6 +664,14 @@ function makeHarness(options: {
 
         if (functionName === "syncQuestionBundleTerminals") {
           return "0xbundlesync";
+        }
+
+        if (functionName === "refundExpiredRewardPool") {
+          const error = rewardPoolResidueSweepErrors[String(args[0])];
+          if (error) {
+            throw new Error(error);
+          }
+          return "0xrewardpoolresiduesweep";
         }
 
         if (functionName === "openRound") {
@@ -1045,6 +1056,70 @@ describe("resolveRounds", () => {
         contentId: "9",
         roundId: "3",
         error: "Cluster source pending",
+      }),
+    );
+  });
+
+  it("sweeps expired reward pool residue returned by Ponder work discovery", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+          rewardPoolQualifications: [],
+          rewardPoolResidueSweeps: [
+            {
+              rewardPoolId: "42",
+              contentId: "9",
+              bountyClosesAt: "1000",
+              unallocatedAmount: "1000000",
+              nonRefundable: true,
+              reason: "reward_pool_residue_sweep",
+            },
+          ],
+          bundleTerminalSyncs: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.rewardPoolResidueSweeps).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "refundExpiredRewardPool",
+        args: [42n],
       }),
     );
   });

@@ -16,6 +16,8 @@
  *   6. Call `markDormant(contentId)` for stale content.
  *   7. Call `forfeitExpiredFeedbackBonus(poolId)` for expired Feedback Bonus pools
  *      that still hold residue.
+ *   8. Call `refundExpiredRewardPool(rewardPoolId)` for expired question reward
+ *      pools that still hold unallocated residue.
  *
  * Vote ciphertext is tlock-encrypted to a future drand round. After the epoch
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
@@ -92,6 +94,7 @@ export interface KeeperResult {
   cleanupBatchesProcessed: number;
   rewardPoolRoundsQualified: number;
   questionBundleTerminalSyncs: number;
+  rewardPoolResidueSweeps: number;
   contentMarkedDormant: number;
   feedbackBonusPoolsForfeited: number;
   /** Open rounds with commit quorum but reveal quorum still unmet this tick. */
@@ -138,6 +141,14 @@ interface KeeperWorkRewardPoolQualificationCandidate {
   snapshotTotalClaimWeight?: bigint;
   reason?: string;
 }
+interface KeeperWorkRewardPoolResidueSweepCandidate {
+  rewardPoolId: bigint;
+  contentId?: bigint;
+  bountyClosesAt?: bigint;
+  unallocatedAmount?: bigint;
+  nonRefundable?: boolean;
+  reason?: string;
+}
 interface KeeperWorkBundleTerminalSyncCandidate {
   bundleId: bigint;
   reason?: string;
@@ -151,6 +162,7 @@ interface KeeperWorkDiscovery {
   dormantContent: KeeperWorkContentCandidate[];
   feedbackBonusForfeits: KeeperWorkFeedbackBonusForfeitCandidate[];
   rewardPoolQualifications: KeeperWorkRewardPoolQualificationCandidate[];
+  rewardPoolResidueSweeps: KeeperWorkRewardPoolResidueSweepCandidate[];
   bundleTerminalSyncs: KeeperWorkBundleTerminalSyncCandidate[];
 }
 interface PonderDeploymentMetadata {
@@ -188,6 +200,7 @@ function emptyResult(): KeeperResult {
     cleanupBatchesProcessed: 0,
     rewardPoolRoundsQualified: 0,
     questionBundleTerminalSyncs: 0,
+    rewardPoolResidueSweeps: 0,
     contentMarkedDormant: 0,
     feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
@@ -582,6 +595,7 @@ async function discoverKeeperWorkCandidates(
         dormantContent: [],
         feedbackBonusForfeits: [],
         rewardPoolQualifications: [],
+        rewardPoolResidueSweeps: [],
         bundleTerminalSyncs: [],
       };
     }
@@ -622,6 +636,10 @@ async function discoverKeeperWorkCandidates(
   setGauge(
     "keeper_work_discovery_reward_pool_qualification_candidates",
     discovery.rewardPoolQualifications.length,
+  );
+  setGauge(
+    "keeper_work_discovery_reward_pool_residue_sweep_candidates",
+    discovery.rewardPoolResidueSweeps.length,
   );
   setGauge(
     "keeper_work_discovery_bundle_terminal_sync_candidates",
@@ -807,6 +825,9 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     parseKeeperWorkRewardPoolQualificationArray(
       record.rewardPoolQualifications ?? [],
     );
+  const rewardPoolResidueSweeps = parseKeeperWorkRewardPoolResidueSweepArray(
+    record.rewardPoolResidueSweeps ?? [],
+  );
   const bundleTerminalSyncs = parseKeeperWorkBundleTerminalSyncArray(
     record.bundleTerminalSyncs ?? [],
   );
@@ -818,6 +839,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     !dormantContent ||
     !feedbackBonusForfeits ||
     !rewardPoolQualifications ||
+    !rewardPoolResidueSweeps ||
     !bundleTerminalSyncs
   ) {
     return null;
@@ -829,6 +851,9 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     ...cleanupRounds.map((candidate) => candidate.contentId),
     ...dormantContent.map((candidate) => candidate.contentId),
     ...rewardPoolQualifications.map((candidate) => candidate.contentId),
+    ...rewardPoolResidueSweeps
+      .map((candidate) => candidate.contentId)
+      .filter((contentId): contentId is bigint => contentId !== undefined),
   ]);
 
   return {
@@ -840,6 +865,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     dormantContent,
     feedbackBonusForfeits,
     rewardPoolQualifications,
+    rewardPoolResidueSweeps,
     bundleTerminalSyncs,
   };
 }
@@ -944,6 +970,38 @@ function parseKeeperWorkRewardPoolQualificationArray(
     const poolOrder = compareBigInt(a.rewardPoolId, b.rewardPoolId);
     return poolOrder !== 0 ? poolOrder : compareBigInt(a.roundId, b.roundId);
   });
+}
+
+function parseKeeperWorkRewardPoolResidueSweepArray(
+  value: unknown,
+): KeeperWorkRewardPoolResidueSweepCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkRewardPoolResidueSweepCandidate[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const rewardPoolId = parsePositiveBigInt(record.rewardPoolId);
+    if (rewardPoolId === null) return null;
+    const key = rewardPoolId.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const nonRefundable =
+      typeof record.nonRefundable === "boolean"
+        ? record.nonRefundable
+        : undefined;
+    candidates.push({
+      rewardPoolId,
+      contentId: parseOptionalPositiveBigInt(record.contentId),
+      bountyClosesAt: parseOptionalNonNegativeBigInt(record.bountyClosesAt),
+      unallocatedAmount: parseOptionalNonNegativeBigInt(
+        record.unallocatedAmount,
+      ),
+      nonRefundable,
+      reason: typeof record.reason === "string" ? record.reason : undefined,
+    });
+  }
+  return candidates.sort((a, b) => compareBigInt(a.rewardPoolId, b.rewardPoolId));
 }
 
 function parseKeeperWorkBundleTerminalSyncArray(
@@ -1857,6 +1915,16 @@ export async function resolveRounds(
     discovery.bundleTerminalSyncs,
   );
 
+  result.rewardPoolResidueSweeps += await _sweepExpiredRewardPoolResidue(
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    registryAddr,
+    discovery.rewardPoolResidueSweeps,
+  );
+
   result.feedbackBonusPoolsForfeited += await _forfeitExpiredFeedbackBonuses(
     publicClient,
     walletClient,
@@ -2339,6 +2407,100 @@ async function _syncQuestionBundleTerminals(
   }
 
   return synced;
+}
+
+function isExpectedRewardPoolResidueSweepRevert(reason: string): boolean {
+  const benign = [
+    "RewardPoolNotFound",
+    "Not expired",
+    "Already refunded",
+    "No refund",
+    "Bounty complete",
+    "Grace",
+    "RewardPoolCursorNeedsAdvance",
+    "Round out of order",
+    "Round not settled",
+    "Cleanup pending",
+    "RecoveredRoundPending",
+    "PreQualificationRejectedRoundPending",
+    "Prequalification round pending",
+    "EnforcedPause",
+    "Pausable",
+  ];
+  const lower = reason.toLowerCase();
+  return benign.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
+
+async function _sweepExpiredRewardPoolResidue(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  registryAddr: `0x${string}`,
+  candidates: readonly KeeperWorkRewardPoolResidueSweepCandidate[],
+): Promise<number> {
+  const rewardPoolQualifications = config.rewardPoolQualifications ?? {
+    enabled: true,
+    maxRoundsPerTick: 25,
+    maxBundleSyncsPerTick: 10,
+    bundleMaxRoundsPerSync: 25,
+  };
+  if (
+    !rewardPoolQualifications.enabled ||
+    rewardPoolQualifications.maxRoundsPerTick <= 0 ||
+    candidates.length === 0
+  ) {
+    return 0;
+  }
+
+  const escrow = await _readQuestionRewardPoolEscrow(publicClient, registryAddr);
+  if (!escrow) return 0;
+
+  let swept = 0;
+  for (const candidate of candidates.slice(
+    0,
+    rewardPoolQualifications.maxRoundsPerTick,
+  )) {
+    try {
+      await writeContractAndConfirm(publicClient, walletClient, {
+        chain,
+        account,
+        address: escrow,
+        abi: QuestionRewardPoolEscrowAbi,
+        functionName: "refundExpiredRewardPool",
+        args: [candidate.rewardPoolId],
+      });
+      swept++;
+      logger.info("Swept expired reward pool residue", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId?.toString(),
+        bountyClosesAt: candidate.bountyClosesAt?.toString(),
+        unallocatedAmount: candidate.unallocatedAmount?.toString(),
+        nonRefundable: candidate.nonRefundable,
+        reason: candidate.reason,
+      });
+    } catch (err: unknown) {
+      const reason = getRevertReason(err);
+      if (isExpectedRewardPoolResidueSweepRevert(reason)) {
+        logger.debug("Skipped expired reward pool residue sweep candidate", {
+          rewardPoolId: candidate.rewardPoolId.toString(),
+          contentId: candidate.contentId?.toString(),
+          error: reason,
+        });
+        continue;
+      }
+
+      incrementCounter("keeper_reward_pool_residue_sweep_failures_total");
+      logger.warn("Failed to sweep expired reward pool residue", {
+        rewardPoolId: candidate.rewardPoolId.toString(),
+        contentId: candidate.contentId?.toString(),
+        error: reason,
+      });
+    }
+  }
+
+  return swept;
 }
 
 function isExpectedFeedbackBonusForfeitRevert(reason: string): boolean {

@@ -339,6 +339,62 @@ export function registerKeeperRoutes(app: ApiApp) {
       )
       .limit(limit);
 
+    const rewardPoolResidueSweeps = await db
+      .select({
+        rewardPoolId: questionRewardPool.id,
+        contentId: questionRewardPool.contentId,
+        bountyClosesAt: questionRewardPool.bountyClosesAt,
+        unallocatedAmount: questionRewardPool.unallocatedAmount,
+        nonRefundable: questionRewardPool.nonRefundable,
+        reason: sql<string>`'reward_pool_residue_sweep'`,
+      })
+      .from(questionRewardPool)
+      .where(
+        and(
+          eq(questionRewardPool.refunded, false),
+          sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
+          sql`${questionRewardPool.unallocatedAmount} > 0`,
+          sql`${questionRewardPool.bountyWindowSeconds} > 0`,
+          or(
+            and(
+              questionRewardPoolHasValidBountyWindowExpression(),
+              sql`${questionRewardPool.bountyClosesAt} < ${now}`,
+            ),
+            and(
+              sql`${questionRewardPool.bountyClosesAt} = 0`,
+              sql`${questionRewardPool.bountyStartBy} > 0`,
+              sql`${questionRewardPool.bountyStartBy} < ${now}`,
+            ),
+          ),
+          sql`not exists (
+            select 1 from ${round}
+            where ${round.contentId} = ${questionRewardPool.contentId}
+              and ${round.state} = ${ROUND_STATE.Settled}
+              and ${round.roundId} >= ${questionRewardPool.startRoundId}
+              and ${round.settledAt} is not null
+              and ${round.settledAt} > 0
+              and (
+                ${questionRewardPool.bountyClosesAt} = 0
+                or ${round.startTime} <= ${questionRewardPool.bountyClosesAt}
+              )
+              and not exists (
+                select 1 from ${questionRewardPoolRound}
+                where ${questionRewardPoolRound.rewardPoolId} = ${questionRewardPool.id}
+                  and ${questionRewardPoolRound.roundId} = ${round.roundId}
+              )
+          )`,
+          sql`not exists (
+            select 1 from ${questionRewardPoolPreQualificationSkip}
+            where ${questionRewardPoolPreQualificationSkip.rewardPoolId} = ${questionRewardPool.id}
+          )`,
+        ),
+      )
+      .orderBy(
+        asc(questionRewardPool.bountyClosesAt),
+        asc(questionRewardPool.id),
+      )
+      .limit(limit);
+
     const bundleTerminalSyncs = await db
       .select({
         bundleId: questionBundleReward.id,
@@ -387,6 +443,7 @@ export function registerKeeperRoutes(app: ApiApp) {
       dormantContent,
       feedbackBonusForfeits,
       rewardPoolQualifications,
+      rewardPoolResidueSweeps,
       bundleTerminalSyncs,
     });
   });

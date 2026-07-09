@@ -114,6 +114,7 @@ function emptyKeeperResult(): KeeperResult {
     cleanupBatchesProcessed: 0,
     rewardPoolRoundsQualified: 0,
     questionBundleTerminalSyncs: 0,
+    rewardPoolResidueSweeps: 0,
     contentMarkedDormant: 0,
     feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
@@ -312,6 +313,7 @@ async function main() {
         result.cleanupBatchesProcessed +
         result.rewardPoolRoundsQualified +
         result.questionBundleTerminalSyncs +
+        result.rewardPoolResidueSweeps +
         result.contentMarkedDormant +
         result.feedbackBonusPoolsForfeited;
       if (total > 0) {

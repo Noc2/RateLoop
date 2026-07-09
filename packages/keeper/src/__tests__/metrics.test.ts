@@ -35,6 +35,7 @@ function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
     cleanupBatchesProcessed: 0,
     rewardPoolRoundsQualified: 0,
     questionBundleTerminalSyncs: 0,
+    rewardPoolResidueSweeps: 0,
     contentMarkedDormant: 0,
     feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
@@ -140,6 +141,7 @@ describe("metrics", () => {
         cleanupBatchesProcessed: 3,
         rewardPoolRoundsQualified: 4,
         questionBundleTerminalSyncs: 6,
+        rewardPoolResidueSweeps: 7,
         feedbackBonusPoolsForfeited: 5,
         roundsAwaitingRevealQuorum: 4,
         minRevealGraceSecondsRemaining: 120,
@@ -153,6 +155,7 @@ describe("metrics", () => {
     expect(metricsBody).toContain("keeper_unrevealed_cleanup_batches_total 3");
     expect(metricsBody).toContain("keeper_reward_pool_rounds_qualified_total 4");
     expect(metricsBody).toContain("keeper_bundle_terminal_syncs_total 6");
+    expect(metricsBody).toContain("keeper_reward_pool_residue_sweeps_total 7");
     expect(metricsBody).toContain("keeper_feedback_bonus_forfeits_total 5");
     expect(metricsBody).toContain("keeper_wallet_balance_wei 4000000000000");
     expect(metricsBody).toContain("keeper_rounds_awaiting_reveal_quorum 4");
@@ -169,6 +172,7 @@ describe("metrics", () => {
       cleanupBatchesProcessed: 3,
       rewardPoolRoundsQualified: 4,
       questionBundleTerminalSyncs: 6,
+      rewardPoolResidueSweeps: 7,
       feedbackBonusPoolsForfeited: 5,
       walletBalanceWei: "4000000000000",
       roundsAwaitingRevealQuorum: 4,

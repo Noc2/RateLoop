@@ -61,6 +61,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
             cleanupBatchesProcessed: 0,
             rewardPoolRoundsQualified: 0,
             questionBundleTerminalSyncs: 0,
+            rewardPoolResidueSweeps: 0,
             contentMarkedDormant: 0,
             feedbackBonusPoolsForfeited: 0,
             roundsAwaitingRevealQuorum: 0,
@@ -307,6 +308,7 @@ describe("keeper index", () => {
       resolveRoundsResult: {
         roundsRevealFailedFinalized: 1,
         cleanupBatchesProcessed: 2,
+        rewardPoolResidueSweeps: 4,
         feedbackBonusPoolsForfeited: 3,
       },
     });
@@ -316,6 +318,7 @@ describe("keeper index", () => {
       expect.objectContaining({
         roundsRevealFailedFinalized: 1,
         cleanupBatchesProcessed: 2,
+        rewardPoolResidueSweeps: 4,
         feedbackBonusPoolsForfeited: 3,
       }),
     );

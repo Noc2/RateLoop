@@ -18,6 +18,7 @@ const counters: Record<string, number> = {
   keeper_advisory_launch_credits_claimed_total: 0,
   keeper_unrevealed_cleanup_batches_total: 0,
   keeper_reward_pool_rounds_qualified_total: 0,
+  keeper_reward_pool_residue_sweeps_total: 0,
   keeper_bundle_terminal_syncs_total: 0,
   keeper_content_marked_dormant_total: 0,
   keeper_runs_total: 0,
@@ -35,6 +36,7 @@ const counters: Record<string, number> = {
   keeper_reward_pool_qualification_cursor_advance_attempts_total: 0,
   keeper_reward_pool_qualification_cursor_advances_total: 0,
   keeper_reward_pool_qualification_cursor_advance_failures_total: 0,
+  keeper_reward_pool_residue_sweep_failures_total: 0,
   keeper_bundle_terminal_sync_failures_total: 0,
   keeper_correlation_epoch_proposed_total: 0,
   keeper_correlation_epoch_finalized_total: 0,
@@ -68,6 +70,7 @@ const gauges: Record<string, number> = {
   // -1 means no settle-ready backlog was observed in the last work discovery.
   keeper_settlement_backlog_oldest_seconds: -1,
   keeper_work_discovery_reward_pool_qualification_candidates: 0,
+  keeper_work_discovery_reward_pool_residue_sweep_candidates: 0,
   keeper_work_discovery_bundle_terminal_sync_candidates: 0,
   keeper_payout_finality_sla_breached_paths: -1,
   keeper_correlation_source_ready_backlog_oldest_seconds: -1,
@@ -217,6 +220,7 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   counters.keeper_advisory_launch_credits_claimed_total += result.advisoryLaunchCreditsClaimed;
   counters.keeper_unrevealed_cleanup_batches_total += result.cleanupBatchesProcessed;
   counters.keeper_reward_pool_rounds_qualified_total += result.rewardPoolRoundsQualified;
+  counters.keeper_reward_pool_residue_sweeps_total += result.rewardPoolResidueSweeps;
   counters.keeper_bundle_terminal_syncs_total += result.questionBundleTerminalSyncs;
   counters.keeper_content_marked_dormant_total += result.contentMarkedDormant;
   counters.keeper_feedback_bonus_forfeits_total += result.feedbackBonusPoolsForfeited;
@@ -257,6 +261,7 @@ function renderMetrics(): string {
     keeper_advisory_launch_credits_claimed_total: "Total advisory launch credits claimed by keeper",
     keeper_unrevealed_cleanup_batches_total: "Total unrevealed-vote cleanup batches processed by keeper",
     keeper_reward_pool_rounds_qualified_total: "Total question reward pool rounds qualified by keeper",
+    keeper_reward_pool_residue_sweeps_total: "Total expired question reward pool residue sweeps sent by keeper",
     keeper_bundle_terminal_syncs_total: "Total question bundle terminal sync transactions sent by keeper",
     keeper_content_marked_dormant_total: "Total content items marked dormant",
     keeper_runs_total: "Total keeper run cycles",
@@ -281,6 +286,8 @@ function renderMetrics(): string {
       "Total successful reward pool qualification cursor advance transactions",
     keeper_reward_pool_qualification_cursor_advance_failures_total:
       "Total unexpected reward pool qualification cursor advance failures",
+    keeper_reward_pool_residue_sweep_failures_total:
+      "Total unexpected expired question reward pool residue sweep failures",
     keeper_bundle_terminal_sync_failures_total: "Total unexpected question bundle terminal sync failures",
     keeper_correlation_epoch_proposed_total: "Total correlation epoch snapshots proposed by keeper",
     keeper_correlation_epoch_finalized_total: "Total correlation epoch snapshots finalized by keeper",
@@ -328,6 +335,8 @@ function renderMetrics(): string {
       "Age in seconds of the oldest settle-ready round returned by keeper work discovery (-1 = none)",
     keeper_work_discovery_reward_pool_qualification_candidates:
       "Reward pool qualification candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_reward_pool_residue_sweep_candidates:
+      "Expired question reward pool residue sweep candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_bundle_terminal_sync_candidates:
       "Question bundle terminal sync candidates returned by the last keeper work discovery phase",
     keeper_payout_finality_sla_breached_paths:
@@ -377,6 +386,7 @@ function renderHealth(): { status: number; body: string } {
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,
     rewardPoolRoundsQualified: counters.keeper_reward_pool_rounds_qualified_total,
+    rewardPoolResidueSweeps: counters.keeper_reward_pool_residue_sweeps_total,
     questionBundleTerminalSyncs: counters.keeper_bundle_terminal_syncs_total,
     feedbackBonusPoolsForfeited: counters.keeper_feedback_bonus_forfeits_total,
     decryptFailures: counters.keeper_decrypt_failures_total,
@@ -394,6 +404,8 @@ function renderHealth(): { status: number; body: string } {
       gauges.keeper_settlement_backlog_oldest_seconds,
     rewardPoolQualificationCandidates:
       gauges.keeper_work_discovery_reward_pool_qualification_candidates,
+    rewardPoolResidueSweepCandidates:
+      gauges.keeper_work_discovery_reward_pool_residue_sweep_candidates,
     bundleTerminalSyncCandidates:
       gauges.keeper_work_discovery_bundle_terminal_sync_candidates,
     walletBalanceWei: (walletBalanceWei ?? 0n).toString(),
