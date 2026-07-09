@@ -8,6 +8,7 @@ test("landing social proof uses the indexed verified human count", () => {
     totalVotes: 6,
     totalQuestionRewardsPaid: "0",
     totalFeedbackBonusesPaid: "0",
+    totalFeedbackBonusesForfeited: "0",
   });
 
   assert.deepEqual(items, [
@@ -23,12 +24,25 @@ test("landing social proof falls back to zero when live verified total is invali
     totalVotes: "not-a-number",
     totalQuestionRewardsPaid: "not-a-number",
     totalFeedbackBonusesPaid: "-1",
+    totalFeedbackBonusesForfeited: "not-a-number",
   });
 
   assert.deepEqual(verifiedHumans, {
     value: "0",
     label: "Verified Humans",
   });
+});
+
+test("landing social proof includes feedback bonus forfeitures paid to treasury", () => {
+  const [, , usdcPaid] = buildLandingPageSocialProofItems({
+    totalVerifiedHumans: 0,
+    totalVotes: 0,
+    totalQuestionRewardsPaid: "0",
+    totalFeedbackBonusesPaid: "0",
+    totalFeedbackBonusesForfeited: "1000000",
+  });
+
+  assert.deepEqual(usdcPaid, { value: "$1", label: "USDC Paid" });
 });
 
 test("formatUsdcPaidOut keeps cent rounding stable", () => {

@@ -3,6 +3,7 @@ export type LandingSocialProofStats = {
   totalVerifiedHumans?: number | string;
   totalQuestionRewardsPaid?: string;
   totalFeedbackBonusesPaid?: string;
+  totalFeedbackBonusesForfeited?: string;
 };
 
 type LandingSocialProofItem = {
@@ -38,7 +39,10 @@ export function formatUsdcPaidOut(rawAmount: unknown) {
 }
 
 export function buildLandingPageSocialProofItems(stats: LandingSocialProofStats): LandingSocialProofItem[] {
-  const paidOut = nonNegativeBigInt(stats.totalQuestionRewardsPaid) + nonNegativeBigInt(stats.totalFeedbackBonusesPaid);
+  const paidOut =
+    nonNegativeBigInt(stats.totalQuestionRewardsPaid) +
+    nonNegativeBigInt(stats.totalFeedbackBonusesPaid) +
+    nonNegativeBigInt(stats.totalFeedbackBonusesForfeited);
   const totalVerifiedHumans = Math.max(0, Math.floor(nonNegativeNumber(stats.totalVerifiedHumans)));
   const totalVotes = Math.max(0, Math.floor(nonNegativeNumber(stats.totalVotes)));
 
