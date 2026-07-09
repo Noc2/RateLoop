@@ -26,8 +26,7 @@ const FOOTER_LINKS: FooterLinkItem[] = [
   { href: "/legal/imprint", label: "Imprint" },
   { href: "https://github.com/Noc2/RateLoop", label: "GitHub", external: true },
   { href: "https://x.com/RateLoop", label: "X", external: true },
-  { href: "https://t.me/rateloop", label: "Community", external: true },
-  { href: "https://t.me/rateloopchannel", label: "Announcements", external: true },
+  { href: "https://t.me/rateloopchannel", label: "Telegram", external: true },
 ];
 
 export function FooterLinks({
