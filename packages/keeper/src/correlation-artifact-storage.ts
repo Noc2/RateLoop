@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   canonicalJson,
@@ -37,7 +38,16 @@ export async function materializeCorrelationArtifactCanonicalJson(
 
   await mkdir(storage.outputDir, { recursive: true });
   const filename = `${artifactHash}.json`;
-  await writeFile(path.join(storage.outputDir, filename), canonical, "utf8");
+  const artifactPath = path.join(storage.outputDir, filename);
+  const temporaryPath = `${artifactPath}.${process.pid}.${randomUUID()}.tmp`;
+
+  try {
+    await writeFile(temporaryPath, canonical, "utf8");
+    await rename(temporaryPath, artifactPath);
+  } catch (error) {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 
   return {
     artifactHash,
