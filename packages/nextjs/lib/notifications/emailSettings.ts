@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, gte, ne } from "drizzle-orm";
 import "server-only";
 import { type NotificationEmailPayload } from "~~/lib/auth/notificationEmails";
 import { db } from "~~/lib/db";
@@ -36,10 +36,6 @@ export function isEmailNotificationEmailInUseError(error: unknown): boolean {
   }
 
   return details.cause ? isEmailNotificationEmailInUseError(details.cause) : false;
-}
-
-function getTimestampMs(value: Date | string): number {
-  return value instanceof Date ? value.getTime() : new Date(value).getTime();
 }
 
 function toState(row: typeof notificationEmailSubscriptions.$inferSelect | undefined): EmailNotificationSettingsState {
@@ -201,16 +197,6 @@ export async function verifyEmailNotificationToken(token: string) {
 
   const now = new Date();
   const [row] = await db
-    .select()
-    .from(notificationEmailSubscriptions)
-    .where(eq(notificationEmailSubscriptions.verificationToken, token))
-    .limit(1);
-
-  if (!row || !row.verificationExpiresAt || getTimestampMs(row.verificationExpiresAt) < now.getTime()) {
-    return { ok: false as const };
-  }
-
-  await db
     .update(notificationEmailSubscriptions)
     .set({
       verifiedAt: now,
@@ -218,7 +204,20 @@ export async function verifyEmailNotificationToken(token: string) {
       verificationExpiresAt: null,
       updatedAt: now,
     })
-    .where(eq(notificationEmailSubscriptions.walletAddress, row.walletAddress));
+    .where(
+      and(
+        eq(notificationEmailSubscriptions.verificationToken, token),
+        gte(notificationEmailSubscriptions.verificationExpiresAt, now),
+      ),
+    )
+    .returning({
+      email: notificationEmailSubscriptions.email,
+      walletAddress: notificationEmailSubscriptions.walletAddress,
+    });
+
+  if (!row) {
+    return { ok: false as const };
+  }
 
   return { ok: true as const, walletAddress: row.walletAddress, email: row.email };
 }
@@ -227,25 +226,18 @@ export async function unsubscribeEmailNotificationSubscription(walletAddress: `0
   await ensureNotificationEmailSubscriptionsTable();
 
   const [row] = await db
-    .select({
-      walletAddress: notificationEmailSubscriptions.walletAddress,
-    })
-    .from(notificationEmailSubscriptions)
+    .delete(notificationEmailSubscriptions)
     .where(
       and(
         eq(notificationEmailSubscriptions.walletAddress, walletAddress),
         eq(notificationEmailSubscriptions.email, email),
       ),
     )
-    .limit(1);
+    .returning({ walletAddress: notificationEmailSubscriptions.walletAddress });
 
   if (!row) {
     return { ok: false as const };
   }
-
-  await db
-    .delete(notificationEmailSubscriptions)
-    .where(eq(notificationEmailSubscriptions.walletAddress, walletAddress));
 
   return { ok: true as const };
 }
