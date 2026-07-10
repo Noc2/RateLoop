@@ -208,7 +208,7 @@ describe("Ponder production launcher", () => {
     expect(spawnImpl).not.toHaveBeenCalled();
   });
 
-  test("starts Ponder with the resolved schema after checking contracts artifacts", async () => {
+test("starts Ponder with the resolved schema after checking contracts artifacts", async () => {
     class FakeChild extends EventEmitter {}
 
     const child = new FakeChild();
@@ -235,6 +235,38 @@ describe("Ponder production launcher", () => {
         stdio: "inherit",
       },
     );
+  });
+
+  test("forwards termination signals to Ponder and cleans up listeners", async () => {
+    class FakeChild extends EventEmitter {
+      exitCode: number | null = null;
+      signalCode: NodeJS.Signals | null = null;
+      kill = vi.fn(() => true);
+    }
+
+    const child = new FakeChild();
+    const processImpl = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+      kill: vi.fn(),
+      pid: 123,
+    });
+
+    await startPonder({
+      env: { DATABASE_SCHEMA: "rateloop_ponder_preview" },
+      processImpl,
+      spawnImpl: vi.fn(() => child),
+      ensureContractsArtifactsImpl: vi.fn(),
+    });
+
+    processImpl.emit("SIGTERM");
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(processImpl.listenerCount("SIGINT")).toBe(1);
+    expect(processImpl.listenerCount("SIGTERM")).toBe(0);
+
+    child.emit("exit", 0, null);
+    expect(processImpl.listenerCount("SIGINT")).toBe(0);
+    expect(processImpl.listenerCount("SIGTERM")).toBe(0);
+    expect(processImpl.exitCode).toBe(0);
   });
 
   test("starts Ponder with a protocol deployment schema when artifacts provide one", async () => {

@@ -220,6 +220,7 @@ function withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl) {
 export async function startPonder({
   argv = process.argv.slice(2),
   env = process.env,
+  processImpl = process,
   spawnImpl = spawn,
   assertProductionRpcChainIdImpl = assertProductionRpcChainId,
   ensureContractsArtifactsImpl,
@@ -267,18 +268,36 @@ export async function startPonder({
     stdio: "inherit",
   });
 
+  const forwardSignal = (signal) => {
+    if (child.exitCode != null || child.signalCode != null) return;
+    child.kill(signal);
+  };
+  const forwardSigint = () => forwardSignal("SIGINT");
+  const forwardSigterm = () => forwardSignal("SIGTERM");
+  let signalHandlersAttached = true;
+  const cleanupSignalHandlers = () => {
+    if (!signalHandlersAttached) return;
+    signalHandlersAttached = false;
+    processImpl.removeListener("SIGINT", forwardSigint);
+    processImpl.removeListener("SIGTERM", forwardSigterm);
+  };
+  processImpl.once("SIGINT", forwardSigint);
+  processImpl.once("SIGTERM", forwardSigterm);
+
   child.on("error", (error) => {
+    cleanupSignalHandlers();
     console.error(`[ponder:start] Failed to start Ponder: ${error.message}`);
-    process.exitCode = 1;
+    processImpl.exitCode = 1;
   });
 
   child.on("exit", (code, signal) => {
+    cleanupSignalHandlers();
     if (signal) {
-      process.kill(process.pid, signal);
+      processImpl.kill(processImpl.pid, signal);
       return;
     }
 
-    process.exitCode = code ?? 1;
+    processImpl.exitCode = code ?? 1;
   });
 
   return child;
