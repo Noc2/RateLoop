@@ -925,7 +925,9 @@ export interface PonderQuestionRewardClaimCandidate {
 
 export interface PonderQuestionRewardClaimCandidatesResponse {
   items: PonderQuestionRewardClaimCandidate[];
+  hasMore?: boolean;
   limit: number;
+  nextOffset?: number;
   offset: number;
 }
 
@@ -984,7 +986,9 @@ export interface PonderQuestionBundleRewardClaimCandidate {
 
 export interface PonderQuestionBundleRewardClaimCandidatesResponse {
   items: PonderQuestionBundleRewardClaimCandidate[];
+  hasMore?: boolean;
   limit: number;
+  nextOffset?: number;
   offset: number;
 }
 
@@ -1777,7 +1781,7 @@ export interface PonderRaterParticipationStatusResponse {
 const PONDER_PAGE_LIMIT = 200;
 
 async function getAllPages<TItem>(
-  fetchPage: (offset: number) => Promise<{ items: TItem[]; hasMore?: boolean }>,
+  fetchPage: (offset: number) => Promise<{ items: TItem[]; hasMore?: boolean; nextOffset?: number }>,
 ): Promise<TItem[]> {
   const items: TItem[] = [];
   let offset = 0;
@@ -1786,11 +1790,15 @@ async function getAllPages<TItem>(
     const page = await fetchPage(offset);
     items.push(...page.items);
 
-    if (page.hasMore === false || page.items.length < PONDER_PAGE_LIMIT) {
+    if (page.hasMore === false || (page.hasMore === undefined && page.items.length < PONDER_PAGE_LIMIT)) {
       break;
     }
 
-    offset += page.items.length;
+    const nextOffset = page.nextOffset ?? offset + page.items.length;
+    if (!Number.isSafeInteger(nextOffset) || nextOffset <= offset) {
+      throw new Error("Ponder pagination cursor did not advance.");
+    }
+    offset = nextOffset;
   }
 
   return items;

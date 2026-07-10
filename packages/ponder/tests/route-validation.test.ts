@@ -4003,12 +4003,15 @@ describe("registerDataRoutes", () => {
     registerDataRoutes(app);
 
     const response = await app.request(
-      "http://localhost/question-reward-claim-candidates?voter=0x0000000000000000000000000000000000000001",
+      "http://localhost/question-reward-claim-candidates?voter=0x0000000000000000000000000000000000000001&limit=1&offset=4",
     );
 
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.items).toEqual([]);
+    expect(body.hasMore).toBe(true);
+    expect(body.nextOffset).toBe(5);
+    expect(body.offset).toBe(4);
   });
 });
 

@@ -944,6 +944,41 @@ test("protocol data reads preflight an explicit deployment key", async () => {
   );
 });
 
+test("claim candidate pagination advances across proof-filtered pages", async () => {
+  const originalGetPage = ponderApi.getQuestionRewardClaimCandidates;
+  const seenOffsets: string[] = [];
+
+  ponderApi.getQuestionRewardClaimCandidates = async (_voter, params) => {
+    seenOffsets.push(params?.offset ?? "");
+    if (params?.offset === "0") {
+      return {
+        items: [],
+        hasMore: true,
+        limit: 200,
+        nextOffset: 200,
+        offset: 0,
+      };
+    }
+    return {
+      items: [{ rewardPoolId: "visible-later" }] as any,
+      hasMore: false,
+      limit: 200,
+      nextOffset: 201,
+      offset: 200,
+    };
+  };
+
+  try {
+    const result = await ponderApi.getAllQuestionRewardClaimCandidates("0x1234567890abcdef1234567890abcdef12345678");
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0]?.rewardPoolId, "visible-later");
+    assert.deepEqual(seenOffsets, ["0", "200"]);
+  } finally {
+    ponderApi.getQuestionRewardClaimCandidates = originalGetPage;
+  }
+});
+
 test("ponderApi.getContentWindow respects hasMore when search totals are omitted", async () => {
   const originalGetContent = ponderApi.getContent;
   let callCount = 0;

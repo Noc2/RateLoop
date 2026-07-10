@@ -731,7 +731,9 @@ export function registerDataRoutes(app: ApiApp) {
         displayCurrency: item.asset === 0 ? "LREP" : "USD",
         decimals: 6,
       })),
+      hasMore: items.length === limit,
       limit,
+      nextOffset: offset + items.length,
       offset,
     });
   });
@@ -1923,7 +1925,9 @@ export function registerDataRoutes(app: ApiApp) {
         displayCurrency: item.asset === 0 ? "LREP" : "USD",
         decimals: 6,
       })),
+      hasMore: items.length === limit,
       limit,
+      nextOffset: offset + items.length,
       offset,
     });
   });
