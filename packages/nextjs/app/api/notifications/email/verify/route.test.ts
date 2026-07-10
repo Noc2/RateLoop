@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import { notificationEmailSubscriptions } from "~~/lib/db/schema";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
@@ -11,6 +12,7 @@ const originalTrustedHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
 const originalVercelUrl = env.VERCEL_URL;
+const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
@@ -30,11 +32,30 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   }
 }
 
-function makeRequest(token: string): NextRequest {
+function makeRequest(token: string, method: "GET" | "POST" = "GET"): NextRequest {
   return new NextRequest(`https://rateloop.ai/api/notifications/email/verify?token=${encodeURIComponent(token)}`, {
     headers: new Headers({
       "x-forwarded-for": "203.0.113.82",
     }),
+    method,
+  });
+}
+
+async function insertPendingSubscription(token = "verification-token") {
+  const now = new Date();
+  await dbModule.db.insert(notificationEmailSubscriptions).values({
+    walletAddress: WALLET,
+    email: "alice@example.com",
+    verifiedAt: null,
+    verificationToken: token,
+    verificationExpiresAt: new Date(now.getTime() + 60_000),
+    roundResolved: true,
+    settlingSoonHour: true,
+    settlingSoonDay: true,
+    followedSubmission: true,
+    followedResolution: true,
+    createdAt: now,
+    updatedAt: now,
   });
 }
 
@@ -93,7 +114,7 @@ after(() => {
 test("email verification route throttles varied tokens before token lookup", async () => {
   await withFixedRateLimitWindow(async () => {
     for (let index = 0; index < 61; index += 1) {
-      const response = await route.GET(makeRequest(`vf-${String(index).padStart(3, "0")}-flood-token`));
+      const response = await route.POST(makeRequest(`vf-${String(index).padStart(3, "0")}-flood-token`, "POST"));
 
       if (index < 60) {
         assert.equal(response.status, 400);
@@ -104,4 +125,33 @@ test("email verification route throttles varied tokens before token lookup", asy
       }
     }
   });
+});
+
+test("email verification GET requires confirmation without consuming the token", async () => {
+  await insertPendingSubscription();
+
+  const response = await route.GET(makeRequest("verification-token"));
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /text\/html/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.match(html, /method="post"/);
+
+  const [row] = await dbModule.db.select().from(notificationEmailSubscriptions);
+  assert.equal(row?.verifiedAt, null);
+  assert.equal(row?.verificationToken, "verification-token");
+});
+
+test("email verification POST consumes the token after confirmation", async () => {
+  env.APP_URL = "https://www.rateloop.ai";
+  await insertPendingSubscription();
+
+  const response = await route.POST(makeRequest("verification-token", "POST"));
+
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "https://www.rateloop.ai/settings?tab=notifications&email=verified");
+  const [row] = await dbModule.db.select().from(notificationEmailSubscriptions);
+  assert.ok(row?.verifiedAt);
+  assert.equal(row?.verificationToken, null);
 });
