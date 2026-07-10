@@ -59,6 +59,24 @@ function safeBigInt(value: unknown): bigint {
   }
 }
 
+function normalizeClaimantAddress(value?: string | null): `0x${string}` | null {
+  return value && isAddress(value) && value !== zeroAddress ? (value.toLowerCase() as `0x${string}`) : null;
+}
+
+export function resolveQuestionRewardClaimant(params: {
+  candidateVoter?: string | null;
+  connectedAddress?: string | null;
+  identityHolder?: string | null;
+  payoutWeight?: { account?: string | null } | null;
+}) {
+  return (
+    normalizeClaimantAddress(params.payoutWeight?.account) ??
+    normalizeClaimantAddress(params.identityHolder) ??
+    normalizeClaimantAddress(params.candidateVoter) ??
+    normalizeClaimantAddress(params.connectedAddress)
+  );
+}
+
 // The ponder API derives `currency` from `asset` (0 -> "LREP", otherwise "USDC"),
 // so exactly "LREP" is the only string form besides the numeric asset id.
 export function getQuestionRewardAsset(candidate: { asset?: number | null; currency?: string | null }) {
@@ -134,6 +152,12 @@ export function useClaimableQuestionRewards() {
     [delegateOf, delegateTo, normalizedAddress],
   );
   const voterQuery = useMemo(() => candidateVoters.join(","), [candidateVoters]);
+  type QuestionRewardClaimCandidate = PonderQuestionRewardClaimCandidate & {
+    candidateVoter?: string | null;
+  };
+  type QuestionBundleRewardClaimCandidate = PonderQuestionBundleRewardClaimCandidate & {
+    candidateVoter?: string | null;
+  };
 
   const {
     data: result,
@@ -146,11 +170,13 @@ export function useClaimableQuestionRewards() {
     ponderFn: async () => {
       if (!voterQuery) return [];
       const pages = await Promise.all(
-        candidateVoters.map(candidate =>
-          ponderApi.getAllQuestionRewardClaimCandidates(candidate, {
-            chainId: targetNetwork.id,
-            deploymentKey: deployment?.deploymentKey,
-          }),
+        candidateVoters.map(async candidateVoter =>
+          (
+            await ponderApi.getAllQuestionRewardClaimCandidates(candidateVoter, {
+              chainId: targetNetwork.id,
+              deploymentKey: deployment?.deploymentKey,
+            })
+          ).map(candidate => ({ ...candidate, candidateVoter })),
         ),
       );
       const seen = new Set<string>();
@@ -180,11 +206,13 @@ export function useClaimableQuestionRewards() {
     ponderFn: async () => {
       if (!voterQuery) return [];
       const pages = await Promise.all(
-        candidateVoters.map(candidate =>
-          ponderApi.getAllQuestionBundleRewardClaimCandidates(candidate, {
-            chainId: targetNetwork.id,
-            deploymentKey: deployment?.deploymentKey,
-          }),
+        candidateVoters.map(async candidateVoter =>
+          (
+            await ponderApi.getAllQuestionBundleRewardClaimCandidates(candidateVoter, {
+              chainId: targetNetwork.id,
+              deploymentKey: deployment?.deploymentKey,
+            })
+          ).map(candidate => ({ ...candidate, candidateVoter })),
         ),
       );
       const seen = new Set<string>();
@@ -203,13 +231,22 @@ export function useClaimableQuestionRewards() {
     staleTime: 30_000,
   });
 
-  const candidates = useMemo(() => result?.data ?? [], [result?.data]);
-  const bundleCandidates = useMemo(() => bundleResult?.data ?? [], [bundleResult?.data]);
+  const candidates = useMemo<QuestionRewardClaimCandidate[]>(() => result?.data ?? [], [result?.data]);
+  const bundleCandidates = useMemo<QuestionBundleRewardClaimCandidate[]>(
+    () => bundleResult?.data ?? [],
+    [bundleResult?.data],
+  );
   const claimableRequests = useMemo(() => {
     if (!address || !escrowAddress || candidates.length === 0) return [];
     return candidates.flatMap(candidate => {
       const payoutProof = buildPayoutProof(candidate);
       if (candidate.requiresPayoutProof && !payoutProof) return [];
+      const claimant = resolveQuestionRewardClaimant({
+        candidateVoter: candidate.candidateVoter,
+        connectedAddress: address,
+        payoutWeight: payoutProof?.payoutWeight,
+      });
+      if (!claimant) return [];
 
       const rewardPoolId = safeBigInt(candidate.rewardPoolId);
       const roundId = safeBigInt(candidate.roundId);
@@ -219,17 +256,17 @@ export function useClaimableQuestionRewards() {
             chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionRewardWithPayoutWeight" as const,
-            args: [rewardPoolId, roundId, address, payoutProof.payoutWeight, payoutProof.payoutProof],
+            args: [rewardPoolId, roundId, claimant, payoutProof.payoutWeight, payoutProof.payoutProof],
           }
         : {
             address: escrowAddress,
             chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionReward" as const,
-            args: [rewardPoolId, roundId, address],
+            args: [rewardPoolId, roundId, claimant],
           };
 
-      return [{ candidate, payoutProof, contract }];
+      return [{ candidate, claimant, payoutProof, contract }];
     });
   }, [address, candidates, escrowAddress, targetNetwork.id]);
   const claimableContracts = useMemo(() => claimableRequests.map(request => request.contract), [claimableRequests]);
@@ -238,6 +275,13 @@ export function useClaimableQuestionRewards() {
     return bundleCandidates.flatMap(candidate => {
       const payoutProof = buildPayoutProof(candidate);
       if (candidate.requiresPayoutProof && !payoutProof) return [];
+      const claimant = resolveQuestionRewardClaimant({
+        candidateVoter: candidate.candidateVoter,
+        connectedAddress: address,
+        identityHolder: candidate.identityHolder,
+        payoutWeight: payoutProof?.payoutWeight,
+      });
+      if (!claimant) return [];
       const bundleId = safeBigInt(candidate.bundleId);
       const roundSetIndex = BigInt(candidate.roundSetIndex ?? 0);
       const contract = payoutProof
@@ -246,17 +290,17 @@ export function useClaimableQuestionRewards() {
             chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionBundleRewardWithPayoutWeight" as const,
-            args: [bundleId, roundSetIndex, address, payoutProof.payoutWeight, payoutProof.payoutProof],
+            args: [bundleId, roundSetIndex, claimant, payoutProof.payoutWeight, payoutProof.payoutProof],
           }
         : {
             address: escrowAddress,
             chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionBundleReward" as const,
-            args: [bundleId, roundSetIndex, address],
+            args: [bundleId, roundSetIndex, claimant],
           };
 
-      return [{ candidate, payoutProof, contract }];
+      return [{ candidate, claimant, payoutProof, contract }];
     });
   }, [address, bundleCandidates, escrowAddress, targetNetwork.id]);
   const bundleClaimableContracts = useMemo(
@@ -283,7 +327,7 @@ export function useClaimableQuestionRewards() {
 
   const claimableItems = useMemo<ClaimableRewardItem[]>(() => {
     if (!claimableResults || claimableResults.length !== claimableRequests.length) return [];
-    return claimableRequests.flatMap(({ candidate, payoutProof }, index) => {
+    return claimableRequests.flatMap(({ candidate, claimant, payoutProof }, index) => {
       const resultItem = claimableResults[index];
       const reward = resultItem?.status === "success" ? safeBigInt(resultItem.result) : 0n;
       if (reward <= 0n) return [];
@@ -291,6 +335,7 @@ export function useClaimableQuestionRewards() {
         rewardPoolId: safeBigInt(candidate.rewardPoolId),
         contentId: safeBigInt(candidate.contentId),
         roundId: safeBigInt(candidate.roundId),
+        claimant,
         reward,
         asset: getQuestionRewardAsset(candidate),
         title: candidate.title,
@@ -309,7 +354,7 @@ export function useClaimableQuestionRewards() {
 
   const bundleClaimableItems = useMemo<ClaimableRewardItem[]>(() => {
     if (!bundleClaimableResults || bundleClaimableResults.length !== bundleClaimableRequests.length) return [];
-    return bundleClaimableRequests.flatMap(({ candidate, payoutProof }, index) => {
+    return bundleClaimableRequests.flatMap(({ candidate, claimant, payoutProof }, index) => {
       const resultItem = bundleClaimableResults[index];
       const reward = resultItem?.status === "success" ? safeBigInt(resultItem.result) : 0n;
       if (reward <= 0n) return [];
@@ -319,6 +364,7 @@ export function useClaimableQuestionRewards() {
         {
           bundleId,
           roundSetIndex,
+          claimant,
           reward,
           asset: getQuestionRewardAsset(candidate),
           title: `Bundle #${bundleId.toString()} round set ${roundSetIndex + 1n}`,

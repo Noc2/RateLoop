@@ -3,6 +3,7 @@ import {
   getClaimableQuestionRewardsQueryKey,
   getQuestionBundleRewardClaimCandidateKey,
   getQuestionRewardAsset,
+  resolveQuestionRewardClaimant,
 } from "./useClaimableQuestionRewards";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -105,4 +106,42 @@ test("getQuestionRewardAsset falls back to USDC for non-LREP candidates", () => 
   assert.equal(getQuestionRewardAsset({ currency: "USDC", asset: 1 }), "USDC");
   assert.equal(getQuestionRewardAsset({ currency: null, asset: 1 }), "USDC");
   assert.equal(getQuestionRewardAsset({ currency: null, asset: null }), "USDC");
+});
+
+test("resolveQuestionRewardClaimant prefers payout proof and linked identity claimants", () => {
+  const connectedAddress = "0xabcdef0000000000000000000000000000000001";
+  const candidateVoter = "0xabcdef0000000000000000000000000000000002";
+  const identityHolder = "0xabcdef0000000000000000000000000000000003";
+  const payoutAccount = "0xabcdef0000000000000000000000000000000004";
+
+  assert.equal(
+    resolveQuestionRewardClaimant({
+      candidateVoter,
+      connectedAddress,
+      identityHolder,
+      payoutWeight: { account: payoutAccount },
+    }),
+    payoutAccount.toLowerCase(),
+  );
+  assert.equal(
+    resolveQuestionRewardClaimant({
+      candidateVoter,
+      connectedAddress,
+      identityHolder,
+    }),
+    identityHolder.toLowerCase(),
+  );
+  assert.equal(
+    resolveQuestionRewardClaimant({
+      candidateVoter,
+      connectedAddress,
+    }),
+    candidateVoter.toLowerCase(),
+  );
+  assert.equal(
+    resolveQuestionRewardClaimant({
+      connectedAddress,
+    }),
+    connectedAddress.toLowerCase(),
+  );
 });

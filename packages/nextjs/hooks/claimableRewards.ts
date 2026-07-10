@@ -63,6 +63,7 @@ export interface QuestionRewardPoolClaimableRewardItem {
   rewardPoolId: bigint;
   contentId: bigint;
   roundId: bigint;
+  claimant?: `0x${string}` | null;
   reward: bigint;
   asset: "LREP" | "USDC";
   title: string;
@@ -74,6 +75,7 @@ export interface QuestionRewardPoolClaimableRewardItem {
 export interface QuestionBundleRewardClaimableRewardItem {
   bundleId: bigint;
   roundSetIndex: bigint;
+  claimant?: `0x${string}` | null;
   reward: bigint;
   asset: "LREP" | "USDC";
   title: string;

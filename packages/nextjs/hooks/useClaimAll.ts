@@ -329,6 +329,7 @@ export function useClaimAll() {
     }
 
     if (item.claimType === "question_reward" && questionRewardPoolEscrowInfo) {
+      const claimAccount = item.claimant ?? address;
       return waitForTransactionPostcondition(
         async () => {
           const claimableAmount = await publicClient.readContract({
@@ -340,8 +341,8 @@ export function useClaimAll() {
                 : "claimableQuestionReward",
             args:
               item.payoutWeight && item.payoutProof
-                ? [item.rewardPoolId, item.roundId, address, item.payoutWeight, item.payoutProof]
-                : [item.rewardPoolId, item.roundId, address],
+                ? [item.rewardPoolId, item.roundId, claimAccount, item.payoutWeight, item.payoutProof]
+                : [item.rewardPoolId, item.roundId, claimAccount],
           } as never);
           return claimableAmount === 0n;
         },
@@ -354,6 +355,7 @@ export function useClaimAll() {
     }
 
     if (item.claimType === "question_bundle_reward" && questionRewardPoolEscrowInfo) {
+      const claimAccount = item.claimant ?? address;
       return waitForTransactionPostcondition(
         async () => {
           const claimableAmount = await publicClient.readContract({
@@ -365,8 +367,8 @@ export function useClaimAll() {
                 : "claimableQuestionBundleReward",
             args:
               item.payoutWeight && item.payoutProof
-                ? [item.bundleId, item.roundSetIndex, address, item.payoutWeight, item.payoutProof]
-                : [item.bundleId, item.roundSetIndex, address],
+                ? [item.bundleId, item.roundSetIndex, claimAccount, item.payoutWeight, item.payoutProof]
+                : [item.bundleId, item.roundSetIndex, claimAccount],
           } as never);
           return claimableAmount === 0n;
         },
