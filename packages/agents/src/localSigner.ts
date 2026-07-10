@@ -74,6 +74,7 @@ type ChainScopedAddressOverrides = Partial<Record<number, Address>>;
 const KEYSTORE_VERSION = 3;
 const RESERVED_SUBMISSION_MIN_AGE_SECONDS = 1n;
 const RESERVATION_REVEAL_READY_TIMEOUT_MS = 30_000;
+const RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS = 250;
 const DEFAULT_SCRYPT_PARAMS = {
   dklen: 32,
   n: 1 << 15,
@@ -3577,18 +3578,41 @@ function isReservationRevealCall(call: RateLoopAgentWalletTransactionCall) {
   );
 }
 
-async function waitForLocalReservationRevealReady(params: {
+function sleep(ms: number) {
+  return new Promise((resolveWait) => setTimeout(resolveWait, ms));
+}
+
+function isSameObservedBlock(
+  before: { number?: bigint | null; timestamp: bigint },
+  after: { number?: bigint | null; timestamp: bigint },
+) {
+  if (typeof before.number === "bigint" && typeof after.number === "bigint") {
+    return before.number === after.number;
+  }
+
+  return before.timestamp === after.timestamp;
+}
+
+export async function waitForLocalReservationRevealReady(params: {
   config: LocalSignerConfig;
-  publicClient: Pick<ReturnType<typeof createPublicClient>, "getBlock">;
+  publicClient: {
+    getBlock: (
+      args: { blockNumber: bigint } | { blockTag: "latest" },
+    ) => Promise<{ number?: bigint | null; timestamp: bigint }>;
+  };
   receipt: TransactionReceipt;
+  sleepMs?: (ms: number) => Promise<void>;
+  timeoutMs?: number;
 }) {
   const reserveBlock = await params.publicClient.getBlock({
     blockNumber: params.receipt.blockNumber,
   });
   const revealReadyTimestamp =
     reserveBlock.timestamp + RESERVED_SUBMISSION_MIN_AGE_SECONDS;
-  const pollMs = Math.max(50, params.config.pollingIntervalMs);
-  const deadline = Date.now() + RESERVATION_REVEAL_READY_TIMEOUT_MS;
+  const pollMs = Math.max(50, Math.floor(params.config.pollingIntervalMs));
+  const timeoutMs = params.timeoutMs ?? RESERVATION_REVEAL_READY_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
+  const sleepFn = params.sleepMs ?? sleep;
 
   for (;;) {
     const latestBlock = await params.publicClient.getBlock({
@@ -3602,9 +3626,30 @@ async function waitForLocalReservationRevealReady(params: {
         "Timed out waiting for the reserved submission reveal window.",
       );
     }
-    await new Promise((resolveWait) =>
-      setTimeout(resolveWait, Math.min(pollMs, remainingMs)),
+
+    const timestampShortfallMs =
+      Number(revealReadyTimestamp - latestBlock.timestamp) * 1_000;
+    const revealWaitMs = Math.max(
+      pollMs,
+      timestampShortfallMs + RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS,
     );
+    if (remainingMs < revealWaitMs) {
+      await sleepFn(remainingMs);
+      throw new Error(
+        "Timed out waiting for the reserved submission reveal window.",
+      );
+    }
+
+    await sleepFn(revealWaitMs);
+
+    const refreshedLatestBlock = await params.publicClient.getBlock({
+      blockTag: "latest",
+    });
+    if (refreshedLatestBlock.timestamp >= revealReadyTimestamp) return;
+
+    // On automining local chains, the reveal transaction may be the next block
+    // that advances timestamp beyond the reservation block.
+    if (isSameObservedBlock(latestBlock, refreshedLatestBlock)) return;
   }
 }
 

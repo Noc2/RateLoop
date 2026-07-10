@@ -24,6 +24,7 @@ import {
   loadLocalSignerConfig,
   signX402AuthorizationRequest,
   validateLocalSignerTransactionPlan,
+  waitForLocalReservationRevealReady,
   withLocalSignerWallet,
 } from "../localSigner.js";
 import {
@@ -1413,6 +1414,40 @@ describe("local signer", () => {
         account.address,
       ),
     ).toThrow(/does not match local signer/);
+  });
+
+  it("lets automining local chains send the reveal transaction after wall-clock wait", async () => {
+    const sleeps: number[] = [];
+    let latestReads = 0;
+    const publicClient = {
+      getBlock: async (
+        params: { blockNumber: bigint } | { blockTag: "latest" },
+      ) => {
+        if ("blockTag" in params) {
+          latestReads += 1;
+        }
+        return {
+          number: 10n,
+          timestamp: 1_000n,
+        };
+      },
+    };
+
+    await waitForLocalReservationRevealReady({
+      config: {
+        ...validationConfig(),
+        pollingIntervalMs: 1,
+        receiptTimeoutMs: 1,
+      },
+      publicClient,
+      receipt: { blockNumber: 10n } as never,
+      sleepMs: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+
+    expect(latestReads).toBe(2);
+    expect(sleeps).toEqual([1_250]);
   });
 
   it("executes mixed-asset wallet-call Feedback Bonus plans", async () => {
