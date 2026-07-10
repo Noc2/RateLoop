@@ -457,6 +457,28 @@ test("read client builds unchanged URLs for the default root-host apiBaseUrl", a
   assert.equal(requestedUrls[2], "https://api.rateloop.ai/stats");
 });
 
+test("read client encodes caller-provided URL path segments", async () => {
+  let requestedUrl = "";
+  const read = createRateLoopReadClient({
+    apiBaseUrl: "https://api.rateloop.ai/ponder",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+    timeoutMs: 5_000,
+  });
+
+  await read.getProfile("../stats?scope=all#fragment");
+
+  assert.equal(
+    requestedUrl,
+    "https://api.rateloop.ai/ponder/profile/%2E%2E%2Fstats%3Fscope%3Dall%23fragment",
+  );
+});
+
 test("read client requires an apiBaseUrl", async () => {
   const read = createRateLoopReadClient({
     apiBaseUrl: undefined,

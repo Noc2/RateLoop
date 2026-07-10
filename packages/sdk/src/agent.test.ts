@@ -1016,6 +1016,32 @@ test("ask handoff helpers use direct browser-handoff routes", async () => {
   assert.equal(status.operationKey, `0x${"69".repeat(32)}`);
 });
 
+test("direct agent helpers encode caller-provided URL path segments", async () => {
+  let requestedUrl = "";
+  const handoffId = "../stats?scope=all#fragment";
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return jsonResponse({
+        handoffId,
+        id: handoffId,
+        status: "pending",
+      });
+    },
+  });
+
+  await agent.getAskHandoffStatus({
+    handoffId,
+    handoffToken: "secret",
+  });
+
+  assert.equal(
+    requestedUrl,
+    "https://rateloop.example/api/agent/handoffs/%2E%2E%2Fstats%3Fscope%3Dall%23fragment",
+  );
+});
+
 test("getAskHandoffStatus forwards includeImageData over MCP", async () => {
   let requestedBody: any;
   const agent = createRateLoopAgentClient({

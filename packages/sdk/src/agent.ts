@@ -1820,6 +1820,10 @@ function agentHandoffsUrl(config: NormalizedAgentConfig) {
   return new URL("./handoffs", `${agentBaseUrl(config)}/`).toString();
 }
 
+function encodePathSegment(value: string) {
+  return encodeURIComponent(value.trim()).replaceAll(".", "%2E");
+}
+
 function agentHandoffUrl(
   config: NormalizedAgentConfig,
   params: AskHandoffLookup,
@@ -1831,7 +1835,7 @@ function agentHandoffUrl(
     throw new RateLoopSdkError("handoffToken is required");
   }
     const url = new URL(
-      `./handoffs/${params.handoffId.trim()}`,
+      `./handoffs/${encodePathSegment(params.handoffId)}`,
       `${agentBaseUrl(config)}/`,
     );
     if (params.includeImageData) {
@@ -1855,7 +1859,7 @@ function agentSigningIntentUrl(
     throw new RateLoopSdkError("token is required");
   }
   const url = new URL(
-    `./signing-intents/${params.intentId.trim()}`,
+    `./signing-intents/${encodePathSegment(params.intentId)}`,
     `${agentBaseUrl(config)}/`,
   );
   return url.toString();
@@ -1870,7 +1874,7 @@ function agentSigningIntentActionUrl(
     throw new RateLoopSdkError("intentId is required");
   }
   return new URL(
-    `./signing-intents/${params.intentId.trim()}/${action}`,
+    `./signing-intents/${encodePathSegment(params.intentId)}/${action}`,
     `${agentBaseUrl(config)}/`,
   ).toString();
 }
@@ -1886,7 +1890,7 @@ function agentConfirmAskUrl(
     );
   }
   return new URL(
-    `./asks/${trimmed}/confirm`,
+    `./asks/${encodePathSegment(trimmed)}/confirm`,
     `${agentBaseUrl(config)}/`,
   ).toString();
 }
@@ -1902,7 +1906,7 @@ function agentConfirmFeedbackBonusUrl(
     );
   }
   return new URL(
-    `./asks/${trimmed}/confirm-feedback-bonus`,
+    `./asks/${encodePathSegment(trimmed)}/confirm-feedback-bonus`,
     `${agentBaseUrl(config)}/`,
   ).toString();
 }
@@ -1915,7 +1919,7 @@ function agentStatusUrl(
     typeof params.operationKey === "string" ? params.operationKey.trim() : "";
   if (operationKey) {
     return new URL(
-      `./asks/${operationKey}`,
+      `./asks/${encodePathSegment(operationKey)}`,
       `${agentBaseUrl(config)}/`,
     ).toString();
   }
@@ -1944,7 +1948,7 @@ function agentResultUrl(
     typeof params.operationKey === "string" ? params.operationKey.trim() : "";
   if (operationKey) {
     const url = new URL(
-      `./results/${operationKey}`,
+      `./results/${encodePathSegment(operationKey)}`,
       `${agentBaseUrl(config)}/`,
     );
     if (params.contentId !== undefined) {
@@ -1959,7 +1963,7 @@ function agentResultUrl(
   const chainId = validateLookupChainId(params.chainId);
   if (contentId && (!chainId || !params.clientRequestId)) {
     return new URL(
-      `./results/by-content/${encodeURIComponent(contentId)}`,
+      `./results/by-content/${encodePathSegment(contentId)}`,
       `${agentBaseUrl(config)}/`,
     ).toString();
   }

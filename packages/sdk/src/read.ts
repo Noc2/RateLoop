@@ -471,6 +471,10 @@ export interface RateLoopReadClient {
   getFrontend(address: string): Promise<{ frontend: RateLoopFrontendItem }>;
 }
 
+function encodePathSegment(value: string | bigint) {
+  return encodeURIComponent(String(value).trim()).replaceAll(".", "%2E");
+}
+
 export function createRateLoopReadClient(
   config: Pick<RateLoopClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
 ): RateLoopReadClient {
@@ -482,21 +486,35 @@ export function createRateLoopReadClient(
         params,
       ),
     getContent: (contentId) =>
-      request<RateLoopContentDetailsResponse>(config, `/content/${contentId}`),
+      request<RateLoopContentDetailsResponse>(
+        config,
+        `/content/${encodePathSegment(contentId)}`,
+      ),
     getContentByUrl: (url) =>
       request<RateLoopContentDetailsResponse>(config, "/content/by-url", { url }),
     getCategories: (params) =>
       request<{ items: RateLoopCategoryItem[] }>(config, "/categories", params),
     getProfile: (address) =>
-      request<RateLoopProfileResponse>(config, `/profile/${address}`),
+      request<RateLoopProfileResponse>(
+        config,
+        `/profile/${encodePathSegment(address)}`,
+      ),
     getProfiles: (addresses) =>
       request<Record<string, RateLoopProfileItem>>(config, "/profiles", {
         addresses: addresses.join(","),
       }),
     getFollows: (address, params) =>
-      request<RateLoopFollowResponse>(config, `/follows/${address}`, params),
+      request<RateLoopFollowResponse>(
+        config,
+        `/follows/${encodePathSegment(address)}`,
+        params,
+      ),
     getFollowers: (address, params) =>
-      request<RateLoopFollowResponse>(config, `/followers/${address}`, params),
+      request<RateLoopFollowResponse>(
+        config,
+        `/followers/${encodePathSegment(address)}`,
+        params,
+      ),
     getAccuracyLeaderboard: (params) =>
       request<RateLoopAccuracyLeaderboardResponse>(
         config,
@@ -504,11 +522,14 @@ export function createRateLoopReadClient(
         params,
       ),
     getVoterAccuracy: (address) =>
-      request<JsonRecord>(config, `/voter-accuracy/${address}`),
+      request<JsonRecord>(
+        config,
+        `/voter-accuracy/${encodePathSegment(address)}`,
+      ),
     getRaterParticipationStatus: (address) =>
       request<RateLoopRaterParticipationStatusResponse>(
         config,
-        `/rater-participation-status/${address}`,
+        `/rater-participation-status/${encodePathSegment(address)}`,
       ),
     getStats: () => request<RateLoopGlobalStats>(config, "/stats"),
     searchVotes: (params) =>
@@ -522,7 +543,10 @@ export function createRateLoopReadClient(
     listFrontends: (params) =>
       request<{ items: RateLoopFrontendItem[] }>(config, "/frontends", params),
     getFrontend: (address) =>
-      request<{ frontend: RateLoopFrontendItem }>(config, `/frontend/${address}`),
+      request<{ frontend: RateLoopFrontendItem }>(
+        config,
+        `/frontend/${encodePathSegment(address)}`,
+      ),
   };
 }
 
