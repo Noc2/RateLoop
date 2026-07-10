@@ -212,6 +212,50 @@ describe("automatic correlation artifact builder", () => {
     );
   });
 
+  it("rejects malformed candidate domains instead of routing them as question rewards", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: [
+            {
+              domain: 999,
+              rewardPoolId: "7",
+              contentId: "9",
+              roundId: "2",
+            },
+          ],
+        });
+      }
+      if (isSupplementalCandidateEndpoint(url.pathname)) {
+        return jsonResponse({ items: [] });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    await expect(
+      buildConfiguredCorrelationSnapshotArtifact(logger),
+    ).rejects.toThrow("correlation round candidate domain is unsupported");
+    expect(
+      fetchMock.mock.calls.some(
+        ([input]) =>
+          new URL(input.toString()).pathname === "/correlation/round-votes",
+      ),
+    ).toBe(false);
+  });
+
   it("builds a deterministic stored artifact from Ponder candidates and votes", async () => {
     mockConfig();
     const fetchMock = vi.fn(

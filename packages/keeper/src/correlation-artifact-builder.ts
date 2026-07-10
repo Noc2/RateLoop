@@ -564,14 +564,20 @@ async function fetchRoundCandidateWindow(
 ): Promise<CorrelationRoundCandidate[]> {
   const candidates: CorrelationRoundCandidate[] = [];
   const targetCount = maxRoundsPerTick + 1;
-  const endpoints = [
-    "/correlation/round-candidates",
-    "/correlation/launch-round-candidates",
-    "/correlation/bundle-round-candidates",
-    "/correlation/rating-round-candidates",
-    "/correlation/rbts-settlement-round-candidates",
+  const endpoints: ReadonlyArray<readonly [string, number]> = [
+    ["/correlation/round-candidates", PAYOUT_DOMAIN_QUESTION_REWARD],
+    ["/correlation/launch-round-candidates", PAYOUT_DOMAIN_LAUNCH_CREDIT],
+    [
+      "/correlation/bundle-round-candidates",
+      PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+    ],
+    ["/correlation/rating-round-candidates", PAYOUT_DOMAIN_PUBLIC_RATING],
+    [
+      "/correlation/rbts-settlement-round-candidates",
+      PAYOUT_DOMAIN_RBTS_SETTLEMENT,
+    ],
   ];
-  for (const pathname of endpoints) {
+  for (const [pathname, expectedDomain] of endpoints) {
     const endpointCandidates: CorrelationRoundCandidate[] = [];
     for (let offset = 0; endpointCandidates.length < targetCount; ) {
       const remaining = targetCount - endpointCandidates.length;
@@ -586,7 +592,9 @@ async function fetchRoundCandidateWindow(
           `Ponder returned too many correlation candidates: ${items.length} > ${limit}`,
         );
       }
-      endpointCandidates.push(...items.map(parseCandidate));
+      endpointCandidates.push(
+        ...items.map((item) => parseCandidate(item, expectedDomain)),
+      );
       if (items.length < limit) {
         break;
       }
@@ -742,10 +750,22 @@ async function fetchJson<T>(url: URL): Promise<T> {
   ) as T;
 }
 
-function parseCandidate(value: unknown): CorrelationRoundCandidate {
+function parseCandidate(
+  value: unknown,
+  expectedDomain: number,
+): CorrelationRoundCandidate {
   const record = requireRecord(value, "correlation round candidate");
+  const domain =
+    record.domain === undefined
+      ? expectedDomain
+      : parseCandidateDomain(record.domain);
+  if (domain !== expectedDomain) {
+    throw new Error(
+      `correlation round candidate domain ${domain} does not match endpoint domain ${expectedDomain}`,
+    );
+  }
   return {
-    domain: parseCandidateDomain(record.domain),
+    domain,
     rewardPoolId: requireNonNegativeBigInt(record.rewardPoolId, "rewardPoolId"),
     contentId: requirePositiveBigInt(record.contentId, "contentId"),
     roundId: requirePositiveBigInt(record.roundId, "roundId"),
@@ -754,6 +774,9 @@ function parseCandidate(value: unknown): CorrelationRoundCandidate {
 
 function parseCandidateDomain(value: unknown) {
   const parsed = parseBigInt(value);
+  if (parsed === BigInt(PAYOUT_DOMAIN_QUESTION_REWARD)) {
+    return PAYOUT_DOMAIN_QUESTION_REWARD;
+  }
   if (parsed === BigInt(PAYOUT_DOMAIN_PUBLIC_RATING)) {
     return PAYOUT_DOMAIN_PUBLIC_RATING;
   }
@@ -766,7 +789,7 @@ function parseCandidateDomain(value: unknown) {
   if (parsed === BigInt(PAYOUT_DOMAIN_RBTS_SETTLEMENT)) {
     return PAYOUT_DOMAIN_RBTS_SETTLEMENT;
   }
-  return PAYOUT_DOMAIN_QUESTION_REWARD;
+  throw new Error("correlation round candidate domain is unsupported");
 }
 
 function parseVote(value: unknown): CorrelationVoteInput {
