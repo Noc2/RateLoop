@@ -29,12 +29,23 @@ export const BASE_MAINNET_READINESS_CONFIG = {
 const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
-function parseArgs(argv) {
-  return {
+export function parseBaseMainnetReadinessArgs(argv) {
+  const supportedArgs = new Set(["--json", "--live", "--require-live-targets"]);
+  const unknownArgs = argv.filter(arg => !supportedArgs.has(arg));
+  if (unknownArgs.length > 0) {
+    throw new Error(`Unknown argument${unknownArgs.length === 1 ? "" : "s"}: ${unknownArgs.join(", ")}.`);
+  }
+
+  const args = {
     live: argv.includes("--live"),
     json: argv.includes("--json"),
     requireLiveTargets: argv.includes("--require-live-targets"),
   };
+  if (args.requireLiveTargets && !args.live) {
+    throw new Error("--require-live-targets requires --live.");
+  }
+
+  return args;
 }
 
 function addCheck(result, ok, message) {
@@ -126,7 +137,14 @@ function loadBaseMainnetOfflineInputs(root = repoRoot) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  let args;
+  try {
+    args = parseBaseMainnetReadinessArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(`[base-mainnet:check] ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+    return;
+  }
   let offlineInputs;
   try {
     offlineInputs = loadBaseMainnetOfflineInputs();

@@ -9,6 +9,7 @@ import {
 } from "./readiness-core.mjs";
 import {
   baseMainnetNotDeployedMessage,
+  parseBaseMainnetReadinessArgs,
   validateBaseMainnetOfflineReadiness,
   validateBaseMainnetLiveEnvironment,
 } from "./check-base-mainnet-readiness.mjs";
@@ -54,6 +55,25 @@ const productionEnvSource =
   "NEXT_PUBLIC_TARGET_NETWORKS=8453\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n";
 const protocolSource =
   'const USDC_BY_CHAIN_ID = { 8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" };';
+
+test("parseBaseMainnetReadinessArgs accepts supported live readiness flags", () => {
+  assert.deepEqual(parseBaseMainnetReadinessArgs(["--live", "--require-live-targets", "--json"]), {
+    live: true,
+    json: true,
+    requireLiveTargets: true,
+  });
+});
+
+test("parseBaseMainnetReadinessArgs rejects unknown flags", () => {
+  assert.throws(() => parseBaseMainnetReadinessArgs(["--lve", "--json"]), /Unknown argument: --lve/);
+});
+
+test("parseBaseMainnetReadinessArgs rejects required live targets without live probes", () => {
+  assert.throws(
+    () => parseBaseMainnetReadinessArgs(["--require-live-targets"]),
+    /--require-live-targets requires --live/,
+  );
+});
 
 test("validateBaseMainnetOfflineReadiness accepts synchronized production Base artifacts", () => {
   const result = validateBaseMainnetOfflineReadiness({
