@@ -1,7 +1,7 @@
 import "./fetch-shim";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { rm, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -38,9 +38,6 @@ const ROUND_STATE_SETTLED = 1;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
-const CORRELATION_ARTIFACT_PORT = 9091;
-const CORRELATION_ARTIFACT_ROUTE_PREFIX = "/correlation-artifacts";
-const correlationArtifactStorageDirectory = path.join(tmpdir(), `rateloop-correlation-artifacts-${process.pid}`);
 const PG_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ROUND_PAYOUT_SNAPSHOT_PROPOSED_EVENT = parseAbiItem(
   "event RoundPayoutSnapshotProposed(bytes32 indexed snapshotKey,uint8 indexed domain,uint256 indexed rewardPoolId,uint256 contentId,uint256 roundId,uint64 correlationEpochId,address frontendOperator,address proposer,uint32 rawEligibleVoters,uint32 effectiveParticipantUnits,uint256 totalClaimWeight,bytes32 weightRoot,bytes32 reasonRoot,bytes32 artifactHash,string artifactURI,uint64 challengeWindowAtProposal,uint64 finalizationVetoWindowAtProposal)",
@@ -625,11 +622,9 @@ export async function stopCorrelationSnapshotKeeper() {
     });
   }
   if (artifactPath) await unlink(artifactPath).catch(() => {});
-  await rm(correlationArtifactStorageDirectory, { recursive: true, force: true }).catch(() => {});
 }
 
-function correlationKeeperEnvOverrides(artifactPath?: string) {
-  const publishFileArtifact = Boolean(artifactPath);
+export function correlationKeeperEnvOverrides(artifactPath?: string) {
   const keeperDatabaseUrl = process.env.KEEPER_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim();
 
   return {
@@ -646,14 +641,9 @@ function correlationKeeperEnvOverrides(artifactPath?: string) {
     KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
     KEEPER_CORRELATION_SNAPSHOTS_MODE: artifactPath ? "file" : "auto",
     KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH: artifactPath,
-    KEEPER_CORRELATION_ARTIFACT_STORAGE: publishFileArtifact ? "file" : "data-uri",
-    KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: publishFileArtifact
-      ? `http://127.0.0.1:${CORRELATION_ARTIFACT_PORT}${CORRELATION_ARTIFACT_ROUTE_PREFIX}`
-      : undefined,
-    KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR: publishFileArtifact ? correlationArtifactStorageDirectory : undefined,
+    KEEPER_CORRELATION_ARTIFACT_STORAGE: "data-uri",
     KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "20",
-    METRICS_ENABLED: publishFileArtifact ? "true" : "false",
-    METRICS_PORT: String(CORRELATION_ARTIFACT_PORT),
+    METRICS_ENABLED: "false",
     LOG_FORMAT: "json",
     MAX_GAS_PER_TX: "30000000",
     ADVISORY_VOTE_RECORDER_ADDRESS: CONTRACT_ADDRESSES.AdvisoryVoteRecorder,
