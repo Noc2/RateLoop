@@ -39,6 +39,7 @@ import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 import { normalizeInferredHeadToHeadAbRequestBody } from "./voteUi";
 import {
+  readBooleanFlag,
   readOptionalPositiveInteger,
   type CliOptions,
   type CliOptionValue,
@@ -262,7 +263,7 @@ function usage() {
   yarn workspace @rateloop/agents ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
-  yarn workspace @rateloop/agents handoff-status --handoff-id ahf_... --handoff-token <private-token>
+  yarn workspace @rateloop/agents handoff-status --handoff-id ahf_... --handoff-token <private-token> --include-image-data
   export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
   yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
   yarn workspace @rateloop/agents wallet
@@ -274,6 +275,7 @@ Common flags:
   --file <path>                 Ask JSON for lint, sandbox, quote, ask, handoff, or local-ask
   --image <path>                Attach a local JPG/PNG/WEBP to handoff; repeat for up to four
   --generated-image <path>      Alias for --image
+  --include-image-data          Include generated image data in handoff-status output
   --ttl-ms <ms>                 Handoff link TTL, 60000-1800000
   --payment-mode <mode>         local-ask mode: wallet_calls, x402_authorization, eip3009_usdc_authorization, or eip3009_authorization
   --overwrite                   Allow wallet --generate to replace an existing keystore
@@ -533,6 +535,7 @@ async function main() {
         await agent.getAskHandoffStatus({
           handoffId: requireString(options, "handoff-id"),
           handoffToken: requireString(options, "handoff-token"),
+          includeImageData: readBooleanFlag(options, "include-image-data"),
         }),
       );
       return;

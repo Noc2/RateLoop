@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readOptionalPositiveInteger } from "../cliOptions";
+import { readBooleanFlag, readOptionalPositiveInteger } from "../cliOptions";
 
 describe("readOptionalPositiveInteger", () => {
   it("returns undefined for omitted options and parses decimal safe integers", () => {
@@ -21,5 +21,23 @@ describe("readOptionalPositiveInteger", () => {
         readOptionalPositiveInteger({ "chain-id": value }, "chain-id"),
       ).toThrow("--chain-id must be a positive base-10 safe integer");
     }
+  });
+});
+
+describe("readBooleanFlag", () => {
+  it("parses omitted, bare, and explicit boolean flag values", () => {
+    expect(readBooleanFlag({}, "include-image-data")).toBe(false);
+    expect(readBooleanFlag({ "include-image-data": true }, "include-image-data")).toBe(true);
+    expect(readBooleanFlag({ "include-image-data": "true" }, "include-image-data")).toBe(true);
+    expect(readBooleanFlag({ "include-image-data": "false" }, "include-image-data")).toBe(false);
+  });
+
+  it("rejects non-boolean values", () => {
+    expect(() =>
+      readBooleanFlag({ "include-image-data": "yes" }, "include-image-data"),
+    ).toThrow("--include-image-data must be a boolean flag");
+    expect(() =>
+      readBooleanFlag({ "include-image-data": ["true", "true"] }, "include-image-data"),
+    ).toThrow("--include-image-data must be a boolean flag");
   });
 });

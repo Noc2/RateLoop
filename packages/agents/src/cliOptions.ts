@@ -21,3 +21,11 @@ export function readOptionalPositiveInteger(
   }
   return parsed;
 }
+
+export function readBooleanFlag(options: CliOptions, name: string): boolean {
+  const value = options[name];
+  if (value === undefined) return false;
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new Error(`--${name} must be a boolean flag`);
+}
