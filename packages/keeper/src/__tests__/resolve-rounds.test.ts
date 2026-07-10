@@ -1193,8 +1193,6 @@ describe("resolveRounds", () => {
     );
     expect(rewardPoolWrites).toEqual([
       { functionName: "qualifyRound", args: [42n, 3n] },
-      { functionName: "qualifyRound", args: [42n, 3n] },
-      { functionName: "qualifyRound", args: [42n, 3n] },
       { functionName: "advanceQualificationCursor", args: [42n, 1n] },
       { functionName: "qualifyRound", args: [42n, 4n] },
     ]);
