@@ -65,6 +65,13 @@ const agentsReadme = readFileSync(
   new URL("../packages/agents/README.md", import.meta.url),
   "utf8",
 );
+const pluginRatingSkill = readFileSync(
+  new URL(
+    "../plugins/rateloop/skills/rateloop-ratings/SKILL.md",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const oracleChallengeFlowDiagram = readFileSync(
   new URL(
     "../packages/nextjs/components/docs/OracleChallengeFlowDiagram.tsx",
@@ -172,6 +179,18 @@ test("public AI docs use published-package example paths and Node 24", () => {
   assert.doesNotMatch(docsAiPage, /npx rateloop-agents sandbox --file packages\/agents\/examples/);
   assert.match(publicDocs["packages/nextjs/public/docs/ai.md"], /npm install @rateloop\/sdk @rateloop\/agents/);
   assert.match(publicDocs["packages/nextjs/public/docs/ai.md"], /pure_agent_fast/);
+});
+
+test("standalone plugin CLI examples install the scoped agents package", () => {
+  assert.match(
+    pluginRatingSkill,
+    /npx --yes --package @rateloop\/agents rateloop-agents sandbox/,
+  );
+  assert.match(
+    pluginRatingSkill,
+    /npx --yes --package @rateloop\/agents rateloop-agents handoff/,
+  );
+  assert.doesNotMatch(pluginRatingSkill, /\bnpx rateloop-agents\b/);
 });
 
 test("public agent docs avoid stale docs anchors", () => {

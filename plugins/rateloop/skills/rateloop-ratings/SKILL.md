@@ -38,7 +38,7 @@ Read `https://www.rateloop.ai/docs/ai.md` for the full agent runbook and `https:
 3. Keep public titles non-sensitive. For gated asks, require a RateLoop-hosted `detailsUrl` plus matching `detailsHash`, set `question.confidentiality.visibility="gated"`, omit external context URLs/videos, and default to `disclosurePolicy: "private_forever"` unless the user explicitly wants disclosure after settlement.
 4. Add `feedbackBonus` when the user needs written reasons, objections, bug details, or product rationale.
 5. Use `rateloop_list_categories`, `rateloop_list_result_templates`, or `rateloop_list_audience_options` only when the category, template, or structured audience vocabulary is unknown.
-6. Run a no-payment validation first with `dryRun: true`, `mode: "dry_run"`, or `npx rateloop-agents sandbox --file <ask.json>`.
+6. Run a no-payment validation first with `dryRun: true`, `mode: "dry_run"`, or `npx --yes --package @rateloop/agents rateloop-agents sandbox --file <ask.json>`.
 7. Quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop image URLs. If the only inspectable context is `generatedImages`, create the handoff directly and let the browser prepare step price the ask before payment.
 8. Prefer `rateloop_create_ask_handoff_link`, then share the returned `handoffUrl` with the user for wallet review and funding.
 9. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then `rateloop_get_result`.
@@ -52,7 +52,7 @@ Read `https://www.rateloop.ai/docs/ai.md` for the full agent runbook and `https:
 - For local files, use the file-backed CLI path:
 
 ```bash
-npx rateloop-agents handoff --file ask.json --image mockup.png
+npx --yes --package @rateloop/agents rateloop-agents handoff --file ask.json --image mockup.png
 ```
 
 ## Existing Rating Workflow
