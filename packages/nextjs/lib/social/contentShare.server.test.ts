@@ -116,6 +116,62 @@ test("getContentShareDataForParam redacts gated private-context content", async 
   }
 });
 
+test("getContentShareDataForParam fails closed when confidentiality storage is unavailable", async () => {
+  const originalFrontendCode = process.env.NEXT_PUBLIC_FRONTEND_CODE;
+  const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
+  process.env.NEXT_PUBLIC_FRONTEND_CODE = "0x3333333333333333333333333333333333333333";
+  process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example";
+
+  const dbModule = await import("~~/lib/db");
+  dbModule.__setDatabaseResourcesForTests({
+    client: {},
+    database: {
+      select() {
+        throw new Error("database offline");
+      },
+    },
+    pool: {},
+  } as never);
+
+  const fetchImpl: typeof fetch = async () =>
+    new Response(
+      JSON.stringify({
+        content: {
+          id: "99",
+          title: "Secret launch concept",
+          description: "Confidential concept details.",
+          imageUrl: "https://example.com/private.png",
+          rating: 50,
+          ratingBps: 5_000,
+          totalVotes: 1,
+          lastActivityAt: "1776160800",
+          openRound: null,
+        },
+      }),
+    );
+
+  try {
+    const shareData = await getContentShareDataForParam("99", {
+      fetchImpl,
+      origin: "https://www.rateloop.ai",
+    });
+
+    assert.equal(shareData, null);
+  } finally {
+    dbModule.__setDatabaseResourcesForTests(null);
+    if (originalFrontendCode === undefined) {
+      delete process.env.NEXT_PUBLIC_FRONTEND_CODE;
+    } else {
+      process.env.NEXT_PUBLIC_FRONTEND_CODE = originalFrontendCode;
+    }
+    if (originalPonderUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_PONDER_URL;
+    } else {
+      process.env.NEXT_PUBLIC_PONDER_URL = originalPonderUrl;
+    }
+  }
+});
+
 test("getContentShareDataForParam uses the current deployment when Ponder matches", async () => {
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";

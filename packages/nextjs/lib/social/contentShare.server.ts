@@ -129,7 +129,7 @@ export async function getContentShareDataForParam(
       chainId: scopedContent.chainId,
       contentRegistryAddress: scopedContent.contentRegistryAddress,
       deploymentKey: scopedContent.deploymentKey,
-    }).catch(() => null);
+    });
     const shareContent =
       isPonderContentGated(scopedContent) || isConfidentialityCurrentlyGated(confidentiality)
         ? redactGatedShareContent(scopedContent)
