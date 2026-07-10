@@ -1,6 +1,6 @@
 import type { PonderTokenTransfer } from "~~/services/ponder/client";
 
-export interface BalanceHistoryPoint {
+interface BalanceHistoryPoint {
   timestamp: number;
   balance: number;
 }
