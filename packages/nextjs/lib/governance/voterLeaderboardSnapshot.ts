@@ -102,7 +102,9 @@ export async function getVoterLeaderboardSnapshot(
   const nextRefreshPromise = refreshSnapshot(cacheKey, deps);
   refreshPromises.set(cacheKey, nextRefreshPromise);
   if (cachedSnapshot) {
-    void nextRefreshPromise;
+    void nextRefreshPromise.catch(error => {
+      console.error("[voter-leaderboard] Failed to refresh stale snapshot", error);
+    });
     return cachedSnapshot;
   }
 

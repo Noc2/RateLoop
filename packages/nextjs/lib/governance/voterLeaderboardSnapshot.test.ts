@@ -126,6 +126,71 @@ test("getVoterLeaderboardSnapshot keeps per-chain caches isolated", async () => 
   assert.equal(second.balances[ADDRESS_A], 999999n);
 });
 
+test("getVoterLeaderboardSnapshot observes failed stale refreshes and retries later", async () => {
+  __resetVoterLeaderboardSnapshotForTests();
+
+  let listCalls = 0;
+  let now = 1_000;
+  let rejectRefresh = false;
+  const errors: unknown[][] = [];
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    errors.push(args);
+  };
+
+  const listTokenHolders = async () => {
+    listCalls += 1;
+    if (rejectRefresh) {
+      throw new Error("Ponder unavailable");
+    }
+    return [buildTokenHolder(listCalls === 1 ? ADDRESS_A : ADDRESS_B)];
+  };
+  const readBalances = async (addresses: string[]) =>
+    Object.fromEntries(addresses.map(address => [address.toLowerCase(), 1n]));
+
+  try {
+    const initial = await getVoterLeaderboardSnapshot({
+      cacheTtlMs: 1,
+      listTokenHolders,
+      now: () => now,
+      readBalances,
+    });
+
+    now += 10;
+    rejectRefresh = true;
+    const stale = await getVoterLeaderboardSnapshot({
+      cacheTtlMs: 1,
+      listTokenHolders,
+      now: () => now,
+      readBalances,
+    });
+    assert.equal(stale, initial);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(errors.length, 1);
+    assert.match(String(errors[0]?.[1]), /Ponder unavailable/);
+
+    rejectRefresh = false;
+    await getVoterLeaderboardSnapshot({
+      cacheTtlMs: 1,
+      listTokenHolders,
+      now: () => now,
+      readBalances,
+    });
+    await new Promise(resolve => setImmediate(resolve));
+
+    const refreshed = await getVoterLeaderboardSnapshot({
+      cacheTtlMs: 1,
+      listTokenHolders,
+      now: () => now,
+      readBalances,
+    });
+    assert.deepEqual(refreshed.rankedAddresses, [ADDRESS_B]);
+    assert.equal(listCalls, 3);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
 test("resolveVoterLeaderboardSelection appends a missing includeAddress without rebuilding the full snapshot", async () => {
   const snapshot: VoterLeaderboardSnapshot = {
     balances: {
