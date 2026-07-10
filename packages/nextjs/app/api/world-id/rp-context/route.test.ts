@@ -174,3 +174,20 @@ test("World ID RP context route rejects oversized JSON bodies", async () => {
   assert.equal(response.status, 413);
   assert.equal(body.code, "request_entity_too_large");
 });
+
+test("World ID RP context route rejects malformed bodies and unsupported purposes", async () => {
+  for (const request of [
+    makeRawRequest("not-json"),
+    makeRequest([]),
+    makeRequest("credential"),
+    makeRequest({ purpose: "presense" }),
+    makeRequest({ purpose: 1 }),
+  ]) {
+    const response = await POST(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.equal(body.code, "invalid_request");
+    assert.equal(body.message, "Request body must be a JSON object with purpose set to credential or presence.");
+  }
+});
