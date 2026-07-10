@@ -24,6 +24,7 @@ RUN --mount=type=cache,id=s/bcb8a921-0bf5-4ecd-b6b6-674e08a8e9f7-/app/.yarn/cach
 
 COPY scripts/clean-package-dist.mjs ./scripts/clean-package-dist.mjs
 COPY scripts/fix-esm-extensions.mjs ./scripts/fix-esm-extensions.mjs
+COPY scripts/json-rpc.mjs ./scripts/json-rpc.mjs
 COPY scripts/with-workspace-dist-lock.mjs ./scripts/with-workspace-dist-lock.mjs
 COPY scripts/write-cjs-package-json.mjs ./scripts/write-cjs-package-json.mjs
 COPY packages/contracts/tsconfig.json ./packages/contracts/tsconfig.json

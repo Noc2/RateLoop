@@ -120,6 +120,7 @@ test("Railway service start commands, watch patterns, and health checks pin prod
   assert.match(ponder, /builder = "DOCKERFILE"/);
   assert.match(ponder, /dockerfilePath = "packages\/ponder\/Dockerfile"/);
   assert.match(ponder, /scripts\/with-workspace-dist-lock\.mjs/);
+  assert.match(ponder, /scripts\/json-rpc\.mjs/);
   assert.doesNotMatch(ponder, /buildCommand/);
   assert.match(ponder, /healthcheckPath = "\/health"/);
   assert.match(ponder, /healthcheckTimeout = 120/);
@@ -149,6 +150,7 @@ test("Ponder Docker runtime uses pinned base and production dependencies", () =>
 
   assert.match(dockerfile, /FROM node:24-alpine@sha256:[a-f0-9]{64}/);
   assert.match(dockerfile, /RUN yarn build:workspace-deps/);
+  assert.match(dockerfile, /COPY scripts\/json-rpc\.mjs \.\/scripts\/json-rpc\.mjs/);
   assert.match(
     dockerfile,
     /yarn workspaces focus @rateloop\/ponder --production/,

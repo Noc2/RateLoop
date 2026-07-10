@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { MissingDockerComposeError, ensureLocalDatabase, formatDatabaseTarget, resolveNextDatabaseConfig } from "./dev-db.mjs";
 import { applyKeeperDevStackEnvDefaults, getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
+import { parseJsonRpcQuantityNumber } from "./json-rpc.mjs";
 import { resolvePonderDatabaseSchema } from "../packages/ponder/scripts/databaseSchema.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
@@ -238,8 +239,8 @@ export async function getPonderRpcReadinessError({
   }
 
   const body = await response.json().catch(() => null);
-  const reportedChainId = typeof body?.result === "string" ? Number.parseInt(body.result, 16) : NaN;
-  if (!Number.isFinite(reportedChainId)) {
+  const reportedChainId = parseJsonRpcQuantityNumber(body?.result);
+  if (reportedChainId === null) {
     return `${formatPonderRpcStartupHelp(plan.rpcUrl)}\n[dev-stack] ${plan.envKey} returned no chainId from eth_chainId.`;
   }
 

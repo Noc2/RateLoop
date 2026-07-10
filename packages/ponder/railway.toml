@@ -8,6 +8,7 @@ watchPatterns = [
   "yarn.lock",
   "scripts/clean-package-dist.mjs",
   "scripts/fix-esm-extensions.mjs",
+  "scripts/json-rpc.mjs",
   "scripts/with-workspace-dist-lock.mjs",
   "scripts/write-cjs-package-json.mjs",
   "packages/contracts/**",

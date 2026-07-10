@@ -213,6 +213,17 @@ test("reports local hardhat Ponder RPC chain ID mismatches", async () => {
   assert.match(error ?? "", /expects chain 31337/);
 });
 
+test("rejects malformed local hardhat JSON-RPC chain ID quantities", async () => {
+  const error = await getPonderRpcReadinessError({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ result: "0x7a69junk" }),
+    }),
+  });
+
+  assert.match(error ?? "", /returned no chainId from eth_chainId/);
+});
+
 test("includes local Ponder address overrides in the deployment fingerprint", () => {
   const base = getPonderDeploymentFingerprint({
     deployedContractsContent: "contracts",

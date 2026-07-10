@@ -129,6 +129,22 @@ describe("Ponder production launcher", () => {
     );
   });
 
+  test("rejects malformed JSON-RPC chain id quantities", async () => {
+    await expect(
+      assertProductionRpcChainId({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        },
+        fetchImpl: vi.fn(async () => ({
+          ok: true,
+          json: async () => ({ result: "0x2105junk" }),
+        })),
+      }),
+    ).rejects.toThrow("PONDER_RPC_URL_8453 eth_chainId probe returned no chainId.");
+  });
+
   test("rejects malformed production chain ids before probing RPC", async () => {
     const fetchImpl = vi.fn();
 

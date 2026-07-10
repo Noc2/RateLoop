@@ -8,6 +8,7 @@ import {
   buildProtocolDeploymentKey,
   resolvePonderChainId,
 } from "./databaseSchema.mjs";
+import { parseJsonRpcQuantityNumber } from "../../../scripts/json-rpc.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
@@ -80,9 +81,8 @@ export async function assertProductionRpcChainId({
   }
 
   const body = await response.json().catch(() => null);
-  const reportedChainId =
-    typeof body?.result === "string" ? Number.parseInt(body.result, 16) : NaN;
-  if (!Number.isFinite(reportedChainId)) {
+  const reportedChainId = parseJsonRpcQuantityNumber(body?.result);
+  if (reportedChainId === null) {
     throw new Error(`${key} eth_chainId probe returned no chainId.`);
   }
   if (reportedChainId !== expectedChainId) {
