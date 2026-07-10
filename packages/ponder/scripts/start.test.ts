@@ -308,6 +308,66 @@ describe("Ponder production launcher", () => {
     );
   });
 
+  test("rejects explicit protocol deployment keys that conflict with shared artifacts", async () => {
+    const configuredDeploymentKey =
+      "8453:0x2000000000000000000000000000000000000001:0x2000000000000000000000000000000000000002";
+    const artifactDeploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const spawnImpl = vi.fn();
+
+    await expect(
+      startPonder({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: configuredDeploymentKey,
+        },
+        spawnImpl,
+        ensureContractsArtifactsImpl: vi.fn(),
+        assertProductionRpcChainIdImpl: vi.fn(async () => true),
+        resolveProtocolDeploymentKeyImpl: vi.fn(() => artifactDeploymentKey),
+      }),
+    ).rejects.toThrow(
+      "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY=8453:0x2000000000000000000000000000000000000001:0x2000000000000000000000000000000000000002 does not match the shared deployment artifacts",
+    );
+
+    expect(spawnImpl).not.toHaveBeenCalled();
+  });
+
+  test("keeps deliberate local hardhat protocol deployment key overrides", async () => {
+    class FakeChild extends EventEmitter {}
+
+    const configuredDeploymentKey =
+      "31337:0x2000000000000000000000000000000000000001:0x2000000000000000000000000000000000000002";
+    const artifactDeploymentKey =
+      "31337:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const child = new FakeChild();
+    const spawnImpl = vi.fn(() => child);
+
+    await expect(
+      startPonder({
+        env: {
+          PONDER_NETWORK: "hardhat",
+          RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: configuredDeploymentKey,
+        },
+        spawnImpl,
+        ensureContractsArtifactsImpl: vi.fn(),
+        assertProductionRpcChainIdImpl: vi.fn(async () => false),
+        resolveProtocolDeploymentKeyImpl: vi.fn(() => artifactDeploymentKey),
+      }),
+    ).resolves.toBe(child);
+
+    expect(spawnImpl).toHaveBeenCalledWith(
+      "ponder",
+      ["start", "--schema", schemaFromProtocolDeploymentKey(configuredDeploymentKey)],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: configuredDeploymentKey,
+        }),
+      }),
+    );
+  });
+
   test("rejects artifact deployment keys when PONDER_CHAIN_ID conflicts with PONDER_NETWORK", () => {
     expect(() =>
       resolveProtocolDeploymentKeyFromArtifacts({

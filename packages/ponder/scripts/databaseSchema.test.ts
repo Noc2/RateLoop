@@ -81,6 +81,32 @@ describe("Ponder database schema launcher", () => {
     });
   });
 
+  test("rejects malformed explicit protocol deployment keys", () => {
+    expect(() =>
+      protocolDeploymentKeyFromEnv({
+        PONDER_NETWORK: "base",
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: "stale-key",
+      }),
+    ).toThrow(
+      "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY must be <chainId>:<contentRegistryAddress>:<feedbackRegistryAddress>",
+    );
+  });
+
+  test("rejects explicit protocol deployment keys for another configured chain", () => {
+    expect(() =>
+      protocolDeploymentKeyFromEnv({
+        PONDER_NETWORK: "base",
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: buildProtocolDeploymentKey({
+          chainId: 31337,
+          contentRegistryAddress,
+          feedbackRegistryAddress,
+        }),
+      }),
+    ).toThrow(
+      "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY chain ID 31337 does not match the configured Ponder chain ID 8453",
+    );
+  });
+
   test("prefers live protocol deployment schemas over stale RateLoop schema overrides", () => {
     const result = resolvePonderDatabaseSchema({
       PONDER_NETWORK: "base",

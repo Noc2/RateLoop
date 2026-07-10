@@ -186,11 +186,29 @@ export function resolveProtocolDeploymentKeyFromArtifacts({
 }
 
 function withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl) {
-  if (readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY")) {
-    return env;
+  const configuredDeploymentKey = readEnv(
+    env,
+    "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
+  );
+  const artifactDeploymentKey = resolveProtocolDeploymentKeyImpl({ env });
+  const enforceArtifactDeploymentKey = readEnv(env, "PONDER_NETWORK") === "base";
+
+  if (
+    enforceArtifactDeploymentKey &&
+    configuredDeploymentKey &&
+    artifactDeploymentKey &&
+    configuredDeploymentKey.toLowerCase() !== artifactDeploymentKey.toLowerCase()
+  ) {
+    throw new Error(
+      `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY=${configuredDeploymentKey} does not match the shared deployment artifacts (${artifactDeploymentKey}). ` +
+        "Remove the stale environment override or refresh the shared deployment artifacts before starting Ponder.",
+    );
   }
 
-  const deploymentKey = resolveProtocolDeploymentKeyImpl({ env });
+  const deploymentKey =
+    configuredDeploymentKey && !enforceArtifactDeploymentKey
+      ? configuredDeploymentKey
+      : artifactDeploymentKey ?? configuredDeploymentKey;
   if (!deploymentKey) return env;
 
   return {

@@ -71,6 +71,24 @@ export function buildProtocolDeploymentKey({ chainId, contentRegistryAddress, fe
   ].join(":");
 }
 
+function normalizeProtocolDeploymentKey(value) {
+  const parts = value?.trim().split(":") ?? [];
+  if (parts.length !== 3) return undefined;
+
+  const chainId = parseStrictPositiveInteger(parts[0]);
+  const contentRegistryAddress = normalizeAddress(parts[1]);
+  const feedbackRegistryAddress = normalizeAddress(parts[2]);
+  if (!chainId || !contentRegistryAddress || !feedbackRegistryAddress) {
+    return undefined;
+  }
+
+  return buildProtocolDeploymentKey({
+    chainId,
+    contentRegistryAddress,
+    feedbackRegistryAddress,
+  });
+}
+
 function canDeriveProtocolDeploymentKeyFromEnvAddresses(env, chainId) {
   const ponderNetwork = readEnv(env, "PONDER_NETWORK");
   return ponderNetwork === "hardhat" || (ponderNetwork === undefined && chainId === PONDER_NETWORK_CHAIN_IDS.hardhat);
@@ -78,7 +96,24 @@ function canDeriveProtocolDeploymentKeyFromEnvAddresses(env, chainId) {
 
 export function protocolDeploymentKeyFromEnv(env = process.env) {
   const explicitKey = readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
-  if (explicitKey) return explicitKey.toLowerCase();
+  if (explicitKey) {
+    const normalizedKey = normalizeProtocolDeploymentKey(explicitKey);
+    if (!normalizedKey) {
+      throw new Error(
+        "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY must be <chainId>:<contentRegistryAddress>:<feedbackRegistryAddress> with a positive chain ID and two non-zero addresses.",
+      );
+    }
+
+    const configuredChainId = resolvePonderChainId(env);
+    const keyChainId = Number(normalizedKey.split(":", 1)[0]);
+    if (configuredChainId !== undefined && keyChainId !== configuredChainId) {
+      throw new Error(
+        `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY chain ID ${keyChainId} does not match the configured Ponder chain ID ${configuredChainId}.`,
+      );
+    }
+
+    return normalizedKey;
+  }
 
   const chainId = resolvePonderChainId(env);
   const contentRegistryAddress = normalizeAddress(readEnv(env, "PONDER_CONTENT_REGISTRY_ADDRESS"));
