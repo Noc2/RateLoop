@@ -259,6 +259,136 @@ test("reserveMcpAgentBudget appends retry audit events after released attempts",
   ]);
 });
 
+test("reserveMcpAgentBudget refreshes billable metadata for failed retries", async () => {
+  const flexibleAgent: McpAgentAuth = {
+    ...AGENT,
+    allowedCategoryIds: null,
+  };
+  const failed = await budget.reserveMcpAgentBudget({
+    agent: flexibleAgent,
+    amount: 1_000_000n,
+    categoryId: "5",
+    chainId: 8453,
+    clientRequestId: "ask-retry-new-terms",
+    operationKey: `0x${"d".repeat(64)}`,
+    payloadHash: "payload-retry-new-terms",
+  });
+  await budget.updateMcpBudgetReservation({
+    error: "submission failed",
+    operationKey: failed.operationKey,
+    status: "failed",
+  });
+
+  const retried = await budget.reserveMcpAgentBudget({
+    agent: flexibleAgent,
+    amount: 500_000n,
+    categoryId: "6",
+    chainId: 8453,
+    clientRequestId: "ask-retry-new-terms",
+    operationKey: failed.operationKey,
+    payloadHash: "payload-retry-new-terms",
+  });
+
+  assert.equal(retried.categoryId, "6");
+  assert.equal(retried.paymentAmount, "500000");
+  assert.deepEqual((await getAuditEvents(failed.operationKey)).at(-1), {
+    contentId: null,
+    error: null,
+    eventType: "retry_reserved",
+    paymentAmount: "500000",
+    status: "reserved",
+  });
+});
+
+test("reserveMcpAgentBudget rejects changed billable terms on active reservations", async () => {
+  const active = await budget.reserveMcpAgentBudget({
+    agent: AGENT,
+    amount: 1_000_000n,
+    categoryId: "5",
+    chainId: 8453,
+    clientRequestId: "ask-active-new-terms",
+    operationKey: `0x${"e".repeat(64)}`,
+    payloadHash: "payload-active-new-terms",
+  });
+
+  await assert.rejects(
+    () =>
+      budget.reserveMcpAgentBudget({
+        agent: AGENT,
+        amount: 1_500_000n,
+        categoryId: "5",
+        chainId: 8453,
+        clientRequestId: "ask-active-new-terms",
+        operationKey: active.operationKey,
+        payloadHash: "payload-active-new-terms",
+      }),
+    /different payment or category terms/,
+  );
+});
+
+test("reserveMcpAgentBudget reanchors cross-day retries to the active budget day", async () => {
+  const crossDayAgent: McpAgentAuth = {
+    ...AGENT,
+    perAskLimitAtomic: AGENT.dailyBudgetAtomic,
+  };
+  const failed = await budget.reserveMcpAgentBudget({
+    agent: crossDayAgent,
+    amount: 1_000_000n,
+    categoryId: "5",
+    chainId: 8453,
+    clientRequestId: "ask-cross-day-retry",
+    operationKey: `0x${"f".repeat(64)}`,
+    payloadHash: "payload-cross-day-retry",
+  });
+  await budget.updateMcpBudgetReservation({
+    error: "submission failed",
+    operationKey: failed.operationKey,
+    status: "failed",
+  });
+
+  const staleCreatedAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1_000);
+  await dbModule.dbClient.execute({
+    args: [staleCreatedAt, staleCreatedAt, failed.operationKey],
+    sql: `
+      UPDATE mcp_agent_budget_reservations
+      SET created_at = ?, updated_at = ?
+      WHERE operation_key = ?
+    `,
+  });
+
+  const retried = await budget.reserveMcpAgentBudget({
+    agent: crossDayAgent,
+    amount: 1_000_000n,
+    categoryId: "5",
+    chainId: 8453,
+    clientRequestId: "ask-cross-day-retry",
+    operationKey: failed.operationKey,
+    payloadHash: "payload-cross-day-retry",
+  });
+  assert.ok(retried.createdAt.getTime() > staleCreatedAt.getTime());
+
+  const activeSummary = await budget.getMcpAgentBudgetSummary(crossDayAgent);
+  assert.equal(activeSummary.spentTodayAtomic, "1000000");
+
+  await budget.updateMcpBudgetReservation({
+    error: "retry failed",
+    operationKey: failed.operationKey,
+    status: "failed",
+  });
+  const releasedSummary = await budget.getMcpAgentBudgetSummary(crossDayAgent);
+  assert.equal(releasedSummary.spentTodayAtomic, "0");
+
+  await budget.reserveMcpAgentBudget({
+    agent: crossDayAgent,
+    amount: crossDayAgent.dailyBudgetAtomic,
+    categoryId: "5",
+    chainId: 8453,
+    clientRequestId: "ask-after-cross-day-release",
+    operationKey: `0x${"0".repeat(64)}`,
+    payloadHash: "payload-after-cross-day-release",
+  });
+});
+
 test("reserveMcpAgentBudget enforces category and spend caps", async () => {
   await assert.rejects(
     () =>

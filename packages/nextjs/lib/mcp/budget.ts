@@ -303,11 +303,20 @@ async function restoreReservationForRetry(
     agent: McpAgentAuth;
     amount: bigint;
     budgetDate: string;
+    categoryId: string;
     existing: McpBudgetReservationRecord;
     now: Date;
   },
 ) {
   if (isReusableBudgetReservation(params.existing.status)) {
+    if (
+      params.existing.paymentAmount !== params.amount.toString() ||
+      params.existing.categoryId !== params.categoryId
+    ) {
+      throw new McpBudgetError(
+        "This active MCP budget reservation was created with different payment or category terms.",
+      );
+    }
     return params.existing;
   }
 
@@ -328,11 +337,14 @@ async function restoreReservationForRetry(
       SET status = 'reserved',
           content_id = NULL,
           error = NULL,
-          updated_at = $2
+          category_id = $2,
+          payment_amount = $3,
+          created_at = $4,
+          updated_at = $4
       WHERE operation_key = $1
       RETURNING *
     `,
-    [params.existing.operationKey, params.now],
+    [params.existing.operationKey, params.categoryId, params.amount.toString(), params.now],
   );
 
   const restored = rowToReservation(result.rows[0]);
@@ -376,6 +388,7 @@ export async function reserveMcpAgentBudget(params: {
         agent: params.agent,
         amount: params.amount,
         budgetDate,
+        categoryId: params.categoryId,
         existing: existingByOperation,
         now,
       });
@@ -394,6 +407,7 @@ export async function reserveMcpAgentBudget(params: {
         agent: params.agent,
         amount: params.amount,
         budgetDate,
+        categoryId: params.categoryId,
         existing: existingByClientRequest,
         now,
       });
