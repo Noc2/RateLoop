@@ -11,7 +11,8 @@
     "generate:elevenlabs-voiceover": "node scripts/generate-elevenlabs-voiceover.mjs",
     "generate:openai-voiceover": "node scripts/generate-openai-voiceover.mjs",
     "generate:voiceover": "zsh scripts/generate-voiceover.zsh",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node ../../scripts/run-node-tests.mjs scripts"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.0",

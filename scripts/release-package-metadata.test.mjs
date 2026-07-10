@@ -181,6 +181,10 @@ test("root workspace test scripts lock shared dist and include non-contract suit
   assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn next:test/);
   assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn workspace @rateloop\/keeper test/);
   assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn promo-video:check-types/);
+  assert.equal(manifest.scripts?.["promo-video:test"], "yarn workspace @rateloop/promo-video test");
+  assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn promo-video:test/);
+  const promoVideoManifest = readJson("packages/promo-video/package.json");
+  assert.equal(promoVideoManifest.scripts?.test, "node ../../scripts/run-node-tests.mjs scripts");
   assert.match(manifest.scripts?.["test:all"] ?? "", /yarn foundry:test && yarn test:ts/);
 });
 
