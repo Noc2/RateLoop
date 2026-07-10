@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { resolveNpmReleaseVersion } from "./validate-npm-release.mjs";
 
 const releasePackages = [
   {
@@ -40,12 +41,13 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-test("public npm packages are ready for the 0.1.0 provenance publish gate", () => {
+test("public npm packages share valid release metadata", () => {
+  const versions = [];
   for (const pkg of releasePackages) {
     const manifest = readJson(pkg.path);
 
     assert.equal(manifest.name, pkg.name);
-    assert.equal(manifest.version, "0.1.0", `${pkg.name} version`);
+    versions.push({ name: manifest.name, version: manifest.version });
     assert.notEqual(manifest.private, true, `${pkg.name} must be publishable`);
     assert.equal(manifest.license, "MIT", `${pkg.name} license`);
     assert.equal(manifest.publishConfig?.access, "public", `${pkg.name} access`);
@@ -96,6 +98,37 @@ test("public npm packages are ready for the 0.1.0 provenance publish gate", () =
       );
     }
   }
+
+  assert.match(resolveNpmReleaseVersion(versions), /^\d+\.\d+\.\d+/);
+});
+
+test("npm release version validation rejects drift and mismatched tags", () => {
+  assert.equal(
+    resolveNpmReleaseVersion(
+      [
+        { name: "@rateloop/contracts", version: "1.2.3" },
+        { name: "@rateloop/sdk", version: "1.2.3" },
+      ],
+      "v1.2.3",
+    ),
+    "1.2.3",
+  );
+  assert.throws(
+    () =>
+      resolveNpmReleaseVersion([
+        { name: "@rateloop/contracts", version: "1.2.3" },
+        { name: "@rateloop/sdk", version: "1.2.4" },
+      ]),
+    /versions must match/,
+  );
+  assert.throws(
+    () =>
+      resolveNpmReleaseVersion(
+        [{ name: "@rateloop/contracts", version: "1.2.3" }],
+        "v1.2.4",
+      ),
+    /does not match/,
+  );
 });
 
 test("npm publish workflow uses GitHub OIDC provenance and publishes in dependency order", () => {
@@ -111,12 +144,14 @@ test("npm publish workflow uses GitHub OIDC provenance and publishes in dependen
   assert.match(workflow, /NPM_TAG must be one of: latest, next, canary\./);
   assert.match(workflow, /PUBLISH_DRY_RUN"\s*==\s*"true"/);
   assert.match(workflow, /GITHUB_REF"\s*==\s*"refs\/heads\/main"/);
-  assert.match(workflow, /refs\/tags\/v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+/);
+  assert.match(workflow, /validate-npm-release\.mjs "\$release_tag"/);
+  assert.match(workflow, /npm view "\$package_name@\$RELEASE_VERSION" version/);
+  assert.match(workflow, /already published/);
 
-  const contractsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz\"");
-  const nodeUtilsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz\"");
-  const sdkIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz\"");
-  const agentsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz\"");
+  const contractsIndex = workflow.indexOf('publish_if_missing "@rateloop/contracts"');
+  const nodeUtilsIndex = workflow.indexOf('publish_if_missing "@rateloop/node-utils"');
+  const sdkIndex = workflow.indexOf('publish_if_missing "@rateloop/sdk"');
+  const agentsIndex = workflow.indexOf('publish_if_missing "@rateloop/agents"');
 
   assert.ok(contractsIndex > -1, "contracts tarball is published");
   assert.ok(nodeUtilsIndex > contractsIndex, "node-utils is published after contracts");

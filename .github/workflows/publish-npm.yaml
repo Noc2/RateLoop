@@ -60,11 +60,18 @@ jobs:
             exit 1
           fi
 
+          release_tag=""
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            release_tag="$GITHUB_REF_NAME"
+          fi
+          RELEASE_VERSION="$(node scripts/validate-npm-release.mjs "$release_tag")"
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+
           if [[ "$PUBLISH_DRY_RUN" == "true" ]]; then
             exit 0
           fi
 
-          if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_EVENT_NAME" == "release" ]]; then
             exit 0
           fi
 
@@ -110,7 +117,18 @@ jobs:
             publish_args+=(--dry-run)
           fi
 
-          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz" "${publish_args[@]}"
-          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz" "${publish_args[@]}"
-          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz" "${publish_args[@]}"
-          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz" "${publish_args[@]}"
+          publish_if_missing() {
+            local package_name="$1"
+            local tarball="$2"
+            if [[ "$PUBLISH_DRY_RUN" != "true" ]] &&
+              [[ "$(npm view "$package_name@$RELEASE_VERSION" version 2>/dev/null || true)" == "$RELEASE_VERSION" ]]; then
+              echo "Skipping $package_name@$RELEASE_VERSION; it is already published."
+              return
+            fi
+            npm publish "$tarball" "${publish_args[@]}"
+          }
+
+          publish_if_missing "@rateloop/contracts" "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz"
+          publish_if_missing "@rateloop/node-utils" "$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz"
+          publish_if_missing "@rateloop/sdk" "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz"
+          publish_if_missing "@rateloop/agents" "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz"
