@@ -254,12 +254,22 @@ test.describe("Next.js API routes", () => {
     expect(otherWalletRes.status).toBe(401);
   });
 
-  test("email verification route redirects invalid tokens to notification settings", async () => {
-    const res = await fetch(`${BASE_URL}/api/notifications/email/verify?token=not-a-real-token`, {
+  test("email verification route requires POST confirmation before validating tokens", async () => {
+    const url = `${BASE_URL}/api/notifications/email/verify?token=not-a-real-token`;
+    const confirmationRes = await fetch(url, {
       redirect: "manual",
     });
-    expect(res.status).toBe(307);
-    const location = res.headers.get("location");
+    expect(confirmationRes.status).toBe(200);
+    expect(confirmationRes.headers.get("cache-control")).toBe("no-store");
+    expect(confirmationRes.headers.get("x-robots-tag")).toBe("noindex");
+    expect(await confirmationRes.text()).toContain('method="post"');
+
+    const validationRes = await fetch(url, {
+      method: "POST",
+      redirect: "manual",
+    });
+    expect(validationRes.status).toBe(303);
+    const location = validationRes.headers.get("location");
     expect(location).toContain("/settings");
     expect(location).toContain("tab=notifications");
     expect(location).toContain("email=invalid");
