@@ -57,9 +57,14 @@ export function getMissingKeeperEnvVars(env) {
       mode === "auto" &&
       artifactStorage === "file" &&
       resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim() &&
-      !isPublicHttpsUrl(resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL)
+      !isValidFileArtifactPublicBaseUrl(
+        resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL,
+        resolvedEnv.CHAIN_ID,
+      )
     ) {
-      missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL");
+      missing.push(
+        "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL, or a loopback HTTP URL on chain 31337",
+      );
     }
   }
 
@@ -79,10 +84,14 @@ function isLoopbackHostname(hostname) {
   return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
 }
 
-function isPublicHttpsUrl(value) {
+function isValidFileArtifactPublicBaseUrl(value, chainId) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !isLoopbackHostname(url.hostname);
+    const isLoopback = isLoopbackHostname(url.hostname);
+    if (String(chainId ?? "").trim() === "31337" && isLoopback) {
+      return url.protocol === "http:";
+    }
+    return url.protocol === "https:" && !isLoopback;
   } catch {
     return false;
   }

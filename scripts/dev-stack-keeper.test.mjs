@@ -108,10 +108,26 @@ test("requires a public artifact base URL when automatic snapshots use file stor
   );
 });
 
+test("allows a loopback HTTP artifact base URL for local file-backed snapshots", () => {
+  assert.deepEqual(
+    getMissingKeeperEnvVars({
+      RPC_URL: "http://localhost:8545",
+      CHAIN_ID: "31337",
+      KEEPER_PRIVATE_KEY: "0xabc",
+      PONDER_BASE_URL: "http://localhost:42069",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "http://127.0.0.1:9091/correlation-artifacts",
+    }),
+    [],
+  );
+});
+
 test("requires a valid HTTPS public artifact base URL when automatic snapshots use file storage", () => {
   for (const publicBaseUrl of [
     "http://artifacts.example.com/rateloop",
-    "https://localhost/rateloop",
     "not a url",
   ]) {
     assert.deepEqual(
@@ -125,7 +141,32 @@ test("requires a valid HTTPS public artifact base URL when automatic snapshots u
         KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
         KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: publicBaseUrl,
       }),
-      ["KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL"],
+      [
+        "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL, or a loopback HTTP URL on chain 31337",
+      ],
+    );
+  }
+});
+
+test("rejects loopback artifact URLs outside local chain 31337", () => {
+  for (const publicBaseUrl of [
+    "http://localhost/rateloop",
+    "https://localhost/rateloop",
+  ]) {
+    assert.deepEqual(
+      getMissingKeeperEnvVars({
+        RPC_URL: "https://mainnet.base.org",
+        CHAIN_ID: "8453",
+        KEEPER_PRIVATE_KEY: "0xabc",
+        PONDER_BASE_URL: "https://ponder.example.com",
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: publicBaseUrl,
+      }),
+      [
+        "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL, or a loopback HTTP URL on chain 31337",
+      ],
     );
   }
 });
