@@ -30,6 +30,8 @@ describe("readBooleanFlag", () => {
     expect(readBooleanFlag({ "include-image-data": true }, "include-image-data")).toBe(true);
     expect(readBooleanFlag({ "include-image-data": "true" }, "include-image-data")).toBe(true);
     expect(readBooleanFlag({ "include-image-data": "false" }, "include-image-data")).toBe(false);
+    expect(readBooleanFlag({ generate: "false" }, "generate")).toBe(false);
+    expect(readBooleanFlag({ overwrite: "false" }, "overwrite")).toBe(false);
   });
 
   it("rejects non-boolean values", () => {

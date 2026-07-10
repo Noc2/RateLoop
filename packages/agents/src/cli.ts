@@ -545,9 +545,9 @@ async function main() {
       const localSignerConfig = loadLocalSignerConfig(
         singleValueOptions(options),
       );
-      if (options.generate) {
+      if (readBooleanFlag(options, "generate")) {
         const generated = await generateLocalSignerWallet(localSignerConfig, {
-          overwrite: Boolean(options.overwrite),
+          overwrite: readBooleanFlag(options, "overwrite"),
         });
         printJson({
           address: generated.account.address,
