@@ -10,6 +10,7 @@ type ClockStore = {
 };
 
 const stores = new Map<number, ClockStore>();
+export const UNIX_TIME_SERVER_SNAPSHOT = 0;
 
 function createClockStore(intervalMs: number): ClockStore {
   let current = Math.floor(Date.now() / 1000);
@@ -58,5 +59,5 @@ function getClockStore(intervalMs: number): ClockStore {
 
 export function useUnixTime(intervalMs = 1000) {
   const store = getClockStore(intervalMs);
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, () => Math.floor(Date.now() / 1000));
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, () => UNIX_TIME_SERVER_SNAPSHOT);
 }
