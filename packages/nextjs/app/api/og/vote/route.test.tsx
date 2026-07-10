@@ -111,7 +111,11 @@ after(() => {
   }
 });
 
-test("caches versioned vote social cards for crawlers", async () => {
+test("caches versioned vote social cards for crawlers", async t => {
+  const dbModule = await import("~~/lib/db");
+  const dbTestMemory = await import("~~/lib/db/testing/testMemory");
+  dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
+  t.after(() => dbModule.__setDatabaseResourcesForTests(null));
   const requestedUrls: string[] = [];
   mockShareContentFetch(requestedUrls);
 
