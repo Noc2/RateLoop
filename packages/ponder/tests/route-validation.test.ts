@@ -616,6 +616,13 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       address: "tokenHolder.address",
       firstSeenAt: "tokenHolder.firstSeenAt",
     },
+    tokenTransfer: {
+      blockNumber: "tokenTransfer.blockNumber",
+      from: "tokenTransfer.from",
+      id: "tokenTransfer.id",
+      timestamp: "tokenTransfer.timestamp",
+      to: "tokenTransfer.to",
+    },
     vote: {
       committedAt: "vote.committedAt",
       commitBlockNumber: "vote.commitBlockNumber",
@@ -689,6 +696,55 @@ afterEach(() => {
   vi.resetModules();
   vi.restoreAllMocks();
   vi.clearAllMocks();
+});
+
+describe("balance history", () => {
+  it("returns the newest bounded transfer window in chronological order", async () => {
+    const newestTransfers = [
+      {
+        id: "newest",
+        from: "0x0000000000000000000000000000000000000001",
+        to: "0x0000000000000000000000000000000000000002",
+        amount: 3n,
+        blockNumber: 700n,
+        timestamp: 1_700n,
+      },
+      {
+        id: "next-newest",
+        from: "0x0000000000000000000000000000000000000002",
+        to: "0x0000000000000000000000000000000000000001",
+        amount: 2n,
+        blockNumber: 699n,
+        timestamp: 1_699n,
+      },
+    ];
+    const { queryBuilder } = mockPonderModules(newestTransfers);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/balance-history?address=0x0000000000000000000000000000000000000001&limit=2",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(2);
+    expect(serializeExpression(queryBuilder.orderBy.mock.calls[0])).toContain(
+      '"kind":"desc","expr":"tokenTransfer.blockNumber"',
+    );
+    expect(serializeExpression(queryBuilder.orderBy.mock.calls[0])).toContain(
+      '"kind":"desc","expr":"tokenTransfer.id"',
+    );
+    expect(body.address).toBe("0x0000000000000000000000000000000000000001");
+    expect(body.transfers.map((item: { id: string }) => item.id)).toEqual([
+      "next-newest",
+      "newest",
+    ]);
+  });
 });
 
 describe("shared API helpers", () => {

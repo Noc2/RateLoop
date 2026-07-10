@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { buildBalanceHistoryPoints, formatLrepBalance } from "./balanceHistoryData";
 import { useAccount } from "wagmi";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useScaffoldReadContract, useTargetNetwork } from "~~/hooks/scaffold-eth";
@@ -66,40 +67,14 @@ export function BalanceHistory({ address: addressProp }: { address?: `0x${string
     };
   }, [address, deployment?.deploymentKey, targetNetwork.id]);
 
-  // Reconstruct balance timeline from Transfer events
-  const dataPoints = useMemo(() => {
-    if (!address || transfers.length === 0) return [];
-
-    const addrLower = address.toLowerCase();
-
-    let balance = 0n;
-    const points: Array<{ timestamp: number; balance: number }> = [];
-
-    for (const t of transfers) {
-      const amount = BigInt(t.amount);
-      if (t.to.toLowerCase() === addrLower) {
-        balance += amount;
-      }
-      if (t.from.toLowerCase() === addrLower) {
-        balance -= amount;
-      }
-      const balanceNum = Number(balance) / 1e6;
-      const ts = Number(t.timestamp);
-      // Collapse events at the same timestamp into one point (keep latest balance)
-      if (points.length > 0 && points[points.length - 1].timestamp === ts) {
-        points[points.length - 1].balance = balanceNum;
-      } else {
-        points.push({ timestamp: ts, balance: balanceNum });
-      }
-    }
-
-    return points;
-  }, [transfers, address]);
+  const dataPoints = useMemo(
+    () => buildBalanceHistoryPoints({ address, currentBalanceRaw, transfers }),
+    [address, currentBalanceRaw, transfers],
+  );
 
   if (!address) return null;
 
-  const currentBalance =
-    dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].balance : Number(currentBalanceRaw ?? 0n) / 1e6;
+  const currentBalance = formatLrepBalance(currentBalanceRaw);
   const currentFormatted = currentBalance.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
   return (

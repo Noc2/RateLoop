@@ -1975,10 +1975,17 @@ export function registerDataRoutes(app: ApiApp) {
           eq(tokenTransfer.to, normalizedAddress),
         ),
       )
-      .orderBy(asc(tokenTransfer.blockNumber))
+      .orderBy(
+        desc(tokenTransfer.blockNumber),
+        desc(tokenTransfer.timestamp),
+        desc(tokenTransfer.id),
+      )
       .limit(limit);
 
-    return jsonBig(c, { transfers, address: normalizedAddress });
+    return jsonBig(c, {
+      transfers: [...transfers].reverse(),
+      address: normalizedAddress,
+    });
   });
 
   app.get("/stats", async (c) => {
