@@ -288,6 +288,25 @@ describe("writeContractAndConfirm", () => {
     expect(walletClient.writeContract).not.toHaveBeenCalled();
   });
 
+  it("does not retry an ambiguous transaction broadcast failure", async () => {
+    const transientError = new Error("request timeout");
+    const { publicClient, walletClient } = makeClients({ estimate: 100_000n });
+    walletClient.writeContract
+      .mockRejectedValueOnce(transientError)
+      .mockResolvedValueOnce("0xsecondhash");
+
+    await expect(
+      writeContractAndConfirm(
+        publicClient as never,
+        walletClient as never,
+        makeRequest(),
+      ),
+    ).rejects.toThrow("request timeout");
+
+    expect(walletClient.writeContract).toHaveBeenCalledTimes(1);
+    expect(publicClient.waitForTransactionReceipt).not.toHaveBeenCalled();
+  });
+
   it("retries transient RPC failures while waiting for the receipt", async () => {
     const transientError = new Error("request timeout");
     const { publicClient, walletClient } = makeClients({ estimate: 100_000n });

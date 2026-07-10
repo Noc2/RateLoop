@@ -2733,9 +2733,10 @@ export async function writeContractAndConfirm(
     }
   }
 
-  const hash = await withTransientWriteRetry(() =>
-    walletClient.writeContract(request),
-  );
+  // A broadcast timeout is ambiguous: the RPC may have accepted the transaction
+  // before losing its response. Retrying writeContract can therefore sign and send
+  // another nonce. Broadcast once; a later keeper tick can safely re-estimate state.
+  const hash = await walletClient.writeContract(request);
 
   const waitForReceipt = (
     publicClient as {
