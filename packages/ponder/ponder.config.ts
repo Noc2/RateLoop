@@ -95,6 +95,15 @@ if (
 }
 const activeChainId = NETWORKS[activeNetwork].chainId;
 let warnedAboutHardhatStartBlocks = false;
+const JSON_RPC_QUANTITY_PATTERN = /^0x(?:0|[1-9a-f][0-9a-f]*)$/iu;
+
+function parseJsonRpcQuantityNumber(value: unknown): number | null {
+  if (typeof value !== "string" || !JSON_RPC_QUANTITY_PATTERN.test(value)) {
+    return null;
+  }
+  const parsed = BigInt(value);
+  return parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(parsed) : null;
+}
 
 function sharedDeploymentRecoveryHint() {
   if (activeChainId === 8453) {
@@ -124,9 +133,11 @@ function probeRpcConnectivity(rpcUrl: string, expectedChainId: number, envKey: s
         console.warn(`[ponder] ${envKey} returned HTTP ${response.status} on eth_chainId probe`);
         return;
       }
-      const body = (await response.json().catch(() => null)) as { result?: string } | null;
-      const reportedChainId = body?.result ? Number.parseInt(body.result, 16) : NaN;
-      if (!Number.isFinite(reportedChainId)) {
+      const body = (await response.json().catch(() => null)) as {
+        result?: unknown;
+      } | null;
+      const reportedChainId = parseJsonRpcQuantityNumber(body?.result);
+      if (reportedChainId === null) {
         console.warn(`[ponder] ${envKey} probe returned no chainId`);
       } else if (reportedChainId !== expectedChainId) {
         console.warn(

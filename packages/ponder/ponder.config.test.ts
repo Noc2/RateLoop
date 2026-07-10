@@ -55,6 +55,7 @@ function getExpectedProbeChainId(env: Record<string, string | undefined>) {
 async function loadPonderConfig(
   overrides: Record<string, string | undefined> = {},
   removals: string[] = [],
+  probeResult?: string,
 ) {
   vi.resetModules();
   process.env = {
@@ -71,7 +72,7 @@ async function loadPonderConfig(
     "fetch",
     vi.fn(async () => {
       const chainId = getExpectedProbeChainId(process.env);
-      return new Response(JSON.stringify({ result: `0x${chainId.toString(16)}` }), {
+      return new Response(JSON.stringify({ result: probeResult ?? `0x${chainId.toString(16)}` }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
@@ -188,6 +189,18 @@ describe("ponder config", () => {
         PONDER_RPC_URL_8453: "not a url",
       }),
     ).rejects.toThrow("PONDER_RPC_URL_8453 must be a valid URL.");
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("warns when the RPC probe returns a malformed chain id quantity", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await loadPonderConfig({}, [], "0x2105junk");
+
+    await vi.waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[ponder] PONDER_RPC_URL_8453 probe returned no chainId",
+      );
+    });
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   it("rejects plaintext RPC env values for Base mainnet", async () => {
