@@ -109,7 +109,11 @@ test("requires a public artifact base URL when automatic snapshots use file stor
 });
 
 test("requires a valid HTTPS public artifact base URL when automatic snapshots use file storage", () => {
-  for (const publicBaseUrl of ["http://artifacts.example.com/rateloop", "not a url"]) {
+  for (const publicBaseUrl of [
+    "http://artifacts.example.com/rateloop",
+    "https://localhost/rateloop",
+    "not a url",
+  ]) {
     assert.deepEqual(
       getMissingKeeperEnvVars({
         RPC_URL: "http://localhost:8545",
@@ -121,7 +125,7 @@ test("requires a valid HTTPS public artifact base URL when automatic snapshots u
         KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
         KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: publicBaseUrl,
       }),
-      ["KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid HTTPS URL"],
+      ["KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL"],
     );
   }
 });

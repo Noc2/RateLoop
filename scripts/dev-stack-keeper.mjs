@@ -57,9 +57,9 @@ export function getMissingKeeperEnvVars(env) {
       mode === "auto" &&
       artifactStorage === "file" &&
       resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim() &&
-      !isHttpsUrl(resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL)
+      !isPublicHttpsUrl(resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL)
     ) {
-      missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid HTTPS URL");
+      missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid public HTTPS URL");
     }
   }
 
@@ -74,9 +74,15 @@ function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
 }
 
-function isHttpsUrl(value) {
+function isLoopbackHostname(hostname) {
+  const normalized = String(hostname ?? "").replace(/^\[|\]$/g, "").toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function isPublicHttpsUrl(value) {
   try {
-    return new URL(value).protocol === "https:";
+    const url = new URL(value);
+    return url.protocol === "https:" && !isLoopbackHostname(url.hostname);
   } catch {
     return false;
   }

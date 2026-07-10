@@ -31,6 +31,11 @@ function readEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function isLoopbackUrlHostname(hostname: string) {
+  const normalized = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return LOOPBACK_BIND_ADDRESSES.has(normalized);
+}
+
 function parseBooleanEnv(
   value: string | undefined,
   fallback: boolean,
@@ -62,10 +67,7 @@ function requireUrlEnv(
 
   try {
     const url = new URL(value);
-    const isLocalhost =
-      url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "::1";
+    const isLocalhost = isLoopbackUrlHostname(url.hostname);
 
     if (isProduction && isLocalhost && !options.allowLocalhostInProduction) {
       errors.push(`${name} must not point to localhost in production`);
@@ -93,10 +95,7 @@ function readOptionalUrlEnv(
 
   try {
     const url = new URL(value);
-    const isLocalhost =
-      url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "::1";
+    const isLocalhost = isLoopbackUrlHostname(url.hostname);
     if (isProduction && options.rejectLocalhostInProduction && isLocalhost) {
       errors.push(`${name} must not point to localhost in production`);
     }
@@ -486,6 +485,7 @@ function loadConfig() {
   const correlationSnapshotArtifactPublicBaseUrl = readOptionalUrlEnv(
     "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
     errors,
+    { rejectLocalhostInProduction: true },
   );
   const hostedPort = readEnv("PORT");
   const metricsPort = readPositiveIntEnvWithOptionalEnvFallback(

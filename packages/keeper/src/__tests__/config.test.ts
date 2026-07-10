@@ -1185,4 +1185,26 @@ describe("keeper config", () => {
       "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be an HTTPS URL when auto correlation snapshots use file artifact storage",
     );
   });
+
+  it("rejects production localhost artifact URLs for automatic file artifact storage", async () => {
+    await expect(
+      loadKeeperConfig({
+        NODE_ENV: "production",
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+          "https://localhost/rateloop/",
+        KEEPER_DATABASE_URL:
+          "postgres://keeper:keeper@postgres.example.com/keeper",
+        PORT: "8080",
+        METRICS_AUTH_TOKEN: "0123456789abcdef",
+        PONDER_BASE_URL: "https://ponder.example.com",
+        CLUSTER_PAYOUT_ORACLE_ADDRESS:
+          "0x6666666666666666666666666666666666666666",
+      }),
+    ).rejects.toThrow(
+      "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must not point to localhost in production",
+    );
+  });
 });
