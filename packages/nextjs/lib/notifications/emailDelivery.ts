@@ -7,7 +7,7 @@ import { notificationEmailDeliveries, notificationEmailSubscriptions } from "~~/
 import { getNotificationDeliverySecret, getOptionalAppUrl, getPrimaryServerTargetNetwork } from "~~/lib/env/server";
 import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 import { buildNotificationEmailUnsubscribeUrl } from "~~/lib/notifications/emailUrls";
-import { isResendConfigured, sendResendEmail } from "~~/lib/notifications/resend";
+import { isResendConfigured, isResendDeliveryError, sendResendEmail } from "~~/lib/notifications/resend";
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
 import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
@@ -443,11 +443,18 @@ async function markDeliverySent(eventKey: string) {
     .where(eq(notificationEmailDeliveries.eventKey, eventKey));
 }
 
-async function clearPendingDelivery(eventKey: string) {
+async function clearReservedDelivery(eventKey: string) {
   await dbClient.execute({
-    sql: "DELETE FROM notification_email_deliveries WHERE event_key = ? AND status = ?",
-    args: [eventKey, DELIVERY_STATUS_SENDING],
+    sql: "DELETE FROM notification_email_deliveries WHERE event_key = ? AND status IN (?, ?)",
+    args: [eventKey, DELIVERY_STATUS_SENDING, DELIVERY_STATUS_SENT],
   });
+}
+
+function isDefiniteEmailNotSentError(error: unknown) {
+  return (
+    isResendDeliveryError(error) ||
+    (error instanceof Error && error.message === "Notification delivery is not configured")
+  );
 }
 
 async function acquireDeliveryLease(eventKey: string, now: number) {
@@ -538,6 +545,11 @@ export async function deliverNotificationEmails() {
       result.attempted += 1;
 
       const deliveryState = await getDeliveryState(candidate.eventKey);
+      if (deliveryState === DELIVERY_STATUS_SENT) {
+        result.skipped += 1;
+        continue;
+      }
+
       const leaseAcquired = await acquireDeliveryLease(candidate.eventKey, Date.now());
       const attempt = resolveNotificationEmailDeliveryAttempt({
         deliveryState,
@@ -549,32 +561,26 @@ export async function deliverNotificationEmails() {
         continue;
       }
 
+      let deliveryMarkedSent = false;
       try {
         const reserved = await reservePendingDelivery(candidate);
         if (!reserved) {
           result.skipped += 1;
-          await releaseDeliveryLease(candidate.eventKey);
           continue;
         }
 
+        await markDeliverySent(candidate.eventKey);
+        deliveryMarkedSent = true;
         await sendCandidate(candidate, appUrl);
-        try {
-          await markDeliverySent(candidate.eventKey);
-          result.sent += 1;
-          await releaseDeliveryLease(candidate.eventKey);
-        } catch (error) {
-          console.error(
-            "Notification email may have been sent but could not be marked delivered:",
-            candidate.eventKey,
-            error,
-          );
-          result.failed += 1;
-        }
+        result.sent += 1;
       } catch (error) {
         console.error("Failed to send notification email:", candidate.eventKey, error);
-        await clearPendingDelivery(candidate.eventKey);
-        await releaseDeliveryLease(candidate.eventKey);
+        if (!deliveryMarkedSent || isDefiniteEmailNotSentError(error)) {
+          await clearReservedDelivery(candidate.eventKey);
+        }
         result.failed += 1;
+      } finally {
+        await releaseDeliveryLease(candidate.eventKey);
       }
     }
   }

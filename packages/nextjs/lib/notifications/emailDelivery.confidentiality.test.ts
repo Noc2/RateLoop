@@ -32,6 +32,7 @@ let confidentiality: ConfidentialityContextModule;
 let emailDelivery: EmailDeliveryModule;
 let ponderClient: PonderClientModule;
 let sentEmails: Array<{ subject: string; text: string; html: string }> = [];
+let assertDeliveryMarkedSentBeforeProviderSend = false;
 const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
 const TEST_CONTENT_DEPLOYMENT = resolveContentDeploymentScope(31337)!;
 
@@ -106,6 +107,12 @@ function installFetchMock() {
     }
 
     if (url === "https://api.resend.com/emails") {
+      if (assertDeliveryMarkedSentBeforeProviderSend) {
+        const deliveryRows = await dbModule.db.select().from(dbSchema.notificationEmailDeliveries);
+        const sentRows = deliveryRows.filter(row => row.status === "sent");
+        assert.equal(sentRows.length, sentEmails.length + 1);
+      }
+
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         html?: string;
         subject?: string;
@@ -146,6 +153,7 @@ before(async () => {
 beforeEach(async () => {
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   ponderClient.invalidatePonderCache({ clearLastKnownGood: true });
+  assertDeliveryMarkedSentBeforeProviderSend = false;
   installFetchMock();
   const now = new Date("2026-06-11T12:00:00.000Z");
   await dbModule.db.insert(dbSchema.notificationEmailSubscriptions).values({
@@ -220,4 +228,13 @@ test("notification emails redact gated titles and descriptions before delivery",
     assert.equal(row.contentRegistryAddress, TEST_CONTENT_DEPLOYMENT.contentRegistryAddress);
     assert.match(row.eventKey, new RegExp(`^${TEST_CONTENT_DEPLOYMENT.deploymentKey}:`));
   }
+});
+
+test("notification delivery marks events sent before calling the email provider", async () => {
+  assertDeliveryMarkedSentBeforeProviderSend = true;
+
+  const result = await emailDelivery.deliverNotificationEmails();
+
+  assert.equal(result.sent, 2);
+  assert.equal(sentEmails.length, 2);
 });
