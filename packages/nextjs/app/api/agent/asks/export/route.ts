@@ -52,7 +52,8 @@ function toCsv(rows: Array<Record<string, unknown>>) {
   ];
   const escape = (value: unknown) => {
     const text = value == null ? "" : String(value);
-    return `"${text.replaceAll('"', '""')}"`;
+    const spreadsheetSafeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${spreadsheetSafeText.replaceAll('"', '""')}"`;
   };
 
   return [headers.join(","), ...rows.map(row => headers.map(header => escape(row[header])).join(","))].join("\n");

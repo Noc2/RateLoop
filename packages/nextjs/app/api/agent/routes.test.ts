@@ -4143,6 +4143,18 @@ test("agent audit export route returns csv rows for the authenticated agent", as
   assert.match(body, /submitted/);
 });
 
+test("agent audit CSV export neutralizes spreadsheet formulas", async () => {
+  await seedManagedAskAudit({ clientRequestId: "=1+1" });
+
+  const response = await asksExportRoute.GET(makeGet("https://rateloop.ai/api/agent/asks/export?format=csv"));
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(body, /"'=1\+1"/);
+  assert.match(body, /"submitted"/);
+  assert.doesNotMatch(body, /,"=1\+1",/);
+});
+
 test("agent audit export route rejects malformed numeric filters", async () => {
   for (const [query, message] of [
     ["chainId=999999abc", "chainId must be a positive integer."],
