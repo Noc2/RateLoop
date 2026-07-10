@@ -41,6 +41,7 @@ import { normalizeInferredHeadToHeadAbRequestBody } from "./voteUi";
 import {
   readBooleanFlag,
   readOptionalPositiveInteger,
+  validateCliOptions,
   type CliOptions,
   type CliOptionValue,
 } from "./cliOptions";
@@ -387,6 +388,7 @@ function withDryRunOptions(
 
 async function main() {
   const { command, options } = parseArgs(process.argv.slice(2));
+  validateCliOptions(command, options);
 
   switch (command) {
     case "templates":
@@ -436,10 +438,11 @@ async function main() {
     }
 
     case "quote": {
+      const dryRun = readBooleanFlag(options, "dry-run");
       const config = withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
       const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
-      const payload = options["dry-run"]
+      const payload = dryRun
         ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
         : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       const findings = lintAgentAskRequest(payload);
@@ -454,18 +457,19 @@ async function main() {
 
     case "sandbox":
     case "ask": {
+      const dryRun =
+        command === "sandbox" || readBooleanFlag(options, "dry-run");
       const config =
-        command === "ask" && !options["dry-run"]
+        command === "ask" && !dryRun
           ? loadExplicitLiveAgentConfig("ask")
           : withDefaultAgentApiBaseUrl(loadAgentsRuntimeConfig());
       const agent = createAgentClient(config);
       const rawPayload = await readJsonFile(requireString(options, "file"));
-      const payload =
-        command === "sandbox" || options["dry-run"]
-          ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
-          : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
+      const payload = dryRun
+        ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
+        : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       const findings = lintAgentAskRequest(payload, {
-        requireMaxPaymentAmount: command === "ask" && !options["dry-run"],
+        requireMaxPaymentAmount: command === "ask" && !dryRun,
       });
       if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });

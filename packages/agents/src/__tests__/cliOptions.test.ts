@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readBooleanFlag, readOptionalPositiveInteger } from "../cliOptions";
+import {
+  readBooleanFlag,
+  readOptionalPositiveInteger,
+  validateCliOptions,
+} from "../cliOptions";
 
 describe("readOptionalPositiveInteger", () => {
   it("returns undefined for omitted options and parses decimal safe integers", () => {
@@ -41,5 +45,31 @@ describe("readBooleanFlag", () => {
     expect(() =>
       readBooleanFlag({ "include-image-data": ["true", "true"] }, "include-image-data"),
     ).toThrow("--include-image-data must be a boolean flag");
+  });
+});
+
+describe("validateCliOptions", () => {
+  it("rejects misspelled and command-inapplicable safety options", () => {
+    expect(() =>
+      validateCliOptions("ask", { dryrun: true, file: "ask.json" }),
+    ).toThrow("Unknown option --dryrun for ask");
+    expect(() =>
+      validateCliOptions("quote", {
+        file: "ask.json",
+        "payment-mode": "wallet_calls",
+      }),
+    ).toThrow("Unknown option --payment-mode for quote");
+  });
+
+  it("rejects duplicate scalar options while allowing repeated images", () => {
+    expect(() =>
+      validateCliOptions("ask", { file: ["one.json", "two.json"] }),
+    ).toThrow("--file may only be specified once");
+    expect(() =>
+      validateCliOptions("handoff", {
+        file: "ask.json",
+        image: ["one.png", "two.png"],
+      }),
+    ).not.toThrow();
   });
 });
