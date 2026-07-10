@@ -485,8 +485,18 @@ function loadConfig() {
   const correlationSnapshotArtifactPublicBaseUrl = readOptionalUrlEnv(
     "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
     errors,
-    { rejectLocalhostInProduction: true },
+    {
+      rejectLocalhostInProduction: chainId !== LOCAL_HARDHAT_CHAIN_ID,
+    },
   );
+  const correlationSnapshotArtifactPublicUrl =
+    correlationSnapshotArtifactPublicBaseUrl
+      ? new URL(correlationSnapshotArtifactPublicBaseUrl)
+      : null;
+  const usesLocalLoopbackArtifactServer =
+    chainId === LOCAL_HARDHAT_CHAIN_ID &&
+    correlationSnapshotArtifactPublicUrl !== null &&
+    isLoopbackUrlHostname(correlationSnapshotArtifactPublicUrl.hostname);
   const hostedPort = readEnv("PORT");
   const metricsPort = readPositiveIntEnvWithOptionalEnvFallback(
     "METRICS_PORT",
@@ -901,7 +911,11 @@ function loadConfig() {
       correlationSnapshotMode === "auto" &&
       correlationSnapshotArtifactStorageMode === "file" &&
       correlationSnapshotArtifactPublicBaseUrl &&
-      !correlationSnapshotArtifactPublicBaseUrl.startsWith("https://")
+      !correlationSnapshotArtifactPublicBaseUrl.startsWith("https://") &&
+      !(
+        usesLocalLoopbackArtifactServer &&
+        correlationSnapshotArtifactPublicUrl?.protocol === "http:"
+      )
     ) {
       errors.push(
         "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be an HTTPS URL when auto correlation snapshots use file artifact storage",
@@ -917,7 +931,8 @@ function loadConfig() {
     }
     if (
       publishesPublicFileArtifacts &&
-      isLoopbackBindAddress(loadedConfig.metricsBindAddress)
+      isLoopbackBindAddress(loadedConfig.metricsBindAddress) &&
+      !usesLocalLoopbackArtifactServer
     ) {
       errors.push(
         "METRICS_BIND_ADDRESS must be unset or non-loopback when auto correlation snapshots publish file artifacts",

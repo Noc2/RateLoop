@@ -353,7 +353,9 @@ describe("keeper config", () => {
         },
         ["KEYSTORE_ACCOUNT", "KEYSTORE_PASSWORD"],
       ),
-    ).rejects.toThrow("KEEPER_PRIVATE_KEY must be a 0x-prefixed 32-byte hex private key");
+    ).rejects.toThrow(
+      "KEEPER_PRIVATE_KEY must be a 0x-prefixed 32-byte hex private key",
+    );
   });
 
   it("does not let a malformed private key satisfy wallet configuration", async () => {
@@ -365,7 +367,9 @@ describe("keeper config", () => {
         },
         ["KEYSTORE_PASSWORD"],
       ),
-    ).rejects.toThrow("KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY");
+    ).rejects.toThrow(
+      "KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY",
+    );
   });
 
   it("requires a keystore password when using a keystore account without a private key", async () => {
@@ -902,8 +906,7 @@ describe("keeper config", () => {
         NODE_ENV: "production",
         RPC_URL: "https://mainnet.base.org",
         VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
-        CONTENT_REGISTRY_ADDRESS:
-          "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
+        CONTENT_REGISTRY_ADDRESS: "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
         ADVISORY_VOTE_RECORDER_ADDRESS:
           "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
       }),
@@ -1190,6 +1193,7 @@ describe("keeper config", () => {
     await expect(
       loadKeeperConfig({
         NODE_ENV: "production",
+        CHAIN_ID: "8453",
         KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
         KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
         KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
@@ -1206,5 +1210,33 @@ describe("keeper config", () => {
     ).rejects.toThrow(
       "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must not point to localhost in production",
     );
+  });
+
+  it("allows a loopback HTTP artifact server for the production local chain", async () => {
+    const { config } = await loadKeeperConfig({
+      NODE_ENV: "production",
+      RPC_URL: "http://127.0.0.1:8545",
+      CHAIN_ID: "31337",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "http://127.0.0.1:9091/correlation-artifacts",
+      KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR:
+        "/tmp/rateloop-correlation-artifacts",
+      KEEPER_DATABASE_URL: "postgres://keeper:keeper@127.0.0.1/keeper",
+      METRICS_ENABLED: "true",
+      METRICS_BIND_ADDRESS: "127.0.0.1",
+      PONDER_BASE_URL: "http://127.0.0.1:42069",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS:
+        "0x6666666666666666666666666666666666666666",
+    });
+
+    expect(config.correlationSnapshots.artifactStorage).toEqual({
+      mode: "file",
+      outputDir: "/tmp/rateloop-correlation-artifacts",
+      publicBaseUrl: "http://127.0.0.1:9091/correlation-artifacts",
+    });
+    expect(config.metricsBindAddress).toBe("127.0.0.1");
   });
 });
