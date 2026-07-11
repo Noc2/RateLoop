@@ -13,6 +13,7 @@ export { ProfileRegistryAbi } from "./ProfileRegistryAbi";
 export { ProtocolConfigAbi } from "./ProtocolConfigAbi";
 export { QuestionRewardPoolEscrowAbi } from "./QuestionRewardPoolEscrowAbi";
 export { RaterRegistryAbi } from "./RaterRegistryAbi";
+export { WorldIdV4BackendIssuerAbi } from "./WorldIdV4BackendIssuerAbi";
 export { RaterRegistryConfidentialityAbi } from "./RaterRegistryConfidentialityAbi";
 export { RoundRewardDistributorAbi } from "./RoundRewardDistributorAbi";
 export { RoundVotingEngineAbi } from "./RoundVotingEngineAbi";

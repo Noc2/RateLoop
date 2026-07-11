@@ -59,6 +59,10 @@ const PROXY_BACKED_DEPLOYMENT_EXPORT_CONTRACTS = [
   "RaterRegistry",
 ];
 
+const ADDITIVE_DEPLOYMENT_EXPORT_CONTRACTS = new Set([
+  "WorldIdV4BackendIssuer",
+]);
+
 function getDirectories(path) {
   if (!existsSync(path)) {
     return [];
@@ -773,6 +777,73 @@ export function refreshExistingDeployedContractAbis(existingContracts) {
   );
 }
 
+export function addAdditiveDeploymentExports(
+  existingContracts,
+  deployments,
+  options = {}
+) {
+  const artifactLoader = options.artifactLoader || getArtifactOfContract;
+  const inheritedFunctionsLoader =
+    options.inheritedFunctionsLoader || getInheritedFunctions;
+  const mergedContracts = Object.fromEntries(
+    Object.entries(existingContracts).map(([chainId, chainConfig]) => [
+      chainId,
+      { ...chainConfig },
+    ])
+  );
+
+  for (const [chainId, chainDeployments] of Object.entries(deployments)) {
+    if (typeof chainDeployments !== "object" || chainDeployments === null) {
+      continue;
+    }
+    const additiveEntries = Object.entries(chainDeployments).filter(
+      ([address, contractName]) =>
+        isDeploymentAddressKey(address) &&
+        ADDITIVE_DEPLOYMENT_EXPORT_CONTRACTS.has(contractName)
+    );
+    if (additiveEntries.length === 0) continue;
+
+    const rollout = chainDeployments.worldIdV4BackendIssuerRollout;
+    const activationBlockNumber = parseOptionalBlockNumber(
+      rollout?.activationBlockNumber
+    );
+    if (!rollout || !activationBlockNumber || activationBlockNumber <= 0) {
+      throw new Error(
+        `Additive deployment export for chainId ${chainId} requires complete World ID v4 backend issuer rollout metadata.`
+      );
+    }
+
+    if (!mergedContracts[chainId]) mergedContracts[chainId] = {};
+    for (const [address, contractName] of additiveEntries) {
+      const artifact = artifactLoader(contractName);
+      if (!artifact) {
+        throw new Error(
+          `No artifact found for additive deployment contract ${contractName}.`
+        );
+      }
+      mergedContracts[chainId][contractName] = {
+        address,
+        abi: artifact.abi,
+        inheritedFunctions: inheritedFunctionsLoader(artifact),
+        deployedOnBlock: activationBlockNumber,
+      };
+    }
+  }
+
+  return mergedContracts;
+}
+
+function readDeploymentExports(deploymentsPath) {
+  const deployments = {};
+  for (let chain of getFiles(deploymentsPath)) {
+    if (!chain.endsWith(".json")) continue;
+    const deploymentFile = join(deploymentsPath, chain);
+    chain = chain.slice(0, -5);
+    deployments[chain] = JSON.parse(readFileSync(deploymentFile));
+  }
+  return deployments;
+}
+
 export function regenerateAbisOnly() {
   const CONTRACTS_TARGET_DIR = join(__dirname, "..", "..", "contracts", "src");
   const deployedContractsTargetFile = join(
@@ -782,8 +853,14 @@ export function regenerateAbisOnly() {
   const existingContracts = readExistingDeployedContracts(
     deployedContractsTargetFile
   );
+  const deployments = readDeploymentExports(
+    join(__dirname, "..", "deployments")
+  );
   const mergedContracts = refreshExistingDeployedContractAbis(
-    pruneGeneratedOnlyContracts(existingContracts)
+    addAdditiveDeploymentExports(
+      pruneGeneratedOnlyContracts(existingContracts),
+      deployments
+    )
   );
 
   generateAbiFiles();
@@ -794,17 +871,7 @@ function main() {
   const current_path_to_broadcast = join(__dirname, "..", "broadcast");
   const current_path_to_deployments = join(__dirname, "..", "deployments");
 
-  const Deploymentchains = getFiles(current_path_to_deployments);
-  const deployments = {};
-
-  // Load existing deployments from deployments directory
-  Deploymentchains.forEach((chain) => {
-    if (!chain.endsWith(".json")) return;
-    const deploymentFile = `${current_path_to_deployments}/${chain}`;
-    chain = chain.slice(0, -5);
-    var deploymentObject = JSON.parse(readFileSync(deploymentFile));
-    deployments[chain] = deploymentObject;
-  });
+  const deployments = readDeploymentExports(current_path_to_deployments);
 
   // Process all deployments from all script folders
   const {
@@ -1144,6 +1211,7 @@ const ABI_TARGETS = [
   { contract: "ProfileRegistry", targets: ["contracts/src/abis"] },
   { contract: "ProtocolConfig", targets: ["contracts/src/abis"] },
   { contract: "RaterRegistry", targets: ["contracts/src/abis"] },
+  { contract: "WorldIdV4BackendIssuer", targets: ["contracts/src/abis"] },
   { contract: "LaunchDistributionPool", targets: ["contracts/src/abis"] },
   { contract: "ClusterPayoutOracle", targets: ["contracts/src/abis"] },
   { contract: "AdvisoryVoteRecorder", targets: ["contracts/src/abis"] },

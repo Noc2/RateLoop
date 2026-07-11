@@ -6,8 +6,11 @@ import {
   buildPonderUrl,
   buildReadinessUrl,
   validateOffchainRuntimeEnv,
+  validateLiveWorldIdV4BackendIssuerRollout,
+  validateWorldIdV4BackendIssuerRolloutMetadata,
 } from "./readiness-core.mjs";
 import {
+  BASE_MAINNET_READINESS_CONFIG,
   baseMainnetNotDeployedMessage,
   parseBaseMainnetReadinessArgs,
   validateBaseMainnetOfflineReadiness,
@@ -51,6 +54,54 @@ const deployedContracts = {
 };`;
 }
 
+function makeRolloutFixture(overrides = {}) {
+  const implementation = addressFor(100);
+  const issuer = addressFor(101);
+  const signer = addressFor(102);
+  const timelock = addressFor(103);
+  const deploymentJson = makeDeploymentJson({
+    [implementation]: "RaterRegistryImplementation",
+    [issuer]: "WorldIdV4BackendIssuer",
+    [timelock]: "TimelockController",
+    worldIdV4BackendIssuerRollout: {
+      signer,
+      rpId: "42",
+      action: "0x1234",
+      maxCredentialTtl: 604800,
+      issuanceCap: 100,
+      proposalId: "123",
+      activationBlockNumber: 200,
+      ...overrides,
+    },
+  });
+  const deployedContractsSource = makeGeneratedContractsSource().replace(
+    "\n  },\n};",
+    `
+    WorldIdV4BackendIssuer: {
+      address: "${issuer}",
+      abi: [],
+      deployedOnBlock: 200,
+    },
+  },
+};`,
+  );
+  return {
+    deploymentJson,
+    deployedContractsSource,
+    implementation,
+    issuer,
+    signer,
+  };
+}
+
+function encodeWord(value) {
+  const hex =
+    typeof value === "string" && value.startsWith("0x")
+      ? value.slice(2)
+      : BigInt(value).toString(16);
+  return `0x${hex.padStart(64, "0")}`;
+}
+
 const productionEnvSource =
   "NEXT_PUBLIC_TARGET_NETWORKS=8453\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n";
 const protocolSource =
@@ -85,6 +136,105 @@ test("validateBaseMainnetOfflineReadiness accepts synchronized production Base a
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.failures, []);
+});
+
+test("World ID v4 rollout readiness stays backward compatible before metadata exists", () => {
+  const result = validateWorldIdV4BackendIssuerRolloutMetadata(
+    makeDeploymentJson(),
+    makeGeneratedContractsSource(),
+    8453,
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rollout, null);
+  assert.deepEqual(result.checks, []);
+});
+
+test("World ID v4 rollout readiness accepts complete receipt-derived metadata", () => {
+  const fixture = makeRolloutFixture();
+  const result = validateWorldIdV4BackendIssuerRolloutMetadata(
+    fixture.deploymentJson,
+    fixture.deployedContractsSource,
+    8453,
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+  assert.equal(result.rollout.issuer, fixture.issuer);
+  assert.equal(result.rollout.implementation, fixture.implementation);
+});
+
+test("World ID v4 rollout readiness rejects partial or unsafe metadata", () => {
+  const fixture = makeRolloutFixture({
+    signer: "",
+    rpId: "18446744073709551616",
+    maxCredentialTtl: 604801,
+    issuanceCap: 10001,
+    activationBlockNumber: 0,
+  });
+  const result = validateWorldIdV4BackendIssuerRolloutMetadata(
+    fixture.deploymentJson,
+    fixture.deployedContractsSource,
+    8453,
+  );
+
+  assert.equal(result.ok, false);
+  assert(result.failures.some((message) => message.includes("signer")));
+  assert(result.failures.some((message) => message.includes("uint64")));
+  assert(result.failures.some((message) => message.includes("TTL")));
+  assert(result.failures.some((message) => message.includes("cap")));
+  assert(
+    result.failures.some((message) => message.includes("activation block")),
+  );
+});
+
+test("live World ID v4 rollout readiness verifies implementation, roles, domain, and cap", async () => {
+  const fixture = makeRolloutFixture();
+  const deploymentAddresses = buildDeploymentAddressMap(fixture.deploymentJson);
+  const registry = deploymentAddresses.get("RaterRegistry");
+  const calls = [];
+  const rpcRequest = async (_rpcUrl, method, params) => {
+    calls.push({ method, params });
+    if (method === "eth_getStorageAt")
+      return encodeWord(fixture.implementation);
+    if (method === "eth_getCode") {
+      return params[0].toLowerCase() === fixture.implementation.toLowerCase()
+        ? "0x60009f8aabb26000"
+        : "0x6001";
+    }
+    if (method !== "eth_call") throw new Error(`Unexpected ${method}`);
+
+    const { data, to } = params[0];
+    if (data.startsWith("0x91d14854")) return encodeWord(1);
+    if (data === "0x7b103999") return encodeWord(registry);
+    if (data === "0xefc21e3f") return encodeWord(8453);
+    if (data === "0x202ab35d") return encodeWord(42);
+    if (data === "0x0a7a1c4d") return encodeWord(0x1234);
+    if (data === "0xe156674b") return encodeWord(604800);
+    if (data === "0xb733b3f8") return encodeWord(100);
+    if (data === "0x0b0f7743") return encodeWord(3);
+    throw new Error(`Unexpected eth_call ${to} ${data}`);
+  };
+  const checks = [];
+  const failures = [];
+
+  await validateLiveWorldIdV4BackendIssuerRollout({
+    checks,
+    deploymentAddresses,
+    deploymentJson: fixture.deploymentJson,
+    failures,
+    readinessConfig: BASE_MAINNET_READINESS_CONFIG,
+    rpcRequest,
+    rpcUrl: "https://rpc.example",
+  });
+
+  assert.deepEqual(failures, []);
+  assert(checks.every((check) => check.ok));
+  assert(calls.some(({ method }) => method === "eth_getStorageAt"));
+  assert(calls.some(({ method }) => method === "eth_getCode"));
+  assert(
+    calls.some(({ params }) => params?.[0]?.data?.startsWith("0x91d14854")),
+  );
 });
 
 test("validateBaseMainnetOfflineReadiness rejects stale generated contract addresses", () => {

@@ -8,6 +8,26 @@ const repoRoot = dirname(scriptDir);
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+const WORLD_ID_V4_BACKEND_ISSUER_ROLLOUT_KEY = "worldIdV4BackendIssuerRollout";
+const WORLD_ID_V4_BACKEND_ISSUER_NAME = "WorldIdV4BackendIssuer";
+const RATER_REGISTRY_IMPLEMENTATION_NAME = "RaterRegistryImplementation";
+const WORLD_ID_V4_BACKEND_CREDENTIAL_SELECTOR = "0x9f8aabb2";
+const HAS_ROLE_SELECTOR = "0x91d14854";
+const ISSUER_BASE_CHAIN_ID_SELECTOR = "0xefc21e3f";
+const ISSUER_REGISTRY_SELECTOR = "0x7b103999";
+const ISSUER_RP_ID_SELECTOR = "0x202ab35d";
+const ISSUER_ACTION_SELECTOR = "0x0a7a1c4d";
+const ISSUER_MAX_CREDENTIAL_TTL_SELECTOR = "0xe156674b";
+const ISSUER_ISSUANCE_CAP_SELECTOR = "0xb733b3f8";
+const ISSUER_ISSUED_COUNT_SELECTOR = "0x0b0f7743";
+const SEEDER_ROLE =
+  "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1";
+const SIGNER_ROLE =
+  "0xe2f4eaae4a9751e85a3e4a7b9587827a877f29914755229b07a7b2da98285f70";
+const GOVERNANCE_ROLE =
+  "0x71840dc4906352362b0cdaf79870196c8e42acafade72d5d5a6d59291253ceb1";
+const MAX_WORLD_ID_V4_BACKEND_CREDENTIAL_TTL = 7 * 24 * 60 * 60;
+const MAX_WORLD_ID_V4_BACKEND_ACTIVATION_CAP = 10_000;
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
 const SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR = "0xb717bbbd";
 const ROUND_PAYOUT_SNAPSHOT_CONSUMER_SELECTOR = "0x2fc1e72a";
@@ -786,7 +806,11 @@ function extractBalancedObject(source, openBraceIndex) {
   return undefined;
 }
 
-export function parseGeneratedContractsForChain(source, chainId) {
+export function parseGeneratedContractsForChain(
+  source,
+  chainId,
+  contractNames = REQUIRED_DEPLOYED_CONTRACTS,
+) {
   const marker = `  ${chainId}: {`;
   const start = source.indexOf(marker);
   if (start === -1) return new Map();
@@ -797,7 +821,7 @@ export function parseGeneratedContractsForChain(source, chainId) {
   const chainSource = source.slice(start, next?.index ?? source.length);
   const contracts = new Map();
 
-  for (const contractName of REQUIRED_DEPLOYED_CONTRACTS) {
+  for (const contractName of contractNames) {
     const keyMatch = new RegExp(`(?:^|[\\s{,])${contractName}:\\s*\\{`).exec(
       chainSource,
     );
@@ -824,6 +848,168 @@ export function parseGeneratedContractsForChain(source, chainId) {
   }
 
   return contracts;
+}
+
+function parsePositiveBigInt(value) {
+  if (
+    typeof value !== "string" &&
+    typeof value !== "number" &&
+    typeof value !== "bigint"
+  ) {
+    return undefined;
+  }
+  try {
+    const parsed = BigInt(value);
+    return parsed > 0n ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasWorldIdV4BackendIssuerRollout(deploymentJson) {
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  return Boolean(
+    deploymentJson[WORLD_ID_V4_BACKEND_ISSUER_ROLLOUT_KEY] ||
+      deploymentAddresses.get(WORLD_ID_V4_BACKEND_ISSUER_NAME) ||
+      deploymentAddresses.get(RATER_REGISTRY_IMPLEMENTATION_NAME),
+  );
+}
+
+export function validateWorldIdV4BackendIssuerRolloutMetadata(
+  deploymentJson,
+  deployedContractsSource,
+  chainId,
+) {
+  const checks = [];
+  const failures = [];
+  if (!hasWorldIdV4BackendIssuerRollout(deploymentJson)) {
+    return { ok: true, checks, failures, rollout: null };
+  }
+
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const implementation = deploymentAddresses.get(
+    RATER_REGISTRY_IMPLEMENTATION_NAME,
+  );
+  const issuer = deploymentAddresses.get(WORLD_ID_V4_BACKEND_ISSUER_NAME);
+  const metadata = deploymentJson[WORLD_ID_V4_BACKEND_ISSUER_ROLLOUT_KEY];
+  const rpId = parsePositiveBigInt(metadata?.rpId);
+  const action = parsePositiveBigInt(metadata?.action);
+  const maxCredentialTtl = parsePositiveBigInt(metadata?.maxCredentialTtl);
+  const issuanceCap = parsePositiveBigInt(metadata?.issuanceCap);
+  const activationBlockNumber = parsePositiveBigInt(
+    metadata?.activationBlockNumber,
+  );
+
+  addCheck(
+    checks,
+    failures,
+    typeof metadata === "object" && metadata !== null,
+    "World ID v4 backend issuer rollout metadata is present",
+  );
+  addCheck(
+    checks,
+    failures,
+    isAddress(implementation),
+    "RaterRegistry rollout implementation has an address in the deployment artifact",
+  );
+  addCheck(
+    checks,
+    failures,
+    isAddress(issuer),
+    "WorldIdV4BackendIssuer has an address in the deployment artifact",
+  );
+  addCheck(
+    checks,
+    failures,
+    isAddress(metadata?.signer),
+    "World ID v4 backend issuer rollout signer is an address",
+  );
+  addCheck(
+    checks,
+    failures,
+    rpId !== undefined && rpId <= BigInt("18446744073709551615"),
+    "World ID v4 backend issuer rollout RP ID is a nonzero uint64",
+  );
+  addCheck(
+    checks,
+    failures,
+    action !== undefined,
+    "World ID v4 backend issuer rollout action is nonzero",
+  );
+  addCheck(
+    checks,
+    failures,
+    maxCredentialTtl !== undefined &&
+      maxCredentialTtl <= BigInt(MAX_WORLD_ID_V4_BACKEND_CREDENTIAL_TTL),
+    `World ID v4 backend issuer rollout TTL is at most ${MAX_WORLD_ID_V4_BACKEND_CREDENTIAL_TTL}s`,
+  );
+  addCheck(
+    checks,
+    failures,
+    issuanceCap !== undefined &&
+      issuanceCap <= BigInt(MAX_WORLD_ID_V4_BACKEND_ACTIVATION_CAP),
+    `World ID v4 backend issuer rollout cap is at most ${MAX_WORLD_ID_V4_BACKEND_ACTIVATION_CAP}`,
+  );
+  addCheck(
+    checks,
+    failures,
+    parsePositiveBigInt(metadata?.proposalId) !== undefined,
+    "World ID v4 backend issuer rollout proposal ID is positive",
+  );
+  addCheck(
+    checks,
+    failures,
+    activationBlockNumber !== undefined,
+    "World ID v4 backend issuer rollout activation block is positive",
+  );
+
+  if (typeof deployedContractsSource === "string") {
+    const generatedContracts = parseGeneratedContractsForChain(
+      deployedContractsSource,
+      chainId,
+      [WORLD_ID_V4_BACKEND_ISSUER_NAME],
+    );
+    const generatedIssuer = generatedContracts.get(
+      WORLD_ID_V4_BACKEND_ISSUER_NAME,
+    );
+    addCheck(
+      checks,
+      failures,
+      isAddress(generatedIssuer?.address),
+      "WorldIdV4BackendIssuer has an address in packages/contracts/src/deployedContracts.ts",
+    );
+    addCheck(
+      checks,
+      failures,
+      Number.isInteger(generatedIssuer?.deployedOnBlock) &&
+        BigInt(generatedIssuer.deployedOnBlock) === activationBlockNumber,
+      "WorldIdV4BackendIssuer generated deployedOnBlock matches rollout activation metadata",
+    );
+    if (issuer && generatedIssuer?.address) {
+      addCheck(
+        checks,
+        failures,
+        sameAddress(issuer, generatedIssuer.address),
+        "WorldIdV4BackendIssuer address matches between foundry and generated contract artifacts",
+      );
+    }
+  }
+
+  return {
+    ok: failures.length === 0,
+    checks,
+    failures,
+    rollout: {
+      action,
+      activationBlockNumber,
+      implementation,
+      issuanceCap,
+      issuer,
+      maxCredentialTtl,
+      rpId,
+      signer: metadata?.signer,
+    },
+  };
 }
 
 export function validateOfflineReadiness(
@@ -903,6 +1089,14 @@ export function validateOfflineReadiness(
     ),
     `Next.js default USDC address is configured for ${readinessConfig.label}`,
   );
+
+  const issuerRollout = validateWorldIdV4BackendIssuerRolloutMetadata(
+    deploymentJson,
+    deployedContractsSource,
+    readinessConfig.chainId,
+  );
+  checks.push(...issuerRollout.checks);
+  failures.push(...issuerRollout.failures);
 
   return { ok: failures.length === 0, checks, failures };
 }
@@ -1034,6 +1228,10 @@ function encodeAddressArgument(value) {
   return value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
 }
 
+function encodeBytes32Argument(value) {
+  return value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+}
+
 function encodeUint8Argument(value) {
   return Number(value).toString(16).padStart(64, "0");
 }
@@ -1044,6 +1242,12 @@ function buildAddressCallData(selector, argumentAddresses = []) {
 
 function buildUint8CallData(selector, value) {
   return `${selector}${encodeUint8Argument(value)}`;
+}
+
+function buildHasRoleCallData(role, account) {
+  return `${HAS_ROLE_SELECTOR}${encodeBytes32Argument(
+    role,
+  )}${encodeAddressArgument(account)}`;
 }
 
 function sameAddress(left, right) {
@@ -1133,6 +1337,246 @@ export async function getAddressWiringValue(
     "latest",
   ]);
   return parseAddressResult(result, wiringCheck.outputIndex ?? 0);
+}
+
+async function readContractUint256(
+  rpcUrl,
+  address,
+  selector,
+  rpcRequest = rpc,
+) {
+  return parseUint256Result(
+    await rpcRequest(rpcUrl, "eth_call", [
+      { to: address, data: selector },
+      "latest",
+    ]),
+  );
+}
+
+async function readContractAddress(
+  rpcUrl,
+  address,
+  selector,
+  rpcRequest = rpc,
+) {
+  return parseAddressResult(
+    await rpcRequest(rpcUrl, "eth_call", [
+      { to: address, data: selector },
+      "latest",
+    ]),
+  );
+}
+
+async function readContractRole(
+  rpcUrl,
+  address,
+  role,
+  account,
+  rpcRequest = rpc,
+) {
+  return (
+    parseUint256Result(
+      await rpcRequest(rpcUrl, "eth_call", [
+        { to: address, data: buildHasRoleCallData(role, account) },
+        "latest",
+      ]),
+    ) === 1n
+  );
+}
+
+export async function validateLiveWorldIdV4BackendIssuerRollout({
+  checks,
+  deploymentAddresses,
+  deploymentJson,
+  failures,
+  readinessConfig,
+  rpcRequest = rpc,
+  rpcUrl,
+}) {
+  if (!hasWorldIdV4BackendIssuerRollout(deploymentJson)) return;
+
+  const metadataResult = validateWorldIdV4BackendIssuerRolloutMetadata(
+    deploymentJson,
+    undefined,
+    readinessConfig.chainId,
+  );
+  const rollout = metadataResult.rollout;
+  if (!metadataResult.ok || !rollout) {
+    addCheck(
+      checks,
+      failures,
+      false,
+      "World ID v4 backend issuer rollout metadata is complete for live checks",
+    );
+    return;
+  }
+
+  const registry = deploymentAddresses.get("RaterRegistry");
+  const timelock = deploymentAddresses.get("TimelockController");
+  const implementationSlotValue = parseStorageAddress(
+    await rpcRequest(rpcUrl, "eth_getStorageAt", [
+      registry,
+      EIP1967_IMPLEMENTATION_SLOT,
+      "latest",
+    ]),
+  );
+  addCheck(
+    checks,
+    failures,
+    sameAddress(implementationSlotValue, rollout.implementation),
+    "RaterRegistry proxy uses the rollout implementation",
+  );
+
+  const implementationCode = await rpcRequest(rpcUrl, "eth_getCode", [
+    rollout.implementation,
+    "latest",
+  ]);
+  addCheck(
+    checks,
+    failures,
+    bytecodeContainsSelector(
+      implementationCode,
+      WORLD_ID_V4_BACKEND_CREDENTIAL_SELECTOR,
+    ),
+    `RaterRegistry rollout implementation bytecode contains selector ${WORLD_ID_V4_BACKEND_CREDENTIAL_SELECTOR}`,
+  );
+
+  const issuerCode = await rpcRequest(rpcUrl, "eth_getCode", [
+    rollout.issuer,
+    "latest",
+  ]);
+  addCheck(
+    checks,
+    failures,
+    typeof issuerCode === "string" && issuerCode !== "0x",
+    "WorldIdV4BackendIssuer has bytecode on RPC",
+  );
+
+  addCheck(
+    checks,
+    failures,
+    await readContractRole(
+      rpcUrl,
+      registry,
+      SEEDER_ROLE,
+      rollout.issuer,
+      rpcRequest,
+    ),
+    "WorldIdV4BackendIssuer holds RaterRegistry SEEDER_ROLE",
+  );
+  addCheck(
+    checks,
+    failures,
+    await readContractRole(
+      rpcUrl,
+      rollout.issuer,
+      SIGNER_ROLE,
+      rollout.signer,
+      rpcRequest,
+    ),
+    "World ID v4 backend signer holds issuer SIGNER_ROLE",
+  );
+  addCheck(
+    checks,
+    failures,
+    isAddress(timelock) &&
+      (await readContractRole(
+        rpcUrl,
+        rollout.issuer,
+        GOVERNANCE_ROLE,
+        timelock,
+        rpcRequest,
+      )),
+    "TimelockController holds issuer GOVERNANCE_ROLE",
+  );
+
+  const issuerRegistry = await readContractAddress(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_REGISTRY_SELECTOR,
+    rpcRequest,
+  );
+  const issuerChainId = await readContractUint256(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_BASE_CHAIN_ID_SELECTOR,
+    rpcRequest,
+  );
+  const issuerRpId = await readContractUint256(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_RP_ID_SELECTOR,
+    rpcRequest,
+  );
+  const issuerAction = await readContractUint256(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_ACTION_SELECTOR,
+    rpcRequest,
+  );
+  const issuerMaxCredentialTtl = await readContractUint256(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_MAX_CREDENTIAL_TTL_SELECTOR,
+    rpcRequest,
+  );
+  const issuerCap = await readContractUint256(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_ISSUANCE_CAP_SELECTOR,
+    rpcRequest,
+  );
+  const issuerIssuedCount = await readContractUint256(
+    rpcUrl,
+    rollout.issuer,
+    ISSUER_ISSUED_COUNT_SELECTOR,
+    rpcRequest,
+  );
+
+  addCheck(
+    checks,
+    failures,
+    sameAddress(issuerRegistry, registry),
+    "WorldIdV4BackendIssuer registry domain matches RaterRegistry",
+  );
+  addCheck(
+    checks,
+    failures,
+    issuerChainId === BigInt(readinessConfig.chainId),
+    `WorldIdV4BackendIssuer chain domain is ${readinessConfig.chainId}`,
+  );
+  addCheck(
+    checks,
+    failures,
+    issuerRpId === rollout.rpId,
+    "WorldIdV4BackendIssuer RP ID matches rollout metadata",
+  );
+  addCheck(
+    checks,
+    failures,
+    issuerAction === rollout.action,
+    "WorldIdV4BackendIssuer action matches rollout metadata",
+  );
+  addCheck(
+    checks,
+    failures,
+    issuerMaxCredentialTtl === rollout.maxCredentialTtl,
+    "WorldIdV4BackendIssuer TTL matches rollout metadata",
+  );
+  addCheck(
+    checks,
+    failures,
+    issuerCap === rollout.issuanceCap,
+    "WorldIdV4BackendIssuer cap matches rollout metadata",
+  );
+  addCheck(
+    checks,
+    failures,
+    issuerIssuedCount !== undefined &&
+      issuerCap !== undefined &&
+      issuerIssuedCount <= issuerCap,
+    "WorldIdV4BackendIssuer issued count does not exceed its cap",
+  );
 }
 
 async function validateLiveDeploymentWiring({
@@ -1384,6 +1828,15 @@ export async function validateLiveReadiness({
           );
         }
       }
+
+      await validateLiveWorldIdV4BackendIssuerRollout({
+        checks,
+        deploymentAddresses,
+        deploymentJson,
+        failures,
+        readinessConfig,
+        rpcUrl,
+      });
 
       for (const removedSelectorCheck of REQUIRED_REMOVED_POST_CREATION_FUNDING_SELECTORS) {
         const address = deploymentAddresses.get(

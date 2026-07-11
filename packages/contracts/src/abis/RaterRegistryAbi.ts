@@ -1239,6 +1239,44 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "recordBackendVerifiedWorldIdV4Credential",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "rpId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "action",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "removeDelegate",
     "inputs": [],
     "outputs": [],

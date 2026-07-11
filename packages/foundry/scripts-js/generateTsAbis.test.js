@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import {
+  addAdditiveDeploymentExports,
   assertFreshTargetDeployment,
   assertSharedDeploymentArtifactsSynced,
   filterGeneratedContractsForDeployTarget,
@@ -111,6 +112,59 @@ test("processAllDeployments tracks proxy addresses for latest broadcast freshnes
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+describe("addAdditiveDeploymentExports", () => {
+  const issuerAddress = "0x00000000000000000000000000000000000000aa";
+  const artifact = { abi: [{ type: "function", name: "issue" }] };
+  const options = {
+    artifactLoader: () => artifact,
+    inheritedFunctionsLoader: () => ({ hasRole: "AccessControl.sol" }),
+  };
+
+  test("preserves existing contracts before an issuer address exists", () => {
+    const existing = { 8453: { RaterRegistry: { address: "0xregistry" } } };
+    assert.deepEqual(
+      addAdditiveDeploymentExports(
+        existing,
+        { 8453: REQUIRED_BASE_EXPORT },
+        options
+      ),
+      existing
+    );
+  });
+
+  test("adds a receipt-backed issuer to ABI-only deployment output", () => {
+    const result = addAdditiveDeploymentExports(
+      {},
+      {
+        8453: {
+          [issuerAddress]: "WorldIdV4BackendIssuer",
+          worldIdV4BackendIssuerRollout: { activationBlockNumber: 321 },
+        },
+      },
+      options
+    );
+
+    assert.deepEqual(result[8453].WorldIdV4BackendIssuer, {
+      address: issuerAddress,
+      abi: artifact.abi,
+      inheritedFunctions: { hasRole: "AccessControl.sol" },
+      deployedOnBlock: 321,
+    });
+  });
+
+  test("rejects an issuer address without complete rollout metadata", () => {
+    assert.throws(
+      () =>
+        addAdditiveDeploymentExports(
+          {},
+          { 8453: { [issuerAddress]: "WorldIdV4BackendIssuer" } },
+          options
+        ),
+      /requires complete World ID v4 backend issuer rollout metadata/
+    );
+  });
 });
 
 describe("assertFreshTargetDeployment", () => {
