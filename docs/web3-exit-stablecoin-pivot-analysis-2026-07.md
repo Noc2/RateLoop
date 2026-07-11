@@ -1,6 +1,7 @@
 # Crypto-Minimal RateLoop: Dropping LREP, Keeping a Thin On-Chain Rail — Analysis & Recommendation (July 2026)
 
 **Status:** v2, 2026-07-11. Decision-support document with a recommendation.
+**Follow-up:** the concrete repo conversion plan (keyless immutable design, gambling-law analysis of USDC vote bonds, latency/commit-reveal decision) lives in [tokenless-immutable-implementation-plan-2026-07.md](tokenless-immutable-implementation-plan-2026-07.md).
 **Scope (v2, narrowed after discussion):** The question is no longer "web3 vs fully centralized." The working idea is a **thin crypto rail**: keep non-custodial, stablecoin-denominated smart contracts where they *reduce* regulatory burden, keep World ID as the optional identity layer (v4 supports passport credentials, so no separate KYC provider is needed unless it becomes simpler), and **drop the LREP token entirely**, monetizing instead with a flat fee on transactions. There are effectively no users yet, so there is no migration work and no migration story — everything can still be changed. The earlier launch-plan doc is brainstorming and is deliberately ignored here.
 
 **Two questions this document answers:**
