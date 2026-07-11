@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {WorldIdV4BackendIssuer} from "../contracts/WorldIdV4BackendIssuer.sol";
-import {IWorldIdV4BackendIssuer} from "../contracts/interfaces/IWorldIdV4BackendIssuer.sol";
-import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
+import { Test } from "forge-std/Test.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { WorldIdV4BackendIssuer } from "../contracts/WorldIdV4BackendIssuer.sol";
+import { IWorldIdV4BackendIssuer } from "../contracts/interfaces/IWorldIdV4BackendIssuer.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract WorldIdV4BackendIssuerTest is Test {
     uint256 internal constant BASE_CHAIN_ID = 8453;

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {RaterRegistry} from "./RaterRegistry.sol";
-import {IWorldIdV4BackendIssuer} from "./interfaces/IWorldIdV4BackendIssuer.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
+import { RaterRegistry } from "./RaterRegistry.sol";
+import { IWorldIdV4BackendIssuer } from "./interfaces/IWorldIdV4BackendIssuer.sol";
 
 /// @title WorldIdV4BackendIssuer
 /// @notice Narrow bridge from backend-verified World ID v4 credentials into RaterRegistry.

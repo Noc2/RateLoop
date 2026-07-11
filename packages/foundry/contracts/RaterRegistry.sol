@@ -1057,8 +1057,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     ) external onlyRole(SEEDER_ROLE) {
         uint64 cap = maxSeededCredentialTtl;
         if (
-            rater == address(0) || rpId == 0 || action == 0 || nullifierHash == bytes32(0)
-                || evidenceHash == bytes32(0)
+            rater == address(0) || rpId == 0 || action == 0 || nullifierHash == bytes32(0) || evidenceHash == bytes32(0)
                 || (cap != 0 && expiresAt > uint256(block.timestamp) + uint256(cap))
         ) {
             revert InvalidCredential();
