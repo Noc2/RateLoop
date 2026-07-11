@@ -12,7 +12,7 @@
 
 ## TL;DR — Recommendation
 
-**Drop LREP. Keep USDC-denominated non-custodial contracts. Keep World ID as an optional credential. Charge a protocol fee hard-coded in the escrow contract. Do this now, before launch.**
+**Drop LREP. Keep USDC-denominated non-custodial contracts. Keep World ID as an optional credential. Charge an interface fee collected through a neutral fee field in the contracts (see the [legal/revenue assessment](legal-revenue-assessment-tokenless-design-2026-07.md), which supersedes this doc's earlier "hard-coded fee" wording). Do this now, before launch.**
 
 The research is unusually one-sided:
 
@@ -85,7 +85,7 @@ Two parallel economies with almost no crossover:
 Implications for RateLoop:
 
 - A **1–5% protocol fee on bounty flows** is comfortably inside all norms and undercuts web2 judgment marketplaces by 2–10×. Percentage fees fit marketplace-sized bounties; **flat-cent fees (x402-style) fit agent micro-asks** — support both shapes.
-- **Hard-code the fee in the escrow contract**, not the frontend. The Uniswap episode shows interface-layer fees get bypassed by forks/aggregators; a contract-layer fee is the defensible version (and 0x/thirdweb have normalized exactly this).
+- **Collect the fee through the contract, but as a caller-set field, not a hard-coded skim.** Superseding note (see [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md)): follow-up research found a hard-coded operator fee is the sharpest MiCA "identifiable operator profits" indicator, while the SEC has explicitly blessed interface fees — the 0x/thirdweb integrator-fee pattern (neutral `feeBps + feeRecipient` populated by whichever interface builds the transaction) gets atomic collection with the interface-fee legal posture. Bypass matters less here than for Uniswap because agents arrive through the company's API where quoting and discovery live.
 - Optionality preserved: Polymarket demonstrates fee-free bootstrap → fees later is a viable sequencing if early liquidity matters more than early revenue.
 - German VAT is unexciting (good): a fee collected in USDC is ordinary consideration for a service — 19% VAT where applicable, reverse charge cross-border B2B, invoiced at the EUR value at receipt. For a stablecoin the FX-documentation burden is trivial.
 
@@ -153,7 +153,7 @@ Known costs of the substitution — accept them consciously:
 
 The original instinct behind "web3" here — credible neutrality, non-custodial money handling, agent-native payments — survives fully in a tokenless design; it's specifically the *token* that carried most of the regulatory cost, the platform-policy risk, the farmer-shaped incentives, and the pattern-match that makes HN and AI builders dismiss a product on sight. Meanwhile the fee model that replaces it is not a compromise: it's the same model the most legitimate actors in the space (Coinbase, thirdweb, Polymarket, Stripe-adjacent rails) converged on, at take rates far below the web2 marketplaces RateLoop implicitly competes with.
 
-**Build the tokenless thin rail: USDC escrows with a hard-coded 1–5% fee (flat-cent pricing for agent micro-asks), stake-free voting with identity-tier gating, non-transferable reputation, World ID as the optional human tier, keyless immutable contracts — and spend the LREP engineering/compliance budget on the two things the research says actually gate adoption: answer quality and the agent-facing API.**
+**Build the tokenless thin rail: USDC escrows with an interface fee of ~5–10% collected via a neutral contract fee field (all-in pricing for agent micro-asks), stake-free voting with identity-tier gating, non-transferable reputation, World ID as the optional human tier, keyless immutable contracts — and spend the LREP engineering/compliance budget on the two things the research says actually gate adoption: answer quality and the agent-facing API.**
 
 ---
 
