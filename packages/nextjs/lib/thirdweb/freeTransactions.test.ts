@@ -305,6 +305,9 @@ const legacyRecipientClaimCall = () =>
     legacyClaimProof,
   ]);
 
+const verifiedBonusClaimCall = (value?: `0x${string}`) =>
+  encodeCall(launchDistributionPoolContract, "claimVerifiedBonus", [ZERO_ADDRESS], value);
+
 function eip3009Authorization(
   to: `0x${string}`,
   options: Partial<{
@@ -648,6 +651,116 @@ test("legacy contributor claims are eligible for metered free transactions", asy
   if (!recipientDecision.isAllowed) return;
   assert.equal(recipientDecision.summary.used, 2);
   assert.equal(recipientDecision.summary.remaining, 0);
+});
+
+test("verified bonus claims require the sender's direct credential and stay metered idempotently", async () => {
+  const identityKey = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  let directCredentialChecks = 0;
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    resolveRaterIdentityKey: async (address, _chainId, options) => {
+      assert.equal(address.toLowerCase(), WALLET);
+      assert.equal(options?.requireDirectHumanCredential, true);
+      directCredentialChecks += 1;
+      return identityKey;
+    },
+  });
+
+  const calls = [verifiedBonusClaimCall()];
+  const firstDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+  assert.equal(firstDecision.isAllowed, true);
+  if (!firstDecision.isAllowed) return;
+  assert.equal(firstDecision.summary.raterIdentityKey, identityKey);
+  assert.equal(firstDecision.summary.used, 1);
+  assert.equal(firstDecision.summary.remaining, 1);
+
+  const repeatedDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+  assert.equal(repeatedDecision.isAllowed, true);
+  if (!repeatedDecision.isAllowed) return;
+  assert.equal(repeatedDecision.summary.used, 1);
+  assert.equal(repeatedDecision.reservationSessionToken, firstDecision.reservationSessionToken);
+  assert.equal(directCredentialChecks, 2);
+});
+
+test("verified bonus claims can precede counted rating calls in one metered batch", async () => {
+  const calls = [
+    verifiedBonusClaimCall(),
+    encodeCall(lrepContract, "approve", [votingEngineContract.address, 1_000_000n]),
+    voteCall("0x0702"),
+  ];
+
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+  assert.equal(decision.isAllowed, true);
+  if (!decision.isAllowed) return;
+  assert.equal(decision.summary.used, 1);
+  assert.equal(decision.summary.remaining, 1);
+
+  const reservationRows = await dbModule.dbClient.execute(
+    "SELECT operation_key, status FROM free_transaction_reservations",
+  );
+  assert.equal(reservationRows.rows.length, 1);
+  assert.equal(reservationRows.rows[0]?.operation_key, buildOperationKey(calls));
+  assert.equal(reservationRows.rows[0]?.status, "pending");
+});
+
+test("verified bonus claims reject unverified senders", async () => {
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    resolveRaterIdentityKey: async () => null,
+  });
+
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([verifiedBonusClaimCall()]) as never,
+  );
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "missing_rater_identity");
+  assert.equal(decision.summary?.verified, false);
+});
+
+test("verified bonus claims reject admin-only smart account identity", async () => {
+  const identityKey = "0x3333333333333333333333333333333333333333333333333333333333333333";
+  let adminLookupCalled = false;
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    getVerifiedThirdwebSmartAccountAdminAddresses: async () => {
+      adminLookupCalled = true;
+      return [THIRDWEB_ADMIN_WALLET];
+    },
+    resolveRaterIdentityKey: async address =>
+      address.toLowerCase() === THIRDWEB_ADMIN_WALLET.toLowerCase() ? identityKey : null,
+  });
+
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([verifiedBonusClaimCall()]) as never,
+  );
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "missing_rater_identity");
+  assert.equal(adminLookupCalled, false);
+});
+
+test("verified bonus claims reject delegated identity accepted for regular sponsored calls", async () => {
+  const identityKey = "0x4444444444444444444444444444444444444444444444444444444444444444";
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    resolveRaterIdentityKey: async (_address, _chainId, options) =>
+      options?.requireDirectHumanCredential ? null : identityKey,
+  });
+
+  const regularDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([voteCall("0x0703")]) as never,
+  );
+  assert.equal(regularDecision.isAllowed, true);
+
+  const claimDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([verifiedBonusClaimCall()]) as never,
+  );
+  assert.equal(claimDecision.isAllowed, false);
+  if (claimDecision.isAllowed) return;
+  assert.equal(claimDecision.debugCode, "missing_rater_identity");
 });
 
 test("confirm finalizes a consumed reservation without double-counting quota", async () => {
@@ -1337,9 +1450,9 @@ test("rejects malformed sponsored feedback publication", async () => {
   assert.equal(decision.debugCode, "unsupported_operation");
 });
 
-test("rejects non-legacy LaunchDistributionPool operations", async () => {
+test("rejects unsupported LaunchDistributionPool selectors", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
-    buildRequest([encodeCall(launchDistributionPoolContract, "claimVerifiedBonus", [ZERO_ADDRESS])]) as never,
+    buildRequest([encodeCall(launchDistributionPoolContract, "unlockFullEarnedRaterCap", [WALLET])]) as never,
   );
 
   assert.equal(decision.isAllowed, false);
@@ -1347,9 +1460,9 @@ test("rejects non-legacy LaunchDistributionPool operations", async () => {
   assert.equal(decision.debugCode, "unsupported_operation");
 });
 
-test("rejects nonzero call values for sponsored operations", async () => {
+test("rejects nonzero call values for verified bonus claims", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
-    buildRequest([encodeCall(frontendRegistryContract, "register", [], "0x1")]) as never,
+    buildRequest([verifiedBonusClaimCall("0x1")]) as never,
   );
 
   assert.equal(decision.isAllowed, false);

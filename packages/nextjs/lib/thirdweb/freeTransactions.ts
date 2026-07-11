@@ -76,7 +76,11 @@ type ThirdwebVerifierRequest = {
 };
 
 type FreeTransactionDbWrite = Pick<typeof db, "insert" | "select" | "update">;
-type ResolveRaterIdentityKey = (address: `0x${string}`, chainId: number) => Promise<string | null>;
+type ResolveRaterIdentityKey = (
+  address: `0x${string}`,
+  chainId: number,
+  options?: { requireDirectHumanCredential?: boolean },
+) => Promise<string | null>;
 type GetVerifiedThirdwebSmartAccountAdminAddresses = (params: {
   chainId: number;
   userOp?: ThirdwebVerifierUserOp;
@@ -738,7 +742,11 @@ async function getTransactionVerificationClient(chainId: number): Promise<Transa
   };
 }
 
-async function resolveRaterIdentityKey(address: `0x${string}`, chainId: number) {
+async function resolveRaterIdentityKey(
+  address: `0x${string}`,
+  chainId: number,
+  options: { requireDirectHumanCredential?: boolean } = {},
+) {
   const client = await getPublicClientForChain(chainId);
   const contracts = getContractsForChain(chainId);
   const raterRegistry = contracts?.RaterRegistry;
@@ -761,7 +769,7 @@ async function resolveRaterIdentityKey(address: `0x${string}`, chainId: number) 
   }
 
   const resolved = resolvedRater as
-    | { identityKey?: `0x${string}`; hasActiveHumanCredential?: boolean }
+    | { delegated?: boolean; identityKey?: `0x${string}`; hasActiveHumanCredential?: boolean }
     | readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean];
   const identityKey = Array.isArray(resolved)
     ? (resolved as readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean])[1]
@@ -769,9 +777,13 @@ async function resolveRaterIdentityKey(address: `0x${string}`, chainId: number) 
   const hasActiveHumanCredential = Array.isArray(resolved)
     ? (resolved as readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean])[3]
     : (resolved as { hasActiveHumanCredential?: boolean }).hasActiveHumanCredential;
+  const delegated = Array.isArray(resolved)
+    ? (resolved as readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean])[4]
+    : (resolved as { delegated?: boolean }).delegated;
 
   if (
     !hasActiveHumanCredential ||
+    (options.requireDirectHumanCredential && delegated !== false) ||
     !identityKey ||
     !/^0x[0-9a-fA-F]{64}$/.test(identityKey) ||
     /^0x0{64}$/.test(identityKey)
@@ -782,8 +794,12 @@ async function resolveRaterIdentityKey(address: `0x${string}`, chainId: number) 
   return identityKey.toLowerCase();
 }
 
-async function resolveConfiguredRaterIdentityKey(address: `0x${string}`, chainId: number) {
-  return (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(address, chainId);
+async function resolveConfiguredRaterIdentityKey(
+  address: `0x${string}`,
+  chainId: number,
+  options?: { requireDirectHumanCredential?: boolean },
+) {
+  return (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(address, chainId, options);
 }
 
 async function resolveFreeTransactionRaterIdentityKey(params: {
@@ -1499,7 +1515,10 @@ async function validateSponsoredCalls(
   chainId: number,
   calls: readonly NormalizedVerifierCall[],
   walletAddress: `0x${string}`,
-): Promise<{ ok: true } | { ok: false; debugCode: "target_not_allowlisted" | "unsupported_operation" }> {
+): Promise<
+  | { ok: true; requiresDirectHumanCredential: boolean }
+  | { ok: false; debugCode: "target_not_allowlisted" | "unsupported_operation" }
+> {
   const contracts = getContractsForChain(chainId);
   const contractsByAddress = getContractsByAddress(chainId);
   const frontendRegistry = contracts?.FrontendRegistry;
@@ -1519,6 +1538,7 @@ async function validateSponsoredCalls(
       .filter((value): value is Address => Boolean(value))
       .map(value => value.toLowerCase()),
   );
+  let requiresDirectHumanCredential = false;
 
   for (const call of calls) {
     if (!isZeroCallValue(call.value)) {
@@ -1659,6 +1679,10 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "LaunchDistributionPool":
+        if (functionName === "claimVerifiedBonus") {
+          requiresDirectHumanCredential = true;
+          continue;
+        }
         if (
           functionName === "claimLegacyContributorAllocation" ||
           functionName === "claimLegacyContributorAllocationTo"
@@ -1671,7 +1695,7 @@ async function validateSponsoredCalls(
     }
   }
 
-  return { ok: true };
+  return { ok: true, requiresDirectHumanCredential };
 }
 
 function isUnmeteredFrontendRegistrationOperation(chainId: number, calls: readonly NormalizedVerifierCall[]) {
@@ -1999,11 +2023,13 @@ export async function evaluateFreeTransactionAllowance(
     walletAddress,
   });
 
-  const raterIdentityKey = await resolveFreeTransactionRaterIdentityKey({
-    chainId,
-    userOp: body.userOp,
-    walletAddress,
-  });
+  const raterIdentityKey = validatedCalls.requiresDirectHumanCredential
+    ? await resolveConfiguredRaterIdentityKey(walletAddress, chainId, { requireDirectHumanCredential: true })
+    : await resolveFreeTransactionRaterIdentityKey({
+        chainId,
+        userOp: body.userOp,
+        walletAddress,
+      });
   timingLog.emit("identity-resolved", {
     hasRaterIdentity: Boolean(raterIdentityKey),
     walletAddress,
