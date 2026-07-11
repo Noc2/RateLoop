@@ -1042,6 +1042,41 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
     }
 
+    /// @notice Record a World ID v4 credential verified by an authorized backend bridge.
+    /// @dev The bridge must hold SEEDER_ROLE and supplies the backend verification's RP/action
+    ///      domain explicitly. Credentials use the native WorldIdV4 provider so identity and
+    ///      launch-reward keys alias direct World ID v3/v4 attestations instead of entering the
+    ///      SeededHuman namespace. This path does not depend on the direct-v4 verifier config.
+    function recordBackendVerifiedWorldIdV4Credential(
+        address rater,
+        uint64 rpId,
+        uint256 action,
+        bytes32 nullifierHash,
+        bytes32 evidenceHash,
+        uint64 expiresAt
+    ) external onlyRole(SEEDER_ROLE) {
+        uint64 cap = maxSeededCredentialTtl;
+        if (
+            rater == address(0) || rpId == 0 || action == 0 || nullifierHash == bytes32(0)
+                || evidenceHash == bytes32(0)
+                || (cap != 0 && expiresAt > uint256(block.timestamp) + uint256(cap))
+        ) {
+            revert InvalidCredential();
+        }
+
+        bytes32 scope = keccak256(abi.encode("world-id-v4", rpId, action));
+        _attestHumanCredential(rater, nullifierHash, scope, expiresAt, HumanCredentialProvider.WorldIdV4, evidenceHash);
+        emit WorldCredentialVerified(
+            rater,
+            WORLD_CREDENTIAL_PROOF_OF_HUMAN,
+            nullifierHash,
+            scope,
+            uint64(block.timestamp),
+            expiresAt,
+            evidenceHash
+        );
+    }
+
     /// @notice Set the upper bound on TTL for SEEDER-seeded credentials. `cap = 0` disables the
     ///         cap (back-compat). `cap > 0` rejects any future `seedHumanCredential` call where
     ///         `expiresAt > block.timestamp + cap`.
