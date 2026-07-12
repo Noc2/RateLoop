@@ -79,22 +79,23 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
-      <div className="max-w-3xl">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-sky-300">Three decisions</p>
-        <h1 className="mt-3 text-4xl font-semibold sm:text-5xl">Run a paid panel</h1>
-        <p className="mt-4 leading-7 text-white/55">Choose the question, audience assurance, and budget preset.</p>
+    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-14">
+      <div className="max-w-3xl border-l-2 border-[var(--rateloop-blue)] pl-6">
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Submit</p>
+        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Run a paid panel</h1>
+        <p className="mt-4 text-lg leading-8 text-base-content/60">
+          Make three clear decisions. Review every funded dollar before authorizing the panel.
+        </p>
       </div>
 
-      <div className="mt-10 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <form
-          className="space-y-6 rounded-2xl border border-white/10 bg-white/[0.035] p-6"
-          onSubmit={event => event.preventDefault()}
-        >
+      <div className="mt-10 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <form className="rateloop-surface-card space-y-7 p-5 sm:p-7" onSubmit={event => event.preventDefault()}>
           <label className="block">
-            <span className="text-sm font-semibold">1. Question</span>
+            <span className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
+              01 · Question
+            </span>
             <textarea
-              className="textarea textarea-bordered mt-2 min-h-32 w-full bg-black/30"
+              className="textarea mt-3 min-h-36 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-base leading-7 focus:border-white/25 focus:outline-none"
               value={prompt}
               maxLength={280}
               onChange={event => {
@@ -102,15 +103,17 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
                 setQuote(null);
               }}
             />
-            <span className="mt-1 block text-xs text-white/40">
-              v0 supports one binary decision. A/B uses the same panel mechanism.
+            <span className="mt-2 block text-xs text-base-content/45">
+              Ask one focused binary decision. A/B panels use the same sealed workflow.
             </span>
           </label>
 
           <label className="block">
-            <span className="text-sm font-semibold">2. Audience assurance</span>
+            <span className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
+              02 · Audience assurance
+            </span>
             <select
-              className="select select-bordered mt-2 w-full bg-black/30"
+              className="select mt-3 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] focus:border-white/25 focus:outline-none"
               value={tierId}
               onChange={event => {
                 setTierId(event.target.value);
@@ -125,20 +128,22 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
           </label>
 
           <fieldset>
-            <legend className="text-sm font-semibold">3. Budget</legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <legend className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
+              03 · Budget
+            </legend>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
               {Object.entries(presets).map(([id, option]) => (
                 <button
                   key={id}
                   type="button"
-                  className={`rounded-xl border p-3 text-left ${presetId === id ? "border-sky-300 bg-sky-300/10" : "border-white/10 bg-black/20"}`}
+                  className={`rounded-lg border p-4 text-left transition-colors ${presetId === id ? "border-base-content/55 bg-base-content/[0.1]" : "border-white/10 bg-black/20 hover:border-white/25 hover:bg-white/[0.04]"}`}
                   onClick={() => {
                     setPresetId(id as keyof typeof presets);
                     setQuote(null);
                   }}
                 >
                   <span className="block text-sm font-semibold">{option.label}</span>
-                  <span className="mt-1 block text-xs text-white/45">
+                  <span className="mt-1.5 block text-xs leading-5 text-base-content/45">
                     {option.panelSize} raters · ${usdc(option.bountyAtomic)} bounty
                   </span>
                 </button>
@@ -148,7 +153,7 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
 
           <button
             type="button"
-            className="btn btn-primary w-full rounded-xl"
+            className="rateloop-gradient-action w-full px-6"
             disabled={busy || !prompt.trim()}
             onClick={() => void getQuote()}
           >
@@ -156,21 +161,22 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
           </button>
         </form>
 
-        <aside className="rounded-2xl border border-white/10 bg-black/25 p-6">
-          <h2 className="text-lg font-semibold">Quote</h2>
+        <aside className="rateloop-surface-card sticky top-24 p-6">
+          <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Funding summary</p>
+          <h2 className="mt-2 text-xl font-semibold">Itemized quote</h2>
           {quote ? (
             <div className="mt-5 space-y-4 text-sm">
-              <div className="space-y-2 border-b border-white/10 pb-4">
+              <div className="space-y-3 border-b border-white/10 pb-4">
                 <div className="flex justify-between">
-                  <span className="text-white/55">Rater bounty</span>
+                  <span className="text-base-content/55">Rater bounty</span>
                   <span>${usdc(quote.economics.bounty.fundedAtomic)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-white/55">Platform fee ({quote.economics.fee.bps / 100}%)</span>
+                  <span className="text-base-content/55">Platform fee ({quote.economics.fee.bps / 100}%)</span>
                   <span>${usdc(quote.economics.fee.fundedAtomic)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-white/55">Max attempt reserve</span>
+                  <span className="text-base-content/55">Accepted-work reserve</span>
                   <span>${usdc(quote.economics.attemptReserve.fundedAtomic)}</span>
                 </div>
                 <div className="flex justify-between pt-2 font-semibold">
@@ -178,36 +184,36 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
                   <span>${usdc(quote.economics.totalFundedAtomic)}</span>
                 </div>
               </div>
-              <p className="rounded-xl bg-white/5 p-3 leading-6 text-white/55">
+              <p className="border-l-2 border-[var(--rateloop-yellow)] bg-white/[0.035] py-2 pl-4 leading-6 text-base-content/60">
                 No responses: fully refunded. Partial panel: bounty and fee refunded; accepted work up to $
                 {usdc(quote.economics.attemptReserve.fundedAtomic)} is paid from the reserve.
               </p>
-              <p className="text-xs text-white/40">
+              <p className="text-xs leading-5 text-base-content/45">
                 Target: {quote.panel.requestedSize} raters · minimum {quote.panel.minimumReveals} reveals · estimated{" "}
                 {Math.round(quote.slo.estimatedSeconds / 60)} min
               </p>
               <button
                 type="button"
-                className="btn btn-primary w-full rounded-xl"
+                className="rateloop-gradient-action w-full px-5"
                 disabled={!sandboxMode || busy}
                 onClick={() => void createAsk()}
               >
-                {sandboxMode ? "Run simulated sandbox panel" : "Payment integration not enabled"}
+                {sandboxMode ? "Start preview panel" : "Fund and start panel"}
               </button>
             </div>
           ) : (
-            <p className="mt-4 text-sm leading-6 text-white/45">
+            <p className="mt-5 text-sm leading-6 text-base-content/45">
               Your itemized funding and refund exposure appear here before any payment action.
             </p>
           )}
           {ask ? (
-            <p className="mt-4 break-all rounded-lg bg-white/5 p-3 text-xs text-white/55">
+            <p className="mt-4 break-all rounded-lg bg-white/5 p-3 text-xs text-base-content/55">
               Operation: {ask.operationKey}
             </p>
           ) : null}
           {result ? (
-            <p className="mt-3 rounded-lg bg-emerald-400/10 p-3 text-sm text-emerald-100">
-              Sandbox result: {result.verdictStatus} · score{" "}
+            <p className="mt-3 border-l-2 border-[var(--rateloop-green)] bg-emerald-400/10 py-2 pl-3 text-sm text-emerald-100">
+              Result: {result.verdictStatus} · score{" "}
               {result.verdict?.scoreBps ? `${result.verdict.scoreBps / 100}%` : "n/a"}
             </p>
           ) : null}

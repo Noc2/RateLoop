@@ -8,17 +8,26 @@ const documents = [
 
 export default function LegalPage() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-12">
-      <h1 className="text-4xl font-semibold">Legal</h1>
-      <p className="mt-4 leading-7 text-white/55">
+    <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
+      <div className="border-l-2 border-[var(--rateloop-pink)] pl-6">
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">RateLoop</p>
+        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Legal</h1>
+      </div>
+      <p className="mt-6 max-w-3xl text-lg leading-8 text-base-content/60">
         These documents cover the isolated tokenless test deployment. It does not currently issue paid vouchers or
         accept production funds.
       </p>
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        {documents.map(([title, href, description]) => (
-          <Link key={href} href={href} className="rounded-2xl border border-white/10 bg-white/[0.035] p-5">
-            <h2 className="font-semibold">{title}</h2>
-            <p className="mt-2 text-sm leading-6 text-white/50">{description}</p>
+      <div className="mt-10 grid gap-4 md:grid-cols-3">
+        {documents.map(([title, href, description], index) => (
+          <Link
+            key={href}
+            href={href}
+            className="rateloop-surface-card group border-l-2 p-6"
+            style={{ borderLeftColor: ["#359EEE", "#03CEA4", "#EF476F"][index] }}
+          >
+            <h2 className="text-lg font-semibold transition-colors group-hover:text-white">{title}</h2>
+            <p className="mt-3 text-sm leading-6 text-base-content/50">{description}</p>
+            <span className="mt-5 inline-block text-sm text-base-content/70">Read document →</span>
           </Link>
         ))}
       </div>
