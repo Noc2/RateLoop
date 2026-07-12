@@ -409,6 +409,112 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "createRoundFor",
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct TokenlessPanel.RoundTerms",
+        "components": [
+          {
+            "name": "contentId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "termsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "beaconNetworkHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "bountyAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "feeAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "attemptReserve",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "attemptCompensation",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minimumReveals",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maximumCommits",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "requiredTier",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "commitDeadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "revealDeadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "beaconFailureDeadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "beaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "claimGracePeriod",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "feeRecipient",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
+      },
+      {
+        "name": "funder",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "credentialIssuer",
     "inputs": [],
     "outputs": [

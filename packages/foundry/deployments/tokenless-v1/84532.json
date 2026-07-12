@@ -5,23 +5,28 @@
   "deploymentProfile": "test",
   "networkName": "baseSepolia",
   "chainId": 84532,
-  "deploymentBlockNumber": 44051709,
-  "deploymentKey": "tokenless-v1:84532:0xd7ea730fceb66257a469b993ac6afda593ef6ae6:0x2f22dd82137e56743fa04cb22efb837b043be570:0x0000000000000000000000000000000000000000",
+  "deploymentBlockNumber": 44052097,
+  "deploymentKey": "tokenless-v1:84532:0x124dd129f09f6aa1572f6469c5dcce3fc72f7b01:0xd98cbadad4bb2d9211ac8520b2bfada1b98f00c4:0xd48b308431bba56badc4f9e52acf7c0fdbfbdd10",
   "contracts": {
     "TestUSDC": {
-      "address": "0xce54856bc61c9b2451313ff0886f8d396bf6f22e",
+      "address": "0xb386d726fe16e44d9d0b24a933af96d14fdc95d2",
       "artifact": "MockERC20",
-      "deployedOnBlock": 44051707
+      "deployedOnBlock": 44052094
     },
     "CredentialIssuer": {
-      "address": "0x2f22dd82137e56743fa04cb22efb837b043be570",
+      "address": "0xd98cbadad4bb2d9211ac8520b2bfada1b98f00c4",
       "artifact": "CredentialIssuer",
-      "deployedOnBlock": 44051708
+      "deployedOnBlock": 44052095
     },
     "TokenlessPanel": {
-      "address": "0xd7ea730fceb66257a469b993ac6afda593ef6ae6",
+      "address": "0x124dd129f09f6aa1572f6469c5dcce3fc72f7b01",
       "artifact": "TokenlessPanel",
-      "deployedOnBlock": 44051709
+      "deployedOnBlock": 44052096
+    },
+    "X402PanelSubmitter": {
+      "address": "0xd48b308431bba56badc4f9e52acf7c0fdbfbdd10",
+      "artifact": "X402PanelSubmitter",
+      "deployedOnBlock": 44052097
     }
   },
   "testCurrency": {
