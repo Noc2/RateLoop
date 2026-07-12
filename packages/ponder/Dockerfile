@@ -19,14 +19,14 @@ COPY packages/node-utils/package.json ./packages/node-utils/package.json
 COPY packages/ponder/package.json ./packages/ponder/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
 
-RUN --mount=type=cache,target=/app/.yarn/cache \
+RUN --mount=type=cache,id=cacheKey-tokenless-ponder-yarn,target=/app/.yarn/cache \
   YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/ponder
 
 COPY packages/ponder ./packages/ponder
 
 WORKDIR /app
 
-RUN --mount=type=cache,target=/app/.yarn/cache \
+RUN --mount=type=cache,id=cacheKey-tokenless-ponder-prod-yarn,target=/app/.yarn/cache \
   YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/ponder --production
 
 RUN chown -R node:node /app/packages/ponder

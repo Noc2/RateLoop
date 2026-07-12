@@ -21,7 +21,7 @@ COPY packages/node-utils/package.json ./packages/node-utils/package.json
 COPY packages/ponder/package.json ./packages/ponder/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
 
-RUN --mount=type=cache,target=/app/.yarn/cache \
+RUN --mount=type=cache,id=cacheKey-tokenless-keeper-yarn,target=/app/.yarn/cache \
   YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/keeper
 
 COPY scripts/clean-package-dist.mjs ./scripts/clean-package-dist.mjs
@@ -40,7 +40,7 @@ RUN yarn build:workspace-deps && yarn build
 
 WORKDIR /app
 
-RUN --mount=type=cache,target=/app/.yarn/cache \
+RUN --mount=type=cache,id=cacheKey-tokenless-keeper-prod-yarn,target=/app/.yarn/cache \
   YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/keeper --production
 
 WORKDIR /app/packages/keeper
