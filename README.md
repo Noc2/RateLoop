@@ -8,6 +8,10 @@ The `tokenless` branch is a greenfield redesign. It does not preserve the former
 
 The isolated test stack runs on Base Sepolia (`84532`). Its deployment identity is:
 
+- sandbox app and agent API: <https://rateloop-tokenless.vercel.app>
+- public Ponder status/evidence API: <https://tokenless-ponder-production.up.railway.app>
+- keeper liveness: <https://tokenless-keeper-production.up.railway.app/live>
+
 ```text
 tokenless-v1:84532:0x0627e4f7f746e84edbd3ec066a58a7fdc3227e16:0xb046277842f11a0c371d860504694fd79a5afb40:0x442581f4732b0f18ed47bcfa46415a65e13f8a5e
 ```
@@ -19,7 +23,7 @@ tokenless-v1:84532:0x0627e4f7f746e84edbd3ec066a58a7fdc3227e16:0xb046277842f11a0c
 
 Canonical metadata and generated ABIs are in [`packages/foundry/deployments/tokenless-v1/84532.json`](packages/foundry/deployments/tokenless-v1/84532.json) and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless).
 
-This is a test deployment. Test USDC is freely mintable, admission is issuer-attested, sealing depends on drand/tlock availability, and a normal payout claim publicly links a vote key to its payout destination.
+This is a test deployment. The public app runs in an explicitly labeled deterministic sandbox mode; its displayed verdicts are simulated and the paid API-to-contract relay is not enabled. The contracts, indexer, and keeper are live on Base Sepolia. Test USDC is freely mintable, admission is issuer-attested, sealing depends on drand/tlock availability, and a normal payout claim publicly links a vote key to its payout destination.
 
 ## Architecture
 
