@@ -7,6 +7,7 @@ import {
   releasePreparedProductAsk,
 } from "~~/lib/tokenless/productCore";
 import { createTokenlessAsk, parseTokenlessAskRequest, tokenlessErrorResponse } from "~~/lib/tokenless/server";
+import { subscribeAskWebhook } from "~~/lib/tokenless/transparency";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,8 +24,13 @@ export async function POST(request: NextRequest) {
     prepared = await prepareProductAsk({ principal, request: body });
     const response = await createTokenlessAsk(body, request.headers.get("idempotency-key"), request.nextUrl.origin);
     await attachProductAsk(prepared, response);
+    const webhookAccepted = await subscribeAskWebhook({
+      operationKey: response.operationKey,
+      workspaceId: prepared.workspaceId,
+      registration: body.webhook,
+    });
     attached = true;
-    return NextResponse.json(response);
+    return NextResponse.json({ ...response, webhookAccepted });
   } catch (error) {
     if (prepared && !attached) await releasePreparedProductAsk(prepared);
     const response = tokenlessErrorResponse(error);
