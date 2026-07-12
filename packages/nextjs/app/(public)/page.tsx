@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PromoVideo } from "~~/components/home/PromoVideo";
+import { SupportedAgentsStrip } from "~~/components/home/SupportedAgentsStrip";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 
 const steps = [
@@ -96,13 +98,13 @@ export default function TokenlessLandingPage() {
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
               Paid human panels guide decisions and earn USDC.
             </p>
-            <div className="mt-7 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-              <Link href="/ask" className="rateloop-gradient-action min-w-44 px-6">
+            <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
+              <Link href="/ask" className="rateloop-gradient-action min-h-11 px-5 text-base">
                 Run a panel
               </Link>
               <Link
                 href="/rate"
-                className="btn min-h-12 rounded-lg border-white/10 bg-white/[0.08] px-6 hover:bg-white/[0.14]"
+                className="btn min-h-11 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
                 Rate decisions
               </Link>
@@ -111,12 +113,14 @@ export default function TokenlessLandingPage() {
               No rater stake · Itemized USDC funding · Deterministic settlement
             </p>
           </div>
+          <SupportedAgentsStrip />
         </section>
 
-        <section className="relative z-10 mt-14 w-full sm:mt-20 lg:mt-28">
+        <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
           <SectionTitle number="01" gradient="Works">
             How It
           </SectionTitle>
+          <PromoVideo />
           <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
             {steps.map(([number, title, body, color]) => (
               <article key={number} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>

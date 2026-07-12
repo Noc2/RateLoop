@@ -61,12 +61,10 @@ function Brand({ compact = false }: { compact?: boolean }) {
     <Link href="/" className="flex min-w-0 items-center gap-2">
       <RateLoopLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix="tokenless-brand" />
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span
-          className={`font-display truncate leading-none text-base-content ${compact ? "text-[1.35rem]" : "text-[1.2rem]"}`}
-        >
+        <span className={`font-display truncate leading-none text-base-content ${compact ? "text-lg" : "text-base"}`}>
           RateLoop
         </span>
-        <span className="truncate text-xs text-base-content/75">Level Up Your Agent</span>
+        <span className="truncate text-[10px] text-base-content/65">Level Up Your Agent</span>
       </div>
     </Link>
   );
@@ -83,12 +81,12 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
           <Link
             key={href}
             href={href}
-            className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors ${
+            className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2 transition-colors ${
               active ? "text-base-content" : "text-base-content/75 hover:bg-base-content/[0.04] hover:text-base-content"
             }`}
           >
-            <Icon className="h-6 w-6 shrink-0" />
-            <span className="text-base font-medium">{label}</span>
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="text-sm font-medium">{label}</span>
             {active ? (
               <span className="absolute bottom-2 right-2 top-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)]" />
             ) : null}
@@ -109,12 +107,22 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
 
 function Notice({ sandboxMode }: { sandboxMode: boolean }) {
   return (
-    <div className="border-b border-white/10 bg-black px-4 py-2.5 text-base-content xl:pl-56">
-      <p className="mx-auto max-w-6xl text-center text-xs font-medium leading-5 text-base-content/72 sm:text-sm">
-        <span className="mr-2 inline-block h-2 w-2 rounded-full bg-[var(--rateloop-yellow)]" />
+    <div className="border-b border-white/10 bg-black px-4 py-2 text-base-content xl:pl-52">
+      <p className="mx-auto flex max-w-6xl items-center justify-center gap-2 text-center text-[11px] font-medium leading-5 text-base-content/72 sm:text-xs">
+        <svg
+          className="h-4 w-4 shrink-0 text-error"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          aria-hidden="true"
+        >
+          <path d="M12 3 2.5 20h19L12 3Z" />
+          <path d="M12 9v5m0 3h.01" />
+        </svg>
         {sandboxMode
-          ? "Preview network — panels use test funds while the Base deployment is prepared."
-          : "Early access — verify the network and panel terms before funding."}
+          ? "RateLoop tokenless preview uses Base Sepolia and test funds only. Do not send production assets."
+          : "RateLoop tokenless is in early access. Verify the network and panel terms before funding."}
       </p>
     </div>
   );
@@ -142,6 +150,28 @@ function Footer() {
               className="transition-colors hover:text-base-content"
             >
               GitHub
+            </a>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-base-content/40">·</span>
+            <a
+              href="https://x.com/RateLoop"
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-base-content"
+            >
+              X
+            </a>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-base-content/40">·</span>
+            <a
+              href="https://t.me/rateloopchannel"
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-base-content"
+            >
+              Telegram
             </a>
           </li>
         </ul>
@@ -172,15 +202,20 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
       </header>
 
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-52 flex-col border-r border-[color:var(--rateloop-shell-border-strong)] bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex">
-        <div className="mb-5 px-4">
+        <div className="mb-4 px-4">
           <Brand />
         </div>
+        <Link
+          href="/rate"
+          className="mx-2.5 mb-4 flex h-8 items-center rounded-md border border-base-content/10 bg-base-content/[0.09] px-3 text-xs text-base-content/55 transition hover:bg-base-content/[0.13] hover:text-base-content/75"
+        >
+          Search
+        </Link>
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 px-2.5">
           <NavLinks />
         </nav>
         <div className="mx-2.5 border-t border-[color:var(--rateloop-shell-border-strong)] pt-4">
-          <BaseAccountSessionButton />
-          <p className="mt-3 px-1 text-center text-[11px] leading-4 text-base-content/40">USDC panels on Base</p>
+          <BaseAccountSessionButton compact />
         </div>
       </aside>
 

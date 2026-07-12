@@ -15,7 +15,7 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-export function BaseAccountSessionButton() {
+export function BaseAccountSessionButton({ compact = false }: { compact?: boolean }) {
   const { connectors } = useConnect();
   const { disconnectAsync } = useDisconnect();
   const [session, setSession] = useState<Session>(null);
@@ -68,14 +68,22 @@ export function BaseAccountSessionButton() {
   }
 
   return (
-    <div>
+    <div className={compact ? "w-full" : undefined}>
       <button
         type="button"
-        className="rateloop-gradient-action min-h-11 w-full px-3 text-sm disabled:cursor-wait disabled:opacity-60"
+        className={`rateloop-gradient-action w-full px-3 disabled:cursor-wait disabled:opacity-60 ${
+          compact ? "min-h-9 text-xs" : "min-h-11 text-sm"
+        }`}
         disabled={pending}
         onClick={session ? signOut : signIn}
       >
-        {pending ? "Opening Base Account…" : session ? shortAddress(session.address) : "Set up Base Account"}
+        {pending
+          ? "Opening Base Account…"
+          : session
+            ? shortAddress(session.address)
+            : compact
+              ? "Sign in"
+              : "Set up Base Account"}
       </button>
       {error ? <p className="mt-2 text-center text-[11px] leading-4 text-error">{error}</p> : null}
     </div>
