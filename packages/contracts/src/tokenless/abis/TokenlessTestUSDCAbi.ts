@@ -231,6 +231,19 @@ export const TokenlessTestUSDCAbi = [
   },
   {
     "type": "function",
+    "name": "faultController",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "mint",
     "inputs": [
       {
@@ -677,5 +690,10 @@ export const TokenlessTestUSDCAbi = [
         "internalType": "string"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedFaultController",
+    "inputs": []
   }
 ] as const;

@@ -9,13 +9,13 @@ The `tokenless` branch is a greenfield redesign. It does not preserve the former
 The isolated test stack runs on Base Sepolia (`84532`). Its deployment identity is:
 
 ```text
-tokenless-v1:84532:0x124dd129f09f6aa1572f6469c5dcce3fc72f7b01:0xd98cbadad4bb2d9211ac8520b2bfada1b98f00c4:0xd48b308431bba56badc4f9e52acf7c0fdbfbdd10
+tokenless-v1:84532:0x0627e4f7f746e84edbd3ec066a58a7fdc3227e16:0xb046277842f11a0c371d860504694fd79a5afb40:0x442581f4732b0f18ed47bcfa46415a65e13f8a5e
 ```
 
-- `TokenlessPanel`: `0x124dd129F09F6aa1572F6469c5DcCe3fc72f7B01`
-- `CredentialIssuer`: `0xD98cBAdAd4bB2d9211ac8520B2bfADA1B98f00c4`
-- `X402PanelSubmitter`: `0xd48b308431Bba56bAdC4f9e52acF7c0FDbFbDD10`
-- unrestricted test `tUSDC`: `0xB386D726Fe16E44d9D0b24A933af96d14FdC95d2`
+- `TokenlessPanel`: `0x0627e4f7f746E84EdbD3EC066a58a7FDC3227E16`
+- `CredentialIssuer`: `0xB046277842F11a0c371D860504694fD79A5AfB40`
+- `X402PanelSubmitter`: `0x442581f4732B0F18eD47bcfA46415A65E13F8a5E`
+- unrestricted test `tUSDC`: `0x2FB6B468D9FCF89446cDadAA61e230419f76a838`
 
 Canonical metadata and generated ABIs are in [`packages/foundry/deployments/tokenless-v1/84532.json`](packages/foundry/deployments/tokenless-v1/84532.json) and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless).
 

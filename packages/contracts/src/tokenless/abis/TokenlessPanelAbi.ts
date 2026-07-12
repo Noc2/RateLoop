@@ -34,6 +34,19 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_CLAIM_GRACE_PERIOD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_FEE_BPS",
     "inputs": [],
     "outputs": [
@@ -761,8 +774,8 @@ export const TokenlessPanelAbi = [
           },
           {
             "name": "claimDeadline",
-            "type": "uint64",
-            "internalType": "uint64"
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "minimumReveals",
@@ -1358,9 +1371,9 @@ export const TokenlessPanelAbi = [
       },
       {
         "name": "claimDeadline",
-        "type": "uint64",
+        "type": "uint256",
         "indexed": false,
-        "internalType": "uint64"
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
