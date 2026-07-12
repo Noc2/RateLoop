@@ -5,15 +5,18 @@ export default function TokenlessSdkPage() {
       <pre>
         <code>{`import { createTokenlessRateLoopClient } from "@rateloop/sdk";
 
-const client = createTokenlessRateLoopClient({ apiBaseUrl });
+const client = createTokenlessRateLoopClient({ apiBaseUrl, apiKey });
 const quote = await client.quote(input);
 const ask = await client.ask({ quoteId: quote.quoteId, idempotencyKey, payment });
+const instructions = await client.paymentInstructions({ operationKey: ask.operationKey });
+await client.submitPayment({ operationKey: ask.operationKey }); // prepaid; wallet/x402 include authorization evidence
 const state = await client.wait({ operationKey: ask.operationKey });
 const result = state.status === "ready" ? await client.result({ operationKey: ask.operationKey }) : null;`}</code>
       </pre>
       <p>
         Ask idempotency keys are required. Pending waits return a cursor, retry delay, expiry, and canonical poll URL.
-        Results use schema <code>rateloop.tokenless.v1</code>.
+        Results use schema <code>rateloop.tokenless.v1</code>. API keys are server-only; browser clients authenticate
+        with the HttpOnly Base Account session.
       </p>
     </article>
   );

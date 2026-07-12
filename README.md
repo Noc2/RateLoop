@@ -4,13 +4,15 @@ RateLoop is a tokenless, USDC-funded human judgment protocol for people and agen
 
 The `tokenless` branch is a greenfield redesign. It does not preserve the former token, governance, registry, oracle, staking, or payout-root system.
 
-## Live test deployment
+## Deployment status
 
-The isolated test stack runs on Base Sepolia (`84532`). Its deployment identity is:
+The production implementation is complete in code. A fresh Base Sepolia deployment is required because the fund-core
+contract changed after the previous isolated sandbox deployment. The checked-in `tokenless-v1/84532.json` artifact and
+the addresses below are therefore historical test evidence, not the deployment to configure for this revision.
 
-- sandbox app and agent API: <https://rateloop-tokenless.vercel.app>
-- public Ponder status/evidence API: <https://tokenless-ponder-production.up.railway.app>
-- keeper liveness: <https://tokenless-keeper-production.up.railway.app/live>
+- isolated sandbox app: <https://rateloop-tokenless.vercel.app>
+- previous isolated Ponder service: <https://tokenless-ponder-production.up.railway.app>
+- previous isolated keeper service: <https://tokenless-keeper-production.up.railway.app/live>
 
 ```text
 tokenless-v1:84532:0x0627e4f7f746e84edbd3ec066a58a7fdc3227e16:0xb046277842f11a0c371d860504694fd79a5afb40:0x442581f4732b0f18ed47bcfa46415a65e13f8a5e
@@ -21,9 +23,12 @@ tokenless-v1:84532:0x0627e4f7f746e84edbd3ec066a58a7fdc3227e16:0xb046277842f11a0c
 - `X402PanelSubmitter`: `0x442581f4732B0F18eD47bcfA46415A65E13F8a5E`
 - unrestricted test `tUSDC`: `0x2FB6B468D9FCF89446cDadAA61e230419f76a838`
 
-Canonical metadata and generated ABIs are in [`packages/foundry/deployments/tokenless-v1/84532.json`](packages/foundry/deployments/tokenless-v1/84532.json) and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless).
+After redeployment, regenerate [`packages/foundry/deployments/tokenless-v1/84532.json`](packages/foundry/deployments/tokenless-v1/84532.json) and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless), then update Vercel, Ponder, keeper, and the deployment-scoped database together.
 
-This is a test deployment. The public app runs in an explicitly labeled deterministic sandbox mode; its displayed verdicts are simulated and the paid API-to-contract relay is not enabled. The contracts, indexer, and keeper are live on Base Sepolia. Test USDC is freely mintable, admission is issuer-attested, sealing depends on drand/tlock availability, and a normal payout claim publicly links a vote key to its payout destination.
+The explicit sandbox remains deterministic and simulated. Production mode implements Base Account funding, prepaid and
+x402 execution, paid eligibility and vouchers, sponsored sealed commits, permissionless keeper settlement, indexed
+evidence, analytics publication, and signed webhooks. Live E2E verification resumes only after the fresh contract
+deployment and complete environment bundle are available.
 
 ## Architecture
 
@@ -34,6 +39,8 @@ This is a test deployment. The public app runs in an explicitly labeled determin
 - `packages/sdk` — versioned quote → ask → wait → result client and JSON schema.
 - `packages/agents` — tokenless agent CLI.
 - `packages/nextjs` — funder/rater UX and durable agent API.
+
+See [`TRUST.md`](TRUST.md) for the exact operator, issuer, USDC, drand, privacy, and deployment trust boundaries.
 
 The contract core has no owner, pause, sweep, setter, proxy, or operator path to funds. The separate issuer can rotate signers for future vouchers but cannot alter accepted commits or move escrowed funds.
 

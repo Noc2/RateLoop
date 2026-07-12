@@ -13,7 +13,7 @@ test("test terms state tokenless limits and accepted-work protection", async () 
   const { default: TermsPage } = await import("./page");
   const html = renderToStaticMarkup(<TermsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /does not currently issue real paid-work vouchers/i);
+  assert.match(html, /fresh contract deployment/i);
   assert.match(html, /cannot cancel the round/i);
   assert.match(html, /no LREP token/i);
 });

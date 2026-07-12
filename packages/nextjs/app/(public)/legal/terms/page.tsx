@@ -8,14 +8,15 @@ export default function TermsPage() {
       <p>Last updated: July 2026</p>
       <h2>Test-only service</h2>
       <p>
-        This branch is an isolated technical test. Contracts, addresses, databases, results, and sandbox balances may be
-        reset. The interface does not currently issue real paid-work vouchers or accept production funding.
+        The public branch deployment is isolated from the existing service. Sandbox balances and deterministic results
+        may be reset. Production-mode vouchers and funding activate only after a fresh contract deployment and complete
+        environment verification.
       </p>
       <h2>Who may use it</h2>
       <p>
-        You must be at least 18 and legally permitted to use the service. Any future real-money funder flow is intended
-        for approved business customers. Paid rater access will remain unavailable until identity, residence, tax,
-        sanctions, and self-custodial payout setup are completed before the first paid task.
+        You must be at least 18 and legally permitted to use the service. Real-money funder flows are intended for
+        approved business customers. Paid rater access remains unavailable until identity, residence, tax, sanctions,
+        and self-custodial payout setup are completed before the first paid task.
       </p>
       <h2>Funding and accepted work</h2>
       <p>

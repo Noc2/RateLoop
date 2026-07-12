@@ -29,7 +29,16 @@ Next.js:
 - `DATABASE_URL`
 - `NEXT_PUBLIC_TARGET_NETWORKS=84532`
 - `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
+- `TOKENLESS_DEPLOYMENT_SCHEMA`, `TOKENLESS_CHAIN_ID`, `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
+- `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`, `TOKENLESS_USDC_ADDRESS`
+- `TOKENLESS_FEE_RECIPIENT`, round timing variables, and optional `NEXT_PUBLIC_BASE_PAYMASTER_URL`
+- distinct `TOKENLESS_X402_RELAYER_PRIVATE_KEY` and `TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY`
+- eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
+- `TOKENLESS_PIPELINE_TOKEN`, `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`
 - explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
+
+Apply Next.js migrations `0000` through `0006` in order before live mode. The app must fail closed when moderation,
+eligibility, deployment, signer, or pipeline configuration is incomplete.
 
 Ponder:
 

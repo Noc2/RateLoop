@@ -26,10 +26,10 @@ export default function PrivacyPage() {
       </p>
       <h2>Paid eligibility</h2>
       <p>
-        This interface does not yet collect paid-rater eligibility data or issue paid vouchers. Before real paid work,
-        the paid-task unlock will require the disclosed identity, residence, applicable tax, sanctions, and payout
-        fields. Advisory browsing will not require that unlock. The identity and tax vault must remain separate from
-        public round records.
+        Production mode collects identity tier, age confirmation, residence, applicable tax/DAC7 fields, sanctions
+        screening state, and payout Base Account ownership before the first paid voucher. Provider results, tax data,
+        and stable nullifier seeds are envelope-encrypted under versioned server-only keys. Advisory browsing does not
+        require this unlock. Public round records contain commitments rather than the eligibility payload.
       </p>
       <h2>Retention and rights</h2>
       <p>

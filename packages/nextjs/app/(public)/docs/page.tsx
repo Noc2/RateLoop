@@ -2,7 +2,7 @@ export default function TokenlessDocsPage() {
   return (
     <article className="prose max-w-none">
       <h1>Tokenless trust and limitations</h1>
-      <p className="lead">This is a disposable test deployment, not the final Phase 5 protocol.</p>
+      <p className="lead">The implementation is complete; Base Sepolia addresses remain disposable until Phase 5.</p>
       <h2>Fund custody</h2>
       <p>
         The target panel core has no operator or admin path to escrowed funds. The separate credential issuer can rotate
@@ -15,10 +15,11 @@ export default function TokenlessDocsPage() {
         <li>Admission and identity caps are operator-attested.</li>
         <li>A normal claim links a one-time vote key to its payout address.</li>
       </ul>
-      <h2>Test status</h2>
+      <h2>Deployment status</h2>
       <p>
-        Sandbox results are deterministic simulations and are labeled as such. Live mode stores quote and ask state in
-        Postgres but does not claim payment or settlement completion before the chain/service integration exists.
+        Sandbox results are deterministic simulations and are labeled as such. Production mode includes authenticated
+        workspaces, eligibility, exact chain payment, sponsored commits, indexed settlement evidence, analytics, and
+        signed webhooks. A fresh contract deployment and complete environment update are required before live E2E use.
       </p>
     </article>
   );
