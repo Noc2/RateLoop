@@ -21,7 +21,11 @@ type ApiKey = {
 
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Request failed.");
+  if (!response.ok) {
+    throw new Error(
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
+    );
+  }
   return body;
 }
 

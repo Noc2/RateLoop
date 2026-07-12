@@ -350,7 +350,7 @@ export async function createEligibilityProviderHandoff(accountAddress: string, n
   const startUrl = new URL(config.startUrl);
   startUrl.searchParams.set("state", state);
   startUrl.searchParams.set("callback_url", callbackUrl);
-  startUrl.searchParams.set("return_url", `${getBaseAccountAuthOrigin()}/rate?eligibility=provider-return`);
+  startUrl.searchParams.set("return_url", `${getBaseAccountAuthOrigin()}/settings?eligibility=provider-return`);
   return { providerId, startUrl: startUrl.toString(), state, expiresAt };
 }
 
