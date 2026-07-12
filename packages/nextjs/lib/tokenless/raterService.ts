@@ -64,7 +64,7 @@ function digest(value: string) {
 export async function listPaidRaterTasks(accountAddress: string, now = new Date()) {
   const address = getAddress(accountAddress).toLowerCase();
   const result = await dbClient.execute({
-    sql: `SELECT vr.round_id, vr.content_id, vr.required_tier_id, vr.voucher_deadline,
+    sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id, vr.required_tier_id, vr.voucher_deadline,
                  c.content_json, e.round_terms_json, e.operation_key,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
@@ -86,6 +86,8 @@ export async function listPaidRaterTasks(accountAddress: string, now = new Date(
     const maximumCommits = Number(terms.maximumCommits);
     return {
       operationKey: rowString(row, "operation_key"),
+      chainId: Number(row.chain_id),
+      panelAddress: getAddress(rowString(row, "panel_address")!),
       roundId: rowString(row, "round_id"),
       contentId: rowString(row, "content_id"),
       question: JSON.parse(rowString(row, "content_json")!),
