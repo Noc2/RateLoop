@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { keeperAction, publicRoundStatus, ROUND_STATE, type KeeperRound, verdictStatus } from "../src/status";
+import {
+  creditBalanceAfterEvent,
+  keeperAction,
+  publicRoundStatus,
+  ROUND_STATE,
+  type KeeperRound,
+  verdictStatus,
+} from "../src/status";
 
 function round(overrides: Partial<KeeperRound> = {}): KeeperRound {
   return {
@@ -49,5 +56,13 @@ describe("tokenless public and keeper state", () => {
     expect(verdictStatus(ROUND_STATE.FINALIZED)).toBe("pending_analytics");
     expect(verdictStatus(ROUND_STATE.ZERO_COMMIT_REFUND)).toBe("zero_commit_refunded");
     expect(verdictStatus(ROUND_STATE.OPEN)).toBeNull();
+  });
+
+  it("tracks pull-credit accruals and withdrawals without allowing an indexed underflow", () => {
+    expect(creditBalanceAfterEvent(2_000_000n, "accrued", 500_000n)).toBe(2_500_000n);
+    expect(creditBalanceAfterEvent(2_500_000n, "withdrawn", 2_500_000n)).toBe(0n);
+    expect(() => creditBalanceAfterEvent(1n, "withdrawn", 2n)).toThrow(
+      "exceeds the indexed owner balance",
+    );
   });
 });

@@ -115,3 +115,7 @@ export function roundKey(deploymentKey: string, roundId: bigint) {
 export function commitKey(deploymentKey: string, value: `0x${string}`) {
   return `${deploymentKey}:${value.toLowerCase()}`;
 }
+
+export function creditOwnerKey(deploymentKey: string, owner: `0x${string}`) {
+  return `${deploymentKey}:${owner.toLowerCase()}`;
+}

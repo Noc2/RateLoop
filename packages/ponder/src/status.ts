@@ -51,6 +51,19 @@ export function verdictStatus(state: number) {
   return null;
 }
 
+export function creditBalanceAfterEvent(
+  remainingCredit: bigint,
+  eventType: "accrued" | "withdrawn",
+  amount: bigint,
+) {
+  if (amount < 0n) throw new Error("Credit event amount cannot be negative.");
+  if (eventType === "accrued") return remainingCredit + amount;
+  if (amount > remainingCredit) {
+    throw new Error("Credit withdrawal exceeds the indexed owner balance.");
+  }
+  return remainingCredit - amount;
+}
+
 export function keeperAction(round: KeeperRound, now: bigint) {
   if (round.state === ROUND_STATE.OPEN && now > round.commitDeadline && now <= round.revealDeadline) {
     return "open_reveal";

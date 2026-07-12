@@ -1,9 +1,15 @@
 import { ponder } from "ponder:registry";
-import { tokenlessClaim, tokenlessCommit, tokenlessRound } from "ponder:schema";
+import {
+  tokenlessClaim,
+  tokenlessCommit,
+  tokenlessCreditBalance,
+  tokenlessCreditEvent,
+  tokenlessRound,
+} from "ponder:schema";
 import { keccak256 } from "viem";
-import { commitKey, resolveTokenlessDeployment, roundKey } from "./protocol-deployment";
+import { commitKey, creditOwnerKey, resolveTokenlessDeployment, roundKey } from "./protocol-deployment";
 import { tokenlessPanelAbi } from "./tokenlessAbi";
-import { ROUND_STATE } from "./status";
+import { creditBalanceAfterEvent, ROUND_STATE } from "./status";
 
 const deployment = resolveTokenlessDeployment();
 
@@ -215,6 +221,79 @@ ponder.on("TokenlessPanel:Claimed", async ({ event, context }) => {
   await context.db
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
     .set((row) => ({ totalPaid: row.totalPaid + amount, updatedAt: event.block.timestamp }));
+});
+
+ponder.on("TokenlessPanel:CreditAccrued", async ({ event, context }) => {
+  const { roundId, recipient, amount } = event.args;
+  const owner = recipient.toLowerCase() as `0x${string}`;
+  const id = creditOwnerKey(deployment.deploymentKey, owner);
+  const existing = await context.db.find(tokenlessCreditBalance, { id });
+  const remainingCredit = creditBalanceAfterEvent(existing?.remainingCredit ?? 0n, "accrued", amount);
+
+  if (existing) {
+    await context.db.update(tokenlessCreditBalance, { id }).set({
+      remainingCredit,
+      totalAccrued: existing.totalAccrued + amount,
+      updatedAt: event.block.timestamp,
+      updatedBlock: event.block.number,
+    });
+  } else {
+    await context.db.insert(tokenlessCreditBalance).values({
+      id,
+      deploymentKey: deployment.deploymentKey,
+      owner,
+      remainingCredit,
+      totalAccrued: amount,
+      totalWithdrawn: 0n,
+      updatedAt: event.block.timestamp,
+      updatedBlock: event.block.number,
+    });
+  }
+
+  await context.db.insert(tokenlessCreditEvent).values({
+    id: `${deployment.deploymentKey}:${event.transaction.hash}:${event.log.logIndex}`,
+    deploymentKey: deployment.deploymentKey,
+    owner,
+    eventType: "accrued",
+    roundId,
+    destination: null,
+    amount,
+    remainingCredit,
+    occurredAt: event.block.timestamp,
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+  });
+});
+
+ponder.on("TokenlessPanel:CreditWithdrawn", async ({ event, context }) => {
+  const { recipient, destination, amount } = event.args;
+  const owner = recipient.toLowerCase() as `0x${string}`;
+  const id = creditOwnerKey(deployment.deploymentKey, owner);
+  const existing = await context.db.find(tokenlessCreditBalance, { id });
+  if (!existing) throw new Error(`Credit withdrawal references unknown owner ${owner}.`);
+  const remainingCredit = creditBalanceAfterEvent(existing.remainingCredit, "withdrawn", amount);
+
+  await context.db.update(tokenlessCreditBalance, { id }).set({
+    remainingCredit,
+    totalWithdrawn: existing.totalWithdrawn + amount,
+    updatedAt: event.block.timestamp,
+    updatedBlock: event.block.number,
+  });
+  await context.db.insert(tokenlessCreditEvent).values({
+    id: `${deployment.deploymentKey}:${event.transaction.hash}:${event.log.logIndex}`,
+    deploymentKey: deployment.deploymentKey,
+    owner,
+    eventType: "withdrawn",
+    roundId: null,
+    destination,
+    amount,
+    remainingCredit,
+    occurredAt: event.block.timestamp,
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+  });
 });
 
 ponder.on("TokenlessPanel:StaleSharesReturned", async ({ event, context }) => {

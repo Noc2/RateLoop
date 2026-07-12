@@ -2,7 +2,15 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { and, asc, desc, eq, replaceBigInts } from "ponder";
 import { db } from "ponder:api";
-import { tokenlessClaim, tokenlessCommit, tokenlessIssuerEpoch, tokenlessRound } from "ponder:schema";
+import {
+  tokenlessClaim,
+  tokenlessCommit,
+  tokenlessCreditBalance,
+  tokenlessCreditEvent,
+  tokenlessIssuerEpoch,
+  tokenlessRound,
+} from "ponder:schema";
+import { isAddress } from "viem";
 import { resolveTokenlessDeployment, roundKey } from "../protocol-deployment";
 import { keeperAction, publicRoundStatus, verdictStatus } from "../status";
 
@@ -28,6 +36,10 @@ function parseTimestamp(value: string | undefined) {
   return BigInt(value);
 }
 
+function parseAddress(value: string) {
+  return isAddress(value) ? value.toLowerCase() as `0x${string}` : null;
+}
+
 function keeperAuthorization(header: string | undefined) {
   const token = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
   if (!token) return process.env.NODE_ENV === "production" ? "missing" : null;
@@ -48,13 +60,33 @@ app.onError((error, c) => {
 app.get("/deployment", (c) => c.json(deployment));
 
 app.get("/status/tokenless", async (c) => {
-  const rows = await db
-    .select({ state: tokenlessRound.state })
-    .from(tokenlessRound)
-    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey));
+  const [rows, creditBalances, creditEvents] = await Promise.all([
+    db
+      .select({ state: tokenlessRound.state })
+      .from(tokenlessRound)
+      .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey)),
+    db
+      .select({ remainingCredit: tokenlessCreditBalance.remainingCredit })
+      .from(tokenlessCreditBalance)
+      .where(eq(tokenlessCreditBalance.deploymentKey, deployment.deploymentKey)),
+    db
+      .select({ id: tokenlessCreditEvent.id })
+      .from(tokenlessCreditEvent)
+      .where(eq(tokenlessCreditEvent.deploymentKey, deployment.deploymentKey)),
+  ]);
   const byState: Record<string, number> = {};
   for (const row of rows) byState[String(row.state)] = (byState[String(row.state)] ?? 0) + 1;
-  return c.json({ status: "ok", deploymentKey: deployment.deploymentKey, rounds: rows.length, byState });
+  return c.json({
+    status: "ok",
+    deploymentKey: deployment.deploymentKey,
+    rounds: rows.length,
+    byState,
+    creditOwners: creditBalances.length,
+    creditEvents: creditEvents.length,
+    totalRemainingCredit: creditBalances
+      .reduce((total, row) => total + row.remainingCredit, 0n)
+      .toString(),
+  });
 });
 
 app.get("/rounds", async (c) => {
@@ -127,6 +159,54 @@ app.get("/rounds/:roundId/claims", async (c) => {
     )
     .orderBy(asc(tokenlessClaim.logIndex));
   return c.json(jsonSafe(rows));
+});
+
+app.get("/rounds/:roundId/credits", async (c) => {
+  const roundId = parseRoundId(c.req.param("roundId"));
+  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  const rows = await db
+    .select()
+    .from(tokenlessCreditEvent)
+    .where(
+      and(
+        eq(tokenlessCreditEvent.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessCreditEvent.roundId, roundId),
+      ),
+    )
+    .orderBy(asc(tokenlessCreditEvent.blockNumber), asc(tokenlessCreditEvent.logIndex));
+  return c.json(jsonSafe(rows));
+});
+
+app.get("/credits/:owner", async (c) => {
+  const owner = parseAddress(c.req.param("owner"));
+  if (!owner) return c.json({ error: "owner must be an EVM address" }, 400);
+  const [balance, events] = await Promise.all([
+    db.query.tokenlessCreditBalance.findFirst({
+      where: and(
+        eq(tokenlessCreditBalance.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessCreditBalance.owner, owner),
+      ),
+    }),
+    db
+      .select()
+      .from(tokenlessCreditEvent)
+      .where(
+        and(
+          eq(tokenlessCreditEvent.deploymentKey, deployment.deploymentKey),
+          eq(tokenlessCreditEvent.owner, owner),
+        ),
+      )
+      .orderBy(desc(tokenlessCreditEvent.blockNumber), desc(tokenlessCreditEvent.logIndex))
+      .limit(limit(c.req.query("limit"), 100)),
+  ]);
+  return c.json(jsonSafe({
+    deploymentKey: deployment.deploymentKey,
+    owner,
+    remainingCredit: balance?.remainingCredit ?? 0n,
+    totalAccrued: balance?.totalAccrued ?? 0n,
+    totalWithdrawn: balance?.totalWithdrawn ?? 0n,
+    events,
+  }));
 });
 
 app.get("/issuer/epochs", async (c) => {

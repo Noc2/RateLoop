@@ -102,6 +102,45 @@ export const tokenlessClaim = onchainTable(
   }),
 );
 
+export const tokenlessCreditBalance = onchainTable(
+  "tokenless_credit_balance",
+  (t) => ({
+    id: t.text().primaryKey(),
+    deploymentKey: t.text().notNull(),
+    owner: t.hex().notNull(),
+    remainingCredit: t.bigint().notNull(),
+    totalAccrued: t.bigint().notNull(),
+    totalWithdrawn: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+    updatedBlock: t.bigint().notNull(),
+  }),
+  (table) => ({
+    deploymentOwnerIdx: index().on(table.deploymentKey, table.owner),
+  }),
+);
+
+export const tokenlessCreditEvent = onchainTable(
+  "tokenless_credit_event",
+  (t) => ({
+    id: t.text().primaryKey(),
+    deploymentKey: t.text().notNull(),
+    owner: t.hex().notNull(),
+    eventType: t.text().notNull(),
+    roundId: t.bigint(),
+    destination: t.hex(),
+    amount: t.bigint().notNull(),
+    remainingCredit: t.bigint().notNull(),
+    occurredAt: t.bigint().notNull(),
+    blockNumber: t.bigint().notNull(),
+    txHash: t.hex().notNull(),
+    logIndex: t.integer().notNull(),
+  }),
+  (table) => ({
+    deploymentOwnerIdx: index().on(table.deploymentKey, table.owner),
+    deploymentRoundIdx: index().on(table.deploymentKey, table.roundId),
+  }),
+);
+
 export const tokenlessIssuerEpoch = onchainTable(
   "tokenless_issuer_epoch",
   (t) => ({

@@ -129,6 +129,24 @@ export const tokenlessPanelAbi = [
   },
   {
     type: "event",
+    name: "CreditAccrued",
+    inputs: [
+      { name: "roundId", type: "uint256", indexed: true },
+      { name: "recipient", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "CreditWithdrawn",
+    inputs: [
+      { name: "recipient", type: "address", indexed: true },
+      { name: "destination", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
     name: "StaleSharesReturned",
     inputs: [
       { name: "roundId", type: "uint256", indexed: true },
@@ -159,6 +177,13 @@ export const tokenlessPanelAbi = [
       { name: "index", type: "uint256" },
     ],
     outputs: [{ name: "commitKey", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "withdrawableCredit",
+    stateMutability: "view",
+    inputs: [{ name: "recipient", type: "address" }],
+    outputs: [{ name: "amount", type: "uint256" }],
   },
 ] as const satisfies Abi;
 
