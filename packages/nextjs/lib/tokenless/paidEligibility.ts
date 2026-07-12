@@ -712,10 +712,10 @@ export async function getPaidEligibility(accountAddress: string, now = new Date(
 
 function getIssuerConfig(): IssuerConfig {
   if (issuerConfigOverride) return issuerConfigOverride;
-  if (process.env.NEXT_PUBLIC_TOKENLESS_VOUCHER_SIGNER_PRIVATE_KEY) {
+  if (process.env.NEXT_PUBLIC_TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY) {
     throw new Error("The voucher signer secret must never use a NEXT_PUBLIC_ environment variable.");
   }
-  const signerPrivateKey = process.env.TOKENLESS_VOUCHER_SIGNER_PRIVATE_KEY as Hex | undefined;
+  const signerPrivateKey = process.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY as Hex | undefined;
   const epoch = process.env.TOKENLESS_VOUCHER_ISSUER_EPOCH;
   const panel = process.env.TOKENLESS_PANEL_ADDRESS;
   const issuer = process.env.TOKENLESS_CREDENTIAL_ISSUER_ADDRESS;
