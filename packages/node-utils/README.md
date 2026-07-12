@@ -1,19 +1,22 @@
-# RateLoop Node Utils
+# `@rateloop/node-utils`
 
-Shared Node.js helpers used by RateLoop services, scripts, and public packages.
+Minimal Node-only helper used by the tokenless keeper to load a Foundry V3 signer keystore.
 
-## Exports
+```ts
+import { getKeystoreAccountFromCredentials } from "@rateloop/node-utils/keystore";
 
-- `@rateloop/node-utils/keystore` for encrypted local signer keystore helpers.
-- `@rateloop/node-utils/json` for JSON parsing and validation utilities.
-- `@rateloop/node-utils/submissionValidation` for shared submission guardrails.
-- `@rateloop/node-utils/contentModeration` for moderation helpers.
-- `@rateloop/node-utils/moderationPatterns` for shared moderation SQL/regex pattern helpers.
-- `@rateloop/node-utils/correlationScoring` for payout-root scoring utilities.
-- `@rateloop/node-utils/identityKeys` for identity-key derivation helpers.
-- `@rateloop/node-utils/profileSelfReport` for profile self-report normalization and audience helpers.
-- `@rateloop/node-utils/voteUi` for shared head-to-head vote UI metadata parsing.
-- `@rateloop/node-utils/x402QuestionFields` for x402 question payload helpers.
+const account = getKeystoreAccountFromCredentials(
+  process.env.KEYSTORE_ACCOUNT ?? "",
+  process.env.KEYSTORE_PASSWORD ?? "",
+);
+```
 
-Build with `yarn workspace @rateloop/node-utils build`. Run tests with
-`yarn workspace @rateloop/node-utils test`.
+The helper accepts only flat, bounded account names under `~/.foundry/keystores`, scrypt with bounded cost parameters, AES-128-CTR, and an exactly 32-byte encrypted private key. It verifies the V3 MAC with a constant-time comparison before decrypting.
+
+This package intentionally contains no protocol, moderation, identity, submission, scoring, voting, or payment helpers.
+
+```bash
+yarn build
+yarn check-types
+yarn test
+```
