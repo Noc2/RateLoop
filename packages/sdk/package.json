@@ -39,6 +39,15 @@
       "read": [
         "dist/esm/read.d.ts"
       ],
+      "tokenless": [
+        "dist/esm/tokenless.d.ts"
+      ],
+      "tokenless-schema": [
+        "dist/esm/tokenlessSchema.d.ts"
+      ],
+      "tokenless-types": [
+        "dist/esm/tokenlessTypes.d.ts"
+      ],
       "types": [
         "dist/esm/types.d.ts"
       ],
@@ -84,6 +93,21 @@
       "types": "./dist/esm/read.d.ts",
       "import": "./dist/esm/read.js",
       "require": "./dist/cjs/read.js"
+    },
+    "./tokenless": {
+      "types": "./dist/esm/tokenless.d.ts",
+      "import": "./dist/esm/tokenless.js",
+      "require": "./dist/cjs/tokenless.js"
+    },
+    "./tokenless-schema": {
+      "types": "./dist/esm/tokenlessSchema.d.ts",
+      "import": "./dist/esm/tokenlessSchema.js",
+      "require": "./dist/cjs/tokenlessSchema.js"
+    },
+    "./tokenless-types": {
+      "types": "./dist/esm/tokenlessTypes.d.ts",
+      "import": "./dist/esm/tokenlessTypes.js",
+      "require": "./dist/cjs/tokenlessTypes.js"
     },
     "./types": {
       "types": "./dist/esm/types.d.ts",
