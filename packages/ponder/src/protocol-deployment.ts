@@ -1,127 +1,117 @@
-import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { isAddress, zeroAddress } from "viem";
 
-export const PONDER_NETWORK_CHAIN_IDS: Record<string, number> = {
-  hardhat: 31337,
-  base: 8453,
-};
+export const TOKENLESS_SCHEMA_VERSION = "tokenless-v1";
+export const PONDER_NETWORK_CHAIN_IDS = {
+  hardhat: 31_337,
+  baseSepolia: 84_532,
+} as const;
 
-export interface PonderProtocolDeploymentMetadata {
-  configured: true;
-  network: string | null;
+export type TokenlessNetwork = keyof typeof PONDER_NETWORK_CHAIN_IDS;
+
+export interface TokenlessDeployment {
+  schemaVersion: typeof TOKENLESS_SCHEMA_VERSION;
+  network: TokenlessNetwork;
   chainId: number;
-  contentRegistryAddress: `0x${string}`;
-  feedbackRegistryAddress: `0x${string}`;
+  panelAddress: `0x${string}`;
+  issuerAddress: `0x${string}`;
+  adapterAddress: `0x${string}`;
+  startBlock: number;
   deploymentKey: string;
-  databaseSchema: string | null;
 }
 
-const DECIMAL_UNSIGNED_INTEGER_PATTERN = /^\d+$/;
-
-function readEnv(env: NodeJS.ProcessEnv | Record<string, string | undefined>, key: string) {
+function read(env: NodeJS.ProcessEnv | Record<string, string | undefined>, key: string) {
   const value = env[key]?.trim();
   return value ? value : undefined;
 }
 
-function parseStrictUnsignedInteger(value: string): number | null {
-  if (!DECIMAL_UNSIGNED_INTEGER_PATTERN.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
-function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
-  if (typeof value !== "string" || !isAddress(value) || value.toLowerCase() === zeroAddress) {
-    return null;
+function requiredAddress(value: string | undefined, key: string): `0x${string}` {
+  if (!value || !isAddress(value) || value.toLowerCase() === zeroAddress) {
+    throw new Error(`${key} must be a non-zero EVM address.`);
   }
-
   return value.toLowerCase() as `0x${string}`;
 }
 
-function resolveChainId(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
-  const network = readEnv(env, "PONDER_NETWORK");
-  const networkChainId = network ? PONDER_NETWORK_CHAIN_IDS[network] : undefined;
-  const explicitChainIdRaw = readEnv(env, "PONDER_CHAIN_ID");
-  const explicitChainId =
-    explicitChainIdRaw === undefined
-      ? null
-      : parseStrictUnsignedInteger(explicitChainIdRaw);
-  if (explicitChainIdRaw !== undefined && (explicitChainId === null || explicitChainId <= 0)) {
-    throw new Error("PONDER_CHAIN_ID must be a positive integer.");
-  }
-  if (explicitChainId !== null) {
-    if (networkChainId !== undefined && explicitChainId !== networkChainId) {
-      throw new Error(
-        `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${network} (${networkChainId}).`,
-      );
-    }
-    if (network !== undefined && networkChainId === undefined) return undefined;
-    return explicitChainId;
-  }
-
-  return networkChainId;
+function optionalAddress(value: string | undefined, key: string): `0x${string}` {
+  if (!value) return zeroAddress;
+  if (!isAddress(value)) throw new Error(`${key} must be an EVM address when set.`);
+  return value.toLowerCase() as `0x${string}`;
 }
 
-export function buildPonderProtocolDeploymentKey(params: {
+function unsignedInteger(value: string | undefined, key: string, fallback?: number) {
+  if (value === undefined && fallback !== undefined) return fallback;
+  if (!value || !/^(?:0|[1-9]\d*)$/u.test(value)) {
+    throw new Error(`${key} must be an unsigned base-10 integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${key} exceeds the safe integer range.`);
+  return parsed;
+}
+
+export function buildTokenlessDeploymentKey(params: {
   chainId: number;
-  contentRegistryAddress: `0x${string}`;
-  feedbackRegistryAddress: `0x${string}`;
+  panelAddress: `0x${string}`;
+  issuerAddress: `0x${string}`;
+  adapterAddress?: `0x${string}`;
 }) {
   return [
+    TOKENLESS_SCHEMA_VERSION,
     String(params.chainId),
-    params.contentRegistryAddress.toLowerCase(),
-    params.feedbackRegistryAddress.toLowerCase(),
+    params.panelAddress.toLowerCase(),
+    params.issuerAddress.toLowerCase(),
+    (params.adapterAddress ?? zeroAddress).toLowerCase(),
   ].join(":");
 }
 
-function resolveProtocolAddress(
-  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
-  chainId: number,
-  envKey: string,
-  contractName: string,
-) {
-  const envAddress = normalizeRequiredAddress(readEnv(env, envKey));
-  const sharedAddress = normalizeRequiredAddress(getSharedDeploymentAddress(chainId, contractName));
-  const network = readEnv(env, "PONDER_NETWORK");
-  const allowLocalEnvAddress =
-    network === "hardhat" || (network === undefined && chainId === PONDER_NETWORK_CHAIN_IDS.hardhat);
-  if (allowLocalEnvAddress) {
-    return envAddress ?? sharedAddress;
+export function resolveTokenlessDeployment(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): TokenlessDeployment {
+  const network = read(env, "PONDER_NETWORK") ?? (read(env, "NODE_ENV") === "production" ? undefined : "hardhat");
+  if (!network || !(network in PONDER_NETWORK_CHAIN_IDS)) {
+    throw new Error("PONDER_NETWORK must be hardhat or baseSepolia.");
+  }
+  const typedNetwork = network as TokenlessNetwork;
+  const chainId = PONDER_NETWORK_CHAIN_IDS[typedNetwork];
+  const explicitChainId = read(env, "PONDER_CHAIN_ID");
+  if (explicitChainId !== undefined && unsignedInteger(explicitChainId, "PONDER_CHAIN_ID") !== chainId) {
+    throw new Error(`PONDER_CHAIN_ID must match PONDER_NETWORK ${typedNetwork} (${chainId}).`);
   }
 
-  return sharedAddress;
-}
-
-export function resolvePonderProtocolDeploymentMetadata(
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
-): PonderProtocolDeploymentMetadata | null {
-  const chainId = resolveChainId(env);
-  if (!chainId) return null;
-
-  const contentRegistryAddress = resolveProtocolAddress(
-    env,
-    chainId,
-    "PONDER_CONTENT_REGISTRY_ADDRESS",
-    "ContentRegistry",
+  const panelAddress = requiredAddress(read(env, "PONDER_TOKENLESS_PANEL_ADDRESS"), "PONDER_TOKENLESS_PANEL_ADDRESS");
+  const issuerAddress = requiredAddress(
+    read(env, "PONDER_CREDENTIAL_ISSUER_ADDRESS"),
+    "PONDER_CREDENTIAL_ISSUER_ADDRESS",
   );
-  const feedbackRegistryAddress = resolveProtocolAddress(
-    env,
-    chainId,
-    "PONDER_FEEDBACK_REGISTRY_ADDRESS",
-    "FeedbackRegistry",
+  const adapterAddress = optionalAddress(
+    read(env, "PONDER_X402_PANEL_SUBMITTER_ADDRESS"),
+    "PONDER_X402_PANEL_SUBMITTER_ADDRESS",
   );
-  if (!contentRegistryAddress || !feedbackRegistryAddress) return null;
+  const startBlock = unsignedInteger(
+    read(env, "PONDER_TOKENLESS_START_BLOCK"),
+    "PONDER_TOKENLESS_START_BLOCK",
+    typedNetwork === "hardhat" ? 0 : undefined,
+  );
+  const deploymentKey = buildTokenlessDeploymentKey({ chainId, panelAddress, issuerAddress, adapterAddress });
+  const configuredKey = read(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY")?.toLowerCase();
+  if (configuredKey && configuredKey !== deploymentKey) {
+    throw new Error("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY does not match the tokenless deployment identity.");
+  }
 
   return {
-    configured: true,
-    network: readEnv(env, "PONDER_NETWORK") ?? null,
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    network: typedNetwork,
     chainId,
-    contentRegistryAddress,
-    feedbackRegistryAddress,
-    deploymentKey: buildPonderProtocolDeploymentKey({
-      chainId,
-      contentRegistryAddress,
-      feedbackRegistryAddress,
-    }),
-    databaseSchema: readEnv(env, "DATABASE_SCHEMA") ?? null,
+    panelAddress,
+    issuerAddress,
+    adapterAddress,
+    startBlock,
+    deploymentKey,
   };
+}
+
+export function roundKey(deploymentKey: string, roundId: bigint) {
+  return `${deploymentKey}:${roundId}`;
+}
+
+export function commitKey(deploymentKey: string, value: `0x${string}`) {
+  return `${deploymentKey}:${value.toLowerCase()}`;
 }

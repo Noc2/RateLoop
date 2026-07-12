@@ -1,159 +1,55 @@
+import { zeroAddress } from "viem";
 import { describe, expect, it } from "vitest";
-import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
-import {
-  buildPonderProtocolDeploymentKey,
-  resolvePonderProtocolDeploymentMetadata,
-} from "../src/protocol-deployment.js";
+import { buildTokenlessDeploymentKey, resolveTokenlessDeployment } from "../src/protocol-deployment";
 
-describe("Ponder protocol deployment metadata", () => {
-  it("reports deployment keys from configured local contract addresses", () => {
-    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
-    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
-    const metadata = resolvePonderProtocolDeploymentMetadata({
-      PONDER_NETWORK: "hardhat",
-      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
-      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
-      DATABASE_SCHEMA: "rateloop_ponder_test",
-    });
+const panel = "0x1000000000000000000000000000000000000001";
+const issuer = "0x1000000000000000000000000000000000000002";
 
-    expect(metadata).toEqual({
-      configured: true,
-      network: "hardhat",
-      chainId: 31337,
-      contentRegistryAddress,
-      feedbackRegistryAddress,
-      deploymentKey: buildPonderProtocolDeploymentKey({
-        chainId: 31337,
-        contentRegistryAddress,
-        feedbackRegistryAddress,
-      }),
-      databaseSchema: "rateloop_ponder_test",
-    });
-  });
-
-  it("accepts explicit chain ids that match the configured network", () => {
-    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
-    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
-    const metadata = resolvePonderProtocolDeploymentMetadata({
-      PONDER_NETWORK: "hardhat",
-      PONDER_CHAIN_ID: "31337",
-      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
-      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
-    });
-
-    expect(metadata?.chainId).toBe(31337);
-    expect(metadata?.deploymentKey).toBe(
-      buildPonderProtocolDeploymentKey({
-        chainId: 31337,
-        contentRegistryAddress,
-        feedbackRegistryAddress,
-      }),
+describe("tokenless deployment identity", () => {
+  it("builds the stable versioned identity including an explicit zero adapter", () => {
+    expect(buildTokenlessDeploymentKey({ chainId: 84_532, panelAddress: panel, issuerAddress: issuer })).toBe(
+      `tokenless-v1:84532:${panel}:${issuer}:${zeroAddress}`,
     );
   });
 
-  it("allows local deployment keys from explicit hardhat chain ids without a network name", () => {
-    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
-    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
-    const metadata = resolvePonderProtocolDeploymentMetadata({
-      PONDER_CHAIN_ID: "31337",
-      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
-      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
+  it("resolves Base Sepolia and fails closed on a mixed identity", () => {
+    const env = {
+      NODE_ENV: "production",
+      PONDER_NETWORK: "baseSepolia",
+      PONDER_CHAIN_ID: "84532",
+      PONDER_TOKENLESS_PANEL_ADDRESS: panel,
+      PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
+      PONDER_TOKENLESS_START_BLOCK: "44051709",
+    };
+    expect(resolveTokenlessDeployment(env)).toMatchObject({
+      chainId: 84_532,
+      panelAddress: panel,
+      issuerAddress: issuer,
+      adapterAddress: zeroAddress,
+      startBlock: 44_051_709,
     });
-
-    expect(metadata).toEqual({
-      configured: true,
-      network: null,
-      chainId: 31337,
-      contentRegistryAddress,
-      feedbackRegistryAddress,
-      deploymentKey: buildPonderProtocolDeploymentKey({
-        chainId: 31337,
-        contentRegistryAddress,
-        feedbackRegistryAddress,
-      }),
-      databaseSchema: null,
-    });
-  });
-
-  it("resolves Base mainnet deployment keys from shared artifacts over stale env", () => {
-    const staleContentRegistryAddress = "0x1000000000000000000000000000000000000001";
-    const staleFeedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
-    const contentRegistryAddress = getSharedDeploymentAddress(8453, "ContentRegistry")?.toLowerCase() as
-      | `0x${string}`
-      | undefined;
-    const feedbackRegistryAddress = getSharedDeploymentAddress(8453, "FeedbackRegistry")?.toLowerCase() as
-      | `0x${string}`
-      | undefined;
-    expect(contentRegistryAddress).toBeDefined();
-    expect(feedbackRegistryAddress).toBeDefined();
-
-    const metadata = resolvePonderProtocolDeploymentMetadata({
-      PONDER_NETWORK: "base",
-      PONDER_CHAIN_ID: "8453",
-      PONDER_CONTENT_REGISTRY_ADDRESS: staleContentRegistryAddress,
-      PONDER_FEEDBACK_REGISTRY_ADDRESS: staleFeedbackRegistryAddress,
-      DATABASE_SCHEMA: "rateloop_ponder_base",
-    });
-
-    expect(metadata).toEqual({
-      configured: true,
-      network: "base",
-      chainId: 8453,
-      contentRegistryAddress: contentRegistryAddress!,
-      feedbackRegistryAddress: feedbackRegistryAddress!,
-      deploymentKey: buildPonderProtocolDeploymentKey({
-        chainId: 8453,
-        contentRegistryAddress: contentRegistryAddress!,
-        feedbackRegistryAddress: feedbackRegistryAddress!,
-      }),
-      databaseSchema: "rateloop_ponder_base",
-    });
-  });
-
-  it("does not configure unknown live chains from env-only contract addresses", () => {
-    expect(
-      resolvePonderProtocolDeploymentMetadata({
-        PONDER_CHAIN_ID: "999999",
-        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
-        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
-      }),
-    ).toBeNull();
-  });
-
-  it("rejects explicit Base chain ids that do not match the configured network", () => {
     expect(() =>
-      resolvePonderProtocolDeploymentMetadata({
+      resolveTokenlessDeployment({
+        ...env,
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v1:84532:${issuer}:${panel}:${zeroAddress}`,
+      }),
+    ).toThrow("does not match the tokenless deployment identity");
+  });
+
+  it("rejects legacy networks and zero core addresses", () => {
+    expect(() =>
+      resolveTokenlessDeployment({
         PONDER_NETWORK: "base",
-        PONDER_CHAIN_ID: "31337",
-        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
-        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+        PONDER_TOKENLESS_PANEL_ADDRESS: panel,
+        PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       }),
-    ).toThrow("PONDER_CHAIN_ID 31337 does not match PONDER_NETWORK base (8453).");
-  });
-
-  it("rejects malformed explicit chain ids instead of falling back to the network", () => {
+    ).toThrow("hardhat or baseSepolia");
     expect(() =>
-      resolvePonderProtocolDeploymentMetadata({
-        PONDER_NETWORK: "base",
-        PONDER_CHAIN_ID: "8453abc",
-        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
-        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
-      }),
-    ).toThrow("PONDER_CHAIN_ID must be a positive integer.");
-  });
-
-  it("rejects explicit chain ids that do not match the configured network", () => {
-    expect(() =>
-      resolvePonderProtocolDeploymentMetadata({
+      resolveTokenlessDeployment({
         PONDER_NETWORK: "hardhat",
-        PONDER_CHAIN_ID: "8453",
-        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
-        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+        PONDER_TOKENLESS_PANEL_ADDRESS: zeroAddress,
+        PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       }),
-    ).toThrow("PONDER_CHAIN_ID 8453 does not match PONDER_NETWORK hardhat (31337).");
-  });
-
-  it("returns null without a known chain", () => {
-    expect(resolvePonderProtocolDeploymentMetadata({ PONDER_NETWORK: "unknown" })).toBeNull();
+    ).toThrow("non-zero EVM address");
   });
 });

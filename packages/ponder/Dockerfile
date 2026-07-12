@@ -22,22 +22,7 @@ COPY packages/sdk/package.json ./packages/sdk/package.json
 RUN --mount=type=cache,id=s/bcb8a921-0bf5-4ecd-b6b6-674e08a8e9f7-/app/.yarn/cache,target=/app/.yarn/cache \
   YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/ponder
 
-COPY scripts/clean-package-dist.mjs ./scripts/clean-package-dist.mjs
-COPY scripts/fix-esm-extensions.mjs ./scripts/fix-esm-extensions.mjs
-COPY scripts/json-rpc.mjs ./scripts/json-rpc.mjs
-COPY scripts/with-workspace-dist-lock.mjs ./scripts/with-workspace-dist-lock.mjs
-COPY scripts/write-cjs-package-json.mjs ./scripts/write-cjs-package-json.mjs
-COPY packages/contracts/tsconfig.json ./packages/contracts/tsconfig.json
-COPY packages/contracts/tsconfig.cjs.json ./packages/contracts/tsconfig.cjs.json
-COPY packages/contracts/src ./packages/contracts/src
-COPY packages/node-utils/tsconfig.json ./packages/node-utils/tsconfig.json
-COPY packages/node-utils/tsconfig.cjs.json ./packages/node-utils/tsconfig.cjs.json
-COPY packages/node-utils/src ./packages/node-utils/src
 COPY packages/ponder ./packages/ponder
-
-WORKDIR /app/packages/ponder
-
-RUN yarn build:workspace-deps
 
 WORKDIR /app
 
@@ -51,4 +36,4 @@ WORKDIR /app/packages/ponder
 EXPOSE 42069
 
 USER node
-CMD ["yarn", "start:built-workspace-deps"]
+CMD ["yarn", "start"]

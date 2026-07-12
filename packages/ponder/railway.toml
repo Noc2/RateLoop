@@ -6,17 +6,10 @@ watchPatterns = [
   ".yarnrc.yml",
   "package.json",
   "yarn.lock",
-  "scripts/clean-package-dist.mjs",
-  "scripts/fix-esm-extensions.mjs",
-  "scripts/json-rpc.mjs",
-  "scripts/with-workspace-dist-lock.mjs",
-  "scripts/write-cjs-package-json.mjs",
-  "packages/contracts/**",
-  "packages/node-utils/**",
   "packages/ponder/**",
 ]
 
 [deploy]
-startCommand = "yarn start:built-workspace-deps"
+startCommand = "yarn start"
 healthcheckPath = "/health"
 healthcheckTimeout = 120

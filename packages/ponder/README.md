@@ -1,175 +1,51 @@
-# RateLoop — Ponder (Indexer & API)
+# RateLoop tokenless-v1 indexer
 
-On-chain event indexer built with [Ponder](https://ponder.sh/). Listens to smart contract events, stores processed data including correlation payout snapshots, and exposes a REST API on port 42069 for consumption by the frontend, agent, and AI/MCP adapters.
+This package indexes only the greenfield `TokenlessPanel` and `CredentialIssuer` deployment. Removed protocol generations have no compatibility surface here.
 
-## Quick Start
+## Deployment identity
 
-```bash
-# From the monorepo root:
-cp packages/ponder/.env.example packages/ponder/.env.local
-# Edit packages/ponder/.env.local with your RPC URL and network selection
+Every row and database namespace is bound to:
 
-yarn ponder:dev     # Development mode with file watching + auto-recovery, terminal UI disabled
-yarn ponder:start   # Production mode (no file watching)
-yarn ponder:codegen # Regenerate TypeScript types from schema
+```text
+tokenless-v1:<chainId>:<panel>:<issuer>:<adapter-or-zero>
 ```
 
-Requires a running chain (local via `yarn chain` or the Base mainnet RPC configured for production).
+Startup fails if `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` conflicts with the configured addresses. A changed core, issuer, or adapter therefore gets a fresh index instead of silently mixing deployments.
 
-## Scripts
-
-| Command               | Description                                                   |
-| --------------------- | ------------------------------------------------------------- |
-| `yarn ponder:dev`     | Development mode with crash recovery and terminal UI disabled |
-| `yarn ponder:start`   | Production mode                                               |
-| `yarn ponder:codegen` | Generate types from `ponder.schema.ts`                        |
-
-Within the package directory, additional scripts are available:
-
-| Command        | Description                                                     |
-| -------------- | --------------------------------------------------------------- |
-| `yarn dev:raw` | Development mode without recovery wrapper, terminal UI disabled |
-| `yarn dev:ui`  | Development mode with Ponder's live terminal UI enabled         |
-| `yarn serve`   | Run API only (no indexing)                                      |
+Supported networks are local Hardhat/Anvil (`31337`) and the isolated Base Sepolia tokenless deployment (`84532`). Base mainnet and all legacy address bundles are intentionally rejected.
 
 ## Configuration
 
-| Variable                                   | Description                                                                                                                                                                                                 |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PONDER_NETWORK`                           | Active network: `hardhat` or `base`                                                                                                                                                                          |
-| `PONDER_CHAIN_ID`                          | Optional explicit chain ID; must match `PONDER_NETWORK` when both are set. Used by `yarn ponder:start` for protocol deployment keys and Postgres schema selection when unset defaults from the network name |
-| `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                                                                                                       |
-| `PONDER_RPC_URL_8453`                      | RPC URL for Base mainnet                                                                                                                                                                                    |
-| `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; validated against the Base mainnet shared artifacts when `PONDER_NETWORK=base`                                                                                             |
-| `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                                                                                                               |
-| `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local-only fallback when the active chain has no shared deployment metadata                                                                                              |
-| `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local-only fallback when the active chain has no shared deployment metadata                                                                                                 |
-| `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Local-only fallback start blocks when the active chain has no shared deployment metadata                                                                                                                    |
-| `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY`  | Optional current protocol deployment key (`chainId:ContentRegistry:FeedbackRegistry`) used to derive the live schema when shared artifacts are unavailable                                                   |
-| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Break-glass schema override for Ponder tables; leave unset for normal live services so `yarn ponder:start` can use Railway or protocol deployment-scoped schemas                                      |
-| `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                                                                                                   |
-| `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                                                                                                               |
-| `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                                                                                                   |
-| `PONDER_METADATA_SYNC_TOKEN`               | Bearer token for Next.js `POST /question-metadata` metadata sync; must match the Next.js server value                                                                                                       |
-| `PONDER_METADATA_SYNC_ALLOW_OPEN`          | Local/dev-only escape hatch for unauthenticated metadata sync                                                                                                                                               |
+Copy `.env.example` to `.env.local` and set:
 
-For live supported chains, Ponder treats `@rateloop/contracts` as the source of truth and validates address and start-block env values against the shared artifacts. Conflicting live-chain overrides fail startup instead of being ignored.
-For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
-`yarn deploy` does not need machine-specific addresses committed to the shared deployment artifact. After `yarn deploy`,
-the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
-`PONDER_NETWORK=hardhat`. Run production indexing with `PONDER_NETWORK=base` and `PONDER_RPC_URL_8453`.
-Keep `RATELOOP_E2E_PRODUCTION_BUILD` and `NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD` unset for Ponder live-chain
-services. Those flags are for local Next.js/Playwright test behavior and Ponder rejects them outside `hardhat`.
+- `PONDER_TOKENLESS_PANEL_ADDRESS`
+- `PONDER_CREDENTIAL_ISSUER_ADDRESS`
+- `PONDER_X402_PANEL_SUBMITTER_ADDRESS` or the zero address
+- `PONDER_TOKENLESS_START_BLOCK`
+- `PONDER_RPC_URL_<chainId>`
+- `CORS_ORIGIN`, and in production `PONDER_KEEPER_WORK_TOKEN`
 
-In production, leave `RATELOOP_PONDER_DATABASE_SCHEMA` and `DATABASE_SCHEMA` unset unless you are doing a
-deliberate recovery override. `yarn ponder:start` still launches Ponder with an explicit Postgres schema:
-on Railway it uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping
-new app builds from colliding with older Ponder app metadata. Outside Railway, the launcher derives a
-protocol deployment-scoped schema from the active chain's `ContentRegistry` and `FeedbackRegistry`
-addresses, so a future incident/governance migration that changes contract addresses indexes into a fresh
-schema even if content IDs restart. If neither value is available and no supported schema override is set,
-the launcher uses RateLoop-owned network fallbacks such as `rateloop_ponder_base`.
-`DATABASE_SCHEMA=ponder` is not supported; remove that old generic override or set a deliberate unique
-recovery schema. To force a specific live schema, set
-`RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true` and choose a unique recovery value such as
-`rateloop_ponder_manual_recovery_202606`; remove the override after the recovery window.
+Run `yarn codegen`, `yarn check-types`, and `yarn test` from this package. Production runs through `node scripts/start.mjs`, which derives a database schema from the stable deployment identity.
 
-When the keeper publishes correlation payout artifacts with `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, set
-`PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` to the same public HTTPS prefix as the keeper's
-`KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL`. Ponder refuses other HTTPS artifact URLs while building payout proofs.
+## Indexed evidence
 
-## Project Structure
+- Round economic terms and deterministic lifecycle cursors.
+- Public tlock ciphertext bytes and their signed hashes.
+- Vote-key, nullifier, payout commitment, reveal, response hash, and accuracy score.
+- Claim destination and amount. This deliberately reflects the v0 privacy limitation: a normal claim links the vote key to its payout destination.
+- Issuer signer epochs, scheduled grace, and emergency rotations.
 
-```
-ponder.config.ts              # Network setup, contract addresses, start blocks
-ponder.schema.ts              # Database tables & relationships
+Round creation and commit handlers read the immutable contract record at the event block because the compact events do not repeat every term. A transient RPC failure fails the handler and is retried by Ponder; no partial default record is persisted.
 
-src/
-├── ContentRegistry.ts        # Content submission & lifecycle events
-├── RoundVotingEngine.ts      # Commit, reveal, settle, cancel events
-├── RoundRewardDistributor.ts # Reward distribution events
-├── QuestionRewardPoolEscrow.ts # Bounty funding, voter claims, and frontend shares
-├── ClusterPayoutOracle.ts    # Correlation epoch and round payout snapshot roots
-├── FeedbackBonusEscrow.ts    # Feedback bonus pools, awards, and forfeits
-├── CategoryRegistry.ts       # Seeded discovery category metadata
-├── ProfileRegistry.ts       # Profile update events
-├── FrontendRegistry.ts       # Frontend fee events
-├── RaterRegistry.ts          # Rater identity, human credential, and follow events
-├── LoopReputation.ts         # LREP transfer events
-└── api/
-    └── index.ts              # REST API routes (Hono)
+## API
 
-scripts/
-└── devWithRecovery.mjs       # Auto-restart on crash, clears corrupted state
-```
+- `GET /deployment`
+- `GET /status/tokenless`
+- `GET /rounds`
+- `GET /rounds/:roundId`
+- `GET /rounds/:roundId/commits`
+- `GET /rounds/:roundId/claims`
+- `GET /issuer/epochs`
+- `GET /keeper/work?now=<unix-seconds>`
 
-ABIs come from `@rateloop/contracts/abis`; the indexer imports the shared package directly.
-
-## API Endpoints
-
-The REST API is built with Hono. Key routes:
-
-| Endpoint                                | Description                                             |
-| --------------------------------------- | ------------------------------------------------------- |
-| `GET /content`                          | List content with filters and pagination                |
-| `GET /content/:id`                      | Single content item                                     |
-| `GET /content/by-url?url=...`           | Look up a single content item by URL                    |
-| `GET /votes`                            | List votes with filters                                 |
-| `GET /question-reward-claim-candidates` | Claimable USDC bounty rounds for a revealed voter       |
-| `GET /question-bundle-claim-candidates` | Claimable bundle bounty round sets for a revealed voter |
-| `GET /profile/:address`                 | User profile and reputation                             |
-| `GET /categories`                       | List content categories                                 |
-
-Bounty tables track gross funding, voter payouts, and the default eligible frontend-operator share separately so API consumers can display both voter rewards and operator fees. Fresh deployments attach bounties and Feedback Bonuses only during question creation: `questionDuration`, `rewardOpensAt`, `rewardClosesAt`, and `feedbackClosesAt` all derive from the question creation timestamp and the single round duration. Bundle bounties are indexed as round sets: each set records one settled round per bundled question, its allocation, and per-voter claims. Feedback Bonus tables stay separate: they index LREP/USDC pools, awarded feedback hashes, direct voter payments, frontend shares, and treasury forfeits. `awardDeadline` is the effective payout/forfeit deadline and extends to at least 1 hour after the round becomes terminal. Native x402 one-shot submissions still create pools through `FeedbackBonusEscrow`, so the existing `FeedbackBonusPoolCreated` handler indexes USDC Feedback Bonuses funded in the same transaction as question submission. Public post-creation bounty and Feedback Bonus funding entrypoints are no longer exposed on the fresh contract ABIs; the indexer keeps legacy columns for compatibility but does not use `bountyStartBy` or first-commit activation to derive fresh reward windows. Content submission events now revolve around public context from a URL, images, or YouTube video, so indexers and clients can treat those fields as the canonical entry point for discovery and previews.
-
-Routes `/health` and `/status` are reserved by Ponder. Railway uses `/health` as the process/liveness healthcheck, while release readiness and operator dashboards should use custom indexer health at `GET /health/indexer`. That readiness signal can return `degraded` for blockers and `attention` for warnings; it includes a `humanVerifiedCommitCount` check that warns when round rows still default to `0` while indexed votes carry human credentials. The same signal is returned in `GET /keeper/work` response metadata under `health.humanVerifiedCommitCount`.
-
-Correlation-scoring routes return source-event input snapshots rather than live mutable identity state. Question-reward and public-rating rows persist the rater's verified-human flag, historical settled-vote count, credential ref, and active ban reasons at the public verdict close; RBTS settlement rows persist the same boundary at `SettlementPending`; pending launch-credit rows persist it at the pending-credit event. If those fields are missing, Ponder returns a conflict instead of serving a root that could drift after later credentials, bans, or voting history changes. `GET /keeper/work` also includes `settlementReadyAt` on settle-ready open rounds so keepers can expose `keeper_settlement_backlog_oldest_seconds` and alert on delayed settlement automation.
-
-## Troubleshooting
-
-**Local chain rewind / reset:** `yarn ponder:dev` now auto-recovers once if the local hardhat/anvil chain was reset and the persisted Ponder checkpoint points at a block that no longer exists. It clears `packages/ponder/.ponder/pglite` and retries automatically.
-
-**Production schema collision:** If Railway logs `Schema '<name>' was previously used by a different
-Ponder app`, make sure the service uses `yarn start` (via `packages/ponder/railway.toml` or
-`yarn ponder:start`) so the launcher injects a deployment-scoped schema. When
-`RAILWAY_DEPLOYMENT_ID` is set, the launcher automatically ignores deprecated static overrides such
-as `rateloop_ponder_base_sepolia_canary` and uses `railway_<deployment_id>` instead. Remove that
-static value from Railway env vars so future deploys stay on the deployment-scoped schema. For
-non-Railway deployments without shared deployment artifacts, set
-`RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` to the current deployment key or use
-`RATELOOP_PONDER_DATABASE_SCHEMA` with `RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true` for a deliberate
-recovery window.
-Only drop the old schema if you are certain it contains no data you need.
-
-**`humanVerifiedCommitCount` backfill:** After deploying schema changes that add
-`humanVerifiedCommitCount`, existing Postgres rows default to `0`. Either run a full
-Ponder reindex, or backfill from indexed vote rows before relying on keeper
-`reveal_failed` hints or dormancy pre-filters on Railway / production:
-
-**Required before mainnet keeper cutover** if the indexer DB was created before the HRC column shipped. Without backfill, `/keeper/work` may omit dormant rounds and `reveal_failed` candidates even though on-chain state is correct. Monitor `/health/indexer` or `health.humanVerifiedCommitCount` in `/keeper/work` for a runtime warning when backfill is still needed.
-
-```sql
-UPDATE "<schema>"."round" AS r
-SET human_verified_commit_count = COALESCE(v.count, 0),
-    has_human_verified_commit = COALESCE(v.count, 0) > 0
-FROM (
-  SELECT content_id, round_id, COUNT(*)::integer AS count
-  FROM "<schema>"."vote"
-  WHERE (credential_mask & 8) != 0 AND committed_at > 0
-  GROUP BY content_id, round_id
-) AS v
-WHERE r.content_id = v.content_id AND r.round_id = v.round_id;
-```
-
-Replace `<schema>` with your deployment schema (for example `railway_<deployment_id>`).
-
-**PGlite corruption or unrecoverable local state:** If Ponder still crashes or behaves unexpectedly after the retry, clear the local state manually:
-
-```bash
-rm -rf packages/ponder/.ponder
-```
-
-**BigInt serialization:** Always use `replaceBigInts()` from `"ponder"` before calling `c.json()` in API routes — `JSON.stringify` cannot serialize BigInt values.
-
-**Rate limiting behind proxies:** In production, set `RATE_LIMIT_TRUSTED_IP_HEADERS` only to headers your edge proxy overwrites, such as `x-forwarded-for` on Vercel/Railway behind a trusted proxy or `cf-connecting-ip` on Cloudflare. Non-production routes fall back to a request fingerprint when it is unset; production custom API routes fail closed with `503` until trusted headers are configured.
+`/keeper/work` emits only permissionless panel actions: open reveal, begin settlement, process aggregation, process weights, finalize, and return stale shares. It never asks a keeper to publish a payout root or exercise an operator fund-control path.

@@ -13,8 +13,8 @@ import {
 describe("devWithRecovery", () => {
   test("uses dev:raw by default and accepts an alternate raw dev script", () => {
     expect(resolveDevRawScript([])).toBe("dev:raw");
-    expect(resolveDevRawScript(["dev:raw:built-contracts"])).toBe(
-      "dev:raw:built-contracts",
+    expect(resolveDevRawScript(["dev:raw:isolated"])).toBe(
+      "dev:raw:isolated",
     );
     expect(resolveDevRawScript([""])).toBe("dev:raw");
   });
@@ -60,14 +60,14 @@ describe("devWithRecovery", () => {
 
     expect(
       shouldRecover(output, {
-        PONDER_NETWORK: "base",
-        PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        PONDER_NETWORK: "baseSepolia",
+        PONDER_RPC_URL_84532: "https://sepolia.base.org",
       }),
     ).toBe(false);
     expect(
       getRecoveryReason(output, {
-        PONDER_NETWORK: "base",
-        PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        PONDER_NETWORK: "baseSepolia",
+        PONDER_RPC_URL_84532: "https://sepolia.base.org",
       }),
     ).toBeNull();
   });

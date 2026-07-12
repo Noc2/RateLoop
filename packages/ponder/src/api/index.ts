@@ -1,231 +1,178 @@
-import { createRequire } from "node:module";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import {
-  hasTrustedRateLimitHeadersConfigured,
-  isLoopbackRateLimitIdentifier,
-  isLoopbackRequestUrl,
-  resolveRateLimitIdentifier,
-} from "./request-identity.js";
-import { RateLimiter } from "./rate-limit.js";
-import { registerContentRoutes } from "./routes/content-routes.js";
-import { registerCorrelationRoutes } from "./routes/correlation-routes.js";
-import { registerDataRoutes } from "./routes/data-routes.js";
-import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
-import { registerKeeperRoutes } from "./routes/keeper-routes.js";
-import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
-import { inspectHumanVerifiedCommitCountHealth } from "./human-verified-commit-health.js";
-import { buildCorrelationFinalitySla } from "./correlation-finality-sla.js";
-import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
-import { parseStrictUnsignedInteger } from "../numberParsing.js";
+import { and, asc, desc, eq, replaceBigInts } from "ponder";
+import { db } from "ponder:api";
+import { tokenlessClaim, tokenlessCommit, tokenlessIssuerEpoch, tokenlessRound } from "ponder:schema";
+import { resolveTokenlessDeployment, roundKey } from "../protocol-deployment";
+import { keeperAction, publicRoundStatus, verdictStatus } from "../status";
 
-const require = createRequire(import.meta.url);
-const { resolvePonderDatabaseSchema, schemaFromProtocolDeploymentKey } = require("../../scripts/databaseSchema.mjs") as {
-  resolvePonderDatabaseSchema: (env?: NodeJS.ProcessEnv) => { schema: string; source: string };
-  schemaFromProtocolDeploymentKey: (deploymentKey?: string | null) => string | undefined;
-};
-
-const KEEPER_WORK_PATH = "/keeper/work";
-const DEPLOYMENT_PROBE_PATHS = new Set(["/deployment"]);
-
-function isKeeperWorkPath(pathname: string) {
-  return pathname === KEEPER_WORK_PATH;
-}
-
-function isDeploymentProbePath(pathname: string) {
-  return DEPLOYMENT_PROBE_PATHS.has(pathname);
-}
-
-function hasValidKeeperWorkAuthorization(c: { req: { header: (name: string) => string | undefined } }) {
-  const token = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
-  if (!token) {
-    return process.env.NODE_ENV !== "production";
-  }
-  return c.req.header("authorization") === `Bearer ${token}`;
-}
-
+const deployment = resolveTokenlessDeployment();
 const app = new Hono();
+const MAX_LIMIT = 500;
 
-// ============================================================
-// GLOBAL ERROR HANDLER — catch unhandled DB/runtime errors
-// ============================================================
+function jsonSafe<T>(value: T) {
+  return replaceBigInts(value, (item) => item.toString());
+}
 
-app.onError((err, c) => {
-  console.error("[ponder-api] Unhandled error:", err.message);
+function limit(value: string | undefined, fallback = 50) {
+  if (!value || !/^[1-9]\d*$/u.test(value)) return fallback;
+  return Math.min(Number(value), MAX_LIMIT);
+}
+
+function parseRoundId(value: string) {
+  return /^(?:0|[1-9]\d*)$/u.test(value) ? BigInt(value) : null;
+}
+
+function parseTimestamp(value: string | undefined) {
+  if (!value || !/^(?:0|[1-9]\d*)$/u.test(value)) return null;
+  return BigInt(value);
+}
+
+function keeperAuthorization(header: string | undefined) {
+  const token = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
+  if (!token) return process.env.NODE_ENV === "production" ? "missing" : null;
+  return header === `Bearer ${token}` ? null : "invalid";
+}
+
+const origins = process.env.CORS_ORIGIN?.split(",").map((value) => value.trim()).filter(Boolean);
+if (process.env.NODE_ENV === "production" && (!origins || origins.length === 0)) {
+  throw new Error("CORS_ORIGIN is required in production.");
+}
+app.use("/*", cors({ origin: origins ?? ["http://localhost:3000"] }));
+
+app.onError((error, c) => {
+  console.error("[tokenless-ponder]", error);
   return c.json({ error: "Internal server error" }, 500);
 });
 
-// ============================================================
-// RATE LIMITING — IP-based sliding window (in-memory, resets on restart)
-// ============================================================
+app.get("/deployment", (c) => c.json(deployment));
 
-const rateLimiter = new RateLimiter(120, 60_000, 60_000);
-const isProduction = process.env.NODE_ENV === "production";
-const isLocalE2EProductionBuild =
-  process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
-  process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
-const rateLimitMisconfigured = isProduction && !hasTrustedRateLimitHeadersConfigured();
+app.get("/status/tokenless", async (c) => {
+  const rows = await db
+    .select({ state: tokenlessRound.state })
+    .from(tokenlessRound)
+    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey));
+  const byState: Record<string, number> = {};
+  for (const row of rows) byState[String(row.state)] = (byState[String(row.state)] ?? 0) + 1;
+  return c.json({ status: "ok", deploymentKey: deployment.deploymentKey, rounds: rows.length, byState });
+});
 
-if (rateLimitMisconfigured) {
-  console.error(
-    "[ponder] FATAL: RATE_LIMIT_TRUSTED_IP_HEADERS is required in production. " +
-    "Set it to the proxy header(s) that carry the client IP. " +
-    "All custom API routes will return 503 until this is fixed.",
+app.get("/rounds", async (c) => {
+  const now = parseTimestamp(c.req.query("now")) ?? BigInt(Math.floor(Date.now() / 1_000));
+  const rows = await db
+    .select()
+    .from(tokenlessRound)
+    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
+    .orderBy(desc(tokenlessRound.roundId))
+    .limit(limit(c.req.query("limit")));
+  return c.json(
+    jsonSafe(
+      rows.map((row) => ({
+        ...row,
+        status: publicRoundStatus(row, now),
+        verdictStatus: verdictStatus(row.state),
+      })),
+    ),
   );
-}
-
-// H-7 (2026-05-22 audit): the in-memory limiter resets on process restart and is per-replica.
-// Operators running multiple Ponder instances behind a load balancer will see the effective
-// limit divide by replica count, and burst traffic immediately after a redeploy goes
-// uncounted. Surface this at boot so it cannot be silently misconfigured; opt-in via
-// PONDER_REPLICA_COUNT > 1 (or RATE_LIMIT_BACKEND=memory to acknowledge the trade-off).
-{
-  const replicaCountRaw = process.env.PONDER_REPLICA_COUNT;
-  const hasReplicaCount = replicaCountRaw !== undefined && replicaCountRaw.trim() !== "";
-  const replicaCount = hasReplicaCount
-    ? parseStrictUnsignedInteger(replicaCountRaw)
-    : 1;
-  const backendAcknowledged = process.env.RATE_LIMIT_BACKEND === "memory";
-  if (
-    isProduction &&
-    hasReplicaCount &&
-    (replicaCount === null || replicaCount < 1)
-  ) {
-    console.warn(
-      `[ponder] WARNING: Invalid PONDER_REPLICA_COUNT=${JSON.stringify(replicaCountRaw)}; ` +
-      "expected a positive base-10 integer. Rate-limit replica diagnostics will assume one replica.",
-    );
-  } else if (isProduction && replicaCount !== null && replicaCount > 1 && !backendAcknowledged) {
-    console.warn(
-      `[ponder] WARNING: in-memory rate limiter is running with ${replicaCount} replicas; ` +
-      "the effective per-IP limit divides by replica count. Migrate to a shared store " +
-      "(e.g. Redis) or set RATE_LIMIT_BACKEND=memory to acknowledge this trade-off.",
-    );
-  }
-}
-
-app.use("/*", async (c, next) => {
-  const requestPath = new URL(c.req.url).pathname;
-  const isDeploymentProbe = isDeploymentProbePath(requestPath);
-  const isAuthorizedKeeperRequest = isKeeperWorkPath(requestPath) && hasValidKeeperWorkAuthorization(c);
-
-  if (rateLimitMisconfigured && !isDeploymentProbe && !isAuthorizedKeeperRequest) {
-    return c.json({ error: "RATE_LIMIT_TRUSTED_IP_HEADERS not configured. Set the env var." }, 503);
-  }
-
-  if (isDeploymentProbe || isAuthorizedKeeperRequest) {
-    await next();
-    return;
-  }
-
-  const identifier = resolveRateLimitIdentifier(name => c.req.header(name) ?? undefined, {
-    requestUrl: c.req.url,
-  });
-
-  const isLoopbackRequest =
-    (!isProduction || isLocalE2EProductionBuild)
-    && (isLoopbackRateLimitIdentifier(identifier) || isLoopbackRequestUrl(c.req.url));
-
-  if (isLoopbackRequest) {
-    await next();
-    return;
-  }
-
-  const { allowed, retryAfter } = rateLimiter.check(identifier);
-
-  if (!allowed) {
-    c.header("Retry-After", String(retryAfter));
-    return c.json({ error: "Too many requests" }, 429);
-  }
-
-  await next();
 });
 
-// Enable CORS for frontend access (restrict via CORS_ORIGIN in production, comma-separated)
-const DEFAULT_CORS_ORIGINS = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"];
-const corsOrigin = process.env.CORS_ORIGIN;
-const corsMisconfigured = isProduction && !corsOrigin;
-if (corsMisconfigured) {
-  console.error(
-    "[ponder] FATAL: CORS_ORIGIN is required in production. " +
-    "Set CORS_ORIGIN env var to your frontend domain(s). " +
-    "All API routes will return 503 until this is fixed.",
+app.get("/rounds/:roundId", async (c) => {
+  const roundId = parseRoundId(c.req.param("roundId"));
+  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  const row = await db.query.tokenlessRound.findFirst({
+    where: and(
+      eq(tokenlessRound.id, roundKey(deployment.deploymentKey, roundId)),
+      eq(tokenlessRound.deploymentKey, deployment.deploymentKey),
+    ),
+  });
+  if (!row) return c.json({ error: "Round not found" }, 404);
+  const now = parseTimestamp(c.req.query("now")) ?? BigInt(Math.floor(Date.now() / 1_000));
+  return c.json(
+    jsonSafe({
+      ...row,
+      status: publicRoundStatus(row, now),
+      verdictStatus: verdictStatus(row.state),
+    }),
   );
-}
-
-const allowedOrigins = corsOrigin ? corsOrigin.split(",").map((origin: string) => origin.trim()) : DEFAULT_CORS_ORIGINS;
-if (!isProduction && !corsOrigin) {
-  console.warn("[ponder] CORS_ORIGIN not set — allowing localhost only. Set CORS_ORIGIN for production domains.");
-}
-
-// Block browser-facing routes if CORS is misconfigured — GET /keeper/work stays available with bearer auth.
-if (corsMisconfigured) {
-  app.use("/*", async (c, next) => {
-    const requestPath = new URL(c.req.url).pathname;
-    if (isDeploymentProbePath(requestPath)) {
-      await next();
-      return;
-    }
-    if (isKeeperWorkPath(requestPath) && hasValidKeeperWorkAuthorization(c)) {
-      await next();
-      return;
-    }
-    return c.json({ error: "CORS_ORIGIN not configured. Set CORS_ORIGIN env var." }, 503);
-  });
-}
-
-app.use(
-  "/*",
-  cors({
-    origin: allowedOrigins,
-  }),
-);
-
-// Ponder provides /health and /status natively. /health/indexer adds indexer-specific signals.
-app.get("/health/indexer", async (c) => {
-  const [humanVerifiedCommitCount, correlationFinality] = await Promise.all([
-    inspectHumanVerifiedCommitCountHealth(),
-    buildCorrelationFinalitySla(),
-  ]);
-  const degraded =
-    humanVerifiedCommitCount.status === "warning" ||
-    correlationFinality.status === "degraded";
-  const status = degraded
-    ? "degraded"
-    : correlationFinality.status === "attention"
-      ? "attention"
-      : "ok";
-
-  return c.json({
-    status,
-    checks: {
-      humanVerifiedCommitCount,
-      correlationFinality,
-    },
-  });
 });
 
-app.get("/deployment", (c) => {
-  const metadata = resolvePonderProtocolDeploymentMetadata();
-  if (!metadata) {
-    return c.json({ configured: false, error: "Protocol deployment is not configured" }, 503);
-  }
-
-  const databaseSchema = resolvePonderDatabaseSchema(process.env);
-
-  return c.json({
-    ...metadata,
-    databaseSchema: databaseSchema.schema,
-    databaseSchemaSource: databaseSchema.source,
-    expectedDatabaseSchema: schemaFromProtocolDeploymentKey(metadata.deploymentKey) ?? null,
-  });
+app.get("/rounds/:roundId/commits", async (c) => {
+  const roundId = parseRoundId(c.req.param("roundId"));
+  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  const rows = await db
+    .select()
+    .from(tokenlessCommit)
+    .where(
+      and(
+        eq(tokenlessCommit.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessCommit.roundId, roundId),
+      ),
+    )
+    .orderBy(asc(tokenlessCommit.commitLogIndex))
+    .limit(limit(c.req.query("limit"), 100));
+  return c.json(jsonSafe(rows));
 });
 
-registerContentRoutes(app);
-registerCorrelationRoutes(app);
-registerDiscoveryRoutes(app);
-registerKeeperRoutes(app);
-registerLeaderboardRoutes(app);
-registerDataRoutes(app);
+app.get("/rounds/:roundId/claims", async (c) => {
+  const roundId = parseRoundId(c.req.param("roundId"));
+  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  const rows = await db
+    .select()
+    .from(tokenlessClaim)
+    .where(
+      and(
+        eq(tokenlessClaim.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessClaim.roundId, roundId),
+      ),
+    )
+    .orderBy(asc(tokenlessClaim.logIndex));
+  return c.json(jsonSafe(rows));
+});
+
+app.get("/issuer/epochs", async (c) => {
+  const rows = await db
+    .select()
+    .from(tokenlessIssuerEpoch)
+    .where(eq(tokenlessIssuerEpoch.deploymentKey, deployment.deploymentKey))
+    .orderBy(desc(tokenlessIssuerEpoch.epoch))
+    .limit(limit(c.req.query("limit"), 20));
+  return c.json(jsonSafe(rows));
+});
+
+app.get("/keeper/work", async (c) => {
+  const authorization = keeperAuthorization(c.req.header("authorization"));
+  if (authorization === "missing") return c.json({ error: "PONDER_KEEPER_WORK_TOKEN is required" }, 503);
+  if (authorization === "invalid") return c.json({ error: "Invalid keeper token" }, 401);
+  const now = parseTimestamp(c.req.query("now"));
+  if (now === null) return c.json({ error: "now must be an unsigned integer timestamp" }, 400);
+
+  const rows = await db
+    .select()
+    .from(tokenlessRound)
+    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
+    .orderBy(asc(tokenlessRound.roundId))
+    .limit(MAX_LIMIT);
+  const work = rows.flatMap((row) => {
+    const action = keeperAction(row, now);
+    if (!action) return [];
+    return [{
+      action,
+      roundId: row.roundId.toString(),
+      cursor:
+        action === "process_aggregate"
+          ? row.aggregateCursor
+          : action === "process_weights"
+            ? row.weightCursor
+            : null,
+    }];
+  });
+  return c.json({
+    deploymentKey: deployment.deploymentKey,
+    chainId: deployment.chainId,
+    panelAddress: deployment.panelAddress,
+    now: now.toString(),
+    work,
+  });
+});
 
 export default app;
