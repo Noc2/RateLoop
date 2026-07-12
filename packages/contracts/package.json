@@ -2,7 +2,7 @@
   "name": "@rateloop/contracts",
   "version": "0.1.0",
   "type": "module",
-  "description": "Generated ABIs, deployment metadata, and protocol constants for RateLoop integrations",
+  "description": "Tokenless-v1 ABIs and isolated Base Sepolia deployment metadata",
   "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/contracts",
   "repository": {
     "type": "git",
@@ -14,39 +14,18 @@
   },
   "keywords": [
     "rateloop",
+    "tokenless",
     "contracts",
     "abis",
-    "deployments",
-    "viem"
+    "base-sepolia"
   ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "typesVersions": {
     "*": {
-      "abis": [
-        "dist/esm/abis/index.d.ts"
-      ],
-      "deployments": [
-        "dist/esm/deployments.d.ts"
-      ],
-      "deployedContracts": [
-        "dist/esm/deployedContracts.d.ts"
-      ],
-      "protocol": [
-        "dist/esm/protocol.d.ts"
-      ],
       "tokenless": [
         "dist/esm/tokenless/index.d.ts"
-      ],
-      "types": [
-        "dist/esm/types.d.ts"
-      ],
-      "voting": [
-        "dist/esm/voting.d.ts"
-      ],
-      "votingCore": [
-        "dist/esm/votingCore.d.ts"
       ],
       "*": [
         "dist/esm/index.d.ts"
@@ -63,45 +42,10 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
     },
-    "./abis": {
-      "types": "./dist/esm/abis/index.d.ts",
-      "import": "./dist/esm/abis/index.js",
-      "require": "./dist/cjs/abis/index.js"
-    },
-    "./deployments": {
-      "types": "./dist/esm/deployments.d.ts",
-      "import": "./dist/esm/deployments.js",
-      "require": "./dist/cjs/deployments.js"
-    },
-    "./deployedContracts": {
-      "types": "./dist/esm/deployedContracts.d.ts",
-      "import": "./dist/esm/deployedContracts.js",
-      "require": "./dist/cjs/deployedContracts.js"
-    },
-    "./protocol": {
-      "types": "./dist/esm/protocol.d.ts",
-      "import": "./dist/esm/protocol.js",
-      "require": "./dist/cjs/protocol.js"
-    },
     "./tokenless": {
       "types": "./dist/esm/tokenless/index.d.ts",
       "import": "./dist/esm/tokenless/index.js",
       "require": "./dist/cjs/tokenless/index.js"
-    },
-    "./types": {
-      "types": "./dist/esm/types.d.ts",
-      "import": "./dist/esm/types.js",
-      "require": "./dist/cjs/types.js"
-    },
-    "./voting": {
-      "types": "./dist/esm/voting.d.ts",
-      "import": "./dist/esm/voting.js",
-      "require": "./dist/cjs/voting.js"
-    },
-    "./votingCore": {
-      "types": "./dist/esm/votingCore.d.ts",
-      "import": "./dist/esm/votingCore.js",
-      "require": "./dist/cjs/votingCore.js"
     }
   },
   "scripts": {
@@ -113,10 +57,6 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  },
-  "dependencies": {
-    "tlock-js": "^0.9.0",
-    "viem": "2.39.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

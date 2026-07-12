@@ -1,27 +1,33 @@
-# RateLoop Contracts
+# `@rateloop/contracts`
 
-Generated TypeScript contract artifacts for RateLoop integrations.
+Generated TypeScript artifacts for the isolated tokenless-v1 protocol.
 
-## Contents
+The package exports exactly four ABIs:
 
-- ABIs for the deployed RateLoop contracts.
-- Shared deployment metadata for supported chains.
-- Protocol constants and helpers used by the app, SDK, agents, keeper, and indexer.
-- Vote commit helpers for the tlock-backed private voting flow.
+- `TokenlessPanelAbi`
+- `CredentialIssuerAbi`
+- `X402PanelSubmitterAbi`
+- `TokenlessTestUSDCAbi`
 
-## Usage
+It also exports `tokenlessDeployedContracts` and `tokenlessDeploymentSchema`. The checked-in deployment is the disposable Base Sepolia stack on chain `84532`; its stable key binds the panel, issuer, and adapter addresses.
 
 ```ts
 import {
-  ROUND_STATE,
-  deployedContracts,
-  getSharedDeploymentAddress,
+  TokenlessPanelAbi,
+  tokenlessDeployedContracts,
+  tokenlessDeploymentSchema,
 } from "@rateloop/contracts";
-import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 
-const contentRegistry = getSharedDeploymentAddress(8453, "ContentRegistry");
-const roundContext = packVoteRoundContext(1n, 5000);
+const deployment = tokenlessDeployedContracts[84532];
+console.log(tokenlessDeploymentSchema, deployment.deploymentKey);
 ```
 
-The package ships dual ESM/CJS builds and TypeScript declarations. Published
-artifacts are generated from the monorepo build; do not edit `dist` by hand.
+The same exports are available from `@rateloop/contracts/tokenless`. There are no compatibility subpaths or address fallbacks. A new deployment must be generated from the isolated Foundry deployment artifact and replaces this package surface atomically.
+
+The package ships ESM, CommonJS, and TypeScript declarations. Run:
+
+```bash
+yarn build
+yarn check-types
+yarn test
+```
