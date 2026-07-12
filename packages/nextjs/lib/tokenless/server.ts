@@ -465,6 +465,9 @@ export async function waitForTokenlessAsk(operationKey: string, appOrigin: strin
   const sandboxMode = isTokenlessSandboxMode();
   const ask = await readAskByOperation(operationKey, sandboxMode);
   if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  if (ask.status === "rejected") {
+    throw new TokenlessServiceError("The question did not pass pre-round moderation.", 410, "content_rejected");
+  }
   if (ask.resultJson) {
     return {
       schemaVersion: TOKENLESS_SCHEMA_VERSION,
