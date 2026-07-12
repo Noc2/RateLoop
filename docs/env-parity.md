@@ -1,31 +1,48 @@
-# RateLoop Environment Parity
+# Tokenless Environment Parity
 
-RateLoop currently targets the live Base mainnet deployment.
+Every live tokenless component is isolated from the legacy RateLoop deployment.
 
-## Chain Scope
+## Chain and deployment identity
 
-- `NEXT_PUBLIC_TARGET_NETWORKS=8453` is the production app setting.
-- `PONDER_NETWORK=base` is the production indexer setting.
-- Local development may use Anvil (`31337`) when a local deployment is running.
+- Network: Base Sepolia
+- Chain ID: `84532`
+- RPC variable: `BASE_SEPOLIA_RPC_URL`, `PONDER_RPC_URL_84532`, or `RPC_URL`, depending on the package
+- Deployment schema: `rateloop-tokenless-deployment-v1`
+- Deployment key: `tokenless-v1:<chainId>:<panel>:<issuer>:<adapter-or-zero>`
+- Canonical artifact: `packages/foundry/deployments/tokenless-v1/84532.json`
 
-## USDC Aliases
+Services must fail closed if their chain, addresses, start block, or deployment key disagree. Do not fall back to Base mainnet, an unversioned deployment JSON, or the former production services.
 
-Use unscoped USDC environment variables for the live deployment unless a package explicitly documents a chain-scoped override. When a chain-scoped alias is needed, use the `8453` suffix.
+## Hosted isolation
 
-- `NEXT_PUBLIC_USDC_ADDRESS_8453`
-- `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_8453`
-- `RATELOOP_X402_USDC_ADDRESS_8453`
+- Web project: `rateloop-tokenless` on a Vercel-provided domain; never alias this branch to `rateloop.ai`.
+- Service project: `rateloop-tokenless` on Railway, with its own Postgres, Ponder, and keeper services.
+- Ponder database schema is derived from the complete tokenless deployment identity.
+- The keeper uses a dedicated gas-only Base Sepolia key.
+- The credential issuer uses a separate server-only signer key. Never expose it through a `NEXT_PUBLIC_` variable.
 
-## E2E Flags
+## Required production variables
 
-Local production-style E2E runs should opt in explicitly with the package-level local E2E flags documented in `packages/nextjs/README.md`. Production deployments should not rely on local fallback chains or undeployed-network bypasses.
+Next.js:
 
-## Contract Address Prefixes
+- `APP_URL`, `NEXT_PUBLIC_APP_URL`
+- `DATABASE_URL`
+- `NEXT_PUBLIC_TARGET_NETWORKS=84532`
+- `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
+- explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
-Use the package-specific prefixes already present in each `.env.example` file:
+Ponder:
 
-- Next.js public app: `NEXT_PUBLIC_*`
-- Agents local signer: `RATELOOP_LOCAL_SIGNER_*`
-- Agents x402 aliases: `RATELOOP_X402_*`
-- Ponder service: `PONDER_*` plus `RATELOOP_PONDER_*` break-glass variables where documented
-- Keeper service: `KEEPER_*`, `PONDER_*`, `METRICS_*`, and contract-address variables from `packages/keeper/.env.example`
+- `PONDER_NETWORK=baseSepolia`, `PONDER_CHAIN_ID=84532`, `PONDER_RPC_URL_84532`
+- `PONDER_TOKENLESS_PANEL_ADDRESS`, `PONDER_CREDENTIAL_ISSUER_ADDRESS`, `PONDER_X402_PANEL_SUBMITTER_ADDRESS`
+- `PONDER_TOKENLESS_START_BLOCK`, `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY`
+- `DATABASE_URL`, `CORS_ORIGIN`, `PONDER_KEEPER_WORK_TOKEN`
+
+Keeper:
+
+- `CHAIN_ID=84532`, `RPC_URL`
+- `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`
+- `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
+- `KEEPER_PRIVATE_KEY` or a hosted keystore, plus `METRICS_AUTH_TOKEN`
+
+The package-local `.env.example` files remain the executable source for exact names and validation rules.
