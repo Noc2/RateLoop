@@ -29,7 +29,7 @@ export function getKeystoreAccount(): PrivateKeyAccount | null {
     throw new Error(
       `Failed to decrypt keystore account "${name}": ${message}. ` +
         `Check KEYSTORE_ACCOUNT/KEYSTORE_PASSWORD; refusing to fall back to KEEPER_PRIVATE_KEY.`,
-      { cause: err },
+      { cause: err }
     );
   }
 }

@@ -10,12 +10,11 @@ watchPatterns = [
   "scripts/fix-esm-extensions.mjs",
   "scripts/with-workspace-dist-lock.mjs",
   "scripts/write-cjs-package-json.mjs",
-  "packages/contracts/**",
   "packages/keeper/**",
   "packages/node-utils/**",
 ]
 
 [deploy]
-startCommand = "sh ./docker-entrypoint.sh"
+startCommand = "yarn start:built-dist"
 healthcheckPath = "/live"
 healthcheckTimeout = 120

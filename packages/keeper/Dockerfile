@@ -10,8 +10,6 @@ WORKDIR /app
 ENV HUSKY=0
 ENV NODE_ENV=production
 
-RUN apk add --no-cache su-exec
-
 COPY .yarn/ ./.yarn/
 COPY .yarnrc.yml package.json yarn.lock ./
 COPY packages/agents/package.json ./packages/agents/package.json
@@ -30,11 +28,7 @@ COPY scripts/clean-package-dist.mjs ./scripts/clean-package-dist.mjs
 COPY scripts/fix-esm-extensions.mjs ./scripts/fix-esm-extensions.mjs
 COPY scripts/with-workspace-dist-lock.mjs ./scripts/with-workspace-dist-lock.mjs
 COPY scripts/write-cjs-package-json.mjs ./scripts/write-cjs-package-json.mjs
-COPY packages/contracts/tsconfig.json ./packages/contracts/tsconfig.json
-COPY packages/contracts/tsconfig.cjs.json ./packages/contracts/tsconfig.cjs.json
-COPY packages/contracts/src ./packages/contracts/src
 COPY packages/keeper/tsconfig.json ./packages/keeper/tsconfig.json
-COPY packages/keeper/docker-entrypoint.sh ./packages/keeper/docker-entrypoint.sh
 COPY packages/keeper/src ./packages/keeper/src
 COPY packages/node-utils/tsconfig.json ./packages/node-utils/tsconfig.json
 COPY packages/node-utils/tsconfig.cjs.json ./packages/node-utils/tsconfig.cjs.json
@@ -56,4 +50,4 @@ EXPOSE 9090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "const http=require('node:http');const port=process.env.METRICS_PORT||process.env.PORT||'9090';const req=http.get({host:'127.0.0.1',port,path:'/live'},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(4000,()=>req.destroy());"
 
-CMD ["sh", "./docker-entrypoint.sh"]
+CMD ["yarn", "start:built-dist"]

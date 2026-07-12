@@ -25,7 +25,10 @@ function formatData(data?: Record<string, unknown>): string {
     .join(" ");
 }
 
-export function createLogger(format: "json" | "text", minLevel: LogLevel = "info"): Logger {
+export function createLogger(
+  format: "json" | "text",
+  minLevel: LogLevel = "info"
+): Logger {
   const minPriority = LEVEL_PRIORITY[minLevel];
 
   function log(level: LogLevel, msg: string, data?: Record<string, unknown>) {
