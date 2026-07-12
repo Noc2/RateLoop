@@ -1,18 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createTokenlessAsk, tokenlessErrorResponse } from "~~/lib/tokenless/server";
+import {
+  attachProductAsk,
+  authenticateProductPrincipal,
+  getProductSessionToken,
+  prepareProductAsk,
+  releasePreparedProductAsk,
+} from "~~/lib/tokenless/productCore";
+import { createTokenlessAsk, parseTokenlessAskRequest, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  let prepared: Awaited<ReturnType<typeof prepareProductAsk>> | null = null;
+  let attached = false;
   try {
-    const response = await createTokenlessAsk(
-      await request.json(),
-      request.headers.get("idempotency-key"),
-      request.nextUrl.origin,
-    );
+    const principal = await authenticateProductPrincipal({
+      authorization: request.headers.get("authorization"),
+      sessionToken: getProductSessionToken(request),
+    });
+    const body = parseTokenlessAskRequest(await request.json(), request.headers.get("idempotency-key"));
+    prepared = await prepareProductAsk({ principal, request: body });
+    const response = await createTokenlessAsk(body, request.headers.get("idempotency-key"), request.nextUrl.origin);
+    await attachProductAsk(prepared, response);
+    attached = true;
     return NextResponse.json(response);
   } catch (error) {
+    if (prepared && !attached) await releasePreparedProductAsk(prepared);
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status });
   }

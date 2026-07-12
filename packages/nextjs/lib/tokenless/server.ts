@@ -187,6 +187,24 @@ function assertPayment(value: unknown): asserts value is TokenlessAskRequest["pa
   }
 }
 
+export function parseTokenlessAskRequest(value: unknown, idempotencyHeader: string | null): TokenlessAskRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError("Ask body must be an object.", 400, "invalid_ask");
+  }
+  const request = value as Partial<TokenlessAskRequest>;
+  if (!request.idempotencyKey || !IDEMPOTENCY_KEY_PATTERN.test(request.idempotencyKey)) {
+    throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
+  }
+  if (idempotencyHeader !== request.idempotencyKey) {
+    throw new TokenlessServiceError("Idempotency-Key header must match the request body.", 400, "idempotency_mismatch");
+  }
+  if (!request.quoteId?.trim() || !request.payment) {
+    throw new TokenlessServiceError("quoteId and payment are required.", 400, "invalid_ask");
+  }
+  assertPayment(request.payment);
+  return request as TokenlessAskRequest;
+}
+
 function buildEconomics(request: TokenlessQuoteRequest): TokenlessEconomics {
   const bounty = parseAtomic(request.budget.bountyAtomic, "budget.bountyAtomic");
   const reserve = parseAtomic(request.budget.attemptReserveAtomic, "budget.attemptReserveAtomic");
@@ -357,20 +375,7 @@ export async function createTokenlessAsk(
   idempotencyHeader: string | null,
   appOrigin: string,
 ): Promise<TokenlessAskResponse> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TokenlessServiceError("Ask body must be an object.", 400, "invalid_ask");
-  }
-  const request = value as Partial<TokenlessAskRequest>;
-  if (!request.idempotencyKey || !IDEMPOTENCY_KEY_PATTERN.test(request.idempotencyKey)) {
-    throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
-  }
-  if (idempotencyHeader !== request.idempotencyKey) {
-    throw new TokenlessServiceError("Idempotency-Key header must match the request body.", 400, "idempotency_mismatch");
-  }
-  if (!request.quoteId?.trim() || !request.payment) {
-    throw new TokenlessServiceError("quoteId and payment are required.", 400, "invalid_ask");
-  }
-  assertPayment(request.payment);
+  const request = parseTokenlessAskRequest(value, idempotencyHeader);
 
   const sandboxMode = isTokenlessSandboxMode();
   const requestHash = hash(request);
