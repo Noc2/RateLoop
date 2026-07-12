@@ -19,6 +19,8 @@ type ApiKey = {
   createdAt: string;
 };
 
+type Webhook = { endpointId: string; url: string; eventTypes: string[]; active: boolean };
+
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
   if (!response.ok) {
@@ -39,9 +41,12 @@ export function WorkspaceSettingsClient() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [workspaceName, setWorkspaceName] = useState("");
   const [keyName, setKeyName] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,14 +62,27 @@ export function WorkspaceSettingsClient() {
   }, []);
 
   const loadKeys = useCallback(async (workspaceId: string) => {
-    if (!workspaceId) return setApiKeys([]);
-    const body = await readJson(
-      await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/api-keys`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      }),
-    );
-    setApiKeys(body.apiKeys as ApiKey[]);
+    if (!workspaceId) {
+      setApiKeys([]);
+      setWebhooks([]);
+      return;
+    }
+    const [keysBody, webhooksBody] = await Promise.all([
+      readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/api-keys`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+      ),
+      readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/webhooks`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+      ),
+    ]);
+    setApiKeys(keysBody.apiKeys as ApiKey[]);
+    setWebhooks(webhooksBody.webhooks as Webhook[]);
   }, []);
 
   useEffect(() => {
@@ -139,6 +157,51 @@ export function WorkspaceSettingsClient() {
       await loadKeys(selectedId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to revoke API key.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createWebhook(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body = await readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(selectedId)}/webhooks`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: webhookUrl, eventTypes: ["result.ready"] }),
+        }),
+      );
+      setNewWebhookSecret(String(body.signingSecret));
+      setWebhookUrl("");
+      await loadKeys(selectedId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to create webhook.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deactivateWebhook(endpointId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(selectedId)}/webhooks/${encodeURIComponent(endpointId)}`,
+          {
+            method: "DELETE",
+            credentials: "same-origin",
+          },
+        ),
+      );
+      await loadKeys(selectedId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to deactivate webhook.");
     } finally {
       setBusy(false);
     }
@@ -239,6 +302,65 @@ export function WorkspaceSettingsClient() {
                   )}
                 </div>
               ))}
+            </div>
+            <div className="mt-8 border-t border-white/10 pt-7">
+              <h2 className="text-xl font-semibold">Result webhooks</h2>
+              <p className="mt-2 text-sm leading-6 text-base-content/50">
+                Register HTTPS destinations before attaching them to an ask. Delivery secrets are shown once.
+              </p>
+              <form className="mt-4 flex gap-2" onSubmit={createWebhook}>
+                <input
+                  type="url"
+                  className="input min-w-0 flex-1 rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                  value={webhookUrl}
+                  onChange={event => setWebhookUrl(event.target.value)}
+                  placeholder="https://agent.example/webhooks/rateloop"
+                  required
+                />
+                <button className="rateloop-gradient-action px-4" disabled={busy}>
+                  Add
+                </button>
+              </form>
+              {newWebhookSecret ? (
+                <div className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.07] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">
+                    Signing secret · shown once
+                  </p>
+                  <code className="mt-2 block break-all text-xs text-base-content/75">{newWebhookSecret}</code>
+                  <button
+                    type="button"
+                    className="mt-3 text-xs underline"
+                    onClick={() => void navigator.clipboard.writeText(newWebhookSecret)}
+                  >
+                    Copy secret
+                  </button>
+                </div>
+              ) : null}
+              <div className="mt-4 space-y-2">
+                {webhooks.map(webhook => (
+                  <div
+                    key={webhook.endpointId}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 p-3 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <span className="block truncate font-medium">{webhook.url}</span>
+                      <span className="text-xs text-base-content/45">{webhook.eventTypes.join(" · ")}</span>
+                    </div>
+                    {webhook.active ? (
+                      <button
+                        type="button"
+                        className="text-xs text-red-200 underline"
+                        disabled={busy}
+                        onClick={() => void deactivateWebhook(webhook.endpointId)}
+                      >
+                        Deactivate
+                      </button>
+                    ) : (
+                      <span className="text-xs text-base-content/40">Inactive</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         ) : (
