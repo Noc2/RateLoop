@@ -1,0 +1,345 @@
+import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
+import { afterEach, beforeEach, test } from "node:test";
+import { recoverTypedDataAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import {
+  type EligibilityProvider,
+  __setPaidEligibilityOverridesForTests,
+  completeEligibilityProviderHandoff,
+  createEligibilityProviderHandoff,
+  getPaidEligibility,
+  issuePaidVoucher,
+  registerVoucherRound,
+  submitPaidEligibility,
+} from "~~/lib/tokenless/paidEligibility";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+const NOW = new Date("2026-07-12T12:00:00.000Z");
+const ACCOUNT = "0x1111111111111111111111111111111111111111";
+const OTHER_ACCOUNT = "0x2222222222222222222222222222222222222222";
+const PANEL = "0x3333333333333333333333333333333333333333";
+const ISSUER = "0x4444444444444444444444444444444444444444";
+const CONTENT_ID = `0x${"55".repeat(32)}` as const;
+const VOTE_KEY = "0x6666666666666666666666666666666666666666" as const;
+const SIGNER_PRIVATE_KEY = `0x${"01".padStart(64, "0")}` as const;
+const SIGNER = privateKeyToAccount(SIGNER_PRIVATE_KEY);
+const VAULT_KEY = Buffer.alloc(32, 7);
+const originalProviderId = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID;
+const originalProviderKey = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY;
+const originalAppUrl = process.env.APP_URL;
+
+function provider(overrides: Partial<Awaited<ReturnType<EligibilityProvider["verify"]>>> = {}): EligibilityProvider {
+  return {
+    async verify(input) {
+      return {
+        providerId: "identity-production",
+        assertionId: "assertion-00000001",
+        subjectId: "provider-subject-123",
+        accountAddress: ACCOUNT,
+        identityTierId: 2,
+        adultVerified: true,
+        residenceCountry: "DE",
+        identityVerifiedAt: new Date(input.now.getTime() - 60_000),
+        identityExpiresAt: new Date(input.now.getTime() + 86_400_000),
+        sanctionsStatus: "clear",
+        sanctionsReference: "sanctions-screen-1",
+        sanctionsScreenedAt: new Date(input.now.getTime() - 60_000),
+        sanctionsExpiresAt: new Date(input.now.getTime() + 86_400_000),
+        assertionHash: "provider-assertion-hash",
+        ...overrides,
+      };
+    },
+  };
+}
+
+function submission(payoutAccount = ACCOUNT) {
+  return {
+    providerResult: { provider: "identity-production", payload: "opaque", signature: "signed" },
+    sanctionsConsent: true as const,
+    taxResidenceCountry: "DE",
+    payoutAccount,
+    dac7: {
+      fullName: "Ada Rater",
+      birthDate: "1990-01-01",
+      streetAddress: "Example Street 1",
+      city: "Berlin",
+      postalCode: "10115",
+      tin: "DE-PRIVATE-TIN",
+    },
+  };
+}
+
+function installOverrides(providerValue = provider(), verifyIssuerState = async () => {}) {
+  __setPaidEligibilityOverridesForTests({
+    provider: providerValue,
+    vault: { currentVersion: "test-v1", keys: new Map([["test-v1", VAULT_KEY]]) },
+    issuerConfig: {
+      chainId: 84532,
+      panelAddress: PANEL,
+      issuerAddress: ISSUER,
+      issuerEpoch: 7n,
+      signerPrivateKey: SIGNER_PRIVATE_KEY,
+      signerAddress: SIGNER.address,
+      rpcUrl: "http://unused.invalid",
+    },
+    verifyIssuerState,
+    requiresDac7: () => true,
+    handoff: { startUrl: "https://identity.example/start", secret: Buffer.alloc(32, 9) },
+  });
+}
+
+beforeEach(() => {
+  process.env.APP_URL = "https://tokenless.example";
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  installOverrides();
+});
+
+afterEach(() => {
+  __setDatabaseResourcesForTests(null);
+  __setPaidEligibilityOverridesForTests({});
+  if (originalProviderId === undefined) delete process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID;
+  else process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID = originalProviderId;
+  if (originalProviderKey === undefined) delete process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY;
+  else process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY = originalProviderKey;
+  if (originalAppUrl === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = originalAppUrl;
+});
+
+async function unlockPaidTasks() {
+  return submitPaidEligibility({ accountAddress: ACCOUNT, submission: submission(), now: NOW });
+}
+
+async function openRound() {
+  await registerVoucherRound({
+    chainId: 84532,
+    panelAddress: PANEL,
+    roundId: "42",
+    contentId: CONTENT_ID,
+    requiredTierId: 2,
+    voucherNotBefore: new Date(NOW.getTime() - 60_000),
+    voucherDeadline: new Date(NOW.getTime() + 20 * 60_000),
+  });
+}
+
+test("paid-task unlock persists every gate while vaulting DAC7 and nullifier material", async () => {
+  const result = await unlockPaidTasks();
+  assert.deepEqual(result, { status: "eligible", blockedReason: null, identityTierId: 2 });
+  const publicState = await getPaidEligibility(ACCOUNT, NOW);
+  assert.equal(publicState.status, "eligible");
+  assert.equal(publicState.dac7Status, "complete");
+  assert.equal(publicState.payoutAccount, ACCOUNT);
+
+  const rows = await dbClient.execute(
+    `SELECT p.nullifier_seed_ciphertext, e.dac7_vault_ciphertext
+     FROM tokenless_rater_profiles p JOIN tokenless_paid_eligibility e ON e.rater_id = p.rater_id`,
+  );
+  const seedCiphertext = String(rows.rows[0]?.nullifier_seed_ciphertext);
+  const dac7Ciphertext = String(rows.rows[0]?.dac7_vault_ciphertext);
+  assert.match(seedCiphertext, /^v1\./);
+  assert.match(dac7Ciphertext, /^v1\./);
+  assert.doesNotMatch(dac7Ciphertext, /Ada Rater|DE-PRIVATE-TIN/);
+
+  await unlockPaidTasks();
+  const refreshed = await dbClient.execute("SELECT nullifier_seed_ciphertext FROM tokenless_rater_profiles");
+  assert.equal(
+    String(refreshed.rows[0]?.nullifier_seed_ciphertext),
+    seedCiphertext,
+    "identity refresh keeps its stable seed",
+  );
+});
+
+test("unlock rejects a payout address that the Base Account session did not prove", async () => {
+  await assert.rejects(
+    () => submitPaidEligibility({ accountAddress: ACCOUNT, submission: submission(OTHER_ACCOUNT), now: NOW }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "payout_ownership_mismatch",
+  );
+});
+
+test("production provider results require an Ed25519 signature bound to the signed-in account", async () => {
+  const keys = generateKeyPairSync("ed25519");
+  process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID = "verified-provider";
+  process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY = keys.publicKey
+    .export({ type: "spki", format: "pem" })
+    .toString();
+  __setPaidEligibilityOverridesForTests({
+    provider: null,
+    vault: { currentVersion: "test-v1", keys: new Map([["test-v1", VAULT_KEY]]) },
+    requiresDac7: () => true,
+    handoff: { startUrl: "https://identity.example/start", secret: Buffer.alloc(32, 9) },
+  });
+  const payload = Buffer.from(
+    JSON.stringify({
+      version: 1,
+      provider: "verified-provider",
+      assertionId: "assertion-signed-1",
+      subjectId: "subject-signed-1",
+      accountAddress: ACCOUNT,
+      identityTierId: 2,
+      adultVerified: true,
+      residenceCountry: "DE",
+      identityVerifiedAt: new Date(NOW.getTime() - 60_000).toISOString(),
+      identityExpiresAt: new Date(NOW.getTime() + 86_400_000).toISOString(),
+      sanctions: {
+        status: "clear",
+        reference: "screen-signed-1",
+        screenedAt: new Date(NOW.getTime() - 60_000).toISOString(),
+        expiresAt: new Date(NOW.getTime() + 86_400_000).toISOString(),
+      },
+    }),
+  ).toString("base64url");
+  const signature = sign(null, Buffer.from(payload, "base64url"), keys.privateKey).toString("base64url");
+  const handoff = await createEligibilityProviderHandoff(ACCOUNT, NOW);
+  assert.equal(
+    new URL(handoff.startUrl).searchParams.get("callback_url"),
+    "https://tokenless.example/api/rater/eligibility/provider/callback",
+  );
+  await completeEligibilityProviderHandoff({
+    state: handoff.state,
+    providerResult: { provider: "verified-provider", payload, signature },
+    now: NOW,
+  });
+  const result = await submitPaidEligibility({
+    accountAddress: ACCOUNT,
+    now: NOW,
+    submission: { ...submission(), providerResult: undefined, providerState: handoff.state },
+  });
+  assert.equal(result.status, "eligible");
+
+  const invalidHandoff = await createEligibilityProviderHandoff(ACCOUNT, NOW);
+  await assert.rejects(
+    () =>
+      completeEligibilityProviderHandoff({
+        state: invalidHandoff.state,
+        now: NOW,
+        providerResult: {
+          provider: "verified-provider",
+          payload,
+          signature: Buffer.alloc(64).toString("base64url"),
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_provider_result",
+  );
+});
+
+test("sanctions review is persisted but remains fail-closed for paid vouchers", async () => {
+  installOverrides(provider({ sanctionsStatus: "review" }));
+  const result = await unlockPaidTasks();
+  assert.equal(result.status, "review");
+  assert.equal(result.blockedReason, "legal_eligibility_review");
+  assert.equal((await getPaidEligibility(ACCOUNT, NOW)).screeningStatus, "review_required");
+  await openRound();
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { idempotencyKey: "voucher:test:review", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
+  );
+});
+
+test("voucher issuance fails before eligibility and for an insufficient identity tier", async () => {
+  await openRound();
+  const request = {
+    idempotencyKey: "voucher:test:before",
+    roundId: "42",
+    contentId: CONTENT_ID,
+    voteKey: VOTE_KEY,
+  } as const;
+  await assert.rejects(
+    () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
+  );
+  installOverrides(provider({ identityTierId: 1 }));
+  await unlockPaidTasks();
+  await assert.rejects(
+    () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "identity_tier_insufficient",
+  );
+});
+
+test("voucher is domain-bound, exact, idempotent, and one-per-identity-per-round", async () => {
+  let issuerChecks = 0;
+  installOverrides(provider(), async () => {
+    issuerChecks += 1;
+  });
+  await unlockPaidTasks();
+  await openRound();
+  const request = {
+    idempotencyKey: "voucher:test:exact",
+    roundId: "42",
+    contentId: CONTENT_ID,
+    voteKey: VOTE_KEY,
+  } as const;
+  const first = await issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW });
+  const replay = await issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW });
+  assert.equal(replay.voucherId, first.voucherId);
+  assert.equal(replay.voucherSignature, first.voucherSignature);
+  assert.equal(issuerChecks, 1, "idempotent replay does not sign again or recheck the chain");
+  assert.equal(first.voucher.issuerEpoch, "7");
+  assert.equal(first.voucher.roundId, "42");
+
+  const recovered = await recoverTypedDataAddress({
+    domain: { name: "RateLoop Tokenless Panel", version: "1", chainId: 84532, verifyingContract: PANEL },
+    types: {
+      Voucher: [
+        { name: "voteKey", type: "address" },
+        { name: "contentId", type: "bytes32" },
+        { name: "roundId", type: "uint256" },
+        { name: "nullifier", type: "bytes32" },
+        { name: "tierId", type: "uint32" },
+        { name: "issuerEpoch", type: "uint64" },
+        { name: "expiresAt", type: "uint64" },
+      ],
+    },
+    primaryType: "Voucher",
+    message: {
+      voteKey: VOTE_KEY,
+      contentId: CONTENT_ID,
+      roundId: 42n,
+      nullifier: first.voucher.nullifier as `0x${string}`,
+      tierId: 2,
+      issuerEpoch: 7n,
+      expiresAt: BigInt(first.voucher.expiresAt as string),
+    },
+    signature: first.voucherSignature as `0x${string}`,
+  });
+  assert.equal(recovered, SIGNER.address);
+
+  await assert.rejects(
+    () => issuePaidVoucher({ accountAddress: ACCOUNT, request: { ...request, voteKey: OTHER_ACCOUNT }, now: NOW }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "voucher_conflict",
+  );
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { ...request, idempotencyKey: "voucher:test:second" },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "voucher_already_issued",
+  );
+});
+
+test("issuer acceptance is checked before any voucher record is created", async () => {
+  installOverrides(provider(), async () => {
+    throw new TokenlessServiceError("epoch rejected", 503, "issuer_mismatch");
+  });
+  await unlockPaidTasks();
+  await openRound();
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { idempotencyKey: "voucher:test:epoch", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "issuer_mismatch",
+  );
+  const rows = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_paid_vouchers");
+  assert.equal(Number(rows.rows[0]?.count), 0);
+});
