@@ -2,7 +2,7 @@
   "name": "@rateloop/sdk",
   "version": "0.1.0",
   "type": "module",
-  "description": "Framework-agnostic frontend SDK foundations for RateLoop integrations",
+  "description": "Tokenless quote, ask, wait, and result client for RateLoop integrations",
   "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/sdk",
   "repository": {
     "type": "git",
@@ -14,46 +14,16 @@
   },
   "keywords": [
     "rateloop",
+    "tokenless",
     "sdk",
-    "frontend",
-    "reputation",
-    "viem"
+    "human-evaluation",
+    "agent-api"
   ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "typesVersions": {
     "*": {
-      "agent": [
-        "dist/esm/agent.d.ts"
-      ],
-      "client": [
-        "dist/esm/client.d.ts"
-      ],
-      "config": [
-        "dist/esm/config.d.ts"
-      ],
-      "errors": [
-        "dist/esm/errors.d.ts"
-      ],
-      "read": [
-        "dist/esm/read.d.ts"
-      ],
-      "tokenless": [
-        "dist/esm/tokenless.d.ts"
-      ],
-      "tokenless-schema": [
-        "dist/esm/tokenlessSchema.d.ts"
-      ],
-      "tokenless-types": [
-        "dist/esm/tokenlessTypes.d.ts"
-      ],
-      "types": [
-        "dist/esm/types.d.ts"
-      ],
-      "vote": [
-        "dist/esm/vote.d.ts"
-      ],
       "*": [
         "dist/esm/index.d.ts"
       ]
@@ -68,73 +38,17 @@
       "types": "./dist/esm/index.d.ts",
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
-    },
-    "./agent": {
-      "types": "./dist/esm/agent.d.ts",
-      "import": "./dist/esm/agent.js",
-      "require": "./dist/cjs/agent.js"
-    },
-    "./client": {
-      "types": "./dist/esm/client.d.ts",
-      "import": "./dist/esm/client.js",
-      "require": "./dist/cjs/client.js"
-    },
-    "./config": {
-      "types": "./dist/esm/config.d.ts",
-      "import": "./dist/esm/config.js",
-      "require": "./dist/cjs/config.js"
-    },
-    "./errors": {
-      "types": "./dist/esm/errors.d.ts",
-      "import": "./dist/esm/errors.js",
-      "require": "./dist/cjs/errors.js"
-    },
-    "./read": {
-      "types": "./dist/esm/read.d.ts",
-      "import": "./dist/esm/read.js",
-      "require": "./dist/cjs/read.js"
-    },
-    "./tokenless": {
-      "types": "./dist/esm/tokenless.d.ts",
-      "import": "./dist/esm/tokenless.js",
-      "require": "./dist/cjs/tokenless.js"
-    },
-    "./tokenless-schema": {
-      "types": "./dist/esm/tokenlessSchema.d.ts",
-      "import": "./dist/esm/tokenlessSchema.js",
-      "require": "./dist/cjs/tokenlessSchema.js"
-    },
-    "./tokenless-types": {
-      "types": "./dist/esm/tokenlessTypes.d.ts",
-      "import": "./dist/esm/tokenlessTypes.js",
-      "require": "./dist/cjs/tokenlessTypes.js"
-    },
-    "./types": {
-      "types": "./dist/esm/types.d.ts",
-      "import": "./dist/esm/types.js",
-      "require": "./dist/cjs/types.js"
-    },
-    "./vote": {
-      "types": "./dist/esm/vote.d.ts",
-      "import": "./dist/esm/vote.js",
-      "require": "./dist/cjs/vote.js"
     }
   },
   "scripts": {
-    "build:workspace-deps": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn workspace @rateloop/contracts build\"",
-    "build:built-workspace-deps": "node ../../scripts/with-workspace-dist-lock.mjs \"node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs\"",
-    "build": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn build:built-workspace-deps\"",
-    "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && tsc --noEmit\"",
+    "build": "node ../../scripts/with-workspace-dist-lock.mjs \"node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs\"",
+    "check-types": "tsc --noEmit",
     "prepack": "yarn build",
-    "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs src\""
+    "test": "node ../../scripts/run-node-tests.mjs src"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
-  },
-  "dependencies": {
-    "@rateloop/contracts": "workspace:*",
-    "viem": "2.39.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

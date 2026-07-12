@@ -17,6 +17,7 @@ import type {
   TokenlessWaitRequest,
   TokenlessWaitResponse,
 } from "./tokenlessTypes";
+import { TOKENLESS_WEBHOOK_EVENT_TYPES } from "./tokenlessTypes";
 
 const DEFAULT_API_PATH = "/api/agent/v1";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -25,6 +26,8 @@ const MAX_WAIT_TIMEOUT_MS = 60_000;
 const WAIT_TRANSPORT_BUFFER_MS = 5_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
+const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+const webhookEventTypes = new Set<string>(TOKENLESS_WEBHOOK_EVENT_TYPES);
 
 interface NormalizedTokenlessClientOptions {
   apiBaseUrl: string;
@@ -122,6 +125,9 @@ function assertIdempotencyKey(value: string) {
 }
 
 function assertQuoteRequest(request: TokenlessQuoteRequest) {
+  if (!request.audience.tierId?.trim()) {
+    throw new RateLoopSdkError("audience.tierId is required.");
+  }
   if (!ATOMIC_AMOUNT_PATTERN.test(request.budget.bountyAtomic)) {
     throw new RateLoopSdkError(
       "budget.bountyAtomic must be an unsigned base-10 atomic amount string.",
@@ -143,14 +149,110 @@ function assertQuoteRequest(request: TokenlessQuoteRequest) {
   }
   if (
     !Number.isSafeInteger(request.requestedPanelSize) ||
-    request.requestedPanelSize <= 0
+    request.requestedPanelSize <= 0 ||
+    request.requestedPanelSize > 500
   ) {
     throw new RateLoopSdkError(
-      "requestedPanelSize must be a positive safe integer.",
+      "requestedPanelSize must be a safe integer between 1 and 500.",
     );
   }
   if (!request.question.prompt.trim()) {
     throw new RateLoopSdkError("question.prompt is required.");
+  }
+  if (request.question.kind === "head_to_head") {
+    if (
+      !request.question.optionA.key.trim() ||
+      !request.question.optionA.label.trim() ||
+      !request.question.optionB.key.trim() ||
+      !request.question.optionB.label.trim()
+    ) {
+      throw new RateLoopSdkError(
+        "head_to_head questions require keys and labels for both options.",
+      );
+    }
+    if (request.question.optionA.key === request.question.optionB.key) {
+      throw new RateLoopSdkError(
+        "head_to_head option keys must be different.",
+      );
+    }
+  }
+  if (request.question.rationale.mode === "required") {
+    const { minLength = 0, maxLength } = request.question.rationale;
+    if (
+      !Number.isSafeInteger(minLength) ||
+      !Number.isSafeInteger(maxLength) ||
+      minLength < 0 ||
+      maxLength < 1 ||
+      maxLength > 2_000 ||
+      minLength > maxLength
+    ) {
+      throw new RateLoopSdkError(
+        "required rationale lengths must satisfy 0 <= minLength <= maxLength <= 2000.",
+      );
+    }
+  }
+}
+
+function assertEvmAddress(value: string, path: string) {
+  if (!EVM_ADDRESS_PATTERN.test(value)) {
+    throw new RateLoopSdkError(`${path} must be an EVM address.`);
+  }
+}
+
+function assertWebhookUrl(value: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new RateLoopSdkError("webhook.url must be a valid URL.");
+  }
+  if (
+    parsed.protocol !== "https:" &&
+    !(parsed.protocol === "http:" && isLoopbackHostname(parsed.hostname))
+  ) {
+    throw new RateLoopSdkError(
+      "webhook.url must use HTTPS except for loopback development.",
+    );
+  }
+}
+
+function assertAskRequest(request: TokenlessAskRequest) {
+  assertIdempotencyKey(request.idempotencyKey);
+  if (!request.quoteId?.trim()) {
+    throw new RateLoopSdkError("quoteId is required.");
+  }
+  if (request.payment.mode === "prepaid") {
+    if (!request.payment.workspaceId.trim()) {
+      throw new RateLoopSdkError(
+        "payment.workspaceId is required for prepaid payment.",
+      );
+    }
+  } else {
+    assertEvmAddress(request.payment.payerAddress, "payment.payerAddress");
+    if (
+      request.payment.mode === "x402" &&
+      (!request.payment.authorization ||
+        Array.isArray(request.payment.authorization) ||
+        Object.keys(request.payment.authorization).length === 0)
+    ) {
+      throw new RateLoopSdkError(
+        "payment.authorization is required for x402 payment.",
+      );
+    }
+  }
+  if (request.webhook) {
+    assertWebhookUrl(request.webhook.url);
+    if (request.webhook.eventTypes.length === 0) {
+      throw new RateLoopSdkError("webhook.eventTypes must not be empty.");
+    }
+    if (new Set(request.webhook.eventTypes).size !== request.webhook.eventTypes.length) {
+      throw new RateLoopSdkError("webhook.eventTypes must not contain duplicates.");
+    }
+    for (const eventType of request.webhook.eventTypes) {
+      if (!webhookEventTypes.has(eventType)) {
+        throw new RateLoopSdkError(`Unsupported webhook event type ${eventType}.`);
+      }
+    }
   }
 }
 
@@ -267,7 +369,7 @@ export function createTokenlessRateLoopClient(
     },
 
     ask(requestBody: TokenlessAskRequest): Promise<TokenlessAskResponse> {
-      assertIdempotencyKey(requestBody.idempotencyKey);
+      assertAskRequest(requestBody);
       return post(config, "/asks", requestBody, parseTokenlessAskResponse, {
         "idempotency-key": requestBody.idempotencyKey,
       });

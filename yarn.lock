@@ -3562,15 +3562,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@rateloop/agents@workspace:packages/agents"
   dependencies:
-    "@rateloop/contracts": "workspace:*"
-    "@rateloop/node-utils": "workspace:*"
     "@rateloop/sdk": "workspace:*"
     "@types/node": ^24.0.0
-    "@vercel/blob": 2.3.0
     dotenv: ^16.4.5
     tsx: ^4.21.0
     typescript: ~5.8.2
-    viem: 2.39.0
     vitest: ^4.1.0
   bin:
     rateloop-agents: ./dist/esm/cli.js
@@ -3719,11 +3715,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@rateloop/sdk@workspace:packages/sdk"
   dependencies:
-    "@rateloop/contracts": "workspace:*"
     "@types/node": ^24.0.0
     tsx: ^4.21.0
     typescript: ~5.8.2
-    viem: 2.39.0
   languageName: unknown
   linkType: soft
 

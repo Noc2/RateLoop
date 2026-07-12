@@ -13,8 +13,30 @@ import {
   TOKENLESS_VERDICT_STATUSES,
   type TokenlessEconomics,
 } from "./tokenlessTypes";
+import * as sdk from "./index";
 
 const API_BASE_URL = "https://tokenless.example";
+
+test("package root exposes only the tokenless client, schema, types, and generic errors", () => {
+  assert.deepEqual(
+    Object.keys(sdk).sort(),
+    [
+      "RateLoopApiError",
+      "RateLoopSdkError",
+      "TOKENLESS_RESULT_JSON_SCHEMA",
+      "TOKENLESS_SCHEMA_VERSION",
+      "TOKENLESS_TERMINAL_VERDICT_STATUSES",
+      "TOKENLESS_VERDICT_STATUSES",
+      "TOKENLESS_WEBHOOK_EVENT_TYPES",
+      "createTokenlessRateLoopClient",
+      "parseTokenlessAskResponse",
+      "parseTokenlessQuoteResponse",
+      "parseTokenlessResult",
+      "parseTokenlessWaitResponse",
+      "parseTokenlessWebhookEvent",
+    ].sort(),
+  );
+});
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -257,7 +279,80 @@ test("tokenless client performs quote and ask with a required idempotency header
       }),
     /idempotencyKey must be 8-160 characters/,
   );
+
+  assert.throws(
+    () =>
+      client.ask({
+        idempotencyKey: "wallet:test:12345678",
+        payment: { mode: "wallet", payerAddress: "0x123" },
+        quoteId: quote.quoteId,
+      }),
+    /payment\.payerAddress must be an EVM address/,
+  );
+
+  assert.throws(
+    () =>
+      client.ask({
+        idempotencyKey: "webhook:test:12345678",
+        payment: { mode: "prepaid", workspaceId: "workspace_1" },
+        quoteId: quote.quoteId,
+        webhook: {
+          eventTypes: ["result.ready"],
+          url: "http://public.example/webhook",
+        },
+      }),
+    /webhook\.url must use HTTPS/,
+  );
   assert.equal(requests.length, 2);
+});
+
+test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () => {
+  const client = createTokenlessRateLoopClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async () => {
+      throw new Error("must not fetch");
+    },
+  });
+
+  assert.throws(
+    () =>
+      client.quote({
+        audience: { tierId: "passport" },
+        budget: {
+          attemptReserveAtomic: "5000000",
+          bountyAtomic: "25000000",
+          feeBps: 750,
+        },
+        question: {
+          kind: "head_to_head",
+          prompt: "Which message?",
+          optionA: { key: "same", label: "A" },
+          optionB: { key: "same", label: "B" },
+          rationale: { mode: "optional" },
+        },
+        requestedPanelSize: 15,
+      }),
+    /option keys must be different/,
+  );
+
+  assert.throws(
+    () =>
+      client.quote({
+        audience: { tierId: "passport" },
+        budget: {
+          attemptReserveAtomic: "5000000",
+          bountyAtomic: "25000000",
+          feeBps: 750,
+        },
+        question: {
+          kind: "binary",
+          prompt: "Ship?",
+          rationale: { mode: "required", minLength: 100, maxLength: 10 },
+        },
+        requestedPanelSize: 15,
+      }),
+    /required rationale lengths/,
+  );
 });
 
 test("tokenless wait returns an explicit polling continuation and then a result-ready signal", async () => {

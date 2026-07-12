@@ -393,7 +393,7 @@ const fundAccountingSchema = {
 } as const;
 
 export const TOKENLESS_RESULT_JSON_SCHEMA = {
-  $id: "https://rateloop.example/schemas/tokenless/result-v1.json",
+  $id: "urn:rateloop:tokenless:result:v1",
   additionalProperties: false,
   properties: {
     schemaVersion: { const: TOKENLESS_SCHEMA_VERSION },
