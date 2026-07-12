@@ -36,6 +36,9 @@
       "protocol": [
         "dist/esm/protocol.d.ts"
       ],
+      "tokenless": [
+        "dist/esm/tokenless/index.d.ts"
+      ],
       "types": [
         "dist/esm/types.d.ts"
       ],
@@ -79,6 +82,11 @@
       "types": "./dist/esm/protocol.d.ts",
       "import": "./dist/esm/protocol.js",
       "require": "./dist/cjs/protocol.js"
+    },
+    "./tokenless": {
+      "types": "./dist/esm/tokenless/index.d.ts",
+      "import": "./dist/esm/tokenless/index.js",
+      "require": "./dist/cjs/tokenless/index.js"
     },
     "./types": {
       "types": "./dist/esm/types.d.ts",

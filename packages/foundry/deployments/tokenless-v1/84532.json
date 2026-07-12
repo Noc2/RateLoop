@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "rateloop-tokenless-deployment-v1",
+  "version": 1,
+  "deploymentComplete": true,
+  "deploymentProfile": "test",
+  "networkName": "baseSepolia",
+  "chainId": 84532,
+  "deploymentBlockNumber": 44051709,
+  "deploymentKey": "tokenless-v1:84532:0xd7ea730fceb66257a469b993ac6afda593ef6ae6:0x2f22dd82137e56743fa04cb22efb837b043be570:0x0000000000000000000000000000000000000000",
+  "contracts": {
+    "TestUSDC": {
+      "address": "0xce54856bc61c9b2451313ff0886f8d396bf6f22e",
+      "artifact": "MockERC20",
+      "deployedOnBlock": 44051707
+    },
+    "CredentialIssuer": {
+      "address": "0x2f22dd82137e56743fa04cb22efb837b043be570",
+      "artifact": "CredentialIssuer",
+      "deployedOnBlock": 44051708
+    },
+    "TokenlessPanel": {
+      "address": "0xd7ea730fceb66257a469b993ac6afda593ef6ae6",
+      "artifact": "TokenlessPanel",
+      "deployedOnBlock": 44051709
+    }
+  },
+  "testCurrency": {
+    "contract": "TestUSDC",
+    "decimals": 6,
+    "symbol": "tUSDC",
+    "unrestrictedMint": true
+  }
+}

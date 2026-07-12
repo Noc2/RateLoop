@@ -3,4 +3,5 @@ export * from "./deployments";
 export { default as deployedContracts } from "./deployedContracts";
 export * from "./protocol";
 export * from "./types";
+export * from "./tokenless/index";
 export * from "./voting";
