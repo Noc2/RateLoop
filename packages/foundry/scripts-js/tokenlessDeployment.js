@@ -202,6 +202,17 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     );
   }
 
+  if (
+    x402PanelSubmitter &&
+    (x402PanelSubmitter.arguments.length < 2 ||
+      !sameAddress(x402PanelSubmitter.arguments[0], testUsdc.address) ||
+      !sameAddress(x402PanelSubmitter.arguments[1], panel.address))
+  ) {
+    throw new Error(
+      "X402PanelSubmitter constructor wiring must match the exported TestUSDC and TokenlessPanel addresses."
+    );
+  }
+
   const contracts = {};
   for (const [label, deployment] of [
     ["TestUSDC", testUsdc],

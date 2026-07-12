@@ -6,6 +6,7 @@ import { Script, console2 } from "forge-std/Script.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
+import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
 /// @notice Disposable Base Sepolia deployment for the tokenless-v1 stack.
 /// @dev This script intentionally does not use DeployHelpers: tokenless artifacts live under
@@ -31,12 +32,14 @@ contract DeployTokenlessScript is Script {
         MockERC20 testUsdc = new MockERC20("RateLoop Tokenless Test USDC", "tUSDC", 6);
         CredentialIssuer issuer = new CredentialIssuer(rotationAuthority, initialSigner, uint64(maxScheduledGraceRaw));
         TokenlessPanel panel = new TokenlessPanel(address(testUsdc), address(issuer));
+        X402PanelSubmitter x402Submitter = new X402PanelSubmitter(address(testUsdc), address(panel));
 
         vm.stopBroadcast();
 
         console2.log("TokenlessTestUSDC:", address(testUsdc));
         console2.log("CredentialIssuer:", address(issuer));
         console2.log("TokenlessPanel:", address(panel));
+        console2.log("X402PanelSubmitter:", address(x402Submitter));
         console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v1");
     }
 }

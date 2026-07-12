@@ -65,7 +65,12 @@ function completeBroadcast({ includeAdapter = false } = {}) {
   ];
   if (includeAdapter) {
     entries.push(
-      createTransaction("X402PanelSubmitter", address(4), [panel], 4)
+      createTransaction(
+        "X402PanelSubmitter",
+        address(4),
+        [testUsdc, panel],
+        4
+      )
     );
   }
   return {
@@ -131,6 +136,18 @@ test("rejects TokenlessPanel constructor wiring that disagrees with exports", ()
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
     /constructor wiring must match/
+  );
+});
+
+test("rejects X402PanelSubmitter constructor wiring that disagrees with exports", () => {
+  const broadcast = completeBroadcast({ includeAdapter: true });
+  const adapter = broadcast.transactions.find(
+    (transaction) => transaction.contractName === "X402PanelSubmitter"
+  );
+  adapter.arguments[1] = address(99);
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
+    /X402PanelSubmitter constructor wiring must match/
   );
 });
 

@@ -178,11 +178,30 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     }
 
     function createRound(RoundTerms calldata terms) external nonReentrant returns (uint256 roundId) {
+        return _createRound(terms, msg.sender, msg.sender);
+    }
+
+    /// @notice Fund a round while assigning every refund and cancellation right to `funder`.
+    /// @dev This narrow entry point lets a stateless payment adapter pull an authorization,
+    ///      deposit it, and disappear from the lifecycle without becoming a funds custodian.
+    function createRoundFor(RoundTerms calldata terms, address funder)
+        external
+        nonReentrant
+        returns (uint256 roundId)
+    {
+        if (funder == address(0)) revert InvalidAddress();
+        return _createRound(terms, msg.sender, funder);
+    }
+
+    function _createRound(RoundTerms calldata terms, address payer, address funder)
+        private
+        returns (uint256 roundId)
+    {
         _validateTerms(terms);
 
         roundId = nextRoundId++;
         Round storage round = _rounds[roundId];
-        round.funder = msg.sender;
+        round.funder = funder;
         round.contentId = terms.contentId;
         round.termsHash = terms.termsHash;
         round.beaconNetworkHash = terms.beaconNetworkHash;
@@ -202,12 +221,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
 
         uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
         uint256 beforeBalance = usdc.balanceOf(address(this));
-        usdc.safeTransferFrom(msg.sender, address(this), amount);
+        usdc.safeTransferFrom(payer, address(this), amount);
         if (usdc.balanceOf(address(this)) - beforeBalance != amount) revert TransferAmountMismatch();
 
         emit RoundCreated(
             roundId,
-            msg.sender,
+            funder,
             terms.contentId,
             terms.termsHash,
             terms.bountyAmount,
