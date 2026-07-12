@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { keccak256, stringToHex } from "viem";
 import {
@@ -50,14 +50,8 @@ export function TokenlessRateClient({ sandboxMode }: { sandboxMode: boolean }) {
   const [status, setStatus] = useState<string | null>(null);
   const [recoverySecret, setRecoverySecret] = useState("");
   const [recoveryPackage, setRecoveryPackage] = useState<string | null>(null);
+  const [recoveryUrl, setRecoveryUrl] = useState<string | null>(null);
   const task = tasks.find(item => !item.alreadyVouchered) ?? tasks[0] ?? null;
-  const recoveryUrl = useMemo(
-    () =>
-      recoveryPackage && typeof window !== "undefined"
-        ? URL.createObjectURL(new Blob([recoveryPackage], { type: "application/json" }))
-        : null,
-    [recoveryPackage],
-  );
 
   useEffect(() => {
     let active = true;
@@ -74,12 +68,15 @@ export function TokenlessRateClient({ sandboxMode }: { sandboxMode: boolean }) {
     };
   }, []);
 
-  useEffect(
-    () => () => {
-      if (recoveryUrl) URL.revokeObjectURL(recoveryUrl);
-    },
-    [recoveryUrl],
-  );
+  useEffect(() => {
+    if (!recoveryPackage) {
+      setRecoveryUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([recoveryPackage], { type: "application/json" }));
+    setRecoveryUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recoveryPackage]);
 
   async function submitResponse() {
     if (!task || !answer || prediction === null) return;

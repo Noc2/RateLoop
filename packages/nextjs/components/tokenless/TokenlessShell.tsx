@@ -96,9 +96,12 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
         );
       })}
       {mobile ? (
-        <Link href="/legal" className="mt-2 block border-t border-white/10 px-4 pt-4 text-sm text-base-content/60">
-          Legal
-        </Link>
+        <div className="mt-2 border-t border-white/10 px-2 pt-4">
+          <BaseAccountSessionButton />
+          <Link href="/legal" className="mt-3 block px-2 text-sm text-base-content/60">
+            Legal
+          </Link>
+        </div>
       ) : null}
     </>
   );
