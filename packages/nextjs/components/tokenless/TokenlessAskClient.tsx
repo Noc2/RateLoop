@@ -7,6 +7,10 @@ import {
   type TokenlessResult,
   createTokenlessRateLoopClient,
 } from "@rateloop/sdk";
+import type { EIP1193Provider } from "viem";
+import { useConnect } from "wagmi";
+import { readBaseAccountSession } from "~~/lib/base-account/client";
+import { sendTokenlessRoundCalls, waitForTokenlessRoundTransaction } from "~~/lib/base-account/funding";
 
 const presets = {
   quick: { bountyAtomic: "25000000", attemptReserveAtomic: "5000000", panelSize: 15, label: "Quick pulse" },
@@ -21,6 +25,7 @@ function usdc(value: string) {
 }
 
 export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
+  const { connectors } = useConnect();
   const [prompt, setPrompt] = useState("Would this product message make you more likely to try the product?");
   const [tierId, setTierId] = useState("passport");
   const [presetId, setPresetId] = useState<keyof typeof presets>("quick");
@@ -59,23 +64,82 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
   }
 
   async function createAsk() {
-    if (!client || !quote || !sandboxMode) return;
+    if (!client || !quote) return;
     setBusy(true);
     setError(null);
     try {
+      const session = await readBaseAccountSession();
+      if (!session) throw new Error("Sign in with Base Account before starting a panel.");
+      const workspaceResponse = await fetch("/api/account/workspaces", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      const workspaceBody = (await workspaceResponse.json()) as { workspaces?: unknown[]; message?: string };
+      if (!workspaceResponse.ok) throw new Error(workspaceBody.message ?? "Unable to load your workspace.");
+      if (!workspaceBody.workspaces?.length) {
+        const createdWorkspace = await fetch("/api/account/workspaces", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Personal workspace" }),
+        });
+        if (!createdWorkspace.ok) {
+          const body = (await createdWorkspace.json()) as { message?: string };
+          throw new Error(body.message ?? "Unable to create your personal workspace.");
+        }
+      }
       const created = await client.ask({
         idempotencyKey: `web:${crypto.randomUUID()}`,
-        payment: { mode: "prepaid", workspaceId: "explicit-tokenless-sandbox" },
+        payment: { mode: "wallet", payerAddress: session.address },
         quoteId: quote.quoteId,
       });
       setAsk(created);
-      const wait = await client.wait({ operationKey: created.operationKey, timeoutMs: 5_000 });
-      if (wait.status === "ready") setResult(await client.result({ operationKey: created.operationKey }));
+      if (sandboxMode) {
+        const wait = await client.wait({ operationKey: created.operationKey, timeoutMs: 5_000 });
+        if (wait.status === "ready") setResult(await client.result({ operationKey: created.operationKey }));
+      } else {
+        await fundAsk(created, session.address);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create ask.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function fundAsk(created: TokenlessAskResponse, funder: `0x${string}`) {
+    if (!client) return;
+    const instructions = await client.paymentInstructions({ operationKey: created.operationKey });
+    const connector = connectors.find(candidate => candidate.name.toLowerCase().includes("base account"));
+    if (!connector) throw new Error("Base Account is unavailable in this browser.");
+    const provider = (await connector.getProvider()) as EIP1193Provider | undefined;
+    if (!provider) throw new Error("Base Account provider is unavailable.");
+    const sent = await sendTokenlessRoundCalls({
+      provider,
+      funder,
+      panelAddress: instructions.panelAddress,
+      usdcAddress: instructions.usdcAddress,
+      terms: {
+        ...instructions.roundTerms,
+        bountyAmount: BigInt(instructions.roundTerms.bountyAmount),
+        feeAmount: BigInt(instructions.roundTerms.feeAmount),
+        attemptReserve: BigInt(instructions.roundTerms.attemptReserve),
+        attemptCompensation: BigInt(instructions.roundTerms.attemptCompensation),
+        commitDeadline: BigInt(instructions.roundTerms.commitDeadline),
+        revealDeadline: BigInt(instructions.roundTerms.revealDeadline),
+        beaconFailureDeadline: BigInt(instructions.roundTerms.beaconFailureDeadline),
+        beaconRound: BigInt(instructions.roundTerms.beaconRound),
+        claimGracePeriod: BigInt(instructions.roundTerms.claimGracePeriod),
+      },
+      paymasterUrl: process.env.NEXT_PUBLIC_BASE_PAYMASTER_URL,
+    });
+    const callsId =
+      sent.result && typeof sent.result === "object" && "id" in sent.result
+        ? (sent.result as { id: unknown }).id
+        : sent.result;
+    const transactionHash = await waitForTokenlessRoundTransaction({ provider, callsId });
+    const confirmed = await client.submitPayment({ operationKey: created.operationKey, transactionHash });
+    setAsk({ ...created, status: "open", roundId: confirmed.roundId });
   }
 
   return (
@@ -195,7 +259,7 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
               <button
                 type="button"
                 className="rateloop-gradient-action w-full px-5"
-                disabled={!sandboxMode || busy}
+                disabled={busy}
                 onClick={() => void createAsk()}
               >
                 {sandboxMode ? "Start preview panel" : "Fund and start panel"}
@@ -207,9 +271,28 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
             </p>
           )}
           {ask ? (
-            <p className="mt-4 break-all rounded-lg bg-white/5 p-3 text-xs text-base-content/55">
-              Operation: {ask.operationKey}
-            </p>
+            <div className="mt-4 rounded-lg bg-white/5 p-3 text-xs text-base-content/55">
+              <p className="break-all">Operation: {ask.operationKey}</p>
+              {!sandboxMode && ask.status === "awaiting_payment" ? (
+                <button
+                  type="button"
+                  className="mt-3 underline underline-offset-4"
+                  disabled={busy}
+                  onClick={() =>
+                    void readBaseAccountSession().then(session => {
+                      if (!session) return setError("Sign in with Base Account to continue funding.");
+                      setBusy(true);
+                      setError(null);
+                      return fundAsk(ask, session.address)
+                        .catch(cause => setError(cause instanceof Error ? cause.message : "Funding is not ready."))
+                        .finally(() => setBusy(false));
+                    })
+                  }
+                >
+                  Retry moderation check & funding
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {result ? (
             <p className="mt-3 border-l-2 border-[var(--rateloop-green)] bg-emerald-400/10 py-2 pl-3 text-sm text-emerald-100">
