@@ -41,3 +41,5 @@ packages/foundry/broadcast/
 
 # cli
 dist
+.vercel
+.env.local
