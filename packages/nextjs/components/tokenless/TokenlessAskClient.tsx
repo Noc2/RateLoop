@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   type TokenlessAskResponse,
   type TokenlessQuoteResponse,
@@ -40,6 +40,27 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
       typeof window === "undefined" ? null : createTokenlessRateLoopClient({ apiBaseUrl: window.location.origin }),
     [],
   );
+
+  useEffect(() => {
+    if (!client || !ask || result) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      try {
+        const waiting = await client.wait({ operationKey: ask.operationKey, timeoutMs: 5_000 });
+        if (active && waiting.status === "ready") setResult(await client.result({ operationKey: ask.operationKey }));
+      } catch (cause) {
+        if (active && cause instanceof Error) setError(cause.message);
+      } finally {
+        if (active) timer = setTimeout(poll, 5_000);
+      }
+    };
+    void poll();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [ask, client, result]);
 
   async function getQuote() {
     if (!client) return;
@@ -295,9 +316,35 @@ export function TokenlessAskClient({ sandboxMode }: { sandboxMode: boolean }) {
             </div>
           ) : null}
           {result ? (
-            <p className="mt-3 border-l-2 border-[var(--rateloop-green)] bg-emerald-400/10 py-2 pl-3 text-sm text-emerald-100">
-              Result: {result.verdictStatus} · score{" "}
-              {result.verdict?.scoreBps ? `${result.verdict.scoreBps / 100}%` : "n/a"}
+            <div className="mt-4 border-l-2 border-[var(--rateloop-green)] bg-emerald-400/[0.08] p-4">
+              <p className="font-mono text-[11px] uppercase tracking-widest text-emerald-100/70">Panel verdict</p>
+              <p className="mt-2 text-lg font-semibold text-emerald-50">
+                {result.verdict?.selected ?? result.verdictStatus}
+                {result.verdict?.scoreBps !== null && result.verdict?.scoreBps !== undefined
+                  ? ` · ${result.verdict.scoreBps / 100}%`
+                  : ""}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-base-content/55">
+                {result.audience.participantCount} participants · {result.audience.label} · confidence{" "}
+                {result.verdict?.confidenceBps !== null && result.verdict?.confidenceBps !== undefined
+                  ? `${result.verdict.confidenceBps / 100}%`
+                  : "not published"}
+              </p>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                <span className="rounded bg-black/20 p-2">Bounty paid ${usdc(result.economics.bounty.paidAtomic)}</span>
+                <span className="rounded bg-black/20 p-2">Refund ${usdc(result.economics.refund.totalAtomic)}</span>
+                <span className="rounded bg-black/20 p-2">
+                  Compensation ${usdc(result.economics.compensation.totalAtomic)}
+                </span>
+              </div>
+              <a href={result.methodologyUrl} className="mt-3 inline-block text-xs underline underline-offset-4">
+                Verify methodology
+              </a>
+            </div>
+          ) : null}
+          {ask && !result && ask.status !== "awaiting_payment" ? (
+            <p className="mt-3 border-l-2 border-[var(--rateloop-blue)] bg-blue-400/[0.08] py-2 pl-3 text-sm text-blue-100">
+              Panel funded. Waiting for sealed commits, reveal, deterministic settlement, and analytics.
             </p>
           ) : null}
           {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
