@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import Script from "next/script";
+import { BaseAccountProviders } from "~~/providers/BaseAccountProviders";
 import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
@@ -16,7 +17,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning style={{ colorScheme: "dark" }}>
       <body suppressHydrationWarning>
-        {children}
+        <BaseAccountProviders>{children}</BaseAccountProviders>
         {isProduction ? <Script nonce={nonce} src="https://scripts.simpleanalyticscdn.com/latest.js" /> : null}
       </body>
     </html>

@@ -32,7 +32,7 @@ async function getGlobalHeaderValue(key: string) {
   return globalHeaders.find(header => header.key === key)?.value;
 }
 
-test("connect-src is reduced to the tokenless app and analytics", async () => {
+test("connect-src includes only the tokenless app, Base RPC, and analytics", async () => {
   const csp = await getContentSecurityPolicy();
   const connectSrc = csp
     .split(";")
@@ -42,7 +42,12 @@ test("connect-src is reduced to the tokenless app and analytics", async () => {
   assert.ok(connectSrc);
   assert.match(connectSrc, /(?:^|\s)'self'(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/queue\.simpleanalyticscdn\.com(?:\s|$)/);
+  assert.match(connectSrc, /(?:^|\s)https:\/\/sepolia\.base\.org(?:\s|$)/);
   assert.doesNotMatch(connectSrc, /walletconnect|thirdweb|worldcoin|drand|blob\.vercel-storage/);
+});
+
+test("Base Account popups retain their opener", async () => {
+  assert.equal(await getGlobalHeaderValue("Cross-Origin-Opener-Policy"), "same-origin-allow-popups");
 });
 
 test("script-src uses the middleware nonce without unsafe-inline", async () => {

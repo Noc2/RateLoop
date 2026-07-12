@@ -8,6 +8,13 @@
       "when": 1783857600000,
       "tag": "0000_tokenless_agent_api",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783861200000,
+      "tag": "0001_base_account_auth",
+      "breakpoints": true
     }
   ]
 }

@@ -44,3 +44,29 @@ export const tokenlessAgentAsks = pgTable(
 
 export type TokenlessAgentAsk = typeof tokenlessAgentAsks.$inferSelect;
 export type NewTokenlessAgentAsk = typeof tokenlessAgentAsks.$inferInsert;
+
+export const tokenlessAuthNonces = pgTable(
+  "tokenless_auth_nonces",
+  {
+    nonceHash: text("nonce_hash").primaryKey(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({ expiresAtIdx: index("tokenless_auth_nonces_expires_at_idx").on(table.expiresAt) }),
+);
+
+export const tokenlessAuthSessions = pgTable(
+  "tokenless_auth_sessions",
+  {
+    sessionHash: text("session_hash").primaryKey(),
+    accountAddress: text("account_address").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    accountAddressIdx: index("tokenless_auth_sessions_account_address_idx").on(table.accountAddress),
+    expiresAtIdx: index("tokenless_auth_sessions_expires_at_idx").on(table.expiresAt),
+  }),
+);

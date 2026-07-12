@@ -6,7 +6,7 @@
   "scripts": {
     "analyze": "ANALYZE=true yarn build",
     "build": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && rm -rf .next && rm -f node_modules/@rateloop/nextjs ../agents/node_modules/@rateloop/agents ../contracts/node_modules/@rateloop/contracts ../foundry/node_modules/@rateloop/foundry ../keeper/node_modules/@rateloop/keeper ../node-utils/node_modules/@rateloop/node-utils ../ponder/node_modules/@rateloop/ponder ../sdk/node_modules/@rateloop/sdk && next build --turbopack\"",
-    "build:workspace-deps": "yarn workspace @rateloop/sdk build",
+    "build:workspace-deps": "yarn workspace @rateloop/contracts build && yarn workspace @rateloop/sdk build",
     "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && rm -rf .next && next typegen && tsc --noEmit --incremental\"",
     "dev": "yarn build:workspace-deps && node scripts/dev-preflight.mjs",
     "dev:built-workspace-deps": "node scripts/dev-preflight.mjs",
@@ -22,7 +22,11 @@
     "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs app config lib utils scripts\""
   },
   "dependencies": {
+    "@base-org/account": "2.5.7",
+    "@rateloop/contracts": "workspace:*",
     "@rateloop/sdk": "workspace:*",
+    "@tanstack/react-query": "~5.59.15",
+    "@wagmi/core": "2.22.1",
     "daisyui": "5.0.9",
     "drizzle-orm": "~0.45.2",
     "next": "~15.5.18",
@@ -30,7 +34,9 @@
     "react": "~19.2.3",
     "react-dom": "~19.2.3",
     "server-only": "0.0.1",
-    "sharp": "^0.34.3"
+    "sharp": "^0.34.3",
+    "viem": "2.39.0",
+    "wagmi": "2.19.5"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.1.6",

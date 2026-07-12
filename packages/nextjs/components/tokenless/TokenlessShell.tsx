@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { BaseAccountSessionButton } from "~~/components/base-account/BaseAccountSessionButton";
 
 type IconProps = { className?: string };
 
@@ -175,9 +176,7 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
           <NavLinks />
         </nav>
         <div className="mx-2.5 border-t border-[color:var(--rateloop-shell-border-strong)] pt-4">
-          <Link href="/settings" className="rateloop-gradient-action min-h-11 w-full px-3 text-sm">
-            Set up account
-          </Link>
+          <BaseAccountSessionButton />
           <p className="mt-3 px-1 text-center text-[11px] leading-4 text-base-content/40">USDC panels on Base</p>
         </div>
       </aside>
