@@ -10,6 +10,7 @@ import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 /// @notice Mock ERC20 token for testing (simulates USDC/USDT with 6 decimals)
 contract MockERC20 is ERC20, EIP712 {
     uint8 private immutable _decimals;
+    address public immutable faultController;
     bytes32 public constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
         "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
     );
@@ -18,8 +19,11 @@ contract MockERC20 is ERC20, EIP712 {
     uint256 public transferShortfall;
     uint256 public authorizationTransferShortfall;
 
+    error UnauthorizedFaultController();
+
     constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) EIP712(name, "2") {
         _decimals = decimals_;
+        faultController = msg.sender;
     }
 
     function decimals() public view virtual override returns (uint8) {
@@ -32,14 +36,17 @@ contract MockERC20 is ERC20, EIP712 {
     }
 
     function setBlockedRecipient(address recipient, bool blocked) external {
+        if (msg.sender != faultController) revert UnauthorizedFaultController();
         blockedRecipients[recipient] = blocked;
     }
 
     function setTransferShortfall(uint256 shortfall) external {
+        if (msg.sender != faultController) revert UnauthorizedFaultController();
         transferShortfall = shortfall;
     }
 
     function setAuthorizationTransferShortfall(uint256 shortfall) external {
+        if (msg.sender != faultController) revert UnauthorizedFaultController();
         authorizationTransferShortfall = shortfall;
     }
 

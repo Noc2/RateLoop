@@ -17,6 +17,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint16 public constant MAX_FEE_BPS = 2_000;
+    uint64 public constant MAX_CLAIM_GRACE_PERIOD = 365 days;
     uint8 public constant SCORING_VERSION = 1;
 
     bytes32 public constant VOUCHER_TYPEHASH = keccak256(
@@ -87,7 +88,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint64 beaconFailureDeadline;
         uint64 beaconRound;
         uint64 claimGracePeriod;
-        uint64 claimDeadline;
+        uint256 claimDeadline;
         uint32 minimumReveals;
         uint32 maximumCommits;
         uint32 requiredTier;
@@ -143,7 +144,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     );
     event SettlementBegun(uint256 indexed roundId, uint32 frozenRevealCount);
     event SettlementProgressed(uint256 indexed roundId, RoundState indexed state, uint32 cursor);
-    event RoundFinalized(uint256 indexed roundId, uint256 totalAccuracyScore, uint64 claimDeadline);
+    event RoundFinalized(uint256 indexed roundId, uint256 totalAccuracyScore, uint256 claimDeadline);
     event RoundTerminal(uint256 indexed roundId, RoundState indexed state, uint256 funderRefund, uint256 compensation);
     event Claimed(uint256 indexed roundId, bytes32 indexed commitKey, address indexed payoutAddress, uint256 amount);
     event StaleSharesReturned(uint256 indexed roundId, address indexed funder, uint256 amount);
@@ -333,11 +334,11 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             return;
         }
         if (round.revealCount < round.minimumReveals) {
+            if (block.timestamp <= round.beaconFailureDeadline) revert InvalidDeadline();
             if (round.revealCount == 0) {
-                if (block.timestamp <= round.beaconFailureDeadline) revert InvalidDeadline();
                 _terminalCompensation(roundId, round, RoundState.BeaconFailureCompensation, round.commitCount);
             } else {
-                _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.revealCount);
+                _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.commitCount);
             }
             return;
         }
@@ -390,7 +391,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         }
 
         round.state = RoundState.Finalized;
-        round.claimDeadline = uint64(block.timestamp) + round.claimGracePeriod;
+        round.claimDeadline = block.timestamp + round.claimGracePeriod;
         usdc.safeTransfer(round.funder, round.attemptReserve);
         if (round.feeAmount != 0) usdc.safeTransfer(round.feeRecipient, round.feeAmount);
 
@@ -422,8 +423,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         CommitRecord storage record = _commits[commitKey];
         if (record.voteKey == address(0)) revert CommitNotFound();
         Round storage round = _rounds[record.roundId];
-        bool eligible = round.state == RoundState.BeaconFailureCompensation
-            || (round.state == RoundState.UnderQuorumCompensation && record.revealed);
+        bool eligible =
+            round.state == RoundState.BeaconFailureCompensation || round.state == RoundState.UnderQuorumCompensation;
         if (!eligible || block.timestamp > round.claimDeadline) revert NotClaimable();
 
         amount = _claim(record, round, payoutAddress, salt, true);
@@ -566,7 +567,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint256 totalCompensation = round.attemptCompensation * recipients;
         round.compensationPerRecipient = round.attemptCompensation;
         round.state = terminalState;
-        round.claimDeadline = uint64(block.timestamp) + round.claimGracePeriod;
+        round.claimDeadline = block.timestamp + round.claimGracePeriod;
 
         uint256 funderRefund = round.bountyAmount + round.feeAmount + round.attemptReserve - totalCompensation;
         usdc.safeTransfer(round.funder, funderRefund);
@@ -600,6 +601,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (
             terms.commitDeadline <= block.timestamp || terms.revealDeadline <= terms.commitDeadline
                 || terms.beaconFailureDeadline < terms.revealDeadline || terms.claimGracePeriod == 0
+                || terms.claimGracePeriod > MAX_CLAIM_GRACE_PERIOD
         ) revert InvalidDeadline();
         if (terms.feeAmount > (terms.bountyAmount * MAX_FEE_BPS) / 10_000) revert InvalidTerms();
         if (terms.feeAmount != 0 && terms.feeRecipient == address(0)) revert InvalidAddress();

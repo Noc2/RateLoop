@@ -27,16 +27,12 @@ contract X402PanelSubmitterTest is Test {
 
     function testAuthorizationCreatesSelfCustodialRoundAndLeavesNoAdapterBalance() external {
         TokenlessPanel.RoundTerms memory terms = _terms();
-        uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
         bytes32 nonce = keccak256("one-shot-round");
-        bytes32 digest = usdc.receiveWithAuthorizationDigest(funder, address(adapter), amount, 0, 1 days, nonce);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(FUNDER_KEY, digest);
+        (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature) =
+            _authorization(terms, nonce);
 
-        uint256 roundId = adapter.createRoundWithAuthorization(
-            funder,
-            terms,
-            X402PanelSubmitter.Authorization({ validAfter: 0, validBefore: 1 days, nonce: nonce, v: v, r: r, s: s })
-        );
+        uint256 roundId = adapter.createRoundWithAuthorization(funder, terms, authorization, roundSignature);
+        uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
 
         assertEq(panel.getRound(roundId).funder, funder);
         assertEq(usdc.balanceOf(address(adapter)), 0);
@@ -47,6 +43,59 @@ contract X402PanelSubmitterTest is Test {
         panel.cancelEmptyRound(roundId);
         assertEq(usdc.balanceOf(funder), 100e6);
         assertEq(usdc.balanceOf(address(panel)), 0);
+    }
+
+    function testAuthorizationCannotBeFrontRunWithMutatedRoundTerms() external {
+        TokenlessPanel.RoundTerms memory signedTerms = _terms();
+        bytes32 nonce = keccak256("terms-bound-round");
+        (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature) =
+            _authorization(signedTerms, nonce);
+
+        TokenlessPanel.RoundTerms memory attackerTerms = signedTerms;
+        attackerTerms.contentId = keccak256("attacker-question");
+        attackerTerms.termsHash = keccak256("attacker-terms");
+        attackerTerms.feeRecipient = makeAddr("attackerFeeRecipient");
+
+        vm.expectRevert(X402PanelSubmitter.InvalidSignature.selector);
+        adapter.createRoundWithAuthorization(funder, attackerTerms, authorization, roundSignature);
+
+        assertFalse(usdc.authorizationState(funder, nonce));
+        assertEq(panel.nextRoundId(), 1);
+    }
+
+    function testRoundEnvelopeBindsTheImmutableTargetPanel() external {
+        TokenlessPanel.RoundTerms memory terms = _terms();
+        bytes32 nonce = keccak256("panel-bound-round");
+        (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature) =
+            _authorization(terms, nonce);
+
+        CredentialIssuer secondIssuer = new CredentialIssuer(address(this), address(0xBEEF), 1 days);
+        TokenlessPanel secondPanel = new TokenlessPanel(address(usdc), address(secondIssuer));
+        X402PanelSubmitter secondAdapter = new X402PanelSubmitter(address(usdc), address(secondPanel));
+
+        assertNotEq(
+            adapter.roundAuthorizationDigest(funder, terms, authorization),
+            secondAdapter.roundAuthorizationDigest(funder, terms, authorization)
+        );
+        vm.expectRevert(X402PanelSubmitter.InvalidSignature.selector);
+        secondAdapter.createRoundWithAuthorization(funder, terms, authorization, roundSignature);
+        assertEq(secondPanel.nextRoundId(), 1);
+    }
+
+    function _authorization(TokenlessPanel.RoundTerms memory terms, bytes32 nonce)
+        private
+        view
+        returns (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature)
+    {
+        uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
+        bytes32 paymentDigest = usdc.receiveWithAuthorizationDigest(funder, address(adapter), amount, 0, 1 days, nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(FUNDER_KEY, paymentDigest);
+        authorization =
+            X402PanelSubmitter.Authorization({ validAfter: 0, validBefore: 1 days, nonce: nonce, v: v, r: r, s: s });
+
+        bytes32 roundDigest = adapter.roundAuthorizationDigest(funder, terms, authorization);
+        (v, r, s) = vm.sign(FUNDER_KEY, roundDigest);
+        roundSignature = abi.encodePacked(r, s, v);
     }
 
     function _terms() private view returns (TokenlessPanel.RoundTerms memory) {

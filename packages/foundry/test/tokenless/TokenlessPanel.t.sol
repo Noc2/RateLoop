@@ -108,7 +108,7 @@ contract TokenlessPanelTest is Test {
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_UnderQuorumRefundsBountyAndFeeButPaysValidRevealer() public {
+    function test_UnderQuorumWaitsForBeaconDeadlineAndPaysEveryAcceptedCommit() public {
         uint256 roundId = _createRound(2, 3);
         Rater memory alice = _rater(0x201, 1, 7_000, "alice", roundId);
         Rater memory bob = _rater(0x202, 0, 3_000, "bob", roundId);
@@ -119,15 +119,19 @@ contract TokenlessPanelTest is Test {
         _reveal(roundId, alice);
         vm.warp(_round(roundId).revealDeadline + 1);
 
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.beginSettlement(roundId);
+
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
         uint256 beforeRefund = usdc.balanceOf(funder);
         panel.beginSettlement(roundId);
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
-        assertEq(usdc.balanceOf(funder) - beforeRefund, BOUNTY + FEE + RESERVE - COMPENSATION);
+        assertEq(usdc.balanceOf(funder) - beforeRefund, BOUNTY + FEE + RESERVE - 2 * COMPENSATION);
 
         panel.claimCompensation(alice.commitKey, alice.payout, alice.salt);
-        assertEq(usdc.balanceOf(alice.payout), COMPENSATION);
-        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
         panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
+        assertEq(usdc.balanceOf(alice.payout), COMPENSATION);
+        assertEq(usdc.balanceOf(bob.payout), COMPENSATION);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
@@ -196,6 +200,58 @@ contract TokenlessPanelTest is Test {
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidTerms.selector);
         panel.createRound(terms);
+    }
+
+    function test_ClaimGracePeriodAcceptsSafeUpperBoundary() public {
+        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
+        terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD();
+
+        vm.prank(funder);
+        uint256 roundId = panel.createRound(terms);
+
+        Rater memory alice = _rater(0x601, 1, 5_000, "alice", roundId);
+        _commit(roundId, alice);
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
+        uint256 expectedClaimDeadline = block.timestamp + panel.MAX_CLAIM_GRACE_PERIOD();
+        panel.beginSettlement(roundId);
+
+        assertEq(_round(roundId).claimGracePeriod, panel.MAX_CLAIM_GRACE_PERIOD());
+        assertEq(_round(roundId).claimDeadline, expectedClaimDeadline);
+    }
+
+    function test_ClaimGracePeriodRejectsValueAboveSafeUpperBoundary() public {
+        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
+        terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD() + 1;
+
+        vm.prank(funder);
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.createRound(terms);
+    }
+
+    function test_OnlyMockDeployerCanConfigureTransferFaultsButMintRemainsPublic() public {
+        address attacker = makeAddr("mockAttacker");
+
+        vm.startPrank(attacker);
+        usdc.mint(attacker, 1e6);
+        vm.expectRevert(MockERC20.UnauthorizedFaultController.selector);
+        usdc.setBlockedRecipient(funder, true);
+        vm.expectRevert(MockERC20.UnauthorizedFaultController.selector);
+        usdc.setTransferShortfall(1);
+        vm.expectRevert(MockERC20.UnauthorizedFaultController.selector);
+        usdc.setAuthorizationTransferShortfall(1);
+        vm.stopPrank();
+
+        assertEq(usdc.balanceOf(attacker), 1e6);
+        assertFalse(usdc.blockedRecipients(funder));
+        assertEq(usdc.transferShortfall(), 0);
+        assertEq(usdc.authorizationTransferShortfall(), 0);
+
+        usdc.setBlockedRecipient(funder, true);
+        usdc.setTransferShortfall(2);
+        usdc.setAuthorizationTransferShortfall(3);
+        assertTrue(usdc.blockedRecipients(funder));
+        assertEq(usdc.transferShortfall(), 2);
+        assertEq(usdc.authorizationTransferShortfall(), 3);
     }
 
     function _createRound(uint32 minimumReveals, uint32 maximumCommits) internal returns (uint256 roundId) {
