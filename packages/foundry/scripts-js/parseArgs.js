@@ -22,6 +22,7 @@ config({ path: join(__dirname, "..", ".env") });
 
 const NETWORK_RPC_OVERRIDE_ENV = {
   base: "BASE_RPC_URL",
+  baseSepolia: "BASE_SEPOLIA_RPC_URL",
 };
 const LOCAL_DEPLOYMENT_SYNC_CONTRACTS = [
   "LoopReputation",
@@ -257,7 +258,11 @@ if (network !== "localhost") {
 // Pass target network so generateTsAbis.js can reorder scaffold.config.ts
 process.env.DEPLOY_TARGET_NETWORK = network;
 
-const result = spawnSync("make", ["deploy-and-generate-abis"], {
+const deployTarget =
+  network === "baseSepolia"
+    ? "deploy-tokenless-and-generate-artifacts"
+    : "deploy-and-generate-abis";
+const result = spawnSync("make", [deployTarget], {
   stdio: "inherit",
   cwd: join(__dirname, ".."),
 });

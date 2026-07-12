@@ -18,6 +18,7 @@ import {
   readRpcChainId,
   resolveConfiguredRpcEndpoint,
   resolveEtherscanVerification,
+  validateObservedDeployChain,
   validateProductionRedeployConfirmation,
 } from "./deployArgs.js";
 
@@ -108,6 +109,23 @@ test("parseDeployArgs reads supported options", () => {
   );
 });
 
+test("parseDeployArgs accepts the explicit Base Sepolia tokenless target", () => {
+  assert.deepEqual(
+    parseDeployArgs([
+      "--network",
+      "baseSepolia",
+      "--keystore",
+      "tokenless-testnet",
+    ]),
+    {
+      showHelp: false,
+      network: "baseSepolia",
+      keystoreArg: "tokenless-testnet",
+      resume: false,
+    }
+  );
+});
+
 test("parseDeployArgs accepts conservative live keystore names", () => {
   assert.equal(isDeployKeystoreAccountName("keeper-prod_1.json"), true);
   assert.equal(
@@ -187,6 +205,7 @@ test("buildDeployFlowFlags leaves local deploys unchanged", () => {
 
 test("buildDeployFlowFlags throttles live deploys", () => {
   assert.equal(isSlowBroadcastNetwork("base"), true);
+  assert.equal(isSlowBroadcastNetwork("baseSepolia"), true);
   assert.equal(isSlowBroadcastNetwork("localhost"), false);
   assert.equal(
     buildDeployFlowFlags("base", {}),
@@ -240,11 +259,34 @@ test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", ()
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,
     }
   );
+  assert.deepEqual(buildDeploymentProfileEnv({ network: "baseSepolia" }), {
+    [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,
+  });
 });
 
 test("production deploy help documents the Base deploy path", () => {
   assert.match(DEPLOY_HELP_TEXT, /--network <network>/);
   assert.match(DEPLOY_HELP_TEXT, /yarn deploy --network base --keystore/);
+  assert.match(
+    DEPLOY_HELP_TEXT,
+    /yarn deploy --network baseSepolia --keystore/
+  );
+});
+
+test("validateObservedDeployChain accepts Base Sepolia without mainnet redeploy checks", async () => {
+  const result = await validateObservedDeployChain({
+    network: "baseSepolia",
+    rpcUrl: "https://rpc.example",
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ result: "0x14a34" }),
+    }),
+  });
+
+  assert.deepEqual(result, {
+    observedChainId: 84532,
+    productionNetwork: null,
+  });
 });
 
 test("validateProductionRedeployConfirmation ignores non-production networks", () => {
@@ -496,10 +538,27 @@ test("Make live deploys run the production guard before Forge work", () => {
   assert.match(makefile, /--rpc-url "\$\(RPC_URL\)"/);
   assert.match(makefile, /--account "\$\(ETH_KEYSTORE_ACCOUNT\)"/);
   assert.match(makefile, /cast wallet address --account "\$\(ACCOUNT_NAME\)"/);
+  assert.match(
+    makefile,
+    /deploy-tokenless-and-generate-artifacts: guard-production-deploy/
+  );
+  assert.match(
+    makefile,
+    /script\/DeployTokenless\.s\.sol --tc DeployTokenlessScript/
+  );
+  assert.match(
+    makefile,
+    /exportTokenlessDeploymentFromBroadcast\.js[\s\S]*generateTokenlessArtifacts\.js/
+  );
 });
 
 test("deploy wrapper validates local deployment sync before seeding", () => {
   const source = readFileSync(parseArgsScript, "utf8");
+
+  assert.match(
+    source,
+    /network === "baseSepolia"[\s\S]*"deploy-tokenless-and-generate-artifacts"/
+  );
 
   assert.match(
     source,

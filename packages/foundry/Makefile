@@ -1,4 +1,4 @@
-.PHONY: build guard-production-deploy deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
+.PHONY: build guard-production-deploy deploy deploy-and-generate-abis deploy-tokenless deploy-tokenless-and-generate-artifacts generate-abis get-address account chain compile compile-all flatten fork format lint test verify slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -55,6 +55,22 @@ deploy-and-generate-abis: guard-production-deploy check-contract-sizes
 	@if [ "$$DEPLOY_TARGET_NETWORK" = "localhost" ]; then \
 		node scripts-js/validateLocalDeploymentSync.js deployments/31337.json ../contracts/src/deployedContracts.ts 31337 $(LOCAL_DEPLOYMENT_SYNC_CONTRACTS); \
 	fi
+	cd ../.. && yarn workspace @rateloop/contracts build
+
+# Deploy the disposable tokenless-v1 stack to Base Sepolia. This is deliberately
+# separate from Deploy.s.sol and deployments/<chainId>.json so it cannot replace
+# or merge with the legacy Base mainnet artifact.
+deploy-tokenless: guard-production-deploy
+	@if [ "$$DEPLOY_TARGET_NETWORK" != "baseSepolia" ]; then \
+		echo "Error: tokenless-v1 deploy requires DEPLOY_TARGET_NETWORK=baseSepolia"; \
+		exit 1; \
+	fi
+	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/DeployTokenless.s.sol --tc DeployTokenlessScript --rpc-url "$(RPC_URL)" --account "$(ETH_KEYSTORE_ACCOUNT)" --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS)
+
+deploy-tokenless-and-generate-artifacts: guard-production-deploy
+	$(MAKE) deploy-tokenless
+	node scripts-js/exportTokenlessDeploymentFromBroadcast.js
+	node scripts-js/generateTokenlessArtifacts.js
 	cd ../.. && yarn workspace @rateloop/contracts build
 
 # Generate TypeScript ABIs

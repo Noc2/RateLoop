@@ -11,16 +11,18 @@ Options:
   --help, -h           Show this help message
 Examples:
   yarn deploy --network base --keystore my-account --resume
+  yarn deploy --network baseSepolia --keystore my-account
   yarn deploy
   `;
 
-const SUPPORTED_DEPLOY_NETWORKS = new Set(["localhost", "base"]);
+const SUPPORTED_DEPLOY_NETWORKS = new Set(["localhost", "base", "baseSepolia"]);
 
-const SLOW_BROADCAST_NETWORKS = new Set(["base"]);
+const SLOW_BROADCAST_NETWORKS = new Set(["base", "baseSepolia"]);
 const PRODUCTION_DEPLOY_NETWORKS = new Set(["base"]);
 export const DEPLOY_NETWORK_CHAIN_IDS = {
   localhost: 31337,
   base: 8453,
+  baseSepolia: 84532,
 };
 export const PRODUCTION_DEPLOY_CHAIN_IDS = {
   base: 8453,
