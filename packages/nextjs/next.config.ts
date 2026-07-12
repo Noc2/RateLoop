@@ -22,17 +22,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
-  transpilePackages: ["@rateloop/contracts", "@rateloop/sdk"],
+  transpilePackages: ["@rateloop/sdk"],
   typescript: {
     ignoreBuildErrors: false,
   },
   eslint: {
     ignoreDuringBuilds: false,
-  },
-  webpack: config => {
-    config.resolve.fallback = { fs: false, net: false, tls: false };
-    config.externals.push("pino-pretty", "lokijs", "encoding");
-    return config;
   },
   headers: async () => [
     {
