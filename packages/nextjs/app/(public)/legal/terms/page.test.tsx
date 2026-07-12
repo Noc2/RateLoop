@@ -8,10 +8,12 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("legal terms use network-neutral bounty funding copy", async () => {
+test("test terms state tokenless limits and accepted-work protection", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: TermsPage } = await import("./page");
   const html = renderToStaticMarkup(<TermsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /funded in LREP or USDC on a configured supported network/i);
+  assert.match(html, /does not currently issue real paid-work vouchers/i);
+  assert.match(html, /cannot cancel the round/i);
+  assert.match(html, /no LREP token/i);
 });

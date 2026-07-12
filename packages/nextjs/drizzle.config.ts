@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const defaultDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app";
+const defaultDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_tokenless";
 const currentFile = fileURLToPath(import.meta.url);
 const projectDir = path.dirname(currentFile);
 

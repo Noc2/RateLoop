@@ -1,0 +1,487 @@
+import {
+  TOKENLESS_SCHEMA_VERSION,
+  type TokenlessAskRequest,
+  type TokenlessAskResponse,
+  type TokenlessEconomics,
+  type TokenlessQuoteRequest,
+  type TokenlessQuoteResponse,
+  type TokenlessResult,
+  type TokenlessWaitResponse,
+  parseTokenlessQuoteResponse,
+  parseTokenlessResult,
+} from "@rateloop/sdk";
+import { eq } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { db } from "~~/lib/db";
+import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
+
+const QUOTE_TTL_MS = 15 * 60_000;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
+const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
+const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+const TIER_LABELS: Record<string, string> = {
+  orb: "Orb-verified unique humans",
+  passport: "Passport-verified humans",
+  presence: "Identity plus recent presence check",
+  selfie: "Live humans (not uniqueness-verified)",
+};
+
+type StoredQuote = {
+  quoteId: string;
+  requestHash: string;
+  requestJson: string;
+  responseJson: string;
+  expiresAt: Date;
+  createdAt: Date;
+};
+
+type StoredAsk = {
+  operationKey: string;
+  idempotencyKey: string;
+  requestHash: string;
+  quoteId: string;
+  requestJson: string;
+  economicsJson: string;
+  status: string;
+  verdictStatus: string | null;
+  roundId: string | null;
+  resultJson: string | null;
+  sandbox: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const sandboxQuotes = new Map<string, StoredQuote>();
+const sandboxAsksByOperation = new Map<string, StoredAsk>();
+const sandboxOperationByIdempotency = new Map<string, string>();
+
+export class TokenlessServiceError extends Error {
+  readonly code: string;
+  readonly retryable: boolean;
+  readonly status: number;
+
+  constructor(message: string, status: number, code: string, retryable = false) {
+    super(message);
+    this.name = "TokenlessServiceError";
+    this.code = code;
+    this.retryable = retryable;
+    this.status = status;
+  }
+}
+
+export function isTokenlessSandboxMode(env: NodeJS.ProcessEnv = process.env) {
+  const rawValue = env.TOKENLESS_SANDBOX_MODE?.trim().toLowerCase();
+  if (!rawValue || rawValue === "false") return false;
+  if (rawValue === "true") return true;
+  throw new TokenlessServiceError(
+    "TOKENLESS_SANDBOX_MODE must be exactly true or false.",
+    500,
+    "invalid_sandbox_configuration",
+  );
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJson(entryValue)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function hash(value: unknown) {
+  return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+function parseAtomic(value: unknown, path: string) {
+  if (typeof value !== "string" || !ATOMIC_AMOUNT_PATTERN.test(value)) {
+    throw new TokenlessServiceError(`${path} must be an unsigned atomic amount string.`, 400, "invalid_quote");
+  }
+  return BigInt(value);
+}
+
+function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError("Quote body must be an object.", 400, "invalid_quote");
+  }
+  const request = value as Partial<TokenlessQuoteRequest>;
+  if (!request.question || !request.question.prompt?.trim()) {
+    throw new TokenlessServiceError("question.prompt is required.", 400, "invalid_quote");
+  }
+  if (request.question.kind !== "binary" && request.question.kind !== "head_to_head") {
+    throw new TokenlessServiceError("question.kind must be binary or head_to_head.", 400, "invalid_quote");
+  }
+  if (
+    request.question.kind === "head_to_head" &&
+    (!request.question.optionA?.key?.trim() ||
+      !request.question.optionA.label?.trim() ||
+      !request.question.optionB?.key?.trim() ||
+      !request.question.optionB.label?.trim() ||
+      request.question.optionA.key === request.question.optionB.key)
+  ) {
+    throw new TokenlessServiceError("head_to_head questions require two distinct keyed options.", 400, "invalid_quote");
+  }
+  const rationale = request.question.rationale;
+  if (
+    !rationale ||
+    (rationale.mode !== "optional" && rationale.mode !== "required") ||
+    (rationale.mode === "required" &&
+      (!Number.isSafeInteger(rationale.maxLength) ||
+        rationale.maxLength < 1 ||
+        rationale.maxLength > 2_000 ||
+        (rationale.minLength !== undefined &&
+          (!Number.isSafeInteger(rationale.minLength) ||
+            rationale.minLength < 0 ||
+            rationale.minLength > rationale.maxLength))))
+  ) {
+    throw new TokenlessServiceError("question.rationale is invalid.", 400, "invalid_quote");
+  }
+  if (!request.audience?.tierId?.trim() || !TIER_LABELS[request.audience.tierId]) {
+    throw new TokenlessServiceError("audience.tierId is unsupported.", 400, "invalid_quote");
+  }
+  if (
+    !Number.isSafeInteger(request.requestedPanelSize) ||
+    (request.requestedPanelSize ?? 0) < 3 ||
+    (request.requestedPanelSize ?? 0) > 500
+  ) {
+    throw new TokenlessServiceError("requestedPanelSize must be an integer from 3 to 500.", 400, "invalid_quote");
+  }
+  if (!request.budget) {
+    throw new TokenlessServiceError("budget is required.", 400, "invalid_quote");
+  }
+  parseAtomic(request.budget.bountyAtomic, "budget.bountyAtomic");
+  parseAtomic(request.budget.attemptReserveAtomic, "budget.attemptReserveAtomic");
+  if (!Number.isSafeInteger(request.budget.feeBps) || request.budget.feeBps < 0 || request.budget.feeBps > 2_000) {
+    throw new TokenlessServiceError("budget.feeBps must be between 0 and 2000.", 400, "invalid_quote");
+  }
+  return request as TokenlessQuoteRequest;
+}
+
+function assertPayment(value: unknown): asserts value is TokenlessAskRequest["payment"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError("payment must be an object.", 400, "invalid_payment");
+  }
+  const payment = value as Record<string, unknown>;
+  if (payment.mode === "prepaid") {
+    if (typeof payment.workspaceId !== "string" || !payment.workspaceId.trim()) {
+      throw new TokenlessServiceError("payment.workspaceId is required.", 400, "invalid_payment");
+    }
+    return;
+  }
+  if (payment.mode !== "wallet" && payment.mode !== "x402") {
+    throw new TokenlessServiceError("payment.mode is unsupported.", 400, "invalid_payment");
+  }
+  if (typeof payment.payerAddress !== "string" || !EVM_ADDRESS_PATTERN.test(payment.payerAddress)) {
+    throw new TokenlessServiceError("payment.payerAddress must be an EVM address.", 400, "invalid_payment");
+  }
+  if (
+    payment.mode === "x402" &&
+    (!payment.authorization ||
+      typeof payment.authorization !== "object" ||
+      Array.isArray(payment.authorization) ||
+      Object.keys(payment.authorization).length === 0)
+  ) {
+    throw new TokenlessServiceError("payment.authorization is required for x402.", 400, "invalid_payment");
+  }
+}
+
+function buildEconomics(request: TokenlessQuoteRequest): TokenlessEconomics {
+  const bounty = parseAtomic(request.budget.bountyAtomic, "budget.bountyAtomic");
+  const reserve = parseAtomic(request.budget.attemptReserveAtomic, "budget.attemptReserveAtomic");
+  const fee = (bounty * BigInt(request.budget.feeBps)) / 10_000n;
+  return {
+    asset: "USDC",
+    decimals: 6,
+    bounty: { fundedAtomic: bounty.toString(), paidAtomic: "0", refundedAtomic: "0" },
+    fee: { bps: request.budget.feeBps, fundedAtomic: fee.toString(), paidAtomic: "0", refundedAtomic: "0" },
+    attemptReserve: { compensatedAtomic: "0", fundedAtomic: reserve.toString(), refundedAtomic: "0" },
+    refund: { attemptReserveAtomic: "0", bountyAtomic: "0", feeAtomic: "0", totalAtomic: "0" },
+    compensation: {
+      perAcceptedRevealCapAtomic: (reserve / BigInt(request.requestedPanelSize)).toString(),
+      recipientCount: 0,
+      totalAtomic: "0",
+    },
+    totalFundedAtomic: (bounty + fee + reserve).toString(),
+  };
+}
+
+async function persistQuote(row: StoredQuote, sandboxMode: boolean) {
+  try {
+    await db
+      .insert(tokenlessAgentQuotes)
+      .values(row)
+      .onConflictDoUpdate({
+        target: tokenlessAgentQuotes.quoteId,
+        set: { responseJson: row.responseJson, expiresAt: row.expiresAt },
+      });
+  } catch (error) {
+    if (!sandboxMode) throw error;
+    sandboxQuotes.set(row.quoteId, row);
+  }
+}
+
+async function readQuote(quoteId: string, sandboxMode: boolean): Promise<StoredQuote | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(tokenlessAgentQuotes)
+      .where(eq(tokenlessAgentQuotes.quoteId, quoteId))
+      .limit(1);
+    return row ?? null;
+  } catch (error) {
+    if (!sandboxMode) throw error;
+    return sandboxQuotes.get(quoteId) ?? null;
+  }
+}
+
+async function readAskByOperation(operationKey: string, sandboxMode: boolean): Promise<StoredAsk | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(tokenlessAgentAsks)
+      .where(eq(tokenlessAgentAsks.operationKey, operationKey))
+      .limit(1);
+    return row ?? null;
+  } catch (error) {
+    if (!sandboxMode) throw error;
+    return sandboxAsksByOperation.get(operationKey) ?? null;
+  }
+}
+
+async function readAskByIdempotency(idempotencyKey: string, sandboxMode: boolean): Promise<StoredAsk | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(tokenlessAgentAsks)
+      .where(eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey))
+      .limit(1);
+    return row ?? null;
+  } catch (error) {
+    if (!sandboxMode) throw error;
+    const operationKey = sandboxOperationByIdempotency.get(idempotencyKey);
+    return operationKey ? (sandboxAsksByOperation.get(operationKey) ?? null) : null;
+  }
+}
+
+async function persistAsk(row: StoredAsk, sandboxMode: boolean) {
+  try {
+    await db.insert(tokenlessAgentAsks).values(row).onConflictDoNothing({ target: tokenlessAgentAsks.idempotencyKey });
+  } catch (error) {
+    if (!sandboxMode) throw error;
+    const existingOperationKey = sandboxOperationByIdempotency.get(row.idempotencyKey);
+    if (!existingOperationKey) {
+      sandboxAsksByOperation.set(row.operationKey, row);
+      sandboxOperationByIdempotency.set(row.idempotencyKey, row.operationKey);
+    }
+  }
+}
+
+export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
+  const request = assertQuoteRequest(value);
+  const sandboxMode = isTokenlessSandboxMode();
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + QUOTE_TTL_MS);
+  const requestHash = hash(request);
+  const quoteId = `qte_${requestHash.slice(0, 32)}`;
+  const response = parseTokenlessQuoteResponse({
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    quoteId,
+    expiresAt: expiresAt.toISOString(),
+    economics: buildEconomics(request),
+    audience: { tierId: request.audience.tierId, label: TIER_LABELS[request.audience.tierId] },
+    panel: {
+      minimumReveals: Math.max(3, Math.ceil(request.requestedPanelSize * 0.8)),
+      requestedSize: request.requestedPanelSize,
+    },
+    slo: { estimatedSeconds: request.audience.tierId === "orb" ? 3600 : 1800, tierId: request.audience.tierId },
+  });
+  await persistQuote(
+    {
+      quoteId,
+      requestHash,
+      requestJson: stableJson(request),
+      responseJson: JSON.stringify(response),
+      expiresAt,
+      createdAt,
+    },
+    sandboxMode,
+  );
+  return response;
+}
+
+function continuation(operationKey: string, appOrigin: string, updatedAt: Date) {
+  return {
+    cursor: `${updatedAt.getTime()}`,
+    expiresAt: new Date(updatedAt.getTime() + 24 * 60 * 60_000).toISOString(),
+    pollUrl: `${appOrigin}/api/agent/v1/asks/${encodeURIComponent(operationKey)}/wait`,
+    retryAfterMs: 1_000,
+  };
+}
+
+function buildSandboxResult(
+  row: Omit<StoredAsk, "resultJson">,
+  quote: TokenlessQuoteResponse,
+  appOrigin: string,
+): TokenlessResult {
+  const reserve = BigInt(quote.economics.attemptReserve.fundedAtomic);
+  const economics: TokenlessEconomics = {
+    ...quote.economics,
+    bounty: { ...quote.economics.bounty, paidAtomic: quote.economics.bounty.fundedAtomic },
+    fee: { ...quote.economics.fee, paidAtomic: quote.economics.fee.fundedAtomic },
+    attemptReserve: { ...quote.economics.attemptReserve, refundedAtomic: reserve.toString() },
+    refund: {
+      attemptReserveAtomic: reserve.toString(),
+      bountyAtomic: "0",
+      feeAtomic: "0",
+      totalAtomic: reserve.toString(),
+    },
+  };
+  return parseTokenlessResult({
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    operationKey: row.operationKey,
+    roundId: row.roundId,
+    verdictStatus: "published",
+    terminal: true,
+    economics,
+    audience: { ...quote.audience, participantCount: quote.panel.minimumReveals },
+    verdict: { confidenceBps: 7600, scoreBps: 6400, selected: "yes" },
+    methodologyUrl: `${appOrigin}/docs/how-it-works#sandbox-limitations`,
+    updatedAt: row.updatedAt.toISOString(),
+  });
+}
+
+export async function createTokenlessAsk(
+  value: unknown,
+  idempotencyHeader: string | null,
+  appOrigin: string,
+): Promise<TokenlessAskResponse> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError("Ask body must be an object.", 400, "invalid_ask");
+  }
+  const request = value as Partial<TokenlessAskRequest>;
+  if (!request.idempotencyKey || !IDEMPOTENCY_KEY_PATTERN.test(request.idempotencyKey)) {
+    throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
+  }
+  if (idempotencyHeader !== request.idempotencyKey) {
+    throw new TokenlessServiceError("Idempotency-Key header must match the request body.", 400, "idempotency_mismatch");
+  }
+  if (!request.quoteId?.trim() || !request.payment) {
+    throw new TokenlessServiceError("quoteId and payment are required.", 400, "invalid_ask");
+  }
+  assertPayment(request.payment);
+
+  const sandboxMode = isTokenlessSandboxMode();
+  const requestHash = hash(request);
+  const existing = await readAskByIdempotency(request.idempotencyKey, sandboxMode);
+  if (existing) {
+    if (existing.requestHash !== requestHash) {
+      throw new TokenlessServiceError(
+        "This idempotency key was already used with a different ask.",
+        409,
+        "idempotency_conflict",
+      );
+    }
+    return {
+      schemaVersion: TOKENLESS_SCHEMA_VERSION,
+      idempotencyKey: existing.idempotencyKey,
+      operationKey: existing.operationKey,
+      roundId: existing.roundId,
+      status: existing.status as TokenlessAskResponse["status"],
+      continuation: continuation(existing.operationKey, appOrigin, existing.updatedAt),
+      webhookAccepted: false,
+    };
+  }
+
+  const storedQuote = await readQuote(request.quoteId, sandboxMode);
+  if (!storedQuote || storedQuote.expiresAt.getTime() <= Date.now()) {
+    throw new TokenlessServiceError("Quote is missing or expired.", 410, "quote_expired");
+  }
+  const quote = parseTokenlessQuoteResponse(JSON.parse(storedQuote.responseJson));
+  const now = new Date();
+  const operationKey = `op_${randomUUID().replaceAll("-", "")}`;
+  const roundId = sandboxMode ? `sandbox_${operationKey.slice(3, 15)}` : null;
+  const baseRow = {
+    operationKey,
+    idempotencyKey: request.idempotencyKey,
+    requestHash,
+    quoteId: request.quoteId,
+    requestJson: stableJson(request),
+    economicsJson: JSON.stringify(quote.economics),
+    status: sandboxMode ? "open" : "awaiting_payment",
+    verdictStatus: sandboxMode ? "published" : null,
+    roundId,
+    sandbox: sandboxMode,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Omit<StoredAsk, "resultJson">;
+  const result = sandboxMode ? buildSandboxResult(baseRow, quote, appOrigin) : null;
+  await persistAsk({ ...baseRow, resultJson: result ? JSON.stringify(result) : null }, sandboxMode);
+  const persisted = await readAskByIdempotency(request.idempotencyKey, sandboxMode);
+  if (!persisted) {
+    throw new TokenlessServiceError("Ask could not be stored.", 500, "ask_persistence_failed");
+  }
+  if (persisted.requestHash !== requestHash) {
+    throw new TokenlessServiceError(
+      "This idempotency key was already used with a different ask.",
+      409,
+      "idempotency_conflict",
+    );
+  }
+
+  return {
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    idempotencyKey: persisted.idempotencyKey,
+    operationKey: persisted.operationKey,
+    roundId: persisted.roundId,
+    status: persisted.status as TokenlessAskResponse["status"],
+    continuation: continuation(persisted.operationKey, appOrigin, persisted.updatedAt),
+    webhookAccepted: false,
+  };
+}
+
+export async function waitForTokenlessAsk(operationKey: string, appOrigin: string): Promise<TokenlessWaitResponse> {
+  const sandboxMode = isTokenlessSandboxMode();
+  const ask = await readAskByOperation(operationKey, sandboxMode);
+  if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  if (ask.resultJson) {
+    return {
+      schemaVersion: TOKENLESS_SCHEMA_VERSION,
+      operationKey,
+      status: "ready",
+      verdictStatus: parseTokenlessResult(JSON.parse(ask.resultJson)).verdictStatus,
+      continuation: null,
+    };
+  }
+  return {
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    operationKey,
+    status: "pending",
+    verdictStatus: null,
+    continuation: continuation(operationKey, appOrigin, ask.updatedAt),
+  };
+}
+
+export async function getTokenlessResult(operationKey: string): Promise<TokenlessResult> {
+  const ask = await readAskByOperation(operationKey, isTokenlessSandboxMode());
+  if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  if (!ask.resultJson) {
+    throw new TokenlessServiceError("Result is not ready.", 409, "result_not_ready", true);
+  }
+  return parseTokenlessResult(JSON.parse(ask.resultJson));
+}
+
+export function tokenlessErrorResponse(error: unknown) {
+  if (error instanceof TokenlessServiceError) {
+    return {
+      body: { code: error.code, message: error.message, retryable: error.retryable },
+      status: error.status,
+    };
+  }
+  console.error("[tokenless-api] unexpected error", error);
+  return {
+    body: { code: "internal_error", message: "Tokenless API request failed.", retryable: false },
+    status: 500,
+  };
+}

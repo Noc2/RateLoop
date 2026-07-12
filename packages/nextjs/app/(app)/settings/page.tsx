@@ -1,148 +1,32 @@
-"use client";
-
-import { Suspense, useCallback, useEffect, useState } from "react";
-import dynamic from "next/dynamic";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useAccount } from "wagmi";
-import { RateLoopConnectButton } from "~~/components/scaffold-eth";
-import { NotificationSettingsPanel } from "~~/components/settings/NotificationSettingsPanel";
-import { AppPageShell } from "~~/components/shared/AppPageShell";
-import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
-import { SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
-import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
-import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
-
-type SettingsTab = "identity" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
-
-const settingsTabs: SettingsTab[] = ["wallet", "identity", "notifications", SETTINGS_FRONTEND_HASH];
-
-const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
-  frontend: "Frontend",
-  identity: "Identity",
-  notifications: "Notifications",
-  wallet: "Wallet",
-};
-
-function SettingsSectionLoading() {
+export default function PaidTaskUnlockPage() {
   return (
-    <div className="surface-card rounded-2xl p-6">
-      <div className="flex items-center gap-3 text-base-content/50">
-        <span className="loading loading-spinner loading-sm text-primary" />
-        <span>Loading...</span>
-      </div>
-    </div>
-  );
-}
-
-const FrontendRegistration = dynamic(
-  () => import("~~/components/governance/FrontendRegistration").then(mod => mod.FrontendRegistration),
-  { loading: SettingsSectionLoading },
-);
-const WalletSettingsPanel = dynamic(
-  () => import("~~/components/settings/WalletSettingsPanel").then(mod => mod.WalletSettingsPanel),
-  { loading: SettingsSectionLoading },
-);
-const WorldIdVerificationCard = dynamic(
-  () => import("~~/components/settings/WorldIdVerificationCard").then(mod => mod.WorldIdVerificationCard),
-  { loading: SettingsSectionLoading },
-);
-
-function parseSettingsTab(value: string | null): SettingsTab | null {
-  if (value === "delegation") return "wallet";
-  return settingsTabs.includes((value ?? "") as SettingsTab) ? (value as SettingsTab) : null;
-}
-
-function getSettingsHash(tab: SettingsTab) {
-  return tab === "wallet" ? "" : `#${tab}`;
-}
-
-function buildSettingsTabUrl(pathname: string, searchParams: URLSearchParams, tab: SettingsTab) {
-  const nextParams = new URLSearchParams(searchParams.toString());
-  nextParams.delete("tab");
-
-  const query = nextParams.toString();
-  const hash = getSettingsHash(tab);
-  return `${pathname}${query ? `?${query}` : ""}${hash}`;
-}
-
-function SettingsPageInner() {
-  const { isConnected, address } = useAccount();
-  const { isRestoringWallet } = useWalletRestore();
-  const pathname = usePathname() ?? SETTINGS_ROUTE;
-  const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("wallet");
-
-  useEffect(() => {
-    const syncTabFromLocation = () => {
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      const hashTab = parseSettingsTab(window.location.hash.replace(/^#/, ""));
-      const queryTab = parseSettingsTab(params.get("tab"));
-      const nextTab = hashTab ?? queryTab ?? "wallet";
-
-      setActiveTab(nextTab);
-
-      const nextUrl = buildSettingsTabUrl(window.location.pathname, params, nextTab);
-      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (currentUrl !== nextUrl) {
-        replaceUrlPreservingHistoryState(nextUrl);
-      }
-    };
-
-    syncTabFromLocation();
-    window.addEventListener("hashchange", syncTabFromLocation);
-    return () => window.removeEventListener("hashchange", syncTabFromLocation);
-  }, [searchParams]);
-
-  const selectTab = useCallback(
-    (tab: SettingsTab) => {
-      setActiveTab(tab);
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      replaceUrlPreservingHistoryState(buildSettingsTabUrl(pathname, params, tab));
-    },
-    [pathname, searchParams],
-  );
-
-  if (isRestoringWallet) {
-    return <WalletRestoreLoading />;
-  }
-
-  if (!isConnected) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-        <p className="text-base-content/60 mb-6 text-center">Sign in to manage your settings</p>
-        <RateLoopConnectButton />
-      </div>
-    );
-  }
-
-  return (
-    <AppPageShell contentClassName="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        {settingsTabs.map(tab => (
-          <button
-            key={tab}
-            onClick={() => selectTab(tab)}
-            className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-              activeTab === tab ? "pill-active" : "pill-inactive"
-            }`}
-          >
-            {SETTINGS_TAB_LABELS[tab]}
-          </button>
+    <div className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+      <p className="font-mono text-xs uppercase tracking-[0.25em] text-sky-300">Eligibility before earnings</p>
+      <h1 className="mt-3 text-4xl font-semibold sm:text-5xl">Unlock paid tasks</h1>
+      <p className="mt-5 leading-7 text-white/55">
+        Browsing and advisory calibration stay frictionless. This combined step happens only before the first paid
+        voucher, so nobody earns money and later discovers that the claim is blocked.
+      </p>
+      <div className="mt-9 space-y-3">
+        {[
+          "Confirm age and residence",
+          "Complete the selected identity tier",
+          "Provide applicable DAC7 fields",
+          "Complete sanctions screening",
+          "Set a self-custodial payout destination",
+        ].map((label, index) => (
+          <div key={label} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 font-mono text-xs">
+              {index + 1}
+            </span>
+            <span>{label}</span>
+          </div>
         ))}
       </div>
-
-      {activeTab === SETTINGS_FRONTEND_HASH && <FrontendRegistration />}
-      {activeTab === "identity" && <WorldIdVerificationCard address={address} />}
-      {activeTab === "notifications" && <NotificationSettingsPanel address={address} />}
-      {activeTab === "wallet" && <WalletSettingsPanel address={address} />}
-    </AppPageShell>
-  );
-}
-
-export default function SettingsPage() {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-[60vh]">Loading...</div>}>
-      <SettingsPageInner />
-    </Suspense>
+      <div className="mt-8 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-5 text-sm leading-6 text-amber-100">
+        Test-stage limitation: eligibility storage, screening, and credential signing are not active in this UI slice.
+        No paid voucher is issued. A normal payout claim will link the one-time vote key to its payout address.
+      </div>
+    </div>
   );
 }

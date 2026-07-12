@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { resolveOptionalAppUrl } from "~~/lib/env/appUrl";
-import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 function resolveMetadataBaseUrl() {
   const production = process.env.NODE_ENV === "production";
@@ -12,7 +11,6 @@ function resolveMetadataBaseUrl() {
     rawVercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
     rawVercelUrl: process.env.VERCEL_URL,
     production,
-    allowLocalhostInProduction: isLocalE2EProductionBuildEnabled(),
   });
 
   if (!resolved) {

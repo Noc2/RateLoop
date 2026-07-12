@@ -1,15 +1,19 @@
+import React from "react";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import test from "node:test";
-import { ASK_STEPS, FEATURE_BENEFITS } from "~~/lib/home/landingCopy";
 
-test("landing page copy does not imply mandatory World ID verification", () => {
-  const copy = [
-    ...ASK_STEPS.map(step => step.description),
-    ...FEATURE_BENEFITS.map(feature => feature.achievedBy),
-  ].join("\n");
+const require = createRequire(import.meta.url);
+const { renderToStaticMarkup } = require("react-dom/server") as {
+  renderToStaticMarkup: (element: React.ReactElement) => string;
+};
 
-  assert.doesNotMatch(copy, /Verified Humans and agents answer/i);
-  assert.doesNotMatch(copy, /Humans are verified through World ID/i);
-  assert.match(copy, /Human and agent raters answer/i);
-  assert.match(copy, /Humans can optionally verify with World ID/i);
+test("landing page presents the tokenless trust split without legacy UX", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { default: HomePage } = await import("./page");
+  const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
+
+  assert.match(html, /paid human panels/i);
+  assert.match(html, /no operator withdrawal path/i);
+  assert.doesNotMatch(html, /LREP|governance|leaderboard|manual claim/i);
 });

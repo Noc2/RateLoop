@@ -1,66 +1,27 @@
 import Link from "next/link";
-import type { NextPage } from "next";
-import { DocumentTextIcon, IdentificationIcon, LockClosedIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 
-const LegalPage: NextPage = () => {
-  const legalPages = [
-    {
-      title: "Terms of Service",
-      description: "Rules and conditions for using RateLoop",
-      href: "/legal/terms",
-      icon: DocumentTextIcon,
-    },
-    {
-      title: "Privacy Notice",
-      description: "How we handle your information",
-      href: "/legal/privacy",
-      icon: LockClosedIcon,
-    },
-    {
-      title: "Imprint",
-      description: "Operator information (Impressum)",
-      href: "/legal/imprint",
-      icon: IdentificationIcon,
-    },
-    {
-      title: "Confidential Context",
-      description: "Protocol-facing terms for gated question context",
-      href: "/confidential-context/terms",
-      icon: ShieldCheckIcon,
-    },
-  ];
+const documents = [
+  ["Test terms", "/legal/terms", "Rules and limitations for this tokenless test deployment."],
+  ["Privacy notice", "/legal/privacy", "What the test interface stores and what may become public on-chain."],
+  ["Imprint", "/legal/imprint", "Operator and contact information."],
+] as const;
 
+export default function LegalPage() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-2">Legal</h1>
-      <p className="mb-8 text-base-content/75">
-        Legal documents and disclosures for RateLoop and Loop Reputation (LREP).
+    <div className="mx-auto max-w-4xl px-4 py-12">
+      <h1 className="text-4xl font-semibold">Legal</h1>
+      <p className="mt-4 leading-7 text-white/55">
+        These documents cover the isolated tokenless test deployment. It does not currently issue paid vouchers or
+        accept production funds.
       </p>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {legalPages.map(page => (
-          <Link
-            key={page.href}
-            href={page.href}
-            className="card bg-base-200 shadow-md hover:shadow-lg transition-shadow"
-          >
-            <div className="card-body">
-              <page.icon className="w-8 h-8 text-primary mb-2" />
-              <h2 className="card-title text-lg">{page.title}</h2>
-              <p className="text-base text-base-content/75">{page.description}</p>
-            </div>
+      <div className="mt-8 grid gap-4 md:grid-cols-3">
+        {documents.map(([title, href, description]) => (
+          <Link key={href} href={href} className="rounded-2xl border border-white/10 bg-white/[0.035] p-5">
+            <h2 className="font-semibold">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-white/50">{description}</p>
           </Link>
         ))}
       </div>
-
-      <div className="mt-8 p-4 bg-base-200 rounded-lg">
-        <p className="text-base text-base-content/70">
-          Last updated: May 2026. These documents may be updated from time to time. Material changes will require
-          re-acceptance through the Terms modal. Continued use of RateLoop constitutes acceptance of any changes.
-        </p>
-      </div>
     </div>
   );
-};
-
-export default LegalPage;
+}

@@ -22,7 +22,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
-  transpilePackages: ["@rateloop/contracts", "@rateloop/node-utils", "thirdweb", "@thirdweb-dev/wagmi-adapter"],
+  transpilePackages: ["@rateloop/contracts", "@rateloop/sdk"],
   typescript: {
     ignoreBuildErrors: false,
   },
@@ -38,19 +38,6 @@ const nextConfig: NextConfig = {
     {
       source: "/(.*)",
       headers: securityHeaders,
-    },
-    {
-      // WS-1 (2026-05-21 repo audit): the browser-signing route receives a bearer `token` in its
-      // initial URL. Even after client-side `history.replaceState` strips it, a navigation that
-      // resolves before the strip runs (or that we later add) could emit a Referer header
-      // carrying the token. Force `no-referrer` on this path so the token can never leave the
-      // origin via Referer.
-      source: "/agent/sign/:path*",
-      headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
-    },
-    {
-      source: "/agent/handoff/:path*",
-      headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
     },
   ],
 };

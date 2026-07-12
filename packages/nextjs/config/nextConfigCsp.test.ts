@@ -23,8 +23,6 @@ const nextConfig = require("../next.config") as TestableNextConfig;
 async function getContentSecurityPolicy() {
   return buildContentSecurityPolicy({
     nonce: "testnonce",
-    ponderUrl: "https://ponder.example",
-    rpcOrigins: ["https://base.example"],
   });
 }
 
@@ -34,7 +32,7 @@ async function getGlobalHeaderValue(key: string) {
   return globalHeaders.find(header => header.key === key)?.value;
 }
 
-test("connect-src allows Vercel Blob browser upload API requests", async () => {
+test("connect-src is reduced to the tokenless app and analytics", async () => {
   const csp = await getContentSecurityPolicy();
   const connectSrc = csp
     .split(";")
@@ -42,19 +40,9 @@ test("connect-src allows Vercel Blob browser upload API requests", async () => {
     .find(directive => directive.startsWith("connect-src "));
 
   assert.ok(connectSrc);
-  assert.match(connectSrc, /(?:^|\s)https:\/\/vercel\.com(?:\s|$)/);
-  assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.blob\.vercel-storage\.com(?:\s|$)/);
-});
-
-test("connect-src allows raw GitHub Gist question details", async () => {
-  const csp = await getContentSecurityPolicy();
-  const connectSrc = csp
-    .split(";")
-    .map(directive => directive.trim())
-    .find(directive => directive.startsWith("connect-src "));
-
-  assert.ok(connectSrc);
-  assert.match(connectSrc, /(?:^|\s)https:\/\/gist\.githubusercontent\.com(?:\s|$)/);
+  assert.match(connectSrc, /(?:^|\s)'self'(?:\s|$)/);
+  assert.match(connectSrc, /(?:^|\s)https:\/\/queue\.simpleanalyticscdn\.com(?:\s|$)/);
+  assert.doesNotMatch(connectSrc, /walletconnect|thirdweb|worldcoin|drand|blob\.vercel-storage/);
 });
 
 test("script-src uses the middleware nonce without unsafe-inline", async () => {

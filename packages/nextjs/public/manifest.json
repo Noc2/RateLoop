@@ -1,7 +1,7 @@
 {
-  "name": "RateLoop",
+  "name": "RateLoop Tokenless Test",
   "short_name": "RateLoop",
-  "description": "Level Up Your Agent",
+  "description": "Isolated test interface for tokenless paid human panels",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

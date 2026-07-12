@@ -1,260 +1,61 @@
-import Link from "next/link";
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
-const AIErrorsPage: NextPage = () => {
-  return (
-    <article className="prose max-w-none">
-      <DocsTitle gradientText="Errors">AI Agent</DocsTitle>
-      <p className="lead text-base-content/60 text-lg">
-        RateLoop&apos;s MCP tools and normalized agent routes return machine-readable errors so runtimes can recover
-        cleanly. Malformed JSON, auth-layer failures, and other request-boundary errors can still return a simpler{" "}
-        <code>{"{ error }"}</code> payload.
-      </p>
+const errors = [
+  ["invalid_quote", "The quote shape or atomic economics are invalid.", "Correct the request before retrying."],
+  ["quote_expired", "The referenced quote is missing or expired.", "Create a fresh quote, then submit once."],
+  ["idempotency_mismatch", "The Idempotency-Key header and body differ.", "Send the same key in both places."],
+  [
+    "idempotency_conflict",
+    "The key already belongs to a different ask payload.",
+    "Reuse the original payload or a new key.",
+  ],
+  ["ask_not_found", "The operation key is unknown.", "Check the operation key returned by the ask."],
+  ["result_not_ready", "The ask has no terminal result yet.", "Follow the wait continuation and retry later."],
+] as const;
 
-      <h2>Error Shape</h2>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "duplicate_ask",
-  "message": "clientRequestId has already been used for a different question payload.",
-  "recoverWith": "reuse_original_request_or_change_clientRequestId",
-  "retryable": false,
-  "status": 409
+const AIErrorsPage: NextPage = () => (
+  <article className="prose max-w-none">
+    <DocsTitle gradientText="Errors">Tokenless API</DocsTitle>
+    <p className="lead text-base-content/60 text-lg">
+      The v1 API returns one stable error envelope. A retryable error is safe to poll again; it does not authorize a
+      duplicate payment or ask.
+    </p>
+    <pre className="bg-base-200 overflow-x-auto rounded-lg p-4">
+      <code>{`{
+  "code": "result_not_ready",
+  "message": "Result is not ready.",
+  "retryable": true
 }`}</code>
-      </pre>
-
-      <h2>Common Codes</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Meaning</th>
-            <th>Recover with</th>
+    </pre>
+    <h2>Current codes</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Meaning</th>
+          <th>Recovery</th>
+        </tr>
+      </thead>
+      <tbody>
+        {errors.map(([code, meaning, recovery]) => (
+          <tr key={code}>
+            <td>
+              <code>{code}</code>
+            </td>
+            <td>{meaning}</td>
+            <td>{recovery}</td>
           </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <code>duplicate_ask</code>
-            </td>
-            <td>The same idempotency key or operation key is already attached to another ask.</td>
-            <td>Reuse the original request or choose a new client request id.</td>
-          </tr>
-          <tr>
-            <td>
-              <code>insufficient_budget</code>
-            </td>
-            <td>The ask exceeds the managed agent&apos;s daily or per-ask cap.</td>
-            <td>Lower the bounty or raise the configured budget before the next ask.</td>
-          </tr>
-          <tr>
-            <td>
-              <code>wallet_address_required</code>
-            </td>
-            <td>A tokenless public ask did not include the wallet that will pay USDC.</td>
-            <td>
-              Add <code>walletAddress</code> to the quote, ask, or client-request lookup.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>invalid_arguments</code>
-            </td>
-            <td>
-              A handoff create, prepare, complete, or asset request is malformed or no longer valid. Handoff-specific
-              payloads usually include <code>originalCode: &quot;AgentAskHandoffError&quot;</code>.
-            </td>
-            <td>
-              Inspect <code>message</code> and, when available, the handoff status <code>nextAction</code>.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>max_payment_exceeded</code>
-            </td>
-            <td>The quoted or prepared ask costs more than the caller&apos;s saved payment cap.</td>
-            <td>
-              Copy <code>maxPaymentAmountHint</code> from a fresh quote or ask the user to approve a higher cap.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>mode_unsupported</code>
-            </td>
-            <td>A raw ask used a legacy no-op execution mode such as sync or async.</td>
-            <td>
-              Omit <code>mode</code> for live asks, or use <code>dryRun: true</code> / <code>{'mode: "dry_run"'}</code>{" "}
-              for sandbox validation.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>invalid_media</code>
-            </td>
-            <td>The image or video inputs do not meet the accepted shape.</td>
-            <td>
-              For handoffs, provide valid <code>generatedImages</code>; for raw flows, fix image URLs and re-quote.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>category_disallowed</code>
-            </td>
-            <td>The agent token is not allowed to ask in that category.</td>
-            <td>Choose an allowed category or update the token configuration.</td>
-          </tr>
-          <tr>
-            <td>
-              <code>failed_submission</code>
-            </td>
-            <td>The ask failed before a settled result became available.</td>
-            <td>Inspect the audit trail and decide whether to retry manually.</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h2>Examples</h2>
-      <h3>Duplicate Ask</h3>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "duplicate_ask",
-  "message": "clientRequestId has already been used for a different question payload.",
-  "recoverWith": "reuse_original_request_or_change_clientRequestId",
-  "retryable": false,
-  "status": 409
-}`}</code>
-      </pre>
-
-      <h3>Insufficient Budget</h3>
-      <p>This code only applies to managed agents with saved RateLoop policy caps.</p>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "insufficient_budget",
-  "message": "Question exceeds this MCP agent's remaining daily budget.",
-  "recoverWith": "reduce_bounty_or_raise_agent_budget",
-  "retryable": false,
-  "status": 409
-}`}</code>
-      </pre>
-
-      <h3>Wallet Address Required</h3>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "wallet_address_required",
-  "message": "walletAddress is required for tokenless public asks.",
-  "recoverWith": "include_walletAddress",
-  "retryable": false,
-  "status": 400
-}`}</code>
-      </pre>
-
-      <h3>Invalid Media</h3>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "invalid_media",
-  "message": "imageUrls must point to approved RateLoop-hosted uploads.",
-  "recoverWith": "fix_media_urls",
-  "retryable": false,
-  "status": 400
-}`}</code>
-      </pre>
-
-      <h3>Browser Handoff Image Cap</h3>
-      <p>Browser handoff images accept JPG, PNG, and WEBP inputs up to 10 MB per image.</p>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "invalid_arguments",
-  "originalCode": "AgentAskHandoffError",
-  "message": "generatedImages[0] exceeds the maximum image upload size of 10485760 bytes.",
-  "recoverWith": "fix_tool_arguments",
-  "retryable": false,
-  "status": 400
-}`}</code>
-      </pre>
-
-      <h3>Expired Handoff Link</h3>
-      <p>
-        Expired handoffs cannot be prepared again. If the link expired before funding, create a new link; if it expired
-        after wallet transactions were submitted, use the recovery guidance in the completion error.
-      </p>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "invalid_arguments",
-  "originalCode": "AgentAskHandoffError",
-  "message": "Handoff link has expired. Ask the AI agent to generate a new handoff link.",
-  "recoverWith": "fix_tool_arguments",
-  "retryable": false,
-  "status": 410
-}`}</code>
-      </pre>
-
-      <h3>Interrupted Image Staging</h3>
-      <p>
-        File-backed handoffs can return a non-terminal staging status before bytes arrive or moderation finishes. Poll
-        status first; if the image fails or stays interrupted, retry or remove the asset from the handoff page, or ask
-        for a fresh link with the image reattached.
-      </p>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "status": "uploading_images",
-  "nextAction": "Image upload is still processing. Poll rateloop_get_handoff_status for completion or failure."
-}`}</code>
-      </pre>
-
-      <h3>Category Disallowed</h3>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "code": "category_disallowed",
-  "message": "This MCP agent is not allowed to ask in the selected category.",
-  "recoverWith": "choose_allowed_category_or_update_agent",
-  "retryable": false,
-  "status": 403
-}`}</code>
-      </pre>
-
-      <h3>Failed Submission State</h3>
-      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`{
-  "answer": "failed",
-  "ready": false,
-  "status": "failed",
-  "wait": {
-    "code": "failed_submission",
-    "recoverWith": "inspect_status_error"
-  }
-}`}</code>
-      </pre>
-
-      <h2>Audit Endpoints</h2>
-      <p>
-        Use the audit surfaces when an agent needs receipts, exportable history, or callback recovery details without
-        mutating the live ask.
-      </p>
-      <ul>
-        <li>
-          <code>/api/agent/asks/[operationKey]/audit</code>: ask-centric detail with reservation state, submission
-          state, audit events, callback deliveries, and live ask guidance.
-        </li>
-        <li>
-          <code>/api/agent/asks/by-client-request/audit?chainId=8453&amp;clientRequestId=...</code>: alternate lookup
-          using the agent&apos;s idempotency key.
-        </li>
-        <li>
-          <code>/api/agent/asks/export?format=json</code> or <code>format=csv</code>: export the authenticated
-          agent&apos;s audit history with optional filters for <code>status</code>, <code>eventType</code>,{" "}
-          <code>chainId</code>, <code>from</code>, <code>to</code>, and <code>limit</code>.
-        </li>
-      </ul>
-
-      <p>
-        Go back to{" "}
-        <Link href="/docs/ai" className="link link-primary">
-          AI Agent Feedback Guide
-        </Link>{" "}
-        for the broader agent connector flow.
-      </p>
-    </article>
-  );
-};
+        ))}
+      </tbody>
+    </table>
+    <h2>Polling rule</h2>
+    <p>
+      Keep the <code>operationKey</code> returned by <code>POST /api/agent/v1/asks</code>. Poll its wait URL and fetch
+      the result only when wait returns <code>ready</code>. Do not create another ask just because settlement is still
+      pending.
+    </p>
+  </article>
+);
 
 export default AIErrorsPage;

@@ -1,234 +1,58 @@
 import Link from "next/link";
-import { LandingFaq } from "~~/components/home/LandingFaq";
-import { LandingPageActions } from "~~/components/home/LandingPageActions";
-import OrbAnimation from "~~/components/home/OrbAnimation";
-import { PromoVideo } from "~~/components/home/PromoVideo";
-import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
-import { getOptionalPonderUrl } from "~~/lib/env/server";
-import { ASK_STEPS, FEATURE_BENEFITS, type TechLink } from "~~/lib/home/landingCopy";
-import { type LandingSocialProofStats, buildLandingPageSocialProofItems } from "~~/lib/home/socialProof";
 
-const LANDING_STATS_REVALIDATE_SECONDS = 300;
-export const revalidate = 300;
+const principles = [
+  ["No rater stake", "Raters never deposit, approve, or risk funds."],
+  ["Accepted work gets a paid path", "A disclosed reserve compensates accepted work when a panel cannot complete."],
+  [
+    "Honest trust split",
+    "The panel core has no operator withdrawal path; the credential issuer controls only future admission.",
+  ],
+] as const;
 
-function SectionHeading({
-  number,
-  title,
-  gradientText,
-  className = "mb-12 sm:mb-16",
-}: {
-  number: string;
-  title: string;
-  gradientText: string;
-  className?: string;
-}) {
+export default function TokenlessLandingPage() {
   return (
-    <div className={className}>
-      <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/70">{number}</span>
-      <h2 className="display-section text-[2.35rem] text-base-content sm:text-[3.25rem] lg:text-[3.9rem] xl:text-[4.15rem]">
-        {title} <span className="rateloop-text-gradient">{gradientText}</span>
-      </h2>
-    </div>
-  );
-}
-
-type LandingOrbitDividerVariant = "how-to-why" | "why-to-faq";
-
-function LandingOrbitDivider({ variant }: { variant: LandingOrbitDividerVariant }) {
-  void variant;
-
-  return (
-    <div aria-hidden="true" className="pointer-events-none relative z-0 my-16 w-full sm:my-20 lg:my-24">
-      <div className="mx-auto h-px max-w-5xl bg-base-content/10" />
-    </div>
-  );
-}
-
-function AskFlowPanel({
-  number,
-  title,
-  description,
-  color,
-}: {
-  number: string;
-  title: string;
-  description: string;
-  color: string;
-}) {
-  return (
-    <div className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
-      <span className="font-mono text-sm" style={{ color }}>
-        {number}
-      </span>
-      <h3 className="mt-3 text-[1.55rem] font-bold leading-tight text-base-content sm:text-[1.75rem]">{title}</h3>
-      <p className="mt-4 max-w-[32rem] text-[1.05rem] leading-8 text-base-content/60">{description}</p>
-    </div>
-  );
-}
-
-function AskWorkflowSection() {
-  const [agentStep, mcpStep, resultStep] = ASK_STEPS;
-
-  return (
-    <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
-      <SectionHeading number="01" title="How It" gradientText="Works" className="mb-6" />
-      <PromoVideo />
-      <div className="grid grid-cols-1 items-stretch gap-x-12 gap-y-14 md:grid-cols-3">
-        <div className="h-full">
-          <AskFlowPanel {...agentStep} />
+    <div className="px-4 py-16 sm:py-24">
+      <div className="mx-auto max-w-6xl">
+        <div className="max-w-4xl">
+          <p className="font-mono text-xs uppercase tracking-[0.28em] text-sky-300">Paid human panels on Base</p>
+          <h1 className="mt-5 text-5xl font-semibold leading-[1.02] sm:text-7xl">
+            Ask a focused question. Get a sealed human panel.
+          </h1>
+          <p className="mt-7 max-w-2xl text-lg leading-8 text-white/60">
+            Tokenless RateLoop funds binary and A/B panels in USDC. Quotes separate the bounty, platform fee, and
+            maximum accepted-work reserve before payment.
+          </p>
+          <div className="mt-9 flex flex-wrap gap-3">
+            <Link href="/ask" className="btn btn-primary rounded-xl px-6">
+              Run a panel
+            </Link>
+            <Link href="/rate" className="btn btn-outline rounded-xl px-6">
+              Explore rater flow
+            </Link>
+          </div>
         </div>
-        <div className="h-full">
-          <AskFlowPanel {...mcpStep} />
-        </div>
-        <div className="h-full">
-          <AskFlowPanel {...resultStep} />
-        </div>
-      </div>
-    </section>
-  );
-}
 
-function getFeatureBenefitCardClassName(index: number) {
-  const spanClass = index < 3 ? "lg:col-span-2" : "lg:col-span-3";
-  return `group flex min-h-[13.25rem] flex-col border-l-2 border-base-content/20 py-2 pl-6 text-left ${spanClass}`;
-}
+        <section className="mt-20 grid gap-4 md:grid-cols-3" aria-label="Protocol principles">
+          {principles.map(([title, body]) => (
+            <article key={title} className="rounded-2xl border border-white/10 bg-white/[0.035] p-6">
+              <h2 className="text-xl font-semibold">{title}</h2>
+              <p className="mt-3 leading-7 text-white/55">{body}</p>
+            </article>
+          ))}
+        </section>
 
-function FeatureBenefitCard({
-  title,
-  achievedBy,
-  links,
-  index,
-}: {
-  title: string;
-  achievedBy: string;
-  links: TechLink[];
-  index: number;
-}) {
-  const accentColors = ["#359EEE", "#03CEA4", "#EF476F", "#FFC43D", "#359EEE"];
-  const accentColor = accentColors[index % accentColors.length];
-
-  return (
-    <article className={getFeatureBenefitCardClassName(index)} style={{ borderColor: accentColor }}>
-      <span className="font-mono text-sm" style={{ color: accentColor }}>
-        {(index + 1).toString().padStart(2, "0")}
-      </span>
-      <h3 className="mt-3 text-[1.45rem] font-bold leading-tight text-base-content sm:text-[1.65rem]">{title}</h3>
-      <p className="mt-4 text-base leading-7 text-base-content/60">{achievedBy}</p>
-      <div className="mt-auto flex flex-wrap gap-2 pt-5">
-        {links.map(link => (
-          <Link
-            key={`${title}-${link.href}`}
-            href={link.href}
-            prefetch={false}
-            className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72 transition hover:border-base-content/20 hover:bg-base-content/[0.1] hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content"
-          >
-            {link.label}
+        <section className="mt-20 rounded-3xl border border-white/10 bg-black/25 p-7 sm:p-10">
+          <p className="text-sm font-semibold text-amber-200">Test-stage limitations</p>
+          <ul className="mt-4 grid gap-3 text-sm leading-6 text-white/55 md:grid-cols-2">
+            <li>Credential issuance can admit or censor future raters, but cannot redirect escrowed funds.</li>
+            <li>USDC inherits Circle freeze, blacklist, and depeg risks.</li>
+            <li>Vote sealing trusts drand availability.</li>
+            <li>A normal claim publicly links the one-time vote key to its payout address.</li>
+          </ul>
+          <Link href="/docs" className="mt-6 inline-block text-sm font-medium text-sky-300 hover:text-sky-200">
+            Read the trust and lifecycle notes →
           </Link>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function FeaturesBenefitsSection() {
-  return (
-    <section className="relative z-10 w-full">
-      <SectionHeading number="02" title="Why It" gradientText="Works" />
-      <div className="grid grid-cols-1 gap-x-12 gap-y-14 md:grid-cols-2 lg:grid-cols-6">
-        {FEATURE_BENEFITS.map((feature, index) => (
-          <FeatureBenefitCard key={feature.title} {...feature} index={index} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-async function getLandingPageSocialProofItems() {
-  const ponderUrl = getOptionalPonderUrl();
-  if (!ponderUrl) {
-    console.warn("[landing-social-proof] NEXT_PUBLIC_PONDER_URL is not configured; hiding landing stats.");
-    return [];
-  }
-
-  try {
-    const response = await fetch(`${ponderUrl}/stats`, {
-      next: { revalidate: LANDING_STATS_REVALIDATE_SECONDS },
-    });
-
-    if (!response.ok) {
-      console.warn("[landing-social-proof] Ponder stats request failed; hiding landing stats.", {
-        status: response.status,
-        statusText: response.statusText,
-      });
-      return [];
-    }
-
-    const stats = (await response.json()) as LandingSocialProofStats;
-    return buildLandingPageSocialProofItems(stats);
-  } catch (error) {
-    console.warn("[landing-social-proof] Ponder stats request threw; hiding landing stats.", {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-export default async function LandingPage() {
-  const socialProofItems = await getLandingPageSocialProofItems();
-
-  return (
-    <div className="flex flex-col items-center grow px-4 pt-4 pb-16 sm:pt-12 lg:pt-16">
-      <div className="relative w-full max-w-6xl flex flex-col items-center">
-        {/* Hero: stacked on mobile, side animation on large screens */}
-        <div className="relative z-0 flex w-full flex-col lg:min-h-[34rem] lg:items-center lg:justify-center xl:min-h-[38rem]">
-          {/* Animation: Hawig orb implementation, positioned as a side visual on large screens */}
-          <div
-            className="relative z-0 w-[min(28rem,84vw)] self-center sm:w-[min(44rem,94vw)] lg:pointer-events-none lg:absolute lg:bottom-[-4rem] lg:left-auto lg:right-[-14rem] lg:top-[-3rem] lg:w-[58rem] lg:-translate-y-6 xl:bottom-[-5rem] xl:right-[-18rem] xl:top-[-4rem] xl:w-[68rem] xl:-translate-y-8"
-            aria-hidden="true"
-          >
-            <OrbAnimation />
-          </div>
-
-          {/* Title (left on large screens) */}
-          <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[38rem] lg:items-start lg:pt-24 lg:pb-6 xl:max-w-[42rem] xl:pt-28 xl:pb-8">
-            <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
-              <span className="block">Level Up Your</span>
-              <span className="block">
-                <span className="rateloop-text-gradient">Agent</span>
-              </span>
-            </h1>
-            <p
-              className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]"
-              data-testid="landing-hero-deck"
-            >
-              Human and AI raters guide decisions <br className="hidden lg:block 2xl:hidden" />
-              and earn LREP or USDC
-            </p>
-            <LandingPageActions />
-            {socialProofItems.length > 0 ? (
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
-                {socialProofItems.map(({ value, label }, index) => (
-                  <div key={label} className="flex items-center">
-                    <span
-                      className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
-                    >
-                      <span className="font-semibold text-base-content">{value}</span> {label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <SupportedAgentsSection />
-        </div>
-
-        <AskWorkflowSection />
-
-        <LandingOrbitDivider variant="how-to-why" />
-        <FeaturesBenefitsSection />
-
-        <LandingOrbitDivider variant="why-to-faq" />
-        <LandingFaq />
+        </section>
       </div>
     </div>
   );

@@ -1,15 +1,3 @@
-User-agent: Twitterbot
-Allow: /
-Allow: /api/og/
-Allow: /og/
-Allow: /og/vote.png
-Allow: /og-image.jpg
-Allow: /twitter-image.jpg
-
 User-agent: *
 Allow: /
-Allow: /api/og/
-Allow: /og/
 Disallow: /api/
-
-Sitemap: https://www.rateloop.ai/sitemap.xml

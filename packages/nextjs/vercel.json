@@ -1,29 +1,3 @@
 {
-  "installCommand": "YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn install --immutable",
-  "crons": [
-    {
-      "path": "/api/confidentiality/disclosure/reconcile",
-      "schedule": "17 * * * *"
-    },
-    {
-      "path": "/api/confidentiality/log-roots/publish/cron",
-      "schedule": "7 0 * * *"
-    },
-    {
-      "path": "/api/attachments/images/sweep",
-      "schedule": "31 * * * *"
-    },
-    {
-      "path": "/api/attachments/details/sweep",
-      "schedule": "43 3 * * *"
-    },
-    {
-      "path": "/api/agent-callbacks/sweep",
-      "schedule": "23 * * * *"
-    },
-    {
-      "path": "/api/notifications/email/deliver",
-      "schedule": "11 * * * *"
-    }
-  ]
+  "installCommand": "YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn install --immutable"
 }

@@ -45,9 +45,8 @@ const ImprintPage: NextPage = () => {
 
         <h2>Important Notice</h2>
         <p>
-          This Imprint applies solely to this Interface (the website). The RateLoop Protocol is a set of decentralized,
-          autonomous smart contracts deployed on public blockchains. The Protocol operates independently and is not
-          controlled, operated, or maintained by Hawig Ventures UG.
+          This imprint applies to the tokenless test interface. Its current Base Sepolia contracts and services are an
+          isolated, disposable test deployment and must not be treated as a production financial service.
         </p>
 
         <h2>Dispute Resolution</h2>
