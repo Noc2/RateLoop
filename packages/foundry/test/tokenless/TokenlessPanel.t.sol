@@ -77,11 +77,11 @@ contract TokenlessPanelTest is Test {
         panel.processWeights(roundId, 2, 1);
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.Weighting));
 
-        uint256 funderBeforeFinalize = usdc.balanceOf(funder);
         panel.finalizeSettlement(roundId);
-        assertEq(usdc.balanceOf(funder) - funderBeforeFinalize, RESERVE);
-        assertEq(usdc.balanceOf(feeRecipient), FEE);
-        assertEq(usdc.balanceOf(address(panel)), BOUNTY);
+        assertEq(panel.withdrawableCredit(funder), RESERVE);
+        assertEq(panel.withdrawableCredit(feeRecipient), FEE);
+        assertEq(panel.totalWithdrawableCredit(), RESERVE + FEE);
+        assertEq(usdc.balanceOf(address(panel)), BOUNTY + RESERVE + FEE);
 
         uint256 aliceAmount = panel.previewPayout(alice.commitKey);
         uint256 bobAmount = panel.previewPayout(bob.commitKey);
@@ -102,13 +102,20 @@ contract TokenlessPanelTest is Test {
 
         uint256 dust = BOUNTY - aliceAmount - bobAmount - carolAmount;
         vm.warp(_round(roundId).claimDeadline + 1);
-        uint256 funderBeforeDust = usdc.balanceOf(funder);
+        usdc.setBlockedRecipient(funder, true);
         assertEq(panel.returnStaleShares(roundId), dust);
-        assertEq(usdc.balanceOf(funder) - funderBeforeDust, dust);
+        assertEq(panel.withdrawableCredit(funder), RESERVE + dust);
+
+        address funderDestination = makeAddr("funderDestination");
+        vm.prank(funder);
+        panel.withdrawCredit(funderDestination);
+        vm.prank(feeRecipient);
+        panel.withdrawCredit(feeRecipient);
+        assertEq(usdc.balanceOf(funderDestination), RESERVE + dust);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_UnderQuorumWaitsForBeaconDeadlineAndPaysEveryAcceptedCommit() public {
+    function test_UnderQuorumWaitsForBeaconDeadlineAndPaysOnlyValidRevealers() public {
         uint256 roundId = _createRound(2, 3);
         Rater memory alice = _rater(0x201, 1, 7_000, "alice", roundId);
         Rater memory bob = _rater(0x202, 0, 3_000, "bob", roundId);
@@ -123,15 +130,18 @@ contract TokenlessPanelTest is Test {
         panel.beginSettlement(roundId);
 
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
-        uint256 beforeRefund = usdc.balanceOf(funder);
         panel.beginSettlement(roundId);
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
-        assertEq(usdc.balanceOf(funder) - beforeRefund, BOUNTY + FEE + RESERVE - 2 * COMPENSATION);
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - COMPENSATION);
 
         panel.claimCompensation(alice.commitKey, alice.payout, alice.salt);
+        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
         panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
         assertEq(usdc.balanceOf(alice.payout), COMPENSATION);
-        assertEq(usdc.balanceOf(bob.payout), COMPENSATION);
+        assertEq(usdc.balanceOf(bob.payout), 0);
+
+        vm.prank(funder);
+        panel.withdrawCredit(funder);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
@@ -143,24 +153,28 @@ contract TokenlessPanelTest is Test {
         _commit(roundId, bob);
 
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
-        uint256 beforeRefund = usdc.balanceOf(funder);
         panel.beginSettlement(roundId);
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.BeaconFailureCompensation));
-        assertEq(usdc.balanceOf(funder) - beforeRefund, BOUNTY + FEE + RESERVE - 2 * COMPENSATION);
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - 2 * COMPENSATION);
 
         panel.claimCompensation(alice.commitKey, alice.payout, alice.salt);
         panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
+        vm.prank(funder);
+        panel.withdrawCredit(funder);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
     function test_ZeroCommitRoundFullyRefunds() public {
         uint256 roundId = _createRound(2, 3);
-        uint256 beforeRefund = usdc.balanceOf(funder);
         vm.warp(_round(roundId).revealDeadline + 1);
         panel.beginSettlement(roundId);
 
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.ZeroCommitRefund));
-        assertEq(usdc.balanceOf(funder) - beforeRefund, BOUNTY + FEE + RESERVE);
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
+        assertEq(usdc.balanceOf(address(panel)), BOUNTY + FEE + RESERVE);
+
+        vm.prank(funder);
+        panel.withdrawCredit(funder);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
@@ -226,6 +240,101 @@ contract TokenlessPanelTest is Test {
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
         panel.createRound(terms);
+    }
+
+    function test_BlockedRefundAndFeeRecipientsCannotPreventFinalizationOrRaterClaim() public {
+        uint256 roundId = _createRound(1, 1);
+        Rater memory alice = _rater(0x701, 1, 5_000, "alice", roundId);
+        _commit(roundId, alice);
+
+        vm.warp(_round(roundId).commitDeadline + 1);
+        _reveal(roundId, alice);
+        vm.warp(_round(roundId).revealDeadline + 1);
+        panel.beginSettlement(roundId);
+        panel.processAggregate(roundId, 0, 1);
+        panel.processWeights(roundId, 0, 1);
+
+        usdc.setBlockedRecipient(funder, true);
+        usdc.setBlockedRecipient(feeRecipient, true);
+        panel.finalizeSettlement(roundId);
+
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.Finalized));
+        assertEq(panel.withdrawableCredit(funder), RESERVE);
+        assertEq(panel.withdrawableCredit(feeRecipient), FEE);
+
+        usdc.setTransferShortfall(1);
+        vm.expectRevert(TokenlessPanel.TransferAmountMismatch.selector);
+        panel.claim(alice.commitKey, alice.payout, alice.salt);
+        assertFalse(panel.getCommit(alice.commitKey).claimed);
+        usdc.setTransferShortfall(0);
+        assertEq(panel.claim(alice.commitKey, alice.payout, alice.salt), BOUNTY);
+
+        vm.prank(funder);
+        vm.expectRevert(bytes("MockERC20: recipient blocked"));
+        panel.withdrawCredit(funder);
+        assertEq(panel.withdrawableCredit(funder), RESERVE);
+
+        address alternateFunderDestination = makeAddr("alternateFunderDestination");
+        address alternateFeeDestination = makeAddr("alternateFeeDestination");
+        vm.prank(funder);
+        panel.withdrawCredit(alternateFunderDestination);
+        vm.prank(feeRecipient);
+        panel.withdrawCredit(alternateFeeDestination);
+
+        assertEq(usdc.balanceOf(alternateFunderDestination), RESERVE);
+        assertEq(usdc.balanceOf(alternateFeeDestination), FEE);
+        assertEq(usdc.balanceOf(address(panel)), 0);
+    }
+
+    function test_BlockedFunderCannotPreventZeroCommitTerminalizationAndOnlyOwnerCanRedirectCredit() public {
+        uint256 roundId = _createRound(2, 3);
+        address attacker = makeAddr("creditAttacker");
+        address alternateDestination = makeAddr("alternateDestination");
+        usdc.setBlockedRecipient(funder, true);
+
+        vm.prank(funder);
+        panel.cancelEmptyRound(roundId);
+
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.ZeroCommitRefund));
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
+
+        vm.prank(attacker);
+        vm.expectRevert(TokenlessPanel.NoCredit.selector);
+        panel.withdrawCredit(alternateDestination);
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
+
+        usdc.setTransferShortfall(1);
+        vm.prank(funder);
+        vm.expectRevert(TokenlessPanel.TransferAmountMismatch.selector);
+        panel.withdrawCredit(alternateDestination);
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
+        usdc.setTransferShortfall(0);
+
+        vm.prank(funder);
+        panel.withdrawCredit(alternateDestination);
+        assertEq(usdc.balanceOf(alternateDestination), BOUNTY + FEE + RESERVE);
+        assertEq(usdc.balanceOf(address(panel)), 0);
+    }
+
+    function test_BlockedFunderCannotPreventUnderQuorumCompensation() public {
+        uint256 roundId = _createRound(2, 2);
+        Rater memory alice = _rater(0x801, 1, 7_000, "alice", roundId);
+        _commit(roundId, alice);
+
+        vm.warp(_round(roundId).commitDeadline + 1);
+        _reveal(roundId, alice);
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
+        usdc.setBlockedRecipient(funder, true);
+        panel.beginSettlement(roundId);
+
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - COMPENSATION);
+        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), COMPENSATION);
+
+        address alternateDestination = makeAddr("underQuorumRefundDestination");
+        vm.prank(funder);
+        panel.withdrawCredit(alternateDestination);
+        assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
     function test_OnlyMockDeployerCanConfigureTransferFaultsButMintRemainsPublic() public {

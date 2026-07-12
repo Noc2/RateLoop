@@ -125,6 +125,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     mapping(uint256 roundId => bytes32[] revealKeys) private _roundRevealKeys;
     mapping(bytes32 commitKey => CommitRecord record) private _commits;
     mapping(bytes32 nullifier => bool used) public nullifierUsed;
+    mapping(address recipient => uint256 amount) public withdrawableCredit;
+    uint256 public totalWithdrawableCredit;
 
     event RoundCreated(
         uint256 indexed roundId,
@@ -148,6 +150,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     event RoundTerminal(uint256 indexed roundId, RoundState indexed state, uint256 funderRefund, uint256 compensation);
     event Claimed(uint256 indexed roundId, bytes32 indexed commitKey, address indexed payoutAddress, uint256 amount);
     event StaleSharesReturned(uint256 indexed roundId, address indexed funder, uint256 amount);
+    event CreditAccrued(uint256 indexed roundId, address indexed recipient, uint256 amount);
+    event CreditWithdrawn(address indexed recipient, address indexed destination, uint256 amount);
 
     error InvalidAddress();
     error InvalidTerms();
@@ -168,6 +172,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     error NothingToProcess();
     error ClaimWindowOpen();
     error TransferAmountMismatch();
+    error NoCredit();
 
     constructor(address usdc_, address credentialIssuer_) EIP712("RateLoop Tokenless Panel", "1") {
         if (
@@ -330,7 +335,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (block.timestamp <= round.revealDeadline) revert InvalidDeadline();
 
         if (round.commitCount == 0) {
-            _terminalRefund(roundId, round, RoundState.ZeroCommitRefund, 0, 0);
+            _terminalRefund(roundId, round, RoundState.ZeroCommitRefund);
             return;
         }
         if (round.revealCount < round.minimumReveals) {
@@ -338,7 +343,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             if (round.revealCount == 0) {
                 _terminalCompensation(roundId, round, RoundState.BeaconFailureCompensation, round.commitCount);
             } else {
-                _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.commitCount);
+                _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.revealCount);
             }
             return;
         }
@@ -392,8 +397,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
 
         round.state = RoundState.Finalized;
         round.claimDeadline = block.timestamp + round.claimGracePeriod;
-        usdc.safeTransfer(round.funder, round.attemptReserve);
-        if (round.feeAmount != 0) usdc.safeTransfer(round.feeRecipient, round.feeAmount);
+        _accrueCredit(roundId, round.funder, round.attemptReserve);
+        _accrueCredit(roundId, round.feeRecipient, round.feeAmount);
 
         emit RoundFinalized(roundId, round.totalAccuracyScore, round.claimDeadline);
     }
@@ -423,8 +428,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         CommitRecord storage record = _commits[commitKey];
         if (record.voteKey == address(0)) revert CommitNotFound();
         Round storage round = _rounds[record.roundId];
-        bool eligible =
-            round.state == RoundState.BeaconFailureCompensation || round.state == RoundState.UnderQuorumCompensation;
+        bool eligible = round.state == RoundState.BeaconFailureCompensation
+            || (round.state == RoundState.UnderQuorumCompensation && record.revealed);
         if (!eligible || block.timestamp > round.claimDeadline) revert NotClaimable();
 
         amount = _claim(record, round, payoutAddress, salt, true);
@@ -445,8 +450,23 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             : round.compensationPerRecipient
                 * (round.state == RoundState.UnderQuorumCompensation ? round.revealCount : round.commitCount);
         amount = allocation - round.totalPaid;
-        if (amount != 0) usdc.safeTransfer(round.funder, amount);
+        _accrueCredit(roundId, round.funder, amount);
         emit StaleSharesReturned(roundId, round.funder, amount);
+    }
+
+    /// @notice Withdraw caller-owned refund, fee, or stale-return credit to a caller-selected destination.
+    /// @dev Only the credited recipient can select a different destination. This keeps terminalization
+    ///      independent of recipient transfer failures without introducing an operator redirection path.
+    function withdrawCredit(address destination) external nonReentrant returns (uint256 amount) {
+        if (destination == address(0)) revert InvalidAddress();
+        amount = withdrawableCredit[msg.sender];
+        if (amount == 0) revert NoCredit();
+
+        withdrawableCredit[msg.sender] = 0;
+        totalWithdrawableCredit -= amount;
+        _transferExact(destination, amount);
+
+        emit CreditWithdrawn(msg.sender, destination, amount);
     }
 
     /// @notice Funder escape before any work is accepted. Impossible after the first commit.
@@ -454,7 +474,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         Round storage round = _rounds[roundId];
         if (msg.sender != round.funder) revert Unauthorized();
         if (round.state != RoundState.Open || round.commitCount != 0) revert InvalidState();
-        _terminalRefund(roundId, round, RoundState.ZeroCommitRefund, 0, 0);
+        _terminalRefund(roundId, round, RoundState.ZeroCommitRefund);
     }
 
     function getRound(uint256 roundId) external view returns (Round memory) {
@@ -549,7 +569,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         record.claimed = true;
         amount = compensation ? round.compensationPerRecipient : _finalizedPayout(record, round);
         round.totalPaid += amount;
-        usdc.safeTransfer(payoutAddress, amount);
+        _transferExact(payoutAddress, amount);
     }
 
     function _finalizedPayout(CommitRecord storage record, Round storage round) private view returns (uint256) {
@@ -570,21 +590,28 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         round.claimDeadline = block.timestamp + round.claimGracePeriod;
 
         uint256 funderRefund = round.bountyAmount + round.feeAmount + round.attemptReserve - totalCompensation;
-        usdc.safeTransfer(round.funder, funderRefund);
+        _accrueCredit(roundId, round.funder, funderRefund);
         emit RoundTerminal(roundId, terminalState, funderRefund, totalCompensation);
     }
 
-    function _terminalRefund(
-        uint256 roundId,
-        Round storage round,
-        RoundState terminalState,
-        uint256 compensation,
-        uint256 retained
-    ) private {
+    function _terminalRefund(uint256 roundId, Round storage round, RoundState terminalState) private {
         round.state = terminalState;
-        uint256 funderRefund = round.bountyAmount + round.feeAmount + round.attemptReserve - compensation - retained;
-        usdc.safeTransfer(round.funder, funderRefund);
-        emit RoundTerminal(roundId, terminalState, funderRefund, compensation);
+        uint256 funderRefund = round.bountyAmount + round.feeAmount + round.attemptReserve;
+        _accrueCredit(roundId, round.funder, funderRefund);
+        emit RoundTerminal(roundId, terminalState, funderRefund, 0);
+    }
+
+    function _accrueCredit(uint256 roundId, address recipient, uint256 amount) private {
+        if (amount == 0) return;
+        withdrawableCredit[recipient] += amount;
+        totalWithdrawableCredit += amount;
+        emit CreditAccrued(roundId, recipient, amount);
+    }
+
+    function _transferExact(address recipient, uint256 amount) private {
+        uint256 beforeBalance = usdc.balanceOf(address(this));
+        usdc.safeTransfer(recipient, amount);
+        if (beforeBalance - usdc.balanceOf(address(this)) != amount) revert TransferAmountMismatch();
     }
 
     function _validateTerms(RoundTerms calldata terms) private view {

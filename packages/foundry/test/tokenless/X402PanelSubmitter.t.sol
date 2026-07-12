@@ -41,6 +41,9 @@ contract X402PanelSubmitterTest is Test {
 
         vm.prank(funder);
         panel.cancelEmptyRound(roundId);
+        assertEq(panel.withdrawableCredit(funder), amount);
+        vm.prank(funder);
+        panel.withdrawCredit(funder);
         assertEq(usdc.balanceOf(funder), 100e6);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
