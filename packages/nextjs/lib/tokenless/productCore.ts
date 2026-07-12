@@ -159,6 +159,118 @@ export async function createWorkspaceApiKey(input: {
   return { apiKeyId: keyId, token };
 }
 
+export type ProductWorkspaceSummary = {
+  workspaceId: string;
+  name: string;
+  role: TokenlessWorkspaceRole;
+  prepaid: {
+    settledAtomic: string;
+    reservedAtomic: string;
+    availableAtomic: string;
+  };
+};
+
+export async function listProductWorkspaces(accountAddress: string): Promise<ProductWorkspaceSummary[]> {
+  const address = getAddress(accountAddress).toLowerCase();
+  const result = await dbClient.execute({
+    sql: `SELECT w.workspace_id, w.name, m.role
+          FROM tokenless_workspace_members m
+          JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id
+          WHERE m.account_address = ? AND w.status = 'active'
+          ORDER BY m.created_at ASC`,
+    args: [address],
+  });
+  return Promise.all(
+    result.rows.map(async value => {
+      const row = value as QueryRow;
+      const workspaceId = rowString(row, "workspace_id");
+      const name = rowString(row, "name");
+      const role = rowString(row, "role") as TokenlessWorkspaceRole | null;
+      if (!workspaceId || !name || !role) throw new Error("Workspace query returned an invalid record.");
+      const [ledger, reservations] = await Promise.all([
+        dbClient.execute({
+          sql: `SELECT COALESCE(SUM(delta_atomic), 0) AS amount FROM tokenless_prepaid_ledger_entries
+              WHERE workspace_id = ? AND settlement_status = 'settled'`,
+          args: [workspaceId],
+        }),
+        dbClient.execute({
+          sql: `SELECT COALESCE(SUM(amount_atomic), 0) AS amount FROM tokenless_prepaid_reservations
+              WHERE workspace_id = ? AND status = 'reserved'`,
+          args: [workspaceId],
+        }),
+      ]);
+      const settled = BigInt(rowString(ledger.rows[0] as QueryRow | undefined, "amount") ?? "0");
+      const reserved = BigInt(rowString(reservations.rows[0] as QueryRow | undefined, "amount") ?? "0");
+      return {
+        workspaceId,
+        name,
+        role,
+        prepaid: {
+          settledAtomic: settled.toString(),
+          reservedAtomic: reserved.toString(),
+          availableAtomic: (settled - reserved).toString(),
+        },
+      };
+    }),
+  );
+}
+
+async function requireWorkspaceManagement(accountAddress: string, workspaceId: string) {
+  const address = getAddress(accountAddress).toLowerCase();
+  const result = await dbClient.execute({
+    sql: `SELECT m.role FROM tokenless_workspace_members m
+          JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id
+          WHERE m.workspace_id = ? AND m.account_address = ? AND w.status = 'active' LIMIT 1`,
+    args: [workspaceId, address],
+  });
+  const role = rowString(result.rows[0] as QueryRow | undefined, "role") as TokenlessWorkspaceRole | null;
+  if (role !== "owner" && role !== "admin") {
+    throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+  }
+  return role;
+}
+
+export async function listWorkspaceApiKeys(input: { accountAddress: string; workspaceId: string }) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `SELECT key_id, key_prefix, name, role, last_used_at, revoked_at, created_at
+          FROM tokenless_workspace_api_keys WHERE workspace_id = ? ORDER BY created_at DESC`,
+    args: [input.workspaceId],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    return {
+      apiKeyId: rowString(row, "key_id"),
+      prefix: rowString(row, "key_prefix"),
+      name: rowString(row, "name"),
+      role: rowString(row, "role"),
+      lastUsedAt: row.last_used_at ? new Date(String(row.last_used_at)).toISOString() : null,
+      revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null,
+      createdAt: new Date(String(row.created_at)).toISOString(),
+    };
+  });
+}
+
+export async function createManagedWorkspaceApiKey(input: {
+  accountAddress: string;
+  workspaceId: string;
+  name: string;
+  role?: Extract<TokenlessWorkspaceRole, "admin" | "member">;
+}) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  return createWorkspaceApiKey(input);
+}
+
+export async function revokeWorkspaceApiKey(input: { accountAddress: string; workspaceId: string; apiKeyId: string }) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_api_keys SET revoked_at = ?
+          WHERE key_id = ? AND workspace_id = ? AND revoked_at IS NULL`,
+    args: [new Date(), input.apiKeyId, input.workspaceId],
+  });
+  if (result.rowCount !== 1) throw new TokenlessServiceError("API key not found.", 404, "api_key_not_found");
+}
+
 export async function recordPrepaidLedgerEntry(input: {
   workspaceId: string;
   amountAtomic: string;

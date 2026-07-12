@@ -78,7 +78,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
   return (
     <>
       {links.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || (href === "/docs" && pathname.startsWith("/docs"));
+        const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}

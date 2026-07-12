@@ -6,10 +6,14 @@ import {
   attachProductAsk,
   authenticateProductPrincipal,
   authorizeAskAccess,
+  createManagedWorkspaceApiKey,
   createWorkspace,
   createWorkspaceApiKey,
+  listProductWorkspaces,
+  listWorkspaceApiKeys,
   prepareProductAsk,
   recordPrepaidLedgerEntry,
+  revokeWorkspaceApiKey,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
@@ -166,4 +170,44 @@ test("wallet payment intents require the signed-in Base Account to be the payer"
   });
   assert.equal(prepared.workspaceId, workspaceId);
   assert.equal(prepared.paymentState, "pending_user_signature");
+});
+
+test("workspace management returns exact available prepaid balance and never exposes API key secrets", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Product team", ownerAddress: ADDRESS_A });
+  await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "50000000", source: "invoice" });
+  const quote = await createTokenlessQuote(quoteRequest());
+  await prepareProductAsk({
+    principal: { kind: "session", accountAddress: ADDRESS_A },
+    request: {
+      idempotencyKey: "workspace:reserve:12345678",
+      payment: { mode: "prepaid", workspaceId },
+      quoteId: quote.quoteId,
+    },
+  });
+  const workspaces = await listProductWorkspaces(ADDRESS_A);
+  assert.deepEqual(workspaces[0]?.prepaid, {
+    settledAtomic: "50000000",
+    reservedAtomic: quote.economics.totalFundedAtomic,
+    availableAtomic: (50_000_000n - BigInt(quote.economics.totalFundedAtomic)).toString(),
+  });
+
+  const created = await createManagedWorkspaceApiKey({
+    accountAddress: ADDRESS_A,
+    workspaceId,
+    name: "Production agent",
+  });
+  assert.match(created.token, /^rlk_/);
+  const listed = await listWorkspaceApiKeys({ accountAddress: ADDRESS_A, workspaceId });
+  assert.equal(listed[0]?.apiKeyId, created.apiKeyId);
+  assert.equal("token" in listed[0]!, false);
+  await revokeWorkspaceApiKey({ accountAddress: ADDRESS_A, workspaceId, apiKeyId: created.apiKeyId });
+  assert.ok((await listWorkspaceApiKeys({ accountAddress: ADDRESS_A, workspaceId }))[0]?.revokedAt);
+});
+
+test("workspace API-key management is hidden from non-members", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Private team", ownerAddress: ADDRESS_A });
+  await assert.rejects(
+    () => listWorkspaceApiKeys({ accountAddress: ADDRESS_B, workspaceId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
+  );
 });

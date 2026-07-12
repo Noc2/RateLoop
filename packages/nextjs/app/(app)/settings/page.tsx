@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const requirements = [
   [
     "01",
@@ -57,6 +59,9 @@ export default function PaidTaskUnlockPage() {
         Your eligibility record is separate from public panel activity. A normal on-chain claim can still link its
         one-time vote key to the payout destination you select.
       </div>
+      <Link href="/settings/workspace" className="rateloop-gradient-action mt-6 w-fit px-6">
+        Manage workspace & API keys
+      </Link>
     </div>
   );
 }
