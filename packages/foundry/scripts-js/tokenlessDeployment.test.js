@@ -107,7 +107,7 @@ test("includes X402PanelSubmitter when the optional adapter is deployed", () => 
   assert.ok(!artifact.deploymentKey.endsWith(`:${address(0)}`));
 });
 
-test("rejects missing required contracts and mixed legacy broadcasts", () => {
+test("rejects missing required contracts and mixed broadcasts", () => {
   const missingIssuer = completeBroadcast();
   missingIssuer.transactions = missingIssuer.transactions.filter(
     (transaction) => transaction.contractName !== "CredentialIssuer"
@@ -118,12 +118,12 @@ test("rejects missing required contracts and mixed legacy broadcasts", () => {
   );
 
   const mixed = completeBroadcast();
-  const legacy = createTransaction("ContentRegistry", address(20), [], 20);
-  mixed.transactions.push(legacy.transaction);
-  mixed.receipts.push(legacy.receipt);
+  const unexpected = createTransaction("UnexpectedContract", address(20), [], 20);
+  mixed.transactions.push(unexpected.transaction);
+  mixed.receipts.push(unexpected.receipt);
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(mixed),
-    /mixed legacy\/tokenless deployment broadcast/
+    /mixed or unknown tokenless deployment broadcast/
   );
 });
 
@@ -165,10 +165,10 @@ test("validates deployment keys against contract addresses", () => {
   );
 });
 
-test("export writes tokenless-v1 separately and leaves legacy 8453 untouched", () => {
+test("export writes tokenless-v1 separately and leaves unrelated artifacts untouched", () => {
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-export-"));
   try {
-    const legacyPath = join(root, "deployments", "8453.json");
+    const unrelatedPath = join(root, "deployments", "unrelated.json");
     const broadcastPath = join(root, "run-latest.json");
     const tokenlessPath = join(
       root,
@@ -177,7 +177,7 @@ test("export writes tokenless-v1 separately and leaves legacy 8453 untouched", (
       "84532.json"
     );
     mkdirSync(join(root, "deployments"), { recursive: true });
-    writeFileSync(legacyPath, '{"networkName":"base","legacy":true}\n');
+    writeFileSync(unrelatedPath, '{"unrelated":true}\n');
     writeFileSync(broadcastPath, JSON.stringify(completeBroadcast()));
 
     exportTokenlessDeploymentFromBroadcast({
@@ -187,8 +187,8 @@ test("export writes tokenless-v1 separately and leaves legacy 8453 untouched", (
     });
 
     assert.equal(
-      readFileSync(legacyPath, "utf8"),
-      '{"networkName":"base","legacy":true}\n'
+      readFileSync(unrelatedPath, "utf8"),
+      '{"unrelated":true}\n'
     );
     const exported = JSON.parse(readFileSync(tokenlessPath, "utf8"));
     assert.equal(exported.schemaVersion, TOKENLESS_DEPLOYMENT_SCHEMA);

@@ -1,25 +1,15 @@
 [profile.default]
-src = 'contracts'
-out = 'out'
-libs = ['lib', 'node_modules']
-fs_permissions = [{ access = "read-write", path = "./"}]
-evm_version = 'cancun'
-# TC-1 (2026-05-20 follow-up audit): pin to 0.8.35. Solidity 0.8.28-0.8.33 with `via_ir = true`
-# emit a wrong opcode (SSTORE vs TSTORE) when `delete` is applied to both a persistent and a
-# transient state var of the same value type in the same compilation unit. ReentrancyGuardTransient
-# is used in several contracts here so the trigger surface is non-empty even if no concrete
-# instance is reachable today. 0.8.34+ ships the upstream fix; 0.8.35 also picks up the latest
-# 0.8.x patch fixes before production deployment.
-# https://www.soliditylang.org/blog/2026/02/18/transient-storage-clearing-helper-collision-bug/
+src = "contracts"
+out = "out"
+libs = ["lib", "node_modules"]
+evm_version = "cancun"
 solc = "0.8.35"
 via_ir = true
 optimizer = true
 optimizer_runs = 100
 build_info = true
-extra_output = ['abi', 'evm.bytecode', 'evm.deployedBytecode', 'storageLayout']
-# Solidity warns on accepted dependency patterns here: OpenZeppelin's transient
-# storage helper and future reserved identifiers in OpenZeppelin/forge-std.
-ignored_error_codes = [2394, 6335]
+extra_output = ["abi", "evm.bytecode", "evm.deployedBytecode"]
+ignored_error_codes = [6335]
 
 [profile.deploy]
 optimizer_runs = 0
@@ -27,39 +17,12 @@ revert_strings = "strip"
 bytecode_hash = "none"
 cbor_metadata = false
 
-
 [rpc_endpoints]
-default_network = "http://127.0.0.1:8545"
-
-mainnet = "https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}"
-sepolia = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-arbitrum = "https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-arbitrumSepolia = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-optimism = "https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-optimismSepolia = "https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-polygon = "https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-polygonMumbai = "https://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-polygonZkEvm = "https://zkevm-rpc.com"
-polygonZkEvmTestnet = "https://rpc.public.zkevm-test.net"
-gnosis = "https://rpc.gnosischain.com"
-chiado = "https://rpc.chiadochain.net"
-base = "https://mainnet.base.org"
 baseSepolia = "${BASE_SEPOLIA_RPC_URL}"
-scrollSepolia = "https://sepolia-rpc.scroll.io"
-scroll = "https://rpc.scroll.io"
-pgn = "https://rpc.publicgoods.network"
-pgnTestnet = "https://sepolia.publicgoods.network"
-
-
 localhost = "http://127.0.0.1:8545"
 
 [etherscan]
-polygonMumbai = { key = "${ETHERSCAN_API_KEY}" }
-sepolia = { key = "${ETHERSCAN_API_KEY}" }
-base = { key = "${BASESCAN_API_KEY}", url = "https://api.basescan.org/api" }
 baseSepolia = { key = "${BASESCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
-
-
 
 [invariant]
 runs = 256
@@ -76,8 +39,3 @@ int_types = "long"
 
 [lint]
 lint_on_build = false
-
-
-
-
-# See more config options https://book.getfoundry.sh/reference/config/overview

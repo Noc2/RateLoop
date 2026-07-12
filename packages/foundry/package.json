@@ -4,42 +4,22 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "account": "make account",
-    "account:generate": "node scripts-js/generateKeystore.js",
-    "account:import": "node scripts-js/importAccount.js",
-    "account:reveal-pk": "node scripts-js/revealPK.js",
-    "chain": "make chain",
+    "build": "forge build --offline",
     "clean": "forge clean",
-    "compile": "make compile",
-    "compile:all": "make compile-all",
+    "compile": "forge build --offline",
     "deploy": "node scripts-js/parseArgs.js",
-    "flatten": "make flatten",
-    "fork": "make fork FORK_URL=${1:-mainnet}",
-    "format": "make format",
-    "postinstall": "shx cp -n .env.example .env",
+    "format": "forge fmt",
     "lint": "make lint",
     "test": "forge test --offline",
-    "test:world-id": "forge test --offline --match-contract 'RaterRegistryTest|DeployRateLoopAllocationsTest'",
+    "test:tooling": "node --test scripts-js/tokenlessDeployment.test.js",
     "check:sizes": "make check-contract-sizes",
-    "verify": "make verify RPC_URL=${1:-localhost}",
-    "slither": "make slither",
-    "aderyn": "make aderyn",
-    "certora": "make certora",
-    "certora:check": "make certora-check",
     "coverage": "make coverage"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "prettier": "~2.8.8",
-    "qrcode": "~1.5.3",
-    "tlock-js": "^0.9.0",
-    "toml": "~3.0.0",
     "viem": "2.39.0"
   },
   "license": "MIT",
-  "devDependencies": {
-    "shx": "^0.3.4"
-  },
   "engines": {
     "node": ">=24 <25"
   }

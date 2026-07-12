@@ -10,23 +10,5 @@
       "name": "v5.5.0",
       "rev": "9fa6e3b8213a5d272cae7d8b3cc6fbe8b77513b8"
     }
-  },
-  "lib/openzeppelin-contracts-upgradeable": {
-    "tag": {
-      "name": "v5.5.0",
-      "rev": "e6b2eef272aeb841e55bbb98ffc5c5c4bce517d1"
-    }
-  },
-  "lib/prb-math": {
-    "tag": {
-      "name": "v4.1.0",
-      "rev": "b21433de7519fe021b176fa0b99dd3b360f28f70"
-    }
-  },
-  "lib/solidity-bytes-utils": {
-    "tag": {
-      "name": "v0.8.4",
-      "rev": "fc502455bb2a7e26a743378df042612dd50d1eb9"
-    }
   }
 }

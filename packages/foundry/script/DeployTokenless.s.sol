@@ -9,8 +9,7 @@ import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
 import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
 /// @notice Disposable Base Sepolia deployment for the tokenless-v1 stack.
-/// @dev This script intentionally does not use DeployHelpers: tokenless artifacts live under
-///      deployments/tokenless-v1 and must never overwrite the legacy deployments/8453.json path.
+/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v1 schema.
 contract DeployTokenlessScript is Script {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84_532;
 

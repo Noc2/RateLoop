@@ -1,160 +1,51 @@
-.PHONY: build guard-production-deploy deploy deploy-and-generate-abis deploy-tokenless deploy-tokenless-and-generate-artifacts generate-abis get-address account chain compile compile-all flatten fork format lint test verify slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
+.PHONY: build compile test coverage format lint check-contract-sizes deploy deploy-tokenless deploy-tokenless-and-generate-artifacts generate-tokenless-artifacts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
 RESUME_FLAG ?=
 DEPLOY_FLOW_FLAGS ?=
 DEPLOY_PROFILE ?= deploy
-DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS ?= --ignored-error-codes 2394 --ignored-error-codes 3860 --ignored-error-codes 5574 --ignored-error-codes 6335
-LOCALHOST_EVM_SIZE_FLAGS ?=
-LOCALHOST_DEPLOYER_PRIVATE_KEY ?= 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
-DEPLOYED_DEPENDENCY_SIZE_SOURCES := lib/openzeppelin-contracts/contracts/governance/TimelockController.sol lib/openzeppelin-contracts/contracts/proxy/transparent/ProxyAdmin.sol lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol
-LOCAL_DEPLOYMENT_SYNC_CONTRACTS := LoopReputation ContentRegistry RoundVotingEngine RoundVotingEngineRbtsSettlementModule RoundRewardDistributor QuestionRewardPoolEscrow ConfidentialityEscrow FeedbackRegistry FeedbackBonusEscrow CategoryRegistry RaterRegistry ClusterPayoutOracle LaunchDistributionPool AdvisoryVoteRecorder X402QuestionSubmitter FrontendRegistry ProfileRegistry ProtocolConfig MockERC20 MockWorldIDRouter
+VERIFY_FLAGS ?=
 
-# setup wallet for anvil
-setup-anvil-wallet:
-	shx rm ~/.foundry/keystores/scaffold-eth-default 2>/dev/null; 	shx rm -rf broadcast/Deploy.s.sol/31337
-	cast wallet import --private-key 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6 --unsafe-password 'localhost' scaffold-eth-default
+build compile:
+	forge build --offline
 
-# Start local chain
-chain: setup-anvil-wallet
-	anvil $(LOCALHOST_EVM_SIZE_FLAGS)
-
-# Start a fork
-fork: setup-anvil-wallet
-	anvil --fork-url ${FORK_URL} --chain-id 31337 $(LOCALHOST_EVM_SIZE_FLAGS)
-
-# Deploy the contracts
-guard-production-deploy:
-	@node scripts-js/checkProductionDeployGuard.js
-
-deploy:
-	@if [ ! -f "script/Deploy.s.sol" ]; then \
-		echo "Error: Deploy script 'script/Deploy.s.sol' not found"; \
-		exit 1; \
-	fi
-	@if [ "$(RPC_URL)" = "localhost" ]; then \
-		env -u ETH_KEYSTORE_ACCOUNT -u ETH_KEYSTORE -u ETH_PASSWORD \
-			FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url localhost --private-key $(LOCALHOST_DEPLOYER_PRIVATE_KEY) --broadcast --ffi --slow --non-interactive $(LOCALHOST_EVM_SIZE_FLAGS) $(RESUME_FLAG); \
-	else \
-		$(MAKE) guard-production-deploy || exit 1; \
-		$(MAKE) check-contract-sizes || exit 1; \
-		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url "$(RPC_URL)" --account "$(ETH_KEYSTORE_ACCOUNT)" --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
-	fi
-
-# Deploy and generate shared deployment artifacts.
-#
-# Keep this as an ordered recipe instead of independent prerequisites. If make
-# is invoked with parallel jobs, `generate-abis` must still wait for the fresh
-# broadcast/deployments JSON written by `deploy`. Rebuild the shared package so
-# consumers that import package exports see the regenerated deployment metadata.
-deploy-and-generate-abis: guard-production-deploy check-contract-sizes
-	$(MAKE) deploy
-	node scripts-js/exportDeploymentFromBroadcast.js
-	$(MAKE) generate-abis
-	@if [ "$$DEPLOY_TARGET_NETWORK" = "localhost" ]; then \
-		node scripts-js/validateLocalDeploymentSync.js deployments/31337.json ../contracts/src/deployedContracts.ts 31337 $(LOCAL_DEPLOYMENT_SYNC_CONTRACTS); \
-	fi
-	cd ../.. && yarn workspace @rateloop/contracts build
-
-# Deploy the disposable tokenless-v1 stack to Base Sepolia. This is deliberately
-# separate from Deploy.s.sol and deployments/<chainId>.json so it cannot replace
-# or merge with the legacy Base mainnet artifact.
-deploy-tokenless: guard-production-deploy
-	@if [ "$$DEPLOY_TARGET_NETWORK" != "baseSepolia" ]; then \
-		echo "Error: tokenless-v1 deploy requires DEPLOY_TARGET_NETWORK=baseSepolia"; \
-		exit 1; \
-	fi
-	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/DeployTokenless.s.sol --tc DeployTokenlessScript --rpc-url "$(RPC_URL)" --account "$(ETH_KEYSTORE_ACCOUNT)" --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS)
-
-deploy-tokenless-and-generate-artifacts: guard-production-deploy
-	$(MAKE) deploy-tokenless
-	node scripts-js/exportTokenlessDeploymentFromBroadcast.js
-	node scripts-js/generateTokenlessArtifacts.js
-	cd ../.. && yarn workspace @rateloop/contracts build
-
-# Generate TypeScript ABIs
-generate-abis:
-	node scripts-js/generateTsAbis.js
-
-# Refresh shared ABIs from compiled artifacts without touching deployment metadata.
-generate-abis-only:
-	node scripts-js/generateTsAbis.js --abis-only
-
-# List account
-account:
-	@node scripts-js/checkAccountBalance.js
-
-# Get address of a keystore
-get-address:
-	@cast wallet address --account "$(ACCOUNT_NAME)"
-
-# Compile contracts
-compile:
-	forge compile --skip test script
-
-compile-all:
-	forge compile
-
-# Flatten contracts
-flatten:
-	forge flatten
-
-# Format code
-format:
-	forge fmt && prettier --write ./scripts-js/**/*.js
-
-# Lint code
-lint:
-	forge fmt --check && prettier --check ./scripts-js/**/*.js
-
-# Run tests
 test:
 	forge test --offline $(TEST_ARGS)
-
-# Verify contracts (Etherscan-compatible chains)
-verify:
-	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/VerifyAll.s.sol --ffi --rpc-url "$(RPC_URL)"
-
-# Static analysis
-slither:
-	slither . --config-file slither.config.json
-
-aderyn:
-	aderyn .
-
-# Formal verification (Certora). See certora/README.md.
-# The target conf inherits shared compiler/prover settings from base.conf via its
-# "override_base_config" key; certoraRun takes a single conf file.
-CERTORA_CONF ?= certora/confs/math.conf
-CERTORA_ARGS ?=
-# Gambit mutation-testing target (spec strength). See certora/mutation/README.md.
-MUTATION_CONF ?= certora/mutation/frontend-registry.mutation.conf
-
-certora:
-	certoraRun $(CERTORA_CONF) $(CERTORA_ARGS)
-
-certora-check:
-	certoraRun $(CERTORA_CONF) --compilation_steps_only $(CERTORA_ARGS)
-
-# Mutation testing: inject contract mutants and re-verify each against the spec.
-# Needs CERTORAKEY (one prover job per mutant); run manually, not in CI.
-certora-mutate:
-	certoraMutate $(MUTATION_CONF) $(CERTORA_ARGS)
 
 coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)
 
+format:
+	forge fmt
+
+lint:
+	forge fmt --check
+	node --check scripts-js/parseArgs.js
+	node --check scripts-js/tokenlessDeployment.js
+	node --check scripts-js/exportTokenlessDeploymentFromBroadcast.js
+	node --check scripts-js/generateTokenlessArtifacts.js
+
 check-contract-sizes:
-	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --force --skip script --skip test
-	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build $(DEPLOYED_DEPENDENCY_SIZE_SOURCES)
-	bash scripts/check-contract-sizes.sh
+	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --offline --sizes --skip test --skip script
 
-# M-Crosscutting-1: snapshot-test the storage layout of every upgradeable contract.
-check-storage-layouts:
-	forge build --skip script --skip test
-	bash scripts/check-storage-layouts.sh
+deploy: deploy-tokenless-and-generate-artifacts
 
-snapshot-storage-layouts:
-	forge build --skip script --skip test
-	bash scripts/snapshot-storage-layouts.sh
+deploy-tokenless: check-contract-sizes
+	@if [ "$$DEPLOY_TARGET_NETWORK" != "baseSepolia" ]; then \
+		echo "Error: tokenless-v1 deploy requires DEPLOY_TARGET_NETWORK=baseSepolia"; \
+		exit 1; \
+	fi
+	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/DeployTokenless.s.sol \
+		--tc DeployTokenlessScript \
+		--rpc-url "$(RPC_URL)" \
+		--account "$(ETH_KEYSTORE_ACCOUNT)" \
+		--broadcast --gas-estimate-multiplier 200 --non-interactive \
+		$(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS)
+
+generate-tokenless-artifacts:
+	node scripts-js/exportTokenlessDeploymentFromBroadcast.js
+	node scripts-js/generateTokenlessArtifacts.js
+
+deploy-tokenless-and-generate-artifacts: deploy-tokenless generate-tokenless-artifacts
+	cd ../.. && yarn workspace @rateloop/contracts build

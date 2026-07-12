@@ -35,14 +35,7 @@ contract X402PanelSubmitterTest is Test {
         uint256 roundId = adapter.createRoundWithAuthorization(
             funder,
             terms,
-            X402PanelSubmitter.Authorization({
-                validAfter: 0,
-                validBefore: 1 days,
-                nonce: nonce,
-                v: v,
-                r: r,
-                s: s
-            })
+            X402PanelSubmitter.Authorization({ validAfter: 0, validBefore: 1 days, nonce: nonce, v: v, r: r, s: s })
         );
 
         assertEq(panel.getRound(roundId).funder, funder);

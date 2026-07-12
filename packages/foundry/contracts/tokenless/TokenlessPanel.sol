@@ -184,19 +184,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     /// @notice Fund a round while assigning every refund and cancellation right to `funder`.
     /// @dev This narrow entry point lets a stateless payment adapter pull an authorization,
     ///      deposit it, and disappear from the lifecycle without becoming a funds custodian.
-    function createRoundFor(RoundTerms calldata terms, address funder)
-        external
-        nonReentrant
-        returns (uint256 roundId)
-    {
+    function createRoundFor(RoundTerms calldata terms, address funder) external nonReentrant returns (uint256 roundId) {
         if (funder == address(0)) revert InvalidAddress();
         return _createRound(terms, msg.sender, funder);
     }
 
-    function _createRound(RoundTerms calldata terms, address payer, address funder)
-        private
-        returns (uint256 roundId)
-    {
+    function _createRound(RoundTerms calldata terms, address payer, address funder) private returns (uint256 roundId) {
         _validateTerms(terms);
 
         roundId = nextRoundId++;
@@ -225,13 +218,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (usdc.balanceOf(address(this)) - beforeBalance != amount) revert TransferAmountMismatch();
 
         emit RoundCreated(
-            roundId,
-            funder,
-            terms.contentId,
-            terms.termsHash,
-            terms.bountyAmount,
-            terms.feeAmount,
-            terms.attemptReserve
+            roundId, funder, terms.contentId, terms.termsHash, terms.bountyAmount, terms.feeAmount, terms.attemptReserve
         );
     }
 

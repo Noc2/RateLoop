@@ -5,28 +5,6 @@ export const TOKENLESS_DEPLOYMENT_VERSION = 1;
 export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84532;
 export const TOKENLESS_BASE_SEPOLIA_NETWORK = "baseSepolia";
 
-const LEGACY_PROTOCOL_CONTRACTS = new Set([
-  "AdvisoryVoteRecorder",
-  "CategoryRegistry",
-  "ClusterPayoutOracle",
-  "ConfidentialityEscrow",
-  "ContentRegistry",
-  "FeedbackBonusEscrow",
-  "FeedbackRegistry",
-  "FrontendRegistry",
-  "LaunchDistributionPool",
-  "LoopReputation",
-  "ProfileRegistry",
-  "ProtocolConfig",
-  "QuestionRewardPoolEscrow",
-  "RateLoopGovernor",
-  "RaterRegistry",
-  "RoundRewardDistributor",
-  "RoundVotingEngine",
-  "TimelockController",
-  "X402QuestionSubmitter",
-]);
-
 const REQUIRED_CONTRACTS = ["TestUSDC", "CredentialIssuer", "TokenlessPanel"];
 const OPTIONAL_CONTRACTS = ["X402PanelSubmitter"];
 const ALLOWED_CONTRACTS = new Set([
@@ -176,13 +154,13 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   }
 
   const creates = findCreates(broadcast);
-  const mixedLegacyNames = creates
-    .map((deployment) => deployment.contractName)
-    .filter((contractName) => LEGACY_PROTOCOL_CONTRACTS.has(contractName));
-  if (mixedLegacyNames.length > 0) {
+  const unexpectedNames = creates
+    .map((deployment) => deploymentLabel(deployment.contractName))
+    .filter((contractName) => !ALLOWED_CONTRACTS.has(contractName));
+  if (unexpectedNames.length > 0) {
     throw new Error(
-      `Refusing mixed legacy/tokenless deployment broadcast: ${[
-        ...new Set(mixedLegacyNames),
+      `Refusing mixed or unknown tokenless deployment broadcast: ${[
+        ...new Set(unexpectedNames),
       ].join(", ")}.`
     );
   }

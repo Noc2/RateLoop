@@ -4,12 +4,3 @@
 [submodule "packages/foundry/lib/openzeppelin-contracts"]
 	path = packages/foundry/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "packages/foundry/lib/solidity-bytes-utils"]
-	path = packages/foundry/lib/solidity-bytes-utils
-	url = https://github.com/gnsps/solidity-bytes-utils
-[submodule "packages/foundry/lib/openzeppelin-contracts-upgradeable"]
-	path = packages/foundry/lib/openzeppelin-contracts-upgradeable
-	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
-[submodule "packages/foundry/lib/prb-math"]
-	path = packages/foundry/lib/prb-math
-	url = https://github.com/PaulRBerg/prb-math
