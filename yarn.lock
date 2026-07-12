@@ -2662,6 +2662,7 @@ __metadata:
     eslint-config-next: ~15.5.18
     eslint-config-prettier: ~10.1.1
     eslint-plugin-prettier: ~5.2.4
+    gsap: ^3.14.2
     next: ~15.5.18
     pg: ^8.20.0
     pg-mem: ^3.0.14
@@ -8937,6 +8938,13 @@ __metadata:
   version: 16.12.0
   resolution: "graphql@npm:16.12.0"
   checksum: c0d2435425270c575091861c9fd82d7cebc1fb1bd5461e05c36521a988f69c5074461e27b89ab70851fabc72ec9d988235f288ba7bbeff67d08a973e8b9d6d3d
+  languageName: node
+  linkType: hard
+
+"gsap@npm:^3.14.2":
+  version: 3.15.0
+  resolution: "gsap@npm:3.15.0"
+  checksum: 168f849ef6eee7e0a3f315490edbd3a9e1cd7add03a768bb65953452dc12e6edbe7b24c9a0572e5ea9c911b5294582ad878ac2e4247848678de81854c5c53a27
   languageName: node
   linkType: hard
 
