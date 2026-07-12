@@ -3,13 +3,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as chains from "viem/chains";
 
-test("available app targets are local Foundry and Base mainnet", () => {
+test("available app targets are local Foundry, Base mainnet, and Base Sepolia", () => {
   assert.deepEqual(
     Object.keys(AVAILABLE_TARGET_NETWORKS)
       .map(Number)
       .sort((a, b) => a - b),
-    [chains.foundry.id, chains.base.id].sort((a, b) => a - b),
+    [chains.foundry.id, chains.base.id, chains.baseSepolia.id].sort((a, b) => a - b),
   );
+});
+
+test("Base Sepolia is an available production target with ordinary RPC metadata", () => {
+  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+    production: true,
+  });
+
+  assert.equal(network.id, chains.baseSepolia.id);
+  assert.equal(network.rpcUrls.default.http[0], chains.baseSepolia.rpcUrls.default.http[0]);
 });
 
 test("Base mainnet is the live available target", () => {

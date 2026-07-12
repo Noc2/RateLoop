@@ -114,6 +114,19 @@ test("uses only hardened configured app origins for image attachment URLs in pro
     ),
     "att_abcdefghijklmnop",
   );
+
+  env.APP_URL = "https://rateloop-tokenless-random.vercel.app";
+  delete env.NEXT_PUBLIC_APP_URL;
+  assert.equal(
+    getAttachmentImageUrl("https://www.rateloop.ai/ask", "att_abcdefghijklmnop", "a".repeat(64)),
+    `https://rateloop-tokenless-random.vercel.app/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+  );
+  assert.equal(
+    parseAttachmentIdFromImageUrl(
+      `https://rateloop-tokenless-random.vercel.app/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+    ),
+    "att_abcdefghijklmnop",
+  );
 });
 
 test("creates random image attachment ids with the public upload prefix", () => {

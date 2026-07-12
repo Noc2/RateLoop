@@ -13,6 +13,10 @@ test("Base mainnet uses the Flashblocks polling interval", () => {
   assert.equal(getPollingIntervalForChainId(8453), BASE_POLLING_INTERVAL);
 });
 
+test("Base Sepolia uses the responsive Base polling interval", () => {
+  assert.equal(getPollingIntervalForChainId(84532), BASE_POLLING_INTERVAL);
+});
+
 test("Base preconfirmation clients use the tighter polling interval", () => {
   assert.equal(BASE_PRECONF_POLLING_INTERVAL, 200);
   assert.equal(

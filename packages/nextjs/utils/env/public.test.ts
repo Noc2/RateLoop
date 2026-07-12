@@ -1,4 +1,9 @@
-import { listMissingRequiredTargetContracts } from "./requiredDeployments";
+import {
+  RATELOOP_DEPLOYMENT_METADATA_KEY,
+  TOKENLESS_DEPLOYMENT_SCHEMA_VERSION,
+  listMissingRequiredTargetContracts,
+  listTargetDeploymentIssues,
+} from "./requiredDeployments";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -94,6 +99,47 @@ test("local and Base mainnet deployment metadata includes production-required co
   assert.deepEqual(missingContracts, []);
 });
 
+test("schema-versioned tokenless deployment accepts only its greenfield core and optional x402 adapter", () => {
+  const tokenlessDeployment = {
+    [RATELOOP_DEPLOYMENT_METADATA_KEY]: { schemaVersion: TOKENLESS_DEPLOYMENT_SCHEMA_VERSION },
+    CredentialIssuer: deployment(1),
+    TokenlessPanel: deployment(2),
+    USDC: deployment(3),
+    X402PanelSubmitter: deployment(4),
+  };
+
+  assert.deepEqual(listTargetDeploymentIssues([84532], { 84532: tokenlessDeployment }), []);
+});
+
+test("schema-versioned tokenless deployment fails closed on missing, malformed, legacy, and unknown entries", () => {
+  assert.deepEqual(
+    listTargetDeploymentIssues([84532], {
+      84532: {
+        [RATELOOP_DEPLOYMENT_METADATA_KEY]: { schemaVersion: TOKENLESS_DEPLOYMENT_SCHEMA_VERSION },
+        ContentRegistry: deployment(1),
+        CredentialIssuer: deployment(2),
+        TokenlessPanel: deployment(3),
+        USDC: {},
+        X402PanelSubmitter: { address: "not-an-address" },
+      },
+    }),
+    ["84532:missing:USDC", "84532:invalid:X402PanelSubmitter", "84532:unexpected:ContentRegistry"],
+  );
+
+  assert.deepEqual(
+    listTargetDeploymentIssues([84532], {
+      84532: {
+        [RATELOOP_DEPLOYMENT_METADATA_KEY]: { schemaVersion: "tokenless-v2" },
+      },
+    }),
+    ["84532:unsupported-schema:tokenless-v2"],
+  );
+});
+
+test("unversioned deployment bundles preserve legacy validation until cutover", () => {
+  assert.deepEqual(listTargetDeploymentIssues([31337, 8453], deployedContracts), []);
+});
+
 test("public env source no longer exposes an undeployed-network bypass", () => {
   const publicEnvSource = readFileSync(new URL("./public.ts", import.meta.url), "utf8");
   const exampleEnvSource = readFileSync(new URL("../../.env.example", import.meta.url), "utf8");
@@ -110,4 +156,10 @@ test("public env production metadata guidance avoids routine Base mainnet redepl
   assert.match(publicEnvSource, /restore the existing production deployment metadata\/contracts package/);
   assert.match(publicEnvSource, /yarn base-mainnet:check/);
   assert.doesNotMatch(publicEnvSource, /Run yarn deploy for those chains before enabling them/);
+});
+
+test("public env guidance requires a tokenless Base Sepolia deployment bundle", () => {
+  const publicEnvSource = readFileSync(new URL("./public.ts", import.meta.url), "utf8");
+
+  assert.match(publicEnvSource, /For Base Sepolia, generate a tokenless-v1 deployment bundle/);
 });

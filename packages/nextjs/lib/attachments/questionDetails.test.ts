@@ -134,6 +134,19 @@ test("uses only hardened configured app origins for question details URLs in pro
     parseQuestionDetailsIdFromDetailsUrl("https://safe.rateloop.ai/api/attachments/details/det_questiondetails01"),
     "det_questiondetails01",
   );
+
+  env.APP_URL = "https://rateloop-tokenless-random.vercel.app";
+  delete env.NEXT_PUBLIC_APP_URL;
+  assert.equal(
+    getQuestionDetailsUrl("https://www.rateloop.ai/api/attachments/details/upload", "det_questiondetails01"),
+    "https://rateloop-tokenless-random.vercel.app/api/attachments/details/det_questiondetails01",
+  );
+  assert.equal(
+    parseQuestionDetailsIdFromDetailsUrl(
+      "https://rateloop-tokenless-random.vercel.app/api/attachments/details/det_questiondetails01",
+    ),
+    "det_questiondetails01",
+  );
 });
 
 test("parses local details ids only from exact public details URLs", () => {

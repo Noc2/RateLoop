@@ -12,6 +12,7 @@ import { afterEach, test } from "node:test";
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalPublicRpcUrl8453 = env.NEXT_PUBLIC_RPC_URL_8453;
+const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
 const originalUseBasePreconfRpc = env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
 const originalServerUseBasePreconfRpc = env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC;
 const originalVercelEnv = env.VERCEL_ENV;
@@ -45,6 +46,12 @@ afterEach(() => {
     delete env.NEXT_PUBLIC_RPC_URL_8453;
   } else {
     env.NEXT_PUBLIC_RPC_URL_8453 = originalPublicRpcUrl8453;
+  }
+
+  if (originalPublicRpcUrl84532 === undefined) {
+    delete env.NEXT_PUBLIC_RPC_URL_84532;
+  } else {
+    env.NEXT_PUBLIC_RPC_URL_84532 = originalPublicRpcUrl84532;
   }
 
   if (originalUseBasePreconfRpc === undefined) {
@@ -190,31 +197,35 @@ test("resolveOptionalAppUrl rejects localhost Vercel-style hosts in production",
   );
 });
 
-test("resolveTrustedRateLoopAppUrl omits hostile app origins and falls through to the next trusted origin", () => {
+test("resolveTrustedRateLoopAppUrl treats an explicitly configured public origin as authoritative", () => {
   assert.equal(
     resolveTrustedRateLoopAppUrl({
-      rawAppUrl: "https://evil.example",
-      rawPublicAppUrl: "https://safe.rateloop.ai",
-      rawVercelUrl: "preview.rateloop.ai",
+      rawAppUrl: "https://rateloop-tokenless-random.vercel.app",
+      rawVercelUrl: "www.rateloop.ai",
       production: true,
     }),
-    "https://safe.rateloop.ai",
+    "https://rateloop-tokenless-random.vercel.app",
   );
+
   assert.equal(
     resolveTrustedRateLoopAppUrl({
       rawAppUrl: "http://remote.example",
       rawPublicAppUrl: "https://service.internal",
-      rawVercelUrl: "localhost:3000",
+      rawVercelUrl: "www.rateloop.ai",
       production: true,
     }),
     undefined,
   );
+});
+
+test("resolveTrustedRateLoopAppUrl accepts Vercel platform URLs only when no explicit origin is configured", () => {
   assert.equal(
     resolveTrustedRateLoopAppUrl({
-      rawAppUrl: "https://evil.example",
+      rawVercelEnv: "preview",
+      rawVercelUrl: "rateloop-tokenless-preview.vercel.app",
       production: true,
     }),
-    undefined,
+    "https://rateloop-tokenless-preview.vercel.app",
   );
 });
 
@@ -242,6 +253,14 @@ test("resolveServerTargetNetworks tolerates local-chain builds in explicit e2e p
   assert.deepEqual(
     networks?.map(network => network.id),
     [31337, 8453],
+  );
+});
+
+test("resolveServerTargetNetworks supports Base Sepolia in production", () => {
+  const networks = resolveServerTargetNetworks("84532", true);
+  assert.deepEqual(
+    networks?.map(network => network.id),
+    [84532],
   );
 });
 
@@ -290,9 +309,11 @@ test("resolveServerTargetNetworks returns null when server Base preconfirmation 
 
 test("getServerRpcOverrides includes public per-chain RPC overrides", () => {
   env.NEXT_PUBLIC_RPC_URL_8453 = "https://8453.rpc.thirdweb.com/client-id/";
+  env.NEXT_PUBLIC_RPC_URL_84532 = "https://base-sepolia.example/rpc/";
 
   assert.deepEqual(getServerRpcOverrides(), {
     8453: "https://8453.rpc.thirdweb.com/client-id",
+    84532: "https://base-sepolia.example/rpc",
   });
 });
 

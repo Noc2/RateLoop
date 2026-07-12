@@ -1,7 +1,7 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { isAddress } from "viem";
 import { RPC_OVERRIDES } from "~~/config/shared";
-import { listMissingRequiredTargetContracts } from "~~/utils/env/requiredDeployments";
+import { listTargetDeploymentIssues } from "~~/utils/env/requiredDeployments";
 import { DEFAULT_DEV_TARGET_NETWORKS, resolveTargetNetworks } from "~~/utils/env/targetNetworks";
 import { mergeRpcOverrides, resolveRpcOverrides } from "~~/utils/rpcUrls";
 
@@ -40,6 +40,7 @@ const rawPublicEnv = {
     (process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ? "true" : undefined),
   ponderUrl: optionalEnv(process.env.NEXT_PUBLIC_PONDER_URL),
   rpcUrl8453: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_8453),
+  rpcUrl84532: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_84532),
   rpcUrl31337: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_31337),
   targetNetworks: optionalEnv(process.env.NEXT_PUBLIC_TARGET_NETWORKS),
   thirdwebClientId: optionalEnv(process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID),
@@ -55,6 +56,7 @@ const rpcOverrides = mergeRpcOverrides(
     {
       31337: rawPublicEnv.rpcUrl31337,
       8453: rawPublicEnv.rpcUrl8453,
+      84532: rawPublicEnv.rpcUrl84532,
     },
     {
       allowLocalhostInProduction: allowLocalE2EProductionBuild,
@@ -115,6 +117,10 @@ function deploymentMetadataRecoveryHint(chainIds: number[]) {
     return "For Base mainnet, restore the existing production deployment metadata/contracts package and run yarn base-mainnet:check.";
   }
 
+  if (chainIds.includes(84532)) {
+    return "For Base Sepolia, generate a tokenless-v1 deployment bundle from the isolated test deployment before enabling the app target.";
+  }
+
   return "For local development, run yarn deploy after starting yarn chain.";
 }
 
@@ -124,16 +130,14 @@ if (missingDeployments.length > 0) {
   );
 }
 
-const missingRequiredContracts = listMissingRequiredTargetContracts(targetNetworkIds, deployedContractsByChain);
+const deploymentIssues = listTargetDeploymentIssues(targetNetworkIds, deployedContractsByChain);
 
-if (missingRequiredContracts.length > 0) {
+if (deploymentIssues.length > 0) {
   const missingContractChainIds = [
-    ...new Set(
-      missingRequiredContracts.map(entry => Number(entry.split(":")[0])).filter(chainId => Number.isInteger(chainId)),
-    ),
+    ...new Set(deploymentIssues.map(entry => Number(entry.split(":")[0])).filter(chainId => Number.isInteger(chainId))),
   ];
   throw new Error(
-    `Missing required deployed contract definitions for target networks: ${missingRequiredContracts.join(", ")}. ${deploymentMetadataRecoveryHint(missingContractChainIds)}`,
+    `Invalid deployed contract definitions for target networks: ${deploymentIssues.join(", ")}. ${deploymentMetadataRecoveryHint(missingContractChainIds)}`,
   );
 }
 

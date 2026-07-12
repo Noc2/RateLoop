@@ -5,7 +5,7 @@ export const DEFAULT_TRANSACTION_RECEIPT_POLLING_INTERVAL = 1_000;
 
 export const RPC_OVERRIDES = {} as const satisfies Partial<Record<number, string>>;
 
-const BASE_CHAIN_IDS = new Set([8453]);
+const BASE_CHAIN_IDS = new Set([8453, 84532]);
 
 export function getPollingIntervalForChainId(
   chainId: number,

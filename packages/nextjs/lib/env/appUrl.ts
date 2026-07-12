@@ -33,6 +33,10 @@ function isTrustedRateLoopAppHostname(hostname: string): boolean {
   return normalized === "rateloop.ai" || normalized.endsWith(RATELOOP_TRUSTED_APP_HOSTNAME_SUFFIX);
 }
 
+function isVercelDeploymentHostname(hostname: string): boolean {
+  return normalizeUrlHostname(hostname).endsWith(".vercel.app");
+}
+
 function resolveVercelHostUrl(rawValue: string | undefined): string | undefined {
   const trimmed = rawValue?.trim();
   if (!trimmed) {
@@ -114,20 +118,50 @@ export function resolveTrustedRateLoopAppUrl(options: {
   allowLocalhostInProduction?: boolean;
 }): string | undefined {
   const allowLocalhostInProduction = options.allowLocalhostInProduction ?? false;
-  const candidates = [
-    options.rawAppUrl,
-    options.rawPublicAppUrl,
+  const explicitAppUrls = [options.rawAppUrl?.trim(), options.rawPublicAppUrl?.trim()].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  // APP_URL/NEXT_PUBLIC_APP_URL are operator-controlled exact origins. When either is configured, it is
+  // authoritative: a tokenless `*.vercel.app` deployment must not silently fall through to a legacy RateLoop host.
+  for (const explicitAppUrl of explicitAppUrls) {
+    const resolved = resolveAppUrl(explicitAppUrl, options.production, allowLocalhostInProduction);
+    if (!resolved) continue;
+    if (!options.production) return resolved;
+
+    const parsed = new URL(resolved);
+    const allowLocalhost = allowLocalhostInProduction && isLocalhostHostname(parsed.hostname);
+    if (
+      allowLocalhost ||
+      isTrustedRateLoopAppHostname(parsed.hostname) ||
+      isVercelDeploymentHostname(parsed.hostname)
+    ) {
+      return resolved;
+    }
+  }
+
+  if (explicitAppUrls.length > 0) {
+    return undefined;
+  }
+
+  const platformCandidates = [
     options.rawVercelEnv === "production" ? resolveVercelHostUrl(options.rawVercelProjectProductionUrl) : undefined,
     resolveVercelHostUrl(options.rawVercelUrl),
   ];
 
-  for (const candidate of candidates) {
+  for (const candidate of platformCandidates) {
     const resolved = candidate ? resolveAppUrl(candidate, options.production, allowLocalhostInProduction) : null;
     if (!resolved) continue;
     if (options.production) {
       const parsed = new URL(resolved);
       const allowLocalhost = allowLocalhostInProduction && isLocalhostHostname(parsed.hostname);
-      if (!allowLocalhost && !isTrustedRateLoopAppHostname(parsed.hostname)) continue;
+      if (
+        !allowLocalhost &&
+        !isTrustedRateLoopAppHostname(parsed.hostname) &&
+        !isVercelDeploymentHostname(parsed.hostname)
+      ) {
+        continue;
+      }
     }
     return resolved;
   }

@@ -8,10 +8,14 @@ import {
 } from "./rpcUrls";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { base, basePreconf, foundry } from "viem/chains";
+import { base, basePreconf, baseSepolia, foundry } from "viem/chains";
 
 test("buildAlchemyHttpUrl returns the expected Base mainnet RPC", () => {
   assert.equal(buildAlchemyHttpUrl(8453, "test-key"), "https://base-mainnet.g.alchemy.com/v2/test-key");
+});
+
+test("buildAlchemyHttpUrl returns the expected Base Sepolia RPC", () => {
+  assert.equal(buildAlchemyHttpUrl(baseSepolia.id, "test-key"), "https://base-sepolia.g.alchemy.com/v2/test-key");
 });
 
 test("buildAlchemyHttpUrl ignores retired and unsupported networks", () => {
