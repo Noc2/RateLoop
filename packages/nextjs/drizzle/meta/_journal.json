@@ -43,6 +43,13 @@
       "when": 1783875600000,
       "tag": "0005_tokenless_transparency_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783879200000,
+      "tag": "0006_tokenless_rater_commits",
+      "breakpoints": true
     }
   ]
 }
