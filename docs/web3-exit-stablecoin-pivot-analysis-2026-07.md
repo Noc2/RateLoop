@@ -25,7 +25,7 @@ Drop the LREP token entirely. Keep a thin, non-custodial crypto rail: immutable 
 |---|---|
 | Vote stake | Nothing — voting is free. Sybil/quality control via identity tiers, per-identity caps, gold questions, reputation gates (stake-free is the industry norm: Community Notes, Code4rena, Sherlock, Metaculus) |
 | Reputation | Non-transferable points/attestations (outside MiCA — not transferable ⇒ not a crypto-asset) |
-| Governance | None — fully keyless, non-upgradeable contracts; bug response = disclose → exit → redeploy (Liquity model) |
+| Governance | None over funds — the fund-holding core is adminless and non-upgradeable; the separate credential issuer retains disclosed signer rotation for future admission only; bug response = disclose → exit → redeploy |
 | Launch distribution pool | Deleted; any early incentives are USDC bounty subsidies (attract earners, not farmers) |
 | Frontend operator bond | Deleted; attribution-only fee share |
 | Challenge-bond oracle | Deleted; commitment-based transparency log + off-chain analytics (the Gitcoin/Community Notes pattern — single-operator challenge games are theater) |
@@ -36,4 +36,4 @@ World ID stays as an optional credential, verified **off-chain** (cloud API + ba
 
 ## Accepted costs
 
-No reflexive token upside for early raters (retention rides on cash yield and status); operator-trust replaces token-holder governance (mitigated by keyless contracts and published evidence); World ID association and "paying humans for judgment" remain attackable surfaces regardless — a token would only have added a second one.
+No reflexive token upside for early raters (retention rides on cash yield and status); operator-trust over voter admission replaces token-holder governance (bounded by an adminless fund core, immutable accepted commits, and published issuance evidence); World ID association and "paying humans for judgment" remain attackable surfaces regardless — a token would only have added a second one.

@@ -4,10 +4,17 @@
 - Commit independent fixes separately. Before pushing, review the changed files and group commits by concern instead of bundling unrelated fixes together.
 - When the user asks to publish finished work, commit the intended fixes and push the current branch after verification passes.
 
-## Governance rotation notes
+## Tokenless branch implementation notes
 
-- Rotating `ContentRegistry.setVotingEngine` alone is insufficient: escrows pin the engine at initialization and reject new work with `"Stale engine"` until a full replacement stack is deployed and rewired (`QuestionRewardPoolEscrow`, `FeedbackBonusEscrow`, `FeedbackRegistry`, fee creditor on `FrontendRegistry`, and X402 submitter escrow pointers as applicable). Those contracts expose no governed `setVotingEngine`; plan a coordinated redeploy and rewire, not a registry-only timelock action.
-- Treat engine migration as a coordinated governance runbook, not a single-timelock action.
+- [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md) is the design of record for `tokenless`. Strategy and legal references are supporting documents; if they conflict, fix them to match the implementation plan or explicitly reopen the decision there.
+- Smart contracts on this branch are disposable until the Phase 5 hardening deployment. The current Base deployment is legacy, not final. Fresh redeploys are expected, and no storage-layout compatibility, proxy migration, governance rotation, old-selector compatibility, or old-address continuity work is required unless the user explicitly asks for a legacy exit task.
+- Build the tokenless contracts as a greenfield core. Existing registries, escrows, oracle, governance, LREP, advisory recorder, and owned x402 submitter are deletion inputs, not architecture constraints. Do not preserve a legacy contract merely to keep generated types, indexers, hooks, tests, or docs compiling.
+- The fund-holding core must have no operator/admin path to funds. The separate credential issuer may rotate admission signers by epoch, but it must never hold funds, redirect claims, alter accepted commits, or influence settlement.
+- Paid-task eligibility must be complete before the first paid voucher. Do not implement a state where a rater earns money and only then discovers that tax, sanctions, identity, or wallet setup blocks the claim.
+- Accepted rater work must reach a paid terminal path even when quorum, beacon, takedown, or platform infrastructure fails. Preserve the bounty/fee/attempt-reserve accounting and no-post-commit-cancellation invariants from the design doc.
+- A normal claim links the vote key to its payout destination. Do not describe the system as cross-round unlinkable until a user-controlled per-round destination and recovery flow is implemented and tested; the operator must never possess a rater spend or universal decryption key.
+- Delete legacy consumers in the same sequence as their contracts: Foundry scripts/tests, deployment JSON, generated ABIs, Ponder schema/handlers, keeper jobs, Next.js surfaces, SDK/agents/MCP payloads, E2E fixtures, env/readiness workflows, and public docs. Use `rg` to prove removed symbols are gone rather than leaving compatibility shims.
+- Keep deletion, new contract core, service/indexer migration, and app/SDK migration in separate commits. Regenerate artifacts only from the new deployment schema, and fail closed on mixed legacy/tokenless address bundles.
 
 ## Agent image handoff notes
 
@@ -15,8 +22,8 @@
 - When creating a browser handoff from local/generated images, prefer the file-backed CLI path: `yarn workspace @rateloop/agents handoff --file <ask.json> --image <image.png>`. It reads bytes from disk, computes `sha256`/`sizeBytes`, and stages large files through the handoff blob-upload route instead of squeezing base64 through a single JSON request.
 - If using MCP directly, pass image bytes from file-backed tooling or an SDK process. Avoid `cat`, `print`, or shelling base64 into the conversation as the transport layer.
 
-## Audit Trust Model Notes
+## Tokenless review boundaries
 
-- Do not assume RateLoop is trying to make every oracle-adjacent path fully economically secured per snapshot on-chain. `ClusterPayoutOracle` payout roots are intentionally optimistic: globally bonded frontend operators publish public deterministic artifacts, challengers/auditors can recompute them during the challenge window, governance arbitrates challenged roots, and bad proposers can lose reputation, future fee income, and their FrontendRegistry LREP bond.
-- Treat `ClusterPayoutOracle` challenge bonds as anti-spam bonds, not payout-value coverage bonds. The default challenge bond is 5 USDC in atomic units (`5_000_000`).
-- Treat the 60-minute `revealGracePeriod` as an accepted product/security parameter, even for long human-duration blind phases. Do not raise it as an audit finding merely because it is shorter than a question's custom epoch duration.
+- Do not carry forward accepted assumptions from the legacy `ClusterPayoutOracle`, frontend-bond, governance, LREP, stake, or snapshot-recovery model. Those surfaces are removed in the tokenless target.
+- Audit the tokenless design against its actual trust split: immutable fund custody and settlement; operator-attested future admission; public deterministic settlement evidence; off-chain moderation, correlation analytics, and legal eligibility.
+- Test deployments are allowed to expose explicitly documented limitations. Do not turn a test-stage shortcut into a final trust claim; Phase 5 is the point where immutable/adminless-funds/privacy language must match the deployed system exactly.
