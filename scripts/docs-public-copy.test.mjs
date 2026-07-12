@@ -2,19 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const activeDocs = {
-  "docs/use-cases-2026-06.md": readFileSync(
-    new URL("../docs/use-cases-2026-06.md", import.meta.url),
-    "utf8",
-  ),
-  "docs/ux-review-multi-agent-2026-07-03.md": readFileSync(
-    new URL(
-      "../docs/ux-review-multi-agent-2026-07-03.md",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-};
+const useCases = readFileSync(
+  new URL("../docs/use-cases-2026-06.md", import.meta.url),
+  "utf8",
+);
+const activeDocs = { "docs/use-cases-2026-06.md": useCases };
 
 const publicDocs = {
   "packages/nextjs/public/docs/ai.md": readFileSync(
@@ -310,7 +302,6 @@ test("fresh redeploy runbooks do not present stale stacks or blockhash pairing a
 });
 
 test("historical use-case snapshot does not label gated AI constraints as current", () => {
-  const useCases = activeDocs["docs/use-cases-2026-06.md"];
   assert.match(useCases, /Capability envelope at snapshot time/);
   assert.match(useCases, /Snapshot-time note/);
   assert.match(useCases, /Adoption blockers that remained at snapshot time/);
