@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reconcileChainPayment } from "~~/lib/tokenless/chain/payments";
 import { authenticateProductPrincipal, authorizeAskAccess, getProductSessionToken } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, tokenlessErrorResponse, waitForTokenlessAsk } from "~~/lib/tokenless/server";
 
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
     }
     const { operationKey } = await context.params;
     await authorizeAskAccess(principal, operationKey);
+    await reconcileChainPayment(operationKey);
     return NextResponse.json(await waitForTokenlessAsk(operationKey, request.nextUrl.origin));
   } catch (error) {
     const response = tokenlessErrorResponse(error);

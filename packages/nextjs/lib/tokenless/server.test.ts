@@ -45,6 +45,17 @@ test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", 
   assert.equal(quote.economics.totalFundedAtomic, "31875000");
 });
 
+test("quotes reject economics that cannot satisfy the panel contract", async () => {
+  await assert.rejects(
+    () => createTokenlessQuote({ ...quoteRequest(), budget: { ...quoteRequest().budget, bountyAtomic: "0" } }),
+    /bountyAtomic must be greater than zero/,
+  );
+  await assert.rejects(
+    () => createTokenlessQuote({ ...quoteRequest(), budget: { ...quoteRequest().budget, attemptReserveAtomic: "14" } }),
+    /non-zero compensation cap for every accepted rater/,
+  );
+});
+
 test("sandbox asks are durable, idempotent, and expose exact result accounting", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
   const request = {

@@ -151,8 +151,18 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
   if (!request.budget) {
     throw new TokenlessServiceError("budget is required.", 400, "invalid_quote");
   }
-  parseAtomic(request.budget.bountyAtomic, "budget.bountyAtomic");
-  parseAtomic(request.budget.attemptReserveAtomic, "budget.attemptReserveAtomic");
+  const bounty = parseAtomic(request.budget.bountyAtomic, "budget.bountyAtomic");
+  const attemptReserve = parseAtomic(request.budget.attemptReserveAtomic, "budget.attemptReserveAtomic");
+  if (bounty === 0n) {
+    throw new TokenlessServiceError("budget.bountyAtomic must be greater than zero.", 400, "invalid_quote");
+  }
+  if (attemptReserve < BigInt(request.requestedPanelSize ?? 0)) {
+    throw new TokenlessServiceError(
+      "budget.attemptReserveAtomic must fund a non-zero compensation cap for every accepted rater.",
+      400,
+      "invalid_quote",
+    );
+  }
   if (!Number.isSafeInteger(request.budget.feeBps) || request.budget.feeBps < 0 || request.budget.feeBps > 2_000) {
     throw new TokenlessServiceError("budget.feeBps must be between 0 and 2000.", 400, "invalid_quote");
   }
@@ -178,12 +188,17 @@ function assertPayment(value: unknown): asserts value is TokenlessAskRequest["pa
   }
   if (
     payment.mode === "x402" &&
-    (!payment.authorization ||
+    payment.authorization !== undefined &&
+    (payment.authorization === null ||
       typeof payment.authorization !== "object" ||
       Array.isArray(payment.authorization) ||
       Object.keys(payment.authorization).length === 0)
   ) {
-    throw new TokenlessServiceError("payment.authorization is required for x402.", 400, "invalid_payment");
+    throw new TokenlessServiceError(
+      "payment.authorization must be a non-empty object when provided.",
+      400,
+      "invalid_payment",
+    );
   }
 }
 

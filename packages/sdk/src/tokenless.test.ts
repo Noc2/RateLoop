@@ -30,6 +30,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_WEBHOOK_EVENT_TYPES",
       "createTokenlessRateLoopClient",
       "parseTokenlessAskResponse",
+      "parseTokenlessPaymentInstructions",
       "parseTokenlessQuoteResponse",
       "parseTokenlessResult",
       "parseTokenlessWaitResponse",
@@ -353,6 +354,92 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
       }),
     /required rationale lengths/,
   );
+});
+
+test("direct B2B clients authenticate payment preparation without exposing API keys in browser clients", async () => {
+  const requests: { url: string; init: RequestInit }[] = [];
+  const terms = {
+    contentId: `0x${"11".repeat(32)}`,
+    termsHash: `0x${"22".repeat(32)}`,
+    beaconNetworkHash: `0x${"33".repeat(32)}`,
+    bountyAmount: "25000000",
+    feeAmount: "1875000",
+    attemptReserve: "5000000",
+    attemptCompensation: "333333",
+    minimumReveals: 12,
+    maximumCommits: 15,
+    requiredTier: 2,
+    commitDeadline: "2000000000",
+    revealDeadline: "2000000120",
+    beaconFailureDeadline: "2000000420",
+    beaconRound: "1000",
+    claimGracePeriod: "604800",
+    feeRecipient: "0x6666666666666666666666666666666666666666",
+  };
+  const response = {
+    operationKey: "op_payment",
+    paymentMode: "x402",
+    paymentState: "prepared",
+    deploymentKey:
+      "tokenless-v1:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333",
+    chainId: 84532,
+    panelAddress: "0x1111111111111111111111111111111111111111",
+    x402SubmitterAddress: "0x3333333333333333333333333333333333333333",
+    usdcAddress: "0x4444444444444444444444444444444444444444",
+    funderAddress: "0x5555555555555555555555555555555555555555",
+    totalFundedAtomic: "31875000",
+    roundTerms: terms,
+    roundId: null,
+    transactionHash: null,
+  };
+  const apiKey = `rlk_${"a".repeat(16)}_${"b".repeat(32)}`;
+  const client = createTokenlessRateLoopClient({
+    apiBaseUrl: API_BASE_URL,
+    apiKey,
+    defaultHeaders: { "x-client": "ci" },
+    fetchImpl: async (url, init = {}) => {
+      requests.push({ url: String(url), init });
+      return new Response(JSON.stringify(response), { status: 200 });
+    },
+  });
+  assert.equal(
+    (await client.paymentInstructions({ operationKey: "op_payment" }))
+      .roundTerms.requiredTier,
+    2,
+  );
+  await client.submitPayment({
+    operationKey: "op_payment",
+    authorization: { nonce: terms.contentId },
+  });
+  for (const request of requests) {
+    const headers = new Headers(request.init.headers);
+    assert.equal(headers.get("authorization"), `Bearer ${apiKey}`);
+    assert.equal(headers.get("x-client"), "ci");
+    assert.equal(request.init.credentials, "same-origin");
+  }
+  assert.equal(
+    requests[0]?.url,
+    `${API_BASE_URL}/api/agent/v1/asks/op_payment/payment`,
+  );
+  assert.deepEqual(JSON.parse(String(requests[1]?.init.body)), {
+    authorization: { nonce: terms.contentId },
+  });
+
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {},
+  });
+  try {
+    assert.throws(
+      () => createTokenlessRateLoopClient({ apiBaseUrl: API_BASE_URL, apiKey }),
+      /API authorization is server-only/,
+    );
+  } finally {
+    if (originalWindow)
+      Object.defineProperty(globalThis, "window", originalWindow);
+    else delete (globalThis as { window?: unknown }).window;
+  }
 });
 
 test("tokenless wait returns an explicit polling continuation and then a result-ready signal", async () => {

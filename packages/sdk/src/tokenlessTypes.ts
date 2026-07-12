@@ -116,7 +116,8 @@ export type TokenlessPayment =
   | { mode: "wallet"; payerAddress: `0x${string}` }
   | {
       mode: "x402";
-      authorization: Record<string, unknown>;
+      /** Supplied after GET payment instructions when the exact immutable round terms are known. */
+      authorization?: Record<string, unknown>;
       payerAddress: `0x${string}`;
     };
 
@@ -216,13 +217,63 @@ export interface TokenlessWebhookEvent {
 export interface TokenlessClientOptions {
   apiBaseUrl: string;
   apiPath?: string;
+  /** Server-side workspace API key. Browser clients must use the HttpOnly Base Account session instead. */
+  apiKey?: string;
+  credentials?: RequestCredentials;
+  defaultHeaders?: HeadersInit;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }
 
+export interface TokenlessRoundTerms {
+  contentId: `0x${string}`;
+  termsHash: `0x${string}`;
+  beaconNetworkHash: `0x${string}`;
+  bountyAmount: TokenlessAtomicAmount;
+  feeAmount: TokenlessAtomicAmount;
+  attemptReserve: TokenlessAtomicAmount;
+  attemptCompensation: TokenlessAtomicAmount;
+  minimumReveals: number;
+  maximumCommits: number;
+  requiredTier: number;
+  commitDeadline: string;
+  revealDeadline: string;
+  beaconFailureDeadline: string;
+  beaconRound: string;
+  claimGracePeriod: string;
+  feeRecipient: `0x${string}`;
+}
+
+export interface TokenlessPaymentInstructions {
+  operationKey: string;
+  paymentMode: "wallet" | "x402" | "prepaid";
+  paymentState: string;
+  deploymentKey: string;
+  chainId: number;
+  panelAddress: `0x${string}`;
+  x402SubmitterAddress: `0x${string}`;
+  usdcAddress: `0x${string}`;
+  funderAddress: `0x${string}`;
+  totalFundedAtomic: TokenlessAtomicAmount;
+  roundTerms: TokenlessRoundTerms;
+  roundId: string | null;
+  transactionHash: `0x${string}` | null;
+}
+
+export type TokenlessSubmitPaymentRequest =
+  | { operationKey: string; transactionHash: `0x${string}` }
+  | { operationKey: string; authorization: Record<string, unknown> }
+  | { operationKey: string };
+
 export interface TokenlessRateLoopClient {
   quote(request: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse>;
   ask(request: TokenlessAskRequest): Promise<TokenlessAskResponse>;
+  paymentInstructions(request: {
+    operationKey: string;
+  }): Promise<TokenlessPaymentInstructions>;
+  submitPayment(
+    request: TokenlessSubmitPaymentRequest,
+  ): Promise<TokenlessPaymentInstructions>;
   wait(request: TokenlessWaitRequest): Promise<TokenlessWaitResponse>;
   result(request: TokenlessResultRequest): Promise<TokenlessResult>;
 }

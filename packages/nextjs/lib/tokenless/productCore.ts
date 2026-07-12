@@ -467,7 +467,7 @@ async function reservePrepaid(input: {
   }
 }
 
-function normalizedX402Authorization(value: Record<string, unknown>) {
+export function normalizedX402Authorization(value: Record<string, unknown>) {
   const validAfter = typeof value.validAfter === "number" ? String(value.validAfter) : value.validAfter;
   const validBefore = typeof value.validBefore === "number" ? String(value.validBefore) : value.validBefore;
   if (
@@ -508,12 +508,17 @@ async function persistPaymentIntent(input: {
     throw new TokenlessServiceError("The payer must match the signed-in Base Account.", 403, "payer_mismatch");
   }
   const payload =
-    input.payment.mode === "x402"
+    input.payment.mode === "x402" && input.payment.authorization
       ? { ...input.payment, authorization: normalizedX402Authorization(input.payment.authorization) }
       : input.payment;
   const payloadJson = stableJson(payload);
   const payloadHash = digest(payloadJson);
-  const state = input.payment.mode === "wallet" ? "pending_user_signature" : "pending_chain_execution";
+  const state =
+    input.payment.mode === "wallet"
+      ? "pending_user_signature"
+      : input.payment.mode === "x402" && !input.payment.authorization
+        ? "pending_chain_authorization"
+        : "pending_chain_execution";
   const existing = await dbClient.execute({
     sql: `SELECT payment_intent_id, amount_atomic, mode, payload_hash
           FROM tokenless_payment_intents WHERE workspace_id = ? AND idempotency_key = ? LIMIT 1`,

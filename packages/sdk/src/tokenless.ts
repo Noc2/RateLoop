@@ -1,6 +1,7 @@
 import { RateLoopApiError, RateLoopSdkError } from "./errors";
 import {
   parseTokenlessAskResponse,
+  parseTokenlessPaymentInstructions,
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
   parseTokenlessWaitResponse,
@@ -9,6 +10,7 @@ import type {
   TokenlessAskRequest,
   TokenlessAskResponse,
   TokenlessClientOptions,
+  TokenlessPaymentInstructions,
   TokenlessQuoteRequest,
   TokenlessQuoteResponse,
   TokenlessRateLoopClient,
@@ -16,6 +18,7 @@ import type {
   TokenlessResultRequest,
   TokenlessWaitRequest,
   TokenlessWaitResponse,
+  TokenlessSubmitPaymentRequest,
 } from "./tokenlessTypes";
 import { TOKENLESS_WEBHOOK_EVENT_TYPES } from "./tokenlessTypes";
 
@@ -32,6 +35,8 @@ const webhookEventTypes = new Set<string>(TOKENLESS_WEBHOOK_EVENT_TYPES);
 interface NormalizedTokenlessClientOptions {
   apiBaseUrl: string;
   apiPath: string;
+  credentials: RequestCredentials;
+  defaultHeaders: Headers;
   fetchImpl: typeof fetch;
   timeoutMs: number;
 }
@@ -98,9 +103,28 @@ function positiveTimeout(
 function normalizeOptions(
   options: TokenlessClientOptions,
 ): NormalizedTokenlessClientOptions {
+  const defaultHeaders = new Headers(options.defaultHeaders);
+  if (
+    typeof window !== "undefined" &&
+    (options.apiKey || defaultHeaders.has("authorization"))
+  ) {
+    throw new RateLoopSdkError(
+      "Tokenless API authorization is server-only and must not be embedded in browser clients.",
+    );
+  }
+  if (
+    options.apiKey &&
+    !/^rlk_[a-f0-9]{16}_[A-Za-z0-9_-]{32,128}$/.test(options.apiKey)
+  ) {
+    throw new RateLoopSdkError("Invalid tokenless workspace apiKey.");
+  }
+  if (options.apiKey)
+    defaultHeaders.set("authorization", `Bearer ${options.apiKey}`);
   return {
     apiBaseUrl: normalizeApiBaseUrl(options.apiBaseUrl),
     apiPath: normalizeApiPath(options.apiPath),
+    credentials: options.credentials ?? "same-origin",
+    defaultHeaders,
     fetchImpl: options.fetchImpl ?? fetch,
     timeoutMs: positiveTimeout(
       options.timeoutMs,
@@ -156,6 +180,19 @@ function assertQuoteRequest(request: TokenlessQuoteRequest) {
       "requestedPanelSize must be a safe integer between 1 and 500.",
     );
   }
+  if (BigInt(request.budget.bountyAtomic) === 0n) {
+    throw new RateLoopSdkError(
+      "budget.bountyAtomic must be greater than zero.",
+    );
+  }
+  if (
+    BigInt(request.budget.attemptReserveAtomic) <
+    BigInt(request.requestedPanelSize)
+  ) {
+    throw new RateLoopSdkError(
+      "budget.attemptReserveAtomic must fund a non-zero compensation cap for every requested rater.",
+    );
+  }
   if (!request.question.prompt.trim()) {
     throw new RateLoopSdkError("question.prompt is required.");
   }
@@ -171,9 +208,7 @@ function assertQuoteRequest(request: TokenlessQuoteRequest) {
       );
     }
     if (request.question.optionA.key === request.question.optionB.key) {
-      throw new RateLoopSdkError(
-        "head_to_head option keys must be different.",
-      );
+      throw new RateLoopSdkError("head_to_head option keys must be different.");
     }
   }
   if (request.question.rationale.mode === "required") {
@@ -231,12 +266,13 @@ function assertAskRequest(request: TokenlessAskRequest) {
     assertEvmAddress(request.payment.payerAddress, "payment.payerAddress");
     if (
       request.payment.mode === "x402" &&
-      (!request.payment.authorization ||
+      request.payment.authorization !== undefined &&
+      (request.payment.authorization === null ||
         Array.isArray(request.payment.authorization) ||
         Object.keys(request.payment.authorization).length === 0)
     ) {
       throw new RateLoopSdkError(
-        "payment.authorization is required for x402 payment.",
+        "payment.authorization must be a non-empty object when provided.",
       );
     }
   }
@@ -245,12 +281,19 @@ function assertAskRequest(request: TokenlessAskRequest) {
     if (request.webhook.eventTypes.length === 0) {
       throw new RateLoopSdkError("webhook.eventTypes must not be empty.");
     }
-    if (new Set(request.webhook.eventTypes).size !== request.webhook.eventTypes.length) {
-      throw new RateLoopSdkError("webhook.eventTypes must not contain duplicates.");
+    if (
+      new Set(request.webhook.eventTypes).size !==
+      request.webhook.eventTypes.length
+    ) {
+      throw new RateLoopSdkError(
+        "webhook.eventTypes must not contain duplicates.",
+      );
     }
     for (const eventType of request.webhook.eventTypes) {
       if (!webhookEventTypes.has(eventType)) {
-        throw new RateLoopSdkError(`Unsupported webhook event type ${eventType}.`);
+        throw new RateLoopSdkError(
+          `Unsupported webhook event type ${eventType}.`,
+        );
       }
     }
   }
@@ -314,14 +357,15 @@ async function request(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers = new Headers(config.defaultHeaders);
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    if (!headers.has("accept")) headers.set("accept", "application/json");
     const response = await config.fetchImpl(
       `${config.apiBaseUrl}${config.apiPath}${path}`,
       {
         ...init,
-        headers: {
-          accept: "application/json",
-          ...init.headers,
-        },
+        credentials: config.credentials,
+        headers,
         signal: controller.signal,
       },
     );
@@ -373,6 +417,40 @@ export function createTokenlessRateLoopClient(
       return post(config, "/asks", requestBody, parseTokenlessAskResponse, {
         "idempotency-key": requestBody.idempotencyKey,
       });
+    },
+
+    async paymentInstructions(requestBody: {
+      operationKey: string;
+    }): Promise<TokenlessPaymentInstructions> {
+      const operationKey = encodePathSegment(
+        requestBody.operationKey,
+        "operationKey",
+      );
+      const response = await request(config, `/asks/${operationKey}/payment`, {
+        method: "GET",
+      });
+      return parseTokenlessPaymentInstructions(response);
+    },
+
+    async submitPayment(
+      requestBody: TokenlessSubmitPaymentRequest,
+    ): Promise<TokenlessPaymentInstructions> {
+      const operationKey = encodePathSegment(
+        requestBody.operationKey,
+        "operationKey",
+      );
+      const body =
+        "transactionHash" in requestBody
+          ? { transactionHash: requestBody.transactionHash }
+          : "authorization" in requestBody
+            ? { authorization: requestBody.authorization }
+            : {};
+      return post(
+        config,
+        `/asks/${operationKey}/payment`,
+        body,
+        parseTokenlessPaymentInstructions,
+      );
     },
 
     async wait(

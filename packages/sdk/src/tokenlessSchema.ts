@@ -10,6 +10,7 @@ import {
   type TokenlessFeeAccounting,
   type TokenlessFundAccounting,
   type TokenlessPollContinuation,
+  type TokenlessPaymentInstructions,
   type TokenlessQuoteResponse,
   type TokenlessRefundAccounting,
   type TokenlessResult,
@@ -262,6 +263,91 @@ export function parseTokenlessAskResponse(
     status,
     continuation: continuation(input.continuation, "continuation"),
     webhookAccepted: boolean(input.webhookAccepted, "webhookAccepted"),
+  };
+}
+
+export function parseTokenlessPaymentInstructions(
+  value: unknown,
+): TokenlessPaymentInstructions {
+  const input = record(value, "response");
+  const terms = record(input.roundTerms, "roundTerms");
+  const paymentMode = string(input.paymentMode, "paymentMode");
+  if (
+    paymentMode !== "wallet" &&
+    paymentMode !== "x402" &&
+    paymentMode !== "prepaid"
+  ) {
+    invalid("paymentMode", "wallet, x402, or prepaid");
+  }
+  const address = (entry: unknown, path: string) => {
+    const value = string(entry, path);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(value)) invalid(path, "an EVM address");
+    return value as `0x${string}`;
+  };
+  const bytes32 = (entry: unknown, path: string) => {
+    const value = string(entry, path);
+    if (!/^0x[0-9a-fA-F]{64}$/.test(value))
+      invalid(path, "a bytes32 hex value");
+    return value as `0x${string}`;
+  };
+  const transactionHash =
+    input.transactionHash === null
+      ? null
+      : bytes32(input.transactionHash, "transactionHash");
+  return {
+    operationKey: string(input.operationKey, "operationKey"),
+    paymentMode,
+    paymentState: string(input.paymentState, "paymentState"),
+    deploymentKey: string(input.deploymentKey, "deploymentKey"),
+    chainId: integer(input.chainId, "chainId", 1),
+    panelAddress: address(input.panelAddress, "panelAddress"),
+    x402SubmitterAddress: address(
+      input.x402SubmitterAddress,
+      "x402SubmitterAddress",
+    ),
+    usdcAddress: address(input.usdcAddress, "usdcAddress"),
+    funderAddress: address(input.funderAddress, "funderAddress"),
+    totalFundedAtomic: atomic(input.totalFundedAtomic, "totalFundedAtomic"),
+    roundTerms: {
+      contentId: bytes32(terms.contentId, "roundTerms.contentId"),
+      termsHash: bytes32(terms.termsHash, "roundTerms.termsHash"),
+      beaconNetworkHash: bytes32(
+        terms.beaconNetworkHash,
+        "roundTerms.beaconNetworkHash",
+      ),
+      bountyAmount: atomic(terms.bountyAmount, "roundTerms.bountyAmount"),
+      feeAmount: atomic(terms.feeAmount, "roundTerms.feeAmount"),
+      attemptReserve: atomic(terms.attemptReserve, "roundTerms.attemptReserve"),
+      attemptCompensation: atomic(
+        terms.attemptCompensation,
+        "roundTerms.attemptCompensation",
+      ),
+      minimumReveals: integer(
+        terms.minimumReveals,
+        "roundTerms.minimumReveals",
+        1,
+      ),
+      maximumCommits: integer(
+        terms.maximumCommits,
+        "roundTerms.maximumCommits",
+        1,
+      ),
+      requiredTier: integer(terms.requiredTier, "roundTerms.requiredTier", 1),
+      commitDeadline: atomic(terms.commitDeadline, "roundTerms.commitDeadline"),
+      revealDeadline: atomic(terms.revealDeadline, "roundTerms.revealDeadline"),
+      beaconFailureDeadline: atomic(
+        terms.beaconFailureDeadline,
+        "roundTerms.beaconFailureDeadline",
+      ),
+      beaconRound: atomic(terms.beaconRound, "roundTerms.beaconRound"),
+      claimGracePeriod: atomic(
+        terms.claimGracePeriod,
+        "roundTerms.claimGracePeriod",
+      ),
+      feeRecipient: address(terms.feeRecipient, "roundTerms.feeRecipient"),
+    },
+    roundId: nullableString(input.roundId, "roundId"),
+    transactionHash,
   };
 }
 

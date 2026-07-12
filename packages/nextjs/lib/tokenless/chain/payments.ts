@@ -1,0 +1,831 @@
+import { TOKENLESS_QUICKNET_T_CHAIN_HASH, type TokenlessChainConfig, loadTokenlessChainConfig } from "./config";
+import { type TokenlessChainRuntime, assertLiveTokenlessDeployment, getTokenlessChainRuntime } from "./runtime";
+import { TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
+import type { TokenlessQuoteResponse } from "@rateloop/sdk";
+import { randomUUID } from "node:crypto";
+import "server-only";
+import { type Address, type Hash, type Hex, decodeEventLog, encodeFunctionData, getAddress, isHash } from "viem";
+import { baseSepolia } from "viem/chains";
+import { dbClient, dbPool } from "~~/lib/db";
+import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+// The issuer may only attest tier 4 after both a uniqueness base credential
+// and a recent presence check; "presence" is never a standalone selfie tier.
+const TIER_IDS: Record<string, number> = { selfie: 1, passport: 2, orb: 3, presence: 4 };
+const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296;
+const QUICKNET_T_PERIOD_SECONDS = 3;
+const APPROVE_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+const ERC20_BALANCE_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+type QueryRow = Record<string, unknown>;
+
+export type PersistedRoundTerms = {
+  contentId: Hex;
+  termsHash: Hex;
+  beaconNetworkHash: Hex;
+  bountyAmount: string;
+  feeAmount: string;
+  attemptReserve: string;
+  attemptCompensation: string;
+  minimumReveals: number;
+  maximumCommits: number;
+  requiredTier: number;
+  commitDeadline: string;
+  revealDeadline: string;
+  beaconFailureDeadline: string;
+  beaconRound: string;
+  claimGracePeriod: string;
+  feeRecipient: Address;
+};
+
+export type ChainPaymentInstructions = {
+  operationKey: string;
+  paymentMode: "wallet" | "x402" | "prepaid";
+  paymentState: string;
+  deploymentKey: string;
+  chainId: number;
+  panelAddress: Address;
+  x402SubmitterAddress: Address;
+  usdcAddress: Address;
+  funderAddress: Address;
+  totalFundedAtomic: string;
+  roundTerms: PersistedRoundTerms;
+  roundId: string | null;
+  transactionHash: Hash | null;
+};
+
+function rowString(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  return value === null || value === undefined ? null : String(value);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function bytes32(value: string | null, name: string): Hex {
+  const normalized = value?.startsWith("0x") ? value : `0x${value ?? ""}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized) || /^0x0{64}$/.test(normalized)) {
+    throw new TokenlessServiceError(`${name} is not a non-zero bytes32 value.`, 409, "invalid_round_terms");
+  }
+  return normalized.toLowerCase() as Hex;
+}
+
+function toOnchainTerms(terms: PersistedRoundTerms) {
+  return {
+    ...terms,
+    bountyAmount: BigInt(terms.bountyAmount),
+    feeAmount: BigInt(terms.feeAmount),
+    attemptReserve: BigInt(terms.attemptReserve),
+    attemptCompensation: BigInt(terms.attemptCompensation),
+    commitDeadline: BigInt(terms.commitDeadline),
+    revealDeadline: BigInt(terms.revealDeadline),
+    beaconFailureDeadline: BigInt(terms.beaconFailureDeadline),
+    beaconRound: BigInt(terms.beaconRound),
+    claimGracePeriod: BigInt(terms.claimGracePeriod),
+  };
+}
+
+function parseTerms(value: string): PersistedRoundTerms {
+  return JSON.parse(value) as PersistedRoundTerms;
+}
+
+async function operationSource(operationKey: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT o.operation_key, o.payment_mode, o.payment_reference, o.payment_state,
+                 o.question_id, q.terms_hash, q.moderation_status AS question_moderation_status,
+                 c.content_hash, c.moderation_status AS content_moderation_status,
+                 a.quote_id, a.economics_json, a.sandbox, aq.response_json,
+                 pi.payer_address, pi.payload_json, pi.amount_atomic AS intent_amount_atomic,
+                 pr.amount_atomic AS reservation_amount_atomic
+          FROM tokenless_ask_ownership o
+          JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
+          JOIN tokenless_question_records q ON q.question_id = o.question_id
+          JOIN tokenless_content_records c ON c.content_id = q.content_id
+          JOIN tokenless_agent_quotes aq ON aq.quote_id = a.quote_id
+          LEFT JOIN tokenless_payment_intents pi ON pi.payment_intent_id = o.payment_reference
+          LEFT JOIN tokenless_prepaid_reservations pr ON pr.reservation_id = o.payment_reference
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [operationKey],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  if (!row) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  if (row.sandbox === true) throw new TokenlessServiceError("Sandbox asks never execute on-chain.", 409, "sandbox_ask");
+  if (
+    rowString(row, "content_moderation_status") !== "approved" ||
+    rowString(row, "question_moderation_status") !== "approved"
+  ) {
+    throw new TokenlessServiceError(
+      "The question must pass pre-round moderation before funding.",
+      409,
+      "content_not_approved",
+      true,
+    );
+  }
+  return row;
+}
+
+function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date): PersistedRoundTerms {
+  const quote = JSON.parse(rowString(row, "response_json") ?? "null") as TokenlessQuoteResponse | null;
+  if (!quote) throw new TokenlessServiceError("The ask has no quote snapshot.", 409, "invalid_round_terms");
+  const bountyAmount = BigInt(quote.economics.bounty.fundedAtomic);
+  const feeAmount = BigInt(quote.economics.fee.fundedAtomic);
+  const attemptReserve = BigInt(quote.economics.attemptReserve.fundedAtomic);
+  const maximumCommits = quote.panel.requestedSize;
+  const minimumReveals = quote.panel.minimumReveals;
+  const attemptCompensation = maximumCommits > 0 ? attemptReserve / BigInt(maximumCommits) : 0n;
+  const requiredTier = TIER_IDS[quote.audience.tierId];
+  if (
+    bountyAmount <= 0n ||
+    attemptCompensation <= 0n ||
+    attemptReserve < attemptCompensation * BigInt(maximumCommits) ||
+    !requiredTier ||
+    minimumReveals <= 0 ||
+    maximumCommits < minimumReveals
+  ) {
+    throw new TokenlessServiceError(
+      "The quote cannot produce valid immutable round terms.",
+      409,
+      "invalid_round_terms",
+    );
+  }
+  const total = bountyAmount + feeAmount + attemptReserve;
+  const paymentAmount = BigInt(
+    rowString(row, "intent_amount_atomic") ?? rowString(row, "reservation_amount_atomic") ?? "-1",
+  );
+  if (paymentAmount !== total || rowString(row, "economics_json") !== JSON.stringify(quote.economics)) {
+    throw new TokenlessServiceError("Payment and quote economics do not match exactly.", 409, "payment_terms_mismatch");
+  }
+  const nowSeconds = Math.floor(now.getTime() / 1_000);
+  const commitDeadline = nowSeconds + Math.max(quote.slo.estimatedSeconds, 300);
+  const revealDeadline = commitDeadline + config.revealWindowSeconds;
+  const beaconFailureDeadline = revealDeadline + config.beaconFailureGraceSeconds;
+  const beaconRound = Math.floor((commitDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 1;
+  return {
+    contentId: bytes32(rowString(row, "content_hash"), "content hash"),
+    termsHash: bytes32(rowString(row, "terms_hash"), "terms hash"),
+    beaconNetworkHash: TOKENLESS_QUICKNET_T_CHAIN_HASH,
+    bountyAmount: bountyAmount.toString(),
+    feeAmount: feeAmount.toString(),
+    attemptReserve: attemptReserve.toString(),
+    attemptCompensation: attemptCompensation.toString(),
+    minimumReveals,
+    maximumCommits,
+    requiredTier,
+    commitDeadline: String(commitDeadline),
+    revealDeadline: String(revealDeadline),
+    beaconFailureDeadline: String(beaconFailureDeadline),
+    beaconRound: String(beaconRound),
+    claimGracePeriod: String(config.claimGracePeriodSeconds),
+    feeRecipient: config.feeRecipient,
+  };
+}
+
+async function executionRow(operationKey: string) {
+  const result = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_chain_executions WHERE operation_key = ? LIMIT 1",
+    args: [operationKey],
+  });
+  return result.rows[0] as QueryRow | undefined;
+}
+
+function instructions(row: QueryRow): ChainPaymentInstructions {
+  return {
+    operationKey: rowString(row, "operation_key")!,
+    paymentMode: rowString(row, "payment_mode") as ChainPaymentInstructions["paymentMode"],
+    paymentState: rowString(row, "state")!,
+    deploymentKey: rowString(row, "deployment_key")!,
+    chainId: Number(row.chain_id),
+    panelAddress: getAddress(rowString(row, "panel_address")!),
+    x402SubmitterAddress: getAddress(rowString(row, "x402_submitter_address")!),
+    usdcAddress: getAddress(rowString(row, "usdc_address")!),
+    funderAddress: getAddress(rowString(row, "funder_address")!),
+    totalFundedAtomic: rowString(row, "total_funded_atomic")!,
+    roundTerms: parseTerms(rowString(row, "round_terms_json")!),
+    roundId: rowString(row, "round_id"),
+    transactionHash: rowString(row, "submission_transaction_hash") as Hash | null,
+  };
+}
+
+export async function prepareChainPayment(
+  operationKey: string,
+  options: { config?: TokenlessChainConfig; now?: Date; runtime?: TokenlessChainRuntime } = {},
+) {
+  const config = options.config ?? loadTokenlessChainConfig();
+  const runtime = options.runtime ?? getTokenlessChainRuntime(config);
+  await assertLiveTokenlessDeployment(config, runtime);
+  const existing = await executionRow(operationKey);
+  if (existing) {
+    if (
+      rowString(existing, "deployment_key") !== config.deploymentKey ||
+      Number(existing.chain_id) !== config.chainId ||
+      rowString(existing, "panel_address")?.toLowerCase() !== config.panelAddress.toLowerCase() ||
+      rowString(existing, "issuer_address")?.toLowerCase() !== config.issuerAddress.toLowerCase() ||
+      rowString(existing, "x402_submitter_address")?.toLowerCase() !== config.x402SubmitterAddress.toLowerCase() ||
+      rowString(existing, "usdc_address")?.toLowerCase() !== config.usdcAddress.toLowerCase()
+    ) {
+      throw new TokenlessServiceError(
+        "This operation is pinned to a different tokenless deployment and cannot be migrated implicitly.",
+        409,
+        "stale_deployment",
+      );
+    }
+    return instructions(existing);
+  }
+  const source = await operationSource(operationKey);
+  const paymentMode = rowString(source, "payment_mode") as ChainPaymentInstructions["paymentMode"];
+  const paymentReference = rowString(source, "payment_reference")!;
+  let funderAddress: Address;
+  if (paymentMode === "prepaid") {
+    if (!runtime.prepaidAccount) {
+      throw new TokenlessServiceError(
+        "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY is required for prepaid chain execution.",
+        503,
+        "prepaid_executor_unavailable",
+        true,
+      );
+    }
+    funderAddress = runtime.prepaidAccount.address;
+  } else {
+    funderAddress = getAddress(rowString(source, "payer_address")!);
+  }
+  const terms = buildRoundTerms(source, config, options.now ?? new Date());
+  const totalFundedAtomic = (
+    BigInt(terms.bountyAmount) +
+    BigInt(terms.feeAmount) +
+    BigInt(terms.attemptReserve)
+  ).toString();
+  const executionId = `chx_${randomUUID().replaceAll("-", "")}`;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_chain_executions
+          (execution_id, operation_key, payment_mode, payment_reference, deployment_key, chain_id,
+           deployment_block, panel_address, issuer_address, x402_submitter_address, usdc_address,
+           funder_address, content_id, terms_hash, round_terms_json, total_funded_atomic, state,
+           created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (operation_key) DO NOTHING`,
+    args: [
+      executionId,
+      operationKey,
+      paymentMode,
+      paymentReference,
+      config.deploymentKey,
+      config.chainId,
+      config.deploymentBlock.toString(),
+      config.panelAddress.toLowerCase(),
+      config.issuerAddress.toLowerCase(),
+      config.x402SubmitterAddress.toLowerCase(),
+      config.usdcAddress.toLowerCase(),
+      funderAddress.toLowerCase(),
+      terms.contentId,
+      terms.termsHash,
+      stableJson(terms),
+      totalFundedAtomic,
+      paymentMode === "wallet"
+        ? "awaiting_wallet"
+        : paymentMode === "x402" && rowString(source, "payment_state") === "pending_chain_authorization"
+          ? "awaiting_authorization"
+          : "prepared",
+      now,
+      now,
+    ],
+  });
+  const persisted = await executionRow(operationKey);
+  if (!persisted)
+    throw new TokenlessServiceError("Chain execution could not be stored.", 500, "chain_persistence_failed");
+  return instructions(persisted);
+}
+
+function exactRoundCreated(input: {
+  logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[];
+  expected: ChainPaymentInstructions;
+}) {
+  const terms = input.expected.roundTerms;
+  const matches: { roundId: bigint }[] = [];
+  for (const log of input.logs) {
+    if (log.address.toLowerCase() !== input.expected.panelAddress.toLowerCase()) continue;
+    try {
+      const decoded = decodeEventLog({
+        abi: TokenlessPanelAbi,
+        data: log.data,
+        topics: [...log.topics] as [] | [Hex, ...Hex[]],
+        strict: true,
+      });
+      if (decoded.eventName !== "RoundCreated") continue;
+      const args = decoded.args;
+      if (
+        getAddress(args.funder) === getAddress(input.expected.funderAddress) &&
+        args.contentId.toLowerCase() === terms.contentId.toLowerCase() &&
+        args.termsHash.toLowerCase() === terms.termsHash.toLowerCase() &&
+        args.bountyAmount === BigInt(terms.bountyAmount) &&
+        args.feeAmount === BigInt(terms.feeAmount) &&
+        args.attemptReserve === BigInt(terms.attemptReserve)
+      ) {
+        matches.push({ roundId: args.roundId });
+      }
+    } catch {
+      // Ignore unrelated logs; only an exact TokenlessPanel RoundCreated event is accepted.
+    }
+  }
+  if (matches.length !== 1) {
+    throw new TokenlessServiceError(
+      "The transaction did not emit exactly one RoundCreated event matching the quoted terms.",
+      409,
+      "payment_receipt_mismatch",
+    );
+  }
+  return matches[0];
+}
+
+async function assertCompleteRoundMatches(input: {
+  expected: ChainPaymentInstructions;
+  roundId: bigint;
+  runtime: TokenlessChainRuntime;
+}) {
+  const round = await input.runtime.publicClient.readContract({
+    abi: TokenlessPanelAbi,
+    address: input.expected.panelAddress,
+    functionName: "getRound",
+    args: [input.roundId],
+  });
+  const terms = toOnchainTerms(input.expected.roundTerms);
+  if (
+    getAddress(round.funder) !== getAddress(input.expected.funderAddress) ||
+    round.contentId.toLowerCase() !== terms.contentId.toLowerCase() ||
+    round.termsHash.toLowerCase() !== terms.termsHash.toLowerCase() ||
+    round.beaconNetworkHash.toLowerCase() !== terms.beaconNetworkHash.toLowerCase() ||
+    getAddress(round.feeRecipient) !== getAddress(terms.feeRecipient) ||
+    round.bountyAmount !== terms.bountyAmount ||
+    round.feeAmount !== terms.feeAmount ||
+    round.attemptReserve !== terms.attemptReserve ||
+    round.attemptCompensation !== terms.attemptCompensation ||
+    round.commitDeadline !== terms.commitDeadline ||
+    round.revealDeadline !== terms.revealDeadline ||
+    round.beaconFailureDeadline !== terms.beaconFailureDeadline ||
+    round.beaconRound !== terms.beaconRound ||
+    round.claimGracePeriod !== terms.claimGracePeriod ||
+    round.minimumReveals !== terms.minimumReveals ||
+    round.maximumCommits !== terms.maximumCommits ||
+    round.requiredTier !== terms.requiredTier
+  ) {
+    throw new TokenlessServiceError(
+      "The created on-chain round does not match the complete quoted terms.",
+      409,
+      "round_terms_mismatch",
+    );
+  }
+}
+
+async function persistConfirmation(input: {
+  expected: ChainPaymentInstructions;
+  transactionHash: Hash;
+  roundId: bigint;
+  blockNumber: bigint;
+  blockHash: Hash;
+}) {
+  const client = await dbPool.connect();
+  const now = new Date();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      "SELECT state, round_id, submission_transaction_hash, payment_reference FROM tokenless_chain_executions WHERE operation_key = $1 FOR UPDATE",
+      [input.expected.operationKey],
+    );
+    const row = locked.rows[0] as QueryRow | undefined;
+    if (!row) throw new TokenlessServiceError("Chain execution not found.", 404, "chain_execution_not_found");
+    const existingRound = rowString(row, "round_id");
+    const existingHash = rowString(row, "submission_transaction_hash");
+    if (
+      existingRound &&
+      (existingRound !== input.roundId.toString() ||
+        existingHash?.toLowerCase() !== input.transactionHash.toLowerCase())
+    ) {
+      throw new TokenlessServiceError(
+        "The operation is already bound to another round.",
+        409,
+        "round_reconciliation_conflict",
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_chain_executions
+       SET state = 'confirmed', submission_transaction_hash = $1, round_id = $2,
+           receipt_block_number = $3, receipt_block_hash = $4, failure_code = NULL,
+           confirmed_at = $5, updated_at = $5
+       WHERE operation_key = $6`,
+      [
+        input.transactionHash,
+        input.roundId.toString(),
+        input.blockNumber.toString(),
+        input.blockHash,
+        now,
+        input.expected.operationKey,
+      ],
+    );
+    await client.query(
+      "UPDATE tokenless_agent_asks SET status = 'open', round_id = $1, updated_at = $2 WHERE operation_key = $3",
+      [input.roundId.toString(), now, input.expected.operationKey],
+    );
+    await client.query(
+      "UPDATE tokenless_ask_ownership SET payment_state = 'confirmed', updated_at = $1 WHERE operation_key = $2",
+      [now, input.expected.operationKey],
+    );
+    if (input.expected.paymentMode === "prepaid") {
+      await client.query(
+        "UPDATE tokenless_prepaid_reservations SET status = 'consumed', updated_at = $1 WHERE reservation_id = $2",
+        [now, rowString(row, "payment_reference")],
+      );
+      await client.query(
+        `INSERT INTO tokenless_prepaid_ledger_entries
+         (entry_id, workspace_id, delta_atomic, settlement_status, source, external_reference, created_at, settled_at)
+         SELECT $1, workspace_id, $2, 'settled', 'chain_round', $3, $4, $4
+         FROM tokenless_prepaid_reservations WHERE reservation_id = $5
+         ON CONFLICT (external_reference) DO NOTHING`,
+        [
+          `led_${randomUUID().replaceAll("-", "")}`,
+          `-${input.expected.totalFundedAtomic}`,
+          `round:${input.expected.deploymentKey}:${input.roundId}`,
+          now,
+          rowString(row, "payment_reference"),
+        ],
+      );
+    } else {
+      await client.query(
+        "UPDATE tokenless_payment_intents SET state = 'confirmed', updated_at = $1 WHERE payment_intent_id = (SELECT payment_reference FROM tokenless_chain_executions WHERE operation_key = $2)",
+        [now, input.expected.operationKey],
+      );
+    }
+    await client.query(
+      `INSERT INTO tokenless_voucher_rounds
+       (chain_id, panel_address, round_id, content_id, required_tier_id, voucher_not_before,
+        voucher_deadline, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $6, $6)
+       ON CONFLICT (chain_id, panel_address, round_id) DO NOTHING`,
+      [
+        input.expected.chainId,
+        input.expected.panelAddress.toLowerCase(),
+        input.roundId.toString(),
+        input.expected.roundTerms.contentId,
+        input.expected.roundTerms.requiredTier,
+        now,
+        new Date(Number(input.expected.roundTerms.commitDeadline) * 1_000),
+      ],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function confirmWalletChainPayment(
+  operationKey: string,
+  transactionHash: string,
+  options: { config?: TokenlessChainConfig; runtime?: TokenlessChainRuntime } = {},
+) {
+  if (!isHash(transactionHash)) {
+    throw new TokenlessServiceError(
+      "transactionHash must be a 32-byte transaction hash.",
+      400,
+      "invalid_transaction_hash",
+    );
+  }
+  const config = options.config ?? loadTokenlessChainConfig();
+  const runtime = options.runtime ?? getTokenlessChainRuntime(config);
+  const expected = await prepareChainPayment(operationKey, { config, runtime });
+  if (expected.paymentMode !== "wallet") {
+    throw new TokenlessServiceError("Only wallet payment intents can be confirmed here.", 409, "payment_mode_mismatch");
+  }
+  const receipt = await runtime.publicClient.getTransactionReceipt({ hash: transactionHash });
+  if (receipt.status !== "success" || receipt.blockNumber < config.deploymentBlock) {
+    throw new TokenlessServiceError(
+      "The payment transaction was not successful on the configured deployment.",
+      409,
+      "payment_failed",
+    );
+  }
+  const match = exactRoundCreated({ logs: receipt.logs, expected });
+  await assertCompleteRoundMatches({ expected, roundId: match.roundId, runtime });
+  await persistConfirmation({
+    expected,
+    transactionHash,
+    roundId: match.roundId,
+    blockNumber: receipt.blockNumber,
+    blockHash: receipt.blockHash,
+  });
+  return { ...(await getChainPaymentInstructions(operationKey)), paymentState: "confirmed" };
+}
+
+async function allocateNonce(input: {
+  executionId: string;
+  column: "approval_nonce" | "submission_nonce";
+  config: TokenlessChainConfig;
+  signer: Address;
+  runtime: TokenlessChainRuntime;
+}) {
+  const existing = await dbClient.execute({
+    sql: `SELECT ${input.column} FROM tokenless_chain_executions WHERE execution_id = ? LIMIT 1`,
+    args: [input.executionId],
+  });
+  const persisted = rowString(existing.rows[0] as QueryRow | undefined, input.column);
+  if (persisted) return Number(persisted);
+  const networkNonce = await input.runtime.publicClient.getTransactionCount({
+    address: input.signer,
+    blockTag: "pending",
+  });
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO tokenless_chain_signer_nonces (deployment_key, signer_address, next_nonce, updated_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (deployment_key, signer_address) DO NOTHING`,
+      [input.config.deploymentKey, input.signer.toLowerCase(), networkNonce, new Date()],
+    );
+    const nonceRow = await client.query(
+      "SELECT next_nonce FROM tokenless_chain_signer_nonces WHERE deployment_key = $1 AND signer_address = $2 FOR UPDATE",
+      [input.config.deploymentKey, input.signer.toLowerCase()],
+    );
+    const storedNext = Number(nonceRow.rows[0].next_nonce);
+    const nonce = Math.max(networkNonce, storedNext);
+    await client.query(
+      `UPDATE tokenless_chain_signer_nonces SET next_nonce = $1, updated_at = $2
+       WHERE deployment_key = $3 AND signer_address = $4`,
+      [nonce + 1, new Date(), input.config.deploymentKey, input.signer.toLowerCase()],
+    );
+    await client.query(
+      `UPDATE tokenless_chain_executions SET ${input.column} = $1, updated_at = $2 WHERE execution_id = $3`,
+      [nonce, new Date(), input.executionId],
+    );
+    await client.query("COMMIT");
+    return nonce;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function storeTransactionHash(
+  executionId: string,
+  column: "approval_transaction_hash" | "submission_transaction_hash",
+  hash: Hash,
+) {
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions SET ${column} = ?, state = 'broadcast', updated_at = ? WHERE execution_id = ?`,
+    args: [hash, new Date(), executionId],
+  });
+}
+
+export async function executeServerChainPayment(
+  operationKey: string,
+  options: { config?: TokenlessChainConfig; runtime?: TokenlessChainRuntime } = {},
+) {
+  const config = options.config ?? loadTokenlessChainConfig();
+  const runtime = options.runtime ?? getTokenlessChainRuntime(config);
+  const expected = await prepareChainPayment(operationKey, { config, runtime });
+  if (expected.paymentMode === "wallet") return expected;
+  const row = await executionRow(operationKey);
+  const executionId = rowString(row, "execution_id")!;
+  const terms = toOnchainTerms(expected.roundTerms);
+  let submissionHash = expected.transactionHash;
+
+  if (expected.paymentMode === "prepaid") {
+    if (!runtime.prepaidAccount || !runtime.prepaidWallet) {
+      throw new TokenlessServiceError("Prepaid executor is unavailable.", 503, "prepaid_executor_unavailable", true);
+    }
+    const balance = await runtime.publicClient.readContract({
+      abi: ERC20_BALANCE_ABI,
+      address: config.usdcAddress,
+      functionName: "balanceOf",
+      args: [runtime.prepaidAccount.address],
+    });
+    if (balance < BigInt(expected.totalFundedAtomic)) {
+      throw new TokenlessServiceError(
+        "The isolated prepaid funder lacks settled USDC.",
+        503,
+        "prepaid_liquidity_unavailable",
+        true,
+      );
+    }
+    let approvalHash = rowString(row, "approval_transaction_hash") as Hash | null;
+    if (!approvalHash) {
+      const nonce = await allocateNonce({
+        executionId,
+        column: "approval_nonce",
+        config,
+        signer: runtime.prepaidAccount.address,
+        runtime,
+      });
+      approvalHash = await runtime.prepaidWallet.sendTransaction({
+        account: runtime.prepaidAccount,
+        chain: baseSepolia,
+        to: config.usdcAddress,
+        data: encodeFunctionData({
+          abi: APPROVE_ABI,
+          functionName: "approve",
+          args: [config.panelAddress, BigInt(expected.totalFundedAtomic)],
+        }),
+        nonce,
+        value: 0n,
+      });
+      await storeTransactionHash(executionId, "approval_transaction_hash", approvalHash);
+    }
+    const approvalReceipt = await runtime.publicClient.waitForTransactionReceipt({ hash: approvalHash });
+    if (approvalReceipt.status !== "success") {
+      throw new TokenlessServiceError("The prepaid USDC approval failed.", 502, "prepaid_approval_failed", true);
+    }
+    if (!submissionHash) {
+      await runtime.publicClient.simulateContract({
+        account: runtime.prepaidAccount,
+        abi: TokenlessPanelAbi,
+        address: config.panelAddress,
+        functionName: "createRound",
+        args: [terms],
+      });
+      const nonce = await allocateNonce({
+        executionId,
+        column: "submission_nonce",
+        config,
+        signer: runtime.prepaidAccount.address,
+        runtime,
+      });
+      submissionHash = await runtime.prepaidWallet.sendTransaction({
+        account: runtime.prepaidAccount,
+        chain: baseSepolia,
+        to: config.panelAddress,
+        data: encodeFunctionData({ abi: TokenlessPanelAbi, functionName: "createRound", args: [terms] }),
+        nonce,
+        value: 0n,
+      });
+      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash);
+    }
+  } else {
+    if (!runtime.relayerAccount || !runtime.relayerWallet) {
+      throw new TokenlessServiceError(
+        "The x402 gas-only relayer is unavailable.",
+        503,
+        "x402_relayer_unavailable",
+        true,
+      );
+    }
+    if (!submissionHash) {
+      const source = await operationSource(operationKey);
+      const payload = JSON.parse(rowString(source, "payload_json") ?? "null") as {
+        authorization?: Record<string, unknown>;
+      } | null;
+      const authorization = payload?.authorization;
+      if (!authorization) throw new TokenlessServiceError("x402 authorization is missing.", 409, "invalid_payment");
+      const roundAuthorizationSignature = String(authorization.roundAuthorizationSignature ?? "") as Hex;
+      const adapterAuthorization = {
+        validAfter: BigInt(String(authorization.validAfter)),
+        validBefore: BigInt(String(authorization.validBefore)),
+        nonce: String(authorization.nonce) as Hex,
+        v: Number(authorization.v),
+        r: String(authorization.r) as Hex,
+        s: String(authorization.s) as Hex,
+      };
+      await runtime.publicClient.simulateContract({
+        account: runtime.relayerAccount,
+        abi: X402PanelSubmitterAbi,
+        address: config.x402SubmitterAddress,
+        functionName: "createRoundWithAuthorization",
+        args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
+      });
+      const nonce = await allocateNonce({
+        executionId,
+        column: "submission_nonce",
+        config,
+        signer: runtime.relayerAccount.address,
+        runtime,
+      });
+      submissionHash = await runtime.relayerWallet.sendTransaction({
+        account: runtime.relayerAccount,
+        chain: baseSepolia,
+        to: config.x402SubmitterAddress,
+        data: encodeFunctionData({
+          abi: X402PanelSubmitterAbi,
+          functionName: "createRoundWithAuthorization",
+          args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
+        }),
+        nonce,
+        value: 0n,
+      });
+      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash);
+    }
+  }
+
+  const receipt = await runtime.publicClient.waitForTransactionReceipt({ hash: submissionHash });
+  if (receipt.status !== "success" || receipt.blockNumber < config.deploymentBlock) {
+    throw new TokenlessServiceError("Round submission failed on-chain.", 502, "round_submission_failed", true);
+  }
+  const match = exactRoundCreated({ logs: receipt.logs, expected });
+  await assertCompleteRoundMatches({ expected, roundId: match.roundId, runtime });
+  await persistConfirmation({
+    expected,
+    transactionHash: submissionHash,
+    roundId: match.roundId,
+    blockNumber: receipt.blockNumber,
+    blockHash: receipt.blockHash,
+  });
+  return { ...(await getChainPaymentInstructions(operationKey)), paymentState: "confirmed" };
+}
+
+export async function getChainPaymentInstructions(operationKey: string) {
+  const row = await executionRow(operationKey);
+  if (!row) throw new TokenlessServiceError("Chain payment is not prepared.", 404, "chain_execution_not_found");
+  return instructions(row);
+}
+
+export async function attachX402Authorization(operationKey: string, value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError("authorization must be an object.", 400, "invalid_payment");
+  }
+  const normalized = normalizedX402Authorization(value as Record<string, unknown>);
+  const result = await dbClient.execute({
+    sql: `SELECT e.payment_mode, e.payment_reference, p.payload_json
+          FROM tokenless_chain_executions e
+          JOIN tokenless_payment_intents p ON p.payment_intent_id = e.payment_reference
+          WHERE e.operation_key = ? LIMIT 1`,
+    args: [operationKey],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  if (!row || rowString(row, "payment_mode") !== "x402") {
+    throw new TokenlessServiceError("The operation is not an x402 payment.", 409, "payment_mode_mismatch");
+  }
+  const payload = JSON.parse(rowString(row, "payload_json") ?? "null") as Record<string, unknown> | null;
+  if (!payload) throw new TokenlessServiceError("x402 payment intent is missing.", 409, "invalid_payment");
+  if (payload.authorization && stableJson(payload.authorization) !== stableJson(normalized)) {
+    throw new TokenlessServiceError(
+      "The x402 authorization conflicts with the one already attached.",
+      409,
+      "payment_conflict",
+    );
+  }
+  const payloadJson = stableJson({ ...payload, authorization: normalized });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_payment_intents
+          SET payload_json = ?, state = 'pending_chain_execution', updated_at = ?
+          WHERE payment_intent_id = ?`,
+    args: [payloadJson, new Date(), rowString(row, "payment_reference")],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_ask_ownership SET payment_state = 'pending_chain_execution', updated_at = ? WHERE operation_key = ?",
+    args: [new Date(), operationKey],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_chain_executions SET state = 'prepared', updated_at = ? WHERE operation_key = ?",
+    args: [new Date(), operationKey],
+  });
+}
+
+export async function reconcileChainPayment(
+  operationKey: string,
+  options: { config?: TokenlessChainConfig; runtime?: TokenlessChainRuntime } = {},
+) {
+  const existing = await executionRow(operationKey);
+  if (!existing) return null;
+  const current = await prepareChainPayment(operationKey, options);
+  if (current.paymentState === "confirmed") return current;
+  if (current.paymentMode === "x402" && current.paymentState === "awaiting_authorization") return current;
+  if (current.paymentMode !== "wallet") return executeServerChainPayment(operationKey, options);
+  return current;
+}
+
+export const __chainPaymentTestUtils = {
+  assertCompleteRoundMatches,
+  buildRoundTerms,
+  exactRoundCreated,
+  toOnchainTerms,
+};
