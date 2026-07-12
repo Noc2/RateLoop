@@ -11,13 +11,13 @@ Brief description of the changes in this PR.
 Describe how you tested your changes:
 
 - [ ] Foundry tests pass (`yarn foundry:test`)
-- [ ] Contract size gate passes (`yarn workspace @rateloop/foundry check:sizes`)
+- [ ] Tokenless contract size gate passes (`yarn foundry:check:sizes`)
 - [ ] Lint passes (`yarn next:lint`)
 - [ ] Type check passes (`yarn next:check-types`)
-- [ ] Base mainnet readiness passes (`yarn base-mainnet:check`) when production deployment/env wiring changed
-- [ ] Node/workspace tests pass for changed packages (`yarn test:ts` or focused `node scripts/run-node-tests.mjs ...`)
-- [ ] E2E smoke checked when user-visible app flows changed (`yarn e2e:ci:app` or focused Playwright spec)
-- [ ] Tested locally with `yarn start`
+- [ ] Node/workspace tests pass for changed packages (`yarn test:packages` or focused package commands)
+- [ ] Isolated tokenless app build passes (`TOKENLESS_SANDBOX_MODE=true DATABASE_URL=memory: yarn next:build`)
+- [ ] New user journeys include focused tests; legacy E2E selectors are not restored
+- [ ] Tested locally against an isolated tokenless deployment when applicable
 
 ## Security
 

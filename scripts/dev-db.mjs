@@ -217,7 +217,7 @@ export function buildLocalDatabasePortConflictMessage(config, containers = []) {
   return (
     `Local Postgres host port ${config.port} is already in use, so Docker cannot start the RateLoop Postgres container for ${formatDatabaseTarget(config)}.` +
     containerSummary +
-    ` Stop the conflicting process/container, or set DATABASE_URL to this local database with a free host port such as ${nextPort} and rerun \`yarn dev:stack\`.`
+    ` Stop the conflicting process/container, or set DATABASE_URL to this local database with a free host port such as ${nextPort} and rerun \`yarn dev:db\`.`
   );
 }
 

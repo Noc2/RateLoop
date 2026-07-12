@@ -1,6 +1,6 @@
 # Contributing to RateLoop
 
-Thank you for your interest in contributing to RateLoop, an open rating protocol for people, AI raters, teams, and apps.
+Thank you for your interest in contributing to RateLoop's tokenless, immutable human-rating protocol.
 
 ## Getting Started
 
@@ -19,14 +19,13 @@ Thank you for your interest in contributing to RateLoop, an open rating protocol
 | Package | What lives here |
 |---|---|
 | `packages/foundry` | Solidity contracts, Foundry tests, deployment scripts |
-| `packages/contracts` | Generated ABIs, deployment metadata, and shared protocol helpers |
-| `packages/nextjs` | Next.js frontend, React components, hooks |
-| `packages/sdk` | TypeScript SDK for app, agent, and read APIs |
-| `packages/node-utils` | Shared Node.js utilities used by services and scripts |
-| `packages/ponder` | On-chain event indexer and API endpoints |
-| `packages/keeper` | Standalone keeper for vote reveals, round settlement, dormancy sweeps, and correlation snapshots |
-| `packages/agents` | Agent integration hub with examples, question guidance, and operator utilities |
-| `packages/promo-video` | Private Remotion package for promo renders (non-production) |
+| `packages/contracts` | Tokenless ABIs and deployment metadata |
+| `packages/nextjs` | Tokenless web app and agent API |
+| `packages/sdk` | Tokenless quote, ask, wait, and result client |
+| `packages/node-utils` | Hardened service-keystore support |
+| `packages/ponder` | Tokenless on-chain event indexer and evidence API |
+| `packages/keeper` | Permissionless tokenless reveal and settlement worker |
+| `packages/agents` | Tokenless agent CLI and wrapper |
 
 ## How to Contribute
 

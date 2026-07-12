@@ -1,127 +1,114 @@
-name: Unit Tests
+name: Tokenless Tests
+
 on:
   push:
-    branches: [main]
+    branches: [main, tokenless]
   pull_request:
-    branches: [main]
+    branches: [main, tokenless]
 
 permissions:
   contents: read
 
 jobs:
-  contract-size:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: true
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: yarn
-      - run: yarn install --immutable
-      - uses: ./.github/actions/setup-foundry
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            packages/foundry/cache
-            packages/foundry/out
-          key: forge-contract-size-v1.7.1-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
-      - name: Enforce EIP-170 contract size limit
-        working-directory: packages/foundry
-        run: make check-contract-sizes DEPLOY_PROFILE=deploy
-      - name: Enforce storage layout pinning
-        working-directory: packages/foundry
-        run: make check-storage-layouts
-      - name: Verify shared ABIs match compiled Solidity
-        working-directory: packages/foundry
-        run: |
-          make generate-abis-only
-          git diff --exit-code ../contracts/src/abis ../contracts/src/deployedContracts.ts
-      - name: Run generateTsAbis parity tests
-        run: yarn foundry:generate-ts-abis:test
-
   foundry:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: true
-      - uses: ./.github/actions/setup-foundry
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          path: |
-            packages/foundry/cache
-            packages/foundry/out
-          key: forge-tests-v1.7.1-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
-      - name: Warm Foundry solc cache
-        run: |
-          forge build --skip script --skip test --no-cache \
-            --out "$RUNNER_TEMP/forge-solc-warmup-out" \
-            --cache-path "$RUNNER_TEMP/forge-solc-warmup-cache"
+          node-version: "24"
+          cache: yarn
+      - uses: ./.github/actions/setup-foundry
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Warm the Solidity compiler cache
         working-directory: packages/foundry
-      - name: Run Foundry tests
-        run: |
-          for suite in test/*.t.sol; do
-            case "$(basename "$suite")" in
-              AdversarialTests.t.sol|AuditGapTests.t.sol|FormalVerification_GameTheory.t.sol|GameTheoryImprovements.t.sol|GasBudget.t.sol|GasEstimatesReport.t.sol|QuestionRewardPoolEscrow.t.sol|RoundIntegration.t.sol|SettlementEdgeCases.t.sol)
-                continue
-                ;;
-            esac
+        run: forge build --skip script --skip test
+      - name: Build tokenless contracts
+        run: yarn foundry:build
+      - name: Run tokenless contract tests
+        run: yarn foundry:test
+      - name: Test deployment artifact tooling
+        run: yarn foundry:test:tooling
+      - name: Enforce deployable contract sizes
+        run: yarn foundry:check:sizes
 
-            if [ "$(basename "$suite")" = "FormalVerification_RoundLifecycle.t.sol" ]; then
-              forge test --offline -vvv --no-cache --match-path "$suite"
-            else
-              forge test --offline -vvv --match-path "$suite"
-            fi
-          done
-        working-directory: packages/foundry
-
-  foundry-heavy:
+  packages:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        suite:
-          - AdversarialTests.t.sol
-          - AuditGapTests.t.sol
-          - FormalVerification_GameTheory.t.sol
-          - GameTheoryImprovements.t.sol
-          - GasBudget.t.sol
-          - GasEstimatesReport.t.sol
-          - QuestionRewardPoolEscrow.t.sol
-          - RoundIntegration.t.sol
-          - SettlementEdgeCases.t.sol
+        include:
+          - package: contracts
+            command: yarn contracts:check-types && yarn contracts:test
+          - package: node-utils
+            command: yarn node-utils:check-types && yarn node-utils:test
+          - package: sdk
+            command: yarn sdk:check-types && yarn sdk:test
+          - package: agents
+            command: yarn agents:check-types && yarn agents:test
+          - package: keeper
+            command: yarn keeper:check-types && yarn keeper:test
+          - package: ponder
+            command: yarn ponder:check-types && yarn ponder:test
+    name: Package (${{ matrix.package }})
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: true
-      - uses: ./.github/actions/setup-foundry
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            packages/foundry/cache
-            packages/foundry/out
-          key: forge-tests-v1.7.1-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
-      - name: Warm Foundry solc cache
-        run: |
-          forge build --skip script --skip test --no-cache \
-            --out "$RUNNER_TEMP/forge-solc-warmup-out" \
-            --cache-path "$RUNNER_TEMP/forge-solc-warmup-cache"
-        working-directory: packages/foundry
-      - name: Run heavy Foundry suite
-        run: forge test --offline -vvv --match-path "test/${{ matrix.suite }}"
-        working-directory: packages/foundry
-
-  typescript:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: true
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: yarn
-      - run: yarn install --immutable
-      - run: yarn test:ts
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Check and test package
+        run: ${{ matrix.command }}
+
+  root-tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Run root and deployment-tool tests
+        run: yarn test:node
+
+  app:
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:3000
+      DATABASE_URL: "memory:"
+      TOKENLESS_SANDBOX_MODE: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Test app
+        run: yarn next:test
+      - name: Check app types
+        run: yarn next:check-types
+      - name: Build isolated tokenless app
+        run: yarn next:build

@@ -1,4 +1,4 @@
-name: Publish npm Packages
+name: Publish Tokenless npm Packages
 
 on:
   release:
@@ -6,22 +6,23 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run the publish workflow without uploading packages"
+        description: Run without uploading packages
         required: true
         default: true
         type: boolean
       npm_tag:
-        description: "npm dist-tag to apply when publishing"
+        description: npm dist-tag
         required: true
         default: latest
-        type: string
+        type: choice
+        options: [latest, next, canary]
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: publish-npm-${{ github.ref }}
+  group: publish-tokenless-npm-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -34,78 +35,49 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: true
-
-      - name: Setup node env
+      - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: yarn
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Validate publish inputs
+          registry-url: https://registry.npmjs.org
+      - name: Validate publish context
         shell: bash
         run: |
-          allowed_tag=false
-          for tag in latest next canary; do
-            if [[ "$NPM_TAG" == "$tag" ]]; then
-              allowed_tag=true
-              break
-            fi
-          done
-
-          if [[ "$allowed_tag" != "true" ]]; then
-            echo "NPM_TAG must be one of: latest, next, canary."
-            exit 1
-          fi
-
           release_tag=""
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             release_tag="$GITHUB_REF_NAME"
           fi
-          RELEASE_VERSION="$(node scripts/validate-npm-release.mjs "$release_tag")"
-          echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+          node scripts/validate-npm-release.mjs "$release_tag"
 
-          if [[ "$PUBLISH_DRY_RUN" == "true" ]]; then
-            exit 0
+          if [[ "$PUBLISH_DRY_RUN" != "true" && "$GITHUB_REF" != "refs/heads/main" && "$GITHUB_EVENT_NAME" != "release" ]]; then
+            echo "Real npm publishes must run from main or a versioned release."
+            exit 1
           fi
-
-          if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_EVENT_NAME" == "release" ]]; then
-            exit 0
-          fi
-
-          echo "Real npm publishes must run from main or a versioned release tag such as v0.1.0."
-          exit 1
-
       - name: Install dependencies
         run: yarn install --immutable
-
-      - name: Check release metadata
+      - name: Validate release metadata
         run: node scripts/run-node-tests.mjs scripts/release-package-metadata.test.mjs
-
-      - name: Build packages
-        run: yarn build:workspace-deps
-
-      - name: Run package tests
+      - name: Build public packages
+        run: yarn build:packages
+      - name: Test public packages
         run: |
-          yarn node-utils:test
           yarn contracts:test
+          yarn node-utils:test
           yarn sdk:test
-          yarn workspace @rateloop/agents test
-
-      - name: Pack packages
+          yarn agents:test
+      - name: Pack public packages
         run: |
           mkdir -p "$RUNNER_TEMP/rateloop-npm"
-          yarn workspace @rateloop/node-utils pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz"
-          yarn workspace @rateloop/contracts pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz"
-          yarn workspace @rateloop/sdk pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz"
-          yarn workspace @rateloop/agents pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz"
-
-      - name: Publish packages
+          yarn workspace @rateloop/contracts pack --out "$RUNNER_TEMP/rateloop-npm/contracts.tgz"
+          yarn workspace @rateloop/node-utils pack --out "$RUNNER_TEMP/rateloop-npm/node-utils.tgz"
+          yarn workspace @rateloop/sdk pack --out "$RUNNER_TEMP/rateloop-npm/sdk.tgz"
+          yarn workspace @rateloop/agents pack --out "$RUNNER_TEMP/rateloop-npm/agents.tgz"
+      - name: Publish public packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
+        shell: bash
         run: |
           if [[ "$PUBLISH_DRY_RUN" != "true" && -z "${NODE_AUTH_TOKEN:-}" ]]; then
             echo "NPM_TOKEN is required for a real npm publish."
@@ -119,16 +91,17 @@ jobs:
 
           publish_if_missing() {
             local package_name="$1"
-            local tarball="$2"
+            local version="$2"
+            local tarball="$3"
             if [[ "$PUBLISH_DRY_RUN" != "true" ]] &&
-              [[ "$(npm view "$package_name@$RELEASE_VERSION" version 2>/dev/null || true)" == "$RELEASE_VERSION" ]]; then
-              echo "Skipping $package_name@$RELEASE_VERSION; it is already published."
+              [[ "$(npm view "$package_name@$version" version 2>/dev/null || true)" == "$version" ]]; then
+              echo "Skipping $package_name@$version; it is already published."
               return
             fi
             npm publish "$tarball" "${publish_args[@]}"
           }
 
-          publish_if_missing "@rateloop/contracts" "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz"
-          publish_if_missing "@rateloop/node-utils" "$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz"
-          publish_if_missing "@rateloop/sdk" "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz"
-          publish_if_missing "@rateloop/agents" "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz"
+          publish_if_missing "@rateloop/contracts" "$(node -p 'require("./packages/contracts/package.json").version')" "$RUNNER_TEMP/rateloop-npm/contracts.tgz"
+          publish_if_missing "@rateloop/node-utils" "$(node -p 'require("./packages/node-utils/package.json").version')" "$RUNNER_TEMP/rateloop-npm/node-utils.tgz"
+          publish_if_missing "@rateloop/sdk" "$(node -p 'require("./packages/sdk/package.json").version')" "$RUNNER_TEMP/rateloop-npm/sdk.tgz"
+          publish_if_missing "@rateloop/agents" "$(node -p 'require("./packages/agents/package.json").version')" "$RUNNER_TEMP/rateloop-npm/agents.tgz"

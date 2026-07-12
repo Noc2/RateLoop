@@ -44,7 +44,7 @@ test("builds actionable help for local database port conflicts", () => {
   assert.match(message, /Local Postgres host port 5432 is already in use/);
   assert.match(message, /rater-postgres-1/);
   assert.match(message, /55432/);
-  assert.match(message, /yarn dev:stack/);
+  assert.match(message, /yarn dev:db/);
 });
 
 test("uses Homebrew fallback logs only while the fallback database is running", () => {

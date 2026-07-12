@@ -30,7 +30,7 @@ runs:
 
         mkdir -p "$HOME/.foundry/bin"
         tar -xzf "$ARCHIVE_PATH" -C "$HOME/.foundry/bin"
-        chmod +x "$HOME/.foundry/bin/forge" "$HOME/.foundry/bin/cast" "$HOME/.foundry/bin/anvil" "$HOME/.foundry/bin/chisel"
+        chmod +x "$HOME/.foundry/bin/forge" "$HOME/.foundry/bin/cast" "$HOME/.foundry/bin/chisel"
         echo "$HOME/.foundry/bin" >> "$GITHUB_PATH"
     - name: Verify Foundry version
       shell: bash
