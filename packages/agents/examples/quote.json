@@ -1,0 +1,20 @@
+{
+  "audience": {
+    "tierId": "presence"
+  },
+  "budget": {
+    "attemptReserveAtomic": "500000",
+    "bountyAtomic": "5000000",
+    "feeBps": 500
+  },
+  "question": {
+    "kind": "binary",
+    "prompt": "Is this release ready for a public rollout?",
+    "rationale": {
+      "mode": "required",
+      "minLength": 20,
+      "maxLength": 500
+    }
+  },
+  "requestedPanelSize": 5
+}

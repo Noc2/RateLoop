@@ -1,0 +1,8 @@
+{
+  "idempotencyKey": "replace-with-a-unique-key",
+  "payment": {
+    "mode": "prepaid",
+    "workspaceId": "sandbox"
+  },
+  "quoteId": "replace-with-an-unexpired-quote-id"
+}

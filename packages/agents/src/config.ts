@@ -1,95 +1,87 @@
 import "dotenv/config";
-import { isAddress, type Address } from "viem";
 
-type AgentsRuntimeConfig = {
-  agentWalletAddress?: Address;
-  apiBaseUrl?: string;
-  mcpAccessToken?: string;
-  mcpApiUrl?: string;
-  mcpProtocolVersion?: string;
+export type TokenlessAgentsRuntimeConfig = {
+  apiKey?: string;
+  apiBaseUrl: string;
+  apiPath?: string;
+  requestTimeoutMs?: number;
 };
 
-function readEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
+function readEnv(env: NodeJS.ProcessEnv, name: string) {
+  const value = env[name]?.trim();
+  return value || undefined;
 }
 
-function readOptionalUrl(name: string): string | undefined {
-  const value = readEnv(name);
-  if (!value) return undefined;
+function positiveInteger(value: string | undefined, name: string) {
+  if (value === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error(`${name} must be a positive base-10 integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${name} must be a positive safe integer.`);
+  }
+  return parsed;
+}
 
+function normalizeBaseUrl(value: string) {
+  let parsed: URL;
   try {
-    return new URL(value).toString().replace(/\/+$/, "");
+    parsed = new URL(value);
   } catch {
-    throw new Error(`${name} must be a valid URL.`);
+    throw new Error("RATELOOP_API_BASE_URL must be a valid URL.");
   }
-}
 
-function deriveMcpApiUrl(apiBaseUrl: string | undefined, token: string | undefined) {
-  if (!apiBaseUrl) return undefined;
-  const path = token ? "api/mcp" : "api/mcp/public";
-  return new URL(path, `${apiBaseUrl}/`).toString().replace(/\/+$/, "");
-}
-
-function enforceTokenUrlPolicy(
-  name: string,
-  value: string | undefined,
-  token: string | undefined,
-) {
-  if (!token || !value) return;
-
-  const url = new URL(value);
-  if (url.protocol === "https:") return;
-  if (url.protocol === "http:" && isLoopbackHostname(url.hostname)) return;
-
-  throw new Error(
-    `${name} must use HTTPS when RATELOOP_MCP_TOKEN is set; localhost HTTP is only allowed for local development.`,
+  const loopback = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+    parsed.hostname.toLowerCase(),
   );
+  if (
+    parsed.protocol !== "https:" &&
+    !(parsed.protocol === "http:" && loopback)
+  ) {
+    throw new Error(
+      "RATELOOP_API_BASE_URL must use HTTPS except for loopback development.",
+    );
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("RATELOOP_API_BASE_URL must not contain credentials.");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === "rateloop.ai" || hostname.endsWith(".rateloop.ai")) {
+    throw new Error(
+      "RATELOOP_API_BASE_URL must point to the isolated tokenless deployment, not rateloop.ai.",
+    );
+  }
+  return parsed.toString().replace(/\/+$/, "");
 }
 
-function isLoopbackHostname(hostname: string) {
-  const normalized = hostname.toLowerCase();
-  return (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "::1" ||
-    normalized === "[::1]"
-  );
-}
-
-function readOptionalAddress(name: string): Address | undefined {
-  const value = readEnv(name);
+function normalizeApiPath(value: string | undefined) {
   if (!value) return undefined;
-  if (!isAddress(value, { strict: false })) {
-    throw new Error(`${name} must be a valid EVM address.`);
+  if (!value.startsWith("/") || value.includes("?") || value.includes("#")) {
+    throw new Error(
+      "RATELOOP_AGENT_API_PATH must be an absolute path without a query or fragment.",
+    );
   }
-  return value as Address;
+  return value.replace(/\/+$/, "");
 }
 
-export function loadAgentsRuntimeConfig(): AgentsRuntimeConfig {
-  const apiBaseUrl = readOptionalUrl("RATELOOP_API_BASE_URL");
-  const mcpAccessToken = readEnv("RATELOOP_MCP_TOKEN");
-  const mcpApiUrl = readOptionalUrl("RATELOOP_MCP_API_URL") ?? deriveMcpApiUrl(apiBaseUrl, mcpAccessToken);
-
-  enforceTokenUrlPolicy("RATELOOP_API_BASE_URL", apiBaseUrl, mcpAccessToken);
-  enforceTokenUrlPolicy("RATELOOP_MCP_API_URL", mcpApiUrl, mcpAccessToken);
+export function loadTokenlessAgentsRuntimeConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): TokenlessAgentsRuntimeConfig {
+  const rawBaseUrl = readEnv(env, "RATELOOP_API_BASE_URL");
+  if (!rawBaseUrl) {
+    throw new Error(
+      "RATELOOP_API_BASE_URL is required. Point it at the isolated tokenless deployment; this package never defaults to the legacy rateloop.ai service.",
+    );
+  }
 
   return {
-    agentWalletAddress: readOptionalAddress("RATELOOP_AGENT_WALLET_ADDRESS"),
-    apiBaseUrl,
-    mcpAccessToken,
-    mcpApiUrl,
-    mcpProtocolVersion: readEnv("RATELOOP_MCP_PROTOCOL_VERSION"),
+    apiKey: readEnv(env, "RATELOOP_AGENT_API_KEY"),
+    apiBaseUrl: normalizeBaseUrl(rawBaseUrl),
+    apiPath: normalizeApiPath(readEnv(env, "RATELOOP_AGENT_API_PATH")),
+    requestTimeoutMs: positiveInteger(
+      readEnv(env, "RATELOOP_REQUEST_TIMEOUT_MS"),
+      "RATELOOP_REQUEST_TIMEOUT_MS",
+    ),
   };
-}
-
-export function requireExplicitLiveAgentTarget(
-  config: AgentsRuntimeConfig,
-  command: "ask" | "local-ask",
-): AgentsRuntimeConfig {
-  if (config.apiBaseUrl || config.mcpApiUrl) return config;
-
-  throw new Error(
-    `${command} can submit paid RateLoop work and requires an explicit endpoint. Set RATELOOP_API_BASE_URL=https://www.rateloop.ai for production, RATELOOP_API_BASE_URL=http://127.0.0.1:3000 for a local stack, or RATELOOP_MCP_API_URL for MCP.`,
-  );
 }
