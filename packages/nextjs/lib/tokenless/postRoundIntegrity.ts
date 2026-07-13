@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 
 export const POST_ROUND_INTEGRITY_VERSION = "rateloop.post-round-integrity.v1" as const;
 
@@ -140,7 +141,7 @@ export function evaluatePostRoundIntegrity(input: {
       !Number.isSafeInteger(report.recentCoassignments) ||
       report.recentCoassignments < 0 ||
       report.providerSubjectHashes.length === 0 ||
-      report.providerSubjectHashes.some(subject => !HASH.test(subject))
+      report.providerSubjectHashes.some(subject => !isOpaqueSubjectReference(subject))
     ) {
       throw new Error("Post-round integrity report is malformed.");
     }

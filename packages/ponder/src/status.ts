@@ -2,18 +2,20 @@ export const ROUND_STATE = {
   OPEN: 0,
   REVEALABLE: 1,
   AGGREGATING: 2,
-  WEIGHTING: 3,
-  FINALIZED: 4,
-  ZERO_COMMIT_REFUND: 5,
-  UNDER_QUORUM_COMPENSATION: 6,
-  BEACON_FAILURE_COMPENSATION: 7,
+  AWAITING_SEED: 3,
+  SCORING: 4,
+  FINALIZED: 5,
+  ZERO_COMMIT_REFUND: 6,
+  UNDER_QUORUM_COMPENSATION: 7,
+  BEACON_FAILURE_COMPENSATION: 8,
 } as const;
 
 export const ROUND_STATUS = [
   "open",
   "revealable",
   "aggregating",
-  "weighting",
+  "awaiting_seed",
+  "scoring",
   "finalized",
   "zero_commit_refunded",
   "under_quorum_compensated",
@@ -28,7 +30,7 @@ export interface KeeperRound {
   minimumReveals: number;
   frozenRevealCount: number;
   aggregateCursor: number;
-  weightCursor: number;
+  scoreCursor: number;
   commitDeadline: bigint;
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
@@ -47,18 +49,30 @@ export function revealTalliesAfterVote(
   };
 }
 
-export function publicRoundStatus(round: Pick<KeeperRound, "state" | "commitDeadline" | "revealDeadline">, now: bigint) {
-  if (round.state === ROUND_STATE.OPEN && now > round.commitDeadline && now <= round.revealDeadline) {
+export function publicRoundStatus(
+  round: Pick<
+    KeeperRound,
+    "state" | "commitDeadline" | "revealDeadline" | "beaconFailureDeadline"
+  >,
+  now: bigint,
+) {
+  if (
+    round.state === ROUND_STATE.OPEN &&
+    now > round.commitDeadline &&
+    now <= round.beaconFailureDeadline
+  ) {
     return "revealable";
   }
   return ROUND_STATUS[round.state] ?? "unknown";
 }
 
 export function verdictStatus(state: number) {
-  if (state === ROUND_STATE.FINALIZED) return "pending_analytics";
+  if (state === ROUND_STATE.FINALIZED) return "pending";
   if (state === ROUND_STATE.ZERO_COMMIT_REFUND) return "zero_commit_refunded";
-  if (state === ROUND_STATE.UNDER_QUORUM_COMPENSATION) return "under_quorum_compensated";
-  if (state === ROUND_STATE.BEACON_FAILURE_COMPENSATION) return "beacon_failure_compensated";
+  if (state === ROUND_STATE.UNDER_QUORUM_COMPENSATION)
+    return "under_quorum_compensated";
+  if (state === ROUND_STATE.BEACON_FAILURE_COMPENSATION)
+    return "beacon_failure_compensated";
   return null;
 }
 
@@ -76,16 +90,33 @@ export function creditBalanceAfterEvent(
 }
 
 export function keeperAction(round: KeeperRound, now: bigint) {
-  if (round.state === ROUND_STATE.OPEN && now > round.commitDeadline && now <= round.revealDeadline) {
+  if (
+    round.state === ROUND_STATE.OPEN &&
+    now > round.commitDeadline &&
+    now <= round.beaconFailureDeadline &&
+    (now <= round.revealDeadline || round.revealCount < round.minimumReveals)
+  ) {
     return "open_reveal";
   }
-  if ((round.state === ROUND_STATE.OPEN || round.state === ROUND_STATE.REVEALABLE) && now > round.revealDeadline) {
-    if (round.commitCount > 0 && round.revealCount === 0 && now <= round.beaconFailureDeadline) return null;
+  if (
+    (round.state === ROUND_STATE.OPEN ||
+      round.state === ROUND_STATE.REVEALABLE) &&
+    now > round.revealDeadline
+  ) {
+    if (
+      round.commitCount > 0 &&
+      round.revealCount < round.minimumReveals &&
+      now <= round.beaconFailureDeadline
+    )
+      return null;
     return "begin_settlement";
   }
   if (round.state === ROUND_STATE.AGGREGATING) return "process_aggregate";
-  if (round.state === ROUND_STATE.WEIGHTING) {
-    return round.weightCursor < round.frozenRevealCount ? "process_weights" : "finalize_settlement";
+  if (round.state === ROUND_STATE.AWAITING_SEED) return "finalize_scoring_seed";
+  if (round.state === ROUND_STATE.SCORING) {
+    return round.scoreCursor < round.frozenRevealCount
+      ? "process_scores"
+      : "finalize_settlement";
   }
   if (
     (round.state === ROUND_STATE.FINALIZED ||

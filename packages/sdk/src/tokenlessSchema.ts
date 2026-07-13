@@ -380,14 +380,8 @@ export function parseTokenlessWaitResponse(
   };
 
   if (input.status === "pending") {
-    if (
-      input.verdictStatus !== null &&
-      input.verdictStatus !== "pending_analytics"
-    ) {
-      invalid(
-        "verdictStatus",
-        "pending_analytics or null while wait status is pending",
-      );
+    if (input.verdictStatus !== null && input.verdictStatus !== "pending") {
+      invalid("verdictStatus", "pending or null while wait status is pending");
     }
     return {
       ...common,
@@ -419,10 +413,10 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
     "verdictStatus",
   );
   const parsedTerminal = boolean(input.terminal, "terminal");
-  if (parsedTerminal !== (parsedVerdictStatus !== "pending_analytics")) {
+  if (parsedTerminal !== (parsedVerdictStatus !== "pending")) {
     invalid(
       "terminal",
-      `false only for pending_analytics and true for terminal verdict statuses`,
+      `false only for pending and true for terminal verdict statuses`,
     );
   }
 
@@ -434,18 +428,47 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
         verdict.intervalBps === null
           ? null
           : (() => {
-              const interval = record(verdict.intervalBps, "verdict.intervalBps");
-              const lower = integer(interval.lower, "verdict.intervalBps.lower", 0, 10_000);
-              const upper = integer(interval.upper, "verdict.intervalBps.upper", 0, 10_000);
-              if (lower > upper) invalid("verdict.intervalBps", "lower <= upper");
+              const interval = record(
+                verdict.intervalBps,
+                "verdict.intervalBps",
+              );
+              const lower = integer(
+                interval.lower,
+                "verdict.intervalBps.lower",
+                0,
+                10_000,
+              );
+              const upper = integer(
+                interval.upper,
+                "verdict.intervalBps.upper",
+                0,
+                10_000,
+              );
+              if (lower > upper)
+                invalid("verdict.intervalBps", "lower <= upper");
               return { lower, upper };
             })(),
       preferenceShareBps:
         verdict.preferenceShareBps === null
           ? null
-          : integer(verdict.preferenceShareBps, "verdict.preferenceShareBps", 0, 10_000),
+          : integer(
+              verdict.preferenceShareBps,
+              "verdict.preferenceShareBps",
+              0,
+              10_000,
+            ),
       selected: nullableString(verdict.selected, "verdict.selected"),
     };
+  }
+  if (
+    (parsedVerdictStatus === "publishable" ||
+      parsedVerdictStatus === "published") !==
+    (parsedVerdict !== null)
+  ) {
+    invalid(
+      "verdict",
+      "present only for publishable or sandbox-published results",
+    );
   }
 
   return {
@@ -595,12 +618,7 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
         participantCount: { minimum: 0, type: "integer" },
         source: { enum: TOKENLESS_REVIEWER_SOURCES },
       },
-      required: [
-        "admissionPolicyHash",
-        "label",
-        "participantCount",
-        "source",
-      ],
+      required: ["admissionPolicyHash", "label", "participantCount", "source"],
       type: "object",
     },
     verdict: {

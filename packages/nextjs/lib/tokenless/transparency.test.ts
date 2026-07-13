@@ -5,11 +5,12 @@ import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   appendFinalizedRoundEvidence,
+  appendPostRoundIntegrityReviewRecord,
   createWorkspaceWebhook,
   deliverPendingWebhooks,
-  evaluateAnalytics,
   inspectWorkspaceTransparency,
   listWorkspaceWebhooks,
+  recomputeRbtsSettlement,
   reviewAndPublishResult,
   stableTransparencyJson,
   subscribeAskWebhook,
@@ -28,21 +29,10 @@ const CONTENT_ID = `0x${"61".repeat(32)}`;
 const TERMS_HASH = `0x${"62".repeat(32)}`;
 const POLICY_HASH = `0x${"63".repeat(32)}`;
 const BEACON_HASH = `0x${"64".repeat(32)}`;
-const DEPLOYMENT = `tokenless-v2:84532:${PANEL}:${ISSUER}:${ADAPTER}`;
+const DEPLOYMENT = `tokenless-v3:84532:${PANEL}:${ISSUER}:${ADAPTER}`;
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64url");
 const NOW = new Date("2026-07-12T18:00:00.000Z");
 const resolvePublic = async () => ["203.0.113.10"];
-
-const economics = {
-  asset: "USDC" as const,
-  decimals: 6 as const,
-  bounty: { fundedAtomic: "25000000", paidAtomic: "25000000", refundedAtomic: "0" },
-  fee: { bps: 750, fundedAtomic: "1875000", paidAtomic: "1875000", refundedAtomic: "0" },
-  attemptReserve: { fundedAtomic: "5000000", compensatedAtomic: "0", refundedAtomic: "5000000" },
-  refund: { bountyAtomic: "0", feeAtomic: "0", attemptReserveAtomic: "5000000", totalAtomic: "5000000" },
-  compensation: { perAcceptedRevealCapAtomic: "333333", recipientCount: 0, totalAtomic: "0" },
-  totalFundedAtomic: "31875000",
-};
 
 const roundTerms = {
   contentId: CONTENT_ID,
@@ -50,8 +40,8 @@ const roundTerms = {
   beaconNetworkHash: BEACON_HASH,
   bountyAmount: "25000000",
   feeAmount: "1875000",
-  attemptReserve: "5000000",
-  attemptCompensation: "333333",
+  attemptReserve: "20000000",
+  attemptCompensation: "4000000",
   minimumReveals: 3,
   maximumCommits: 5,
   admissionPolicyHash: POLICY_HASH,
@@ -61,6 +51,47 @@ const roundTerms = {
   beaconRound: "25000000",
   claimGracePeriod: "604800",
   feeRecipient: FEE_RECIPIENT,
+};
+
+const COMMIT_KEYS = Array.from(
+  { length: 5 },
+  (_, index) => `0x${String(index + 31).padStart(64, "0")}` as `0x${string}`,
+);
+const ENTROPY = `0x${"73".repeat(32)}` as const;
+const RBTS_FIXTURE = recomputeRbtsSettlement({
+  chainId: 84_532,
+  entropy: ENTROPY,
+  fixedBasePay: 4_000_000n,
+  maximumBonus: 1_000_000n,
+  mode: "rbts",
+  panelAddress: PANEL as `0x${string}`,
+  reveals: COMMIT_KEYS.map((commitKey, index) => ({
+    commitKey,
+    predictedUpBps: 7_000,
+    vote: index === 4 ? (0 as const) : (1 as const),
+  })),
+  roundId: 42n,
+});
+const BOUNTY_REFUND = 25_000_000n - RBTS_FIXTURE.totalFinalizedLiability;
+const FUNDER_REFUND = 20_000_000n + BOUNTY_REFUND;
+const economics = {
+  asset: "USDC" as const,
+  decimals: 6 as const,
+  bounty: {
+    fundedAtomic: "25000000",
+    paidAtomic: RBTS_FIXTURE.totalFinalizedLiability.toString(),
+    refundedAtomic: BOUNTY_REFUND.toString(),
+  },
+  fee: { bps: 750, fundedAtomic: "1875000", paidAtomic: "1875000", refundedAtomic: "0" },
+  attemptReserve: { fundedAtomic: "20000000", compensatedAtomic: "0", refundedAtomic: "20000000" },
+  refund: {
+    bountyAtomic: BOUNTY_REFUND.toString(),
+    feeAtomic: "0",
+    attemptReserveAtomic: "20000000",
+    totalAtomic: FUNDER_REFUND.toString(),
+  },
+  compensation: { perAcceptedRevealCapAtomic: "4000000", recipientCount: 0, totalAtomic: "0" },
+  totalFundedAtomic: "46875000",
 };
 
 function indexedRound(overrides: Record<string, unknown> = {}) {
@@ -77,6 +108,21 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
     feeAmount: roundTerms.feeAmount,
     attemptReserve: roundTerms.attemptReserve,
     attemptCompensation: roundTerms.attemptCompensation,
+    fixedBasePay: "4000000",
+    maximumBonus: "1000000",
+    compensationPerRecipient: "0",
+    funderRefund: FUNDER_REFUND.toString(),
+    totalCompensation: "0",
+    totalRbtsScoreBps: RBTS_FIXTURE.totalRbtsScoreBps.toString(),
+    totalFinalizedLiability: RBTS_FIXTURE.totalFinalizedLiability.toString(),
+    totalPaid: "0",
+    entropyBlock: "44059900",
+    entropy: ENTROPY,
+    revealSetXor: RBTS_FIXTURE.revealSetXor,
+    revealSetSum: RBTS_FIXTURE.revealSetSum.toString(),
+    scoringSeed: RBTS_FIXTURE.scoringSeed,
+    scoringVersion: 2,
+    scoringMode: 1,
     minimumReveals: roundTerms.minimumReveals,
     maximumCommits: roundTerms.maximumCommits,
     admissionPolicyHash: POLICY_HASH,
@@ -87,8 +133,10 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
     commitCount: 5,
     revealCount: 5,
     frozenRevealCount: 5,
+    aggregateCursor: 5,
+    scoreCursor: 5,
     upVotes: 4,
-    state: 4,
+    state: 5,
     createdBlock: "44050001",
     finalizedAt: String(Math.floor(NOW.getTime() / 1_000)),
     finalizedBlock: "44060000",
@@ -99,16 +147,27 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
 }
 
 function indexedCommits(responseHash?: string) {
-  return Array.from({ length: 5 }, (_, index) => ({
-    deploymentKey: DEPLOYMENT,
-    roundId: "42",
-    voteKey: `0x${String(index + 1).padStart(40, "0")}`,
-    nullifier: `0x${String(index + 11).padStart(64, "0")}`,
-    responseHash: responseHash ?? `0x${String(index + 21).padStart(64, "0")}`,
-    vote: index === 4 ? 0 : 1,
-    predictedUpBps: 7_000,
-    revealed: true,
-  }));
+  return Array.from({ length: 5 }, (_, index) => {
+    const score = RBTS_FIXTURE.scores.get(COMMIT_KEYS[index].toLowerCase())!;
+    return {
+      deploymentKey: DEPLOYMENT,
+      roundId: "42",
+      commitKey: COMMIT_KEYS[index],
+      voteKey: `0x${String(index + 1).padStart(40, "0")}`,
+      nullifier: `0x${String(index + 11).padStart(64, "0")}`,
+      responseHash: responseHash ?? `0x${String(index + 21).padStart(64, "0")}`,
+      vote: index === 4 ? 0 : 1,
+      predictedUpBps: 7_000,
+      referenceCommitKey: score.referenceCommitKey,
+      peerCommitKey: score.peerCommitKey,
+      finalizedPayout: score.finalizedPayout.toString(),
+      informationScoreBps: score.informationScoreBps,
+      predictionScoreBps: score.predictionScoreBps,
+      rbtsScoreBps: score.rbtsScoreBps,
+      committedAt: String(Math.floor(NOW.getTime() / 1_000) + index * 10),
+      revealed: true,
+    };
+  });
 }
 
 function ponderFetch(input: { round?: Record<string, unknown>; commits?: Record<string, unknown>[] } = {}) {
@@ -128,6 +187,166 @@ function ponderFetch(input: { round?: Record<string, unknown>; commits?: Record<
     if (url.pathname.endsWith("/rounds/42")) return Response.json(input.round ?? indexedRound());
     return Response.json({ error: "not found" }, { status: 404 });
   };
+}
+
+async function seedFrozenIntegrityAssignments() {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_projects
+          (project_id, workspace_id, name, data_classification, status, retention_days,
+           created_by, created_at, updated_at)
+          VALUES ('project_transparency', ?, 'Transparency integrity', 'confidential', 'active',
+                  30, ?, ?, ?)`,
+    args: [WORKSPACE, OWNER, NOW, NOW],
+  });
+  for (const [artifactId, role] of [
+    ["artifact_transparency_a", "baseline"],
+    ["artifact_transparency_b", "candidate"],
+  ] as const) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_artifacts
+            (artifact_id, project_id, role, label, digest, content_type, size_bytes,
+             storage_ref, redaction_status, renderer_policy, created_at, updated_at)
+            VALUES (?, 'project_transparency', ?, ?, ?, 'application/json', 1, ?,
+                    'approved', 'safe_json', ?, ?)`,
+      args: [
+        artifactId,
+        role,
+        role,
+        `sha256:${role === "baseline" ? "a".repeat(64) : "b".repeat(64)}`,
+        `private:${artifactId}`,
+        NOW,
+        NOW,
+      ],
+    });
+  }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_rubrics
+          (rubric_id, project_id, version, prompt, failure_tags_json, rationale_json,
+           pass_rule_json, rubric_json, created_at)
+          VALUES ('rubric_transparency', 'project_transparency', 1, 'Ship decision', '[]',
+                  '{"mode":"optional"}', '{"minimumValidResponses":3}', '{}', ?)`,
+    args: [NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_suites
+          (suite_id, project_id, name, version, status, rubric_id, rubric_version,
+           manifest_hash, manifest_json, frozen_at, created_at, updated_at)
+          VALUES ('suite_transparency', 'project_transparency', 'Suite', 1, 'frozen',
+                  'rubric_transparency', 1, 'sha256:suite', '{}', ?, ?, ?)`,
+    args: [NOW, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_cases
+          (case_id, project_id, suite_id, suite_version, position, title, instructions,
+           baseline_artifact_id, candidate_artifact_id, context_artifact_ids_json, status,
+           created_at, updated_at, deterministic_checks_json)
+          VALUES ('case_transparency', 'project_transparency', 'suite_transparency', 1, 1,
+                  'Case', 'Compare', 'artifact_transparency_a', 'artifact_transparency_b',
+                  '[]', 'ready', ?, ?, '[]')`,
+    args: [NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_audience_policies
+          (policy_id, project_id, version, reviewer_source, compensation, cohorts_json,
+           selection, fallbacks_json, required_qualifications_json, assurance_json,
+           buyer_privacy_json, legal_eligibility_required, policy_hash, policy_json, created_at)
+          VALUES ('policy_transparency', 'project_transparency', 1, 'rateloop_network', 'paid',
+                  '[]', 'randomized', '{"allowed":false,"sources":[]}', '[]',
+                  '{"requirements":[]}', '{}', true, 'sha256:policy', '{}', ?)`,
+    args: [NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_runs
+          (run_id, project_id, suite_id, suite_version, audience_policy_id,
+           audience_policy_version, status, policy_hash, manifest_hash, manifest_json,
+           created_by, created_at, updated_at, frozen_at)
+          VALUES ('run_transparency', 'project_transparency', 'suite_transparency', 1,
+                  'policy_transparency', 1, 'completed', 'sha256:policy', 'sha256:manifest',
+                  '{}', ?, ?, ?, ?)`,
+    args: [OWNER, NOW, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_run_cases
+          (run_id, case_id, position, variant_a_artifact_id, variant_b_artifact_id,
+           blinding_commitment, blinding_secret_json, deterministic_checks_json,
+           deterministic_checks_hash, deterministic_checks_status, content_id,
+           admission_policy_hash, round_id, round_status, created_at, updated_at)
+          VALUES ('run_transparency', 'case_transparency', 1, 'artifact_transparency_a',
+                  'artifact_transparency_b', 'sha256:blind', '{}', '[]', 'sha256:checks',
+                  'not_applicable', ?, ?, '42', 'finalized', ?, ?)`,
+    args: [CONTENT_ID, POLICY_HASH, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_cohorts
+          (cohort_id, project_id, name, source, selection, capacity, active_reservations,
+           qualification_rules_json, status, created_by, created_at, updated_at)
+          VALUES ('cohort_transparency', 'project_transparency', 'Network', 'rateloop_network',
+                  'randomized', 5, 0, '[]', 'active', ?, ?, ?)`,
+    args: [OWNER, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_run_subpanels
+          (subpanel_id, workspace_id, project_id, run_id, cohort_id, source, selection,
+           target_count, active_reservations, policy_id, policy_version, policy_hash,
+           run_manifest_hash, created_at)
+          VALUES ('subpanel_transparency', ?, 'project_transparency', 'run_transparency',
+                  'cohort_transparency', 'rateloop_network', 'randomized', 5, 0,
+                  'policy_transparency', 1, 'sha256:policy', 'sha256:manifest', ?)`,
+    args: [WORKSPACE, NOW],
+  });
+  for (let index = 0; index < 5; index += 1) {
+    const accountAddress = `0x${String(index + 101).padStart(40, "0")}`;
+    const reviewerLookup = `hmac-sha256:lookup-v1:${String(index + 1).padStart(64, "0")}`;
+    const clusterPseudonym = `hmac-sha256:cluster-v1:${String(index + 11).padStart(64, "0")}`;
+    const providerSubjectHashes = [`hmac-sha256:world-v1:${String(index + 21).padStart(64, "0")}`];
+    const provenanceJson = stableTransparencyJson({
+      schemaVersion: "rateloop.assignment-integrity-provenance.v1",
+      constraints: { maxClusterShareBps: 5_000, maxRecentCoassignments: 0 },
+      reviewerLookup,
+      clusterPseudonym,
+      providerSubjectHashes,
+      recentCoassignments: 0,
+    });
+    const provenanceHash = `sha256:${createHash("sha256").update(provenanceJson).digest("hex")}`;
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_cohort_reviewers
+            (project_id, cohort_id, reviewer_account_address, qualification_provenance_json,
+             maximum_active_assignments, active_reservations, status, created_by, created_at, updated_at)
+            VALUES ('project_transparency', 'cohort_transparency', ?, '[]', 1, 0,
+                    'active', ?, ?, ?)`,
+      args: [accountAddress, OWNER, NOW, NOW],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_assignments
+            (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
+             reviewer_account_address, source, selection, status, confidentiality_terms_hash,
+             qualification_provenance_json, assurance_snapshot_json, assurance_snapshot_hash,
+             blinding_json, paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
+             assignment_expires_at, lease_issuer_account_address, lease_state, created_at, updated_at,
+             integrity_reviewer_lookup, integrity_cluster_pseudonym, provider_subject_hashes_json,
+             integrity_provenance_json, integrity_provenance_hash)
+            VALUES (?, ?, 'project_transparency', 'run_transparency', 'subpanel_transparency',
+                    'cohort_transparency', ?, 'rateloop_network', 'randomized', ?, 'sha256:terms',
+                    '[]', '{}', 'sha256:snapshot', '{}', true, ?, ?, ?, ?, 'expired', ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        `assignment_transparency_${index}`,
+        WORKSPACE,
+        accountAddress,
+        index % 2 === 0 ? "reserved" : "expired",
+        NOW,
+        new Date(NOW.getTime() - 120_000),
+        new Date(NOW.getTime() - 60_000),
+        OWNER,
+        NOW,
+        NOW,
+        reviewerLookup,
+        clusterPseudonym,
+        stableTransparencyJson(providerSubjectHashes),
+        provenanceJson,
+        provenanceHash,
+      ],
+    });
+  }
 }
 
 beforeEach(async () => {
@@ -181,7 +400,7 @@ beforeEach(async () => {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_chain_executions
           (execution_id, operation_key, payment_mode, payment_reference, deployment_key, chain_id, deployment_block, panel_address, issuer_address, x402_submitter_address, usdc_address, funder_address, content_id, terms_hash, round_terms_json, total_funded_atomic, state, round_id, created_at, updated_at)
-          VALUES ('execution_transparency', ?, 'prepaid', 'payment', ?, 84532, 44050000, ?, ?, ?, ?, ?, ?, ?, ?, 31875000, 'confirmed', 42, ?, ?)`,
+          VALUES ('execution_transparency', ?, 'prepaid', 'payment', ?, 84532, 44050000, ?, ?, ?, ?, ?, ?, ?, ?, 46875000, 'confirmed', 42, ?, ?)`,
     args: [
       OPERATION,
       DEPLOYMENT,
@@ -265,22 +484,25 @@ beforeEach(async () => {
 
 afterEach(() => __setDatabaseResourcesForTests(null));
 
-test("canonical evidence and fixed analytics rules are deterministic", () => {
+test("canonical evidence and normative RBTS accounting are deterministic", () => {
   assert.equal(stableTransparencyJson({ z: 1, a: { y: 2, x: 3 } }), '{"a":{"x":3,"y":2},"z":1}');
-  assert.deepEqual(
-    evaluateAnalytics(
-      { answerFingerprintRiskBps: 500, correlationRiskBps: 800, issuedVoucherCount: 5, verifiedIdentityCount: 5 },
-      { independentClusters: 5, largestClusterBps: 2_000, uniqueVoteKeys: 5 },
-    ),
-    { decision: "published", reasonCodes: [] },
-  );
-  assert.equal(
-    evaluateAnalytics(
-      { answerFingerprintRiskBps: 4500, correlationRiskBps: 800, issuedVoucherCount: 6, verifiedIdentityCount: 5 },
-      { independentClusters: 5, largestClusterBps: 2_000, uniqueVoteKeys: 5 },
-    ).decision,
-    "delisted",
-  );
+  const baseOnly = recomputeRbtsSettlement({
+    chainId: 84_532,
+    entropy: `0x${"00".repeat(32)}`,
+    fixedBasePay: 4_000_000n,
+    maximumBonus: 1_000_000n,
+    mode: "base_only_entropy_unavailable",
+    panelAddress: PANEL as `0x${string}`,
+    reveals: COMMIT_KEYS.map((commitKey, index) => ({
+      commitKey,
+      predictedUpBps: 7_000,
+      vote: index === 4 ? (0 as const) : (1 as const),
+    })),
+    roundId: 42n,
+  });
+  assert.equal(baseOnly.scoringSeed, `0x${"00".repeat(32)}`);
+  assert.equal(baseOnly.totalFinalizedLiability, 20_000_000n);
+  assert.ok([...baseOnly.scores.values()].every(score => score.rbtsScoreBps === 0));
 });
 
 test("finalized evidence rejects malformed Ponder provenance and altered frozen terms", async () => {
@@ -301,6 +523,28 @@ test("finalized evidence rejects malformed Ponder provenance and altered frozen 
         ponderUrl: "https://ponder.example.test",
       }),
     /do not match the frozen terms/,
+  );
+  await assert.rejects(
+    () =>
+      appendFinalizedRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({ round: indexedRound({ entropy: `0x${"74".repeat(32)}` }) }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /RBTS aggregate evidence is inconsistent/,
+  );
+  await assert.rejects(
+    () =>
+      appendFinalizedRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          commits: indexedCommits().map((commit, index) =>
+            index === 0 ? { ...commit, finalizedPayout: "4500001" } : commit,
+          ),
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /RBTS score evidence is inconsistent/,
   );
   await dbClient.execute(
     "UPDATE tokenless_voucher_assurance_snapshots SET snapshot_json = '{}' WHERE voucher_id = 'voucher_0'",
@@ -334,6 +578,20 @@ test("webhook registration rejects SSRF targets and returns its secret only once
 });
 
 test("finalized evidence publishes once and webhook retries preserve idempotency and signatures", async () => {
+  await seedFrozenIntegrityAssignments();
+  const genericResponses = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_assurance_responses WHERE run_id = 'run_transparency'",
+    args: [],
+  });
+  const assignmentStatuses = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_assurance_assignments WHERE run_id = 'run_transparency' ORDER BY status",
+    args: [],
+  });
+  assert.equal(Number(genericResponses.rows[0]?.count), 0);
+  assert.deepEqual(
+    assignmentStatuses.rows.map(row => String(row.status)),
+    ["expired", "expired", "reserved", "reserved", "reserved"],
+  );
   const endpoint = await createWorkspaceWebhook({
     accountAddress: OWNER,
     workspaceId: WORKSPACE,
@@ -374,7 +632,7 @@ test("finalized evidence publishes once and webhook retries preserve idempotency
     now: new Date(NOW.getTime() + 1_000),
   });
   assert.equal(replay.publicationId, published.publicationId);
-  assert.equal(published.result.verdictStatus, "published");
+  assert.equal(published.result.verdictStatus, "publishable");
   assert.equal(published.result.verdict?.preferenceShareBps, 8000);
   assert.deepEqual(published.result.verdict?.intervalBps, { lower: 3755, upper: 9638 });
 
@@ -430,19 +688,22 @@ test("finalized evidence publishes once and webhook retries preserve idempotency
     verifiedIdentityCount: 5,
   });
   assert.deepEqual(storedEvidence.provenance, {
-    assignmentCount: 0,
+    assignmentCount: 5,
     issuedVoucherCount: 5,
-    matchedAssignmentCount: 0,
-    validResponseCount: 0,
+    matchedAssignmentCount: 5,
+    validResponseCount: 5,
     verifiedIdentityCount: 5,
   });
   assert.equal((storedEvidence.chain as Record<string, unknown>).transactionHash, `0x${"cd".repeat(32)}`);
-  assert.equal(inspection.analyticsReviews[0]?.decision, "published");
+  assert.equal(inspection.analyticsReviews[0]?.decision, "publishable");
+  assert.equal(inspection.analyticsReviews[0]?.evaluation_schema_version, "rateloop.post-round-integrity.v1");
+  assert.equal(inspection.analyticsReviews[0]?.payout_effect, "none");
   assert.equal(inspection.publications.length, 1);
   assert.equal(inspection.webhookDeliveries[0]?.state, "delivered");
 });
 
-test("analytics can delist public interpretation without changing indexed settlement evidence", async () => {
+test("post-round integrity can delist public interpretation without changing indexed settlement evidence", async () => {
+  await seedFrozenIntegrityAssignments();
   await appendFinalizedRoundEvidence({
     operationKey: OPERATION,
     fetchImpl: ponderFetch({ commits: indexedCommits(`0x${"fe".repeat(32)}`) }),
@@ -455,11 +716,65 @@ test("analytics can delist public interpretation without changing indexed settle
   });
   assert.equal(published.result.verdictStatus, "delisted");
   assert.equal(published.result.verdict, null);
-  assert.deepEqual(published.reasonCodes, ["high_answer_fingerprint_risk"]);
+  assert.deepEqual(published.reasonCodes, ["answer_fingerprint_concentration"]);
   const stored = await dbClient.execute({
     sql: "SELECT verdict_status, result_json FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [OPERATION],
   });
   assert.equal(stored.rows[0]?.verdict_status, "delisted");
   assert.equal(JSON.parse(String(stored.rows[0]?.result_json)).verdict, null);
+});
+
+test("pending integrity and append-only remediation cannot mutate finalized accounting", async () => {
+  await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  const before = await dbClient.execute({
+    sql: "SELECT economics_json FROM tokenless_agent_asks WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  const pending = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: NOW,
+  });
+  assert.equal(pending.result.verdictStatus, "pending");
+  assert.equal(pending.result.terminal, false);
+  assert.equal(pending.publicationId, null);
+  assert.equal(pending.evaluation.payoutEffect, "none");
+  await seedFrozenIntegrityAssignments();
+  await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  const completed = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  const record = await appendPostRoundIntegrityReviewRecord({
+    operationKey: OPERATION,
+    evaluationHash: completed.evaluation.evaluationHash,
+    recordType: "remediation",
+    reasonCode: "buyer_requested_review",
+    details: { note: "Review the aggregate claim only." },
+    submittedBy: OWNER,
+    now: new Date(NOW.getTime() + 2_000),
+  });
+  assert.equal(record.payoutEffect, "none");
+  const after = await dbClient.execute({
+    sql: "SELECT economics_json FROM tokenless_agent_asks WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  assert.equal(String(after.rows[0]?.economics_json), String(before.rows[0]?.economics_json));
+  const inspection = await inspectWorkspaceTransparency({
+    accountAddress: OWNER,
+    workspaceId: WORKSPACE,
+    operationKey: OPERATION,
+  });
+  assert.equal(inspection.analyticsReviews.length, 2);
+  assert.equal(inspection.integrityReviewRecords[0]?.payout_effect, "none");
 });

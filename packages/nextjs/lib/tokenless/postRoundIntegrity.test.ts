@@ -108,3 +108,20 @@ test("appeals append to an immutable evaluation and cannot affect payout", () =>
   assert.equal(appeal.effect, "append_only_review");
   assert.equal(appeal.payoutEffect, "none");
 });
+
+test("versioned World ID HMAC references remain valid opaque integrity evidence", () => {
+  const reports = Array.from({ length: 5 }, (_, index) => ({
+    ...report(index),
+    reviewerLookup: `hmac-sha256:lookup-v2:${String(index + 1).padStart(64, "0")}`,
+    clusterPseudonym: `hmac-sha256:cluster-v2:${String(index + 11).padStart(64, "0")}`,
+    providerSubjectHashes: [`hmac-sha256:world-id-v1:${String(index + 21).padStart(64, "0")}`],
+  }));
+  const evaluation = evaluatePostRoundIntegrity({
+    policy,
+    reports,
+    inputsComplete: true,
+  });
+  assert.equal(evaluation.status, "publishable");
+  assert.equal(evaluation.aggregates.uniqueReviewerCount, 5);
+  assert.equal(evaluation.aggregates.independentClusterCount, 5);
+});

@@ -155,6 +155,13 @@
       "when": 1783933200000,
       "tag": "0021_integrity_epoch_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783936800000,
+      "tag": "0022_post_round_integrity",
+      "breakpoints": true
     }
   ]
 }

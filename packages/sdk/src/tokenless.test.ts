@@ -117,7 +117,7 @@ function resultFixture(
     operationKey: "op_12345678",
     roundId: "42",
     verdictStatus,
-    terminal: verdictStatus !== "pending_analytics",
+    terminal: verdictStatus !== "pending",
     economics: economics(),
     audience: {
       admissionPolicyHash: `0x${"ab".repeat(32)}`,
@@ -126,7 +126,7 @@ function resultFixture(
       source: "customer_invited",
     },
     verdict:
-      verdictStatus === "published"
+      verdictStatus === "published" || verdictStatus === "publishable"
         ? {
             intervalBps: { lower: 4121, upper: 8510 },
             preferenceShareBps: 6700,
@@ -140,7 +140,9 @@ function resultFixture(
 
 test("tokenless status constants and JSON Schema expose the exact accounting contract", () => {
   assert.deepEqual(TOKENLESS_VERDICT_STATUSES, [
-    "pending_analytics",
+    "pending",
+    "publishable",
+    "inconclusive",
     "published",
     "delisted",
     "zero_commit_refunded",
@@ -173,7 +175,7 @@ test("parseTokenlessResult validates terminal state and every accounting field",
   for (const status of TOKENLESS_VERDICT_STATUSES) {
     const parsed = parseTokenlessResult(resultFixture(status));
     assert.equal(parsed.verdictStatus, status);
-    assert.equal(parsed.terminal, status !== "pending_analytics");
+    assert.equal(parsed.terminal, status !== "pending");
     assert.equal(parsed.economics.attemptReserve.fundedAtomic, "5000000");
     assert.equal(parsed.economics.refund.totalAtomic, "0");
     assert.equal(parsed.economics.compensation.recipientCount, 0);
@@ -182,10 +184,10 @@ test("parseTokenlessResult validates terminal state and every accounting field",
   assert.throws(
     () =>
       parseTokenlessResult({
-        ...resultFixture("pending_analytics"),
+        ...resultFixture("pending"),
         terminal: true,
       }),
-    /false only for pending_analytics/,
+    /false only for pending/,
   );
   assert.throws(
     () =>
@@ -509,7 +511,7 @@ test("tokenless wait returns an explicit polling continuation and then a result-
           schemaVersion: TOKENLESS_SCHEMA_VERSION,
           operationKey: "op.with.dot",
           status: "pending",
-          verdictStatus: "pending_analytics",
+          verdictStatus: "pending",
           continuation: {
             cursor: "next/cursor",
             expiresAt: "2026-07-13T12:00:00.000Z",
@@ -594,10 +596,10 @@ test("tokenless webhook parser carries result URL and verdict continuation state
     eventType: "result.updated",
     occurredAt: "2026-07-12T12:00:00.000Z",
     operationKey: "op_12345678",
-    verdictStatus: "pending_analytics",
+    verdictStatus: "pending",
     resultUrl: "https://tokenless.example/api/agent/v1/results/op_12345678",
   });
 
   assert.equal(event.eventType, "result.updated");
-  assert.equal(event.verdictStatus, "pending_analytics");
+  assert.equal(event.verdictStatus, "pending");
 });

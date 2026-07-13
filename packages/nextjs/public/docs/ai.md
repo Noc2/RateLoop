@@ -4,9 +4,10 @@ Use the versioned API to place a focused human-assurance panel inside an AI-enab
 
 - `ask` requires an idempotency key in both the JSON body and `Idempotency-Key` header.
 - `wait` is bounded and returns a cursor, retry delay, expiry, and canonical poll URL while pending.
-- Results use schema `rateloop.tokenless.v1`.
-- Verdict status is one of `pending_analytics`, `published`, `delisted`, `zero_commit_refunded`, `under_quorum_compensated`, or `beacon_failure_compensated`.
+- Results use schema `rateloop.tokenless.v2`.
+- Production verdict status is one of `pending`, `publishable`, `inconclusive`, `delisted`, `zero_commit_refunded`, `under_quorum_compensated`, or `beacon_failure_compensated`. Deterministic sandbox responses retain `published` for compatibility.
 - Every result itemizes `bounty`, `fee`, `attemptReserve`, `refund`, and `compensation`.
+- Post-round integrity evaluation and appeal/remediation records affect verdict publication and future eligibility only; they never rewrite finalized payouts.
 
 Sandbox simulation is available only when the deployment explicitly sets `TOKENLESS_SANDBOX_MODE=true` and must be presented as test data.
 

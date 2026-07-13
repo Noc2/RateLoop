@@ -3,14 +3,25 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import "server-only";
+import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
 import { dbClient } from "~~/lib/db";
+import {
+  type PostRoundIntegrityPolicy,
+  type PostRoundIntegrityReport,
+  createPostRoundIntegrityAppeal,
+  evaluatePostRoundIntegrity,
+} from "~~/lib/tokenless/postRoundIntegrity";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const WEBHOOK_EVENTS = new Set(["result.ready", "result.updated"]);
 const MAX_DELIVERY_ATTEMPTS = 8;
 const BPS_MAX = 10_000;
 const MAX_PONDER_COMMITS = 500;
-const FINALIZED_ROUND_STATE = 4;
+const FINALIZED_ROUND_STATE = 5;
+const RBTS_SCORING_VERSION = 2;
+const RBTS_SCORING_SEED_DOMAIN = "rateloop-tokenless-rbts-v1";
+const UINT256_MODULUS = 1n << 256n;
+const ZERO_BYTES32 = `0x${"00".repeat(32)}`;
 const UNSIGNED_INTEGER = /^(?:0|[1-9]\d*)$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
@@ -37,6 +48,19 @@ export type IndexedFinalizedEvidence = {
     matchedAssignmentCount: number;
     validResponseCount: number;
     verifiedIdentityCount: number;
+  };
+  scoring: {
+    entropy: string;
+    entropyBlock: string;
+    fixedBasePayAtomic: string;
+    maximumBonusAtomic: string;
+    mode: "rbts" | "base_only_entropy_unavailable";
+    revealSetSum: string;
+    revealSetXor: string;
+    scoringSeed: string;
+    totalFinalizedLiabilityAtomic: string;
+    totalRbtsScoreBps: string;
+    version: typeof RBTS_SCORING_VERSION;
   };
   roundTerms: {
     admissionPolicyHash: string;
@@ -65,6 +89,14 @@ type PonderDeployment = {
 type PonderRound = Record<string, unknown>;
 type PonderCommit = Record<string, unknown>;
 
+type PostRoundIntegrityInput = {
+  schemaVersion: "rateloop.post-round-integrity-input.v1";
+  policy: PostRoundIntegrityPolicy;
+  reports: PostRoundIntegrityReport[];
+  inputsComplete: boolean;
+  limitationCodes: string[];
+};
+
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
   return value === null || value === undefined ? null : String(value);
@@ -84,6 +116,142 @@ export function stableTransparencyJson(value: unknown): string {
 
 function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+type NormativeRbtsReveal = {
+  commitKey: Hex;
+  predictedUpBps: number;
+  vote: 0 | 1;
+};
+
+function quadraticScoreBps(predictionBps: number, actualVote: 0 | 1) {
+  const squared = predictionBps * predictionBps;
+  return actualVote === 1
+    ? Math.floor((2 * BPS_MAX * predictionBps - squared) / BPS_MAX)
+    : BPS_MAX - Math.floor(squared / BPS_MAX);
+}
+
+export function recomputeRbtsSettlement(input: {
+  chainId: number;
+  entropy: Hex;
+  fixedBasePay: bigint;
+  maximumBonus: bigint;
+  mode: "rbts" | "base_only_entropy_unavailable";
+  panelAddress: Address;
+  reveals: NormativeRbtsReveal[];
+  roundId: bigint;
+}) {
+  let revealSetXor = 0n;
+  let revealSetSum = 0n;
+  for (const reveal of input.reveals) {
+    const leaf = BigInt(keccak256(encodeAbiParameters([{ type: "bytes32" }], [reveal.commitKey])));
+    revealSetXor ^= leaf;
+    revealSetSum = (revealSetSum + leaf) % UINT256_MODULUS;
+  }
+  const revealSetXorHex = `0x${revealSetXor.toString(16).padStart(64, "0")}` as Hex;
+  const scoringSeed =
+    input.mode === "rbts"
+      ? keccak256(
+          encodeAbiParameters(
+            [
+              { type: "string" },
+              { type: "uint256" },
+              { type: "address" },
+              { type: "uint256" },
+              { type: "uint32" },
+              { type: "bytes32" },
+              { type: "uint256" },
+              { type: "bytes32" },
+            ],
+            [
+              RBTS_SCORING_SEED_DOMAIN,
+              BigInt(input.chainId),
+              input.panelAddress,
+              input.roundId,
+              input.reveals.length,
+              revealSetXorHex,
+              revealSetSum,
+              input.entropy,
+            ],
+          ),
+        )
+      : (ZERO_BYTES32 as Hex);
+  const ranked =
+    input.mode === "rbts"
+      ? input.reveals
+          .map(reveal => ({
+            ...reveal,
+            rankHash: keccak256(
+              encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [scoringSeed, reveal.commitKey]),
+            ),
+          }))
+          .sort((left, right) => {
+            const rankOrder =
+              BigInt(left.rankHash) < BigInt(right.rankHash)
+                ? -1
+                : BigInt(left.rankHash) > BigInt(right.rankHash)
+                  ? 1
+                  : 0;
+            if (rankOrder !== 0) return rankOrder;
+            return BigInt(left.commitKey) < BigInt(right.commitKey)
+              ? -1
+              : BigInt(left.commitKey) > BigInt(right.commitKey)
+                ? 1
+                : 0;
+          })
+      : input.reveals;
+  const byKey = new Map(input.reveals.map(reveal => [reveal.commitKey.toLowerCase(), reveal]));
+  const scores = new Map<
+    string,
+    {
+      finalizedPayout: bigint;
+      informationScoreBps: number;
+      peerCommitKey: Hex;
+      predictionScoreBps: number;
+      rbtsScoreBps: number;
+      referenceCommitKey: Hex;
+    }
+  >();
+  let totalFinalizedLiability = 0n;
+  let totalRbtsScoreBps = 0n;
+  for (const [index, rankedReveal] of ranked.entries()) {
+    const referenceCommitKey =
+      input.mode === "rbts" ? ranked[(index + 1) % ranked.length].commitKey : (ZERO_BYTES32 as Hex);
+    const peerCommitKey = input.mode === "rbts" ? ranked[(index + 2) % ranked.length].commitKey : (ZERO_BYTES32 as Hex);
+    const own = byKey.get(rankedReveal.commitKey.toLowerCase())!;
+    const reference = byKey.get(referenceCommitKey.toLowerCase());
+    const peer = byKey.get(peerCommitKey.toLowerCase());
+    let informationScoreBps = 0;
+    let predictionScoreBps = 0;
+    let rbtsScoreBps = 0;
+    if (input.mode === "rbts") {
+      const delta = Math.min(reference!.predictedUpBps, BPS_MAX - reference!.predictedUpBps);
+      const shadowPredictionBps =
+        own.vote === 1 ? reference!.predictedUpBps + delta : reference!.predictedUpBps - delta;
+      informationScoreBps = quadraticScoreBps(shadowPredictionBps, peer!.vote);
+      predictionScoreBps = quadraticScoreBps(own.predictedUpBps, peer!.vote);
+      rbtsScoreBps = Math.floor((informationScoreBps + predictionScoreBps) / 2);
+    }
+    const finalizedPayout = input.fixedBasePay + (input.maximumBonus * BigInt(rbtsScoreBps)) / BigInt(BPS_MAX);
+    scores.set(own.commitKey.toLowerCase(), {
+      finalizedPayout,
+      informationScoreBps,
+      peerCommitKey,
+      predictionScoreBps,
+      rbtsScoreBps,
+      referenceCommitKey,
+    });
+    totalFinalizedLiability += finalizedPayout;
+    totalRbtsScoreBps += BigInt(rbtsScoreBps);
+  }
+  return {
+    revealSetSum,
+    revealSetXor: revealSetXorHex,
+    scores,
+    scoringSeed,
+    totalFinalizedLiability,
+    totalRbtsScoreBps,
+  };
 }
 
 function bps(value: number, name: string) {
@@ -428,6 +596,27 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
     throw new TokenlessServiceError("Indexed round evidence is invalid.", 400, "invalid_round_evidence");
   }
   if (
+    value.scoring.version !== RBTS_SCORING_VERSION ||
+    !UNSIGNED_INTEGER.test(value.scoring.entropyBlock) ||
+    !UNSIGNED_INTEGER.test(value.scoring.revealSetSum) ||
+    !UNSIGNED_INTEGER.test(value.scoring.totalFinalizedLiabilityAtomic) ||
+    !UNSIGNED_INTEGER.test(value.scoring.totalRbtsScoreBps) ||
+    !UNSIGNED_INTEGER.test(value.scoring.fixedBasePayAtomic) ||
+    !UNSIGNED_INTEGER.test(value.scoring.maximumBonusAtomic) ||
+    !BYTES32.test(value.scoring.entropy) ||
+    !BYTES32.test(value.scoring.revealSetXor) ||
+    !BYTES32.test(value.scoring.scoringSeed) ||
+    !["rbts", "base_only_entropy_unavailable"].includes(value.scoring.mode) ||
+    (value.scoring.mode === "rbts" &&
+      (value.scoring.scoringSeed.toLowerCase() === ZERO_BYTES32 ||
+        value.scoring.entropy.toLowerCase() === ZERO_BYTES32)) ||
+    (value.scoring.mode === "base_only_entropy_unavailable" &&
+      (value.scoring.scoringSeed.toLowerCase() !== ZERO_BYTES32 ||
+        value.scoring.entropy.toLowerCase() !== ZERO_BYTES32))
+  ) {
+    throw new TokenlessServiceError("RBTS settlement evidence is malformed.", 400, "invalid_round_evidence");
+  }
+  if (
     Object.values(value.tierMix).some(count => !Number.isSafeInteger(count) || count < 0) ||
     Object.values(value.tierMix).reduce((sum, count) => sum + count, 0) !== value.revealCount
   ) {
@@ -469,7 +658,20 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
   ) {
     throw new TokenlessServiceError("Frozen round terms are malformed.", 400, "invalid_round_evidence");
   }
-  evaluateAnalytics(value.analytics, value.diversity);
+  bps(value.analytics.answerFingerprintRiskBps, "answerFingerprintRiskBps");
+  bps(value.analytics.correlationRiskBps, "correlationRiskBps");
+  if (
+    !Number.isSafeInteger(value.analytics.issuedVoucherCount) ||
+    value.analytics.issuedVoucherCount < 0 ||
+    !Number.isSafeInteger(value.analytics.verifiedIdentityCount) ||
+    value.analytics.verifiedIdentityCount < 0
+  ) {
+    throw new TokenlessServiceError(
+      "Issuance analytics counts must be non-negative integers.",
+      400,
+      "invalid_analytics",
+    );
+  }
 }
 
 function exactIndexedIdentity(input: { deployment: PonderDeployment; execution: Row; round: PonderRound; terms: Row }) {
@@ -484,6 +686,7 @@ function exactIndexedIdentity(input: { deployment: PonderDeployment; execution: 
     funder: rowString(input.execution, "funder_address")!.toLowerCase(),
   };
   if (
+    !expected.deploymentKey.toLowerCase().startsWith("tokenless-v3:") ||
     input.deployment.deploymentKey.toLowerCase() !== expected.deploymentKey.toLowerCase() ||
     input.deployment.chainId !== expected.chainId ||
     input.deployment.startBlock !== Number(expected.deploymentBlock) ||
@@ -539,7 +742,8 @@ async function assuranceProvenance(input: {
   contentId: string;
   admissionPolicyHash: string;
   revealCount: number;
-  revealedAccounts: Set<string>;
+  minimumReveals: number;
+  revealedCommitsByAccount: Map<string, { committedAt: number; responseHash: string; vote: 0 | 1 }>;
 }) {
   const cases = await dbClient.execute({
     sql: `SELECT run_id, case_id FROM tokenless_assurance_run_cases
@@ -554,37 +758,120 @@ async function assuranceProvenance(input: {
     );
   }
   const linked = cases.rows[0] as Row | undefined;
-  if (!linked) return { assignmentCount: 0, matchedAssignmentCount: 0, validResponseCount: 0, correlationRiskBps: 0 };
+  const defaultPolicy: PostRoundIntegrityPolicy = {
+    minimumReports: Math.max(3, input.minimumReveals),
+    minimumAssignmentCoverageBps: BPS_MAX,
+    maximumClusterShareBps: 5_000,
+    maximumAnswerFingerprintShareBps: 4_000,
+    maximumCommitBurstShareBps: 6_000,
+    commitBurstWindowSeconds: 5,
+    maximumRecentCoassignments: 0,
+  };
+  if (!linked) {
+    return {
+      assignmentCount: 0,
+      matchedAssignmentCount: 0,
+      validResponseCount: 0,
+      correlationRiskBps: 0,
+      integrityInput: {
+        schemaVersion: "rateloop.post-round-integrity-input.v1",
+        policy: defaultPolicy,
+        reports: [],
+        inputsComplete: false,
+        limitationCodes: ["assurance_case_missing", "assignment_provenance_missing"],
+      } satisfies PostRoundIntegrityInput,
+    };
+  }
   const runId = rowString(linked, "run_id")!;
-  const caseId = rowString(linked, "case_id")!;
-  const [assignments, responses] = await Promise.all([
-    dbClient.execute({
-      sql: `SELECT reviewer_account_address FROM tokenless_assurance_assignments
-            WHERE run_id = ? AND status IN ('accepted', 'completed')`,
-      args: [runId],
-    }),
-    dbClient.execute({
-      sql: `SELECT reviewer_key, response_digest FROM tokenless_assurance_responses
-            WHERE run_id = ? AND case_id = ? AND validity = 'valid'`,
-      args: [runId, caseId],
-    }),
-  ]);
-  const matchedAssignmentCount = assignments.rows.filter(value =>
-    input.revealedAccounts.has(rowString(value as Row, "reviewer_account_address")?.toLowerCase() ?? ""),
-  ).length;
-  const mismatch = Math.max(
-    Math.abs(input.revealCount - matchedAssignmentCount),
-    Math.abs(input.revealCount - responses.rows.length),
-  );
+  // The chain reveal is the canonical paid-response evidence. Voucher issuance
+  // already bound vote key -> account -> this frozen assignment provenance.
+  // Do not gate publication on the separate enterprise-response table, and do
+  // not discard accepted paid work because its assignment lease later expired.
+  const assignments = await dbClient.execute({
+    sql: `SELECT reviewer_account_address, integrity_reviewer_lookup, integrity_cluster_pseudonym,
+                 provider_subject_hashes_json, integrity_provenance_json, integrity_provenance_hash
+          FROM tokenless_assurance_assignments WHERE run_id = ?`,
+    args: [runId],
+  });
+  const reports: PostRoundIntegrityReport[] = [];
+  const limitationCodes = new Set<string>();
+  let policy: PostRoundIntegrityPolicy | null = null;
+  let matchedAssignmentCount = 0;
+  for (const value of assignments.rows) {
+    const assignment = value as Row;
+    const account = rowString(assignment, "reviewer_account_address")?.toLowerCase() ?? "";
+    const commit = input.revealedCommitsByAccount.get(account);
+    if (!commit) continue;
+    matchedAssignmentCount += 1;
+    try {
+      const provenanceJson = stringValue(assignment.integrity_provenance_json, "Assignment integrity provenance");
+      if (`sha256:${digest(provenanceJson)}` !== rowString(assignment, "integrity_provenance_hash")) {
+        throw new Error("hash mismatch");
+      }
+      const provenance = objectValue(JSON.parse(provenanceJson), "Assignment integrity provenance");
+      const constraints = objectValue(provenance.constraints, "Assignment integrity constraints");
+      const providerSubjectHashes = Array.isArray(provenance.providerSubjectHashes)
+        ? provenance.providerSubjectHashes.map(String)
+        : [];
+      const reviewerLookup = stringValue(provenance.reviewerLookup, "Assignment reviewer lookup");
+      const clusterPseudonym = stringValue(provenance.clusterPseudonym, "Assignment cluster pseudonym");
+      const recentCoassignments = integerValue(provenance.recentCoassignments, "Assignment recent coassignments");
+      if (
+        reviewerLookup !== rowString(assignment, "integrity_reviewer_lookup") ||
+        clusterPseudonym !== rowString(assignment, "integrity_cluster_pseudonym") ||
+        stableTransparencyJson(providerSubjectHashes) !== rowString(assignment, "provider_subject_hashes_json")
+      ) {
+        throw new Error("column binding mismatch");
+      }
+      const candidatePolicy: PostRoundIntegrityPolicy = {
+        minimumReports: Math.max(3, input.minimumReveals),
+        minimumAssignmentCoverageBps: BPS_MAX,
+        maximumClusterShareBps: integerValue(constraints.maxClusterShareBps, "Assignment maximum cluster share"),
+        maximumAnswerFingerprintShareBps: 4_000,
+        maximumCommitBurstShareBps: 6_000,
+        commitBurstWindowSeconds: 5,
+        maximumRecentCoassignments: integerValue(
+          constraints.maxRecentCoassignments,
+          "Assignment maximum recent coassignments",
+        ),
+      };
+      if (policy && stableTransparencyJson(policy) !== stableTransparencyJson(candidatePolicy)) {
+        throw new Error("mixed frozen constraints");
+      }
+      policy = candidatePolicy;
+      reports.push({
+        reviewerLookup,
+        clusterPseudonym,
+        providerSubjectHashes,
+        vote: commit.vote,
+        responseHash: commit.responseHash,
+        committedAt: commit.committedAt,
+        recentCoassignments,
+        assignmentMatched: true,
+      });
+    } catch {
+      limitationCodes.add("assignment_provenance_invalid");
+    }
+  }
+  if (!policy) limitationCodes.add("integrity_policy_missing");
+  if (reports.length !== input.revealCount) limitationCodes.add("assignment_provenance_partial");
+  const mismatch = Math.abs(input.revealCount - reports.length);
   return {
     assignmentCount: assignments.rows.length,
     matchedAssignmentCount,
-    validResponseCount: responses.rows.length,
+    validResponseCount: reports.length,
     correlationRiskBps: ratioBps(Math.min(mismatch, input.revealCount), input.revealCount),
+    integrityInput: {
+      schemaVersion: "rateloop.post-round-integrity-input.v1",
+      policy: policy ?? defaultPolicy,
+      reports,
+      inputsComplete: policy !== null && reports.length === input.revealCount,
+      limitationCodes: [...limitationCodes].sort(),
+    } satisfies PostRoundIntegrityInput,
   };
 }
 
-export async function deriveFinalizedRoundEvidence(input: {
+async function deriveFinalizedRoundEvidenceBundle(input: {
   operationKey: string;
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
@@ -679,6 +966,99 @@ export async function deriveFinalizedRoundEvidence(input: {
       "indexed_evidence_invalid",
     );
   }
+  const scoringVersion = integerValue(round.scoringVersion, "Indexed scoring version");
+  const scoringModeValue = integerValue(round.scoringMode, "Indexed scoring mode");
+  const scoringMode = scoringModeValue === 1 ? "rbts" : scoringModeValue === 2 ? "base_only_entropy_unavailable" : null;
+  const scoreCursor = integerValue(round.scoreCursor, "Indexed score cursor");
+  const fixedBasePay = unsignedValue(round.fixedBasePay, "Indexed fixed base pay");
+  const maximumBonus = unsignedValue(round.maximumBonus, "Indexed maximum bonus");
+  const totalRbtsScoreBps = unsignedValue(round.totalRbtsScoreBps, "Indexed total RBTS score");
+  const totalFinalizedLiability = unsignedValue(round.totalFinalizedLiability, "Indexed total finalized liability");
+  const scoringSeed = exactBytes32(round.scoringSeed, "Indexed scoring seed");
+  const revealSetXor = exactBytes32(round.revealSetXor, "Indexed reveal-set XOR");
+  const revealSetSum = unsignedValue(round.revealSetSum, "Indexed reveal-set sum");
+  const entropyBlock = unsignedValue(round.entropyBlock, "Indexed entropy block");
+  const entropy = exactBytes32(round.entropy, "Indexed scoring entropy");
+  const maximumCommits = integerValue(round.maximumCommits, "Indexed maximum commits");
+  if (maximumCommits < 3 || maximumCommits > MAX_PONDER_COMMITS) {
+    throw new TokenlessServiceError("Indexed maximum commits is invalid.", 409, "indexed_evidence_invalid");
+  }
+  const maximumSeatPay = BigInt(unsignedValue(round.bountyAmount, "Indexed bounty amount")) / BigInt(maximumCommits);
+  const normativeFixedBasePay = (maximumSeatPay * 8_000n) / 10_000n;
+  const normativeMaximumBonus = maximumSeatPay - normativeFixedBasePay;
+  if (
+    scoringVersion !== RBTS_SCORING_VERSION ||
+    !scoringMode ||
+    scoreCursor !== revealCount ||
+    BigInt(fixedBasePay) !== normativeFixedBasePay ||
+    BigInt(maximumBonus) !== normativeMaximumBonus ||
+    (scoringMode === "rbts" && (scoringSeed === ZERO_BYTES32 || entropy === ZERO_BYTES32)) ||
+    (scoringMode === "base_only_entropy_unavailable" && (scoringSeed !== ZERO_BYTES32 || entropy !== ZERO_BYTES32))
+  ) {
+    throw new TokenlessServiceError("Indexed RBTS settlement is incomplete.", 409, "indexed_evidence_invalid");
+  }
+  const normativeReveals = revealed.map((commit, index) => {
+    const vote = integerValue(commit.vote, `Reveal ${index} vote`);
+    const predictedUpBps = integerValue(commit.predictedUpBps, `Reveal ${index} prediction`);
+    if (vote !== 0 && vote !== 1) {
+      throw new TokenlessServiceError("Indexed vote is invalid.", 409, "indexed_evidence_invalid");
+    }
+    if (predictedUpBps < 100 || predictedUpBps > 9_900 || predictedUpBps % 100 !== 0) {
+      throw new TokenlessServiceError("Indexed prediction is invalid.", 409, "indexed_evidence_invalid");
+    }
+    return {
+      commitKey: exactBytes32(commit.commitKey, `Reveal ${index} commit key`) as Hex,
+      predictedUpBps,
+      vote: vote as 0 | 1,
+    };
+  });
+  if (new Set(normativeReveals.map(reveal => reveal.commitKey)).size !== revealCount) {
+    throw new TokenlessServiceError("Indexed reveal commit keys are not unique.", 409, "indexed_evidence_invalid");
+  }
+  const normativeSettlement = recomputeRbtsSettlement({
+    chainId: deployment.chainId,
+    entropy: entropy as Hex,
+    fixedBasePay: BigInt(fixedBasePay),
+    maximumBonus: BigInt(maximumBonus),
+    mode: scoringMode,
+    panelAddress: exactAddress(deployment.panelAddress, "Ponder panel address") as Address,
+    reveals: normativeReveals,
+    roundId: BigInt(unsignedValue(round.roundId, "Indexed round id")),
+  });
+  if (
+    normativeSettlement.revealSetXor !== revealSetXor ||
+    normativeSettlement.revealSetSum !== BigInt(revealSetSum) ||
+    normativeSettlement.scoringSeed !== scoringSeed ||
+    normativeSettlement.totalRbtsScoreBps !== BigInt(totalRbtsScoreBps) ||
+    normativeSettlement.totalFinalizedLiability !== BigInt(totalFinalizedLiability)
+  ) {
+    throw new TokenlessServiceError(
+      "Indexed RBTS aggregate evidence is inconsistent.",
+      409,
+      "indexed_evidence_invalid",
+    );
+  }
+  for (const [index, commit] of revealed.entries()) {
+    const commitKey = exactBytes32(commit.commitKey, `Reveal ${index} commit key`);
+    const referenceCommitKey = exactBytes32(commit.referenceCommitKey, `Reveal ${index} reference key`);
+    const peerCommitKey = exactBytes32(commit.peerCommitKey, `Reveal ${index} peer key`);
+    const informationScoreBps = integerValue(commit.informationScoreBps, `Reveal ${index} information score`);
+    const predictionScoreBps = integerValue(commit.predictionScoreBps, `Reveal ${index} prediction score`);
+    const rbtsScoreBps = integerValue(commit.rbtsScoreBps, `Reveal ${index} RBTS score`);
+    const finalizedPayout = BigInt(unsignedValue(commit.finalizedPayout, `Reveal ${index} finalized payout`));
+    const normativeScore = normativeSettlement.scores.get(commitKey);
+    if (
+      !normativeScore ||
+      referenceCommitKey !== normativeScore.referenceCommitKey ||
+      peerCommitKey !== normativeScore.peerCommitKey ||
+      informationScoreBps !== normativeScore.informationScoreBps ||
+      predictionScoreBps !== normativeScore.predictionScoreBps ||
+      rbtsScoreBps !== normativeScore.rbtsScoreBps ||
+      finalizedPayout !== normativeScore.finalizedPayout
+    ) {
+      throw new TokenlessServiceError("Indexed RBTS score evidence is inconsistent.", 409, "indexed_evidence_invalid");
+    }
+  }
   const vouchersResult = await dbClient.execute({
     sql: `SELECT v.vote_key, v.admission_policy_hash, v.content_id, v.issuer_address,
                  v.assurance_snapshot_hash, p.account_address, s.snapshot_json,
@@ -714,8 +1094,8 @@ export async function deriveFinalizedRoundEvidence(input: {
   }
   const tierMix: Record<string, number> = {};
   const identityCounts = new Map<string, number>();
-  const revealedAccounts = new Set<string>();
-  for (const voucher of revealedVouchers as Row[]) {
+  const revealedCommitsByAccount = new Map<string, { committedAt: number; responseHash: string; vote: 0 | 1 }>();
+  for (const [index, voucher] of (revealedVouchers as Row[]).entries()) {
     const snapshotJson = stringValue(voucher.snapshot_json, "Voucher assurance snapshot");
     const snapshotHash = stringValue(voucher.snapshot_hash, "Voucher assurance snapshot hash");
     const voucherSnapshotHash = stringValue(voucher.assurance_snapshot_hash, "Voucher-bound assurance snapshot hash");
@@ -741,14 +1121,30 @@ export async function deriveFinalizedRoundEvidence(input: {
     tierMix[tier] = (tierMix[tier] ?? 0) + 1;
     const identity = subjects.join("+");
     identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1);
-    revealedAccounts.add(exactAddress(voucher.account_address, "Voucher account"));
+    const account = exactAddress(voucher.account_address, "Voucher account");
+    const commit = revealed[index];
+    const vote = integerValue(commit.vote, `Reveal ${index} vote`);
+    const committedAtValue = unsignedValue(commit.committedAt, `Reveal ${index} committed timestamp`);
+    if (BigInt(committedAtValue) > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new TokenlessServiceError(
+        `Reveal ${index} committed timestamp is malformed.`,
+        409,
+        "indexed_evidence_invalid",
+      );
+    }
+    revealedCommitsByAccount.set(account, {
+      committedAt: Number(committedAtValue),
+      responseHash: responseHashes[index],
+      vote: vote as 0 | 1,
+    });
   }
   const assurance = await assuranceProvenance({
     roundId: rowString(execution, "round_id")!,
     contentId: exactBytes32(round.contentId, "Indexed content id"),
     admissionPolicyHash: exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
     revealCount,
-    revealedAccounts,
+    minimumReveals: integerValue(round.minimumReveals, "Indexed minimum reveals"),
+    revealedCommitsByAccount,
   });
   const issuedIdentities = new Set(
     vouchersResult.rows.map(value => {
@@ -767,6 +1163,15 @@ export async function deriveFinalizedRoundEvidence(input: {
   const bountyAmount = unsignedValue(round.bountyAmount, "Indexed bounty amount");
   const feeAmount = unsignedValue(round.feeAmount, "Indexed fee amount");
   const attemptReserve = unsignedValue(round.attemptReserve, "Indexed attempt reserve");
+  const liability = BigInt(totalFinalizedLiability);
+  if (liability > BigInt(bountyAmount)) {
+    throw new TokenlessServiceError("Finalized liability exceeds the bounty.", 409, "indexed_evidence_invalid");
+  }
+  const bountyRefund = BigInt(bountyAmount) - liability;
+  const funderRefund = unsignedValue(round.funderRefund, "Indexed funder refund");
+  if (BigInt(funderRefund) !== BigInt(attemptReserve) + bountyRefund) {
+    throw new TokenlessServiceError("Indexed finalized refund does not conserve.", 409, "indexed_evidence_invalid");
+  }
   const totalFundedAtomic = (BigInt(bountyAmount) + BigInt(feeAmount) + BigInt(attemptReserve)).toString();
   if (totalFundedAtomic !== rowString(execution, "total_funded_atomic")) {
     throw new TokenlessServiceError(
@@ -783,7 +1188,11 @@ export async function deriveFinalizedRoundEvidence(input: {
     economics: {
       asset: "USDC",
       decimals: 6,
-      bounty: { fundedAtomic: bountyAmount, paidAtomic: bountyAmount, refundedAtomic: "0" },
+      bounty: {
+        fundedAtomic: bountyAmount,
+        paidAtomic: totalFinalizedLiability,
+        refundedAtomic: bountyRefund.toString(),
+      },
       fee: {
         bps: integerValue(fee.bps, "Stored fee bps"),
         fundedAtomic: feeAmount,
@@ -791,7 +1200,12 @@ export async function deriveFinalizedRoundEvidence(input: {
         refundedAtomic: "0",
       },
       attemptReserve: { fundedAtomic: attemptReserve, compensatedAtomic: "0", refundedAtomic: attemptReserve },
-      refund: { bountyAtomic: "0", feeAtomic: "0", attemptReserveAtomic: attemptReserve, totalAtomic: attemptReserve },
+      refund: {
+        bountyAtomic: bountyRefund.toString(),
+        feeAtomic: "0",
+        attemptReserveAtomic: attemptReserve,
+        totalAtomic: funderRefund,
+      },
       compensation: {
         perAcceptedRevealCapAtomic: unsignedValue(round.attemptCompensation, "Indexed attempt compensation"),
         recipientCount: 0,
@@ -818,6 +1232,19 @@ export async function deriveFinalizedRoundEvidence(input: {
       validResponseCount: assurance.validResponseCount,
       verifiedIdentityCount: issuedIdentities.size,
     },
+    scoring: {
+      entropy,
+      entropyBlock,
+      fixedBasePayAtomic: fixedBasePay,
+      maximumBonusAtomic: maximumBonus,
+      mode: scoringMode,
+      revealSetSum,
+      revealSetXor,
+      scoringSeed,
+      totalFinalizedLiabilityAtomic: totalFinalizedLiability,
+      totalRbtsScoreBps,
+      version: RBTS_SCORING_VERSION,
+    },
     roundTerms: {
       admissionPolicyHash: exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
       contentId: exactBytes32(round.contentId, "Indexed content id"),
@@ -831,7 +1258,28 @@ export async function deriveFinalizedRoundEvidence(input: {
     },
   };
   validateFinalizedEvidence(evidence);
-  return evidence;
+  return { evidence, integrityInput: assurance.integrityInput };
+}
+
+export async function deriveFinalizedRoundEvidence(input: {
+  operationKey: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+}) {
+  return (await deriveFinalizedRoundEvidenceBundle(input)).evidence;
+}
+
+function immutableFinalizedEvidenceIdentity(evidence: IndexedFinalizedEvidence) {
+  return {
+    ...evidence,
+    analytics: { ...evidence.analytics, correlationRiskBps: 0 },
+    provenance: {
+      ...evidence.provenance,
+      assignmentCount: 0,
+      matchedAssignmentCount: 0,
+      validResponseCount: 0,
+    },
+  };
 }
 
 export async function appendFinalizedRoundEvidence(input: {
@@ -839,7 +1287,7 @@ export async function appendFinalizedRoundEvidence(input: {
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
 }) {
-  const evidence = await deriveFinalizedRoundEvidence(input);
+  const { evidence, integrityInput } = await deriveFinalizedRoundEvidenceBundle(input);
   const ownership = await dbClient.execute({
     sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
     args: [input.operationKey],
@@ -856,14 +1304,29 @@ export async function appendFinalizedRoundEvidence(input: {
   const evidenceHash = digest(`round.finalized:${evidenceJson}`);
   const eventId = `tpe_${digest(`${input.operationKey}:${evidenceHash}`).slice(0, 32)}`;
   const existingEvidence = await dbClient.execute({
-    sql: "SELECT evidence_hash FROM tokenless_transparency_events WHERE operation_key = ? AND event_type = 'round.finalized' LIMIT 1",
+    sql: `SELECT event_id, evidence_hash, evidence_json FROM tokenless_transparency_events
+          WHERE operation_key = ? AND event_type = 'round.finalized' LIMIT 1`,
     args: [input.operationKey],
   });
-  const existingHash = rowString(existingEvidence.rows[0] as Row | undefined, "evidence_hash");
+  const existingRow = existingEvidence.rows[0] as Row | undefined;
+  const existingHash = rowString(existingRow, "evidence_hash");
   if (existingHash) {
     if (existingHash !== evidenceHash) {
-      throw new TokenlessServiceError("Finalized evidence is immutable for this ask.", 409, "evidence_conflict");
+      const storedEvidence = JSON.parse(rowString(existingRow, "evidence_json")!) as IndexedFinalizedEvidence;
+      if (
+        stableTransparencyJson(immutableFinalizedEvidenceIdentity(storedEvidence)) !==
+        stableTransparencyJson(immutableFinalizedEvidenceIdentity(evidence))
+      ) {
+        throw new TokenlessServiceError("Finalized evidence is immutable for this ask.", 409, "evidence_conflict");
+      }
+      await appendPostRoundIntegrityInput({
+        operationKey: input.operationKey,
+        evidenceHash: existingHash,
+        integrityInput,
+      });
+      return { eventId: rowString(existingRow, "event_id")!, evidenceHash: existingHash };
     }
+    await appendPostRoundIntegrityInput({ operationKey: input.operationKey, evidenceHash, integrityInput });
     return { eventId, evidenceHash };
   }
   const sequenceResult = await dbClient.execute({
@@ -889,36 +1352,55 @@ export async function appendFinalizedRoundEvidence(input: {
       new Date(),
     ],
   });
+  await appendPostRoundIntegrityInput({ operationKey: input.operationKey, evidenceHash, integrityInput });
   await dbClient.execute({
-    sql: `UPDATE tokenless_agent_asks SET status = 'submitted', verdict_status = 'pending_analytics', updated_at = ?
+    sql: `UPDATE tokenless_agent_asks SET status = 'submitted', verdict_status = 'pending', updated_at = ?
           WHERE operation_key = ? AND result_json IS NULL`,
     args: [new Date(), input.operationKey],
   });
   return { eventId, evidenceHash };
 }
 
-export function evaluateAnalytics(metrics: AnalyticsMetrics, diversity: IndexedFinalizedEvidence["diversity"]) {
-  bps(metrics.answerFingerprintRiskBps, "answerFingerprintRiskBps");
-  bps(metrics.correlationRiskBps, "correlationRiskBps");
-  if (
-    !Number.isSafeInteger(metrics.issuedVoucherCount) ||
-    metrics.issuedVoucherCount < 0 ||
-    !Number.isSafeInteger(metrics.verifiedIdentityCount) ||
-    metrics.verifiedIdentityCount < 0
-  ) {
-    throw new TokenlessServiceError(
-      "Issuance analytics counts must be non-negative integers.",
-      400,
-      "invalid_analytics",
-    );
-  }
-  const reasonCodes: string[] = [];
-  if (metrics.issuedVoucherCount > metrics.verifiedIdentityCount)
-    reasonCodes.push("issuance_exceeds_verified_identities");
-  if (metrics.correlationRiskBps >= 4_000) reasonCodes.push("high_correlation_risk");
-  if (metrics.answerFingerprintRiskBps >= 4_000) reasonCodes.push("high_answer_fingerprint_risk");
-  if (diversity.largestClusterBps > 5_000) reasonCodes.push("dominant_identity_cluster");
-  return { decision: reasonCodes.length === 0 ? ("published" as const) : ("delisted" as const), reasonCodes };
+async function appendPostRoundIntegrityInput(input: {
+  operationKey: string;
+  evidenceHash: string;
+  integrityInput: PostRoundIntegrityInput;
+}) {
+  const inputJson = stableTransparencyJson({ evidenceHash: input.evidenceHash, ...input.integrityInput });
+  const inputHash = `sha256:${digest(inputJson)}`;
+  const existing = await dbClient.execute({
+    sql: `SELECT input_id FROM tokenless_post_round_integrity_inputs
+          WHERE operation_key = ? AND input_hash = ? LIMIT 1`,
+    args: [input.operationKey, inputHash],
+  });
+  if (existing.rows.length > 0) return rowString(existing.rows[0] as Row, "input_id")!;
+  const versionResult = await dbClient.execute({
+    sql: `SELECT COALESCE(MAX(input_version), 0) + 1 AS input_version
+          FROM tokenless_post_round_integrity_inputs WHERE operation_key = ?`,
+    args: [input.operationKey],
+  });
+  const inputVersion = Number(rowString(versionResult.rows[0] as Row, "input_version") ?? "1");
+  const inputId = `pri_${digest(`${input.operationKey}:${inputHash}`).slice(0, 32)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_post_round_integrity_inputs
+          (input_id, operation_key, evidence_hash, input_version, input_hash, policy_json,
+           reports_json, inputs_complete, limitation_codes_json, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (operation_key, input_hash) DO NOTHING`,
+    args: [
+      inputId,
+      input.operationKey,
+      input.evidenceHash,
+      inputVersion,
+      inputHash,
+      stableTransparencyJson(input.integrityInput.policy),
+      stableTransparencyJson(input.integrityInput.reports),
+      input.integrityInput.inputsComplete,
+      stableTransparencyJson(input.integrityInput.limitationCodes),
+      new Date(),
+    ],
+  });
+  return inputId;
 }
 
 function evidenceRoot(hashes: string[]) {
@@ -970,27 +1452,33 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
   ) as IndexedFinalizedEvidence;
   validateFinalizedEvidence(evidence);
   const root = evidenceRoot(eventResult.rows.map(value => rowString(value as Row, "evidence_hash")!));
-  const evaluation = evaluateAnalytics(evidence.analytics, evidence.diversity);
-  const existingPublication = await dbClient.execute({
-    sql: "SELECT publication_id, evidence_root, result_json FROM tokenless_result_publications WHERE operation_key = ? AND publication_version = 1 LIMIT 1",
-    args: [input.operationKey],
+  const integrityResult = await dbClient.execute({
+    sql: `SELECT input_hash, policy_json, reports_json, inputs_complete, limitation_codes_json
+          FROM tokenless_post_round_integrity_inputs
+          WHERE operation_key = ? AND evidence_hash = ?
+          ORDER BY input_version DESC LIMIT 1`,
+    args: [input.operationKey, rowString(eventResult.rows.at(-1) as Row, "evidence_hash")!],
   });
-  const existing = existingPublication.rows[0] as Row | undefined;
-  if (existing) {
-    if (rowString(existing, "evidence_root") !== root) {
-      throw new TokenlessServiceError("Published result evidence is immutable.", 409, "publication_conflict");
-    }
-    const review = await dbClient.execute({
-      sql: "SELECT reason_codes_json FROM tokenless_analytics_reviews WHERE operation_key = ? AND review_version = 1 LIMIT 1",
-      args: [input.operationKey],
-    });
-    return {
-      evidenceRoot: root,
-      publicationId: rowString(existing, "publication_id")!,
-      reasonCodes: JSON.parse(rowString(review.rows[0] as Row | undefined, "reason_codes_json") ?? "[]") as string[],
-      result: parseTokenlessResult(JSON.parse(rowString(existing, "result_json")!)),
-    };
+  const integrity = integrityResult.rows[0] as Row | undefined;
+  if (!integrity) {
+    throw new TokenlessServiceError(
+      "Post-round integrity inputs are not indexed.",
+      409,
+      "integrity_evidence_pending",
+      true,
+    );
   }
+  const evaluation = evaluatePostRoundIntegrity({
+    policy: JSON.parse(rowString(integrity, "policy_json")!) as PostRoundIntegrityPolicy,
+    reports: JSON.parse(rowString(integrity, "reports_json")!) as PostRoundIntegrityReport[],
+    inputsComplete: Boolean(integrity.inputs_complete),
+    limitationCodes: JSON.parse(rowString(integrity, "limitation_codes_json") ?? "[]") as string[],
+  });
+  const existingReview = await dbClient.execute({
+    sql: `SELECT review_id, review_version, reason_codes_json FROM tokenless_analytics_reviews
+          WHERE operation_key = ? AND evaluation_hash = ? LIMIT 1`,
+    args: [input.operationKey, evaluation.evaluationHash],
+  });
   const askResult = await dbClient.execute({
     sql: `SELECT a.economics_json, q.request_json, q.response_json
           FROM tokenless_agent_asks a JOIN tokenless_agent_quotes q ON q.quote_id = a.quote_id
@@ -1008,8 +1496,8 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     operationKey: input.operationKey,
     roundId: evidence.roundId,
-    verdictStatus: evaluation.decision,
-    terminal: true,
+    verdictStatus: evaluation.status,
+    terminal: evaluation.status !== "pending",
     economics: evidence.economics,
     audience: {
       admissionPolicyHash: audience.admissionPolicyHash,
@@ -1018,7 +1506,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
       source: audience.source,
     },
     verdict:
-      evaluation.decision === "published"
+      evaluation.status === "publishable"
         ? {
             intervalBps,
             preferenceShareBps,
@@ -1028,33 +1516,88 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     methodologyUrl: `${input.appOrigin.replace(/\/$/, "")}/docs/how-it-works`,
     updatedAt: now.toISOString(),
   });
-  const reviewId = `anr_${digest(`${input.operationKey}:${root}:v1`).slice(0, 32)}`;
-  const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evaluation.decision}:v1`).slice(0, 32)}`;
+  if (existingReview.rows.length === 0) {
+    const versionResult = await dbClient.execute({
+      sql: "SELECT COALESCE(MAX(review_version), 0) + 1 AS review_version FROM tokenless_analytics_reviews WHERE operation_key = ?",
+      args: [input.operationKey],
+    });
+    const reviewVersion = Number(rowString(versionResult.rows[0] as Row, "review_version") ?? "1");
+    const reviewId = `anr_${digest(`${input.operationKey}:${evaluation.evaluationHash}`).slice(0, 32)}`;
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_analytics_reviews
+            (review_id, operation_key, review_version, decision, evidence_root, tier_mix_json, diversity_json,
+             metrics_json, reason_codes_json, reviewed_at, evaluation_schema_version, evaluation_hash,
+             aggregates_json, limitation_codes_json, remediation, effect, payout_effect)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (operation_key, evaluation_hash) DO NOTHING`,
+      args: [
+        reviewId,
+        input.operationKey,
+        reviewVersion,
+        evaluation.status,
+        root,
+        stableTransparencyJson(evidence.tierMix),
+        stableTransparencyJson(evidence.diversity),
+        stableTransparencyJson(evidence.analytics),
+        stableTransparencyJson(evaluation.reasonCodes),
+        now,
+        evaluation.schemaVersion,
+        evaluation.evaluationHash,
+        stableTransparencyJson(evaluation.aggregates),
+        stableTransparencyJson(evaluation.limitationCodes),
+        evaluation.remediation,
+        evaluation.effect,
+        evaluation.payoutEffect,
+      ],
+    });
+  }
+  if (evaluation.status === "pending") {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_agent_asks SET status = 'submitted', verdict_status = 'pending', updated_at = ?
+            WHERE operation_key = ? AND result_json IS NULL`,
+      args: [now, input.operationKey],
+    });
+    return { evidenceRoot: root, publicationId: null, reasonCodes: evaluation.reasonCodes, evaluation, result };
+  }
+  const existingPublication = await dbClient.execute({
+    sql: `SELECT publication_id, evidence_root, evaluation_hash, result_json
+          FROM tokenless_result_publications WHERE operation_key = ? LIMIT 1`,
+    args: [input.operationKey],
+  });
+  const existing = existingPublication.rows[0] as Row | undefined;
+  if (existing) {
+    if (
+      rowString(existing, "evidence_root") !== root ||
+      rowString(existing, "evaluation_hash") !== evaluation.evaluationHash
+    ) {
+      throw new TokenlessServiceError("Published result evidence is immutable.", 409, "publication_conflict");
+    }
+    return {
+      evidenceRoot: root,
+      publicationId: rowString(existing, "publication_id")!,
+      reasonCodes: evaluation.reasonCodes,
+      evaluation,
+      result: parseTokenlessResult(JSON.parse(rowString(existing, "result_json")!)),
+    };
+  }
+  const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evaluation.evaluationHash}`).slice(0, 32)}`;
   await dbClient.execute({
-    sql: `INSERT INTO tokenless_analytics_reviews
-          (review_id, operation_key, review_version, decision, evidence_root, tier_mix_json, diversity_json, metrics_json, reason_codes_json, reviewed_at)
-          VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (operation_key, review_version) DO NOTHING`,
+    sql: `INSERT INTO tokenless_result_publications
+          (publication_id, operation_key, publication_version, verdict_status, evidence_root, result_json, published_at, evaluation_hash)
+          VALUES (?, ?, 1, ?, ?, ?, ?, ?) ON CONFLICT (operation_key, publication_version) DO NOTHING`,
     args: [
-      reviewId,
+      publicationId,
       input.operationKey,
-      evaluation.decision,
+      evaluation.status,
       root,
-      stableTransparencyJson(evidence.tierMix),
-      stableTransparencyJson(evidence.diversity),
-      stableTransparencyJson(evidence.analytics),
-      JSON.stringify(evaluation.reasonCodes),
+      JSON.stringify(result),
       now,
+      evaluation.evaluationHash,
     ],
   });
   await dbClient.execute({
-    sql: `INSERT INTO tokenless_result_publications
-          (publication_id, operation_key, publication_version, verdict_status, evidence_root, result_json, published_at)
-          VALUES (?, ?, 1, ?, ?, ?, ?) ON CONFLICT (operation_key, publication_version) DO NOTHING`,
-    args: [publicationId, input.operationKey, evaluation.decision, root, JSON.stringify(result), now],
-  });
-  await dbClient.execute({
     sql: "UPDATE tokenless_agent_asks SET status = 'submitted', verdict_status = ?, result_json = ?, updated_at = ? WHERE operation_key = ?",
-    args: [evaluation.decision, JSON.stringify(result), now, input.operationKey],
+    args: [evaluation.status, JSON.stringify(result), now, input.operationKey],
   });
   await enqueuePublicationWebhooks({
     publicationId,
@@ -1063,7 +1606,77 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     appOrigin: input.appOrigin,
     now,
   });
-  return { evidenceRoot: root, publicationId, reasonCodes: evaluation.reasonCodes, result };
+  return { evidenceRoot: root, publicationId, reasonCodes: evaluation.reasonCodes, evaluation, result };
+}
+
+export async function appendPostRoundIntegrityReviewRecord(input: {
+  operationKey: string;
+  evaluationHash: string;
+  recordType: "appeal" | "remediation";
+  reasonCode: string;
+  details?: Record<string, unknown>;
+  submittedBy: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  if (!input.submittedBy.trim()) {
+    throw new TokenlessServiceError("Integrity review submitter is required.", 400, "invalid_integrity_record");
+  }
+  const ownership = await dbClient.execute({
+    sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
+    args: [input.operationKey],
+  });
+  const workspaceId = rowString(ownership.rows[0] as Row | undefined, "workspace_id");
+  if (!workspaceId) throw new TokenlessServiceError("Result not found.", 404, "result_not_found");
+  await requireWorkspaceMember(input.submittedBy, workspaceId);
+  const evaluation = await dbClient.execute({
+    sql: `SELECT evaluation_hash FROM tokenless_analytics_reviews
+          WHERE operation_key = ? AND evaluation_hash = ? LIMIT 1`,
+    args: [input.operationKey, input.evaluationHash],
+  });
+  if (evaluation.rows.length === 0) {
+    throw new TokenlessServiceError("Integrity evaluation was not found.", 404, "integrity_evaluation_not_found");
+  }
+  const appealBinding = createPostRoundIntegrityAppeal({
+    evaluationHash: input.evaluationHash,
+    appealId: `appeal_${digest(`${input.operationKey}:${input.submittedBy}:${now.toISOString()}`).slice(0, 32)}`,
+    reasonCode: input.reasonCode,
+    submittedAt: now.toISOString(),
+  });
+  const detailsJson = stableTransparencyJson(input.details ?? {});
+  const recordHash = `sha256:${digest(
+    stableTransparencyJson({
+      appealBinding,
+      recordType: input.recordType,
+      details: JSON.parse(detailsJson),
+      submittedBy: input.submittedBy,
+    }),
+  )}`;
+  const recordId = `pir_${digest(`${input.operationKey}:${recordHash}`).slice(0, 32)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_post_round_integrity_records
+          (record_id, operation_key, evaluation_hash, record_type, reason_code, details_json,
+           record_hash, submitted_by, effect, payout_effect, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'append_only_review', 'none', ?)
+          ON CONFLICT (operation_key, record_hash) DO NOTHING`,
+    args: [
+      recordId,
+      input.operationKey,
+      input.evaluationHash,
+      input.recordType,
+      input.reasonCode,
+      detailsJson,
+      recordHash,
+      input.submittedBy,
+      now,
+    ],
+  });
+  return {
+    recordId,
+    recordHash,
+    effect: "append_only_review" as const,
+    payoutEffect: "none" as const,
+  };
 }
 
 async function enqueuePublicationWebhooks(input: {
@@ -1213,13 +1826,22 @@ export async function inspectWorkspaceTransparency(input: {
     args: [input.operationKey, input.workspaceId],
   });
   if (ownership.rows.length === 0) throw new TokenlessServiceError("Result not found.", 404, "result_not_found");
-  const [events, reviews, publications, deliveries] = await Promise.all([
+  const [events, reviews, records, publications, deliveries] = await Promise.all([
     dbClient.execute({
       sql: "SELECT event_id, sequence, event_type, deployment_key, round_id, evidence_hash, evidence_json, occurred_at, recorded_at FROM tokenless_transparency_events WHERE operation_key = ? ORDER BY sequence ASC",
       args: [input.operationKey],
     }),
     dbClient.execute({
-      sql: "SELECT review_id, review_version, decision, evidence_root, tier_mix_json, diversity_json, metrics_json, reason_codes_json, reviewed_at FROM tokenless_analytics_reviews WHERE operation_key = ? ORDER BY review_version ASC",
+      sql: `SELECT review_id, review_version, decision, evidence_root, tier_mix_json, diversity_json,
+                   metrics_json, reason_codes_json, evaluation_schema_version, evaluation_hash,
+                   aggregates_json, limitation_codes_json, remediation, effect, payout_effect, reviewed_at
+            FROM tokenless_analytics_reviews WHERE operation_key = ? ORDER BY review_version ASC`,
+      args: [input.operationKey],
+    }),
+    dbClient.execute({
+      sql: `SELECT record_id, evaluation_hash, record_type, reason_code, details_json, record_hash,
+                   submitted_by, effect, payout_effect, created_at
+            FROM tokenless_post_round_integrity_records WHERE operation_key = ? ORDER BY created_at ASC`,
       args: [input.operationKey],
     }),
     dbClient.execute({
@@ -1255,7 +1877,10 @@ export async function inspectWorkspaceTransparency(input: {
       "diversity_json",
       "metrics_json",
       "reason_codes_json",
+      "aggregates_json",
+      "limitation_codes_json",
     ]),
+    integrityReviewRecords: parseJsonColumns(records.rows as Row[], ["details_json"]),
     publications: parseJsonColumns(publications.rows as Row[], ["result_json"]),
     webhookDeliveries: parseJsonColumns(deliveries.rows as Row[], []),
   };

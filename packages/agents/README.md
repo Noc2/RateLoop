@@ -92,12 +92,15 @@ Without `--until-ready`, `wait` performs one bounded request and prints either a
 
 All responses use `rateloop.tokenless.v2`. The audience binds the exact frozen admission policy; no ordered identity tier or fabricated confidence score is exposed. Verdict status is one of:
 
-- `pending_analytics`
-- `published`
+- `pending`
+- `publishable`
+- `inconclusive`
 - `delisted`
 - `zero_commit_refunded`
 - `under_quorum_compensated`
 - `beacon_failure_compensated`
+
+Deterministic sandbox responses retain `published` for compatibility. Production post-round integrity uses `publishable`; integrity status and appeal/remediation records never change finalized payout accounting.
 
 Results itemize bounty, fee, attempt reserve, refunds, and compensation. A terminal compensation or refund result is a successful terminal protocol outcome, not a transport failure.
 

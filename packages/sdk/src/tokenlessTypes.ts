@@ -12,6 +12,10 @@ export type TokenlessReviewerSource =
   (typeof TOKENLESS_REVIEWER_SOURCES)[number];
 
 export const TOKENLESS_TERMINAL_VERDICT_STATUSES = [
+  "publishable",
+  "inconclusive",
+  // Retained only for deterministic sandbox responses created before the
+  // production post-round integrity publication vocabulary was introduced.
   "published",
   "delisted",
   "zero_commit_refunded",
@@ -20,7 +24,7 @@ export const TOKENLESS_TERMINAL_VERDICT_STATUSES = [
 ] as const;
 
 export const TOKENLESS_VERDICT_STATUSES = [
-  "pending_analytics",
+  "pending",
   ...TOKENLESS_TERMINAL_VERDICT_STATUSES,
 ] as const;
 
@@ -180,7 +184,7 @@ export type TokenlessWaitResponse =
       schemaVersion: typeof TOKENLESS_SCHEMA_VERSION;
       operationKey: string;
       status: "pending";
-      verdictStatus: "pending_analytics" | null;
+      verdictStatus: "pending" | null;
       continuation: TokenlessPollContinuation;
     }
   | {
