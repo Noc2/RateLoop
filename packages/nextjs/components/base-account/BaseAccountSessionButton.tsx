@@ -72,7 +72,7 @@ export function BaseAccountSessionButton({ compact = false }: { compact?: boolea
       <button
         type="button"
         className={`rateloop-gradient-action w-full px-3 disabled:cursor-wait disabled:opacity-60 ${
-          compact ? "min-h-9 text-xs" : "min-h-11 text-sm"
+          compact ? "min-h-10 text-base" : "min-h-11 text-sm"
         }`}
         disabled={pending}
         onClick={session ? signOut : signIn}

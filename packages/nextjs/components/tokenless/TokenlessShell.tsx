@@ -61,10 +61,12 @@ function Brand({ compact = false }: { compact?: boolean }) {
     <Link href="/" className="flex min-w-0 items-center gap-2">
       <RateLoopLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix="tokenless-brand" />
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className={`font-display truncate leading-none text-base-content ${compact ? "text-lg" : "text-base"}`}>
+        <span
+          className={`font-display truncate leading-none text-base-content ${compact ? "text-[1.35rem]" : "text-[1.2rem]"}`}
+        >
           RateLoop
         </span>
-        <span className="truncate text-[10px] text-base-content/65">Level Up Your Agent</span>
+        <span className="truncate text-xs text-base-content/75">Level Up Your Agent</span>
       </div>
     </Link>
   );
@@ -81,12 +83,12 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
           <Link
             key={href}
             href={href}
-            className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2 transition-colors ${
+            className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors ${
               active ? "text-base-content" : "text-base-content/75 hover:bg-base-content/[0.04] hover:text-base-content"
             }`}
           >
-            <Icon className="h-5 w-5 shrink-0" />
-            <span className="text-sm font-medium">{label}</span>
+            <Icon className="h-6 w-6 shrink-0" />
+            <span className="text-base font-medium">{label}</span>
             {active ? (
               <span className="absolute bottom-2 right-2 top-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)]" />
             ) : null}
@@ -207,7 +209,7 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
         </div>
         <Link
           href="/rate"
-          className="mx-2.5 mb-4 flex h-8 items-center rounded-md border border-base-content/10 bg-base-content/[0.09] px-3 text-xs text-base-content/55 transition hover:bg-base-content/[0.13] hover:text-base-content/75"
+          className="mx-2.5 mb-4 flex h-8 items-center rounded-md border border-base-content/10 bg-base-content/[0.09] px-3 text-base text-base-content/55 transition hover:bg-base-content/[0.13] hover:text-base-content/75"
         >
           Search
         </Link>
