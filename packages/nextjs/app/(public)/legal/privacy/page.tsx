@@ -13,10 +13,11 @@ export default function PrivacyPage() {
       </p>
       <h2>Current test data</h2>
       <p>
-        The quote and ask API stores request payloads, itemized economics, idempotency keys, operation keys, statuses,
-        and sandbox results in the isolated branch database. The explicit sandbox may use temporary in-process storage
-        if that database is unavailable. The site uses privacy-preserving aggregate analytics without advertising or
-        cross-site profiling.
+        The isolated service stores workspaces, projects, frozen evaluation manifests, reviewer policies, assignments,
+        responses, access events, itemized economics, and operational identifiers. Customer artifacts are encrypted
+        before private object storage; database rows keep opaque object references and tenant-scoped metadata. Assigned
+        reviewers receive short-lived leases only for their blinded cases. Sandbox responses are simulated test data.
+        The site does not use advertising or cross-site profiling.
       </p>
       <h2>On-chain data</h2>
       <p>
@@ -26,15 +27,21 @@ export default function PrivacyPage() {
       </p>
       <h2>Paid eligibility</h2>
       <p>
-        Production mode collects identity tier, age confirmation, residence, applicable tax/DAC7 fields, sanctions
-        screening state, and payout Base Account ownership before the first paid voucher. Provider results, tax data,
-        and stable nullifier seeds are envelope-encrypted under versioned server-only keys. Advisory browsing does not
-        require this unlock. Public round records contain commitments rather than the eligibility payload.
+        Customer-invited unpaid reviews do not require a global identity provider. Paid human-assurance assignments are
+        currently unavailable; before enabling them, RateLoop must bind the exact assignment policy through current
+        capability, minimum-age, sanctions, tax/DAC7, payout, voucher, settlement, and receipt checks. Declared
+        residence, tax residence, document issuer, nationality, and any verified residence predicate remain separate
+        fields. Provider evidence, statutory tax records, customer artifacts, and private rationales use separate
+        server-only encryption domains; response pseudonyms use a separate keyed-hash domain. Public round records
+        contain commitments and settlement data, not the eligibility payload or raw rationale. For paid work, the
+        service database must retain a restricted mapping between the reviewer, voucher, vote key, and nullifier for
+        eligibility, abuse control, and payment operations; RateLoop does not claim database-level anonymity.
       </p>
       <h2>Retention and rights</h2>
       <p>
-        Test database records may be deleted when the isolated deployment is reset. Statutory retention may apply once
-        real payments exist. You may request access, correction, deletion where available, restriction, or object to
+        Workspace and project retention settings control private artifact deletion and access logging. Test records may
+        also be deleted when the isolated deployment is reset. Legal holds and statutory retention may apply once real
+        payments exist. You may request access, correction, deletion where available, restriction, or object to
         processing by contacting the address above; public blockchain records remain outside the operator&apos;s ability
         to erase.
       </p>

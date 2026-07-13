@@ -15,8 +15,16 @@ export default function TermsPage() {
       <h2>Who may use it</h2>
       <p>
         You must be at least 18 and legally permitted to use the service. Real-money funder flows are intended for
-        approved business customers. Paid rater access remains unavailable until identity, residence, tax, sanctions,
-        and self-custodial payout setup are completed before the first paid task.
+        approved business customers whose workspace trader details have been verified. Paid human-assurance assignments
+        are currently unavailable. They will remain disabled until the exact frozen assignment policy, applicable
+        capability, tax, sanctions, payout, voucher, settlement, and receipt requirements are enforced end to end.
+      </p>
+      <h2>Customer material and reviewers</h2>
+      <p>
+        Customers must have the right to submit evaluation material, minimize and redact personal or confidential data,
+        choose appropriate reviewers, and provide any required notices. A one-time invitation proves project access, not
+        unique humanity, expertise, legal residence, or paid-work eligibility. Customer-invited, RateLoop-network,
+        hybrid, and simulated sandbox results are labeled separately.
       </p>
       <h2>Funding and accepted work</h2>
       <p>
@@ -31,7 +39,11 @@ export default function TermsPage() {
         payout destination; this test does not promise cross-round unlinkability.
       </p>
       <h2>Use of results</h2>
-      <p>Test results are not financial, legal, medical, or investment advice.</p>
+      <p>
+        RateLoop supplies decision evidence, limitations, and settlement records. The customer remains responsible for
+        the final go, revise, or stop decision. Test results are not financial, legal, medical, or investment advice and
+        must not be used as an automatic approval for regulated or safety-critical decisions.
+      </p>
       <h2>Operator</h2>
       <p>
         The interface is operated by Hawig Ventures UG (haftungsbeschränkt). See the{" "}

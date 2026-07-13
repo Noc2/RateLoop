@@ -11,9 +11,9 @@ yarn workspace @rateloop/nextjs dev
 ```
 
 The default example enables the explicit sandbox. Sandbox responses are simulations and are visibly labeled. Set
-`TOKENLESS_SANDBOX_MODE=false` only after provisioning a dedicated Postgres database and applying
-`drizzle/0000_tokenless_agent_api.sql`; live mode fails closed when persistence is unavailable and does not fabricate
-settlement results.
+`TOKENLESS_SANDBOX_MODE=false` only after provisioning a dedicated Postgres database and applying every migration in
+`drizzle/meta/_journal.json`; live mode fails closed when persistence is unavailable and does not fabricate settlement
+results.
 
 ## API
 
@@ -21,6 +21,9 @@ settlement results.
 - `POST /api/agent/v1/asks` with matching `Idempotency-Key` header and body field
 - `GET /api/agent/v1/asks/:operationKey/wait`
 - `GET /api/agent/v1/results/:operationKey`
+- `GET|POST /api/agent/v1/assurance/projects`
+- `GET /api/agent/v1/assurance/projects/:projectId`
+- `GET /api/agent/v1/assurance/runs/:runId`
 
 The shared schema and client come from `@rateloop/sdk`. Quote economics always itemize the bounty, platform fee,
 maximum attempt reserve, total authorized funding, refunds, and accepted-work compensation.

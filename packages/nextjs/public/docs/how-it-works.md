@@ -1,13 +1,15 @@
 # How RateLoop works
 
-RateLoop adds a paid, blinded human quality gate to an AI-enabled workflow.
+RateLoop is designed to add a blinded human quality gate to an AI-enabled workflow.
 
-1. A customer names the rollout decision, defines one binary or A/B quality criterion, and chooses an audience tier and budget.
-2. The customer minimizes and redacts submitted material. Current early access is not suitable for secrets or regulated personal data.
-3. The quote itemizes the rater bounty, platform fee, and maximum accepted-work reserve.
-4. Eligible humans submit a sealed answer, one prediction bucket, and any required rationale without staking funds or seeing the crowd's direction.
-5. Settlement freezes the reveal set, processes weights restart-safely, and finalizes before claims.
-6. Zero-commit rounds refund fully. Under-quorum or beacon-failure rounds refund bounty and fee while the reserve compensates accepted work.
-7. The customer uses the result, reasons, and settlement evidence as decision support while retaining the final rollout decision.
+The public tokenless deployment is currently a simulated sandbox: it previews setup and reviewer journeys but does not recruit or pay live reviewers and does not produce live human evidence.
 
-There is no funder cancellation after the first accepted paid commit. A normal claim links the one-time vote key to its payout address. Off-chain content may be readable by RateLoop and participating raters; settlement evidence may be public. A panel is not an automatic release, safety, legal, or compliance approval.
+1. A customer creates a client-isolated project and freezes representative cases, baseline and candidate artifacts, a rubric, and a pass rule.
+2. The customer chooses invited reviewers, a RateLoop-network panel, separate hybrid subpanels, or a simulated sandbox. The exact audience policy is hashed into paid terms.
+3. Private artifacts are minimized, redacted, encrypted, and released only through short assignment leases.
+4. Any paid quote itemizes the reviewer bounty, platform fee, and maximum accepted-work reserve. Paid eligibility must be complete before an assignment or voucher.
+5. Reviewers compare blinded A/B artifacts, add bounded failure tags and a rationale, and cannot see early answers.
+6. Paid case rounds settle permissionlessly. Zero-commit rounds refund fully; under-quorum or beacon-failure paths refund bounty and fee while accepted valid work remains compensable.
+7. A private decision packet separates reviewer coverage from case judgments and reports per-case descriptive results, disagreement, limitations, and any valid settlement evidence. The customer records the final go, revise, or stop decision separately.
+
+There is no funder cancellation after the first accepted paid commit. A normal claim links the one-time vote key to its payout address. Assigned reviewers can read their leased material and public-chain settlement evidence remains public. A decision packet is evidence, not an automatic release, safety, legal, or compliance approval.

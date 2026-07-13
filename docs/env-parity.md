@@ -7,9 +7,12 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 - Network: Base Sepolia
 - Chain ID: `84532`
 - RPC variable: `BASE_SEPOLIA_RPC_URL`, `PONDER_RPC_URL_84532`, or `RPC_URL`, depending on the package
-- Deployment schema: `rateloop-tokenless-deployment-v1`
-- Deployment key: `tokenless-v1:<chainId>:<panel>:<issuer>:<adapter-or-zero>`
-- Canonical artifact: `packages/foundry/deployments/tokenless-v1/84532.json`
+- Deployment schema: `rateloop-tokenless-deployment-v2`
+- Deployment key: `tokenless-v2:<chainId>:<panel>:<issuer>:<adapter-or-zero>`
+- Canonical artifact after the next fresh deployment: `packages/foundry/deployments/tokenless-v2/84532.json`
+
+The checked-in v1 artifact is historical and must not be used by a live service. Until a complete v2 artifact exists,
+keep the web app in explicit sandbox mode and do not start Ponder or the keeper against placeholder addresses.
 
 Services must fail closed if their chain, addresses, start block, or deployment key disagree. Do not fall back to Base mainnet, an unversioned deployment JSON, or the former production services.
 
@@ -37,7 +40,8 @@ Next.js:
 - `TOKENLESS_PIPELINE_TOKEN`, `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`
 - explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
-Apply Next.js migrations `0000` through `0006` in order before live mode. The app must fail closed when moderation,
+Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` (currently `0000` through `0014`) in
+order before smoke testing the human-assurance APIs or enabling live mode. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 
 Ponder:

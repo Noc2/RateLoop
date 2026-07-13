@@ -1,6 +1,11 @@
 # RateLoop
 
-RateLoop is being redesigned as **human assurance for AI-enabled workflows**: blinded baseline-versus-candidate evaluation by relevant reviewers, a private decision packet, and independently checkable settlement evidence. The current code supplies the case-level USDC-funded settlement primitive; the [human-assurance redesign plan](docs/tokenless-human-assurance-redesign-plan-2026-07.md) defines the product work still required.
+RateLoop is **human assurance for AI-enabled workflows**: blinded baseline-versus-candidate evaluation by relevant
+reviewers, a private decision packet, and independently checkable evidence. The branch now includes the private
+project, suite, audience, assignment, response, and evidence foundations alongside the case-level settlement
+primitive. The public deployment remains an explicitly simulated sandbox; the
+[human-assurance redesign plan](docs/tokenless-human-assurance-redesign-plan-2026-07.md) tracks the remaining buyer,
+paid-settlement, operational, and E2E work.
 
 ## Deployment status
 
@@ -35,9 +40,9 @@ complete live secret/provider bundle is provisioned; configuring the contract id
 - `packages/contracts` — tokenless-only generated ABIs and deployment metadata; the checked-in Base Sepolia metadata is currently stale.
 - `packages/ponder` — tokenless event indexer and public evidence/status API.
 - `packages/keeper` — permissionless reveal, settlement, claim, compensation, and stale-return automation.
-- `packages/sdk` — versioned quote → ask → wait → result client and JSON schema.
-- `packages/agents` — tokenless agent CLI.
-- `packages/nextjs` — funder/rater UX and durable agent API.
+- `packages/sdk` — versioned quote → ask → wait → result and assurance project/run clients and JSON schemas.
+- `packages/agents` — tokenless agent CLI, including API-key-scoped assurance project/run reads.
+- `packages/nextjs` — buyer/rater foundations, private evidence packets, and durable agent APIs.
 
 See [`TRUST.md`](TRUST.md) for the exact operator, issuer, USDC, drand, privacy, and deployment trust boundaries.
 

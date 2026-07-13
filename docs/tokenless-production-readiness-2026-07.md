@@ -7,13 +7,40 @@ stale after subsequent fund-core changes and must not be used as the next live c
 deployment remains required after the planned contract work, with generated artifacts, Ponder, keeper, app, and service
 configuration updated together. No claim is made that the paid live E2E gate is complete.
 
+## Human-assurance implementation recheck — 13 July 2026
+
+The redesign has changed the status of the pre-redesign findings below. This table is the current summary; the numbered
+assessment remains as historical rationale and must not be read as current implementation status.
+
+| Area | Current status | Remaining release gate |
+|---|---|---|
+| Private task access | Implemented: live content fails closed; cohort assignment, confidentiality acceptance, and short artifact leases control reads | Browser authorization matrix and realistic confidential-artifact red team |
+| Artifact privacy | Implemented: private encrypted object storage, tenant commitments, read/export logs, and retention/deletion services | Production key custody, backup/recovery, legal-hold operations, and DPA/subprocessor review |
+| Audience and eligibility | Implemented for private unpaid use: exact policy hashes, invited/network/hybrid/sandbox models, capability evidence, and purpose-separated tax/provider/vote domains | Paid, network, and hybrid assurance assignments deliberately fail closed until assignment-specific vouchers, settlement, and receipts are connected; no production World ID or Self adapter |
+| Buyer domain | Implemented foundation: workspaces, projects, suites, cases, runs, frozen manifests, subpanels, one-case private pilot UI, reruns, and aggregation | Full multi-case buyer editor/history/comparison UX and paid funding journey still need browser E2E |
+| Reviewer workflow | Implemented for unpaid invited panels: invitation, assignment-only A/B cases, frozen tags, encrypted rationale, server-persisted responses, and lease recovery | Paid assignment/commit/receipt integration, notifications, earnings history, appeals, and live E2E |
+| Evidence | Implemented for completed unpaid invited runs: source-derived signed packets, separate reviewer/judgment coverage, per-case descriptive aggregation, separate client decision, and offline verification with a pinned trust anchor | Paid packets fail closed without terminal receipts; operational key publication/rotation, external verifier review, and a live settlement fixture remain |
+| Settlement pipeline | Implemented source derivation: caller-supplied outcomes are rejected; Ponder finalization provenance and stored assignment/voucher/response records drive publication and webhooks | Scheduled production worker, monitoring/alerts, and deployment-pinned live exercise |
+| Fund-core economics | Implemented and property-tested: exact policy equality, strict reveal/beacon deadline separation, self-reveal fallback, zero-reveal refund, and accepted-valid-work compensation | External real-money contract review, deploy assertion, gas/size report, then one fresh deployment |
+| Deployment | Active bundle intentionally invalidated; source ABIs are v2-only | Fresh Base Sepolia contracts and atomic app/Ponder/keeper/Postgres configuration; sandbox-only app publication is allowed before this |
+| B2B/legal operations | Workspace trader/VAT/DPA/retention fields exist; public legal copy reflects reviewer modes and evidence limits | Geoblocking, screening operations, invoices/reconciliation, notice/action, KMS, rate limits, runbooks, and German legal review remain blockers to real money |
+
+The decisive remaining boundary is therefore narrower but still important: the isolated application can be published in
+explicit sandbox mode for product review, and an unpaid invited pilot can be rehearsed after migrations and operational
+privacy review. Paid testnet work requires both the missing assurance settlement integration and a fresh deployment.
+Real-money launch remains blocked by the controls listed in the final row.
+
 ## Headline
 
 The build is real and honest. Test health is clean (26/26 Foundry incl. stateful invariant suites; ~140 TS unit tests across 8 workspaces; typechecks pass), the adminless-funds claim genuinely holds on-chain (no owner/pause/sweep/upgrade path; issuer firewalled from funds and from accepted commits, proven by test), the copy discipline is excellent (no "reviews", no "fully keyless"/"unlinkable"/"zero deposits" overclaims — the honest formulations are used consistently), and the strongest compliance mechanics (DAC7 gating before the first voucher, checkout itemization, envelope-encrypted nullifier seeds, user-controlled payout-key recovery) are correctly built.
 
-**The settlement substrate is real, but the human-assurance product is not ready for private customer material.** The redesign audit found assignment/access, storage, identity-linkage, and evidence-derivation failures that precede a useful live pilot. Both user-facing loops also dead-end after the first action, the result/webhook pipeline has no automated driver, roughly half of the pre-real-money controls are absent, and reserve farming remains a genuine economic bug.
+**The settlement substrate and unpaid invited human-assurance foundation are implemented, but the paid assurance stack
+is intentionally disabled.** The access, storage, response, and unpaid evidence blockers identified in the snapshot
+were addressed in source. The remaining gates are assignment-specific paid settlement, live end-to-end validation,
+operational key/privacy controls, fuller buyer and reviewer loops, B2B legal/payment operations, external review, and a
+fresh atomic contract/service deployment.
 
-## Newly identified human-assurance blockers
+## Historical pre-redesign human-assurance blockers
 
 0a. **Live task content is not access-controlled.** Any signed-in rater can receive every approved open task's `content_json`; there is no project, cohort, invitation, assignment, assurance, or confidentiality filter. Fail closed on live content before any private pilot, then issue short-lived assignment-specific reads.
 

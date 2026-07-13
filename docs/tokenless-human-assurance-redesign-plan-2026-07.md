@@ -4,6 +4,23 @@
 
 **Status:** Detailed execution plan. This plan implements the product direction in the [design of record](tokenless-immutable-implementation-plan-2026-07.md), [product-market-fit research](tokenless-product-market-fit-research-2026-07-13.md), and [consulting strategy](ai-consulting-rateloop-integration-strategy-2026-07-13.md). It does not authorize a production deployment.
 
+## Implementation checkpoint — 13 July 2026
+
+- Phase A is implemented and verified: private task visibility fails closed, beacon-failure compensation is hardened,
+  vouchers bind the exact audience-policy hash, and v2 human-assurance schemas replace ordered identity tiers.
+- Phase B has a usable **unpaid customer-invited foundation**: client-isolated projects, suites/cases/runs, encrypted
+  artifacts, assignments and renewable short leases, blinded responses, explicit off-chain completion, descriptive
+  per-case aggregation, signed decision packets, and separate client sign-off. The public buyer flow remains a
+  suite-setup preview rather than a complete run dashboard.
+- Paid, RateLoop-network, and hybrid assurance assignments now fail closed. They must not be re-enabled until the frozen
+  assignment policy is carried through voucher issuance, sealed commit, terminal settlement, and a receipt for every
+  expected judgment. The existing generic paid settlement primitive is not a substitute for that product integration.
+- Identity-provider commits 15 and 16 remain deliberately deferred behind the PMF gates below. Base Account plus
+  one-time customer invitations is the active private path; neither World ID nor Self is a production dependency.
+- Pipeline and integration foundations are present, but production scheduling, safe artifact upload, settlement
+  notifications, earnings, full buyer APIs/UI, compliance operations, browser E2E, and the atomic fresh deployment
+  remain open. The isolated web deployment may be published only as an explicitly simulated sandbox meanwhile.
+
 ## Decision
 
 Rebuild the tokenless product around this category and promise:
