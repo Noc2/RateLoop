@@ -1,18 +1,12 @@
 import Link from "next/link";
 
-const useCases = [
-  "Customer support",
-  "AI consulting delivery",
-  "Marketing and content",
-  "Product workflows",
-  "Internal copilots",
-] as const;
+const useCases = ["Support", "Consulting", "Marketing", "Product", "Copilots"] as const;
 
 export function HumanAssuranceUseCasesStrip() {
   return (
     <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40">
       <p className="mb-5 text-center text-base leading-7 text-base-content/70 sm:text-lg">
-        Add a human quality gate before AI-enabled work reaches customers
+        Add a human check before AI reaches your customers.
       </p>
       <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:gap-2.5 sm:px-0 lg:gap-3">
         {useCases.map(useCase => (

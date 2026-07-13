@@ -6,9 +6,8 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "RateLoop — Human assurance for AI workflows",
-  description:
-    "Test AI-enabled work with blinded human panels, written reasons, and verifiable settlement evidence before rollout.",
+  title: "RateLoop — Human assurance for AI",
+  description: "Get blind human feedback before you ship AI work.",
 });
 
 const isProduction = process.env.NODE_ENV === "production";

@@ -8,33 +8,33 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("landing page leads with buyer-facing human assurance and a secondary rater journey", async () => {
+test("landing page uses concise buyer-facing copy and a secondary reviewer journey", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   process.env.TOKENLESS_SANDBOX_MODE = "true";
   const { default: HomePage } = await import("./page");
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
   assert.match(html, /Human Assurance/i);
-  assert.match(html, /for AI Workflows/i);
-  assert.match(html, /Set Up a Sandbox Suite/);
-  assert.match(html, /Preview Reviewer Flow/);
+  assert.match(html, /for AI/i);
+  assert.match(html, /Get blind human feedback before you ship/i);
+  assert.match(html, /Try the Sandbox/);
+  assert.match(html, /View Reviewer Flow/);
   assert.ok(
-    html.indexOf("Set Up a Sandbox Suite") < html.indexOf("Preview Reviewer Flow"),
+    html.indexOf("Try the Sandbox") < html.indexOf("View Reviewer Flow"),
     "the buyer CTA should appear before the rater CTA",
   );
-  assert.match(html, /Reviewer activity, results, and payments are simulated/i);
-  assert.match(html, /use only synthetic or redacted test material/i);
-  assert.doesNotMatch(html, /Earn by Evaluating AI|Get clear reasons and verifiable settlement evidence/);
-  assert.match(html, /Set the Quality Bar/);
-  assert.match(html, /Humans Evaluate Blind/);
-  assert.match(html, /Decide With Evidence/);
-  assert.match(html, /AI consulting delivery/);
-  assert.match(html, /What Is Human Assurance\?/);
-  assert.match(html, /human-owned rollout decision/i);
-  assert.match(html, /not suitable for secrets or regulated personal data/i);
+  assert.match(html, /Reviews and payments are simulated/i);
+  assert.match(html, /Use test or redacted content/i);
+  assert.match(html, /Set the Standard/);
+  assert.match(html, /Review Blind/);
+  assert.match(html, /Make the Call/);
+  assert.match(html, /Consulting/);
+  assert.match(html, /What Does RateLoop Do\?/);
+  assert.match(html, /Your team makes the final decision/i);
+  assert.match(html, /Keep secrets out/i);
   assert.match(html, /How It/);
-  assert.match(html, /Why It/);
-  assert.match(html, /Agent-Ready/);
+  assert.match(html, /Why RateLoop/);
+  assert.match(html, /Agent/);
   assert.match(html, /Claude Code/);
   assert.match(html, /OpenAI Codex/);
   assert.match(html, /Cursor/);
@@ -45,11 +45,16 @@ test("landing page leads with buyer-facing human assurance and a secondary rater
   assert.match(html, /rateloop_create_handoff/);
   assert.match(html, /rateloop_get_handoff_status/);
   assert.match(html, /rateloop_get_result/);
-  assert.match(html, /exact outbound material for explicit approval/i);
-  assert.match(html, /browser review before quote and submission/i);
-  assert.match(html, /not live human reviews or paid evidence/i);
+  assert.match(html, /You see exactly what will be shared/i);
+  assert.match(html, /Review the quote and send it from the browser/i);
+  assert.match(html, /This sandbox is simulated/i);
   assert.match(html, /href="\/docs\/ai"/);
   assert.match(html, /Common/);
+  assert.equal(html.match(/<details/g)?.length, 6);
+  assert.doesNotMatch(
+    html,
+    /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready/i,
+  );
   assert.doesNotMatch(
     html,
     /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context|favorite AI agent|rateloop-promo\.mp4/i,

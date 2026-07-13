@@ -164,8 +164,8 @@ function Notice({ sandboxMode }: { sandboxMode: boolean }) {
           <path d="M12 9v5m0 3h.01" />
         </svg>
         {sandboxMode
-          ? "Sandbox preview: reviewers, results, and payments are simulated. Base Sepolia/test funds only; do not send production assets or private customer data."
-          : "RateLoop is in early access. Verify the network and panel terms before funding."}
+          ? "Sandbox only: simulated reviews and test funds. Do not use private data."
+          : "Early access: check the network and panel terms before funding."}
       </p>
     </div>
   );
