@@ -32,7 +32,7 @@ const logger: Logger = {
 const config = {
   chainId: 84532,
   deployment: {
-    key: `tokenless-v1:84532:${PANEL}:${ISSUER}:0x0000000000000000000000000000000000000000`,
+    key: `tokenless-v2:84532:${PANEL}:${ISSUER}:0x0000000000000000000000000000000000000000`,
     blockNumber: 100n,
     panel: PANEL,
     credentialIssuer: ISSUER,

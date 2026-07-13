@@ -26,7 +26,7 @@ export function tokenlessDeploymentPath(root = foundryRoot) {
   return join(
     root,
     "deployments",
-    "tokenless-v1",
+    "tokenless-v2",
     `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`
   );
 }

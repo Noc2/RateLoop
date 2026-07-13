@@ -44,7 +44,7 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
     revealWindowSeconds: 120,
     beaconFailureGraceSeconds: 300,
     rpcUrl: "https://sepolia.base.org/",
-    schemaVersion: "rateloop-tokenless-deployment-v1",
+    schemaVersion: "rateloop-tokenless-deployment-v2",
     usdcAddress: USDC,
     x402SubmitterAddress: ADAPTER,
     ...overrides,
@@ -107,7 +107,7 @@ afterEach(() => {
 test("deployment config binds the complete bundle and forbids credential key reuse", () => {
   const key = `0x${"11".repeat(32)}`;
   const env = {
-    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v1",
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
     TOKENLESS_CHAIN_ID: "84532",
     TOKENLESS_PANEL_ADDRESS: PANEL,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
@@ -129,6 +129,15 @@ test("deployment config binds the complete bundle and forbids credential key reu
         TOKENLESS_DEPLOYMENT_KEY: "wrong",
       }),
     /does not match the complete configured tokenless contract bundle/,
+  );
+  assert.throws(
+    () =>
+      loadTokenlessChainConfig({
+        ...env,
+        TOKENLESS_X402_RELAYER_PRIVATE_KEY: undefined,
+        TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v1",
+      }),
+    /must be rateloop-tokenless-deployment-v2/,
   );
 });
 

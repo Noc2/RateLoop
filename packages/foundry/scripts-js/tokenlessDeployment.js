@@ -1,7 +1,8 @@
 import { isAddress, zeroAddress } from "viem";
 
-export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v1";
-export const TOKENLESS_DEPLOYMENT_VERSION = 1;
+export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v2";
+export const TOKENLESS_DEPLOYMENT_VERSION = 2;
+export const TOKENLESS_DEPLOYMENT_KEY_VERSION = "tokenless-v2";
 export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84532;
 export const TOKENLESS_BASE_SEPOLIA_NETWORK = "baseSepolia";
 
@@ -127,7 +128,7 @@ export function buildTokenlessDeploymentKey({
   x402PanelSubmitter,
 }) {
   return [
-    "tokenless-v1",
+    TOKENLESS_DEPLOYMENT_KEY_VERSION,
     String(chainId),
     panel.toLowerCase(),
     credentialIssuer.toLowerCase(),
@@ -144,12 +145,12 @@ export function reconstructTokenlessDeploymentFromBroadcast(
 ) {
   if (chainId !== TOKENLESS_BASE_SEPOLIA_CHAIN_ID) {
     throw new Error(
-      `tokenless-v1 only supports Base Sepolia (${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}); received ${chainId}.`
+      `${TOKENLESS_DEPLOYMENT_KEY_VERSION} only supports Base Sepolia (${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}); received ${chainId}.`
     );
   }
   if (networkName !== TOKENLESS_BASE_SEPOLIA_NETWORK) {
     throw new Error(
-      `tokenless-v1 networkName must be ${TOKENLESS_BASE_SEPOLIA_NETWORK}.`
+      `${TOKENLESS_DEPLOYMENT_KEY_VERSION} networkName must be ${TOKENLESS_BASE_SEPOLIA_NETWORK}.`
     );
   }
 
@@ -269,7 +270,7 @@ export function validateTokenlessDeploymentArtifact(artifact) {
   for (const name of Object.keys(contracts)) {
     if (!ALLOWED_CONTRACTS.has(name)) {
       throw new Error(
-        `Unexpected contract ${name} in tokenless-v1 deployment artifact.`
+        `Unexpected contract ${name} in ${TOKENLESS_DEPLOYMENT_KEY_VERSION} deployment artifact.`
       );
     }
   }

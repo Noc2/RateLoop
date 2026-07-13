@@ -8,7 +8,7 @@ const issuer = "0x1000000000000000000000000000000000000002";
 describe("tokenless deployment identity", () => {
   it("builds the stable versioned identity including an explicit zero adapter", () => {
     expect(buildTokenlessDeploymentKey({ chainId: 84_532, panelAddress: panel, issuerAddress: issuer })).toBe(
-      `tokenless-v1:84532:${panel}:${issuer}:${zeroAddress}`,
+      `tokenless-v2:84532:${panel}:${issuer}:${zeroAddress}`,
     );
   });
 
@@ -20,6 +20,7 @@ describe("tokenless deployment identity", () => {
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       PONDER_TOKENLESS_START_BLOCK: "44051709",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v2:84532:${panel}:${issuer}:${zeroAddress}`,
     };
     expect(resolveTokenlessDeployment(env)).toMatchObject({
       chainId: 84_532,
@@ -31,9 +32,15 @@ describe("tokenless deployment identity", () => {
     expect(() =>
       resolveTokenlessDeployment({
         ...env,
-        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v1:84532:${issuer}:${panel}:${zeroAddress}`,
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v1:84532:${panel}:${issuer}:${zeroAddress}`,
       }),
     ).toThrow("does not match the tokenless deployment identity");
+    expect(() =>
+      resolveTokenlessDeployment({
+        ...env,
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: undefined,
+      }),
+    ).toThrow("is required for Base Sepolia");
   });
 
   it("rejects legacy networks and zero core addresses", () => {

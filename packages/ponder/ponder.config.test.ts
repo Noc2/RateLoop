@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const originalEnv = { ...process.env };
 const panel = "0x1000000000000000000000000000000000000001";
 const issuer = "0x1000000000000000000000000000000000000002";
+const deploymentKey = `tokenless-v2:84532:${panel}:${issuer}:0x0000000000000000000000000000000000000000`;
 
 afterEach(() => {
   process.env = { ...originalEnv };
@@ -19,6 +20,7 @@ describe("tokenless Ponder config", () => {
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       PONDER_TOKENLESS_START_BLOCK: "44051709",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     };
     const { default: config } = await import("./ponder.config");
     expect(Object.keys((config as any).contracts).sort()).toEqual(["CredentialIssuer", "TokenlessPanel"]);
@@ -34,6 +36,7 @@ describe("tokenless Ponder config", () => {
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       PONDER_TOKENLESS_START_BLOCK: "1",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     };
     await expect(import("./ponder.config")).rejects.toThrow("must use HTTPS");
   });

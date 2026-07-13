@@ -8,8 +8,8 @@ import { CredentialIssuer } from "../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
 import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
-/// @notice Disposable Base Sepolia deployment for the tokenless-v1 stack.
-/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v1 schema.
+/// @notice Disposable Base Sepolia deployment for the next tokenless-v2 stack.
+/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v2 schema.
 contract DeployTokenlessScript is Script {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84_532;
 
@@ -39,6 +39,6 @@ contract DeployTokenlessScript is Script {
         console2.log("CredentialIssuer:", address(issuer));
         console2.log("TokenlessPanel:", address(panel));
         console2.log("X402PanelSubmitter:", address(x402Submitter));
-        console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v1");
+        console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v2");
     }
 }

@@ -62,5 +62,6 @@ payout. Workspace webhooks are HMAC-signed, idempotent, retried, and store their
 
 The historical Base Sepolia deployment is stale and disposable until a real-money review. Contract changes require a fresh deployment;
 no storage, selector, proxy, or address compatibility is promised. App, Ponder, keeper, Postgres schema, deployment
-block, and the complete `tokenless-v1:<chain>:<panel>:<issuer>:<adapter>` key must change together. The `tokenless`
+block, and the complete `tokenless-v2:<chain>:<panel>:<issuer>:<adapter>` key must change together. Historical v1 keys
+are rejected by every active service. The `tokenless`
 branch must never be attached to `rateloop.ai` or the legacy production Railway/Vercel projects.

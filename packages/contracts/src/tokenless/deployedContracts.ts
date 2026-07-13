@@ -1,14 +1,18 @@
 /**
- * Generated from rateloop-tokenless-deployment-v1.
- * Do not edit manually.
+ * The active registry is intentionally empty until a complete v2 bundle is freshly deployed.
+ * The v1 entry remains exported only as explicit historical evidence.
  */
-export const tokenlessDeploymentSchema = "rateloop-tokenless-deployment-v1" as const;
+export const tokenlessDeploymentSchema = "rateloop-tokenless-deployment-v2" as const;
+export const tokenlessDeployedContracts = {} as const;
 
-export const tokenlessDeployedContracts = {
+export const tokenlessHistoricalDeploymentSchema = "rateloop-tokenless-deployment-v1" as const;
+export const tokenlessHistoricalDeployments = {
   "84532": {
     "schemaVersion": "rateloop-tokenless-deployment-v1",
     "version": 1,
     "deploymentComplete": true,
+    "deploymentStatus": "historical",
+    "supersededBySchema": "rateloop-tokenless-deployment-v2",
     "deploymentProfile": "test",
     "networkName": "baseSepolia",
     "chainId": 84532,

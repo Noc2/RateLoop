@@ -103,7 +103,7 @@ export function startMetricsServer(
     if (request.url === "/live") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
-        JSON.stringify({ status: "live", protocol: "tokenless-v1" })
+        JSON.stringify({ status: "live", protocol: "tokenless-v2" })
       );
       return;
     }
@@ -127,7 +127,7 @@ export function startMetricsServer(
       response.end(
         JSON.stringify({
           status: healthy ? "ok" : "degraded",
-          protocol: "tokenless-v1",
+          protocol: "tokenless-v2",
           consecutiveErrors,
           lastRunAt: lastRunAt?.toISOString() ?? null,
           walletBalanceWei: walletBalanceWei?.toString() ?? null,

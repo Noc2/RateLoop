@@ -2,7 +2,7 @@
   "name": "@rateloop/contracts",
   "version": "0.1.0",
   "type": "module",
-  "description": "Tokenless-v1 ABIs and isolated Base Sepolia deployment metadata",
+  "description": "Versioned tokenless ABIs and isolated Base Sepolia deployment metadata",
   "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/contracts",
   "repository": {
     "type": "git",

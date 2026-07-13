@@ -36,7 +36,7 @@ deploy: deploy-tokenless-and-generate-artifacts
 
 deploy-tokenless: check-contract-sizes
 	@if [ "$$DEPLOY_TARGET_NETWORK" != "baseSepolia" ]; then \
-		echo "Error: tokenless-v1 deploy requires DEPLOY_TARGET_NETWORK=baseSepolia"; \
+		echo "Error: tokenless-v2 deploy requires DEPLOY_TARGET_NETWORK=baseSepolia"; \
 		exit 1; \
 	fi
 	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/DeployTokenless.s.sol \

@@ -100,7 +100,7 @@ export function generateTokenlessArtifacts({
   deploymentPath = join(
     foundryRoot,
     "deployments",
-    "tokenless-v1",
+    "tokenless-v2",
     `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`
   ),
   outputDirectory = join(

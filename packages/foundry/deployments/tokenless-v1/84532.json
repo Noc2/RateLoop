@@ -2,6 +2,8 @@
   "schemaVersion": "rateloop-tokenless-deployment-v1",
   "version": 1,
   "deploymentComplete": true,
+  "deploymentStatus": "historical",
+  "supersededBySchema": "rateloop-tokenless-deployment-v2",
   "deploymentProfile": "test",
   "networkName": "baseSepolia",
   "chainId": 84532,

@@ -6,6 +6,7 @@ loadDotenv();
 
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 const LOCAL_CHAIN_ID = 31337;
+export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v2";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
@@ -85,7 +86,7 @@ export function buildTokenlessDeploymentKey(params: {
   x402PanelSubmitter?: Address;
 }) {
   return [
-    "tokenless-v1",
+    TOKENLESS_DEPLOYMENT_VERSION,
     String(params.chainId),
     params.panel.toLowerCase(),
     params.credentialIssuer.toLowerCase(),

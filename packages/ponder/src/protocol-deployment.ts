@@ -1,6 +1,6 @@
 import { isAddress, zeroAddress } from "viem";
 
-export const TOKENLESS_SCHEMA_VERSION = "tokenless-v1";
+export const TOKENLESS_SCHEMA_VERSION = "tokenless-v2";
 export const PONDER_NETWORK_CHAIN_IDS = {
   hardhat: 31_337,
   baseSepolia: 84_532,
@@ -92,6 +92,9 @@ export function resolveTokenlessDeployment(
   );
   const deploymentKey = buildTokenlessDeploymentKey({ chainId, panelAddress, issuerAddress, adapterAddress });
   const configuredKey = read(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY")?.toLowerCase();
+  if (typedNetwork === "baseSepolia" && !configuredKey) {
+    throw new Error("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY is required for Base Sepolia.");
+  }
   if (configuredKey && configuredKey !== deploymentKey) {
     throw new Error("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY does not match the tokenless deployment identity.");
   }

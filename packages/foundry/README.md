@@ -1,4 +1,4 @@
-# RateLoop tokenless-v1 contracts
+# RateLoop tokenless contracts
 
 This package contains the disposable Base Sepolia tokenless protocol:
 
@@ -7,7 +7,7 @@ This package contains the disposable Base Sepolia tokenless protocol:
 - `X402PanelSubmitter`: a stateless EIP-3009 funding adapter with no retained balance or mutable wiring.
 - `MockERC20`: unrestricted test currency used only by the isolated test deployment.
 
-The checked-in historical artifact is `deployments/tokenless-v1/84532.json`. It is stale after current fund-core changes and must not be used as a live compatibility target. The next versioned deployment key will bind chain, panel, issuer, and optional adapter addresses and must never be merged with another deployment schema.
+The checked-in `deployments/tokenless-v1/84532.json` artifact is explicitly historical and must not be used as a live compatibility target. The deployment tooling now reserves `rateloop-tokenless-deployment-v2` and `tokenless-v2:*` keys for the next fresh deployment; it will write `deployments/tokenless-v2/84532.json` without overwriting the v1 evidence.
 
 ## Commands
 

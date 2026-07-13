@@ -2,7 +2,7 @@ import "server-only";
 import { type Address, getAddress, isAddress, zeroAddress } from "viem";
 
 export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84_532;
-export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v1";
+export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v2";
 export const TOKENLESS_QUICKNET_T_CHAIN_HASH =
   "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const;
 
@@ -62,7 +62,7 @@ export function buildTokenlessDeploymentKey(input: {
   x402SubmitterAddress: Address;
 }) {
   return [
-    "tokenless-v1",
+    "tokenless-v2",
     input.chainId,
     input.panelAddress.toLowerCase(),
     input.issuerAddress.toLowerCase(),

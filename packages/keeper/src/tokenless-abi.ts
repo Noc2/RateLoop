@@ -1,6 +1,6 @@
 import { parseAbi } from "viem";
 
-// Package-local minimal ABI until the first tokenless-v1 deployment generates
+// Package-local minimal ABI until the first tokenless-v2 deployment generates
 // @rateloop/contracts/tokenless. Keep this limited to permissionless keeper calls.
 export const TokenlessPanelAbi = parseAbi([
   "event CommitAccepted(uint256 indexed roundId,bytes32 indexed commitKey,bytes32 indexed nullifier,bytes sealedPayload)",

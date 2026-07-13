@@ -95,7 +95,7 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.contracts.X402PanelSubmitter, undefined);
   assert.match(
     artifact.deploymentKey,
-    /^tokenless-v1:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}$/
+    /^tokenless-v2:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}$/
   );
 });
 
@@ -165,7 +165,7 @@ test("validates deployment keys against contract addresses", () => {
   );
 });
 
-test("export writes tokenless-v1 separately and leaves unrelated artifacts untouched", () => {
+test("export writes tokenless-v2 separately and leaves unrelated artifacts untouched", () => {
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-export-"));
   try {
     const unrelatedPath = join(root, "deployments", "unrelated.json");
@@ -173,7 +173,7 @@ test("export writes tokenless-v1 separately and leaves unrelated artifacts untou
     const tokenlessPath = join(
       root,
       "deployments",
-      "tokenless-v1",
+      "tokenless-v2",
       "84532.json"
     );
     mkdirSync(join(root, "deployments"), { recursive: true });
@@ -214,7 +214,7 @@ test("generated sources expose required ABIs and omit the absent adapter", () =>
   assert.equal(sources.has("abis/X402PanelSubmitterAbi.ts"), false);
   assert.match(
     sources.get("deployedContracts.ts"),
-    /rateloop-tokenless-deployment-v1/
+    /rateloop-tokenless-deployment-v2/
   );
   assert.doesNotMatch(sources.get("index.ts"), /X402PanelSubmitterAbi/);
 });
