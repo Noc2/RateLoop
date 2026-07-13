@@ -49,6 +49,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "https://*.walletconnect.com",
     "https://*.walletconnect.org",
     "wss://*.walletconnect.com",
+    "https://bridge.worldcoin.org",
     httpsOrigin(options.baseRpcUrl),
     ...(options.isVercelLiveEnabled ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"] : []),
     ...(options.isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : []),

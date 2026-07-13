@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PaidEligibilityClient } from "~~/components/tokenless/PaidEligibilityClient";
+import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
 export default function PaidTaskUnlockPage() {
   return (
@@ -13,7 +14,7 @@ export default function PaidTaskUnlockPage() {
         </p>
       </div>
 
-      <PaidEligibilityClient />
+      <PaidEligibilityClient networkPanelsEnabled={isWorldIdAssuranceEnabled()} />
       <Link href="/settings/workspace" className="rateloop-gradient-action mt-6 w-fit px-6">
         Manage workspace & API keys
       </Link>

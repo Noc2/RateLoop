@@ -141,6 +141,13 @@
       "when": 1783926000000,
       "tag": "0019_integrity_epochs",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783929600000,
+      "tag": "0020_world_id_proof_of_human",
+      "breakpoints": true
     }
   ]
 }

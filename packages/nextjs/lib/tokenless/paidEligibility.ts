@@ -916,7 +916,8 @@ export async function getPaidEligibility(accountAddress: string, now = new Date(
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) return { status: "not_started" };
   const assertionsResult = await dbClient.execute({
-    sql: `SELECT capabilities_json, evidence_expires_at, document_issuing_country,
+    sql: `SELECT provider_id, provider_namespace, capabilities_json, evidence_expires_at,
+                 assurance_validity_model, document_issuing_country,
                  nationality_country, verified_residence_country
           FROM tokenless_assurance_assertions
           WHERE rater_id = ? AND status = 'active'
@@ -924,12 +925,17 @@ export async function getPaidEligibility(accountAddress: string, now = new Date(
     args: [stringValue(row, "rater_id")!],
   });
   const assertions = assertionsResult.rows as QueryRow[];
-  const currentAssertions = assertions.filter(value => new Date(String(value.evidence_expires_at)) > now);
+  const currentAssertions = assertions.filter(
+    value =>
+      stringValue(value, "assurance_validity_model") === "durable_enrollment" ||
+      new Date(String(value.evidence_expires_at)) > now,
+  );
   const capabilities = [
     ...new Set(
       currentAssertions.flatMap(value => JSON.parse(String(value.capabilities_json)) as HumanAssuranceCapability[]),
     ),
   ].sort();
+  const assuranceProviders = [...new Set(currentAssertions.map(value => String(value.provider_id)))].sort();
   const latestAssertion = assertions[0];
   // Human-assurance assertions are independent from the legal age gate. A
   // short-lived World ID (or future provider) assertion must not expire an
@@ -949,6 +955,7 @@ export async function getPaidEligibility(accountAddress: string, now = new Date(
     status: currentStatus,
     blockedReason: publicBlockedReason(stringValue(row, "blocked_reason")),
     capabilities,
+    assuranceProviders,
     evidenceExpiresAt,
     minimumAgeVerified: row.minimum_age_verified === null ? null : Number(row.minimum_age_verified),
     documentIssuingCountry: stringValue(latestAssertion, "document_issuing_country"),
@@ -1067,11 +1074,11 @@ async function loadVoucherEligibility(
   const assertionsResult = await dbClient.execute({
     sql: `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
                  b.subject_reference_hash, a.capabilities_json, a.evidence_verified_at,
-                 a.evidence_expires_at
+                 a.evidence_expires_at, a.assurance_validity_model
           FROM tokenless_assurance_assertions a
           JOIN tokenless_provider_subject_bindings b ON b.binding_id = a.binding_id
           WHERE a.rater_id = ? AND a.status = 'active' AND b.status = 'active'
-            AND a.evidence_expires_at > ?`,
+            AND (a.assurance_validity_model = 'durable_enrollment' OR a.evidence_expires_at > ?)`,
     args: [raterId, now],
   });
   const assertions = (assertionsResult.rows as QueryRow[]).map(assertion => ({
@@ -1083,6 +1090,7 @@ async function loadVoucherEligibility(
     capabilities: JSON.parse(String(assertion.capabilities_json)) as HumanAssuranceCapability[],
     verifiedAt: new Date(String(assertion.evidence_verified_at)),
     expiresAt: new Date(String(assertion.evidence_expires_at)),
+    validityModel: stringValue(assertion, "assurance_validity_model") as "expiring" | "durable_enrollment",
   }));
   const qualificationsResult = await dbClient.execute({
     sql: `SELECT qualification_id, reviewer_source, qualification_kind, cohort_ids_json,
@@ -1289,6 +1297,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
         capabilities: [...value.capabilities].sort(),
         verifiedAt: value.verifiedAt.toISOString(),
         expiresAt: value.expiresAt.toISOString(),
+        validityModel: value.validityModel,
       }))
       .sort((left, right) => left.assertionId.localeCompare(right.assertionId)),
     qualifications: eligibility.qualificationRecords

@@ -1,12 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { WorldIdAssuranceClient } from "~~/components/tokenless/WorldIdAssuranceClient";
 import { readBrowserSession } from "~~/lib/thirdweb/client";
 
 type EligibilityState = {
   status: "not_started" | "eligible" | "review" | "blocked" | "expired";
   blockedReason?: string | null;
   capabilities?: string[];
+  assuranceProviders?: string[];
   evidenceExpiresAt?: string;
   dac7Status?: string;
   screeningStatus?: string;
@@ -66,7 +68,7 @@ function formatCapability(value: string) {
   return value.replaceAll("_", " ");
 }
 
-export function PaidEligibilityClient() {
+export function PaidEligibilityClient({ networkPanelsEnabled = false }: { networkPanelsEnabled?: boolean }) {
   const [state, setState] = useState<EligibilityState | null>(null);
   const [accountAddress, setAccountAddress] = useState<string | null>(null);
   const [providerState, setProviderState] = useState<string | null>(null);
@@ -197,6 +199,12 @@ export function PaidEligibilityClient() {
                   : "No provider claim exposed"}
               </strong>
             </div>
+            {networkPanelsEnabled ? (
+              <WorldIdAssuranceClient
+                verified={state.assuranceProviders?.includes("world:poh") ?? false}
+                onVerified={refresh}
+              />
+            ) : null}
           </div>
         ) : providerState ? (
           <form className="mt-6 space-y-5" onSubmit={submitUnlock}>

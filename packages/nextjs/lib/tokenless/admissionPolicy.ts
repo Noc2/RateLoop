@@ -17,6 +17,7 @@ export type CapabilityAdmissionEvidence = {
     capabilities: HumanAssuranceCapability[];
     verifiedAt: Date;
     expiresAt: Date;
+    validityModel?: "expiring" | "durable_enrollment";
   }>;
   reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid">;
   cohortIds: string[];
@@ -90,7 +91,11 @@ export function evaluateFrozenAdmissionPolicy(input: {
         (requirement.allowedProviders.length === 0 || requirement.allowedProviders.includes(assertion.providerId)),
     );
     const current = candidates.find(assertion => {
-      if (assertion.expiresAt <= now || assertion.verifiedAt > now) return false;
+      if (
+        (assertion.validityModel !== "durable_enrollment" && assertion.expiresAt <= now) ||
+        assertion.verifiedAt > now
+      )
+        return false;
       return (
         requirement.freshnessSeconds === undefined ||
         assertion.verifiedAt.getTime() >= now.getTime() - requirement.freshnessSeconds * 1_000
