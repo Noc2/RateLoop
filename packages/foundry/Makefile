@@ -11,7 +11,7 @@ build compile:
 	forge build --offline
 
 test:
-	forge test --offline --ignored-error-codes 3860 --deny warnings $(TEST_ARGS)
+	forge test --offline --ignored-error-codes 3860 --ignored-error-codes 6335 --deny warnings $(TEST_ARGS)
 
 coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)
