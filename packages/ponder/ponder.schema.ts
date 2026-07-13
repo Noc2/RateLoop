@@ -41,6 +41,10 @@ export const tokenlessRound = onchainTable(
     createdAt: t.bigint().notNull(),
     createdBlock: t.bigint().notNull(),
     createdTxHash: t.hex().notNull(),
+    finalizedAt: t.bigint(),
+    finalizedBlock: t.bigint(),
+    finalizedBlockHash: t.hex(),
+    finalizedTxHash: t.hex(),
     updatedAt: t.bigint().notNull(),
   }),
   (table) => ({

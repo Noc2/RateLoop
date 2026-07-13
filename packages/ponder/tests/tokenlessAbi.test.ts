@@ -51,6 +51,10 @@ describe("tokenless panel indexing ABI", () => {
 
   it("stores the policy hash without retaining the v1 tier column", () => {
     expect(tokenlessRound.admissionPolicyHash.columnType).toBe("PgHex");
+    expect(tokenlessRound.finalizedAt.columnType).toBe("PgEvmBigint");
+    expect(tokenlessRound.finalizedBlock.columnType).toBe("PgEvmBigint");
+    expect(tokenlessRound.finalizedBlockHash.columnType).toBe("PgHex");
+    expect(tokenlessRound.finalizedTxHash.columnType).toBe("PgHex");
     expect("requiredTier" in tokenlessRound).toBe(false);
   });
 });

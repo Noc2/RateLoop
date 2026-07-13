@@ -9,6 +9,11 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const WEBHOOK_EVENTS = new Set(["result.ready", "result.updated"]);
 const MAX_DELIVERY_ATTEMPTS = 8;
 const BPS_MAX = 10_000;
+const MAX_PONDER_COMMITS = 500;
+const FINALIZED_ROUND_STATE = 4;
+const UNSIGNED_INTEGER = /^(?:0|[1-9]\d*)$/;
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
 
 type Row = Record<string, unknown>;
 type ResolveHostname = (hostname: string) => Promise<string[]>;
@@ -25,7 +30,20 @@ export type IndexedFinalizedEvidence = {
     largestClusterBps: number;
     uniqueVoteKeys: number;
   };
-  chain: { blockNumber: string; blockHash: string; transactionHash: string };
+  analytics: AnalyticsMetrics;
+  provenance: {
+    assignmentCount: number;
+    issuedVoucherCount: number;
+    matchedAssignmentCount: number;
+    validResponseCount: number;
+    verifiedIdentityCount: number;
+  };
+  roundTerms: {
+    admissionPolicyHash: string;
+    contentId: string;
+    termsHash: string;
+  };
+  chain: { blockNumber: string; blockHash: string; transactionHash: string; timestamp: string };
 };
 
 export type AnalyticsMetrics = {
@@ -34,6 +52,18 @@ export type AnalyticsMetrics = {
   issuedVoucherCount: number;
   verifiedIdentityCount: number;
 };
+
+type PonderDeployment = {
+  adapterAddress: string;
+  chainId: number;
+  deploymentKey: string;
+  issuerAddress: string;
+  panelAddress: string;
+  startBlock: number;
+};
+
+type PonderRound = Record<string, unknown>;
+type PonderCommit = Record<string, unknown>;
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -61,6 +91,94 @@ function bps(value: number, name: string) {
     throw new TokenlessServiceError(`${name} must be an integer from 0 to 10000.`, 400, "invalid_analytics");
   }
   return value;
+}
+
+function objectValue(value: unknown, name: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError(`${name} is malformed.`, 409, "indexed_evidence_invalid");
+  }
+  return value as Record<string, unknown>;
+}
+
+function stringValue(value: unknown, name: string, pattern?: RegExp) {
+  if (typeof value !== "string" || value.length === 0 || (pattern && !pattern.test(value))) {
+    throw new TokenlessServiceError(`${name} is malformed.`, 409, "indexed_evidence_invalid");
+  }
+  return value;
+}
+
+function integerValue(value: unknown, name: string) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new TokenlessServiceError(`${name} is malformed.`, 409, "indexed_evidence_invalid");
+  }
+  return value;
+}
+
+function unsignedValue(value: unknown, name: string) {
+  return stringValue(value, name, UNSIGNED_INTEGER);
+}
+
+function exactAddress(value: unknown, name: string) {
+  return stringValue(value, name, ADDRESS).toLowerCase();
+}
+
+function exactBytes32(value: unknown, name: string) {
+  return stringValue(value, name, BYTES32).toLowerCase();
+}
+
+function ratioBps(numerator: number, denominator: number) {
+  return denominator === 0 ? 0 : Math.floor((numerator * BPS_MAX) / denominator);
+}
+
+function duplicateRiskBps(values: string[]) {
+  return ratioBps(values.length - new Set(values).size, values.length);
+}
+
+function configuredPonderUrl(raw = process.env.TOKENLESS_PONDER_URL ?? process.env.NEXT_PUBLIC_PONDER_URL) {
+  const value = raw?.trim() || (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:42069");
+  if (!value)
+    throw new TokenlessServiceError("Ponder evidence source is not configured.", 503, "ponder_unavailable", true);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new TokenlessServiceError("Ponder evidence source is invalid.", 503, "ponder_unavailable", true);
+  }
+  if (url.username || url.password || url.hash || !["http:", "https:"].includes(url.protocol)) {
+    throw new TokenlessServiceError("Ponder evidence source is invalid.", 503, "ponder_unavailable", true);
+  }
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+    throw new TokenlessServiceError("Ponder evidence source must use HTTPS.", 503, "ponder_unavailable", true);
+  }
+  return url;
+}
+
+function ponderEndpoint(base: URL, path: string) {
+  const url = new URL(base.toString());
+  url.pathname = `${url.pathname.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+  url.search = "";
+  return url;
+}
+
+async function fetchPonderJson(fetchImpl: typeof fetch, url: URL, name: string) {
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      headers: { accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new TokenlessServiceError(`${name} is not available.`, 409, "indexed_evidence_pending", true);
+  }
+  if (!response.ok) {
+    throw new TokenlessServiceError(`${name} is not available.`, 409, "indexed_evidence_pending", true);
+  }
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    throw new TokenlessServiceError(`${name} returned malformed JSON.`, 409, "indexed_evidence_invalid");
+  }
 }
 
 function webhookKey(raw = process.env.TOKENLESS_WEBHOOK_ENCRYPTION_KEY) {
@@ -299,7 +417,7 @@ export async function subscribeAskWebhook(input: {
 
 function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
   if (
-    !/^(?:0|[1-9]\d*)$/.test(value.roundId) ||
+    !UNSIGNED_INTEGER.test(value.roundId) ||
     !value.deploymentKey ||
     !Number.isSafeInteger(value.revealCount) ||
     value.revealCount < 1 ||
@@ -324,9 +442,10 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
     );
   }
   if (
-    !/^(?:0|[1-9]\d*)$/.test(value.chain.blockNumber) ||
-    !/^0x[0-9a-fA-F]{64}$/.test(value.chain.blockHash) ||
-    !/^0x[0-9a-fA-F]{64}$/.test(value.chain.transactionHash)
+    !UNSIGNED_INTEGER.test(value.chain.blockNumber) ||
+    !BYTES32.test(value.chain.blockHash) ||
+    !BYTES32.test(value.chain.transactionHash) ||
+    !UNSIGNED_INTEGER.test(value.chain.timestamp)
   ) {
     throw new TokenlessServiceError("Chain finality evidence is malformed.", 400, "invalid_round_evidence");
   }
@@ -336,44 +455,372 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
     value.economics.attemptReserve.fundedAtomic,
     value.economics.totalFundedAtomic,
   ];
-  if (fundedAmounts.some(amount => !/^(?:0|[1-9]\d*)$/.test(amount))) {
+  if (fundedAmounts.some(amount => !UNSIGNED_INTEGER.test(amount))) {
     throw new TokenlessServiceError("Round evidence funding is malformed.", 400, "invalid_round_evidence");
   }
   const funded = BigInt(fundedAmounts[0]) + BigInt(fundedAmounts[1]) + BigInt(fundedAmounts[2]);
   if (funded !== BigInt(value.economics.totalFundedAtomic)) {
     throw new TokenlessServiceError("Round evidence funding does not conserve.", 400, "invalid_round_evidence");
   }
+  if (
+    !BYTES32.test(value.roundTerms.admissionPolicyHash) ||
+    !BYTES32.test(value.roundTerms.contentId) ||
+    !BYTES32.test(value.roundTerms.termsHash)
+  ) {
+    throw new TokenlessServiceError("Frozen round terms are malformed.", 400, "invalid_round_evidence");
+  }
+  evaluateAnalytics(value.analytics, value.diversity);
 }
 
-export async function appendFinalizedRoundEvidence(input: {
-  operationKey: string;
-  evidence: IndexedFinalizedEvidence;
-  occurredAt: Date;
-}) {
-  validateFinalizedEvidence(input.evidence);
-  const ownership = await dbClient.execute({
-    sql: `SELECT o.workspace_id, e.deployment_key, e.deployment_block, e.round_id, e.total_funded_atomic
-          FROM tokenless_ask_ownership o
-          JOIN tokenless_chain_executions e ON e.operation_key = o.operation_key
-          WHERE o.operation_key = ? LIMIT 1`,
-    args: [input.operationKey],
-  });
-  const owner = ownership.rows[0] as Row | undefined;
-  const workspaceId = rowString(owner, "workspace_id");
-  if (!workspaceId) throw new TokenlessServiceError("Ask chain execution was not found.", 404, "ask_not_found");
+function exactIndexedIdentity(input: { deployment: PonderDeployment; execution: Row; round: PonderRound; terms: Row }) {
+  const expected = {
+    deploymentKey: rowString(input.execution, "deployment_key")!,
+    chainId: Number(input.execution.chain_id),
+    deploymentBlock: rowString(input.execution, "deployment_block")!,
+    panelAddress: rowString(input.execution, "panel_address")!.toLowerCase(),
+    issuerAddress: rowString(input.execution, "issuer_address")!.toLowerCase(),
+    adapterAddress: rowString(input.execution, "x402_submitter_address")!.toLowerCase(),
+    roundId: rowString(input.execution, "round_id")!,
+    funder: rowString(input.execution, "funder_address")!.toLowerCase(),
+  };
   if (
-    rowString(owner, "deployment_key") !== input.evidence.deploymentKey ||
-    rowString(owner, "round_id") !== input.evidence.roundId ||
-    BigInt(input.evidence.chain.blockNumber) < BigInt(rowString(owner, "deployment_block") ?? "0") ||
-    rowString(owner, "total_funded_atomic") !== input.evidence.economics.totalFundedAtomic
+    input.deployment.deploymentKey.toLowerCase() !== expected.deploymentKey.toLowerCase() ||
+    input.deployment.chainId !== expected.chainId ||
+    input.deployment.startBlock !== Number(expected.deploymentBlock) ||
+    exactAddress(input.deployment.panelAddress, "Ponder panel address") !== expected.panelAddress ||
+    exactAddress(input.deployment.issuerAddress, "Ponder issuer address") !== expected.issuerAddress ||
+    exactAddress(input.deployment.adapterAddress, "Ponder adapter address") !== expected.adapterAddress ||
+    stringValue(input.round.deploymentKey, "Indexed deployment key").toLowerCase() !==
+      expected.deploymentKey.toLowerCase() ||
+    unsignedValue(input.round.roundId, "Indexed round id") !== expected.roundId ||
+    exactAddress(input.round.funder, "Indexed funder") !== expected.funder
   ) {
     throw new TokenlessServiceError(
-      "Indexed evidence does not match the ask deployment identity.",
+      "Indexed evidence does not match the deployment-pinned execution.",
       409,
       "evidence_identity_mismatch",
     );
   }
-  const evidenceJson = stableTransparencyJson(input.evidence);
+  const exactTerms: Array<[unknown, unknown, string, (value: unknown, name: string) => string]> = [
+    [input.round.contentId, input.terms.contentId, "contentId", exactBytes32],
+    [input.round.termsHash, input.terms.termsHash, "termsHash", exactBytes32],
+    [input.round.beaconNetworkHash, input.terms.beaconNetworkHash, "beaconNetworkHash", exactBytes32],
+    [input.round.admissionPolicyHash, input.terms.admissionPolicyHash, "admissionPolicyHash", exactBytes32],
+    [input.round.feeRecipient, input.terms.feeRecipient, "feeRecipient", exactAddress],
+    [input.round.bountyAmount, input.terms.bountyAmount, "bountyAmount", unsignedValue],
+    [input.round.feeAmount, input.terms.feeAmount, "feeAmount", unsignedValue],
+    [input.round.attemptReserve, input.terms.attemptReserve, "attemptReserve", unsignedValue],
+    [input.round.attemptCompensation, input.terms.attemptCompensation, "attemptCompensation", unsignedValue],
+    [input.round.commitDeadline, input.terms.commitDeadline, "commitDeadline", unsignedValue],
+    [input.round.revealDeadline, input.terms.revealDeadline, "revealDeadline", unsignedValue],
+    [input.round.beaconFailureDeadline, input.terms.beaconFailureDeadline, "beaconFailureDeadline", unsignedValue],
+    [input.round.beaconRound, input.terms.beaconRound, "beaconRound", unsignedValue],
+    [input.round.claimGracePeriod, input.terms.claimGracePeriod, "claimGracePeriod", unsignedValue],
+  ];
+  if (
+    exactTerms.some(
+      ([indexed, frozen, name, parse]) => parse(indexed, `Indexed ${name}`) !== parse(frozen, `Frozen ${name}`),
+    )
+  ) {
+    throw new TokenlessServiceError("Indexed round terms do not match the frozen terms.", 409, "round_terms_mismatch");
+  }
+  if (
+    integerValue(input.round.minimumReveals, "Indexed minimum reveals") !==
+      integerValue(input.terms.minimumReveals, "Frozen minimum reveals") ||
+    integerValue(input.round.maximumCommits, "Indexed maximum commits") !==
+      integerValue(input.terms.maximumCommits, "Frozen maximum commits")
+  ) {
+    throw new TokenlessServiceError("Indexed round terms do not match the frozen terms.", 409, "round_terms_mismatch");
+  }
+}
+
+async function assuranceProvenance(input: {
+  roundId: string;
+  contentId: string;
+  admissionPolicyHash: string;
+  revealCount: number;
+  revealedAccounts: Set<string>;
+}) {
+  const cases = await dbClient.execute({
+    sql: `SELECT run_id, case_id FROM tokenless_assurance_run_cases
+          WHERE round_id = ? AND lower(content_id) = ? AND lower(admission_policy_hash) = ? LIMIT 2`,
+    args: [input.roundId, input.contentId.toLowerCase(), input.admissionPolicyHash.toLowerCase()],
+  });
+  if (cases.rows.length > 1) {
+    throw new TokenlessServiceError(
+      "Indexed round maps to multiple assurance cases.",
+      409,
+      "evidence_identity_mismatch",
+    );
+  }
+  const linked = cases.rows[0] as Row | undefined;
+  if (!linked) return { assignmentCount: 0, matchedAssignmentCount: 0, validResponseCount: 0, correlationRiskBps: 0 };
+  const runId = rowString(linked, "run_id")!;
+  const caseId = rowString(linked, "case_id")!;
+  const [assignments, responses] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT reviewer_account_address FROM tokenless_assurance_assignments
+            WHERE run_id = ? AND status IN ('accepted', 'completed')`,
+      args: [runId],
+    }),
+    dbClient.execute({
+      sql: `SELECT reviewer_key, response_digest FROM tokenless_assurance_responses
+            WHERE run_id = ? AND case_id = ? AND validity = 'valid'`,
+      args: [runId, caseId],
+    }),
+  ]);
+  const matchedAssignmentCount = assignments.rows.filter(value =>
+    input.revealedAccounts.has(rowString(value as Row, "reviewer_account_address")?.toLowerCase() ?? ""),
+  ).length;
+  const mismatch = Math.max(
+    Math.abs(input.revealCount - matchedAssignmentCount),
+    Math.abs(input.revealCount - responses.rows.length),
+  );
+  return {
+    assignmentCount: assignments.rows.length,
+    matchedAssignmentCount,
+    validResponseCount: responses.rows.length,
+    correlationRiskBps: ratioBps(Math.min(mismatch, input.revealCount), input.revealCount),
+  };
+}
+
+export async function deriveFinalizedRoundEvidence(input: {
+  operationKey: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+}) {
+  const source = await dbClient.execute({
+    sql: `SELECT o.workspace_id, e.*, a.economics_json
+          FROM tokenless_ask_ownership o
+          JOIN tokenless_chain_executions e ON e.operation_key = o.operation_key
+          JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [input.operationKey],
+  });
+  const execution = source.rows[0] as Row | undefined;
+  if (!execution || !rowString(execution, "workspace_id") || !rowString(execution, "round_id")) {
+    throw new TokenlessServiceError("Ask chain execution was not found.", 404, "ask_not_found");
+  }
+  if (rowString(execution, "state") !== "confirmed") {
+    throw new TokenlessServiceError("Ask chain execution is not confirmed.", 409, "indexed_evidence_pending", true);
+  }
+  const terms = objectValue(JSON.parse(rowString(execution, "round_terms_json")!), "Frozen round terms") as Row;
+  const base = configuredPonderUrl(input.ponderUrl);
+  const roundUrl = ponderEndpoint(base, `/rounds/${encodeURIComponent(rowString(execution, "round_id")!)}`);
+  const commitsUrl = ponderEndpoint(base, `/rounds/${encodeURIComponent(rowString(execution, "round_id")!)}/commits`);
+  commitsUrl.searchParams.set("limit", String(MAX_PONDER_COMMITS));
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const [rawDeployment, rawRound, rawCommits] = await Promise.all([
+    fetchPonderJson(fetchImpl, ponderEndpoint(base, "/deployment"), "Ponder deployment"),
+    fetchPonderJson(fetchImpl, roundUrl, "Indexed round"),
+    fetchPonderJson(fetchImpl, commitsUrl, "Indexed commits"),
+  ]);
+  const deployment = objectValue(rawDeployment, "Ponder deployment") as unknown as PonderDeployment;
+  const round = objectValue(rawRound, "Indexed round") as PonderRound;
+  if (!Array.isArray(rawCommits)) {
+    throw new TokenlessServiceError("Indexed commits are malformed.", 409, "indexed_evidence_invalid");
+  }
+  exactIndexedIdentity({ deployment, execution, round, terms });
+  const state = integerValue(round.state, "Indexed round state");
+  const revealCount = integerValue(round.revealCount, "Indexed reveal count");
+  const frozenRevealCount = integerValue(round.frozenRevealCount, "Indexed frozen reveal count");
+  const commitCount = integerValue(round.commitCount, "Indexed commit count");
+  const upVotes = integerValue(round.upVotes, "Indexed up vote count");
+  if (
+    state !== FINALIZED_ROUND_STATE ||
+    revealCount < 1 ||
+    frozenRevealCount !== revealCount ||
+    upVotes > revealCount ||
+    commitCount > MAX_PONDER_COMMITS ||
+    rawCommits.length !== commitCount
+  ) {
+    throw new TokenlessServiceError(
+      "Indexed round is not completely finalized.",
+      409,
+      "indexed_evidence_pending",
+      true,
+    );
+  }
+  const finalizedBlock = unsignedValue(round.finalizedBlock, "Finalized block");
+  const finalizedAt = unsignedValue(round.finalizedAt, "Finalized timestamp");
+  if (
+    BigInt(finalizedBlock) < BigInt(rowString(execution, "deployment_block")!) ||
+    BigInt(finalizedBlock) < BigInt(unsignedValue(round.createdBlock, "Created block"))
+  ) {
+    throw new TokenlessServiceError("Finalization predates the pinned deployment.", 409, "evidence_identity_mismatch");
+  }
+  const commits = rawCommits.map((value, index) => objectValue(value, `Indexed commit ${index}`) as PonderCommit);
+  const revealed = commits.filter(commit => commit.revealed === true);
+  if (revealed.length !== revealCount) {
+    throw new TokenlessServiceError(
+      "Indexed reveal count does not match the commit projection.",
+      409,
+      "indexed_evidence_invalid",
+    );
+  }
+  const voteKeys = revealed.map((commit, index) => exactAddress(commit.voteKey, `Reveal ${index} vote key`));
+  const nullifiers = revealed.map((commit, index) => exactBytes32(commit.nullifier, `Reveal ${index} nullifier`));
+  const responseHashes = revealed.map((commit, index) =>
+    exactBytes32(commit.responseHash, `Reveal ${index} response hash`),
+  );
+  if (new Set(voteKeys).size !== revealCount || new Set(nullifiers).size !== revealCount) {
+    throw new TokenlessServiceError("Indexed reveal identities are not unique.", 409, "indexed_evidence_invalid");
+  }
+  const indexedUpVotes = revealed.reduce((sum, commit, index) => {
+    const vote = integerValue(commit.vote, `Reveal ${index} vote`);
+    if (vote !== 0 && vote !== 1)
+      throw new TokenlessServiceError("Indexed vote is invalid.", 409, "indexed_evidence_invalid");
+    return sum + vote;
+  }, 0);
+  if (indexedUpVotes !== upVotes) {
+    throw new TokenlessServiceError(
+      "Indexed votes do not match the finalized aggregate.",
+      409,
+      "indexed_evidence_invalid",
+    );
+  }
+  const vouchersResult = await dbClient.execute({
+    sql: `SELECT v.vote_key, v.admission_policy_hash, v.content_id, v.issuer_address,
+                 p.account_address, e.provider_subject_hash, e.provider_id, e.reviewer_source
+          FROM tokenless_paid_vouchers v
+          JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
+          JOIN tokenless_capability_eligibility e ON e.rater_id = v.rater_id
+          WHERE v.chain_id = ? AND lower(v.panel_address) = ? AND v.round_id = ?`,
+    args: [
+      Number(execution.chain_id),
+      rowString(execution, "panel_address")!.toLowerCase(),
+      rowString(execution, "round_id")!,
+    ],
+  });
+  const vouchers = new Map(
+    vouchersResult.rows.map(value => {
+      const voucher = value as Row;
+      return [rowString(voucher, "vote_key")!.toLowerCase(), voucher] as const;
+    }),
+  );
+  const revealedVouchers = voteKeys.map(voteKey => vouchers.get(voteKey));
+  if (
+    revealedVouchers.some(value => !value) ||
+    revealedVouchers.some(
+      value =>
+        rowString(value, "content_id")?.toLowerCase() !== exactBytes32(round.contentId, "Indexed content id") ||
+        rowString(value, "issuer_address")?.toLowerCase() !== rowString(execution, "issuer_address")?.toLowerCase() ||
+        rowString(value, "admission_policy_hash")?.toLowerCase() !==
+          exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
+    )
+  ) {
+    throw new TokenlessServiceError("Indexed reveals do not match issued vouchers.", 409, "evidence_source_mismatch");
+  }
+  const tierMix: Record<string, number> = {};
+  const identityCounts = new Map<string, number>();
+  const revealedAccounts = new Set<string>();
+  for (const voucher of revealedVouchers as Row[]) {
+    const tier = `provider:${stringValue(voucher.provider_id, "Voucher provider")}`;
+    tierMix[tier] = (tierMix[tier] ?? 0) + 1;
+    const identity = stringValue(voucher.provider_subject_hash, "Voucher identity subject");
+    identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1);
+    revealedAccounts.add(exactAddress(voucher.account_address, "Voucher account"));
+  }
+  const assurance = await assuranceProvenance({
+    roundId: rowString(execution, "round_id")!,
+    contentId: exactBytes32(round.contentId, "Indexed content id"),
+    admissionPolicyHash: exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
+    revealCount,
+    revealedAccounts,
+  });
+  const issuedIdentities = new Set(vouchersResult.rows.map(value => rowString(value as Row, "provider_subject_hash")!));
+  const largestIdentityCluster = Math.max(...identityCounts.values());
+  const quoteEconomics = objectValue(JSON.parse(rowString(execution, "economics_json")!), "Stored economics");
+  const fee = objectValue(quoteEconomics.fee, "Stored fee economics");
+  const bountyAmount = unsignedValue(round.bountyAmount, "Indexed bounty amount");
+  const feeAmount = unsignedValue(round.feeAmount, "Indexed fee amount");
+  const attemptReserve = unsignedValue(round.attemptReserve, "Indexed attempt reserve");
+  const totalFundedAtomic = (BigInt(bountyAmount) + BigInt(feeAmount) + BigInt(attemptReserve)).toString();
+  if (totalFundedAtomic !== rowString(execution, "total_funded_atomic")) {
+    throw new TokenlessServiceError(
+      "Indexed funding does not match the pinned execution.",
+      409,
+      "round_terms_mismatch",
+    );
+  }
+  const evidence: IndexedFinalizedEvidence = {
+    deploymentKey: rowString(execution, "deployment_key")!,
+    roundId: rowString(execution, "round_id")!,
+    revealCount,
+    upVotes,
+    economics: {
+      asset: "USDC",
+      decimals: 6,
+      bounty: { fundedAtomic: bountyAmount, paidAtomic: bountyAmount, refundedAtomic: "0" },
+      fee: {
+        bps: integerValue(fee.bps, "Stored fee bps"),
+        fundedAtomic: feeAmount,
+        paidAtomic: feeAmount,
+        refundedAtomic: "0",
+      },
+      attemptReserve: { fundedAtomic: attemptReserve, compensatedAtomic: "0", refundedAtomic: attemptReserve },
+      refund: { bountyAtomic: "0", feeAtomic: "0", attemptReserveAtomic: attemptReserve, totalAtomic: attemptReserve },
+      compensation: {
+        perAcceptedRevealCapAtomic: unsignedValue(round.attemptCompensation, "Indexed attempt compensation"),
+        recipientCount: 0,
+        totalAtomic: "0",
+      },
+      totalFundedAtomic,
+    },
+    tierMix,
+    diversity: {
+      independentClusters: identityCounts.size,
+      largestClusterBps: ratioBps(largestIdentityCluster, revealCount),
+      uniqueVoteKeys: new Set(voteKeys).size,
+    },
+    analytics: {
+      answerFingerprintRiskBps: duplicateRiskBps(responseHashes),
+      correlationRiskBps: assurance.correlationRiskBps,
+      issuedVoucherCount: vouchersResult.rows.length,
+      verifiedIdentityCount: issuedIdentities.size,
+    },
+    provenance: {
+      assignmentCount: assurance.assignmentCount,
+      issuedVoucherCount: vouchersResult.rows.length,
+      matchedAssignmentCount: assurance.matchedAssignmentCount,
+      validResponseCount: assurance.validResponseCount,
+      verifiedIdentityCount: issuedIdentities.size,
+    },
+    roundTerms: {
+      admissionPolicyHash: exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
+      contentId: exactBytes32(round.contentId, "Indexed content id"),
+      termsHash: exactBytes32(round.termsHash, "Indexed terms hash"),
+    },
+    chain: {
+      blockNumber: finalizedBlock,
+      blockHash: exactBytes32(round.finalizedBlockHash, "Finalized block hash"),
+      transactionHash: exactBytes32(round.finalizedTxHash, "Finalized transaction hash"),
+      timestamp: finalizedAt,
+    },
+  };
+  validateFinalizedEvidence(evidence);
+  return evidence;
+}
+
+export async function appendFinalizedRoundEvidence(input: {
+  operationKey: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+}) {
+  const evidence = await deriveFinalizedRoundEvidence(input);
+  const ownership = await dbClient.execute({
+    sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
+    args: [input.operationKey],
+  });
+  const workspaceId = rowString(ownership.rows[0] as Row | undefined, "workspace_id");
+  if (!workspaceId) throw new TokenlessServiceError("Ask chain execution was not found.", 404, "ask_not_found");
+  if (
+    !UNSIGNED_INTEGER.test(evidence.chain.timestamp) ||
+    BigInt(evidence.chain.timestamp) > BigInt(Math.floor(Date.now() / 1_000) + 300)
+  ) {
+    throw new TokenlessServiceError("Finalization timestamp is invalid.", 409, "indexed_evidence_invalid");
+  }
+  const evidenceJson = stableTransparencyJson(evidence);
   const evidenceHash = digest(`round.finalized:${evidenceJson}`);
   const eventId = `tpe_${digest(`${input.operationKey}:${evidenceHash}`).slice(0, 32)}`;
   const existingEvidence = await dbClient.execute({
@@ -401,12 +848,12 @@ export async function appendFinalizedRoundEvidence(input: {
       eventId,
       input.operationKey,
       workspaceId,
-      input.evidence.deploymentKey,
-      input.evidence.roundId,
+      evidence.deploymentKey,
+      evidence.roundId,
       sequence,
       evidenceHash,
       evidenceJson,
-      input.occurredAt,
+      new Date(Number(evidence.chain.timestamp) * 1_000),
       new Date(),
     ],
   });
@@ -477,12 +924,7 @@ export function wilsonIntervalBps(successes: number, sampleSize: number) {
   };
 }
 
-export async function reviewAndPublishResult(input: {
-  operationKey: string;
-  metrics: AnalyticsMetrics;
-  appOrigin: string;
-  now?: Date;
-}) {
+export async function reviewAndPublishResult(input: { operationKey: string; appOrigin: string; now?: Date }) {
   const now = input.now ?? new Date();
   const eventResult = await dbClient.execute({
     sql: `SELECT evidence_json, evidence_hash FROM tokenless_transparency_events
@@ -496,7 +938,7 @@ export async function reviewAndPublishResult(input: {
   ) as IndexedFinalizedEvidence;
   validateFinalizedEvidence(evidence);
   const root = evidenceRoot(eventResult.rows.map(value => rowString(value as Row, "evidence_hash")!));
-  const evaluation = evaluateAnalytics(input.metrics, evidence.diversity);
+  const evaluation = evaluateAnalytics(evidence.analytics, evidence.diversity);
   const existingPublication = await dbClient.execute({
     sql: "SELECT publication_id, evidence_root, result_json FROM tokenless_result_publications WHERE operation_key = ? AND publication_version = 1 LIMIT 1",
     args: [input.operationKey],
@@ -567,7 +1009,7 @@ export async function reviewAndPublishResult(input: {
       root,
       stableTransparencyJson(evidence.tierMix),
       stableTransparencyJson(evidence.diversity),
-      stableTransparencyJson(input.metrics),
+      stableTransparencyJson(evidence.analytics),
       JSON.stringify(evaluation.reasonCodes),
       now,
     ],
@@ -646,17 +1088,22 @@ export async function deliverPendingWebhooks(
     limit?: number;
     encryptionKey?: string;
     resolveHostname?: ResolveHostname;
+    operationKey?: string;
   } = {},
 ) {
   const fetchImpl = input.fetchImpl ?? fetch;
   const now = input.now ?? new Date();
+  const operationFilter = input.operationKey ? "AND p.operation_key = ?" : "";
   const due = await dbClient.execute({
     sql: `SELECT d.delivery_id, d.idempotency_key, d.payload_json, d.attempt_count,
                  e.url, e.secret_ciphertext
-          FROM tokenless_webhook_deliveries d JOIN tokenless_webhook_endpoints e ON e.endpoint_id = d.endpoint_id
+          FROM tokenless_webhook_deliveries d
+          JOIN tokenless_webhook_endpoints e ON e.endpoint_id = d.endpoint_id
+          JOIN tokenless_result_publications p ON p.publication_id = d.publication_id
           WHERE d.state IN ('pending', 'retry') AND d.next_attempt_at <= ? AND e.active = true
+          ${operationFilter}
           ORDER BY d.next_attempt_at ASC LIMIT ?`,
-    args: [now, Math.min(Math.max(input.limit ?? 25, 1), 100)],
+    args: [now, ...(input.operationKey ? [input.operationKey] : []), Math.min(Math.max(input.limit ?? 25, 1), 100)],
   });
   const outcomes = [];
   for (const value of due.rows) {

@@ -178,6 +178,10 @@ ponder.on("TokenlessPanel:RoundFinalized", async ({ event, context }) => {
       state: ROUND_STATE.FINALIZED,
       totalAccuracyScore,
       claimDeadline,
+      finalizedAt: event.block.timestamp,
+      finalizedBlock: event.block.number,
+      finalizedBlockHash: event.block.hash,
+      finalizedTxHash: event.transaction.hash,
       updatedAt: event.block.timestamp,
     });
 });
