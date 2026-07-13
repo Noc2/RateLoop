@@ -16,6 +16,7 @@ test("landing page presents the tokenless trust split without legacy UX", async 
   assert.match(html, /paid human panels/i);
   assert.match(html, /no operator withdrawal path/i);
   assert.match(html, /Level Up Your/);
+  assert.match(html, /<span class="block"><span class="rateloop-text-gradient">Agent<\/span><\/span>/);
   assert.match(html, /Use RateLoop with your favorite AI agent/);
   assert.match(html, /How It/);
   assert.match(html, /Why It/);
