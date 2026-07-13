@@ -85,9 +85,21 @@ export async function assertLiveTokenlessDeployment(
   if (bytecodes.some(code => !code || code === "0x")) {
     throw new Error("The configured tokenless deployment bundle contains an address without bytecode.");
   }
-  const [panelUsdc, panelIssuer, adapterPanel, adapterUsdc, authorizationToken] = await Promise.all([
+  const [
+    panelUsdc,
+    panelIssuer,
+    scoringVersion,
+    basePayBps,
+    maximumCommits,
+    adapterPanel,
+    adapterUsdc,
+    authorizationToken,
+  ] = await Promise.all([
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "usdc" }),
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "credentialIssuer" }),
+    client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "SCORING_VERSION" }),
+    client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "BASE_PAY_BPS" }),
+    client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "MAXIMUM_COMMITS" }),
     client.readContract({ abi: X402PanelSubmitterAbi, address: config.x402SubmitterAddress, functionName: "panel" }),
     client.readContract({ abi: X402PanelSubmitterAbi, address: config.x402SubmitterAddress, functionName: "usdc" }),
     client.readContract({
@@ -101,7 +113,10 @@ export async function assertLiveTokenlessDeployment(
     !sameAddress(panelIssuer, config.issuerAddress) ||
     !sameAddress(adapterPanel, config.panelAddress) ||
     !sameAddress(adapterUsdc, config.usdcAddress) ||
-    !sameAddress(authorizationToken, config.usdcAddress)
+    !sameAddress(authorizationToken, config.usdcAddress) ||
+    Number(scoringVersion) !== 2 ||
+    Number(basePayBps) !== 8_000 ||
+    Number(maximumCommits) !== 500
   ) {
     throw new Error("The configured tokenless addresses are a mixed deployment bundle.");
   }

@@ -6,22 +6,34 @@ import {
   tokenlessCreditEvent,
   tokenlessRound,
 } from "ponder:schema";
-import { keccak256 } from "viem";
-import { commitKey, creditOwnerKey, resolveTokenlessDeployment, roundKey } from "./protocol-deployment";
+import { keccak256, zeroHash } from "viem";
+import {
+  commitKey,
+  creditOwnerKey,
+  resolveTokenlessDeployment,
+  roundKey,
+} from "./protocol-deployment";
 import { tokenlessPanelAbi } from "./tokenlessAbi";
-import { creditBalanceAfterEvent, revealTalliesAfterVote, ROUND_STATE } from "./status";
+import {
+  creditBalanceAfterEvent,
+  revealTalliesAfterVote,
+  ROUND_STATE,
+} from "./status";
 
 const deployment = resolveTokenlessDeployment();
 
-function panelAddress(context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"]) {
+function panelAddress(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+) {
   const address = context.contracts.TokenlessPanel.address;
   const resolved = Array.isArray(address) ? address[0] : address;
-  if (!resolved) throw new Error("TokenlessPanel address missing from Ponder context.");
+  if (!resolved)
+    throw new Error("TokenlessPanel address missing from Ponder context.");
   return resolved;
 }
 
 ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
-  const { roundId, admissionPolicyHash } = event.args;
+  const { roundId, admissionPolicyHash, scoringVersion } = event.args;
   const round = await context.client.readContract({
     abi: tokenlessPanelAbi,
     address: panelAddress(context),
@@ -43,11 +55,21 @@ ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
     feeAmount: round.feeAmount,
     attemptReserve: round.attemptReserve,
     attemptCompensation: round.attemptCompensation,
+    fixedBasePay: round.fixedBasePay,
+    maximumBonus: round.maximumBonus,
     compensationPerRecipient: round.compensationPerRecipient,
     funderRefund: 0n,
     totalCompensation: 0n,
-    totalAccuracyScore: round.totalAccuracyScore,
+    totalRbtsScoreBps: round.totalRbtsScoreBps,
+    totalFinalizedLiability: round.totalFinalizedLiability,
     totalPaid: round.totalPaid,
+    entropyBlock: round.entropyBlock,
+    entropy: zeroHash,
+    revealSetXor: round.revealSetXor,
+    revealSetSum: round.revealSetSum,
+    scoringSeed: round.scoringSeed,
+    scoringVersion,
+    scoringMode: round.scoringMode,
     minimumReveals: round.minimumReveals,
     maximumCommits: round.maximumCommits,
     admissionPolicyHash,
@@ -55,7 +77,7 @@ ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
     revealCount: round.revealCount,
     frozenRevealCount: round.frozenRevealCount,
     aggregateCursor: round.aggregateCursor,
-    weightCursor: round.weightCursor,
+    scoreCursor: round.scoreCursor,
     upVotes: round.upVotes,
     state: round.state,
     commitDeadline: round.commitDeadline,
@@ -73,7 +95,12 @@ ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
 });
 
 ponder.on("TokenlessPanel:CommitAccepted", async ({ event, context }) => {
-  const { roundId, commitKey: rawCommitKey, nullifier, sealedPayload } = event.args;
+  const {
+    roundId,
+    commitKey: rawCommitKey,
+    nullifier,
+    sealedPayload,
+  } = event.args;
   const record = await context.client.readContract({
     abi: tokenlessPanelAbi,
     address: panelAddress(context),
@@ -95,7 +122,12 @@ ponder.on("TokenlessPanel:CommitAccepted", async ({ event, context }) => {
     responseHash: record.responseHash,
     vote: record.vote,
     predictedUpBps: record.predictedUpBps,
-    accuracyScore: record.accuracyScore,
+    referenceCommitKey: record.referenceCommitKey,
+    peerCommitKey: record.peerCommitKey,
+    finalizedPayout: record.finalizedPayout,
+    informationScoreBps: record.informationScoreBps,
+    predictionScoreBps: record.predictionScoreBps,
+    rbtsScoreBps: record.rbtsScoreBps,
     revealed: record.revealed,
     claimed: record.claimed,
     committedAt: event.block.timestamp,
@@ -106,13 +138,24 @@ ponder.on("TokenlessPanel:CommitAccepted", async ({ event, context }) => {
 
   await context.db
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
-    .set((row) => ({ commitCount: row.commitCount + 1, updatedAt: event.block.timestamp }));
+    .set((row) => ({
+      commitCount: row.commitCount + 1,
+      updatedAt: event.block.timestamp,
+    }));
 });
 
 ponder.on("TokenlessPanel:RevealAccepted", async ({ event, context }) => {
-  const { roundId, commitKey: rawCommitKey, vote, predictedUpBps, responseHash } = event.args;
+  const {
+    roundId,
+    commitKey: rawCommitKey,
+    vote,
+    predictedUpBps,
+    responseHash,
+  } = event.args;
   await context.db
-    .update(tokenlessCommit, { id: commitKey(deployment.deploymentKey, rawCommitKey) })
+    .update(tokenlessCommit, {
+      id: commitKey(deployment.deploymentKey, rawCommitKey),
+    })
     .set({
       vote,
       predictedUpBps,
@@ -130,10 +173,13 @@ ponder.on("TokenlessPanel:RevealAccepted", async ({ event, context }) => {
 
 ponder.on("TokenlessPanel:SettlementBegun", async ({ event, context }) => {
   await context.db
-    .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, event.args.roundId) })
+    .update(tokenlessRound, {
+      id: roundKey(deployment.deploymentKey, event.args.roundId),
+    })
     .set({
       state: ROUND_STATE.AGGREGATING,
       frozenRevealCount: event.args.frozenRevealCount,
+      entropyBlock: event.args.entropyBlock,
       updatedAt: event.block.timestamp,
     });
 });
@@ -141,45 +187,83 @@ ponder.on("TokenlessPanel:SettlementBegun", async ({ event, context }) => {
 ponder.on("TokenlessPanel:SettlementProgressed", async ({ event, context }) => {
   const id = roundKey(deployment.deploymentKey, event.args.roundId);
   const existing = await context.db.find(tokenlessRound, { id });
-  if (!existing) throw new Error(`Settlement progress references unknown round ${event.args.roundId}.`);
+  if (!existing)
+    throw new Error(
+      `Settlement progress references unknown round ${event.args.roundId}.`,
+    );
 
-  const aggregateTransition =
-    existing.state === ROUND_STATE.AGGREGATING && event.args.state === ROUND_STATE.WEIGHTING;
-  if (existing.state === ROUND_STATE.WEIGHTING) {
-    for (let index = existing.weightCursor; index < event.args.cursor; index += 1) {
-      const rawCommitKey = await context.client.readContract({
-        abi: tokenlessPanelAbi,
-        address: panelAddress(context),
-        functionName: "roundRevealKey",
-        args: [event.args.roundId, BigInt(index)],
-      });
-      const record = await context.client.readContract({
-        abi: tokenlessPanelAbi,
-        address: panelAddress(context),
-        functionName: "getCommit",
-        args: [rawCommitKey],
-      });
-      await context.db
-        .update(tokenlessCommit, { id: commitKey(deployment.deploymentKey, rawCommitKey) })
-        .set({ accuracyScore: record.accuracyScore });
-    }
-  }
   await context.db.update(tokenlessRound, { id }).set({
     state: event.args.state,
     aggregateCursor:
-      existing.state === ROUND_STATE.AGGREGATING ? event.args.cursor : existing.aggregateCursor,
-    weightCursor: aggregateTransition ? existing.weightCursor : event.args.cursor,
+      existing.state === ROUND_STATE.AGGREGATING
+        ? event.args.cursor
+        : existing.aggregateCursor,
+    scoreCursor:
+      existing.state === ROUND_STATE.SCORING
+        ? event.args.cursor
+        : existing.scoreCursor,
     updatedAt: event.block.timestamp,
   });
 });
 
+ponder.on("TokenlessPanel:ScoringSeedFinalized", async ({ event, context }) => {
+  await context.db
+    .update(tokenlessRound, {
+      id: roundKey(deployment.deploymentKey, event.args.roundId),
+    })
+    .set({
+      state: ROUND_STATE.SCORING,
+      scoringMode: event.args.mode,
+      entropyBlock: event.args.entropyBlock,
+      entropy: event.args.entropy,
+      scoringSeed: event.args.scoringSeed,
+      revealSetXor: event.args.revealSetXor,
+      revealSetSum: event.args.revealSetSum,
+      updatedAt: event.block.timestamp,
+    });
+});
+
+ponder.on("TokenlessPanel:RevealScored", async ({ event, context }) => {
+  const {
+    commitKey: rawCommitKey,
+    referenceCommitKey,
+    peerCommitKey,
+    informationScoreBps,
+    predictionScoreBps,
+    rbtsScoreBps,
+    finalizedPayout,
+  } = event.args;
+  await context.db
+    .update(tokenlessCommit, {
+      id: commitKey(deployment.deploymentKey, rawCommitKey),
+    })
+    .set({
+      referenceCommitKey,
+      peerCommitKey,
+      informationScoreBps,
+      predictionScoreBps,
+      rbtsScoreBps,
+      finalizedPayout,
+    });
+});
+
 ponder.on("TokenlessPanel:RoundFinalized", async ({ event, context }) => {
-  const { roundId, totalAccuracyScore, claimDeadline } = event.args;
+  const {
+    roundId,
+    mode,
+    totalRbtsScoreBps,
+    totalFinalizedLiability,
+    funderRefund,
+    claimDeadline,
+  } = event.args;
   await context.db
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
     .set({
       state: ROUND_STATE.FINALIZED,
-      totalAccuracyScore,
+      scoringMode: mode,
+      totalRbtsScoreBps,
+      totalFinalizedLiability,
+      funderRefund,
       claimDeadline,
       finalizedAt: event.block.timestamp,
       finalizedBlock: event.block.number,
@@ -210,7 +294,12 @@ ponder.on("TokenlessPanel:RoundTerminal", async ({ event, context }) => {
 });
 
 ponder.on("TokenlessPanel:Claimed", async ({ event, context }) => {
-  const { roundId, commitKey: rawCommitKey, payoutAddress, amount } = event.args;
+  const {
+    roundId,
+    commitKey: rawCommitKey,
+    payoutAddress,
+    amount,
+  } = event.args;
   await context.db.insert(tokenlessClaim).values({
     id: `${deployment.deploymentKey}:${event.transaction.hash}:${event.log.logIndex}`,
     deploymentKey: deployment.deploymentKey,
@@ -223,11 +312,16 @@ ponder.on("TokenlessPanel:Claimed", async ({ event, context }) => {
     logIndex: event.log.logIndex,
   });
   await context.db
-    .update(tokenlessCommit, { id: commitKey(deployment.deploymentKey, rawCommitKey) })
+    .update(tokenlessCommit, {
+      id: commitKey(deployment.deploymentKey, rawCommitKey),
+    })
     .set({ claimed: true });
   await context.db
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
-    .set((row) => ({ totalPaid: row.totalPaid + amount, updatedAt: event.block.timestamp }));
+    .set((row) => ({
+      totalPaid: row.totalPaid + amount,
+      updatedAt: event.block.timestamp,
+    }));
 });
 
 ponder.on("TokenlessPanel:CreditAccrued", async ({ event, context }) => {
@@ -235,7 +329,11 @@ ponder.on("TokenlessPanel:CreditAccrued", async ({ event, context }) => {
   const owner = recipient.toLowerCase() as `0x${string}`;
   const id = creditOwnerKey(deployment.deploymentKey, owner);
   const existing = await context.db.find(tokenlessCreditBalance, { id });
-  const remainingCredit = creditBalanceAfterEvent(existing?.remainingCredit ?? 0n, "accrued", amount);
+  const remainingCredit = creditBalanceAfterEvent(
+    existing?.remainingCredit ?? 0n,
+    "accrued",
+    amount,
+  );
 
   if (existing) {
     await context.db.update(tokenlessCreditBalance, { id }).set({
@@ -278,8 +376,13 @@ ponder.on("TokenlessPanel:CreditWithdrawn", async ({ event, context }) => {
   const owner = recipient.toLowerCase() as `0x${string}`;
   const id = creditOwnerKey(deployment.deploymentKey, owner);
   const existing = await context.db.find(tokenlessCreditBalance, { id });
-  if (!existing) throw new Error(`Credit withdrawal references unknown owner ${owner}.`);
-  const remainingCredit = creditBalanceAfterEvent(existing.remainingCredit, "withdrawn", amount);
+  if (!existing)
+    throw new Error(`Credit withdrawal references unknown owner ${owner}.`);
+  const remainingCredit = creditBalanceAfterEvent(
+    existing.remainingCredit,
+    "withdrawn",
+    amount,
+  );
 
   await context.db.update(tokenlessCreditBalance, { id }).set({
     remainingCredit,
@@ -305,7 +408,9 @@ ponder.on("TokenlessPanel:CreditWithdrawn", async ({ event, context }) => {
 
 ponder.on("TokenlessPanel:StaleSharesReturned", async ({ event, context }) => {
   await context.db
-    .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, event.args.roundId) })
+    .update(tokenlessRound, {
+      id: roundKey(deployment.deploymentKey, event.args.roundId),
+    })
     .set({
       staleReturned: true,
       staleAmount: event.args.amount,

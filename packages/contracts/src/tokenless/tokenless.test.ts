@@ -7,6 +7,8 @@ import {
   X402PanelSubmitterAbi,
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
+  tokenlessHistoricalDeployments,
+  tokenlessHistoricalDeploymentSchema,
 } from "./index.js";
 
 type AbiParameter = {
@@ -22,15 +24,19 @@ type AbiEntry = {
   readonly outputs?: readonly AbiParameter[];
 };
 
-const deployment = tokenlessDeployedContracts[84532];
+const deployment = tokenlessHistoricalDeployments[84532];
 const nonZeroAddress = /^0x(?!0{40}$)[0-9a-f]{40}$/u;
 
 function names(abi: readonly AbiEntry[], type: string) {
-  return new Set(abi.filter((entry) => entry.type === type).map((entry) => entry.name));
+  return new Set(
+    abi.filter((entry) => entry.type === type).map((entry) => entry.name),
+  );
 }
 
 function findEntry(abi: readonly AbiEntry[], type: string, name: string) {
-  const entry = abi.find((candidate) => candidate.type === type && candidate.name === name);
+  const entry = abi.find(
+    (candidate) => candidate.type === type && candidate.name === name,
+  );
   assert.ok(entry, `missing ${type} ${name}`);
   return entry;
 }
@@ -41,14 +47,35 @@ function tupleComponentNames(
   index = 0,
 ) {
   const parameter = entry[field]?.[index];
-  assert.equal(parameter?.type, "tuple", `${entry.name} ${field}[${index}] must be a tuple`);
+  assert.equal(
+    parameter?.type,
+    "tuple",
+    `${entry.name} ${field}[${index}] must be a tuple`,
+  );
   return new Set(parameter.components?.map((component) => component.name));
 }
 
-test("exports the complete active v2 Base Sepolia deployment", () => {
-  assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v2");
-  assert.deepEqual(Object.keys(tokenlessDeployedContracts), ["84532"]);
-  assert.equal(deployment.schemaVersion, tokenlessDeploymentSchema);
+test("keeps historical v2 separate from the optional complete v3 registry", () => {
+  assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v3");
+  assert.ok([0, 1].includes(Object.keys(tokenlessDeployedContracts).length));
+  const active = (
+    tokenlessDeployedContracts as Record<
+      string,
+      { deploymentKey: string; schemaVersion: string }
+    >
+  )["84532"];
+  if (active) {
+    assert.equal(active.schemaVersion, tokenlessDeploymentSchema);
+    assert.equal(active.deploymentKey.startsWith("tokenless-v3:84532:"), true);
+  }
+  assert.equal(
+    tokenlessHistoricalDeploymentSchema,
+    "rateloop-tokenless-deployment-v2",
+  );
+  assert.deepEqual(Object.keys(tokenlessHistoricalDeployments), ["84532"]);
+  assert.equal(deployment.schemaVersion, tokenlessHistoricalDeploymentSchema);
+  assert.equal(deployment.deploymentStatus, "historical");
+  assert.equal(deployment.supersededBySchema, tokenlessDeploymentSchema);
   assert.equal(deployment.version, 2);
   assert.equal(deployment.chainId, 84532);
   assert.equal(deployment.networkName, "baseSepolia");
@@ -67,11 +94,15 @@ test("exports the complete active v2 Base Sepolia deployment", () => {
   }
   assert.equal(
     deployment.deploymentBlockNumber,
-    Math.max(...Object.values(deployment.contracts).map((contract) => contract.deployedOnBlock)),
+    Math.max(
+      ...Object.values(deployment.contracts).map(
+        (contract) => contract.deployedOnBlock,
+      ),
+    ),
   );
 });
 
-test("deployment key is derived from the panel, issuer, and adapter addresses", () => {
+test("historical deployment key remains immutable evidence", () => {
   const expected = [
     "tokenless-v2",
     "84532",
@@ -84,7 +115,7 @@ test("deployment key is derived from the panel, issuer, and adapter addresses", 
   assert.equal(deployment.deploymentKey, expected);
 });
 
-test("panel ABI exposes deterministic lifecycle evidence and no mutable administration", () => {
+test("panel ABI exposes deterministic RBTS lifecycle evidence and no mutable administration", () => {
   const functions = names(TokenlessPanelAbi, "function");
   const events = names(TokenlessPanelAbi, "event");
   for (const functionName of [
@@ -93,7 +124,8 @@ test("panel ABI exposes deterministic lifecycle evidence and no mutable administ
     "reveal",
     "beginSettlement",
     "processAggregate",
-    "processWeights",
+    "finalizeScoringSeed",
+    "processScores",
     "finalizeSettlement",
     "claim",
     "claimCompensation",
@@ -106,15 +138,60 @@ test("panel ABI exposes deterministic lifecycle evidence and no mutable administ
     "CommitAccepted",
     "RevealAccepted",
     "SettlementProgressed",
+    "ScoringSeedFinalized",
+    "RevealScored",
     "RoundFinalized",
     "RoundTerminal",
     "Claimed",
   ]) {
     assert.ok(events.has(eventName), `missing ${eventName}`);
   }
-  for (const forbidden of ["owner", "pause", "sweep", "setIssuer", "setFeeRecipient"]) {
+  assert.equal(functions.has("processWeights"), false);
+  for (const forbidden of [
+    "owner",
+    "pause",
+    "sweep",
+    "setIssuer",
+    "setFeeRecipient",
+  ]) {
     assert.equal(functions.has(forbidden), false, `unexpected ${forbidden}`);
   }
+});
+
+test("round and commit evidence use RBTS liabilities instead of accuracy weights", () => {
+  const roundFields = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "getRound"),
+    "outputs",
+  );
+  const commitFields = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "getCommit"),
+    "outputs",
+  );
+  for (const field of [
+    "fixedBasePay",
+    "maximumBonus",
+    "totalRbtsScoreBps",
+    "totalFinalizedLiability",
+    "entropyBlock",
+    "scoringSeed",
+    "scoreCursor",
+    "scoringMode",
+  ]) {
+    assert.ok(roundFields.has(field), `missing round field ${field}`);
+  }
+  for (const field of [
+    "referenceCommitKey",
+    "peerCommitKey",
+    "finalizedPayout",
+    "informationScoreBps",
+    "predictionScoreBps",
+    "rbtsScoreBps",
+  ]) {
+    assert.ok(commitFields.has(field), `missing commit field ${field}`);
+  }
+  assert.equal(roundFields.has("totalAccuracyScore"), false);
+  assert.equal(roundFields.has("weightCursor"), false);
+  assert.equal(commitFields.has("accuracyScore"), false);
 });
 
 test("panel and adapter ABIs bind admission to an exact policy hash", () => {
@@ -140,7 +217,12 @@ test("panel and adapter ABIs bind admission to an exact policy hash", () => {
     ),
   );
 
-  for (const fields of [voucherFields, roundTermFields, roundFields, adapterRoundTermFields]) {
+  for (const fields of [
+    voucherFields,
+    roundTermFields,
+    roundFields,
+    adapterRoundTermFields,
+  ]) {
     assert.ok(fields.has("admissionPolicyHash"));
     assert.equal(fields.has("tierId"), false);
     assert.equal(fields.has("requiredTier"), false);

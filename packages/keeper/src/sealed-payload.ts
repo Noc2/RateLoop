@@ -24,7 +24,9 @@ const PARAMETERS = [
   { name: "salt", type: "bytes32" },
 ] as const;
 
-const PREDICTION_BUCKETS = new Set([1000, 3000, 5000, 7000, 9000]);
+function isPredictionGridValue(value: number) {
+  return value >= 100 && value <= 9_900 && value % 100 === 0;
+}
 
 export function encodeTokenlessRevealPayload(
   material: TokenlessRevealMaterial
@@ -68,9 +70,9 @@ export function decodeTokenlessRevealPayload(
   if (vote !== 0 && vote !== 1) {
     throw new Error("Tokenless reveal payload vote must be 0 or 1.");
   }
-  if (!PREDICTION_BUCKETS.has(predictedUpBps)) {
+  if (!isPredictionGridValue(predictedUpBps)) {
     throw new Error(
-      "Tokenless reveal payload uses an invalid prediction bucket."
+      "Tokenless reveal payload prediction must use the 100..9900 one-percent grid."
     );
   }
   if (!isAddress(voteKey) || !isAddress(payoutAddress)) {
@@ -84,7 +86,7 @@ export function decodeTokenlessRevealPayload(
     roundId,
     voteKey,
     vote,
-    predictedUpBps: predictedUpBps as 1000 | 3000 | 5000 | 7000 | 9000,
+    predictedUpBps,
     responseHash,
     payoutAddress,
     salt,

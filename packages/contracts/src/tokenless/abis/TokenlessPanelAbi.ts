@@ -1,5 +1,5 @@
 /**
- * Generated from rateloop-tokenless-deployment-v2.
+ * Generated from the RBTS TokenlessPanel source for rateloop-tokenless-deployment-v3.
  * Do not edit manually.
  */
 export const TokenlessPanelAbi = [
@@ -21,6 +21,19 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "BASE_PAY_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "COMMIT_TYPEHASH",
     "inputs": [],
     "outputs": [
@@ -28,6 +41,19 @@ export const TokenlessPanelAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAXIMUM_COMMITS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -584,6 +610,19 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "finalizeScoringSeed",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "finalizeSettlement",
     "inputs": [
       {
@@ -642,12 +681,37 @@ export const TokenlessPanelAbi = [
             "internalType": "bytes32"
           },
           {
-            "name": "accuracyScore",
+            "name": "referenceCommitKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "peerCommitKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "finalizedPayout",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
             "name": "predictedUpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "informationScoreBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "predictionScoreBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "rbtsScoreBps",
             "type": "uint16",
             "internalType": "uint16"
           },
@@ -733,12 +797,27 @@ export const TokenlessPanelAbi = [
             "internalType": "uint256"
           },
           {
+            "name": "fixedBasePay",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maximumBonus",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "compensationPerRecipient",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "totalAccuracyScore",
+            "name": "totalRbtsScoreBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "totalFinalizedLiability",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -746,6 +825,26 @@ export const TokenlessPanelAbi = [
             "name": "totalPaid",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "entropyBlock",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "revealSetXor",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "revealSetSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "scoringSeed",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitDeadline",
@@ -813,7 +912,7 @@ export const TokenlessPanelAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "weightCursor",
+            "name": "scoreCursor",
             "type": "uint32",
             "internalType": "uint32"
           },
@@ -826,6 +925,11 @@ export const TokenlessPanelAbi = [
             "name": "state",
             "type": "uint8",
             "internalType": "enum TokenlessPanel.RoundState"
+          },
+          {
+            "name": "scoringMode",
+            "type": "uint8",
+            "internalType": "enum TokenlessPanel.ScoringMode"
           },
           {
             "name": "staleReturned",
@@ -950,7 +1054,7 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
-    "name": "processWeights",
+    "name": "processScores",
     "inputs": [
       {
         "name": "roundId",
@@ -1407,6 +1511,61 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "event",
+    "name": "RevealScored",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "commitKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "referenceCommitKey",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "peerCommitKey",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "informationScoreBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "predictionScoreBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "rbtsScoreBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "finalizedPayout",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoundCreated",
     "inputs": [
       {
@@ -1456,6 +1615,24 @@ export const TokenlessPanelAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "fixedBasePay",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "maximumBonus",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "scoringVersion",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
       }
     ],
     "anonymous": false
@@ -1471,7 +1648,25 @@ export const TokenlessPanelAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalAccuracyScore",
+        "name": "mode",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum TokenlessPanel.ScoringMode"
+      },
+      {
+        "name": "totalRbtsScoreBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalFinalizedLiability",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "funderRefund",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1518,6 +1713,55 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "event",
+    "name": "ScoringSeedFinalized",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "mode",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum TokenlessPanel.ScoringMode"
+      },
+      {
+        "name": "entropyBlock",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "entropy",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "scoringSeed",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "revealSetXor",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "revealSetSum",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "SettlementBegun",
     "inputs": [
       {
@@ -1531,6 +1775,12 @@ export const TokenlessPanelAbi = [
         "type": "uint32",
         "indexed": false,
         "internalType": "uint32"
+      },
+      {
+        "name": "entropyBlock",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1637,7 +1887,7 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "error",
-    "name": "InvalidPredictionBucket",
+    "name": "InvalidPrediction",
     "inputs": []
   },
   {

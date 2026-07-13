@@ -6,7 +6,7 @@ loadDotenv();
 
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 const LOCAL_CHAIN_ID = 31337;
-export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v2";
+export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v3";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {

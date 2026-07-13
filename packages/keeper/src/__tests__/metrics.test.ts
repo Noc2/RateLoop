@@ -10,13 +10,15 @@ describe("tokenless keeper liveness metrics", () => {
       votesRevealed: 0,
       settlementsBegun: 0,
       aggregateBatchesProcessed: 0,
-      weightBatchesProcessed: 0,
+      scoringSeedsFinalized: 1,
+      scoreBatchesProcessed: 2,
       roundsFinalized: 0,
       terminalRoundsAdvanced: 0,
       claimsExecuted: 0,
       staleReturnsExecuted: 0,
       selfRevealFallbacksPending: 3,
       roundsAwaitingBeaconFailure: 2,
+      roundsAwaitingScoringEntropy: 1,
     };
 
     recordRun(result, 250);
@@ -25,5 +27,8 @@ describe("tokenless keeper liveness metrics", () => {
     expect(metrics).toContain("keeper_rounds_scanned 4");
     expect(metrics).toContain("keeper_self_reveal_fallbacks_pending 3");
     expect(metrics).toContain("keeper_rounds_awaiting_beacon_failure 2");
+    expect(metrics).toContain("keeper_rounds_awaiting_scoring_entropy 1");
+    expect(metrics).toContain("keeper_scoring_seeds_finalized_total 1");
+    expect(metrics).toContain("keeper_score_batches_processed_total 2");
   });
 });

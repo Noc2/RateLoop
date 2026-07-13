@@ -1,18 +1,22 @@
 import { parseAbi } from "viem";
 
-// Package-local minimal ABI until the first tokenless-v2 deployment generates
+// Package-local minimal ABI until the first tokenless-v3 deployment generates
 // @rateloop/contracts/tokenless. Keep this limited to permissionless keeper calls.
 export const TokenlessPanelAbi = parseAbi([
   "event CommitAccepted(uint256 indexed roundId,bytes32 indexed commitKey,bytes32 indexed nullifier,bytes sealedPayload)",
   "function nextRoundId() view returns (uint256)",
   "function credentialIssuer() view returns (address)",
-  "function getRound(uint256 roundId) view returns ((address funder,bytes32 contentId,bytes32 termsHash,bytes32 beaconNetworkHash,address feeRecipient,uint256 bountyAmount,uint256 feeAmount,uint256 attemptReserve,uint256 attemptCompensation,uint256 compensationPerRecipient,uint256 totalAccuracyScore,uint256 totalPaid,uint64 commitDeadline,uint64 revealDeadline,uint64 beaconFailureDeadline,uint64 beaconRound,uint64 claimGracePeriod,uint256 claimDeadline,uint32 minimumReveals,uint32 maximumCommits,bytes32 admissionPolicyHash,uint32 commitCount,uint32 revealCount,uint32 frozenRevealCount,uint32 aggregateCursor,uint32 weightCursor,uint32 upVotes,uint8 state,bool staleReturned))",
-  "function getCommit(bytes32 commitKey) view returns ((uint256 roundId,address voteKey,bytes32 sealedCommitment,bytes32 sealedPayloadHash,bytes32 payoutCommitment,bytes32 responseHash,uint256 accuracyScore,uint16 predictedUpBps,uint8 vote,bool revealed,bool claimed))",
+  "function SCORING_VERSION() view returns (uint8)",
+  "function BASE_PAY_BPS() view returns (uint16)",
+  "function MAXIMUM_COMMITS() view returns (uint32)",
+  "function getRound(uint256 roundId) view returns ((address funder,bytes32 contentId,bytes32 termsHash,bytes32 beaconNetworkHash,address feeRecipient,uint256 bountyAmount,uint256 feeAmount,uint256 attemptReserve,uint256 attemptCompensation,uint256 fixedBasePay,uint256 maximumBonus,uint256 compensationPerRecipient,uint256 totalRbtsScoreBps,uint256 totalFinalizedLiability,uint256 totalPaid,uint256 entropyBlock,bytes32 revealSetXor,uint256 revealSetSum,bytes32 scoringSeed,uint64 commitDeadline,uint64 revealDeadline,uint64 beaconFailureDeadline,uint64 beaconRound,uint64 claimGracePeriod,uint256 claimDeadline,uint32 minimumReveals,uint32 maximumCommits,bytes32 admissionPolicyHash,uint32 commitCount,uint32 revealCount,uint32 frozenRevealCount,uint32 aggregateCursor,uint32 scoreCursor,uint32 upVotes,uint8 state,uint8 scoringMode,bool staleReturned))",
+  "function getCommit(bytes32 commitKey) view returns ((uint256 roundId,address voteKey,bytes32 sealedCommitment,bytes32 sealedPayloadHash,bytes32 payoutCommitment,bytes32 responseHash,bytes32 referenceCommitKey,bytes32 peerCommitKey,uint256 finalizedPayout,uint16 predictedUpBps,uint16 informationScoreBps,uint16 predictionScoreBps,uint16 rbtsScoreBps,uint8 vote,bool revealed,bool claimed))",
   "function openReveal(uint256 roundId)",
   "function reveal(uint256 roundId,address voteKey,uint8 vote,uint16 predictedUpBps,bytes32 responseHash,address payoutAddress,bytes32 salt)",
   "function beginSettlement(uint256 roundId)",
   "function processAggregate(uint256 roundId,uint32 cursor,uint32 count)",
-  "function processWeights(uint256 roundId,uint32 cursor,uint32 count)",
+  "function finalizeScoringSeed(uint256 roundId)",
+  "function processScores(uint256 roundId,uint32 cursor,uint32 count)",
   "function finalizeSettlement(uint256 roundId)",
   "function claim(bytes32 commitKey,address payoutAddress,bytes32 salt) returns (uint256 amount)",
   "function claimCompensation(bytes32 commitKey,address payoutAddress,bytes32 salt) returns (uint256 amount)",

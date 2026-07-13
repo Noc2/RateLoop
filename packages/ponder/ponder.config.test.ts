@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const originalEnv = { ...process.env };
 const panel = "0x1000000000000000000000000000000000000001";
 const issuer = "0x1000000000000000000000000000000000000002";
-const deploymentKey = `tokenless-v2:84532:${panel}:${issuer}:0x0000000000000000000000000000000000000000`;
+const deploymentKey = `tokenless-v3:84532:${panel}:${issuer}:0x0000000000000000000000000000000000000000`;
 
 afterEach(() => {
   process.env = { ...originalEnv };

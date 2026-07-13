@@ -241,8 +241,8 @@ app.get("/keeper/work", async (c) => {
       cursor:
         action === "process_aggregate"
           ? row.aggregateCursor
-          : action === "process_weights"
-            ? row.weightCursor
+          : action === "process_scores"
+            ? row.scoreCursor
             : null,
     }];
   });

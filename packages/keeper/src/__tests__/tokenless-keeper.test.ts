@@ -23,6 +23,7 @@ const SEALED_PAYLOAD = "0x1234" as Hex;
 const RESPONSE_HASH = `0x${"66".repeat(32)}` as Hex;
 const SALT = `0x${"77".repeat(32)}` as Hex;
 const ADMISSION_POLICY_HASH = `0x${"99".repeat(32)}` as Hex;
+const ZERO_HASH = `0x${"00".repeat(32)}` as Hex;
 
 const logger: Logger = {
   debug() {},
@@ -34,7 +35,7 @@ const logger: Logger = {
 const config = {
   chainId: 84532,
   deployment: {
-    key: `tokenless-v2:84532:${PANEL}:${ISSUER}:0x0000000000000000000000000000000000000000`,
+    key: `tokenless-v3:84532:${PANEL}:${ISSUER}:0x0000000000000000000000000000000000000000`,
     blockNumber: 100n,
     panel: PANEL,
     credentialIssuer: ISSUER,
@@ -56,9 +57,16 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     feeAmount: 5n,
     attemptReserve: 10n,
     attemptCompensation: 2n,
+    fixedBasePay: 2n,
+    maximumBonus: 1n,
     compensationPerRecipient: 0n,
-    totalAccuracyScore: 0n,
+    totalRbtsScoreBps: 0n,
+    totalFinalizedLiability: 0n,
     totalPaid: 0n,
+    entropyBlock: 0n,
+    revealSetXor: ZERO_HASH,
+    revealSetSum: 0n,
+    scoringSeed: ZERO_HASH,
     commitDeadline: 100n,
     revealDeadline: 200n,
     beaconFailureDeadline: 250n,
@@ -72,9 +80,10 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     revealCount: 0,
     frozenRevealCount: 0,
     aggregateCursor: 0,
-    weightCursor: 0,
+    scoreCursor: 0,
     upVotes: 0,
     state: TokenlessRoundState.Open,
+    scoringMode: 0,
     staleReturned: false,
     ...overrides,
   };
@@ -85,6 +94,7 @@ function clients(params: {
   now?: bigint;
   writes?: string[];
   commitClaimed?: boolean;
+  currentBlock?: bigint;
 }): TokenlessKeeperClients {
   const writes = params.writes ?? [];
   const currentRound = { ...params.currentRound };
@@ -108,7 +118,7 @@ function clients(params: {
         return 84532;
       },
       async getBlockNumber() {
-        return 1000n;
+        return params.currentBlock ?? 1000n;
       },
       async getBlock() {
         return { timestamp: params.now ?? 150n };
@@ -136,6 +146,12 @@ function clients(params: {
         switch (args.functionName) {
           case "credentialIssuer":
             return ISSUER;
+          case "SCORING_VERSION":
+            return 2;
+          case "BASE_PAY_BPS":
+            return 8_000;
+          case "MAXIMUM_COMMITS":
+            return 500;
           case "nextRoundId":
             return 2n;
           case "getRound":
@@ -148,8 +164,13 @@ function clients(params: {
               sealedPayloadHash: `0x${"22".repeat(32)}`,
               payoutCommitment: `0x${"33".repeat(32)}`,
               responseHash: RESPONSE_HASH,
-              accuracyScore: 0n,
+              referenceCommitKey: ZERO_HASH,
+              peerCommitKey: ZERO_HASH,
+              finalizedPayout: 0n,
               predictedUpBps: 7000,
+              informationScoreBps: 0,
+              predictionScoreBps: 0,
+              rbtsScoreBps: 0,
               vote: 1,
               revealed: currentRound.revealCount > 0,
               claimed: params.commitClaimed ?? false,
@@ -175,23 +196,31 @@ const decrypt = async () => ({
 beforeEach(() => resetTokenlessKeeperStateForTests());
 
 describe("tokenless keeper orchestration", () => {
-  it("uses the policy-bound v2 round tuple", () => {
+  it("uses the policy-bound v3 RBTS round tuple", () => {
     const getRound = TokenlessPanelAbi.find(
-      (entry) => entry.type === "function" && entry.name === "getRound"
+      (entry) => entry.type === "function" && entry.name === "getRound",
     );
     expect(getRound?.outputs[0]?.components).toContainEqual(
       expect.objectContaining({
         name: "admissionPolicyHash",
         type: "bytes32",
-      })
+      }),
     );
     expect(getRound?.outputs[0]?.components).toContainEqual(
-      expect.objectContaining({ name: "claimDeadline", type: "uint256" })
+      expect.objectContaining({ name: "claimDeadline", type: "uint256" }),
+    );
+    expect(getRound?.outputs[0]?.components).toContainEqual(
+      expect.objectContaining({ name: "scoringSeed", type: "bytes32" }),
     );
     expect(
       getRound?.outputs[0]?.components.some(
-        (component) => String(component.name) === "requiredTier"
-      )
+        (component) => String(component.name) === "totalAccuracyScore",
+      ),
+    ).toBe(false);
+    expect(
+      getRound?.outputs[0]?.components.some(
+        (component) => String(component.name) === "requiredTier",
+      ),
     ).toBe(false);
   });
 
@@ -200,8 +229,20 @@ describe("tokenless keeper orchestration", () => {
     instance.publicClient.readContract = async () =>
       "0x00000000000000000000000000000000000000ff";
     await expect(
-      validateTokenlessKeeperDeployment(instance, config)
+      validateTokenlessKeeperDeployment(instance, config),
     ).rejects.toThrow(/credentialIssuer does not match/);
+  });
+
+  it("fails closed when a relabeled panel exposes different mechanism constants", async () => {
+    const instance = clients({ currentRound: round() });
+    const readContract = instance.publicClient.readContract.bind(
+      instance.publicClient,
+    );
+    instance.publicClient.readContract = async (args) =>
+      args.functionName === "BASE_PAY_BPS" ? 7_500 : readContract(args);
+    await expect(
+      validateTokenlessKeeperDeployment(instance, config),
+    ).rejects.toThrow(/RBTS constants do not match/);
   });
 
   it("fails closed when a configured x402 adapter is not deployed", async () => {
@@ -213,7 +254,7 @@ describe("tokenless keeper orchestration", () => {
           ...config.deployment,
           x402PanelSubmitter: ADAPTER,
         },
-      })
+      }),
     ).rejects.toThrow(/X402_PANEL_SUBMITTER_ADDRESS has no deployed bytecode/);
   });
 
@@ -223,7 +264,7 @@ describe("tokenless keeper orchestration", () => {
       clients({ currentRound: round(), writes, now: 150n }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(writes).toEqual(["openReveal", "reveal"]);
     expect(result.votesRevealed).toBe(1);
@@ -235,7 +276,7 @@ describe("tokenless keeper orchestration", () => {
       clients({ currentRound: round(), writes, now: 250n }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(writes).toEqual(["openReveal", "reveal", "beginSettlement"]);
     expect(result.votesRevealed).toBe(1);
@@ -250,7 +291,7 @@ describe("tokenless keeper orchestration", () => {
       logger,
       async () => {
         throw new Error("beacon unavailable");
-      }
+      },
     );
     expect(unavailableWrites).toEqual(["openReveal"]);
     expect(unavailable.selfRevealFallbacksPending).toBe(1);
@@ -271,7 +312,7 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(waitingWrites).not.toContain("beginSettlement");
     expect(waiting.roundsAwaitingBeaconFailure).toBe(1);
@@ -291,7 +332,7 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(terminalWrites).toContain("beginSettlement");
     expect(terminal.roundsAwaitingBeaconFailure).toBe(0);
@@ -308,7 +349,7 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(normalWrites).toContain("beginSettlement");
 
@@ -322,13 +363,13 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(terminalWrites).toContain("beginSettlement");
     expect(result.terminalRoundsAdvanced).toBe(1);
   });
 
-  it("processes both settlement phases and finalizes", async () => {
+  it("processes aggregation, future-block seed finalization, RBTS scoring, and finalization", async () => {
     const aggregateWrites: string[] = [];
     await runTokenlessKeeper(
       clients({
@@ -340,26 +381,80 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(aggregateWrites).toContain("processAggregate");
+
+    resetTokenlessKeeperStateForTests();
+    const seedWrites: string[] = [];
+    await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.AwaitingSeed,
+          frozenRevealCount: 3,
+          entropyBlock: 900n,
+        }),
+        writes: seedWrites,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(seedWrites).toContain("finalizeScoringSeed");
+
+    resetTokenlessKeeperStateForTests();
+    const scoreWrites: string[] = [];
+    await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.Scoring,
+          frozenRevealCount: 3,
+          scoreCursor: 1,
+        }),
+        writes: scoreWrites,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(scoreWrites).toContain("processScores");
 
     resetTokenlessKeeperStateForTests();
     const finalWrites: string[] = [];
     await runTokenlessKeeper(
       clients({
         currentRound: round({
-          state: TokenlessRoundState.Weighting,
+          state: TokenlessRoundState.Scoring,
           frozenRevealCount: 3,
-          weightCursor: 3,
+          scoreCursor: 3,
         }),
         writes: finalWrites,
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(finalWrites).toContain("finalizeSettlement");
+  });
+
+  it("waits until the committed future entropy block can be read", async () => {
+    const writes: string[] = [];
+    const result = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.AwaitingSeed,
+          frozenRevealCount: 3,
+          entropyBlock: 1_000n,
+        }),
+        writes,
+        currentBlock: 1_000n,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(writes).not.toContain("finalizeScoringSeed");
+    expect(result.roundsAwaitingScoringEntropy).toBe(1);
   });
 
   it("auto-claims decrypted material and returns stale shares", async () => {
@@ -376,7 +471,7 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(claimWrites).toContain("claim");
 
@@ -394,7 +489,7 @@ describe("tokenless keeper orchestration", () => {
       }),
       config,
       logger,
-      decrypt
+      decrypt,
     );
     expect(staleWrites).toContain("returnStaleShares");
   });

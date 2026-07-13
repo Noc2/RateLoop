@@ -159,7 +159,9 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   const attemptReserve = BigInt(quote.economics.attemptReserve.fundedAtomic);
   const maximumCommits = quote.panel.requestedSize;
   const minimumReveals = quote.panel.minimumReveals;
-  const attemptCompensation = maximumCommits > 0 ? attemptReserve / BigInt(maximumCommits) : 0n;
+  const maximumSeatPay = maximumCommits > 0 ? bountyAmount / BigInt(maximumCommits) : 0n;
+  const attemptCompensation = (maximumSeatPay * 8_000n) / 10_000n;
+  const minimumAttemptReserve = attemptCompensation * BigInt(maximumCommits);
   const frozenProductTerms = JSON.parse(rowString(row, "terms_json") ?? "null") as {
     audiencePolicy?: unknown;
   } | null;
@@ -181,9 +183,10 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   if (
     bountyAmount <= 0n ||
     attemptCompensation <= 0n ||
-    attemptReserve < attemptCompensation * BigInt(maximumCommits) ||
-    minimumReveals <= 0 ||
-    maximumCommits < minimumReveals
+    attemptReserve < minimumAttemptReserve ||
+    minimumReveals < 3 ||
+    maximumCommits < minimumReveals ||
+    maximumCommits > 500
   ) {
     throw new TokenlessServiceError(
       "The quote cannot produce valid immutable round terms.",
@@ -344,6 +347,9 @@ function exactRoundCreated(input: {
   expected: ChainPaymentInstructions;
 }) {
   const terms = input.expected.roundTerms;
+  const maximumSeatPay = BigInt(terms.bountyAmount) / BigInt(terms.maximumCommits);
+  const fixedBasePay = (maximumSeatPay * 8_000n) / 10_000n;
+  const maximumBonus = maximumSeatPay - fixedBasePay;
   const matches: { roundId: bigint }[] = [];
   for (const log of input.logs) {
     if (log.address.toLowerCase() !== input.expected.panelAddress.toLowerCase()) continue;
@@ -363,7 +369,10 @@ function exactRoundCreated(input: {
         args.admissionPolicyHash.toLowerCase() === terms.admissionPolicyHash.toLowerCase() &&
         args.bountyAmount === BigInt(terms.bountyAmount) &&
         args.feeAmount === BigInt(terms.feeAmount) &&
-        args.attemptReserve === BigInt(terms.attemptReserve)
+        args.attemptReserve === BigInt(terms.attemptReserve) &&
+        args.fixedBasePay === fixedBasePay &&
+        args.maximumBonus === maximumBonus &&
+        args.scoringVersion === 2
       ) {
         matches.push({ roundId: args.roundId });
       }
@@ -393,6 +402,9 @@ async function assertCompleteRoundMatches(input: {
     args: [input.roundId],
   });
   const terms = toOnchainTerms(input.expected.roundTerms);
+  const maximumSeatPay = terms.bountyAmount / BigInt(terms.maximumCommits);
+  const fixedBasePay = (maximumSeatPay * 8_000n) / 10_000n;
+  const maximumBonus = maximumSeatPay - fixedBasePay;
   if (
     getAddress(round.funder) !== getAddress(input.expected.funderAddress) ||
     round.contentId.toLowerCase() !== terms.contentId.toLowerCase() ||
@@ -403,6 +415,8 @@ async function assertCompleteRoundMatches(input: {
     round.feeAmount !== terms.feeAmount ||
     round.attemptReserve !== terms.attemptReserve ||
     round.attemptCompensation !== terms.attemptCompensation ||
+    round.fixedBasePay !== fixedBasePay ||
+    round.maximumBonus !== maximumBonus ||
     round.commitDeadline !== terms.commitDeadline ||
     round.revealDeadline !== terms.revealDeadline ||
     round.beaconFailureDeadline !== terms.beaconFailureDeadline ||

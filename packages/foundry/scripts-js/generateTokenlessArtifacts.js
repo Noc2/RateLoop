@@ -38,11 +38,11 @@ function readCompiledAbi(root, contract) {
     root,
     "out",
     `${contract.artifact}.sol`,
-    `${contract.artifact}.json`
+    `${contract.artifact}.json`,
   );
   if (!existsSync(artifactPath)) {
     throw new Error(
-      `Missing compiled artifact for ${contract.artifact}: ${artifactPath}. Run forge build first.`
+      `Missing compiled artifact for ${contract.artifact}: ${artifactPath}. Run forge build first.`,
     );
   }
   const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
@@ -65,8 +65,8 @@ export function buildTokenlessSourceAbiFiles({ abiLoader }) {
       `${generatedHeader()}export const ${exportName} = ${JSON.stringify(
         abi,
         null,
-        2
-      )} as const;\n`
+        2,
+      )} as const;\n`,
     );
   }
   return files;
@@ -87,7 +87,7 @@ export function generateTokenlessSourceAbis({
     "packages",
     "contracts",
     "src",
-    "tokenless"
+    "tokenless",
   ),
   compiledArtifactRoot = foundryRoot,
 } = {}) {
@@ -101,7 +101,7 @@ export function generateTokenlessSourceAbis({
 
 export function buildTokenlessGeneratedSources(
   deploymentArtifact,
-  { abiLoader }
+  { abiLoader },
 ) {
   const deployment = validateTokenlessDeploymentArtifact(deploymentArtifact);
   const files = new Map();
@@ -121,8 +121,8 @@ export function buildTokenlessGeneratedSources(
       `${generatedHeader()}export const ${exportName} = ${JSON.stringify(
         abi,
         null,
-        2
-      )} as const;\n`
+        2,
+      )} as const;\n`,
     );
     exportLines.push(`export { ${exportName} } from "./abis/${exportName}";`);
   }
@@ -130,18 +130,18 @@ export function buildTokenlessGeneratedSources(
   files.set(
     "deployedContracts.ts",
     `${generatedHeader()}export const tokenlessDeploymentSchema = ${JSON.stringify(
-      deployment.schemaVersion
+      deployment.schemaVersion,
     )} as const;\n\nexport const tokenlessDeployedContracts = ${JSON.stringify(
       { [deployment.chainId]: deployment },
       null,
-      2
-    )} as const;\n`
+      2,
+    )} as const;\n`,
   );
   files.set(
     "index.ts",
     `${generatedHeader()}${exportLines.join(
-      "\n"
-    )}\nexport { tokenlessDeployedContracts, tokenlessDeploymentSchema } from "./deployedContracts";\n`
+      "\n",
+    )}\nexport { tokenlessDeployedContracts, tokenlessDeploymentSchema } from "./deployedContracts";\nexport { tokenlessHistoricalDeployments, tokenlessHistoricalDeploymentSchema } from "./historicalDeployments";\n`,
   );
 
   return files;
@@ -152,14 +152,14 @@ export function generateTokenlessArtifacts({
     foundryRoot,
     "deployments",
     "tokenless-v3",
-    `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`
+    `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`,
   ),
   outputDirectory = join(
     workspaceRoot,
     "packages",
     "contracts",
     "src",
-    "tokenless"
+    "tokenless",
   ),
   compiledArtifactRoot = foundryRoot,
 } = {}) {
@@ -176,7 +176,7 @@ export function generateTokenlessArtifacts({
   const optionalAdapterPath = join(
     outputDirectory,
     "abis",
-    "X402PanelSubmitterAbi.ts"
+    "X402PanelSubmitterAbi.ts",
   );
   if (!deployment.contracts?.X402PanelSubmitter) {
     rmSync(optionalAdapterPath, { force: true });
@@ -189,7 +189,9 @@ async function main() {
   const args = process.argv.slice(2);
   const sourceOnly = args.length === 1 && args[0] === "--source-abis-only";
   if (args.length > (sourceOnly ? 1 : 0)) {
-    throw new Error("Usage: generateTokenlessArtifacts.js [--source-abis-only]");
+    throw new Error(
+      "Usage: generateTokenlessArtifacts.js [--source-abis-only]",
+    );
   }
   const result = sourceOnly
     ? generateTokenlessSourceAbis()
@@ -197,7 +199,7 @@ async function main() {
   console.log(
     `Generated ${result.files.length} tokenless ${
       sourceOnly ? "source ABIs" : "contract artifacts"
-    } under ${result.outputDirectory}`
+    } under ${result.outputDirectory}`,
   );
 }
 
@@ -208,7 +210,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.error(
       `[generate-tokenless-artifacts] ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
     process.exitCode = 1;
   }

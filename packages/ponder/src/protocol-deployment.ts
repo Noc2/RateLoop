@@ -1,6 +1,6 @@
 import { isAddress, zeroAddress } from "viem";
 
-export const TOKENLESS_SCHEMA_VERSION = "tokenless-v2";
+export const TOKENLESS_SCHEMA_VERSION = "tokenless-v3";
 export const PONDER_NETWORK_CHAIN_IDS = {
   hardhat: 31_337,
   baseSepolia: 84_532,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolvePonderDatabaseSchema, schemaFromTokenlessDeploymentKey } from "../scripts/databaseSchema.mjs";
 
 const key =
-  "tokenless-v2:84532:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002:0x0000000000000000000000000000000000000000";
+  "tokenless-v3:84532:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002:0x0000000000000000000000000000000000000000";
 
 describe("tokenless database schema", () => {
   it("is stable per deployment identity", () => {
@@ -13,7 +13,7 @@ describe("tokenless database schema", () => {
   });
 
   it("rejects legacy keys and accidental mixed-schema overrides", () => {
-    expect(() => schemaFromTokenlessDeploymentKey("tokenless-v1:84532:legacy:legacy")).toThrow("tokenless-v2");
+    expect(() => schemaFromTokenlessDeploymentKey("tokenless-v2:84532:legacy:legacy")).toThrow("tokenless-v3");
     expect(() =>
       resolvePonderDatabaseSchema({
         RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: key,

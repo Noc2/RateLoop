@@ -13,7 +13,7 @@ beforeAll(async () => {
   process.env.RPC_URL = "http://127.0.0.1:8545";
   process.env.TOKENLESS_PANEL_ADDRESS = PANEL;
   process.env.TOKENLESS_CREDENTIAL_ISSUER_ADDRESS = ISSUER;
-  process.env.TOKENLESS_DEPLOYMENT_KEY = `tokenless-v2:31337:${PANEL}:${ISSUER}:${ZERO}`;
+  process.env.TOKENLESS_DEPLOYMENT_KEY = `tokenless-v3:31337:${PANEL}:${ISSUER}:${ZERO}`;
   process.env.KEEPER_PRIVATE_KEY = `0x${"11".repeat(32)}`;
   ({ loadConfig, buildTokenlessDeploymentKey } = await import("../config.js"));
 });
@@ -25,7 +25,7 @@ function productionEnv(): NodeJS.ProcessEnv {
     RPC_URL: "https://sepolia.base.org",
     TOKENLESS_PANEL_ADDRESS: PANEL,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
-    TOKENLESS_DEPLOYMENT_KEY: `tokenless-v2:84532:${PANEL}:${ISSUER}:${ZERO}`,
+    TOKENLESS_DEPLOYMENT_KEY: `tokenless-v3:84532:${PANEL}:${ISSUER}:${ZERO}`,
     TOKENLESS_DEPLOYMENT_BLOCK: "123",
     KEEPER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
     METRICS_BIND_ADDRESS: "0.0.0.0",
@@ -41,7 +41,7 @@ describe("tokenless keeper config", () => {
         panel: PANEL,
         credentialIssuer: ISSUER,
       })
-    ).toBe(`tokenless-v2:84532:${PANEL}:${ISSUER}:${ZERO}`);
+    ).toBe(`tokenless-v3:84532:${PANEL}:${ISSUER}:${ZERO}`);
   });
 
   it("accepts a complete Base Sepolia deployment", () => {
@@ -64,7 +64,7 @@ describe("tokenless keeper config", () => {
     expect(() =>
       loadConfig({
         ...productionEnv(),
-        TOKENLESS_DEPLOYMENT_KEY: `tokenless-v1:84532:${PANEL}:${ISSUER}:${ZERO}`,
+        TOKENLESS_DEPLOYMENT_KEY: `tokenless-v2:84532:${PANEL}:${ISSUER}:${ZERO}`,
       })
     ).toThrow(/does not match/);
   });

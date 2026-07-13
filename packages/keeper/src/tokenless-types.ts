@@ -4,11 +4,18 @@ export enum TokenlessRoundState {
   Open,
   Revealable,
   Aggregating,
-  Weighting,
+  AwaitingSeed,
+  Scoring,
   Finalized,
   ZeroCommitRefund,
   UnderQuorumCompensation,
   BeaconFailureCompensation,
+}
+
+export enum TokenlessScoringMode {
+  Pending,
+  Rbts,
+  BaseOnlyEntropyUnavailable,
 }
 
 export interface TokenlessRound {
@@ -21,9 +28,16 @@ export interface TokenlessRound {
   feeAmount: bigint;
   attemptReserve: bigint;
   attemptCompensation: bigint;
+  fixedBasePay: bigint;
+  maximumBonus: bigint;
   compensationPerRecipient: bigint;
-  totalAccuracyScore: bigint;
+  totalRbtsScoreBps: bigint;
+  totalFinalizedLiability: bigint;
   totalPaid: bigint;
+  entropyBlock: bigint;
+  revealSetXor: Hex;
+  revealSetSum: bigint;
+  scoringSeed: Hex;
   commitDeadline: bigint;
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
@@ -37,9 +51,10 @@ export interface TokenlessRound {
   revealCount: number;
   frozenRevealCount: number;
   aggregateCursor: number;
-  weightCursor: number;
+  scoreCursor: number;
   upVotes: number;
   state: TokenlessRoundState;
+  scoringMode: TokenlessScoringMode;
   staleReturned: boolean;
 }
 
@@ -50,8 +65,13 @@ export interface TokenlessCommit {
   sealedPayloadHash: Hex;
   payoutCommitment: Hex;
   responseHash: Hex;
-  accuracyScore: bigint;
+  referenceCommitKey: Hex;
+  peerCommitKey: Hex;
+  finalizedPayout: bigint;
   predictedUpBps: number;
+  informationScoreBps: number;
+  predictionScoreBps: number;
+  rbtsScoreBps: number;
   vote: number;
   revealed: boolean;
   claimed: boolean;
@@ -61,7 +81,7 @@ export interface TokenlessRevealMaterial {
   roundId: bigint;
   voteKey: Address;
   vote: 0 | 1;
-  predictedUpBps: 1000 | 3000 | 5000 | 7000 | 9000;
+  predictedUpBps: number;
   responseHash: Hex;
   payoutAddress: Address;
   salt: Hex;
@@ -73,11 +93,13 @@ export interface TokenlessKeeperResult {
   votesRevealed: number;
   settlementsBegun: number;
   aggregateBatchesProcessed: number;
-  weightBatchesProcessed: number;
+  scoringSeedsFinalized: number;
+  scoreBatchesProcessed: number;
   roundsFinalized: number;
   terminalRoundsAdvanced: number;
   claimsExecuted: number;
   staleReturnsExecuted: number;
   selfRevealFallbacksPending: number;
   roundsAwaitingBeaconFailure: number;
+  roundsAwaitingScoringEntropy: number;
 }

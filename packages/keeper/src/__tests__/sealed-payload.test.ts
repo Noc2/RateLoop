@@ -29,4 +29,14 @@ describe("tokenless sealed reveal payload", () => {
       /wrong protocol magic/
     );
   });
+
+  it("accepts the exact RBTS one-percent prediction grid", () => {
+    const fineGrained = { ...material, predictedUpBps: 5_100 };
+    expect(decodeTokenlessRevealPayload(encodeTokenlessRevealPayload(fineGrained))).toEqual(fineGrained);
+    expect(() =>
+      decodeTokenlessRevealPayload(
+        encodeTokenlessRevealPayload({ ...material, predictedUpBps: 5_050 }),
+      ),
+    ).toThrow(/one-percent grid/);
+  });
 });

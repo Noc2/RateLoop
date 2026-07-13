@@ -1,0 +1,46 @@
+/** Immutable historical metadata. Full artifact generation must never overwrite this file. */
+export const tokenlessHistoricalDeploymentSchema =
+  "rateloop-tokenless-deployment-v2" as const;
+export const tokenlessHistoricalDeployments = {
+  "84532": {
+    schemaVersion: "rateloop-tokenless-deployment-v2",
+    version: 2,
+    deploymentComplete: true,
+    deploymentStatus: "historical",
+    supersededBySchema: "rateloop-tokenless-deployment-v3",
+    deploymentProfile: "test",
+    networkName: "baseSepolia",
+    chainId: 84532,
+    deploymentBlockNumber: 44090502,
+    deploymentKey:
+      "tokenless-v2:84532:0x465174830061bdaf829567b3253b5001e1d885f5:0x9fdd25d3bc526c5dddfb34cf629ab1f70736a9e3:0x3fb8d0b01d4101bf7038f7d103f35c307dce0d42",
+    contracts: {
+      TestUSDC: {
+        address: "0x49341aa90c4b931b64730e283aafddaa9e2bfb83",
+        artifact: "MockERC20",
+        deployedOnBlock: 44090502,
+      },
+      CredentialIssuer: {
+        address: "0x9fdd25d3bc526c5dddfb34cf629ab1f70736a9e3",
+        artifact: "CredentialIssuer",
+        deployedOnBlock: 44090502,
+      },
+      TokenlessPanel: {
+        address: "0x465174830061bdaf829567b3253b5001e1d885f5",
+        artifact: "TokenlessPanel",
+        deployedOnBlock: 44090502,
+      },
+      X402PanelSubmitter: {
+        address: "0x3fb8d0b01d4101bf7038f7d103f35c307dce0d42",
+        artifact: "X402PanelSubmitter",
+        deployedOnBlock: 44090502,
+      },
+    },
+    testCurrency: {
+      contract: "TestUSDC",
+      decimals: 6,
+      symbol: "tUSDC",
+      unrestrictedMint: true,
+    },
+  },
+} as const;

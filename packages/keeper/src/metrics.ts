@@ -9,7 +9,8 @@ const counters: Record<string, number> = {
   keeper_votes_revealed_total: 0,
   keeper_settlements_begun_total: 0,
   keeper_aggregate_batches_processed_total: 0,
-  keeper_weight_batches_processed_total: 0,
+  keeper_scoring_seeds_finalized_total: 0,
+  keeper_score_batches_processed_total: 0,
   keeper_rounds_finalized_total: 0,
   keeper_terminal_rounds_advanced_total: 0,
   keeper_claims_executed_total: 0,
@@ -24,6 +25,7 @@ const gauges: Record<string, number> = {
   keeper_rounds_scanned: 0,
   keeper_self_reveal_fallbacks_pending: 0,
   keeper_rounds_awaiting_beacon_failure: 0,
+  keeper_rounds_awaiting_scoring_entropy: 0,
 };
 
 let consecutiveErrors = 0;
@@ -64,8 +66,8 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
   counters.keeper_settlements_begun_total += result.settlementsBegun;
   counters.keeper_aggregate_batches_processed_total +=
     result.aggregateBatchesProcessed;
-  counters.keeper_weight_batches_processed_total +=
-    result.weightBatchesProcessed;
+  counters.keeper_scoring_seeds_finalized_total += result.scoringSeedsFinalized;
+  counters.keeper_score_batches_processed_total += result.scoreBatchesProcessed;
   counters.keeper_rounds_finalized_total += result.roundsFinalized;
   counters.keeper_terminal_rounds_advanced_total +=
     result.terminalRoundsAdvanced;
@@ -78,6 +80,8 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
     result.selfRevealFallbacksPending;
   gauges.keeper_rounds_awaiting_beacon_failure =
     result.roundsAwaitingBeaconFailure;
+  gauges.keeper_rounds_awaiting_scoring_entropy =
+    result.roundsAwaitingScoringEntropy;
   consecutiveErrors = 0;
   lastRunAt = new Date();
 }
@@ -106,7 +110,7 @@ export function startMetricsServer(
     if (request.url === "/live") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
-        JSON.stringify({ status: "live", protocol: "tokenless-v2" })
+        JSON.stringify({ status: "live", protocol: "tokenless-v3" })
       );
       return;
     }
@@ -130,7 +134,7 @@ export function startMetricsServer(
       response.end(
         JSON.stringify({
           status: healthy ? "ok" : "degraded",
-          protocol: "tokenless-v2",
+          protocol: "tokenless-v3",
           consecutiveErrors,
           lastRunAt: lastRunAt?.toISOString() ?? null,
           walletBalanceWei: walletBalanceWei?.toString() ?? null,

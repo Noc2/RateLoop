@@ -71,13 +71,15 @@ function emptyResult(): TokenlessKeeperResult {
     votesRevealed: 0,
     settlementsBegun: 0,
     aggregateBatchesProcessed: 0,
-    weightBatchesProcessed: 0,
+    scoringSeedsFinalized: 0,
+    scoreBatchesProcessed: 0,
     roundsFinalized: 0,
     terminalRoundsAdvanced: 0,
     claimsExecuted: 0,
     staleReturnsExecuted: 0,
     selfRevealFallbacksPending: 0,
     roundsAwaitingBeaconFailure: 0,
+    roundsAwaitingScoringEntropy: 0,
   };
 }
 
@@ -98,7 +100,7 @@ export async function decryptTokenlessRevealMaterial(params: {
   const bytes = hexToBytes(params.sealedPayload);
   if (bytes.length === 0 || bytes.length > params.maxCiphertextBytes) {
     throw new Error(
-      "Tokenless tlock ciphertext size is outside configured bounds."
+      "Tokenless tlock ciphertext size is outside configured bounds.",
     );
   }
   const armored = Buffer.from(bytes).toString("utf8");
@@ -128,7 +130,7 @@ function normalizeCommit(value: unknown): TokenlessCommit {
 async function readRound(
   publicClient: TokenlessPublicClient,
   panel: Address,
-  roundId: bigint
+  roundId: bigint,
 ) {
   return normalizeRound(
     await publicClient.readContract({
@@ -136,14 +138,14 @@ async function readRound(
       abi: TokenlessPanelAbi,
       functionName: "getRound",
       args: [roundId],
-    })
+    }),
   );
 }
 
 async function readCommit(
   publicClient: TokenlessPublicClient,
   panel: Address,
-  commitKey: Hex
+  commitKey: Hex,
 ) {
   return normalizeCommit(
     await publicClient.readContract({
@@ -151,7 +153,7 @@ async function readCommit(
       abi: TokenlessPanelAbi,
       functionName: "getCommit",
       args: [commitKey],
-    })
+    }),
   );
 }
 
@@ -159,7 +161,7 @@ async function writeAndConfirm(
   clients: TokenlessKeeperClients,
   panel: Address,
   functionName: string,
-  args: readonly unknown[]
+  args: readonly unknown[],
 ) {
   const hash = await clients.walletClient.writeContract({
     address: panel,
@@ -175,7 +177,7 @@ async function writeAndConfirm(
 function isExpectedRace(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return /InvalidState|InvalidDeadline|CursorMismatch|AlreadyClaimed|NotClaimable|ClaimWindowOpen/iu.test(
-    message
+    message,
   );
 }
 
@@ -184,7 +186,7 @@ async function permissionlessWrite(
   panel: Address,
   functionName: string,
   args: readonly unknown[],
-  logger: Logger
+  logger: Logger,
 ) {
   try {
     await writeAndConfirm(clients, panel, functionName, args);
@@ -204,12 +206,12 @@ async function permissionlessWrite(
 async function commitLogsForRound(
   publicClient: TokenlessPublicClient,
   config: KeeperConfig,
-  roundId: bigint
+  roundId: bigint,
 ) {
   return publicClient.getLogs({
     address: config.deployment.panel,
     event: TokenlessPanelAbi.find(
-      (item) => item.type === "event" && item.name === "CommitAccepted"
+      (item) => item.type === "event" && item.name === "CommitAccepted",
     ),
     args: { roundId },
     fromBlock: config.deployment.blockNumber,
@@ -220,16 +222,16 @@ async function commitLogsForRound(
 function validateRevealMaterial(
   material: TokenlessRevealMaterial,
   commit: TokenlessCommit,
-  roundId: bigint
+  roundId: bigint,
 ) {
   if (material.roundId !== roundId || commit.roundId !== roundId) {
     throw new Error(
-      "Decrypted tokenless reveal material is bound to another round."
+      "Decrypted tokenless reveal material is bound to another round.",
     );
   }
   if (!isAddressEqual(material.voteKey, commit.voteKey)) {
     throw new Error(
-      "Decrypted tokenless reveal material is bound to another vote key."
+      "Decrypted tokenless reveal material is bound to another vote key.",
     );
   }
 }
@@ -269,7 +271,7 @@ async function revealAndClaimRound(params: {
   const logs = await commitLogsForRound(
     params.clients.publicClient,
     params.config,
-    params.roundId
+    params.roundId,
   );
   for (const log of logs) {
     const commitKey = log.args?.commitKey;
@@ -278,7 +280,7 @@ async function revealAndClaimRound(params: {
     const commit = await readCommit(
       params.clients.publicClient,
       params.config.deployment.panel,
-      commitKey
+      commitKey,
     );
 
     let material: TokenlessRevealMaterial;
@@ -293,10 +295,7 @@ async function revealAndClaimRound(params: {
         commit,
       });
     } catch (error) {
-      if (
-        !commit.revealed &&
-        acceptsReveals(params.round, params.now)
-      ) {
+      if (!commit.revealed && acceptsReveals(params.round, params.now)) {
         params.result.selfRevealFallbacksPending += 1;
       }
       params.logger.debug("Tokenless commit is not auto-decryptable yet", {
@@ -307,10 +306,7 @@ async function revealAndClaimRound(params: {
       continue;
     }
 
-    if (
-      !commit.revealed &&
-      acceptsReveals(params.round, params.now)
-    ) {
+    if (!commit.revealed && acceptsReveals(params.round, params.now)) {
       const revealed = await permissionlessWrite(
         params.clients,
         params.config.deployment.panel,
@@ -324,7 +320,7 @@ async function revealAndClaimRound(params: {
           material.payoutAddress,
           material.salt,
         ],
-        params.logger
+        params.logger,
       );
       if (revealed) {
         params.result.votesRevealed += 1;
@@ -341,19 +337,19 @@ async function revealAndClaimRound(params: {
         params.round.state === TokenlessRoundState.Finalized
           ? "claim"
           : params.round.state ===
-              TokenlessRoundState.BeaconFailureCompensation ||
-            (params.round.state ===
-              TokenlessRoundState.UnderQuorumCompensation &&
-              commit.revealed)
-          ? "claimCompensation"
-          : null;
+                TokenlessRoundState.BeaconFailureCompensation ||
+              (params.round.state ===
+                TokenlessRoundState.UnderQuorumCompensation &&
+                commit.revealed)
+            ? "claimCompensation"
+            : null;
       if (functionName) {
         const claimed = await permissionlessWrite(
           params.clients,
           params.config.deployment.panel,
           functionName,
           [commitKey, material.payoutAddress, material.salt],
-          params.logger
+          params.logger,
         );
         if (claimed) params.result.claimsExecuted += 1;
       }
@@ -374,7 +370,7 @@ async function advanceRound(params: {
   let round = await readRound(
     params.clients.publicClient,
     params.config.deployment.panel,
-    params.roundId
+    params.roundId,
   );
   params.result.roundsScanned += 1;
 
@@ -389,7 +385,7 @@ async function advanceRound(params: {
       params.config.deployment.panel,
       "openReveal",
       [params.roundId],
-      params.logger
+      params.logger,
     );
     if (opened) params.result.revealWindowsOpened += 1;
     round = { ...round, state: TokenlessRoundState.Revealable };
@@ -400,7 +396,7 @@ async function advanceRound(params: {
     round = await readRound(
       params.clients.publicClient,
       params.config.deployment.panel,
-      params.roundId
+      params.roundId,
     );
   }
 
@@ -415,14 +411,13 @@ async function advanceRound(params: {
       quorumMet ||
       params.now > round.beaconFailureDeadline;
     if (mayAdvance) {
-      const terminal =
-        round.commitCount === 0 || !quorumMet;
+      const terminal = round.commitCount === 0 || !quorumMet;
       const advanced = await permissionlessWrite(
         params.clients,
         params.config.deployment.panel,
         "beginSettlement",
         [params.roundId],
-        params.logger
+        params.logger,
       );
       if (advanced) {
         if (terminal) params.result.terminalRoundsAdvanced += 1;
@@ -444,22 +439,39 @@ async function advanceRound(params: {
         round.aggregateCursor,
         params.config.settlementBatchSize,
       ],
-      params.logger
+      params.logger,
     );
     if (processed) params.result.aggregateBatchesProcessed += 1;
     return;
   }
 
-  if (round.state === TokenlessRoundState.Weighting) {
-    if (round.weightCursor < round.frozenRevealCount) {
+  if (round.state === TokenlessRoundState.AwaitingSeed) {
+    const currentBlock = await params.clients.publicClient.getBlockNumber();
+    if (currentBlock <= round.entropyBlock) {
+      params.result.roundsAwaitingScoringEntropy += 1;
+      return;
+    }
+    const seeded = await permissionlessWrite(
+      params.clients,
+      params.config.deployment.panel,
+      "finalizeScoringSeed",
+      [params.roundId],
+      params.logger,
+    );
+    if (seeded) params.result.scoringSeedsFinalized += 1;
+    return;
+  }
+
+  if (round.state === TokenlessRoundState.Scoring) {
+    if (round.scoreCursor < round.frozenRevealCount) {
       const processed = await permissionlessWrite(
         params.clients,
         params.config.deployment.panel,
-        "processWeights",
-        [params.roundId, round.weightCursor, params.config.settlementBatchSize],
-        params.logger
+        "processScores",
+        [params.roundId, round.scoreCursor, params.config.settlementBatchSize],
+        params.logger,
       );
-      if (processed) params.result.weightBatchesProcessed += 1;
+      if (processed) params.result.scoreBatchesProcessed += 1;
       return;
     }
     const finalized = await permissionlessWrite(
@@ -467,7 +479,7 @@ async function advanceRound(params: {
       params.config.deployment.panel,
       "finalizeSettlement",
       [params.roundId],
-      params.logger
+      params.logger,
     );
     if (finalized) params.result.roundsFinalized += 1;
     return;
@@ -488,7 +500,7 @@ async function advanceRound(params: {
       params.config.deployment.panel,
       "returnStaleShares",
       [params.roundId],
-      params.logger
+      params.logger,
     );
     if (returned) params.result.staleReturnsExecuted += 1;
   }
@@ -509,15 +521,23 @@ function scanRoundIds(nextRoundId: bigint, maxRounds: number) {
 
 export async function validateTokenlessKeeperDeployment(
   clients: TokenlessKeeperClients,
-  config: KeeperConfig
+  config: KeeperConfig,
 ) {
   const chainId = await clients.publicClient.getChainId();
   if (chainId !== config.chainId) {
     throw new Error(
-      `RPC reports chain ${chainId}, expected tokenless keeper chain ${config.chainId}.`
+      `RPC reports chain ${chainId}, expected tokenless keeper chain ${config.chainId}.`,
     );
   }
-  const [panelCode, issuerCode, currentBlock, issuer] = await Promise.all([
+  const [
+    panelCode,
+    issuerCode,
+    currentBlock,
+    issuer,
+    scoringVersion,
+    basePayBps,
+    maximumCommits,
+  ] = await Promise.all([
     clients.publicClient.getBytecode({ address: config.deployment.panel }),
     clients.publicClient.getBytecode({
       address: config.deployment.credentialIssuer,
@@ -528,13 +548,28 @@ export async function validateTokenlessKeeperDeployment(
       abi: TokenlessPanelAbi,
       functionName: "credentialIssuer",
     }),
+    clients.publicClient.readContract({
+      address: config.deployment.panel,
+      abi: TokenlessPanelAbi,
+      functionName: "SCORING_VERSION",
+    }),
+    clients.publicClient.readContract({
+      address: config.deployment.panel,
+      abi: TokenlessPanelAbi,
+      functionName: "BASE_PAY_BPS",
+    }),
+    clients.publicClient.readContract({
+      address: config.deployment.panel,
+      abi: TokenlessPanelAbi,
+      functionName: "MAXIMUM_COMMITS",
+    }),
   ]);
   if (!panelCode || panelCode === "0x") {
     throw new Error("TOKENLESS_PANEL_ADDRESS has no deployed bytecode.");
   }
   if (!issuerCode || issuerCode === "0x") {
     throw new Error(
-      "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS has no deployed bytecode."
+      "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS has no deployed bytecode.",
     );
   }
   if (
@@ -542,7 +577,16 @@ export async function validateTokenlessKeeperDeployment(
     !isAddressEqual(issuer as Address, config.deployment.credentialIssuer)
   ) {
     throw new Error(
-      "TokenlessPanel credentialIssuer does not match the versioned deployment identity."
+      "TokenlessPanel credentialIssuer does not match the versioned deployment identity.",
+    );
+  }
+  if (
+    Number(scoringVersion) !== 2 ||
+    Number(basePayBps) !== 8_000 ||
+    Number(maximumCommits) !== 500
+  ) {
+    throw new Error(
+      "TokenlessPanel RBTS constants do not match the tokenless-v3 deployment identity.",
     );
   }
   if (
@@ -554,13 +598,13 @@ export async function validateTokenlessKeeperDeployment(
     });
     if (!adapterCode || adapterCode === "0x") {
       throw new Error(
-        "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS has no deployed bytecode."
+        "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS has no deployed bytecode.",
       );
     }
   }
   if (config.deployment.blockNumber > currentBlock) {
     throw new Error(
-      "TOKENLESS_DEPLOYMENT_BLOCK is ahead of the current chain."
+      "TOKENLESS_DEPLOYMENT_BLOCK is ahead of the current chain.",
     );
   }
 }
@@ -569,8 +613,9 @@ export async function runTokenlessKeeper(
   clients: TokenlessKeeperClients,
   config: KeeperConfig,
   logger: Logger,
-  decrypt: RevealDecryptor = decryptTokenlessRevealMaterial
+  decrypt: RevealDecryptor = decryptTokenlessRevealMaterial,
 ) {
+  await validateTokenlessKeeperDeployment(clients, config);
   const [block, nextRoundIdRaw] = await Promise.all([
     clients.publicClient.getBlock(),
     clients.publicClient.readContract({

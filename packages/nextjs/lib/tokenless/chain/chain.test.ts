@@ -47,7 +47,7 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
     revealWindowSeconds: 120,
     beaconFailureGraceSeconds: 300,
     rpcUrl: "https://sepolia.base.org/",
-    schemaVersion: "rateloop-tokenless-deployment-v2",
+    schemaVersion: "rateloop-tokenless-deployment-v3",
     usdcAddress: USDC,
     x402SubmitterAddress: ADAPTER,
     ...overrides,
@@ -65,6 +65,9 @@ function mockRuntime(
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
       if (address === PANEL && functionName === "usdc") return USDC;
       if (address === PANEL && functionName === "credentialIssuer") return ISSUER;
+      if (address === PANEL && functionName === "SCORING_VERSION") return 2;
+      if (address === PANEL && functionName === "BASE_PAY_BPS") return 8_000;
+      if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
       if (address === ADAPTER && functionName === "panel") return PANEL;
       if (address === ADAPTER && (functionName === "usdc" || functionName === "authorizationToken")) return USDC;
       if (address === PANEL && functionName === "getRound" && expectedRound) {
@@ -79,6 +82,10 @@ function mockRuntime(
           feeAmount: terms.feeAmount,
           attemptReserve: terms.attemptReserve,
           attemptCompensation: terms.attemptCompensation,
+          fixedBasePay: ((terms.bountyAmount / BigInt(terms.maximumCommits)) * 8_000n) / 10_000n,
+          maximumBonus:
+            terms.bountyAmount / BigInt(terms.maximumCommits) -
+            ((terms.bountyAmount / BigInt(terms.maximumCommits)) * 8_000n) / 10_000n,
           commitDeadline: terms.commitDeadline,
           revealDeadline: terms.revealDeadline,
           beaconFailureDeadline: terms.beaconFailureDeadline,
@@ -110,7 +117,7 @@ afterEach(() => {
 test("deployment config binds the complete bundle and forbids credential key reuse", () => {
   const key = `0x${"11".repeat(32)}`;
   const env = {
-    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v3",
     TOKENLESS_CHAIN_ID: "84532",
     TOKENLESS_PANEL_ADDRESS: PANEL,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
@@ -138,9 +145,9 @@ test("deployment config binds the complete bundle and forbids credential key reu
       loadTokenlessChainConfig({
         ...env,
         TOKENLESS_X402_RELAYER_PRIVATE_KEY: undefined,
-        TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v1",
+        TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
       }),
-    /must be rateloop-tokenless-deployment-v2/,
+    /must be rateloop-tokenless-deployment-v3/,
   );
 });
 
@@ -156,23 +163,49 @@ test("deployment validation rejects on-chain immutable wiring from a mixed bundl
   await assert.rejects(() => assertLiveTokenlessDeployment(config(), runtime), /mixed deployment bundle/);
 });
 
+test("deployment validation rejects a relabeled panel with different mechanism constants", async () => {
+  const runtime = mockRuntime();
+  const readContract = runtime.publicClient.readContract.bind(runtime.publicClient);
+  runtime.publicClient.readContract = (async args =>
+    args.functionName === "SCORING_VERSION" ? 1 : readContract(args)) as typeof runtime.publicClient.readContract;
+  await assert.rejects(() => assertLiveTokenlessDeployment(config(), runtime), /mixed deployment bundle/);
+});
+
 function admissionPolicy() {
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
     policyId: "policy_chain_paid_network",
     version: 1,
     reviewerSource: "rateloop_network" as const,
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:2026-07-13:001",
+      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+      maxClusterShareBps: 2_000,
+      allowedRiskBands: ["low", "medium"] as const,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 1,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
     compensation: "paid" as const,
     cohorts: [],
     selection: "randomized" as const,
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
-      requirements: ["account_control", "live_human", "minimum_age"].map(capability => ({
-        capability: capability as "account_control" | "live_human" | "minimum_age",
-        reviewerSources: ["rateloop_network" as const],
-        allowedProviders: ["identity-production"],
-      })),
+      requirements: [
+        ...["account_control", "live_human", "minimum_age"].map(capability => ({
+          capability: capability as "account_control" | "live_human" | "minimum_age",
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["identity-production"],
+        })),
+        {
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
+        },
+      ],
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const],
@@ -216,14 +249,18 @@ async function freezeAskAdmissionPolicy(operationKey: string) {
   });
 }
 
-async function walletAsk(options: { includeAdmissionPolicy?: boolean } = {}) {
+async function walletAsk(options: { attemptReserveAtomic?: string; includeAdmissionPolicy?: boolean } = {}) {
   await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
   const quote = await createTokenlessQuote({
     audience: {
       admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
       source: "rateloop_network",
     },
-    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    budget: {
+      attemptReserveAtomic: options.attemptReserveAtomic ?? "20000000",
+      bountyAtomic: "25000000",
+      feeBps: 750,
+    },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
   });
@@ -251,6 +288,16 @@ test("legacy tier-only asks fail closed instead of being converted into capabili
   assert.equal(Number(executions.rows[0]?.count), 0);
 });
 
+test("underfunded fixed-base guarantees fail before chain funding", async () => {
+  const operationKey = await walletAsk({ attemptReserveAtomic: "5000000" });
+  await assert.rejects(
+    () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_round_terms",
+  );
+  const executions = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_chain_executions");
+  assert.equal(Number(executions.rows[0]?.count), 0);
+});
+
 function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment>>, roundId = 7n) {
   const topics = encodeEventTopics({
     abi: TokenlessPanelAbi,
@@ -268,6 +315,9 @@ function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment
       { name: "bountyAmount", type: "uint256" },
       { name: "feeAmount", type: "uint256" },
       { name: "attemptReserve", type: "uint256" },
+      { name: "fixedBasePay", type: "uint256" },
+      { name: "maximumBonus", type: "uint256" },
+      { name: "scoringVersion", type: "uint8" },
     ],
     [
       expected.roundTerms.termsHash,
@@ -275,6 +325,10 @@ function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment
       BigInt(expected.roundTerms.bountyAmount),
       BigInt(expected.roundTerms.feeAmount),
       BigInt(expected.roundTerms.attemptReserve),
+      ((BigInt(expected.roundTerms.bountyAmount) / BigInt(expected.roundTerms.maximumCommits)) * 8_000n) / 10_000n,
+      BigInt(expected.roundTerms.bountyAmount) / BigInt(expected.roundTerms.maximumCommits) -
+        ((BigInt(expected.roundTerms.bountyAmount) / BigInt(expected.roundTerms.maximumCommits)) * 8_000n) / 10_000n,
+      2,
     ],
   );
   return { address: PANEL, data, topics: topics.filter((topic): topic is Hex => topic !== null) };
@@ -289,8 +343,8 @@ test("wallet confirmation accepts only the exact quoted RoundCreated evidence an
     now: new Date("2026-07-12T20:00:00Z"),
   });
   assert.equal(expected.paymentMode, "wallet");
-  assert.equal(expected.totalFundedAtomic, "31875000");
-  assert.equal(expected.roundTerms.attemptCompensation, "333333");
+  assert.equal(expected.totalFundedAtomic, "46875000");
+  assert.equal(expected.roundTerms.attemptCompensation, "1333332");
   const receiptRuntime = mockRuntime(
     {
       getTransactionReceipt: async () => ({
@@ -375,7 +429,7 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
       admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
       source: "rateloop_network",
     },
-    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Fund this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
   });
