@@ -91,7 +91,7 @@ test("generates independent one-time vote and payout accounts entirely client-si
   const secrets = createTokenlessRaterRoundSecrets({
     roundId: 9n,
     vote: 0,
-    predictedUpBps: 3000,
+    predictedUpBps: 3_700,
     responseHash: RESPONSE_HASH,
   });
   validateTokenlessRaterRoundSecrets(secrets);
@@ -105,9 +105,11 @@ test("rejects malformed reveal material and mismatched spend keys deterministica
   assert.throws(() => validateTokenlessRevealMaterial({ ...secrets.reveal, roundId: 0n }), /roundId must be positive/);
   assert.throws(() => validateTokenlessRevealMaterial({ ...secrets.reveal, vote: 2 as 0 }), /vote must be 0 or 1/);
   assert.throws(
-    () => validateTokenlessRevealMaterial({ ...secrets.reveal, predictedUpBps: 42 as 1000 }),
-    /predictedUpBps/,
+    () => validateTokenlessRevealMaterial({ ...secrets.reveal, predictedUpBps: 3_333 }),
+    /one-percent grid/,
   );
+  assert.doesNotThrow(() => validateTokenlessRevealMaterial({ ...secrets.reveal, predictedUpBps: 100 }));
+  assert.doesNotThrow(() => validateTokenlessRevealMaterial({ ...secrets.reveal, predictedUpBps: 9_900 }));
   assert.throws(
     () => validateTokenlessRevealMaterial({ ...secrets.reveal, salt: "0x12" }),
     /salt must be exactly 32 bytes/,

@@ -1,9 +1,9 @@
 import {
-  TOKENLESS_PREDICTION_BUCKETS,
-  type TokenlessPredictionBucket,
+  type TokenlessPredictionBps,
   type TokenlessRaterRoundSecrets,
   type TokenlessRevealMaterial,
   type TokenlessVote,
+  isTokenlessPredictionBps,
 } from "./types";
 import {
   type Address,
@@ -61,8 +61,8 @@ export function validateTokenlessRevealMaterial(material: TokenlessRevealMateria
     throw new Error("payoutAddress must be a non-zero address.");
   }
   if (material.vote !== 0 && material.vote !== 1) throw new Error("vote must be 0 or 1.");
-  if (!(TOKENLESS_PREDICTION_BUCKETS as readonly number[]).includes(material.predictedUpBps)) {
-    throw new Error("predictedUpBps must be one of 1000, 3000, 5000, 7000, or 9000.");
+  if (!isTokenlessPredictionBps(material.predictedUpBps)) {
+    throw new Error("predictedUpBps must use the 100..9900 one-percent grid.");
   }
   assertBytes32(material.responseHash, "responseHash");
   assertBytes32(material.salt, "salt");
@@ -89,7 +89,7 @@ export function validateTokenlessRaterRoundSecrets(secrets: TokenlessRaterRoundS
 export function createTokenlessRaterRoundSecrets(params: {
   roundId: bigint;
   vote: TokenlessVote;
-  predictedUpBps: TokenlessPredictionBucket;
+  predictedUpBps: TokenlessPredictionBps;
   responseHash: Hex;
 }): TokenlessRaterRoundSecrets {
   const votePrivateKey = generatePrivateKey();

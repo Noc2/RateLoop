@@ -1,15 +1,26 @@
 import type { Address, Hex } from "viem";
 
-export const TOKENLESS_PREDICTION_BUCKETS = [1000, 3000, 5000, 7000, 9000] as const;
+export const TOKENLESS_PREDICTION_MIN_BPS = 100 as const;
+export const TOKENLESS_PREDICTION_MAX_BPS = 9_900 as const;
+export const TOKENLESS_PREDICTION_STEP_BPS = 100 as const;
 
-export type TokenlessPredictionBucket = (typeof TOKENLESS_PREDICTION_BUCKETS)[number];
+export type TokenlessPredictionBps = number;
 export type TokenlessVote = 0 | 1;
+
+export function isTokenlessPredictionBps(value: number): value is TokenlessPredictionBps {
+  return (
+    Number.isSafeInteger(value) &&
+    value >= TOKENLESS_PREDICTION_MIN_BPS &&
+    value <= TOKENLESS_PREDICTION_MAX_BPS &&
+    value % TOKENLESS_PREDICTION_STEP_BPS === 0
+  );
+}
 
 export interface TokenlessRevealMaterial {
   roundId: bigint;
   voteKey: Address;
   vote: TokenlessVote;
-  predictedUpBps: TokenlessPredictionBucket;
+  predictedUpBps: TokenlessPredictionBps;
   responseHash: Hex;
   payoutAddress: Address;
   salt: Hex;
