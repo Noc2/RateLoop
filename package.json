@@ -8,6 +8,7 @@
     ]
   },
   "scripts": {
+    "account": "yarn workspace @rateloop/foundry account",
     "build:packages": "yarn node-utils:build && yarn contracts:build && yarn sdk:build && yarn agents:build",
     "build:workspace-deps": "yarn build:packages",
     "contracts:build": "yarn workspace @rateloop/contracts build",

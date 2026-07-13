@@ -21,7 +21,10 @@ format:
 
 lint:
 	forge fmt --check
+	node --check scripts-js/account.js
+	node --check scripts-js/foundryAccounts.js
 	node --check scripts-js/parseArgs.js
+	node --check scripts-js/tokenlessDeployArgs.js
 	node --check scripts-js/tokenlessDeployment.js
 	node --check scripts-js/exportTokenlessDeploymentFromBroadcast.js
 	node --check scripts-js/generateTokenlessArtifacts.js

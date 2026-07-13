@@ -11,14 +11,27 @@ The checked-in live artifact is `deployments/tokenless-v1/84532.json`. Its versi
 
 ## Commands
 
+From the repository root, inspect a local Foundry account and deploy with an interactive account selection:
+
+```bash
+yarn account
+yarn foundry:deploy:tokenless --network baseSepolia
+```
+
+The equivalent package commands are:
+
 ```bash
 yarn test
 yarn build
 yarn lint
 yarn check:sizes
 yarn test:tooling
+yarn account
+yarn deploy --network baseSepolia
 yarn deploy --network baseSepolia --keystore <foundry-account>
 ```
+
+`yarn account` and a deploy without `--keystore` present the safe local Foundry accounts from `~/.foundry/keystores`; `scaffold-eth-default` is excluded from live deployment. Account inspection uses the public V3-keystore address when present; keystores that omit that optional field request their password so Foundry can derive the address. Foundry also requests the password when deployment transactions are signed. Use the explicit `--keystore` form for automation. Import an account with `cast wallet import <account-name> --interactive`.
 
 Deployment requires `BASE_SEPOLIA_RPC_URL`, `TOKENLESS_ROTATION_AUTHORITY`, and `TOKENLESS_INITIAL_SIGNER`. The wrapper verifies RPC chain ID `84532` before broadcasting. After a successful broadcast it exports the isolated deployment JSON and regenerates only the tokenless TypeScript artifacts.
 

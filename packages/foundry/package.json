@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "account": "node scripts-js/account.js",
     "build": "forge build --offline",
     "clean": "forge clean",
     "compile": "forge build --offline",
@@ -11,7 +12,7 @@
     "format": "forge fmt",
     "lint": "make lint",
     "test": "forge test --offline",
-    "test:tooling": "node --test scripts-js/tokenlessDeployment.test.js",
+    "test:tooling": "node --test scripts-js/tokenlessDeployment.test.js scripts-js/foundryAccounts.test.js scripts-js/tokenlessDeployArgs.test.js",
     "check:sizes": "make check-contract-sizes",
     "coverage": "make coverage"
   },

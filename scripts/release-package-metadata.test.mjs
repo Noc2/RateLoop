@@ -93,6 +93,7 @@ test("npm workflow publishes tokenless packages in dependency order", () => {
 test("root scripts expose only surviving tokenless commands", () => {
   const scripts = readJson("package.json").scripts;
   for (const name of [
+    "account",
     "foundry:test",
     "foundry:test:tooling",
     "contracts:test",
