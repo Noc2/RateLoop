@@ -15,6 +15,17 @@ The default example enables the explicit sandbox. Sandbox responses are simulati
 `drizzle/meta/_journal.json`; live mode fails closed when persistence is unavailable and does not fabricate settlement
 results.
 
+## Browser authentication
+
+The tokenless browser uses thirdweb in-app wallets for email OTP, Google, Apple, and passkey onboarding. Base Account is
+also offered as an external wallet, but it is not required for workspace access. Every method signs a domain-bound login
+payload; RateLoop verifies it server-side and creates its own opaque, hashed, HttpOnly session. The thirdweb browser token
+and client-reported profiles are never workspace authorization.
+
+Configure `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`, `NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN`, and the server-only
+`THIRDWEB_SECRET_KEY`. Apply migration `0016_thirdweb_enterprise_auth.sql`, then run
+`yarn workspace @rateloop/nextjs auth:check` before a hosted rollout.
+
 ## API
 
 - `POST /api/mcp` for the stateless, four-tool Streamable HTTP handoff adapter

@@ -30,6 +30,7 @@ Services must fail closed if their chain, addresses, start block, or deployment 
 Next.js:
 
 - `APP_URL`, `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`, `NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN`, and server-only `THIRDWEB_SECRET_KEY`
 - `DATABASE_URL`
 - `NEXT_PUBLIC_TARGET_NETWORKS=84532`
 - `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
@@ -42,7 +43,10 @@ Next.js:
 - `TOKENLESS_MCP_RATE_LIMIT_SECRET` with at least 32 random characters and no public variant
 - explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
-Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` (currently `0000` through `0015`) in
+The thirdweb project must allow only local development origins and `rateloop-tokenless.vercel.app`; never add
+`rateloop.ai`. Run `yarn workspace @rateloop/nextjs auth:check` before a hosted authentication rollout.
+
+Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` (currently `0000` through `0016`) in
 order before smoke testing the human-assurance APIs or enabling live mode. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 
