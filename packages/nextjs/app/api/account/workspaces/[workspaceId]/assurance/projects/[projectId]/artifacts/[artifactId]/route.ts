@@ -16,6 +16,7 @@ export async function GET(request: NextRequest, context: Context) {
     const artifact = await readEncryptedArtifact({
       accountAddress: session.address,
       artifactId,
+      leaseId: request.nextUrl.searchParams.get("leaseId") ?? undefined,
       projectId,
       purpose: shouldExport ? "export" : "preview",
       requestReference: request.headers.get("x-request-id") ?? undefined,
