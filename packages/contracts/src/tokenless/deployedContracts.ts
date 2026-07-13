@@ -1,43 +1,39 @@
 /**
- * The active registry is intentionally empty until a complete v2 bundle is freshly deployed.
- * The v1 entry remains exported only as explicit historical evidence.
+ * Generated from rateloop-tokenless-deployment-v2.
+ * Do not edit manually.
  */
 export const tokenlessDeploymentSchema = "rateloop-tokenless-deployment-v2" as const;
-export const tokenlessDeployedContracts = {} as const;
 
-export const tokenlessHistoricalDeploymentSchema = "rateloop-tokenless-deployment-v1" as const;
-export const tokenlessHistoricalDeployments = {
+export const tokenlessDeployedContracts = {
   "84532": {
-    "schemaVersion": "rateloop-tokenless-deployment-v1",
-    "version": 1,
+    "schemaVersion": "rateloop-tokenless-deployment-v2",
+    "version": 2,
     "deploymentComplete": true,
-    "deploymentStatus": "historical",
-    "supersededBySchema": "rateloop-tokenless-deployment-v2",
     "deploymentProfile": "test",
     "networkName": "baseSepolia",
     "chainId": 84532,
-    "deploymentBlockNumber": 44083251,
-    "deploymentKey": "tokenless-v1:84532:0x9f21adbac4c007dd45c55d24e38f0067d1e1c5ba:0x830bee10d5304142cd87acac983af140d946def0:0x226891915c1ccce315ddfe58195fdc0a16bd977d",
+    "deploymentBlockNumber": 44090502,
+    "deploymentKey": "tokenless-v2:84532:0x465174830061bdaf829567b3253b5001e1d885f5:0x9fdd25d3bc526c5dddfb34cf629ab1f70736a9e3:0x3fb8d0b01d4101bf7038f7d103f35c307dce0d42",
     "contracts": {
       "TestUSDC": {
-        "address": "0x1a63af26f6bd65de51b20dbaef093c088a52c9df",
+        "address": "0x49341aa90c4b931b64730e283aafddaa9e2bfb83",
         "artifact": "MockERC20",
-        "deployedOnBlock": 44083251
+        "deployedOnBlock": 44090502
       },
       "CredentialIssuer": {
-        "address": "0x830bee10d5304142cd87acac983af140d946def0",
+        "address": "0x9fdd25d3bc526c5dddfb34cf629ab1f70736a9e3",
         "artifact": "CredentialIssuer",
-        "deployedOnBlock": 44083251
+        "deployedOnBlock": 44090502
       },
       "TokenlessPanel": {
-        "address": "0x9f21adbac4c007dd45c55d24e38f0067d1e1c5ba",
+        "address": "0x465174830061bdaf829567b3253b5001e1d885f5",
         "artifact": "TokenlessPanel",
-        "deployedOnBlock": 44083251
+        "deployedOnBlock": 44090502
       },
       "X402PanelSubmitter": {
-        "address": "0x226891915c1ccce315ddfe58195fdc0a16bd977d",
+        "address": "0x3fb8d0b01d4101bf7038f7d103f35c307dce0d42",
         "artifact": "X402PanelSubmitter",
-        "deployedOnBlock": 44083251
+        "deployedOnBlock": 44090502
       }
     },
     "testCurrency": {

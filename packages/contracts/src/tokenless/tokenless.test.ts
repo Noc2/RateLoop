@@ -7,8 +7,6 @@ import {
   X402PanelSubmitterAbi,
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
-  tokenlessHistoricalDeployments,
-  tokenlessHistoricalDeploymentSchema,
 } from "./index.js";
 
 type AbiParameter = {
@@ -24,7 +22,7 @@ type AbiEntry = {
   readonly outputs?: readonly AbiParameter[];
 };
 
-const deployment = tokenlessHistoricalDeployments[84532];
+const deployment = tokenlessDeployedContracts[84532];
 const nonZeroAddress = /^0x(?!0{40}$)[0-9a-f]{40}$/u;
 
 function names(abi: readonly AbiEntry[], type: string) {
@@ -47,13 +45,11 @@ function tupleComponentNames(
   return new Set(parameter.components?.map((component) => component.name));
 }
 
-test("keeps v1 historical while reserving the active registry for v2", () => {
+test("exports the complete active v2 Base Sepolia deployment", () => {
   assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v2");
-  assert.deepEqual(Object.keys(tokenlessDeployedContracts), []);
-  assert.equal(tokenlessHistoricalDeploymentSchema, "rateloop-tokenless-deployment-v1");
-  assert.deepEqual(Object.keys(tokenlessHistoricalDeployments), ["84532"]);
-  assert.equal(deployment.deploymentStatus, "historical");
-  assert.equal(deployment.supersededBySchema, tokenlessDeploymentSchema);
+  assert.deepEqual(Object.keys(tokenlessDeployedContracts), ["84532"]);
+  assert.equal(deployment.schemaVersion, tokenlessDeploymentSchema);
+  assert.equal(deployment.version, 2);
   assert.equal(deployment.chainId, 84532);
   assert.equal(deployment.networkName, "baseSepolia");
   assert.equal(deployment.deploymentComplete, true);
@@ -77,7 +73,7 @@ test("keeps v1 historical while reserving the active registry for v2", () => {
 
 test("deployment key is derived from the panel, issuer, and adapter addresses", () => {
   const expected = [
-    "tokenless-v1",
+    "tokenless-v2",
     "84532",
     deployment.contracts.TokenlessPanel.address,
     deployment.contracts.CredentialIssuer.address,
