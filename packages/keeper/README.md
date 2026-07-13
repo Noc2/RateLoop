@@ -4,7 +4,7 @@ Permissionless liveness automation for the disposable tokenless Base Sepolia dep
 
 The worker scans the immutable `TokenlessPanel` directly and performs only:
 
-- opening the reveal window;
+- opening the reveal window through the disclosed beacon-failure deadline;
 - tlock decryption and reveal submission;
 - `beginSettlement` terminal/refund or reveal-set freeze;
 - bounded aggregate and weight processing;
@@ -36,7 +36,7 @@ The tlock plaintext is ABI encoded as:
 
 The keeper rejects wrong magic/version, invalid prediction buckets, and round or vote-key mismatches. Base Sepolia is pinned to drand quicknet-t.
 
-If the beacon is late or unavailable, the keeper does not invent or retain a rater key. It reports `selfRevealFallbacksPending`; the rater can reveal the same committed plaintext from their client backup. In a beacon-failure terminal round, automatic compensation claiming is possible only if the ciphertext later decrypts. Otherwise the rater must use their locally retained payout material before the claim deadline.
+If the beacon is late or unavailable, the keeper does not invent or retain a rater key. Both automatic reveal and the rater's client-backed self-reveal remain open through `beaconFailureDeadline`. After the normal reveal deadline, zero-commit and already-quorate rounds settle immediately; an under-quorum round stays open for valid late reveals and settles only after the beacon-failure deadline. The keeper reports both `selfRevealFallbacksPending` and `roundsAwaitingBeaconFailure`. In a beacon-failure terminal round, automatic compensation claiming is possible only if the ciphertext later decrypts. Otherwise the rater must use their locally retained payout material before the claim deadline.
 
 ## Health
 

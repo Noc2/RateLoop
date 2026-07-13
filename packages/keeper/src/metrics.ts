@@ -23,6 +23,7 @@ const gauges: Record<string, number> = {
   keeper_wallet_balance_wei: 0,
   keeper_rounds_scanned: 0,
   keeper_self_reveal_fallbacks_pending: 0,
+  keeper_rounds_awaiting_beacon_failure: 0,
 };
 
 let consecutiveErrors = 0;
@@ -75,11 +76,13 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
   gauges.keeper_rounds_scanned = result.roundsScanned;
   gauges.keeper_self_reveal_fallbacks_pending =
     result.selfRevealFallbacksPending;
+  gauges.keeper_rounds_awaiting_beacon_failure =
+    result.roundsAwaitingBeaconFailure;
   consecutiveErrors = 0;
   lastRunAt = new Date();
 }
 
-function renderMetrics() {
+export function renderMetrics() {
   const lines: string[] = [];
   for (const [name, value] of Object.entries(counters)) {
     lines.push(`# TYPE ${name} counter`, `${name} ${value}`);
@@ -133,6 +136,8 @@ export function startMetricsServer(
           walletBalanceWei: walletBalanceWei?.toString() ?? null,
           selfRevealFallbacksPending:
             gauges.keeper_self_reveal_fallbacks_pending,
+          roundsAwaitingBeaconFailure:
+            gauges.keeper_rounds_awaiting_beacon_failure,
         })
       );
       return;

@@ -7,6 +7,7 @@ import {
   type TokenlessKeeperClients,
 } from "../keeper.js";
 import type { Logger } from "../logger.js";
+import { TokenlessPanelAbi } from "../tokenless-abi.js";
 import {
   TokenlessRoundState,
   type TokenlessRound,
@@ -21,6 +22,7 @@ const COMMIT_KEY = `0x${"55".repeat(32)}` as Hex;
 const SEALED_PAYLOAD = "0x1234" as Hex;
 const RESPONSE_HASH = `0x${"66".repeat(32)}` as Hex;
 const SALT = `0x${"77".repeat(32)}` as Hex;
+const ADMISSION_POLICY_HASH = `0x${"99".repeat(32)}` as Hex;
 
 const logger: Logger = {
   debug() {},
@@ -65,7 +67,7 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     claimDeadline: 0n,
     minimumReveals: 1,
     maximumCommits: 5,
-    requiredTier: 1,
+    admissionPolicyHash: ADMISSION_POLICY_HASH,
     commitCount: 1,
     revealCount: 0,
     frozenRevealCount: 0,
@@ -85,11 +87,19 @@ function clients(params: {
   commitClaimed?: boolean;
 }): TokenlessKeeperClients {
   const writes = params.writes ?? [];
+  const currentRound = { ...params.currentRound };
   return {
     account: { address: "0x00000000000000000000000000000000000000aa" },
     walletClient: {
       async writeContract(args) {
-        writes.push(String(args.functionName));
+        const functionName = String(args.functionName);
+        writes.push(functionName);
+        if (functionName === "openReveal") {
+          currentRound.state = TokenlessRoundState.Revealable;
+        } else if (functionName === "reveal") {
+          currentRound.state = TokenlessRoundState.Revealable;
+          currentRound.revealCount += 1;
+        }
         return `0x${"88".repeat(32)}`;
       },
     },
@@ -111,6 +121,7 @@ function clients(params: {
       },
       async waitForTransactionReceipt() {},
       async getLogs() {
+        if (currentRound.commitCount === 0) return [];
         return [
           {
             args: {
@@ -128,7 +139,7 @@ function clients(params: {
           case "nextRoundId":
             return 2n;
           case "getRound":
-            return params.currentRound;
+            return currentRound;
           case "getCommit":
             return {
               roundId: 1n,
@@ -140,7 +151,7 @@ function clients(params: {
               accuracyScore: 0n,
               predictedUpBps: 7000,
               vote: 1,
-              revealed: params.currentRound.revealCount > 0,
+              revealed: currentRound.revealCount > 0,
               claimed: params.commitClaimed ?? false,
             };
           default:
@@ -164,6 +175,26 @@ const decrypt = async () => ({
 beforeEach(() => resetTokenlessKeeperStateForTests());
 
 describe("tokenless keeper orchestration", () => {
+  it("uses the policy-bound v2 round tuple", () => {
+    const getRound = TokenlessPanelAbi.find(
+      (entry) => entry.type === "function" && entry.name === "getRound"
+    );
+    expect(getRound?.outputs[0]?.components).toContainEqual(
+      expect.objectContaining({
+        name: "admissionPolicyHash",
+        type: "bytes32",
+      })
+    );
+    expect(getRound?.outputs[0]?.components).toContainEqual(
+      expect.objectContaining({ name: "claimDeadline", type: "uint256" })
+    );
+    expect(
+      getRound?.outputs[0]?.components.some(
+        (component) => String(component.name) === "requiredTier"
+      )
+    ).toBe(false);
+  });
+
   it("fails closed when panel issuer wiring differs", async () => {
     const instance = clients({ currentRound: round() });
     instance.publicClient.readContract = async () =>
@@ -196,6 +227,75 @@ describe("tokenless keeper orchestration", () => {
     );
     expect(writes).toEqual(["openReveal", "reveal"]);
     expect(result.votesRevealed).toBe(1);
+  });
+
+  it("keeps automatic and self-reveal fallback live through the beacon deadline", async () => {
+    const writes: string[] = [];
+    const result = await runTokenlessKeeper(
+      clients({ currentRound: round(), writes, now: 250n }),
+      config,
+      logger,
+      decrypt
+    );
+    expect(writes).toEqual(["openReveal", "reveal", "beginSettlement"]);
+    expect(result.votesRevealed).toBe(1);
+    expect(result.settlementsBegun).toBe(1);
+    expect(result.roundsAwaitingBeaconFailure).toBe(0);
+
+    resetTokenlessKeeperStateForTests();
+    const unavailableWrites: string[] = [];
+    const unavailable = await runTokenlessKeeper(
+      clients({ currentRound: round(), writes: unavailableWrites, now: 250n }),
+      config,
+      logger,
+      async () => {
+        throw new Error("beacon unavailable");
+      }
+    );
+    expect(unavailableWrites).toEqual(["openReveal"]);
+    expect(unavailable.selfRevealFallbacksPending).toBe(1);
+    expect(unavailable.roundsAwaitingBeaconFailure).toBe(1);
+  });
+
+  it("waits on under-quorum rounds until the beacon failure deadline", async () => {
+    const waitingWrites: string[] = [];
+    const waiting = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.Revealable,
+          minimumReveals: 2,
+          revealCount: 1,
+        }),
+        writes: waitingWrites,
+        now: 220n,
+      }),
+      config,
+      logger,
+      decrypt
+    );
+    expect(waitingWrites).not.toContain("beginSettlement");
+    expect(waiting.roundsAwaitingBeaconFailure).toBe(1);
+    expect(waiting.terminalRoundsAdvanced).toBe(0);
+
+    resetTokenlessKeeperStateForTests();
+    const terminalWrites: string[] = [];
+    const terminal = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.Revealable,
+          minimumReveals: 2,
+          revealCount: 1,
+        }),
+        writes: terminalWrites,
+        now: 251n,
+      }),
+      config,
+      logger,
+      decrypt
+    );
+    expect(terminalWrites).toContain("beginSettlement");
+    expect(terminal.roundsAwaitingBeaconFailure).toBe(0);
+    expect(terminal.terminalRoundsAdvanced).toBe(1);
   });
 
   it("freezes normal rounds and advances terminal refunds", async () => {

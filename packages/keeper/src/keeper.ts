@@ -77,7 +77,17 @@ function emptyResult(): TokenlessKeeperResult {
     claimsExecuted: 0,
     staleReturnsExecuted: 0,
     selfRevealFallbacksPending: 0,
+    roundsAwaitingBeaconFailure: 0,
   };
+}
+
+function acceptsReveals(round: TokenlessRound, now: bigint) {
+  return (
+    (round.state === TokenlessRoundState.Open ||
+      round.state === TokenlessRoundState.Revealable) &&
+    now > round.commitDeadline &&
+    now <= round.beaconFailureDeadline
+  );
 }
 
 export async function decryptTokenlessRevealMaterial(params: {
@@ -255,6 +265,7 @@ async function revealAndClaimRound(params: {
   now: bigint;
   result: TokenlessKeeperResult;
 }) {
+  let revealedAny = false;
   const logs = await commitLogsForRound(
     params.clients.publicClient,
     params.config,
@@ -284,8 +295,7 @@ async function revealAndClaimRound(params: {
     } catch (error) {
       if (
         !commit.revealed &&
-        params.now > params.round.commitDeadline &&
-        params.now <= params.round.revealDeadline
+        acceptsReveals(params.round, params.now)
       ) {
         params.result.selfRevealFallbacksPending += 1;
       }
@@ -299,10 +309,7 @@ async function revealAndClaimRound(params: {
 
     if (
       !commit.revealed &&
-      params.now > params.round.commitDeadline &&
-      params.now <= params.round.revealDeadline &&
-      (params.round.state === TokenlessRoundState.Open ||
-        params.round.state === TokenlessRoundState.Revealable)
+      acceptsReveals(params.round, params.now)
     ) {
       const revealed = await permissionlessWrite(
         params.clients,
@@ -319,7 +326,10 @@ async function revealAndClaimRound(params: {
         ],
         params.logger
       );
-      if (revealed) params.result.votesRevealed += 1;
+      if (revealed) {
+        params.result.votesRevealed += 1;
+        revealedAny = true;
+      }
     }
 
     if (
@@ -349,6 +359,7 @@ async function revealAndClaimRound(params: {
       }
     }
   }
+  return revealedAny;
 }
 
 async function advanceRound(params: {
@@ -368,9 +379,10 @@ async function advanceRound(params: {
   params.result.roundsScanned += 1;
 
   if (
+    round.commitCount > 0 &&
     round.state === TokenlessRoundState.Open &&
     params.now > round.commitDeadline &&
-    params.now <= round.revealDeadline
+    params.now <= round.beaconFailureDeadline
   ) {
     const opened = await permissionlessWrite(
       params.clients,
@@ -383,20 +395,28 @@ async function advanceRound(params: {
     round = { ...round, state: TokenlessRoundState.Revealable };
   }
 
-  await revealAndClaimRound({ ...params, round });
+  const revealedAny = await revealAndClaimRound({ ...params, round });
+  if (revealedAny) {
+    round = await readRound(
+      params.clients.publicClient,
+      params.config.deployment.panel,
+      params.roundId
+    );
+  }
 
   if (
     (round.state === TokenlessRoundState.Open ||
       round.state === TokenlessRoundState.Revealable) &&
     params.now > round.revealDeadline
   ) {
+    const quorumMet = round.revealCount >= round.minimumReveals;
     const mayAdvance =
       round.commitCount === 0 ||
-      round.revealCount > 0 ||
+      quorumMet ||
       params.now > round.beaconFailureDeadline;
     if (mayAdvance) {
       const terminal =
-        round.commitCount === 0 || round.revealCount < round.minimumReveals;
+        round.commitCount === 0 || !quorumMet;
       const advanced = await permissionlessWrite(
         params.clients,
         params.config.deployment.panel,
@@ -408,6 +428,8 @@ async function advanceRound(params: {
         if (terminal) params.result.terminalRoundsAdvanced += 1;
         else params.result.settlementsBegun += 1;
       }
+    } else {
+      params.result.roundsAwaitingBeaconFailure += 1;
     }
     return;
   }

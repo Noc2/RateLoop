@@ -32,7 +32,7 @@ export interface TokenlessRound {
   claimDeadline: bigint;
   minimumReveals: number;
   maximumCommits: number;
-  requiredTier: number;
+  admissionPolicyHash: Hex;
   commitCount: number;
   revealCount: number;
   frozenRevealCount: number;
@@ -79,4 +79,5 @@ export interface TokenlessKeeperResult {
   claimsExecuted: number;
   staleReturnsExecuted: number;
   selfRevealFallbacksPending: number;
+  roundsAwaitingBeaconFailure: number;
 }
