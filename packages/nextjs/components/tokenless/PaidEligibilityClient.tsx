@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { readBaseAccountSession } from "~~/lib/base-account/client";
+import { readBrowserSession } from "~~/lib/thirdweb/client";
 
 type EligibilityState = {
   status: "not_started" | "eligible" | "review" | "blocked" | "expired";
@@ -74,7 +74,7 @@ export function PaidEligibilityClient() {
 
   async function refresh() {
     const [session, eligibility] = await Promise.all([
-      readBaseAccountSession(),
+      readBrowserSession(),
       readJson(await fetch("/api/rater/eligibility", { cache: "no-store", credentials: "same-origin" })),
     ]);
     setAccountAddress(session?.address ?? null);
@@ -183,7 +183,7 @@ export function PaidEligibilityClient() {
               <strong className="mt-1 block">Current</strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-pink)] pl-4">
-              <span className="text-xs text-base-content/45">Payout Base Account</span>
+              <span className="text-xs text-base-content/45">Payout wallet</span>
               <strong className="mt-1 block break-all text-sm">{state.payoutAccount}</strong>
             </div>
             <div className="border-l-2 border-white/20 pl-4 sm:col-span-2">
@@ -311,7 +311,7 @@ export function PaidEligibilityClient() {
               disabled={busy || !accountAddress}
               onClick={() => void startProvider()}
             >
-              {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Sign in with Base Account first"}
+              {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Sign in to RateLoop first"}
             </button>
           </div>
         )}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { acceptAudienceAssignment } from "~~/lib/tokenless/audienceAssignments";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ assignmentId: string }> };
 
 export async function POST(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const { assignmentId } = await context.params;
     const body = (await request.json()) as { confidentialityTermsHash?: string };
     return NextResponse.json(

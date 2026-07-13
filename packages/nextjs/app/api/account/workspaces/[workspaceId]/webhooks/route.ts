@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import { createWorkspaceWebhook, listWorkspaceWebhooks } from "~~/lib/tokenless/transparency";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ workspaceId: string }> };
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
     return NextResponse.json({
       webhooks: await listWorkspaceWebhooks({ accountAddress: session.address, workspaceId }),
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, context: Context) {
 
 export async function POST(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
     const body = (await request.json()) as { url?: unknown; eventTypes?: unknown };
     if (typeof body.url !== "string" || !Array.isArray(body.eventTypes)) {

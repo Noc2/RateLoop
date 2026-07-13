@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { dbClient } from "~~/lib/db";
 import { readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { assertAssuranceAssignmentSettlementAvailable } from "~~/lib/tokenless/audienceAssignments";
@@ -19,7 +19,7 @@ function rowString(row: QueryRow | undefined, key: string) {
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { artifactId, assignmentId } = await context.params;
     const result = await dbClient.execute({
       sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment, ap.policy_json

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { getAssuranceProjectResources, scopeAssuranceSessionToWorkspace } from "~~/lib/tokenless/humanAssurance";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ projectId: string; workspaceId: string }> };
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { projectId, workspaceId } = await context.params;
     const principal = await scopeAssuranceSessionToWorkspace({ accountAddress: session.address, workspaceId });
     return NextResponse.json(await getAssuranceProjectResources({ principal, projectId }));

@@ -1,7 +1,7 @@
 import { Inter, Space_Grotesk } from "next/font/google";
 import { headers } from "next/headers";
 import Script from "next/script";
-import { BaseAccountProviders } from "~~/providers/BaseAccountProviders";
+import { AppProviders } from "~~/providers/AppProviders";
 import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
@@ -38,7 +38,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       style={{ colorScheme: "dark" }}
     >
       <body suppressHydrationWarning>
-        <BaseAccountProviders>{children}</BaseAccountProviders>
+        <AppProviders>{children}</AppProviders>
         {isProduction ? <Script nonce={nonce} src="https://scripts.simpleanalyticscdn.com/latest.js" /> : null}
       </body>
     </html>

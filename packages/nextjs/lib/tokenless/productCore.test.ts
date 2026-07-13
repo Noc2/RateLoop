@@ -235,7 +235,7 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
   assert.equal(workspaceId, prepared.workspaceId);
 });
 
-test("wallet payment intents require the signed-in Base Account to be the payer", async () => {
+test("wallet payment intents require the signed-in browser principal to be the payer", async () => {
   const { workspaceId } = await createWorkspace({ name: "Personal", ownerAddress: ADDRESS_A });
   const quote = await createTokenlessQuote(quoteRequest());
   await assert.rejects(

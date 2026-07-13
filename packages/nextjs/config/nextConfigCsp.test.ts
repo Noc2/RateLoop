@@ -32,7 +32,7 @@ async function getGlobalHeaderValue(key: string) {
   return globalHeaders.find(header => header.key === key)?.value;
 }
 
-test("connect-src includes only the tokenless app, Base RPC, and analytics", async () => {
+test("connect-src includes only the tokenless app, Base RPC, thirdweb auth, and analytics", async () => {
   const csp = await getContentSecurityPolicy();
   const connectSrc = csp
     .split(";")
@@ -43,10 +43,12 @@ test("connect-src includes only the tokenless app, Base RPC, and analytics", asy
   assert.match(connectSrc, /(?:^|\s)'self'(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/queue\.simpleanalyticscdn\.com(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/sepolia\.base\.org(?:\s|$)/);
-  assert.doesNotMatch(connectSrc, /walletconnect|thirdweb|worldcoin|drand|blob\.vercel-storage/);
+  assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.thirdweb\.com(?:\s|$)/);
+  assert.match(connectSrc, /(?:^|\s)wss:\/\/\*\.walletconnect\.com(?:\s|$)/);
+  assert.doesNotMatch(connectSrc, /worldcoin|drand|blob\.vercel-storage/);
 });
 
-test("Base Account popups retain their opener", async () => {
+test("thirdweb and Base Account authentication popups retain their opener", async () => {
   assert.equal(await getGlobalHeaderValue("Cross-Origin-Opener-Policy"), "same-origin-allow-popups");
 });
 

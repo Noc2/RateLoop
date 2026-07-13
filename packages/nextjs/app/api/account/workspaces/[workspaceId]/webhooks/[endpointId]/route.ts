@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import { deactivateWorkspaceWebhook } from "~~/lib/tokenless/transparency";
 
@@ -11,7 +11,7 @@ export async function DELETE(
   context: { params: Promise<{ workspaceId: string; endpointId: string }> },
 ) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, endpointId } = await context.params;
     await deactivateWorkspaceWebhook({ accountAddress: session.address, workspaceId, endpointId });
     return NextResponse.json({ deactivated: true });

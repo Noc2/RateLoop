@@ -29,6 +29,15 @@ export default function PrivacyPage() {
         later read its status or result, so users must not share it or include secrets, credentials, regulated personal
         data, or confidential customer material.
       </p>
+      <h2>Browser sign-in</h2>
+      <p>
+        Browser users may sign in through thirdweb using email, Google, Apple, a passkey, or a supported external
+        wallet. thirdweb and the selected sign-in provider process authentication data under their own terms. RateLoop
+        receives the resulting wallet address and, for an in-app wallet, may store the verified provider, thirdweb user
+        identifier, normalized email address and domain, and display name needed for account access and audit UX.
+        RateLoop stores its own hashed, time-limited browser session; it does not store the thirdweb secret key or a
+        social-provider token in the browser session. An email domain alone never grants workspace membership.
+      </p>
       <h2>On-chain data</h2>
       <p>
         Future test interactions may publish transaction addresses, commitments, round terms, settlement data, and

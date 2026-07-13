@@ -291,7 +291,7 @@ async function createCohort(
   });
 }
 
-test("one-time invitations store only token hashes and bind redemption to the intended Base Account", async () => {
+test("one-time invitations store only token hashes and bind redemption to the intended browser principal", async () => {
   const project = await seedProject();
   const otherProject = await seedProject(OTHER_OWNER, "other");
   const cohort = await createCohort(project, { source: "customer_invited", selection: "customer_named" });

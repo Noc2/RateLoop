@@ -14,7 +14,7 @@ import "server-only";
 import { type Address, type Hex, createPublicClient, encodePacked, getAddress, http, keccak256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
-import { getBaseAccountAuthOrigin } from "~~/lib/base-account/auth";
+import { getAuthOrigin } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 import { evaluateFrozenAdmissionPolicy, freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -379,7 +379,7 @@ export async function createEligibilityProviderHandoff(accountAddress: string, n
   const rawState = randomBytes(32).toString("base64url");
   const state = `${rawState}.${signHandoffState(rawState, config.secret)}`;
   const expiresAt = new Date(now.getTime() + 15 * 60_000);
-  const callbackUrl = `${getBaseAccountAuthOrigin()}/api/rater/eligibility/provider/callback`;
+  const callbackUrl = `${getAuthOrigin()}/api/rater/eligibility/provider/callback`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_eligibility_provider_handoffs
           (state_hash, account_address, provider_id, status, expires_at, created_at)
@@ -389,7 +389,7 @@ export async function createEligibilityProviderHandoff(accountAddress: string, n
   const startUrl = new URL(config.startUrl);
   startUrl.searchParams.set("state", state);
   startUrl.searchParams.set("callback_url", callbackUrl);
-  startUrl.searchParams.set("return_url", `${getBaseAccountAuthOrigin()}/settings?eligibility=provider-return`);
+  startUrl.searchParams.set("return_url", `${getAuthOrigin()}/settings?eligibility=provider-return`);
   return { providerId, startUrl: startUrl.toString(), state, expiresAt };
 }
 
@@ -604,7 +604,7 @@ export async function submitPaidEligibility(input: {
   const payoutAccount = getAddress(input.submission.payoutAccount);
   if (payoutAccount !== accountAddress) {
     throw new TokenlessServiceError(
-      "The payout Base Account must be the signed-in account.",
+      "The payout wallet must be the signed-in account.",
       403,
       "payout_ownership_mismatch",
     );

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { revokeWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -11,7 +11,7 @@ export async function DELETE(
   context: { params: Promise<{ workspaceId: string; apiKeyId: string }> },
 ) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, apiKeyId } = await context.params;
     await revokeWorkspaceApiKey({ accountAddress: session.address, workspaceId, apiKeyId });
     return NextResponse.json({ revoked: true });

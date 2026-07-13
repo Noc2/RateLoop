@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { storeEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -14,7 +14,7 @@ const RENDERER_POLICIES = new Set(["plain_text", "sanitized_html", "image", "dow
 
 export async function POST(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const { projectId, workspaceId } = await context.params;
     const form = await request.formData();
     const file = form.get("file");

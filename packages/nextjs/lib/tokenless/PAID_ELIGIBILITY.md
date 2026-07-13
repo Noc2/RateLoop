@@ -4,7 +4,7 @@ Paid eligibility is completed before the API can issue a paid-task voucher. The 
 
 ## Provider handoff
 
-1. An authenticated Base Account calls `POST /api/rater/eligibility/provider/start` from the application origin.
+1. An authenticated RateLoop browser session calls `POST /api/rater/eligibility/provider/start` from the application origin.
 2. RateLoop creates a 15-minute, HMAC-authenticated state and returns the configured provider URL. The URL includes `state`, `callback_url`, and `return_url` query parameters.
 3. The provider posts `{ state, provider, payload, signature }` to the callback. RateLoop verifies the provider's Ed25519 signature, account binding, evidence lifetime, provider-neutral capabilities, and sanctions result. The verified result is encrypted in the provider-evidence key domain.
 4. The browser submits the combined tax/DAC7/payout unlock sheet to `POST /api/rater/eligibility` with `providerState`. The handoff is consumed in the same transaction as the eligibility record.

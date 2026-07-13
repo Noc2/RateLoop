@@ -238,7 +238,7 @@ test("declared and tax residence mismatch is persisted distinctly and blocks pai
   );
 });
 
-test("unlock rejects a payout address that the Base Account session did not prove", async () => {
+test("unlock rejects a payout address that the browser session did not prove", async () => {
   await assert.rejects(
     () => submitPaidEligibility({ accountAddress: ACCOUNT, submission: submission(OTHER_ACCOUNT), now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "payout_ownership_mismatch",

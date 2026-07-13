@@ -1,15 +1,22 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BASE_ACCOUNT_SESSION_COOKIE, findBaseAccountSession } from "~~/lib/base-account/auth";
+import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const cookieStore = await cookies();
-  const session = await findBaseAccountSession(cookieStore.get(BASE_ACCOUNT_SESSION_COOKIE)?.value);
+  const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
   return NextResponse.json(
     session
-      ? { authenticated: true, address: session.address, expiresAt: session.expiresAt }
+      ? {
+          authenticated: true,
+          address: session.address,
+          authProvider: session.authProvider,
+          email: session.email,
+          displayName: session.displayName,
+          expiresAt: session.expiresAt,
+        }
       : { authenticated: false },
     { headers: { "Cache-Control": "no-store" } },
   );

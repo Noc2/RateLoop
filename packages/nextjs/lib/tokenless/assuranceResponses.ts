@@ -355,7 +355,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   try {
     accountAddress = getAddress(input.baseAccountAddress).toLowerCase();
   } catch {
-    serviceError("A valid Base Account is required.", "invalid_account", 401);
+    serviceError("A valid signed-in account is required.", "invalid_account", 401);
   }
   const responses = validateResponseBatch(input.responses);
   const now = input.now ?? new Date();

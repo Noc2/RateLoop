@@ -80,7 +80,7 @@ function normalizeAddress(value: string, field = "accountAddress") {
   try {
     return getAddress(value).toLowerCase();
   } catch {
-    throw new TokenlessServiceError(`${field} must be a valid Base Account address.`, 400, "invalid_account");
+    throw new TokenlessServiceError(`${field} must be a valid account address.`, 400, "invalid_account");
   }
 }
 
@@ -433,7 +433,11 @@ export async function redeemReviewerInvitationWithBaseAccount(input: {
     }
     const intended = rowString(row, "intended_account_address");
     if (intended && intended !== reviewer) {
-      throw new TokenlessServiceError("Invitation is bound to another Base Account.", 403, "invite_account_mismatch");
+      throw new TokenlessServiceError(
+        "Invitation is bound to another signed-in account.",
+        403,
+        "invite_account_mismatch",
+      );
     }
     await client.query(
       `INSERT INTO tokenless_assurance_cohort_reviewers

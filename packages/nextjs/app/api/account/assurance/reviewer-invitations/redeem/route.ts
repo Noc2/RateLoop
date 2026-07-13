@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { redeemReviewerInvitationWithBaseAccount } from "~~/lib/tokenless/audienceAssignments";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const body = (await request.json()) as { token?: string };
     return NextResponse.json(
       await redeemReviewerInvitationWithBaseAccount({

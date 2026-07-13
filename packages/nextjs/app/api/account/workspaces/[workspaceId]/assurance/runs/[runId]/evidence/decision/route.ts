@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { getAssuranceClientDecision, recordAssuranceClientDecision } from "~~/lib/tokenless/evidencePackets";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ runId: string; workspaceId: string }> };
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { runId, workspaceId } = await context.params;
     return NextResponse.json(
       { decision: await getAssuranceClientDecision({ accountAddress: session.address, workspaceId, runId }) },
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, context: Context) {
 
 export async function POST(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     let body: { decision?: "go" | "revise" | "stop"; note?: string | null };
     try {
       body = (await request.json()) as typeof body;

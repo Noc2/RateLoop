@@ -136,7 +136,7 @@ test("workspace governance persists trader and VAT data while applying retention
   assert.equal(stored.rows[0]?.dpa_reference, "dpa:alpha:2026-07");
 });
 
-test("one-time member invitations store only hashes, bind redemption to Base Account, and preserve governance roles", async () => {
+test("one-time member invitations store only hashes, bind redemption to the browser principal, and preserve governance roles", async () => {
   const { workspaceId } = await createWorkspace({ name: "Role workspace", ownerAddress: OWNER_A });
   const client = await createClient(workspaceId, OWNER_A, "Client One");
 

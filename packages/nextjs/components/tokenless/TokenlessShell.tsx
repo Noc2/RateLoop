@@ -1,10 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
-import { BaseAccountSessionButton } from "~~/components/base-account/BaseAccountSessionButton";
 import { DOCS_NAV } from "~~/constants/docsNav";
+
+const ThirdwebSessionButton = dynamic(
+  () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
+  { ssr: false },
+);
 
 type IconProps = { className?: string };
 
@@ -133,7 +138,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
       })}
       {mobile ? (
         <div className="mt-2 border-t border-white/10 px-2 pt-4">
-          <BaseAccountSessionButton />
+          <ThirdwebSessionButton />
           <Link href="/legal" className="mt-3 block px-2 text-sm text-base-content/60">
             Legal
           </Link>
@@ -242,7 +247,7 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
           <NavLinks />
         </nav>
         <div className="mx-2.5 border-t border-[color:var(--rateloop-shell-border-strong)] pt-4">
-          <BaseAccountSessionButton compact />
+          <ThirdwebSessionButton compact />
         </div>
       </aside>
 

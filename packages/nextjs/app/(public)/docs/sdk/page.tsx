@@ -20,8 +20,8 @@ const result = state.status === "ready" ? await client.result({ operationKey: as
       <p>
         Ask idempotency keys are required. Pending waits return a cursor, retry delay, expiry, and canonical poll URL.
         Results use schema <code>rateloop.tokenless.v1</code>. API keys are server-only; browser clients authenticate
-        with the HttpOnly Base Account session. The result is decision support and must not silently trigger a release
-        or be presented as a compliance approval.
+        with the HttpOnly RateLoop browser session. The result is decision support and must not silently trigger a
+        release or be presented as a compliance approval.
       </p>
     </article>
   );

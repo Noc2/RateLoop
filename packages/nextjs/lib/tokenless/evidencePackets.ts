@@ -75,7 +75,7 @@ function normalizeAddress(value: string) {
   try {
     return getAddress(value).toLowerCase();
   } catch {
-    throw new TokenlessServiceError("A valid Base Account is required.", 400, "invalid_account");
+    throw new TokenlessServiceError("A valid signed-in account is required.", 400, "invalid_account");
   }
 }
 

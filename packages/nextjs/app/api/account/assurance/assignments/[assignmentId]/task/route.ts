@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { getAssignmentOnlyTask } from "~~/lib/tokenless/audienceAssignments";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ assignmentId: string }> };
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { assignmentId } = await context.params;
     return NextResponse.json(await getAssignmentOnlyTask({ assignmentId, baseAccountAddress: session.address }), {
       headers: { "Cache-Control": "private, no-store, max-age=0" },

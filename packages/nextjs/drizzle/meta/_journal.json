@@ -113,6 +113,13 @@
       "when": 1783911600000,
       "tag": "0015_tokenless_mcp_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783915200000,
+      "tag": "0016_thirdweb_enterprise_auth",
+      "breakpoints": true
     }
   ]
 }

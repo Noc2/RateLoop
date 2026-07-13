@@ -81,7 +81,7 @@ function normalizeAddress(value: string, field: string) {
   try {
     return getAddress(value).toLowerCase();
   } catch {
-    throw new TokenlessServiceError(`${field} must be a valid Base Account address.`, 400, "invalid_account");
+    throw new TokenlessServiceError(`${field} must be a valid account address.`, 400, "invalid_account");
   }
 }
 
@@ -503,7 +503,7 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
     }
     if (intendedAccountAddress && intendedAccountAddress !== accountAddress) {
       throw new TokenlessServiceError(
-        "Invitation is bound to a different Base Account.",
+        "Invitation is bound to a different signed-in account.",
         403,
         "invite_account_mismatch",
       );

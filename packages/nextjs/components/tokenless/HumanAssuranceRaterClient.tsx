@@ -341,8 +341,8 @@ export function HumanAssuranceRaterClient({
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Private review queue</p>
         <h1 className="display-section mt-3 text-4xl sm:text-5xl">Compare work. Explain the difference.</h1>
         <p className="mt-4 max-w-3xl text-lg leading-8 text-base-content/60">
-          RateLoop shows only assignments selected for your Base Account. Candidate order is blinded; qualification,
-          confidentiality, and access leases are checked before any private artifact is shown.
+          RateLoop shows only assignments selected for your signed-in account. Candidate order is blinded;
+          qualification, confidentiality, and access leases are checked before any private artifact is shown.
         </p>
       </div>
 
@@ -359,12 +359,12 @@ export function HumanAssuranceRaterClient({
                     <h2 className="mt-2 text-2xl font-semibold">Redeem a one-time invitation</h2>
                   </div>
                   <span className="rounded-md bg-white/[0.05] px-3 py-1.5 text-xs text-base-content/55">
-                    Base Account bound
+                    Account bound
                   </span>
                 </div>
                 <p className="mt-5 text-sm leading-6 text-base-content/60">
                   Paste the token directly instead of putting it in a URL. It is single-use, stored only as a hash, and
-                  can be redeemed only by the intended Base Account.
+                  can be redeemed only by the intended signed-in account.
                 </p>
                 <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={redeemInvitation}>
                   <label className="grow text-sm text-base-content/60">

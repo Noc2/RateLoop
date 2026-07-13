@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ artifactId: string; projectId: string; worksp
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { artifactId, projectId, workspaceId } = await context.params;
     const shouldExport = request.nextUrl.searchParams.get("download") === "true";
     const artifact = await readEncryptedArtifact({

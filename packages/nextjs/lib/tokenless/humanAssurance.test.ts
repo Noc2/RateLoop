@@ -563,7 +563,7 @@ test("case and run bindings are derived from parents and reject cross-project re
   );
 });
 
-test("a Base Account explicitly scopes multi-workspace project lists without cross-tenant fallback", async () => {
+test("a browser session explicitly scopes multi-workspace project lists without cross-tenant fallback", async () => {
   const first = await createWorkspace({ name: "Client Alpha", ownerAddress: ADDRESS_A });
   const second = await createWorkspace({ name: "Client Beta", ownerAddress: ADDRESS_A });
   const firstPrincipal = await scopeAssuranceSessionToWorkspace({

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import {
   createAssuranceProject,
   listAssuranceProjects,
@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 type Context = { params: Promise<{ workspaceId: string }> };
 
 async function principal(request: NextRequest, context: Context, mutation = false) {
-  const session = await requireBaseAccountRequest(request, mutation ? { mutation: true } : undefined);
+  const session = await requireBrowserSession(request, mutation ? { mutation: true } : undefined);
   const { workspaceId } = await context.params;
   return scopeAssuranceSessionToWorkspace({ accountAddress: session.address, workspaceId });
 }

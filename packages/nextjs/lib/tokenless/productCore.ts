@@ -2,7 +2,7 @@ import type { TokenlessAskRequest, TokenlessAskResponse, TokenlessQuoteResponse 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
-import { BASE_ACCOUNT_SESSION_COOKIE, findBaseAccountSession } from "~~/lib/base-account/auth";
+import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -102,13 +102,13 @@ export async function authenticateProductPrincipal(input: {
     return { kind: "api_key", apiKeyId: keyId, workspaceId, role };
   }
 
-  const session = await findBaseAccountSession(input.sessionToken);
+  const session = await findAuthSession(input.sessionToken);
   if (!session) throw new TokenlessServiceError("Authentication is required.", 401, "authentication_required");
   return { kind: "session", accountAddress: session.address };
 }
 
 export function getProductSessionToken(request: { cookies: { get(name: string): { value: string } | undefined } }) {
-  return request.cookies.get(BASE_ACCOUNT_SESSION_COOKIE)?.value;
+  return request.cookies.get(AUTH_SESSION_COOKIE)?.value;
 }
 
 export async function createWorkspace(input: { name: string; ownerAddress: string }) {
@@ -505,7 +505,7 @@ async function persistPaymentIntent(input: {
 }) {
   const payerAddress = getAddress(input.payment.payerAddress).toLowerCase();
   if (input.principal.kind === "session" && input.principal.accountAddress.toLowerCase() !== payerAddress) {
-    throw new TokenlessServiceError("The payer must match the signed-in Base Account.", 403, "payer_mismatch");
+    throw new TokenlessServiceError("The payer must match the signed-in wallet.", 403, "payer_mismatch");
   }
   const payload =
     input.payment.mode === "x402" && input.payment.authorization

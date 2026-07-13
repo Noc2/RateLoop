@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import { inspectWorkspaceTransparency } from "~~/lib/tokenless/transparency";
 
@@ -11,7 +11,7 @@ export async function GET(
   context: { params: Promise<{ workspaceId: string; operationKey: string }> },
 ) {
   try {
-    const session = await requireBaseAccountRequest(request);
+    const session = await requireBrowserSession(request);
     const { workspaceId, operationKey } = await context.params;
     return NextResponse.json(
       await inspectWorkspaceTransparency({ accountAddress: session.address, workspaceId, operationKey }),

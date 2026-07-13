@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBaseAccountRequest } from "~~/lib/base-account/request";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import { requestProjectDeletion, storeEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import {
   addAssuranceCase,
@@ -26,7 +26,7 @@ function text(value: unknown, name: string, min: number, max: number) {
 export async function POST(request: NextRequest, context: Context) {
   let cleanup: { accountAddress: string; projectId: string; workspaceId: string } | null = null;
   try {
-    const session = await requireBaseAccountRequest(request, { mutation: true });
+    const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
     const principal = await scopeAssuranceSessionToWorkspace({ accountAddress: session.address, workspaceId });
     const body = (await request.json()) as Record<string, unknown>;

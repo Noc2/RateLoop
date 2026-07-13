@@ -192,7 +192,7 @@ export function HumanAssuranceBuyerClient() {
             ) : (
               <div className="mt-4 rounded-lg border border-white/10 p-4">
                 <p className="text-sm leading-6 text-base-content/60">
-                  Sign in with Base Account from the header, then create a client-isolated workspace.
+                  Sign in with your work account from the header, then create a client-isolated workspace.
                 </p>
                 <div className="mt-3 flex gap-2">
                   <input

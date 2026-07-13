@@ -86,7 +86,9 @@ The canonical policy is hashed. Paid-round vouchers and terms should bind the ex
 
 ### Keep five concepts separate
 
-1. **Browser identity:** Base Account and SIWE session.
+1. **Browser identity:** thirdweb in-app wallet onboarding through email, Google, Apple, or passkey, followed by a
+   RateLoop-verified, domain-bound SIWE session. Base Account remains an optional external wallet rather than a
+   prerequisite for invited enterprise users.
 2. **Project access:** invitation, roster membership, assignment, and confidentiality acceptance.
 3. **Job qualification:** language, role, experience, customer segment, or manually vetted expertise.
 4. **Identity assurance:** liveness, document uniqueness, global uniqueness, document-backed predicates, and freshness.
@@ -106,7 +108,7 @@ A passport does not prove legal or tax residence. Public receipts should expose 
 
 | Option | Recommended role | Constraints |
 |---|---|---|
-| Access code / roster | Default for private invited cohorts | Hash one-time tokens, bind redemption to Base Account, expire them, and prevent reuse; no uniqueness claim |
+| Access code / roster | Default for private invited cohorts | Hash one-time tokens, bind redemption to the signed-in browser principal, expire them, and prevent reuse; no uniqueness claim |
 | World ID 4 Proof of Human | Optional global-uniqueness capability for open panels | Use server verification and bind the proof to the RateLoop account/context; do not add World contracts to the Base fund core |
 | World passport / NFC | Optional document-uniqueness capability | Coverage and authentication strength vary by document and country |
 | World Selfie Check | Optional low-friction liveness signal | It is beta/low assurance and currently uses a legacy proof path while v4 support rolls out; do not market it as global uniqueness |

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type State, WagmiProvider } from "wagmi";
 import { getBaseAccountConfig } from "~~/config/baseAccount";
 
-export function BaseAccountProviders({ children, initialState }: { children: ReactNode; initialState?: State }) {
+export function AppProviders({ children, initialState }: { children: ReactNode; initialState?: State }) {
   const [config] = useState(() => getBaseAccountConfig());
   const [queryClient] = useState(() => new QueryClient());
 
