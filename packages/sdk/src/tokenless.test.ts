@@ -200,6 +200,7 @@ test("parseTokenlessResult validates terminal state and every accounting field",
 });
 
 test("tokenless client performs quote and ask with a required idempotency header", async () => {
+  const apiKey = `rlk_${"c".repeat(16)}_${"d".repeat(32)}`;
   const requests: Array<{
     body: unknown;
     headers: Headers;
@@ -207,6 +208,7 @@ test("tokenless client performs quote and ask with a required idempotency header
     url: string;
   }> = [];
   const client = createTokenlessRateLoopClient({
+    apiKey,
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input, init) => {
       requests.push({
@@ -281,7 +283,9 @@ test("tokenless client performs quote and ask with a required idempotency header
     requests[0]?.url,
     "https://tokenless.example/api/agent/v1/quote",
   );
+  assert.equal(requests[0]?.headers.get("authorization"), null);
   assert.equal(requests[1]?.url, "https://tokenless.example/api/agent/v1/asks");
+  assert.equal(requests[1]?.headers.get("authorization"), `Bearer ${apiKey}`);
   assert.equal(
     requests[1]?.headers.get("idempotency-key"),
     "ask:test:12345678",

@@ -91,9 +91,34 @@ test("live asks remain pending payment and never synthesize a result", async () 
 
   assert.equal(ask.status, "awaiting_payment");
   assert.equal(ask.roundId, null);
-  const wait = await waitForTokenlessAsk(ask.operationKey, "https://tokenless.example");
+  const staleCursorStartedAt = Date.now();
+  const staleCursorWait = await waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", {
+    cursor: "0",
+    pollIntervalMs: 2,
+    timeoutMs: 1_000,
+  });
+  assert.ok(Date.now() - staleCursorStartedAt < 500);
+  assert.equal(staleCursorWait.status, "pending");
+
+  const boundedStartedAt = Date.now();
+  const wait = await waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", {
+    cursor: ask.continuation.cursor,
+    pollIntervalMs: 2,
+    timeoutMs: 20,
+  });
+  const boundedElapsedMs = Date.now() - boundedStartedAt;
+  assert.ok(boundedElapsedMs >= 10);
+  assert.ok(boundedElapsedMs < 500);
   assert.equal(wait.status, "pending");
   assert.equal(wait.verdictStatus, null);
+  await assert.rejects(
+    () =>
+      waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", {
+        cursor: "not-a-server-cursor",
+        timeoutMs: 20,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_wait_cursor",
+  );
   await assert.rejects(
     () => getTokenlessResult(ask.operationKey),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "result_not_ready" && error.retryable,

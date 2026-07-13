@@ -16,6 +16,9 @@ import { db } from "~~/lib/db";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
 
 const QUOTE_TTL_MS = 15 * 60_000;
+const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
+const DEFAULT_WAIT_POLL_INTERVAL_MS = 250;
+const MAX_WAIT_TIMEOUT_MS = 60_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
@@ -483,22 +486,75 @@ export async function createTokenlessAsk(
   };
 }
 
-export async function waitForTokenlessAsk(operationKey: string, appOrigin: string): Promise<TokenlessWaitResponse> {
+export async function waitForTokenlessAsk(
+  operationKey: string,
+  appOrigin: string,
+  options: {
+    cursor?: string;
+    pollIntervalMs?: number;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  } = {},
+): Promise<TokenlessWaitResponse> {
   const sandboxMode = isTokenlessSandboxMode();
-  const ask = await readAskByOperation(operationKey, sandboxMode);
-  if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
-  if (ask.status === "rejected") {
-    throw new TokenlessServiceError("The question did not pass pre-round moderation.", 410, "content_rejected");
+  const timeoutMs = options.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_WAIT_POLL_INTERVAL_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_WAIT_TIMEOUT_MS) {
+    throw new TokenlessServiceError("timeoutMs must be between 1 and 60000.", 400, "invalid_wait_timeout");
   }
-  if (ask.resultJson) {
-    return {
-      schemaVersion: TOKENLESS_SCHEMA_VERSION,
-      operationKey,
-      status: "ready",
-      verdictStatus: parseTokenlessResult(JSON.parse(ask.resultJson)).verdictStatus,
-      continuation: null,
-    };
+  if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 1 || pollIntervalMs > MAX_WAIT_TIMEOUT_MS) {
+    throw new TokenlessServiceError("pollIntervalMs must be between 1 and 60000.", 400, "invalid_wait_timeout");
   }
+  const cursor = options.cursor?.trim();
+  if (cursor && (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) {
+    throw new TokenlessServiceError("cursor is invalid.", 400, "invalid_wait_cursor");
+  }
+  const knownUpdatedAt = cursor ? Number(cursor) : null;
+  const deadline = Date.now() + timeoutMs;
+  let ask: StoredAsk;
+
+  while (true) {
+    const current = await readAskByOperation(operationKey, sandboxMode);
+    if (!current) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+    ask = current;
+    if (ask.status === "rejected") {
+      throw new TokenlessServiceError("The question did not pass pre-round moderation.", 410, "content_rejected");
+    }
+    if (ask.resultJson) {
+      return {
+        schemaVersion: TOKENLESS_SCHEMA_VERSION,
+        operationKey,
+        status: "ready",
+        verdictStatus: parseTokenlessResult(JSON.parse(ask.resultJson)).verdictStatus,
+        continuation: null,
+      };
+    }
+    if (knownUpdatedAt !== null && ask.updatedAt.getTime() > knownUpdatedAt) break;
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    if (options.signal?.aborted) {
+      throw new TokenlessServiceError("Wait request was cancelled.", 499, "wait_cancelled", true);
+    }
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => options.signal?.removeEventListener("abort", abort);
+      const abort = () => {
+        clearTimeout(timer);
+        cleanup();
+        reject(new TokenlessServiceError("Wait request was cancelled.", 499, "wait_cancelled", true));
+      };
+      const timer = setTimeout(
+        () => {
+          cleanup();
+          resolve();
+        },
+        Math.min(pollIntervalMs, remainingMs),
+      );
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted) abort();
+    });
+  }
+
   return {
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     operationKey,

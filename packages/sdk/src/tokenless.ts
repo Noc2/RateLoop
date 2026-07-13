@@ -371,12 +371,14 @@ async function request(
   path: string,
   init: RequestInit,
   timeoutMs = config.timeoutMs,
+  options: { omitAuthorization?: boolean } = {},
 ) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers = new Headers(config.defaultHeaders);
     new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    if (options.omitAuthorization) headers.delete("authorization");
     if (!headers.has("accept")) headers.set("accept", "application/json");
     const response = await config.fetchImpl(
       `${config.apiBaseUrl}${config.apiPath}${path}`,
@@ -407,15 +409,22 @@ async function post<T>(
   body: unknown,
   parse: (value: unknown) => T,
   headers?: HeadersInit,
+  options?: { omitAuthorization?: boolean },
 ): Promise<T> {
-  const response = await request(config, path, {
-    body: JSON.stringify(body),
-    headers: {
-      "content-type": "application/json",
-      ...headers,
+  const response = await request(
+    config,
+    path,
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json",
+        ...headers,
+      },
+      method: "POST",
     },
-    method: "POST",
-  });
+    config.timeoutMs,
+    options,
+  );
   return parse(response);
 }
 
@@ -465,7 +474,16 @@ export function createTokenlessRateLoopClient(
 
     quote(requestBody: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse> {
       assertQuoteRequest(requestBody);
-      return post(config, "/quote", requestBody, parseTokenlessQuoteResponse);
+      return post(
+        config,
+        "/quote",
+        requestBody,
+        parseTokenlessQuoteResponse,
+        undefined,
+        {
+          omitAuthorization: true,
+        },
+      );
     },
 
     ask(requestBody: TokenlessAskRequest): Promise<TokenlessAskResponse> {

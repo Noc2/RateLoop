@@ -11,44 +11,12 @@ export type TokenlessWaitUntilReadyOptions = TokenlessWaitRequest & {
   sleep?: (milliseconds: number) => Promise<void>;
 };
 
-export type TokenlessAgentsClientOptions = TokenlessClientOptions & {
-  apiKey?: string;
-};
-
-function isQuoteRequest(input: RequestInfo | URL) {
-  const url = new URL(
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url,
-  );
-  return url.pathname.endsWith("/quote");
-}
-
-function withScopedApiKey(
-  transport: typeof fetch,
-  apiKey: string | undefined,
-): typeof fetch {
-  const normalizedApiKey = apiKey?.trim();
-  if (!normalizedApiKey) return transport;
-
-  return async (input, init) => {
-    if (isQuoteRequest(input)) return transport(input, init);
-    const headers = new Headers(init?.headers);
-    headers.set("authorization", `Bearer ${normalizedApiKey}`);
-    return transport(input, { ...init, headers });
-  };
-}
+export type TokenlessAgentsClientOptions = TokenlessClientOptions;
 
 export function createTokenlessAgentsClient(
   options: TokenlessAgentsClientOptions,
 ): TokenlessRateLoopClient {
-  const { apiKey, fetchImpl, ...sdkOptions } = options;
-  return createTokenlessRateLoopClient({
-    ...sdkOptions,
-    fetchImpl: withScopedApiKey(fetchImpl ?? fetch, apiKey),
-  });
+  return createTokenlessRateLoopClient(options);
 }
 
 function defaultSleep(milliseconds: number) {
