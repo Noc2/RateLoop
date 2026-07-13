@@ -19,6 +19,18 @@ import {
 } from "./humanAssuranceSchema";
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "./humanAssuranceTypes";
 
+const integrityPolicy = {
+  schemaVersion: "rateloop.integrity-assignment.v1" as const,
+  epochId: "integrity:2026-07-13:001",
+  epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+  maxClusterShareBps: 2_000,
+  allowedRiskBands: ["low", "medium"] as const,
+  recentCoassignmentWindowSeconds: 2_592_000,
+  maxRecentCoassignments: 1,
+  maxPerCustomer: 3,
+  onePerProviderSubject: true as const,
+};
+
 const now = "2026-07-13T12:00:00.000Z";
 const hash = `sha256:${"a".repeat(64)}` as const;
 const base = { schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION };
@@ -290,6 +302,7 @@ test("v2 refuses ordered tiers, fake confidence, and unpaid eligibility bypasses
         policyId: "policy_1",
         version: 1,
         reviewerSource: "rateloop_network",
+        integrity: integrityPolicy,
         compensation: "paid",
         cohorts: [],
         selection: "randomized",
@@ -332,6 +345,7 @@ test("v2 assurance requirements must identify a concrete reviewer source", () =>
         policyId: "policy_source_required",
         version: 1,
         reviewerSource: "rateloop_network",
+        integrity: integrityPolicy,
         compensation: "paid",
         cohorts: [],
         selection: "randomized",
@@ -354,7 +368,75 @@ test("v2 assurance requirements must identify a concrete reviewer source", () =>
         legalEligibilityRequired: true,
       }),
     (error: unknown) =>
-      error instanceof RateLoopSdkError && error.message.includes("reviewerSources"),
+      error instanceof RateLoopSdkError &&
+      error.message.includes("reviewerSources"),
+  );
+});
+
+test("network policies freeze exact epoch constraints while non-network policies cannot claim them", () => {
+  const common = {
+    ...base,
+    policyId: "policy_integrity_required",
+    version: 1,
+    compensation: "paid",
+    cohorts: [],
+    selection: "randomized",
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "unique_human",
+          reviewerSources: ["rateloop_network"],
+          allowedProviders: ["world:poh"],
+        },
+      ],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source"],
+      minimumAggregationSize: 5,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+  assert.throws(
+    () =>
+      parseHumanAssuranceAudiencePolicy({
+        ...common,
+        reviewerSource: "rateloop_network",
+      }),
+    (error: unknown) =>
+      error instanceof RateLoopSdkError && error.message.includes("integrity"),
+  );
+  assert.throws(
+    () =>
+      parseHumanAssuranceAudiencePolicy({
+        ...common,
+        reviewerSource: "rateloop_network",
+        integrity: integrityPolicy,
+        assurance: {
+          requirements: [
+            {
+              capability: "unique_human",
+              reviewerSources: ["rateloop_network"],
+              allowedProviders: ["world-id"],
+            },
+          ],
+        },
+      }),
+    (error: unknown) =>
+      error instanceof RateLoopSdkError && error.message.includes("world:poh"),
+  );
+  assert.throws(
+    () =>
+      parseHumanAssuranceAudiencePolicy({
+        ...common,
+        reviewerSource: "customer_invited",
+        integrity: integrityPolicy,
+      }),
+    (error: unknown) =>
+      error instanceof RateLoopSdkError &&
+      error.message.includes("invited and sandbox"),
   );
 });
 

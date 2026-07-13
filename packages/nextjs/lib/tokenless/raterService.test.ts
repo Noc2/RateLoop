@@ -15,17 +15,35 @@ function paidAdmissionPolicy() {
     policyId: "policy_rater_tasks",
     version: 1,
     reviewerSource: "rateloop_network" as const,
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:2026-07-13:001",
+      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+      maxClusterShareBps: 2_000,
+      allowedRiskBands: ["low", "medium"] as Array<"low" | "medium">,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 0,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
     compensation: "paid" as const,
     cohorts: [],
     selection: "randomized" as const,
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
-      requirements: ["account_control", "live_human", "minimum_age"].map(capability => ({
-        capability: capability as "account_control" | "live_human" | "minimum_age",
-        reviewerSources: ["rateloop_network" as const],
-        allowedProviders: ["identity-production"],
-      })),
+      requirements: [
+        ...["account_control", "live_human", "minimum_age"].map(capability => ({
+          capability: capability as "account_control" | "live_human" | "minimum_age",
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["identity-production"],
+        })),
+        {
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
+        },
+      ],
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const],

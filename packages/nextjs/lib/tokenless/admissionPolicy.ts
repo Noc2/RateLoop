@@ -6,6 +6,7 @@ import {
 } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
+import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 
 export type CapabilityAdmissionEvidence = {
   assertions: Array<{
@@ -22,6 +23,16 @@ export type CapabilityAdmissionEvidence = {
   reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid">;
   cohortIds: string[];
   qualifications: Array<{ key: string; value: string | number | boolean | string[] }>;
+  integrity?: {
+    epochId: string;
+    epochManifestHash: `sha256:${string}`;
+    reviewerLookup: string;
+    clusterPseudonym: string;
+    riskBand: "low" | "medium" | "high";
+    providerSubjectHashes: string[];
+    recentCoassignments: number;
+    activeCustomerAssignments: number;
+  };
 };
 
 function canonicalJson(value: unknown): string {
@@ -81,6 +92,30 @@ export function evaluateFrozenAdmissionPolicy(input: {
     !sourceAllowed(input.policy, input.evidence.reviewerSource)
   ) {
     failures.push("reviewer_source");
+  }
+  if (input.evidence.reviewerSource === "rateloop_network") {
+    const constraint = input.policy.integrity;
+    const integrity = input.evidence.integrity;
+    if (!integrity) failures.push("integrity_evidence");
+    else if (!constraint) failures.push("integrity_policy");
+    else {
+      if (integrity.epochId !== constraint.epochId) failures.push("integrity_epoch");
+      if (integrity.epochManifestHash !== constraint.epochManifestHash) failures.push("integrity_manifest");
+      if (!constraint.allowedRiskBands.includes(integrity.riskBand)) failures.push("integrity_risk_band");
+      if (!integrity.reviewerLookup || !integrity.clusterPseudonym) failures.push("integrity_membership");
+      if (constraint.onePerProviderSubject && integrity.providerSubjectHashes.length === 0) {
+        failures.push("provider_subject");
+      }
+      if (integrity.providerSubjectHashes.some(value => !isOpaqueSubjectReference(value))) {
+        failures.push("provider_subject_reference");
+      }
+      if (integrity.recentCoassignments > constraint.maxRecentCoassignments) {
+        failures.push("recent_coassignment_cap");
+      }
+      if (integrity.activeCustomerAssignments >= constraint.maxPerCustomer) {
+        failures.push("customer_assignment_cap");
+      }
+    }
   }
   for (const requirement of input.policy.assurance.requirements) {
     if (!requirement.reviewerSources.includes(input.evidence.reviewerSource)) continue;

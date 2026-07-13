@@ -1,6 +1,7 @@
 import { CredentialIssuerAbi, TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
 import {
   HUMAN_ASSURANCE_CAPABILITIES,
+  type HumanAssuranceAudiencePolicy,
   type HumanAssuranceCapability,
   type HumanAssuranceReviewerSource,
 } from "@rateloop/sdk";
@@ -20,7 +21,12 @@ import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import { getAuthOrigin } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
-import { evaluateFrozenAdmissionPolicy, freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import {
+  type CapabilityAdmissionEvidence,
+  evaluateFrozenAdmissionPolicy,
+  freezeAdmissionPolicy,
+} from "~~/lib/tokenless/admissionPolicy";
+import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const COUNTRY = /^[A-Z]{2}$/;
@@ -110,6 +116,14 @@ let issuerConfigOverride: IssuerConfig | null = null;
 let issuerStateVerifierOverride: IssuerStateVerifier | null = null;
 let dac7PolicyOverride: ((country: string) => boolean) | null = null;
 let handoffConfigOverride: HandoffConfig | null = null;
+let integrityEvidenceOverride:
+  | ((input: {
+      accountAddress: Address;
+      contentId: Hex;
+      policy: HumanAssuranceAudiencePolicy;
+      now: Date;
+    }) => Promise<CapabilityAdmissionEvidence["integrity"] | null>)
+  | null = null;
 
 function stringValue(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -1128,6 +1142,78 @@ async function loadVoucherEligibility(
   return { row, assertions, cohortIds, qualificationRecords, qualifications, reviewerSource };
 }
 
+async function loadVoucherIntegrityEvidence(input: {
+  accountAddress: Address;
+  contentId: Hex;
+  policy: HumanAssuranceAudiencePolicy;
+  now: Date;
+}): Promise<CapabilityAdmissionEvidence["integrity"] | null> {
+  if (integrityEvidenceOverride) return integrityEvidenceOverride(input);
+  const constraint = input.policy.integrity;
+  if (!constraint) return null;
+  const result = await dbClient.execute({
+    sql: `SELECT a.integrity_provenance_json
+          FROM tokenless_assurance_assignments a
+          JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+          JOIN tokenless_assurance_run_cases rc ON rc.run_id = a.run_id
+          WHERE a.reviewer_account_address = ? AND a.source = 'rateloop_network'
+            AND a.paid_assignment = true AND a.status IN ('reserved', 'accepted')
+            AND rc.content_id = ? AND sp.policy_hash = ?
+            AND a.integrity_epoch_id = ? AND a.integrity_manifest_hash = ?
+            AND a.integrity_provenance_json IS NOT NULL
+            AND ((a.status = 'reserved' AND a.reservation_expires_at > ?)
+              OR (a.status = 'accepted' AND a.assignment_expires_at > ?))
+          ORDER BY a.created_at DESC LIMIT 1`,
+    args: [
+      input.accountAddress.toLowerCase(),
+      input.contentId.toLowerCase(),
+      freezeAdmissionPolicy(input.policy).policyHash,
+      constraint.epochId,
+      constraint.epochManifestHash,
+      input.now,
+      input.now,
+    ],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  if (!row) return null;
+  try {
+    const provenance = JSON.parse(String(row.integrity_provenance_json)) as Record<string, unknown>;
+    const providerSubjectHashes = Array.isArray(provenance.providerSubjectHashes)
+      ? provenance.providerSubjectHashes.map(String)
+      : [];
+    const riskBand = String(provenance.riskBand);
+    const recentCoassignments = Number(provenance.recentCoassignments);
+    const activeCustomerAssignments = Number(provenance.activeCustomerAssignments);
+    if (
+      provenance.epochId !== constraint.epochId ||
+      provenance.epochManifestHash !== constraint.epochManifestHash ||
+      typeof provenance.reviewerLookup !== "string" ||
+      typeof provenance.clusterPseudonym !== "string" ||
+      !["low", "medium", "high"].includes(riskBand) ||
+      providerSubjectHashes.length === 0 ||
+      providerSubjectHashes.some(value => !isOpaqueSubjectReference(value)) ||
+      !Number.isSafeInteger(recentCoassignments) ||
+      recentCoassignments < 0 ||
+      !Number.isSafeInteger(activeCustomerAssignments) ||
+      activeCustomerAssignments < 0
+    ) {
+      return null;
+    }
+    return {
+      epochId: constraint.epochId,
+      epochManifestHash: constraint.epochManifestHash,
+      reviewerLookup: provenance.reviewerLookup,
+      clusterPseudonym: provenance.clusterPseudonym,
+      riskBand: riskBand as "low" | "medium" | "high",
+      providerSubjectHashes,
+      recentCoassignments,
+      activeCustomerAssignments,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function registerVoucherRound(input: {
   chainId: number;
   panelAddress: string;
@@ -1272,6 +1358,15 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
       reviewerSource: eligibility.reviewerSource,
       cohortIds: eligibility.cohortIds,
       qualifications: eligibility.qualifications,
+      integrity:
+        eligibility.reviewerSource === "rateloop_network"
+          ? ((await loadVoucherIntegrityEvidence({
+              accountAddress,
+              contentId: input.request.contentId,
+              policy: frozenPolicy.policy,
+              now,
+            })) ?? undefined)
+          : undefined,
     },
     maximumCommits: Number(round.maximum_commits),
     now,
@@ -1439,6 +1534,14 @@ export function __setPaidEligibilityOverridesForTests(input: {
   verifyIssuerState?: IssuerStateVerifier | null;
   requiresDac7?: ((country: string) => boolean) | null;
   handoff?: HandoffConfig | null;
+  integrityEvidence?:
+    | ((input: {
+        accountAddress: Address;
+        contentId: Hex;
+        policy: HumanAssuranceAudiencePolicy;
+        now: Date;
+      }) => Promise<CapabilityAdmissionEvidence["integrity"] | null>)
+    | null;
 }) {
   providerOverride = input.provider ?? null;
   vaultOverride = input.vault ?? null;
@@ -1446,4 +1549,5 @@ export function __setPaidEligibilityOverridesForTests(input: {
   issuerStateVerifierOverride = input.verifyIssuerState ?? null;
   dac7PolicyOverride = input.requiresDac7 ?? null;
   handoffConfigOverride = input.handoff ?? null;
+  integrityEvidenceOverride = input.integrityEvidence ?? null;
 }

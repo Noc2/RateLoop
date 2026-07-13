@@ -1,12 +1,14 @@
 import { HUMAN_ASSURANCE_SCHEMA_VERSION, type HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import type { PoolClient } from "pg";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { type PrivateArtifactStore, __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import {
   type CohortSource,
   type QualificationProvenance,
+  __integrityAssignmentConcurrencyTestUtils,
   acceptAudienceAssignment,
   createProjectCohort,
   createReviewerInvitation,
@@ -16,6 +18,7 @@ import {
   redeemReviewerInvitationWithBaseAccount,
   registerProjectCohortReviewer,
   reserveAudienceAssignment,
+  reserveDiversifiedNetworkSubpanel,
 } from "~~/lib/tokenless/audienceAssignments";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -54,6 +57,20 @@ afterEach(() => {
   __setDatabaseResourcesForTests(null);
 });
 
+test("network assignment transactions lock the workspace before any selection query", async () => {
+  const queries: string[] = [];
+  const client = {
+    query: async (sql: string) => {
+      queries.push(sql.replace(/\s+/g, " ").trim());
+      return { rowCount: sql === "BEGIN" ? null : 1, rows: [{ workspace_id: "ws_lock" }] };
+    },
+  } as unknown as PoolClient;
+  await __integrityAssignmentConcurrencyTestUtils.beginIntegrityAssignmentTransaction(client, "ws_lock");
+  assert.equal(queries[0], "BEGIN");
+  assert.match(queries[1]!, /FROM tokenless_workspaces .* FOR UPDATE$/);
+  assert.equal(queries.length, 2);
+});
+
 function qualification(
   key: string,
   value: QualificationProvenance["value"],
@@ -86,11 +103,12 @@ function audiencePolicy(
   > = {},
 ): HumanAssuranceAudiencePolicy {
   const compensation = input.compensation ?? "unpaid";
+  const reviewerSource = input.reviewerSource ?? cohorts[0]!.source;
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
     policyId: "policy_fixture",
     version: 1,
-    reviewerSource: input.reviewerSource ?? cohorts[0]!.source,
+    reviewerSource,
     compensation,
     cohorts: cohorts.map(cohort => ({
       cohortId: cohort.cohortId,
@@ -100,7 +118,33 @@ function audiencePolicy(
     selection: input.selection ?? "randomized",
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: input.requiredQualifications ?? [],
-    assurance: { requirements: [] },
+    assurance: {
+      requirements:
+        reviewerSource === "rateloop_network" || reviewerSource === "hybrid"
+          ? [
+              {
+                capability: "unique_human",
+                reviewerSources: ["rateloop_network"],
+                allowedProviders: ["world:poh"],
+              },
+            ]
+          : [],
+    },
+    ...(reviewerSource === "rateloop_network" || reviewerSource === "hybrid"
+      ? {
+          integrity: {
+            schemaVersion: "rateloop.integrity-assignment.v1" as const,
+            epochId: "integrity:2026-07-13:001",
+            epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+            maxClusterShareBps: 5_000,
+            allowedRiskBands: ["low", "medium"] as Array<"low" | "medium">,
+            recentCoassignmentWindowSeconds: 2_592_000,
+            maxRecentCoassignments: 0,
+            maxPerCustomer: 3,
+            onePerProviderSubject: true as const,
+          },
+        }
+      : {}),
     buyerPrivacy: {
       visibleFields: ["reviewer_source", "qualification_summary"],
       minimumAggregationSize: 2,
@@ -108,6 +152,33 @@ function audiencePolicy(
     },
     legalEligibilityRequired: input.legalEligibilityRequired ?? compensation !== "unpaid",
   };
+}
+
+async function seedIntegrityEpoch(now = new Date()) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_integrity_epochs
+          (epoch_id, schema_version, cutoff_at, source_window_started_at, source_window_ended_at,
+           private_features_expire_at, feature_spec_hash, parameter_hash, scorer_build_hash,
+           private_leaf_root, aggregate_cluster_counts_json, eligible_reviewer_count,
+           excluded_reviewer_count, manifest_hash, manifest_json, signature_algorithm,
+           signer_key_id, signing_public_key, signature, lookup_key_version,
+           pseudonym_key_version, vault_key_version, created_at)
+          VALUES (?, 'rateloop-integrity-epoch-v1', ?, ?, ?, ?, ?, ?, ?, ?, '{}', 0, 0, ?, '{}',
+                  'Ed25519', 'fixture', 'fixture', 'fixture', 'lookup-v1', 'pseudonym-v1', 'vault-v1', ?)`,
+    args: [
+      "integrity:2026-07-13:001",
+      new Date(now.getTime() - 120_000),
+      new Date(now.getTime() - 3_600_000),
+      new Date(now.getTime() - 120_000),
+      new Date(now.getTime() + 86_400_000),
+      `sha256:${"1".repeat(64)}`,
+      `sha256:${"2".repeat(64)}`,
+      `sha256:${"3".repeat(64)}`,
+      `sha256:${"4".repeat(64)}`,
+      `sha256:${"a".repeat(64)}`,
+      now,
+    ],
+  });
 }
 
 async function seedProject(owner = OWNER, label = "primary") {
@@ -350,8 +421,9 @@ test("one-time invitations store only token hashes and bind redemption to the in
   );
 });
 
-test("hybrid audiences fail closed while unpaid sandbox simulation remains available", async () => {
+test("hybrid audiences freeze separate epoch-bound network and invited subpanels", async () => {
   const project = await seedProject();
+  await seedIntegrityEpoch();
   const invited = await createCohort(project, { source: "customer_invited" });
   const network = await createCohort(project, { source: "rateloop_network" });
   const policy = audiencePolicy(
@@ -362,16 +434,17 @@ test("hybrid audiences fail closed while unpaid sandbox simulation remains avail
     { reviewerSource: "hybrid", selection: "randomized", compensation: "mixed" },
   );
   const { runId } = await seedRun(project, policy);
-  await assert.rejects(
-    () =>
-      prepareRunAudience({
-        accountAddress: OWNER,
-        workspaceId: project.workspaceId,
-        projectId: project.projectId,
-        runId,
-      }),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+  const subpanels = await prepareRunAudience({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    runId,
+  });
+  assert.deepEqual(subpanels.map(value => value.source).sort(), ["customer_invited", "rateloop_network"]);
+  assert.equal(subpanels.find(value => value.source === "customer_invited")?.integrity, undefined);
+  assert.equal(
+    subpanels.find(value => value.source === "rateloop_network")?.integrity?.manifestHash,
+    `sha256:${"a".repeat(64)}`,
   );
 
   await assert.rejects(
@@ -399,7 +472,7 @@ test("hybrid audiences fail closed while unpaid sandbox simulation remains avail
   );
 });
 
-test("paid network audiences fail closed before subpanels or assignments are created", async () => {
+test("paid network audiences require an exact epoch and stay closed before voucher/receipt-bound assignment", async () => {
   const project = await seedProject();
   const now = new Date();
   const cohort = await createCohort(project, {
@@ -429,12 +502,37 @@ test("paid network audiences fail closed before subpanels or assignments are cre
         projectId: project.projectId,
         runId,
       }),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "integrity_epoch_unavailable",
   );
   assert.equal(
     Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_run_subpanels")).rows[0]?.count),
     0,
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),
+    0,
+  );
+  await seedIntegrityEpoch(now);
+  const [subpanel] = await prepareRunAudience({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    runId,
+  });
+  assert.equal(subpanel?.integrity?.epochId, "integrity:2026-07-13:001");
+  await assert.rejects(
+    () =>
+      reserveDiversifiedNetworkSubpanel({
+        accountAddress: OWNER,
+        workspaceId: project.workspaceId,
+        projectId: project.projectId,
+        runId,
+        subpanelId: subpanel!.subpanelId!,
+        confidentialityTermsHash: TERMS_HASH,
+        now,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
   );
   assert.equal(
     Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),

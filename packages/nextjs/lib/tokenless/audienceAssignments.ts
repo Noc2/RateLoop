@@ -1,10 +1,17 @@
-import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@rateloop/sdk";
+import {
+  type HumanAssuranceAudiencePolicy,
+  type HumanAssuranceCapability,
+  parseHumanAssuranceRubric,
+} from "@rateloop/sdk";
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
+import { evaluateFrozenAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
+import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
+import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid", "sandbox"] as const;
@@ -551,7 +558,6 @@ export async function prepareRunAudience(input: {
       throw new TokenlessServiceError("Frozen run not found.", 404, "run_not_found");
     }
     const policy = parseJson<HumanAssuranceAudiencePolicy>(run.policy_json, "audience policy");
-    assertAssuranceAssignmentSettlementAvailable({ policy });
     const existing = await client.query(
       "SELECT * FROM tokenless_assurance_run_subpanels WHERE run_id = $1 ORDER BY source, cohort_id",
       [input.runId],
@@ -570,6 +576,11 @@ export async function prepareRunAudience(input: {
             rowString(row, "policy_hash") !== policyHash ||
             rowString(row, "run_manifest_hash") !== rowString(run, "manifest_hash") ||
             rowString(row, "selection") !== policy.selection ||
+            (rowString(row, "source") === "rateloop_network" &&
+              (rowString(row, "integrity_epoch_id") !== policy.integrity?.epochId ||
+                rowString(row, "integrity_manifest_hash") !== policy.integrity?.epochManifestHash ||
+                rowString(row, "integrity_constraints_json") !== canonicalJson(policy.integrity))) ||
+            (rowString(row, "source") !== "rateloop_network" && rowString(row, "integrity_epoch_id") !== null) ||
             !expectedCohorts.delete(rowString(row, "cohort_id") ?? "")
           );
         }) ||
@@ -587,6 +598,14 @@ export async function prepareRunAudience(input: {
         cohortId: rowString(value as QueryRow, "cohort_id"),
         source: rowString(value as QueryRow, "source"),
         targetCount: rowNumber(value as QueryRow, "target_count"),
+        ...(rowString(value as QueryRow, "source") === "rateloop_network"
+          ? {
+              integrity: {
+                epochId: rowString(value as QueryRow, "integrity_epoch_id"),
+                manifestHash: rowString(value as QueryRow, "integrity_manifest_hash"),
+              },
+            }
+          : {}),
       }));
     }
     const cohorts: QueryRow[] = [];
@@ -615,6 +634,21 @@ export async function prepareRunAudience(input: {
     }
     validatePolicySourceRules(policy, cohorts);
     const now = new Date();
+    if (policy.integrity) {
+      const epoch = await client.query(
+        `SELECT epoch_id FROM tokenless_integrity_epochs
+         WHERE epoch_id = $1 AND manifest_hash = $2 AND cutoff_at <= $3
+           AND private_features_expire_at > $4 LIMIT 1`,
+        [policy.integrity.epochId, policy.integrity.epochManifestHash, rowDate(run, "frozen_at"), now],
+      );
+      if (epoch.rowCount !== 1) {
+        throw new TokenlessServiceError(
+          "The frozen integrity epoch is missing, expired, or newer than the run.",
+          409,
+          "integrity_epoch_unavailable",
+        );
+      }
+    }
     const subpanels = [];
     for (let index = 0; index < cohorts.length; index += 1) {
       const cohort = cohorts[index]!;
@@ -624,8 +658,9 @@ export async function prepareRunAudience(input: {
         `INSERT INTO tokenless_assurance_run_subpanels
          (subpanel_id, workspace_id, project_id, run_id, cohort_id, source, selection,
           target_count, active_reservations, policy_id, policy_version, policy_hash,
-          run_manifest_hash, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13)`,
+          run_manifest_hash, integrity_epoch_id, integrity_manifest_hash,
+          integrity_constraints_json, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
           subpanelId,
           input.workspaceId,
@@ -639,6 +674,9 @@ export async function prepareRunAudience(input: {
           rowNumber(run, "audience_policy_version"),
           policyHash,
           rowString(run, "manifest_hash"),
+          rowString(cohort, "source") === "rateloop_network" ? policy.integrity?.epochId : null,
+          rowString(cohort, "source") === "rateloop_network" ? policy.integrity?.epochManifestHash : null,
+          rowString(cohort, "source") === "rateloop_network" ? canonicalJson(policy.integrity) : null,
           now,
         ],
       );
@@ -647,6 +685,14 @@ export async function prepareRunAudience(input: {
         cohortId: requested.cohortId,
         source: rowString(cohort, "source"),
         targetCount: requested.maximumReviewers,
+        ...(rowString(cohort, "source") === "rateloop_network"
+          ? {
+              integrity: {
+                epochId: policy.integrity?.epochId,
+                manifestHash: policy.integrity?.epochManifestHash,
+              },
+            }
+          : {}),
       });
     }
     await client.query("COMMIT");
@@ -695,11 +741,12 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
   const raterId = rowString(row, "rater_id")!;
   const assertions = await client.query(
     `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
-            b.subject_reference_hash, a.capabilities_json, a.evidence_verified_at, a.evidence_expires_at
+            b.subject_reference_hash, a.capabilities_json, a.evidence_verified_at, a.evidence_expires_at,
+            a.assurance_validity_model
      FROM tokenless_assurance_assertions a
      JOIN tokenless_provider_subject_bindings b ON b.binding_id = a.binding_id
      WHERE a.rater_id = $1 AND a.status = 'active' AND b.status = 'active'
-       AND a.evidence_expires_at > $2`,
+       AND (a.assurance_validity_model = 'durable_enrollment' OR a.evidence_expires_at > $2)`,
     [raterId, now],
   );
   return {
@@ -712,9 +759,13 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
         providerId: rowString(assertion, "provider_id")!,
         providerNamespace: rowString(assertion, "provider_namespace")!,
         subjectReferenceHash: rowString(assertion, "subject_reference_hash")!,
-        capabilities: parseJson<string[]>(assertion.capabilities_json, "assurance capabilities").sort(),
+        capabilities: parseJson<HumanAssuranceCapability[]>(
+          assertion.capabilities_json,
+          "assurance capabilities",
+        ).sort(),
         verifiedAt: rowDate(assertion, "evidence_verified_at")!.toISOString(),
         expiresAt: rowDate(assertion, "evidence_expires_at")!.toISOString(),
+        validityModel: rowString(assertion, "assurance_validity_model") as "expiring" | "durable_enrollment",
       };
     }),
   };
@@ -769,6 +820,358 @@ export async function expireAudienceAssignments(now = new Date()) {
 
 function assignmentIsPaid(compensation: HumanAssuranceAudiencePolicy["compensation"], source: CohortSource) {
   return compensation === "paid" || (compensation === "mixed" && source === "rateloop_network");
+}
+
+function integrityLookupRuntime() {
+  const encoded = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY?.trim();
+  const version = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION?.trim();
+  const key = encoded ? Buffer.from(encoded, "base64url") : Buffer.alloc(0);
+  if (!version || key.byteLength < 32) {
+    throw new TokenlessServiceError(
+      "Integrity reviewer lookup is not configured.",
+      503,
+      "integrity_lookup_unavailable",
+    );
+  }
+  return { key, version };
+}
+
+async function beginIntegrityAssignmentTransaction(client: PoolClient, workspaceId: string) {
+  await client.query("BEGIN");
+  const workspace = await client.query(
+    `SELECT workspace_id FROM tokenless_workspaces
+     WHERE workspace_id = $1 AND status = 'active' LIMIT 1 FOR UPDATE`,
+    [workspaceId],
+  );
+  if (workspace.rowCount !== 1) {
+    throw new TokenlessServiceError("Workspace is unavailable.", 409, "workspace_unavailable");
+  }
+}
+
+export const __integrityAssignmentConcurrencyTestUtils = { beginIntegrityAssignmentTransaction };
+
+/**
+ * Complete, hidden, epoch-diversified network-panel reservation. The current
+ * product deliberately calls the settlement guard before any mutation: this
+ * routine becomes reachable only after vouchers and receipts bind this exact
+ * batch/provenance commitment end to end.
+ */
+export async function reserveDiversifiedNetworkSubpanel(input: {
+  accountAddress: string;
+  workspaceId: string;
+  projectId: string;
+  runId: string;
+  subpanelId: string;
+  confidentialityTermsHash: string;
+  reservationTtlMs?: number;
+  now?: Date;
+}) {
+  const manager = await requireProjectManager(input);
+  if (!HASH_PATTERN.test(input.confidentialityTermsHash)) {
+    throw new TokenlessServiceError("Confidentiality terms hash is invalid.", 400, "invalid_confidentiality_terms");
+  }
+  const now = input.now ?? new Date();
+  const ttl = integer(
+    input.reservationTtlMs ?? DEFAULT_RESERVATION_TTL_MS,
+    "reservationTtlMs",
+    60_000,
+    MAX_RESERVATION_TTL_MS,
+  );
+  // This is intentionally before BEGIN: paid work must not be reserved until
+  // its voucher and receipt carry selectionBatchId + integrityProvenanceHash.
+  assertAssuranceAssignmentSettlementAvailable({
+    paidAssignment: true,
+    policy: { compensation: "paid", reviewerSource: "rateloop_network" },
+    source: "rateloop_network",
+  });
+  const lookup = integrityLookupRuntime();
+  const client = await dbPool.connect();
+  try {
+    await beginIntegrityAssignmentTransaction(client, input.workspaceId);
+    const locked = await client.query(
+      `SELECT sp.*, c.qualification_rules_json, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
+              r.policy_hash AS current_policy_hash, p.policy_json, e.lookup_key_version,
+              e.private_features_expire_at
+       FROM tokenless_assurance_run_subpanels sp
+       JOIN tokenless_assurance_runs r ON r.run_id = sp.run_id AND r.project_id = sp.project_id
+       JOIN tokenless_assurance_audience_policies p
+         ON p.policy_id = sp.policy_id AND p.version = sp.policy_version
+       JOIN tokenless_assurance_cohorts c ON c.project_id = sp.project_id AND c.cohort_id = sp.cohort_id
+       JOIN tokenless_integrity_epochs e ON e.epoch_id = sp.integrity_epoch_id
+       WHERE sp.subpanel_id = $1 AND sp.run_id = $2 AND sp.project_id = $3 AND sp.workspace_id = $4
+       LIMIT 1 FOR UPDATE`,
+      [input.subpanelId, input.runId, input.projectId, input.workspaceId],
+    );
+    const subpanel = locked.rows[0] as QueryRow | undefined;
+    const policy = subpanel ? parseJson<HumanAssuranceAudiencePolicy>(subpanel.policy_json, "audience policy") : null;
+    if (
+      !subpanel ||
+      !policy?.integrity ||
+      rowString(subpanel, "source") !== "rateloop_network" ||
+      rowString(subpanel, "selection") !== "randomized" ||
+      rowString(subpanel, "selection_status") !== "pending" ||
+      rowString(subpanel, "run_status") !== "frozen" ||
+      rowString(subpanel, "run_manifest_hash") !== rowString(subpanel, "current_run_manifest_hash") ||
+      rowString(subpanel, "policy_hash") !== rowString(subpanel, "current_policy_hash") ||
+      rowString(subpanel, "integrity_epoch_id") !== policy.integrity.epochId ||
+      rowString(subpanel, "integrity_manifest_hash") !== policy.integrity.epochManifestHash ||
+      rowString(subpanel, "integrity_constraints_json") !== canonicalJson(policy.integrity) ||
+      rowString(subpanel, "lookup_key_version") !== lookup.version ||
+      (rowDate(subpanel, "private_features_expire_at")?.getTime() ?? 0) <= now.getTime()
+    ) {
+      throw new TokenlessServiceError("Frozen network subpanel is unavailable.", 409, "integrity_subpanel_unavailable");
+    }
+    const targetCount = rowNumber(subpanel, "target_count")!;
+    const reviewers = await client.query(
+      `SELECT * FROM tokenless_assurance_cohort_reviewers
+       WHERE project_id = $1 AND cohort_id = $2 AND status = 'active'
+         AND active_reservations < maximum_active_assignments
+         AND (qualification_expires_at IS NULL OR qualification_expires_at > $3)
+       FOR UPDATE`,
+      [input.projectId, rowString(subpanel, "cohort_id"), now],
+    );
+    const since = new Date(now.getTime() - policy.integrity.recentCoassignmentWindowSeconds * 1_000);
+    const history = await client.query(
+      `SELECT reviewer_lookup, run_id FROM tokenless_integrity_assignment_history
+       WHERE workspace_id = $1 AND selected_at >= $2 ORDER BY run_id, reviewer_lookup`,
+      [input.workspaceId, since],
+    );
+    const priorRuns = new Map<string, string[]>();
+    const customerCounts = new Map<string, number>();
+    for (const value of history.rows) {
+      const row = value as QueryRow;
+      const reviewerLookup = rowString(row, "reviewer_lookup")!;
+      const runId = rowString(row, "run_id")!;
+      priorRuns.set(runId, [...(priorRuns.get(runId) ?? []), reviewerLookup]);
+      customerCounts.set(reviewerLookup, (customerCounts.get(reviewerLookup) ?? 0) + 1);
+    }
+    const recentPairs = new Map<string, Map<string, number>>();
+    for (const members of priorRuns.values()) {
+      for (const left of members) {
+        const counts = recentPairs.get(left) ?? new Map<string, number>();
+        for (const right of members) if (right !== left) counts.set(right, (counts.get(right) ?? 0) + 1);
+        recentPairs.set(left, counts);
+      }
+    }
+    const cohortRules = validateQualificationRules(
+      parseJson<QualificationRule[]>(subpanel.qualification_rules_json ?? "[]", "cohort rules"),
+    );
+    const rules = [...cohortRules, ...validateQualificationRules(policy.requiredQualifications)];
+    const candidates: Array<{
+      reviewerAccountAddress: string;
+      reviewerLookup: string;
+      clusterPseudonym: string;
+      riskBand: "low" | "medium" | "high";
+      providerSubjectHashes: string[];
+      activeCustomerAssignments: number;
+      recentCoassignmentsByReviewerLookup: Record<string, number>;
+      assuranceSnapshot: Record<string, unknown>;
+      provenance: QualificationProvenance[];
+    }> = [];
+    for (const value of reviewers.rows) {
+      const reviewer = value as QueryRow;
+      const address = rowString(reviewer, "reviewer_account_address")!;
+      const reviewerLookup = integrityReviewerLookup({ key: lookup.key, reviewerId: address });
+      const memberResult = await client.query(
+        `SELECT cluster_pseudonym, risk_band FROM tokenless_integrity_epoch_members
+         WHERE epoch_id = $1 AND reviewer_lookup = $2 AND eligibility_status = 'eligible' LIMIT 1`,
+        [policy.integrity.epochId, reviewerLookup],
+      );
+      const member = memberResult.rows[0] as QueryRow | undefined;
+      if (!member) continue;
+      const provenance = parseJson<QualificationProvenance[]>(
+        reviewer.qualification_provenance_json,
+        "qualification provenance",
+      );
+      if (!satisfiesQualifications(rules, provenance, now)) continue;
+      let eligibility: Awaited<ReturnType<typeof paidEligibility>>;
+      try {
+        eligibility = await paidEligibility(client, address, now);
+      } catch {
+        continue;
+      }
+      const riskBand = rowString(member, "risk_band") as "low" | "medium" | "high";
+      const allProviderSubjects = [...new Set(eligibility.assertions.map(assertion => assertion.subjectReferenceHash))];
+      const admission = evaluateFrozenAdmissionPolicy({
+        policy,
+        evidence: {
+          assertions: eligibility.assertions.map(assertion => ({
+            ...assertion,
+            verifiedAt: new Date(assertion.verifiedAt),
+            expiresAt: new Date(assertion.expiresAt),
+          })),
+          reviewerSource: "rateloop_network",
+          cohortIds: [rowString(subpanel, "cohort_id")!],
+          qualifications: provenance.map(item => ({ key: item.key, value: item.value })),
+          integrity: {
+            epochId: policy.integrity.epochId,
+            epochManifestHash: policy.integrity.epochManifestHash,
+            reviewerLookup,
+            clusterPseudonym: rowString(member, "cluster_pseudonym")!,
+            riskBand,
+            providerSubjectHashes: allProviderSubjects,
+            recentCoassignments: 0,
+            activeCustomerAssignments: customerCounts.get(reviewerLookup) ?? 0,
+          },
+        },
+        maximumCommits: targetCount,
+        now,
+      });
+      if (!admission.eligible) continue;
+      const usedAssertions = eligibility.assertions.filter(assertion =>
+        admission.usedAssertionIds.includes(assertion.assertionId),
+      );
+      const providerSubjectHashes = [
+        ...new Set(usedAssertions.map(assertion => assertion.subjectReferenceHash)),
+      ].sort();
+      if (!providerSubjectHashes.length) continue;
+      candidates.push({
+        reviewerAccountAddress: address,
+        reviewerLookup,
+        clusterPseudonym: rowString(member, "cluster_pseudonym")!,
+        riskBand,
+        providerSubjectHashes,
+        activeCustomerAssignments: customerCounts.get(reviewerLookup) ?? 0,
+        recentCoassignmentsByReviewerLookup: Object.fromEntries(recentPairs.get(reviewerLookup) ?? []),
+        assuranceSnapshot: {
+          schemaVersion: "rateloop.assignment-assurance-snapshot.v1",
+          reviewerSource: "rateloop_network",
+          assertions: usedAssertions,
+          qualifications: provenance.filter(item => admission.usedQualificationKeys.includes(item.key)),
+          capturedAt: now.toISOString(),
+        },
+        provenance,
+      });
+    }
+    const seed = randomBytes(32).toString("hex");
+    const selection = selectDiversifiedIntegrityPanel({ candidates, constraints: policy.integrity, targetCount, seed });
+    const batchId = `hasb_${randomUUID().replaceAll("-", "")}`;
+    const reservationExpiresAt = new Date(now.getTime() + ttl);
+    for (const chosen of selection.selected) {
+      const assignmentId = `haas_${randomUUID().replaceAll("-", "")}`;
+      const integrityProvenance = {
+        schemaVersion: "rateloop.assignment-integrity-provenance.v1",
+        epochId: policy.integrity.epochId,
+        epochManifestHash: policy.integrity.epochManifestHash,
+        constraints: policy.integrity,
+        reviewerLookup: chosen.reviewerLookup,
+        clusterPseudonym: chosen.clusterPseudonym,
+        riskBand: chosen.riskBand,
+        providerSubjectHashes: chosen.providerSubjectHashes,
+        activeCustomerAssignments: chosen.activeCustomerAssignments,
+        recentCoassignments: Math.max(
+          0,
+          ...selection.selected
+            .filter(peer => peer.reviewerLookup !== chosen.reviewerLookup)
+            .map(peer => chosen.recentCoassignmentsByReviewerLookup[peer.reviewerLookup] ?? 0),
+        ),
+        selectionBatchId: batchId,
+        selectionCommitment: selection.selectionCommitment,
+      };
+      const integrityJson = canonicalJson(integrityProvenance);
+      const integrityHash = `sha256:${hashToken(integrityJson)}`;
+      const assuranceJson = canonicalJson(chosen.assuranceSnapshot);
+      await client.query(
+        `INSERT INTO tokenless_assurance_assignments
+         (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
+          reviewer_account_address, source, selection, status, confidentiality_terms_hash,
+          qualification_provenance_json, assurance_snapshot_json, assurance_snapshot_hash,
+          blinding_json, paid_assignment, paid_eligibility_checked_at, voucher_marker,
+          reservation_expires_at, lease_issuer_account_address, lease_state, recovery_count,
+          integrity_epoch_id, integrity_manifest_hash, integrity_reviewer_lookup,
+          integrity_cluster_pseudonym, integrity_risk_band, provider_subject_hashes_json,
+          integrity_provenance_json, integrity_provenance_hash, selection_batch_id, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'rateloop_network','randomized','reserved',$8,$9,$10,$11,
+                 $12,true,$13,NULL,$14,$15,'pending',0,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$25)`,
+        [
+          assignmentId,
+          input.workspaceId,
+          input.projectId,
+          input.runId,
+          input.subpanelId,
+          rowString(subpanel, "cohort_id"),
+          chosen.reviewerAccountAddress,
+          input.confidentialityTermsHash,
+          JSON.stringify(chosen.provenance),
+          assuranceJson,
+          `sha256:${hashToken(assuranceJson)}`,
+          JSON.stringify({ swap: randomInt(2) === 1 }),
+          now,
+          reservationExpiresAt,
+          manager,
+          policy.integrity.epochId,
+          policy.integrity.epochManifestHash,
+          chosen.reviewerLookup,
+          chosen.clusterPseudonym,
+          chosen.riskBand,
+          JSON.stringify(chosen.providerSubjectHashes),
+          integrityJson,
+          integrityHash,
+          batchId,
+          now,
+        ],
+      );
+      await client.query(
+        `INSERT INTO tokenless_integrity_assignment_history
+         (history_id, selection_batch_id, workspace_id, project_id, run_id, subpanel_id,
+          assignment_id, epoch_id, manifest_hash, reviewer_lookup, cluster_pseudonym,
+          provider_subject_hashes_json, selected_at, response_window_closes_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [
+          `hiah_${randomUUID().replaceAll("-", "")}`,
+          batchId,
+          input.workspaceId,
+          input.projectId,
+          input.runId,
+          input.subpanelId,
+          assignmentId,
+          policy.integrity.epochId,
+          policy.integrity.epochManifestHash,
+          chosen.reviewerLookup,
+          chosen.clusterPseudonym,
+          JSON.stringify(chosen.providerSubjectHashes),
+          now,
+          reservationExpiresAt,
+        ],
+      );
+      await client.query(
+        `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations = active_reservations + 1
+         WHERE project_id = $1 AND cohort_id = $2 AND reviewer_account_address = $3`,
+        [input.projectId, rowString(subpanel, "cohort_id"), chosen.reviewerAccountAddress],
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_assurance_run_subpanels
+       SET active_reservations = $1, selected_count = $1, selection_batch_id = $2,
+           selection_seed_hash = $3, selection_commitment = $4, selection_status = 'reserved'
+       WHERE subpanel_id = $5 AND selection_status = 'pending'`,
+      [targetCount, batchId, selection.selectionSeedHash, selection.selectionCommitment, input.subpanelId],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_cohorts SET active_reservations = active_reservations + $1
+       WHERE project_id = $2 AND cohort_id = $3`,
+      [targetCount, input.projectId, rowString(subpanel, "cohort_id")],
+    );
+    await client.query("COMMIT");
+    return {
+      subpanelId: input.subpanelId,
+      source: "rateloop_network" as const,
+      selectedCount: selection.aggregate.selectedCount,
+      selectionCommitment: selection.selectionCommitment,
+      integrity: {
+        epochId: policy.integrity.epochId,
+        manifestHash: policy.integrity.epochManifestHash,
+        independentClusterCount: selection.aggregate.independentClusterCount,
+        largestClusterShareBps: selection.aggregate.largestClusterShareBps,
+        riskBandCounts: selection.aggregate.riskBandCounts,
+      },
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function reserveAudienceAssignment(input: {
@@ -997,7 +1400,7 @@ export async function reserveAudienceAssignment(input: {
     await client.query("COMMIT");
     return {
       assignmentId,
-      reviewerAccountAddress,
+      ...(selection === "customer_named" ? { reviewerAccountAddress } : {}),
       source,
       paidAssignment: isPaid,
       reservationExpiresAt: reservationExpiresAt.toISOString(),

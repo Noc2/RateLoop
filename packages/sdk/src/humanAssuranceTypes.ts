@@ -1,5 +1,7 @@
 export const HUMAN_ASSURANCE_SCHEMA_VERSION =
   "rateloop.human-assurance.v2" as const;
+export const HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION =
+  "rateloop.integrity-assignment.v1" as const;
 
 export const HUMAN_ASSURANCE_CAPABILITIES = [
   "account_control",
@@ -108,6 +110,17 @@ export interface HumanAssuranceAudiencePolicy {
       allowedProviders: string[];
       freshnessSeconds?: number;
     }>;
+  };
+  integrity?: {
+    schemaVersion: typeof HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION;
+    epochId: string;
+    epochManifestHash: `sha256:${string}`;
+    maxClusterShareBps: number;
+    allowedRiskBands: Array<"low" | "medium" | "high">;
+    recentCoassignmentWindowSeconds: number;
+    maxRecentCoassignments: number;
+    maxPerCustomer: number;
+    onePerProviderSubject: true;
   };
   buyerPrivacy: {
     visibleFields: Array<

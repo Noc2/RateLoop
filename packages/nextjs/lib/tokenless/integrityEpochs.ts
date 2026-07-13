@@ -186,6 +186,13 @@ function hmacIntegrityValue(key: Buffer, domain: string, value: string) {
   return `hmac-sha256:${createHmac("sha256", key).update(`${domain}:${value}`).digest("hex")}`;
 }
 
+export function integrityReviewerLookup(input: { key: Buffer; reviewerId: string }) {
+  if (!input.reviewerId.trim() || input.reviewerId.length > 320) {
+    throw new Error("Integrity reviewer identifier is invalid.");
+  }
+  return hmacIntegrityValue(input.key, "integrity-reviewer-lookup", input.reviewerId);
+}
+
 export function integrityValueCommitment(input: { key: Buffer; kind: IntegrityHardLinkKind; value: string }) {
   if (!HARD_LINK_KIND_SET.has(input.kind)) throw new Error("Integrity hard-link kind is unsupported.");
   if (!input.value.trim() || input.value.length > 1_000) throw new Error("Integrity link value is invalid.");
@@ -268,7 +275,7 @@ function normalizeObservation(
   if (!Number.isSafeInteger(behavioralRiskBps) || behavioralRiskBps < 0 || behavioralRiskBps > 10_000) {
     throw new Error("Integrity behavioral risk must be an integer from 0 to 10000.");
   }
-  const reviewerLookup = hmacIntegrityValue(input.lookupKey, "integrity-reviewer-lookup", value.reviewerId);
+  const reviewerLookup = integrityReviewerLookup({ key: input.lookupKey, reviewerId: value.reviewerId });
   return {
     ...value,
     observedAt,

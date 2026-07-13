@@ -1,4 +1,4 @@
-import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
+import { HUMAN_ASSURANCE_SCHEMA_VERSION, type HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
@@ -39,7 +39,7 @@ function provider(overrides: Partial<Awaited<ReturnType<EligibilityProvider["ver
   return {
     async verify(input) {
       return {
-        providerId: "identity-production",
+        providerId: "world:poh",
         assertionId: "assertion-00000001",
         subjectId: "provider-subject-123",
         accountAddress: ACCOUNT,
@@ -79,7 +79,27 @@ function submission(payoutAccount = ACCOUNT) {
   };
 }
 
-function installOverrides(providerValue = provider(), verifyIssuerState = async () => {}) {
+const validIntegrityEvidence = async ({ policy }: { policy: HumanAssuranceAudiencePolicy }) =>
+  policy.integrity
+    ? {
+        epochId: policy.integrity.epochId,
+        epochManifestHash: policy.integrity.epochManifestHash,
+        reviewerLookup: `hmac-sha256:${"b".repeat(64)}`,
+        clusterPseudonym: `hmac-sha256:${"c".repeat(64)}`,
+        riskBand: "low" as const,
+        providerSubjectHashes: [`hmac-sha256:hmac-v1:${"d".repeat(64)}`],
+        recentCoassignments: 0,
+        activeCustomerAssignments: 0,
+      }
+    : null;
+
+function installOverrides(
+  providerValue = provider(),
+  verifyIssuerState = async () => {},
+  integrityEvidence: Parameters<
+    typeof __setPaidEligibilityOverridesForTests
+  >[0]["integrityEvidence"] = validIntegrityEvidence,
+) {
   __setPaidEligibilityOverridesForTests({
     provider: providerValue,
     vault: {
@@ -99,6 +119,7 @@ function installOverrides(providerValue = provider(), verifyIssuerState = async 
     verifyIssuerState,
     requiresDac7: () => true,
     handoff: { startUrl: "https://identity.example/start", secret: Buffer.alloc(32, 9) },
+    integrityEvidence,
   });
 }
 
@@ -129,16 +150,27 @@ async function openRound() {
     policyId: "policy_paid_network",
     version: 1,
     reviewerSource: "rateloop_network" as const,
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:2026-07-13:001",
+      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+      maxClusterShareBps: 2_000,
+      allowedRiskBands: ["low", "medium"] as Array<"low" | "medium">,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 0,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
     compensation: "paid" as const,
     cohorts: [],
     selection: "randomized" as const,
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
-      requirements: ["account_control", "live_human", "minimum_age"].map(capability => ({
-        capability: capability as "account_control" | "live_human" | "minimum_age",
+      requirements: ["account_control", "live_human", "unique_human", "minimum_age"].map(capability => ({
+        capability: capability as "account_control" | "live_human" | "unique_human" | "minimum_age",
         reviewerSources: ["rateloop_network" as const],
-        allowedProviders: ["identity-production"],
+        allowedProviders: ["world:poh"],
       })),
     },
     buyerPrivacy: {
@@ -174,6 +206,7 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   assert.equal(publicState.payoutAccount, ACCOUNT);
   assert.equal(publicState.declaredResidenceCountry, "DE");
   assert.equal(publicState.documentIssuingCountry, "DE");
+  assert.deepEqual(publicState.assuranceProviders, ["world:poh"]);
 
   const rows = await dbClient.execute(
     `SELECT p.nullifier_seed_ciphertext, p.nullifier_key_domain,
@@ -198,6 +231,15 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
     seedCiphertext,
     "identity refresh keeps its stable seed",
   );
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_assertions
+          SET assurance_validity_model = 'durable_enrollment', evidence_expires_at = ?
+          WHERE provider_id = 'world:poh'`,
+    args: [new Date(NOW.getTime() - 1)],
+  });
+  const durableEnrollment = await getPaidEligibility(ACCOUNT, NOW);
+  assert.ok(durableEnrollment.capabilities?.includes("unique_human"));
+  assert.deepEqual(durableEnrollment.assuranceProviders, ["world:poh"]);
 });
 
 test("document and nationality countries remain distinct from residence and tax eligibility", async () => {
@@ -399,6 +441,31 @@ test("voucher issuance fails before eligibility and for missing required capabil
   );
 });
 
+test("network voucher admission cannot omit assignment integrity provenance", async () => {
+  await unlockPaidTasks();
+  await openRound();
+  installOverrides(
+    provider(),
+    async () => {},
+    async () => null,
+  );
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: {
+          idempotencyKey: "voucher:test:missing-integrity",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "rateloop_network",
+        },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "admission_policy_not_satisfied",
+  );
+});
+
 test("voucher issuance rejects policy JSON that no longer matches its frozen hash", async () => {
   await unlockPaidTasks();
   await openRound();
@@ -436,7 +503,7 @@ test("voucher admission composes independent provider assertions and snapshots t
   const raterId = String(rater.rows[0]?.rater_id);
   await dbClient.execute({
     sql: "UPDATE tokenless_assurance_assertions SET capabilities_json = ? WHERE rater_id = ?",
-    args: [JSON.stringify(["account_control", "live_human"]), raterId],
+    args: [JSON.stringify(["account_control", "live_human", "unique_human"]), raterId],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_provider_subject_bindings
@@ -471,6 +538,17 @@ test("voucher admission composes independent provider assertions and snapshots t
       policyId: "policy_composed",
       version: 1,
       reviewerSource: "rateloop_network",
+      integrity: {
+        schemaVersion: "rateloop.integrity-assignment.v1",
+        epochId: "integrity:2026-07-13:001",
+        epochManifestHash: `sha256:${"a".repeat(64)}`,
+        maxClusterShareBps: 2_000,
+        allowedRiskBands: ["low", "medium"],
+        recentCoassignmentWindowSeconds: 2_592_000,
+        maxRecentCoassignments: 0,
+        maxPerCustomer: 3,
+        onePerProviderSubject: true,
+      },
       compensation: "paid",
       cohorts: [],
       selection: "randomized",
@@ -481,12 +559,17 @@ test("voucher admission composes independent provider assertions and snapshots t
           {
             capability: "account_control",
             reviewerSources: ["rateloop_network"],
-            allowedProviders: ["identity-production"],
+            allowedProviders: ["world:poh"],
           },
           {
             capability: "live_human",
             reviewerSources: ["rateloop_network"],
-            allowedProviders: ["identity-production"],
+            allowedProviders: ["world:poh"],
+          },
+          {
+            capability: "unique_human",
+            reviewerSources: ["rateloop_network"],
+            allowedProviders: ["world:poh"],
           },
           {
             capability: "minimum_age",
@@ -522,7 +605,7 @@ test("voucher admission composes independent provider assertions and snapshots t
       assertions: Array<{ providerId: string }>;
     }
   ).assertions;
-  assert.deepEqual(assertions.map(value => value.providerId).sort(), ["age-provider", "identity-production"]);
+  assert.deepEqual(assertions.map(value => value.providerId).sort(), ["age-provider", "world:poh"]);
 });
 
 test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", async () => {
@@ -561,7 +644,7 @@ test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", 
   assert.equal(snapshottedAssertions.reviewerSource, "rateloop_network");
   const assertions = snapshottedAssertions.assertions;
   assert.equal(assertions.length, 1);
-  assert.equal(assertions[0]?.providerId, "identity-production");
+  assert.equal(assertions[0]?.providerId, "world:poh");
   assert.deepEqual(assertions[0]?.capabilities, [
     "account_control",
     "document_holder",

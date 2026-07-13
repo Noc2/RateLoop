@@ -9,18 +9,37 @@ function policy() {
     policyId: "policy_1",
     version: 1,
     reviewerSource: "rateloop_network",
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:2026-07-13:001",
+      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+      maxClusterShareBps: 2_000,
+      allowedRiskBands: ["low", "medium"] as const,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 1,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
     compensation: "paid",
     cohorts: [],
     selection: "randomized",
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [{ key: "quality_score", operator: "at_least" as const, value: 80 }],
     assurance: {
-      requirements: ["account_control", "live_human", "minimum_age"].map(capability => ({
-        capability: capability as "account_control" | "live_human" | "minimum_age",
-        reviewerSources: ["rateloop_network" as const],
-        allowedProviders: ["identity-production"],
-        freshnessSeconds: 3_600,
-      })),
+      requirements: [
+        ...["account_control", "live_human", "minimum_age"].map(capability => ({
+          capability: capability as "account_control" | "live_human" | "minimum_age",
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["identity-production"],
+          freshnessSeconds: 3_600,
+        })),
+        {
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
+          freshnessSeconds: 3_600,
+        },
+      ],
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source"],
@@ -65,10 +84,30 @@ test("admission evaluation covers capabilities, providers, source, and aggregate
         verifiedAt: new Date(now.getTime() - 1_000),
         expiresAt: new Date(now.getTime() + 3_600_000),
       },
+      {
+        assertionId: "assertion_world",
+        bindingId: "binding_world",
+        providerId: "world:poh",
+        providerNamespace: "world-id:v4:rp:test",
+        subjectReferenceHash: `hmac-sha256:hmac-v1:${"9".repeat(64)}`,
+        capabilities: ["unique_human"] as const,
+        verifiedAt: new Date(now.getTime() - 1_000),
+        expiresAt: new Date(now.getTime() + 3_600_000),
+      },
     ],
     reviewerSource: "rateloop_network" as const,
     cohortIds: [],
     qualifications: [{ key: "quality_score", value: 90 }],
+    integrity: {
+      epochId: "integrity:2026-07-13:001",
+      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+      reviewerLookup: `hmac-sha256:${"b".repeat(64)}`,
+      clusterPseudonym: `hmac-sha256:${"c".repeat(64)}`,
+      riskBand: "low" as const,
+      providerSubjectHashes: [`hmac-sha256:hmac-v1:${"9".repeat(64)}`],
+      recentCoassignments: 0,
+      activeCustomerAssignments: 0,
+    },
   };
   const admitted = evaluateFrozenAdmissionPolicy({
     policy: frozen.policy,
@@ -83,8 +122,39 @@ test("admission evaluation covers capabilities, providers, source, and aggregate
     now,
   });
   assert.equal(admitted.eligible, true);
-  assert.deepEqual(admitted.usedAssertionIds, ["assertion_1"]);
+  assert.deepEqual(admitted.usedAssertionIds, ["assertion_1", "assertion_world"]);
   assert.deepEqual(admitted.usedQualificationKeys, ["quality_score"]);
+
+  const durableEnrollmentPolicy = freezeAdmissionPolicy({
+    ...policy(),
+    assurance: {
+      requirements: policy().assurance.requirements.map(requirement =>
+        requirement.capability === "unique_human" ? { ...requirement, freshnessSeconds: undefined } : requirement,
+      ),
+    },
+  });
+  const durableEnrollment = evaluateFrozenAdmissionPolicy({
+    policy: durableEnrollmentPolicy.policy,
+    evidence: {
+      ...evidence,
+      assertions: evidence.assertions.map(assertion =>
+        assertion.providerId === "world:poh"
+          ? {
+              ...assertion,
+              capabilities: [...assertion.capabilities],
+              verifiedAt: new Date(now.getTime() - 86_400_000),
+              expiresAt: new Date(now.getTime() - 1),
+              validityModel: "durable_enrollment" as const,
+            }
+          : { ...assertion, capabilities: [...assertion.capabilities] },
+      ),
+    },
+    maximumCommits: 15,
+    now,
+  });
+  assert.equal(durableEnrollment.eligible, true);
+  assert.deepEqual(durableEnrollment.usedAssertionIds, ["assertion_1", "assertion_world"]);
+
   assert.deepEqual(
     evaluateFrozenAdmissionPolicy({
       policy: frozen.policy,
@@ -108,6 +178,7 @@ test("admission evaluation covers capabilities, providers, source, and aggregate
         "freshness:account_control",
         "capability:live_human",
         "capability:minimum_age",
+        "capability:unique_human",
         "qualification:quality_score",
         "panel_capacity",
       ],
@@ -133,7 +204,7 @@ test("hybrid policies apply only the requirements for the actual subpanel source
         {
           capability: "unique_human",
           reviewerSources: ["rateloop_network"],
-          allowedProviders: ["world-id"],
+          allowedProviders: ["world:poh"],
           freshnessSeconds: 3_600,
         },
       ],
@@ -178,6 +249,11 @@ test("paid hybrid policies never admit the sandbox source", () => {
           reviewerSources: ["sandbox"],
           allowedProviders: ["rateloop-development"],
         },
+        {
+          capability: "unique_human",
+          reviewerSources: ["rateloop_network"],
+          allowedProviders: ["world:poh"],
+        },
       ],
     },
   });
@@ -207,23 +283,29 @@ test("paid hybrid policies never admit the sandbox source", () => {
   assert.deepEqual(result.failures, ["reviewer_source"]);
 });
 
-test("source-mistagged requirements cannot silently admit a paid reviewer", () => {
-  const now = new Date("2026-07-13T12:00:00.000Z");
-  const mistagged = freezeAdmissionPolicy({
-    ...policy(),
-    requiredQualifications: [],
-    assurance: {
-      requirements: [
-        {
-          capability: "customer_invitation",
-          reviewerSources: ["customer_invited"],
-          allowedProviders: ["rateloop:invitation"],
+test("source-mistagged requirements cannot create a network policy", () => {
+  assert.throws(
+    () =>
+      freezeAdmissionPolicy({
+        ...policy(),
+        assurance: {
+          requirements: [
+            {
+              capability: "customer_invitation",
+              reviewerSources: ["customer_invited"],
+              allowedProviders: ["rateloop:invitation"],
+            },
+          ],
         },
-      ],
-    },
-  });
+      }),
+    /world:poh/,
+  );
+});
+
+test("network admission cannot omit frozen integrity evidence", () => {
+  const frozen = freezeAdmissionPolicy(policy());
   const result = evaluateFrozenAdmissionPolicy({
-    policy: mistagged.policy,
+    policy: frozen.policy,
     evidence: {
       assertions: [],
       reviewerSource: "rateloop_network",
@@ -231,8 +313,8 @@ test("source-mistagged requirements cannot silently admit a paid reviewer", () =
       qualifications: [],
     },
     maximumCommits: 15,
-    now,
+    now: new Date("2026-07-13T12:00:00.000Z"),
   });
   assert.equal(result.eligible, false);
-  assert.deepEqual(result.failures, ["assurance_requirement"]);
+  assert.ok(result.failures.includes("integrity_evidence"));
 });

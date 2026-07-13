@@ -1,6 +1,7 @@
 import { RateLoopSdkError } from "./errors";
 import {
   HUMAN_ASSURANCE_CAPABILITIES,
+  HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION,
   HUMAN_ASSURANCE_SCHEMA_VERSION,
   type HumanAssuranceArtifact,
   type HumanAssuranceAudiencePolicy,
@@ -300,16 +301,152 @@ export function parseHumanAssuranceAudiencePolicy(
           "country_bucket",
         ]),
     );
+  const reviewerSource = enumeration(input.reviewerSource, "reviewerSource", [
+    "customer_invited",
+    "rateloop_network",
+    "hybrid",
+    "sandbox",
+  ]);
+  const networkSupply =
+    reviewerSource === "rateloop_network" || reviewerSource === "hybrid";
+  const assuranceRequirements: HumanAssuranceAudiencePolicy["assurance"]["requirements"] =
+    assurance.requirements.map((value, index) => {
+      const requirement = record(value, `assurance.requirements[${index}]`);
+      const reviewerSources: HumanAssuranceAudiencePolicy["assurance"]["requirements"][number]["reviewerSources"] =
+        stringArray(
+          requirement.reviewerSources,
+          `assurance.requirements[${index}].reviewerSources`,
+        ).map((source, sourceIndex) =>
+          enumeration(
+            source,
+            `assurance.requirements[${index}].reviewerSources[${sourceIndex}]`,
+            ["customer_invited", "rateloop_network", "sandbox"],
+          ),
+        );
+      if (reviewerSources.length === 0) {
+        invalid(
+          `assurance.requirements[${index}].reviewerSources`,
+          "at least one concrete reviewer source",
+        );
+      }
+      return {
+        capability: enumeration(
+          requirement.capability,
+          `assurance.requirements[${index}].capability`,
+          HUMAN_ASSURANCE_CAPABILITIES,
+        ),
+        reviewerSources,
+        allowedProviders: stringArray(
+          requirement.allowedProviders,
+          `assurance.requirements[${index}].allowedProviders`,
+        ),
+        freshnessSeconds:
+          requirement.freshnessSeconds === undefined
+            ? undefined
+            : integer(
+                requirement.freshnessSeconds,
+                `assurance.requirements[${index}].freshnessSeconds`,
+                1,
+                31_536_000,
+              ),
+      };
+    });
+  if (
+    networkSupply &&
+    !assuranceRequirements.some(
+      (requirement) =>
+        requirement.capability === "unique_human" &&
+        requirement.reviewerSources.includes("rateloop_network") &&
+        requirement.allowedProviders.includes("world:poh"),
+    )
+  ) {
+    invalid(
+      "assurance.requirements",
+      "a rateloop_network unique_human requirement from provider world:poh",
+    );
+  }
+  let integrity: HumanAssuranceAudiencePolicy["integrity"];
+  if (input.integrity !== undefined) {
+    const value = record(input.integrity, "integrity");
+    if (!networkSupply)
+      invalid("integrity", "absent for invited and sandbox policies");
+    if (
+      value.schemaVersion !==
+      HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION
+    ) {
+      invalid(
+        "integrity.schemaVersion",
+        HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION,
+      );
+    }
+    const allowedRiskBands: NonNullable<
+      HumanAssuranceAudiencePolicy["integrity"]
+    >["allowedRiskBands"] = stringArray(
+      value.allowedRiskBands,
+      "integrity.allowedRiskBands",
+    ).map((band, index) =>
+      enumeration(band, `integrity.allowedRiskBands[${index}]`, [
+        "low",
+        "medium",
+        "high",
+      ] as const),
+    );
+    if (
+      allowedRiskBands.length === 0 ||
+      new Set(allowedRiskBands).size !== allowedRiskBands.length
+    ) {
+      invalid(
+        "integrity.allowedRiskBands",
+        "a non-empty array of unique risk bands",
+      );
+    }
+    if (value.onePerProviderSubject !== true)
+      invalid("integrity.onePerProviderSubject", "true");
+    integrity = {
+      schemaVersion: HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION,
+      epochId: string(value.epochId, "integrity.epochId"),
+      epochManifestHash: digest(
+        value.epochManifestHash,
+        "integrity.epochManifestHash",
+      ),
+      maxClusterShareBps: integer(
+        value.maxClusterShareBps,
+        "integrity.maxClusterShareBps",
+        1,
+        10_000,
+      ),
+      allowedRiskBands,
+      recentCoassignmentWindowSeconds: integer(
+        value.recentCoassignmentWindowSeconds,
+        "integrity.recentCoassignmentWindowSeconds",
+        1,
+        31_536_000,
+      ),
+      maxRecentCoassignments: integer(
+        value.maxRecentCoassignments,
+        "integrity.maxRecentCoassignments",
+        0,
+        10_000,
+      ),
+      maxPerCustomer: integer(
+        value.maxPerCustomer,
+        "integrity.maxPerCustomer",
+        1,
+        10_000,
+      ),
+      onePerProviderSubject: true,
+    };
+  } else if (networkSupply) {
+    invalid(
+      "integrity",
+      "a frozen integrity assignment policy for RateLoop-network supply",
+    );
+  }
   return {
     schemaVersion: schemaVersion(input.schemaVersion),
     policyId: string(input.policyId, "policyId"),
     version: integer(input.version, "version", 1),
-    reviewerSource: enumeration(input.reviewerSource, "reviewerSource", [
-      "customer_invited",
-      "rateloop_network",
-      "hybrid",
-      "sandbox",
-    ]),
+    reviewerSource,
     compensation,
     cohorts: input.cohorts.map((value, index) => {
       const cohort = record(value, `cohorts[${index}]`);
@@ -358,48 +495,8 @@ export function parseHumanAssuranceAudiencePolicy(
         value: rawValue as string | number | boolean | string[],
       };
     }),
-    assurance: {
-      requirements: assurance.requirements.map((value, index) => {
-        const requirement = record(value, `assurance.requirements[${index}]`);
-        const reviewerSources: HumanAssuranceAudiencePolicy["assurance"]["requirements"][number]["reviewerSources"] = stringArray(
-          requirement.reviewerSources,
-          `assurance.requirements[${index}].reviewerSources`,
-        ).map((source, sourceIndex) =>
-          enumeration(
-            source,
-            `assurance.requirements[${index}].reviewerSources[${sourceIndex}]`,
-            ["customer_invited", "rateloop_network", "sandbox"],
-          ),
-        );
-        if (reviewerSources.length === 0) {
-          invalid(
-            `assurance.requirements[${index}].reviewerSources`,
-            "at least one concrete reviewer source",
-          );
-        }
-        return {
-          capability: enumeration(
-            requirement.capability,
-            `assurance.requirements[${index}].capability`,
-            HUMAN_ASSURANCE_CAPABILITIES,
-          ),
-          reviewerSources,
-          allowedProviders: stringArray(
-            requirement.allowedProviders,
-            `assurance.requirements[${index}].allowedProviders`,
-          ),
-          freshnessSeconds:
-            requirement.freshnessSeconds === undefined
-              ? undefined
-              : integer(
-                  requirement.freshnessSeconds,
-                  `assurance.requirements[${index}].freshnessSeconds`,
-                  1,
-                  31_536_000,
-                ),
-        };
-      }),
-    },
+    assurance: { requirements: assuranceRequirements },
+    integrity,
     buyerPrivacy: {
       visibleFields,
       minimumAggregationSize: integer(
@@ -908,6 +1005,47 @@ export const HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA = {
         },
       },
       required: ["requirements"],
+      type: "object",
+    },
+    integrity: {
+      additionalProperties: false,
+      properties: {
+        schemaVersion: {
+          const: HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION,
+        },
+        epochId: idSchema,
+        epochManifestHash: digestSchema,
+        maxClusterShareBps: { maximum: 10_000, minimum: 1, type: "integer" },
+        allowedRiskBands: {
+          items: { enum: ["low", "medium", "high"] },
+          minItems: 1,
+          type: "array",
+          uniqueItems: true,
+        },
+        recentCoassignmentWindowSeconds: {
+          maximum: 31_536_000,
+          minimum: 1,
+          type: "integer",
+        },
+        maxRecentCoassignments: {
+          maximum: 10_000,
+          minimum: 0,
+          type: "integer",
+        },
+        maxPerCustomer: { maximum: 10_000, minimum: 1, type: "integer" },
+        onePerProviderSubject: { const: true },
+      },
+      required: [
+        "schemaVersion",
+        "epochId",
+        "epochManifestHash",
+        "maxClusterShareBps",
+        "allowedRiskBands",
+        "recentCoassignmentWindowSeconds",
+        "maxRecentCoassignments",
+        "maxPerCustomer",
+        "onePerProviderSubject",
+      ],
       type: "object",
     },
     buyerPrivacy: { type: "object" },
