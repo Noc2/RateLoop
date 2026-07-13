@@ -24,6 +24,10 @@ const ABI_EXPORT_NAMES = {
   TestUSDC: "TokenlessTestUSDCAbi",
   X402PanelSubmitter: "X402PanelSubmitterAbi",
 };
+const SOURCE_ABI_CONTRACTS = [
+  ["TokenlessPanel", { artifact: "TokenlessPanel" }],
+  ["X402PanelSubmitter", { artifact: "X402PanelSubmitter" }],
+];
 
 function generatedHeader() {
   return `/**\n * Generated from ${TOKENLESS_DEPLOYMENT_SCHEMA}.\n * Do not edit manually.\n */\n`;
@@ -46,6 +50,53 @@ function readCompiledAbi(root, contract) {
     throw new Error(`Compiled artifact ${artifactPath} has no ABI array.`);
   }
   return artifact.abi;
+}
+
+export function buildTokenlessSourceAbiFiles({ abiLoader }) {
+  const files = new Map();
+  for (const [contractName, contract] of SOURCE_ABI_CONTRACTS) {
+    const abi = abiLoader(contractName, contract);
+    if (!Array.isArray(abi)) {
+      throw new Error(`${contractName} ABI loader did not return an array.`);
+    }
+    const exportName = ABI_EXPORT_NAMES[contractName];
+    files.set(
+      `abis/${exportName}.ts`,
+      `${generatedHeader()}export const ${exportName} = ${JSON.stringify(
+        abi,
+        null,
+        2
+      )} as const;\n`
+    );
+  }
+  return files;
+}
+
+function writeGeneratedFiles(outputDirectory, files) {
+  mkdirSync(outputDirectory, { recursive: true });
+  for (const [relativePath, source] of files) {
+    const target = join(outputDirectory, relativePath);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, source, "utf8");
+  }
+}
+
+export function generateTokenlessSourceAbis({
+  outputDirectory = join(
+    workspaceRoot,
+    "packages",
+    "contracts",
+    "src",
+    "tokenless"
+  ),
+  compiledArtifactRoot = foundryRoot,
+} = {}) {
+  const files = buildTokenlessSourceAbiFiles({
+    abiLoader: (_contractName, contract) =>
+      readCompiledAbi(compiledArtifactRoot, contract),
+  });
+  writeGeneratedFiles(outputDirectory, files);
+  return { files: [...files.keys()], outputDirectory };
 }
 
 export function buildTokenlessGeneratedSources(
@@ -130,18 +181,23 @@ export function generateTokenlessArtifacts({
   if (!deployment.contracts?.X402PanelSubmitter) {
     rmSync(optionalAdapterPath, { force: true });
   }
-  for (const [relativePath, source] of files) {
-    const target = join(outputDirectory, relativePath);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, source, "utf8");
-  }
+  writeGeneratedFiles(outputDirectory, files);
   return { files: [...files.keys()], outputDirectory };
 }
 
 async function main() {
-  const result = generateTokenlessArtifacts();
+  const args = process.argv.slice(2);
+  const sourceOnly = args.length === 1 && args[0] === "--source-abis-only";
+  if (args.length > (sourceOnly ? 1 : 0)) {
+    throw new Error("Usage: generateTokenlessArtifacts.js [--source-abis-only]");
+  }
+  const result = sourceOnly
+    ? generateTokenlessSourceAbis()
+    : generateTokenlessArtifacts();
   console.log(
-    `Generated ${result.files.length} tokenless contract artifacts under ${result.outputDirectory}`
+    `Generated ${result.files.length} tokenless ${
+      sourceOnly ? "source ABIs" : "contract artifacts"
+    } under ${result.outputDirectory}`
   );
 }
 

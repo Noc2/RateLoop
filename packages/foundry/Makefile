@@ -1,4 +1,4 @@
-.PHONY: build compile test coverage format lint check-contract-sizes deploy deploy-tokenless deploy-tokenless-and-generate-artifacts generate-tokenless-artifacts
+.PHONY: build compile test coverage format lint check-contract-sizes deploy deploy-tokenless deploy-tokenless-and-generate-artifacts generate-tokenless-artifacts generate-tokenless-source-abis
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -49,6 +49,9 @@ deploy-tokenless: check-contract-sizes
 generate-tokenless-artifacts:
 	node scripts-js/exportTokenlessDeploymentFromBroadcast.js
 	node scripts-js/generateTokenlessArtifacts.js
+
+generate-tokenless-source-abis:
+	node scripts-js/generateTokenlessArtifacts.js --source-abis-only
 
 deploy-tokenless-and-generate-artifacts: deploy-tokenless generate-tokenless-artifacts
 	cd ../.. && yarn workspace @rateloop/contracts build

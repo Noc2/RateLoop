@@ -1,5 +1,5 @@
 /**
- * Generated from rateloop-tokenless-deployment-v1.
+ * Generated from rateloop-tokenless-deployment-v2.
  * Do not edit manually.
  */
 export const X402PanelSubmitterAbi = [
@@ -118,9 +118,9 @@ export const X402PanelSubmitterAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "requiredTier",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitDeadline",
@@ -322,9 +322,9 @@ export const X402PanelSubmitterAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "requiredTier",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitDeadline",
@@ -460,9 +460,9 @@ export const X402PanelSubmitterAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "requiredTier",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitDeadline",

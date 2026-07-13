@@ -11,13 +11,40 @@ import {
   tokenlessHistoricalDeploymentSchema,
 } from "./index.js";
 
-type AbiEntry = { type?: string; name?: string };
+type AbiParameter = {
+  readonly type?: string;
+  readonly name?: string;
+  readonly components?: readonly AbiParameter[];
+};
+
+type AbiEntry = {
+  readonly type?: string;
+  readonly name?: string;
+  readonly inputs?: readonly AbiParameter[];
+  readonly outputs?: readonly AbiParameter[];
+};
 
 const deployment = tokenlessHistoricalDeployments[84532];
 const nonZeroAddress = /^0x(?!0{40}$)[0-9a-f]{40}$/u;
 
 function names(abi: readonly AbiEntry[], type: string) {
   return new Set(abi.filter((entry) => entry.type === type).map((entry) => entry.name));
+}
+
+function findEntry(abi: readonly AbiEntry[], type: string, name: string) {
+  const entry = abi.find((candidate) => candidate.type === type && candidate.name === name);
+  assert.ok(entry, `missing ${type} ${name}`);
+  return entry;
+}
+
+function tupleComponentNames(
+  entry: AbiEntry,
+  field: "inputs" | "outputs",
+  index = 0,
+) {
+  const parameter = entry[field]?.[index];
+  assert.equal(parameter?.type, "tuple", `${entry.name} ${field}[${index}] must be a tuple`);
+  return new Set(parameter.components?.map((component) => component.name));
 }
 
 test("keeps v1 historical while reserving the active registry for v2", () => {
@@ -92,6 +119,39 @@ test("panel ABI exposes deterministic lifecycle evidence and no mutable administ
   for (const forbidden of ["owner", "pause", "sweep", "setIssuer", "setFeeRecipient"]) {
     assert.equal(functions.has(forbidden), false, `unexpected ${forbidden}`);
   }
+});
+
+test("panel and adapter ABIs bind admission to an exact policy hash", () => {
+  const voucherFields = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "commit"),
+    "inputs",
+  );
+  const roundTermFields = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "createRound"),
+    "inputs",
+  );
+  const roundFields = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "getRound"),
+    "outputs",
+  );
+  const adapterRoundTermFields = tupleComponentNames(
+    findEntry(X402PanelSubmitterAbi, "function", "roundTermsDigest"),
+    "inputs",
+  );
+  const roundCreatedFields = new Set(
+    findEntry(TokenlessPanelAbi, "event", "RoundCreated").inputs?.map(
+      (parameter) => parameter.name,
+    ),
+  );
+
+  for (const fields of [voucherFields, roundTermFields, roundFields, adapterRoundTermFields]) {
+    assert.ok(fields.has("admissionPolicyHash"));
+    assert.equal(fields.has("tierId"), false);
+    assert.equal(fields.has("requiredTier"), false);
+  }
+
+  assert.ok(roundCreatedFields.has("admissionPolicyHash"));
+  assert.equal(roundCreatedFields.has("requiredTier"), false);
 });
 
 test("issuer and adapter ABIs retain only their narrow responsibilities", () => {

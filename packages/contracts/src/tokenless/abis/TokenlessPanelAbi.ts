@@ -1,5 +1,5 @@
 /**
- * Generated from rateloop-tokenless-deployment-v1.
+ * Generated from rateloop-tokenless-deployment-v2.
  * Do not edit manually.
  */
 export const TokenlessPanelAbi = [
@@ -211,9 +211,9 @@ export const TokenlessPanelAbi = [
             "internalType": "bytes32"
           },
           {
-            "name": "tierId",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "issuerEpoch",
@@ -374,9 +374,9 @@ export const TokenlessPanelAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "requiredTier",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitDeadline",
@@ -475,9 +475,9 @@ export const TokenlessPanelAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "requiredTier",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitDeadline",
@@ -788,9 +788,9 @@ export const TokenlessPanelAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "requiredTier",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "commitCount",
@@ -1186,9 +1186,9 @@ export const TokenlessPanelAbi = [
             "internalType": "bytes32"
           },
           {
-            "name": "tierId",
-            "type": "uint32",
-            "internalType": "uint32"
+            "name": "admissionPolicyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
             "name": "issuerEpoch",
@@ -1429,6 +1429,12 @@ export const TokenlessPanelAbi = [
       },
       {
         "name": "termsHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "admissionPolicyHash",
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"

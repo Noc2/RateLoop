@@ -11,7 +11,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { exportTokenlessDeploymentFromBroadcast } from "./exportTokenlessDeploymentFromBroadcast.js";
-import { buildTokenlessGeneratedSources } from "./generateTokenlessArtifacts.js";
+import {
+  buildTokenlessGeneratedSources,
+  buildTokenlessSourceAbiFiles,
+} from "./generateTokenlessArtifacts.js";
 import {
   reconstructTokenlessDeploymentFromBroadcast,
   TOKENLESS_DEPLOYMENT_SCHEMA,
@@ -217,4 +220,43 @@ test("generated sources expose required ABIs and omit the absent adapter", () =>
     /rateloop-tokenless-deployment-v2/
   );
   assert.doesNotMatch(sources.get("index.ts"), /X402PanelSubmitterAbi/);
+});
+
+test("source-only ABI generation cannot emit or replace deployment metadata", () => {
+  const sources = buildTokenlessSourceAbiFiles({
+    abiLoader: (contractName) => [
+      { type: "function", name: `fixture${contractName}` },
+    ],
+  });
+
+  assert.deepEqual([...sources.keys()].sort(), [
+    "abis/TokenlessPanelAbi.ts",
+    "abis/X402PanelSubmitterAbi.ts",
+  ]);
+  assert.equal(sources.has("deployedContracts.ts"), false);
+  assert.equal(sources.has("index.ts"), false);
+  for (const source of sources.values()) {
+    assert.match(source, /rateloop-tokenless-deployment-v2/);
+    assert.doesNotMatch(source, /0x[0-9a-f]{40}/i);
+  }
+});
+
+test("full artifact generation rejects historical v1 deployment metadata", () => {
+  const historical = reconstructTokenlessDeploymentFromBroadcast(
+    completeBroadcast({ includeAdapter: true })
+  );
+  historical.schemaVersion = "rateloop-tokenless-deployment-v1";
+  historical.version = 1;
+  historical.deploymentKey = historical.deploymentKey.replace(
+    "tokenless-v2:",
+    "tokenless-v1:"
+  );
+
+  assert.throws(
+    () =>
+      buildTokenlessGeneratedSources(historical, {
+        abiLoader: () => [],
+      }),
+    /Unsupported tokenless deployment schema rateloop-tokenless-deployment-v1/
+  );
 });
