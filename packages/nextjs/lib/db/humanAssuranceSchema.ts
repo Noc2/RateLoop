@@ -287,9 +287,15 @@ export const tokenlessAssuranceEvidencePackets = pgTable(
     chainReferencesJson: text("chain_references_json").notNull(),
     signature: text("signature").notNull(),
     generatedAt: time("generated_at").notNull(),
+    packetDigest: text("packet_digest"),
+    packetJson: text("packet_json"),
+    signatureAlgorithm: text("signature_algorithm"),
+    signingKeyId: text("signing_key_id"),
+    signingPublicKey: text("signing_public_key"),
   },
   table => ({
     runUnique: uniqueIndex("tokenless_assurance_evidence_packets_run_unique").on(table.runId),
+    packetDigestUnique: uniqueIndex("tokenless_assurance_evidence_packets_digest_unique").on(table.packetDigest),
   }),
 );
 
@@ -307,8 +313,12 @@ export const tokenlessAssuranceClientDecisions = pgTable(
     note: text("note"),
     decidedBy: text("decided_by").notNull(),
     decidedAt: time("decided_at").notNull(),
+    evidencePacketDigest: text("evidence_packet_digest"),
+    decisionDigest: text("decision_digest"),
+    decisionJson: text("decision_json"),
   },
   table => ({
     runUnique: uniqueIndex("tokenless_assurance_client_decisions_run_unique").on(table.runId),
+    decisionDigestUnique: uniqueIndex("tokenless_assurance_client_decisions_digest_unique").on(table.decisionDigest),
   }),
 );

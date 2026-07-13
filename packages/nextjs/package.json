@@ -19,6 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
     "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs app config lib utils scripts\""
   },
   "dependencies": {
