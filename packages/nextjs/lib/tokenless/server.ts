@@ -564,6 +564,22 @@ export async function waitForTokenlessAsk(
   };
 }
 
+export async function getTokenlessAskByIdempotencyKey(idempotencyKey: string) {
+  if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
+  }
+  const ask = await readAskByIdempotency(idempotencyKey, isTokenlessSandboxMode());
+  if (!ask) return null;
+  return {
+    operationKey: ask.operationKey,
+    result: ask.resultJson ? parseTokenlessResult(JSON.parse(ask.resultJson)) : null,
+    roundId: ask.roundId,
+    status: ask.status,
+    updatedAt: ask.updatedAt.toISOString(),
+    verdictStatus: ask.verdictStatus,
+  };
+}
+
 export async function getTokenlessResult(operationKey: string): Promise<TokenlessResult> {
   const ask = await readAskByOperation(operationKey, isTokenlessSandboxMode());
   if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");

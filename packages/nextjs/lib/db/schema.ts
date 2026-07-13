@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export * from "./humanAssuranceSchema";
 
@@ -46,6 +46,19 @@ export const tokenlessAgentAsks = pgTable(
 
 export type TokenlessAgentAsk = typeof tokenlessAgentAsks.$inferSelect;
 export type NewTokenlessAgentAsk = typeof tokenlessAgentAsks.$inferInsert;
+
+export const tokenlessMcpRateLimits = pgTable(
+  "tokenless_mcp_rate_limits",
+  {
+    clientHash: text("client_hash").primaryKey(),
+    windowStartedAt: timestamp("window_started_at", { mode: "date", withTimezone: true }).notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    updatedAtIdx: index("tokenless_mcp_rate_limits_updated_at_idx").on(table.updatedAt),
+  }),
+);
 
 export const tokenlessAuthNonces = pgTable(
   "tokenless_auth_nonces",

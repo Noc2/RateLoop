@@ -39,9 +39,10 @@ Next.js:
 - distinct `TOKENLESS_X402_RELAYER_PRIVATE_KEY` and `TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY`
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
 - `TOKENLESS_PIPELINE_TOKEN`, `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`
+- `TOKENLESS_MCP_RATE_LIMIT_SECRET` with at least 32 random characters and no public variant
 - explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
-Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` (currently `0000` through `0014`) in
+Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` (currently `0000` through `0015`) in
 order before smoke testing the human-assurance APIs or enabling live mode. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 
