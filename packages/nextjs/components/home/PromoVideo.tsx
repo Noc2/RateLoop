@@ -1,24 +1,47 @@
+"use client";
+
+import { useRef, useState } from "react";
+
+/** Lazy click-to-play media keeps the promo MP4 out of the initial page load. */
 export function PromoVideo() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [started, setStarted] = useState(false);
+
+  const handlePlay = () => {
+    setStarted(true);
+    void videoRef.current?.play();
+  };
+
   return (
-    <div className="relative mb-14 flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-base-content/10 bg-[radial-gradient(circle_at_50%_45%,rgba(3,206,164,0.09),transparent_34%),radial-gradient(circle_at_70%_58%,rgba(53,158,238,0.08),transparent_28%),#050505] shadow-[0_24px_60px_rgb(0_0_0/0.35)]">
-      <div className="w-full max-w-3xl px-6 text-center sm:px-10">
-        <p className="text-xl font-semibold text-base-content/75 sm:text-3xl">
-          Your agent can build anything. <span className="rateloop-text-gradient">Should it?</span>
-        </p>
-        <div className="mx-auto mt-8 max-w-xl rounded-lg border border-base-content/10 bg-black/70 p-4 text-left shadow-2xl sm:p-5">
-          <div className="mb-4 flex items-center justify-between text-[10px] font-mono text-base-content/35 sm:text-xs">
-            <span>Your Agent</span>
-            <span>panel session</span>
-          </div>
-          <div className="ml-auto max-w-[88%] rounded-md border border-[#359EEE]/20 bg-[#359EEE]/10 px-4 py-3 text-xs leading-5 text-base-content/75 sm:text-sm sm:leading-6">
-            I have an idea for an AI meeting-notes app. Run a paid human panel before I build more.
-          </div>
-        </div>
-      </div>
-      <div className="absolute bottom-4 left-5 h-0.5 w-24 bg-gradient-to-r from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-transparent" />
-      <p className="absolute bottom-4 left-5 mt-3 translate-y-5 text-[10px] font-semibold text-base-content/55 sm:text-xs">
-        One focused question. Sealed human judgment. USDC settlement.
-      </p>
+    <div className="relative mb-14 w-full overflow-hidden rounded-lg border border-base-content/10 bg-base-300 shadow-[0_24px_60px_rgb(0_0_0/0.35)]">
+      <video
+        ref={videoRef}
+        controls={started}
+        preload="none"
+        playsInline
+        poster="/videos/rateloop-promo-poster.jpg"
+        className="block aspect-video h-auto w-full"
+      >
+        <source src="/videos/rateloop-promo.mp4" type="video/mp4" />
+        <track kind="captions" src="/videos/rateloop-promo.vtt" srcLang="en" label="English" />
+      </video>
+      {!started ? (
+        <button
+          type="button"
+          onClick={handlePlay}
+          aria-label="Play the RateLoop intro video"
+          className="group absolute inset-0 flex items-center justify-center bg-black/25 transition hover:bg-black/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-base-content"
+        >
+          <span className="flex h-20 w-20 items-center justify-center rounded-full border border-white/25 bg-black/55 backdrop-blur-sm transition group-hover:scale-105 group-hover:bg-black/70">
+            <svg viewBox="0 0 24 24" className="ml-1 h-9 w-9 fill-white" aria-hidden="true">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+          </span>
+          <span className="pointer-events-none absolute bottom-4 right-5 rounded-md bg-black/55 px-2.5 py-1 font-mono text-xs text-white/85 backdrop-blur-sm">
+            1:07
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }

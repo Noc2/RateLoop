@@ -1,0 +1,5 @@
+node_modules
+out/
+
+# Throwaway background-music auditions from scripts/generate-elevenlabs-music.mjs
+public/audio/music-test-*.mp3

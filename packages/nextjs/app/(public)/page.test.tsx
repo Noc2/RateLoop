@@ -21,8 +21,10 @@ test("landing page restores established RateLoop copy without legacy product cla
   assert.match(html, /<span class="block"><span class="rateloop-text-gradient">Agent<\/span><\/span>/);
   assert.match(html, /Use RateLoop with your favorite AI agent/);
   assert.match(html, /How It/);
+  assert.match(html, /rateloop-promo\.mp4/);
+  assert.match(html, /rateloop-promo\.vtt/);
   assert.match(html, /Why It/);
   assert.match(html, /Common/);
-  assert.match(html, /Your agent can build anything/);
+  assert.match(html, /Play the RateLoop intro video/);
   assert.doesNotMatch(html, /LREP|tokenless|protocol token|governance|leaderboard|manual claim/i);
 });

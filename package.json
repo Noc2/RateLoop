@@ -60,6 +60,8 @@
     "ponder:dev:ui": "yarn workspace @rateloop/ponder dev:ui",
     "ponder:start": "yarn workspace @rateloop/ponder start",
     "ponder:test": "yarn workspace @rateloop/ponder test",
+    "promo-video:check-types": "yarn workspace @rateloop/promo-video check-types",
+    "promo-video:test": "yarn workspace @rateloop/promo-video test",
     "postinstall": "husky install",
     "precommit": "lint-staged",
     "security:audit": "yarn npm audit --recursive --environment production && yarn npm audit --recursive --environment development",
@@ -67,7 +69,7 @@
     "test": "yarn test:packages",
     "test:all": "yarn foundry:test && yarn test:packages",
     "test:node": "node scripts/run-node-tests.mjs scripts packages/foundry/scripts-js",
-    "test:packages": "yarn contracts:check-types && yarn contracts:test && yarn node-utils:check-types && yarn node-utils:test && yarn sdk:check-types && yarn sdk:test && yarn agents:check-types && yarn agents:test && yarn keeper:check-types && yarn keeper:test && yarn ponder:check-types && yarn ponder:test && yarn next:check-types && yarn next:test",
+    "test:packages": "yarn contracts:check-types && yarn contracts:test && yarn node-utils:check-types && yarn node-utils:test && yarn sdk:check-types && yarn sdk:test && yarn agents:check-types && yarn agents:test && yarn keeper:check-types && yarn keeper:test && yarn ponder:check-types && yarn ponder:test && yarn promo-video:check-types && yarn promo-video:test && yarn next:check-types && yarn next:test",
     "vercel": "yarn workspace @rateloop/nextjs vercel",
     "vercel:login": "yarn workspace @rateloop/nextjs vercel:login",
     "yeet": "node scripts/yeet-pr.mjs"
