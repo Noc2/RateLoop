@@ -1,7 +1,7 @@
-export default function TokenlessSdkPage() {
+export default function SdkPage() {
   return (
     <article className="prose max-w-none">
-      <h1>Tokenless SDK</h1>
+      <h1>RateLoop SDK</h1>
       <pre>
         <code>{`import { createTokenlessRateLoopClient } from "@rateloop/sdk";
 

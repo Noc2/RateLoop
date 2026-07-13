@@ -1,6 +1,6 @@
 # RateLoop Tokenless: Architecture & Implementation Plan (July 2026)
 
-**Status:** Current design of record and implementation baseline. Smart-contract deployments on this branch are disposable until Phase 5; none of the current Base contracts should be treated as final or as a compatibility constraint. Rationale in [web3-exit-stablecoin-pivot-analysis-2026-07.md](web3-exit-stablecoin-pivot-analysis-2026-07.md); legal/revenue reference in [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md).
+**Status:** Current design of record and implementation baseline. Smart-contract deployments on this branch are disposable until Phase 5; none of the current Base contracts should be treated as final or as a compatibility constraint. Legal/revenue reference in [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md).
 
 ## Implementation status — 12 July 2026
 

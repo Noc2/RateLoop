@@ -4,7 +4,7 @@ export default function PrivacyPage() {
   return (
     <article className="prose legal-prose mx-auto max-w-4xl px-4 py-12">
       <Link href="/legal">&larr; Legal</Link>
-      <h1>Tokenless test privacy notice</h1>
+      <h1>RateLoop test privacy notice</h1>
       <p>Last updated: July 2026</p>
       <h2>Controller</h2>
       <p>

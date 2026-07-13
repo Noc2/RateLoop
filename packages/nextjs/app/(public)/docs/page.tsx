@@ -1,7 +1,7 @@
-export default function TokenlessDocsPage() {
+export default function DocsPage() {
   return (
     <article className="prose max-w-none">
-      <h1>Tokenless trust and limitations</h1>
+      <h1>Trust and limitations</h1>
       <p className="lead">The implementation is complete; Base Sepolia addresses remain disposable until Phase 5.</p>
       <h2>Fund custody</h2>
       <p>

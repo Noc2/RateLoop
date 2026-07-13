@@ -7,7 +7,7 @@ Small, versioned helpers for the tokenless RateLoop agent flow:
 3. `wait` performs a bounded long poll and returns a continuation when work is still pending.
 4. `result` returns the versioned verdict and complete fund accounting.
 
-This package does not contain the removed token, staking, governance, oracle, reward-pool, feedback-bonus, legacy content, or legacy MCP transaction flows. It never defaults to `rateloop.ai`. Set the isolated tokenless deployment explicitly.
+This package never defaults to `rateloop.ai`. Set the isolated deployment explicitly.
 
 ## Install
 

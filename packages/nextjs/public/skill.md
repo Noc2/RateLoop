@@ -1,4 +1,4 @@
-# RateLoop tokenless workflow
+# RateLoop workflow
 
 Use RateLoop only for public or explicitly authorized, non-urgent evaluative questions.
 

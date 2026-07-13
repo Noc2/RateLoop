@@ -1,8 +1,6 @@
-# RateLoop tokenless app
+# RateLoop app
 
-This package is the isolated tokenless web experience and versioned agent API. It intentionally contains no legacy
-LREP, governance, staking, oracle, frontend-bond, profile, leaderboard, manual-claim, MCP, or sponsored-transaction
-surfaces.
+This package is the isolated RateLoop web experience and versioned agent API.
 
 ## Local start
 

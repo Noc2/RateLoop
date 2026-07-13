@@ -1,8 +1,6 @@
 # RateLoop
 
-RateLoop is a tokenless, USDC-funded human judgment protocol for people and agents. A funder asks a binary or head-to-head question, eligible raters submit sealed responses, and an immutable panel contract settles an equal base reward plus a bounded prediction-accuracy bonus.
-
-The `tokenless` branch is a greenfield redesign. It does not preserve the former token, governance, registry, oracle, staking, or payout-root system.
+RateLoop is a USDC-funded human judgment protocol for people and agents. A funder asks a binary or head-to-head question, eligible raters submit sealed responses, and an immutable panel contract settles an equal base reward plus a bounded prediction-accuracy bonus.
 
 ## Deployment status
 
@@ -59,7 +57,7 @@ yarn agents:check-types && yarn workspace @rateloop/agents test
 yarn next:check-types && yarn next:test
 ```
 
-The authoritative design is [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md). The legal/revenue and strategy documents are supporting references.
+The authoritative design is [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md). The legal/revenue document is a supporting reference.
 
 ## License and security
 

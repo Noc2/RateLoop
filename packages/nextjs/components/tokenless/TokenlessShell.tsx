@@ -123,8 +123,8 @@ function Notice({ sandboxMode }: { sandboxMode: boolean }) {
           <path d="M12 9v5m0 3h.01" />
         </svg>
         {sandboxMode
-          ? "RateLoop tokenless preview uses Base Sepolia and test funds only. Do not send production assets."
-          : "RateLoop tokenless is in early access. Verify the network and panel terms before funding."}
+          ? "RateLoop preview uses Base Sepolia and test funds only. Do not send production assets."
+          : "RateLoop is in early access. Verify the network and panel terms before funding."}
       </p>
     </div>
   );

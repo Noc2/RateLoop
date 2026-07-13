@@ -1,4 +1,4 @@
-# How tokenless RateLoop works
+# How RateLoop works
 
 1. A funder chooses a binary or A/B question, audience tier, and budget.
 2. The quote itemizes the rater bounty, platform fee, and maximum accepted-work reserve.

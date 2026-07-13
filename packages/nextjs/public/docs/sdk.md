@@ -1,4 +1,4 @@
-# Tokenless SDK
+# RateLoop SDK
 
 ```ts
 import { createTokenlessRateLoopClient } from "@rateloop/sdk/tokenless";

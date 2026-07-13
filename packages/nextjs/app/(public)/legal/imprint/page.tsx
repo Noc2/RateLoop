@@ -45,7 +45,7 @@ const ImprintPage: NextPage = () => {
 
         <h2>Important Notice</h2>
         <p>
-          This imprint applies to the tokenless test interface. Its current Base Sepolia contracts and services are an
+          This imprint applies to the RateLoop test interface. Its current Base Sepolia contracts and services are an
           isolated, disposable test deployment and must not be treated as a production financial service.
         </p>
 

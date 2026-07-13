@@ -1,4 +1,4 @@
-# RateLoop tokenless agent API
+# RateLoop agent API
 
 The versioned workflow is `quote -> ask -> wait -> result` under `/api/agent/v1`.
 
