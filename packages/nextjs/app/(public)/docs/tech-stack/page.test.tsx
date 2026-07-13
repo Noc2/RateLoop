@@ -1,0 +1,24 @@
+import React from "react";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import test from "node:test";
+
+const require = createRequire(import.meta.url);
+const { renderToStaticMarkup } = require("react-dom/server") as {
+  renderToStaticMarkup: (element: React.ReactElement) => string;
+};
+
+test("tech-stack docs explain the tokenless integrity layers and their limits", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { default: TechStackPage } = await import("./page");
+  const html = renderToStaticMarkup(<TechStackPage />).replace(/\s+/g, " ");
+
+  assert.match(html, /no.*LREP/i);
+  assert.match(html, /fixed base payment.*Robust Bayesian Truth Serum bonus/i);
+  assert.match(html, /World ID 4 Proof of Human/i);
+  assert.match(html, /correlation epochs/i);
+  assert.match(html, /Surprisingly Popular.*shadow mode/i);
+  assert.match(html, /not a truth oracle/i);
+  assert.match(html, /never accepted work payment/i);
+  assert.doesNotMatch(html, /token reward|stake-weighted|guarantees honest/i);
+});
