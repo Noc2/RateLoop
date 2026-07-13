@@ -23,7 +23,7 @@ export const tokenlessRound = onchainTable(
     totalPaid: t.bigint().notNull().default(0n),
     minimumReveals: t.integer().notNull(),
     maximumCommits: t.integer().notNull(),
-    requiredTier: t.integer().notNull(),
+    admissionPolicyHash: t.hex().notNull(),
     commitCount: t.integer().notNull().default(0),
     revealCount: t.integer().notNull().default(0),
     frozenRevealCount: t.integer().notNull().default(0),
@@ -48,6 +48,7 @@ export const tokenlessRound = onchainTable(
     stateDeadlineIdx: index().on(table.state, table.revealDeadline),
     funderIdx: index().on(table.funder),
     contentIdx: index().on(table.contentId),
+    admissionPolicyIdx: index().on(table.deploymentKey, table.admissionPolicyHash),
   }),
 );
 

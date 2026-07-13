@@ -21,7 +21,7 @@ function panelAddress(context: Parameters<Parameters<typeof ponder.on>[1]>[0]["c
 }
 
 ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
-  const { roundId } = event.args;
+  const { roundId, admissionPolicyHash } = event.args;
   const round = await context.client.readContract({
     abi: tokenlessPanelAbi,
     address: panelAddress(context),
@@ -50,7 +50,7 @@ ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
     totalPaid: round.totalPaid,
     minimumReveals: round.minimumReveals,
     maximumCommits: round.maximumCommits,
-    requiredTier: round.requiredTier,
+    admissionPolicyHash,
     commitCount: round.commitCount,
     revealCount: round.revealCount,
     frozenRevealCount: round.frozenRevealCount,
