@@ -135,17 +135,17 @@ strict incentive claim of the continuous mechanism.
 
 ### Peer selection
 
-After the reveal set is frozen, derive a seed that was unpredictable at commit time and produce a deterministic
-permutation. For every rater, select:
+After the reveal set is frozen, derive a seed that was unpredictable at commit time and apply the canonical hash-rank
+selection in the [frozen v1 specification](tokenless-rbts-v1-spec.md). For every rater, select:
 
 - one distinct reference report whose prediction creates the shadow prediction; and
 - one distinct peer report whose binary signal is scored.
 
-For three reveals, the two other raters fill those roles. For larger panels, the permutation must give every eligible
-report equal selection probability, prevent self-selection, avoid duplicate reference/peer selection, and be fully
-recomputable. Bind the seed to chain ID, panel address, round ID, frozen reveal-set hash, and a post-closure randomness
-source. If the randomness source fails, valid revealers receive guaranteed base pay and the unused bonus refunds; no
-operator supplies a replacement seed.
+For three reveals, the two other raters fill those roles. For larger panels, the selection must give every eligible
+report equal marginal selection probability, prevent self-selection, avoid duplicate reference/peer selection, be
+independent of reveal order, and be fully recomputable. Bind the seed to chain ID, panel address, round ID, frozen
+reveal-set commitment, and a post-closure randomness source. If the randomness source fails, valid revealers receive
+guaranteed base pay and the unused bonus refunds; no operator supplies a replacement seed.
 
 ### Score
 
@@ -425,8 +425,8 @@ deployment boundaries.
    clicks, constant-report equilibria, coordinated minorities/majorities, selective reveal, heterogeneous priors, and
    seeded correlation rings. Version fixtures and publish worked examples.
 4. **`docs(mechanism): freeze tokenless-rbts-v1`**
-   Obtain mechanism/security review and freeze probability input, score, peer permutation, randomness, fixed base/max
-   bonus, refund/dust behavior, result semantics, and failure fallback before Solidity changes.
+   Record the mechanism/security re-audit and freeze probability input, score, canonical peer selection, randomness,
+   fixed base/max bonus, refund/dust behavior, result semantics, and failure fallback before Solidity changes.
 
 ### Phase 1 — compose identity and ship World ID
 
@@ -474,9 +474,9 @@ deployment boundaries.
 17. **`feat(analytics): shadow per-round surprisingly-popular results`**
     Add versioned per-round predicted-versus-actual diagnostics, minimum sample guards, evidence output, and benchmark
     reports with no payout or primary-verdict effect.
-18. **`feat(identity): add optional Self document predicates`**
-    Only after the provider and procurement gates pass, add backend minimum-age/document/country verification with data
-    minimization and no fund-core dependency.
+18. **`feat(identity): prepare optional Self document predicates`**
+    Add a disabled provider adapter contract, configuration-equality checks, and test vectors, but do not enable Self or
+    claim production support until provider access, procurement, privacy, conversion, and error-handling gates pass.
 19. **`docs(mechanism): decide scoring-v2 from evidence`**
     Either keep RBTS-only, promote a bounded fixed surprise bonus in a fresh deployment, or remove the prediction input
     if it does not beat equal-pay panels. Never change the rule for an already funded round.
