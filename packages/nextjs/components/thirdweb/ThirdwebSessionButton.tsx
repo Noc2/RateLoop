@@ -13,6 +13,20 @@ import {
   thirdwebBrowserClient,
 } from "~~/lib/thirdweb/client";
 
+export const RATELOOP_SIGN_IN_LABEL = "Sign In";
+
+export function rateLoopConnectButtonStyle(compact: boolean) {
+  return {
+    background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",
+    border: "1px solid transparent",
+    borderRadius: "0.5rem",
+    boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
+    color: "var(--rateloop-warm-white)",
+    minWidth: compact ? "100%" : "8.5rem",
+    whiteSpace: "nowrap",
+  } as const;
+}
+
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -76,7 +90,7 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
           className={`rateloop-gradient-action w-full px-3 opacity-70 ${compact ? "min-h-10 text-base" : "min-h-11 text-sm"}`}
           onClick={() => setConfigurationError(true)}
         >
-          Sign in
+          {RATELOOP_SIGN_IN_LABEL}
         </button>
         {configurationError ? (
           <p className="mt-2 max-w-56 text-center text-[11px] leading-4 text-error">
@@ -87,13 +101,8 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
     );
   }
 
-  const buttonClass = `rateloop-gradient-action px-3 ${compact ? "!min-h-10 !w-full !text-base" : "!min-h-11 !text-sm"}`;
-  const buttonStyle = {
-    border: 0,
-    borderRadius: "999px",
-    color: "white",
-    minWidth: compact ? "100%" : "8.5rem",
-  } as const;
+  const buttonClass = `rateloop-gradient-action px-3 ${compact ? "!min-h-10 !w-full !text-sm" : "!min-h-11 !text-sm"}`;
+  const buttonStyle = rateLoopConnectButtonStyle(compact);
 
   return (
     <ThirdwebProvider>
@@ -122,7 +131,7 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
           }}
           theme={theme}
           connectButton={{
-            label: compact ? "Continue with work account" : "Sign in",
+            label: RATELOOP_SIGN_IN_LABEL,
             className: buttonClass,
             style: buttonStyle,
           }}

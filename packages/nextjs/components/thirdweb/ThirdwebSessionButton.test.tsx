@@ -1,5 +1,10 @@
 import React from "react";
-import { ThirdwebSessionButton, sessionLabel } from "./ThirdwebSessionButton";
+import {
+  RATELOOP_SIGN_IN_LABEL,
+  ThirdwebSessionButton,
+  rateLoopConnectButtonStyle,
+  sessionLabel,
+} from "./ThirdwebSessionButton";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -24,6 +29,19 @@ test("enterprise session labels prefer a name and mask work email addresses", ()
 test("an unconfigured deployment fails closed with an operator-readable sign-in state", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(<ThirdwebSessionButton compact />).replace(/\s+/g, " ");
-  assert.match(html, />Sign in</);
+  assert.match(html, />Sign In</);
   assert.doesNotMatch(html, /Google|Apple|email OTP/);
+});
+
+test("the thirdweb entry point keeps the original compact RateLoop sign-in treatment", () => {
+  assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
+  assert.deepEqual(rateLoopConnectButtonStyle(true), {
+    background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",
+    border: "1px solid transparent",
+    borderRadius: "0.5rem",
+    boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
+    color: "var(--rateloop-warm-white)",
+    minWidth: "100%",
+    whiteSpace: "nowrap",
+  });
 });
