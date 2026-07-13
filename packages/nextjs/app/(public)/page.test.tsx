@@ -10,17 +10,21 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 test("landing page leads with buyer-facing human assurance and a secondary rater journey", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  process.env.TOKENLESS_SANDBOX_MODE = "true";
   const { default: HomePage } = await import("./page");
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
   assert.match(html, /Human Assurance/i);
   assert.match(html, /for AI Workflows/i);
-  assert.match(html, /Validate a Workflow/);
-  assert.match(html, /Earn by Evaluating AI/);
+  assert.match(html, /Set Up a Sandbox Suite/);
+  assert.match(html, /Preview Reviewer Flow/);
   assert.ok(
-    html.indexOf("Validate a Workflow") < html.indexOf("Earn by Evaluating AI"),
+    html.indexOf("Set Up a Sandbox Suite") < html.indexOf("Preview Reviewer Flow"),
     "the buyer CTA should appear before the rater CTA",
   );
+  assert.match(html, /Reviewer activity, results, and payments are simulated/i);
+  assert.match(html, /use only synthetic or redacted test material/i);
+  assert.doesNotMatch(html, /Earn by Evaluating AI|Get clear reasons and verifiable settlement evidence/);
   assert.match(html, /Set the Quality Bar/);
   assert.match(html, /Humans Evaluate Blind/);
   assert.match(html, /Decide With Evidence/);

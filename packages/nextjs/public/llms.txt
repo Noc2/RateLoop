@@ -2,13 +2,15 @@
 
 RateLoop provides paid, blinded human assurance panels for AI-enabled workflows. Use a panel to test one declared quality criterion before rollout, then treat the result, written reasons, and settlement evidence as decision support. The customer remains responsible for the final action.
 
+The public tokenless deployment is currently a sandbox product preview. Reviewers, results, settlement, and payments are simulated; do not describe its output as live human work or a payment receipt.
+
 - Buyer UI: `/ask`
 - Rater UI: `/rate`
 - Account: `/settings`
 - Documentation: `/docs`, `/docs/how-it-works`, `/docs/ai`, `/docs/sdk`, `/docs/smart-contracts`
-- Integration API: `/api/agent/v1/quote`, `/api/agent/v1/asks`, `/api/agent/v1/asks/{operationKey}/wait`, `/api/agent/v1/results/{operationKey}`
-- Schema: `rateloop.tokenless.v1`
+- Integration API: `/api/agent/v1/quote`, `/api/agent/v1/asks`, `/api/agent/v1/asks/{operationKey}/wait`, `/api/agent/v1/results/{operationKey}`, `/api/agent/v1/assurance/projects`, `/api/agent/v1/assurance/runs/{runId}`
+- Schemas: `rateloop.tokenless.v2`, `rateloop.human-assurance.v2`
 
-Current boundary: do not submit secrets or regulated personal data. RateLoop and participating raters may be able to read off-chain content, and settlement evidence may be public. Sandbox results are simulations only. Do not present a panel result as automated approval, proof of compliance, or proof that every rater is independent.
+Current boundary: do not submit secrets or regulated personal data. Assigned reviewers can read leased material, RateLoop retains controlled operational access, and paid settlement evidence may be public. Do not present a panel result as automated approval, proof of compliance, or proof that every rater is independent.
 
 Do not describe the current product as using AI raters, Reputation, LREP, staking, governance, frontend bonds, challenge oracles, leaderboards, or manual reward claims.

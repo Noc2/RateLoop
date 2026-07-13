@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HumanAssuranceUseCasesStrip } from "~~/components/home/HumanAssuranceUseCasesStrip";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
+import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
 const steps = [
   [
@@ -75,11 +76,11 @@ const questions = [
   ],
   [
     "Can We Invite Our Own Reviewers?",
-    "Not yet as a complete enterprise workflow. The current product recruits from the available rater pool. Invite-only customer panels and reusable reviewer cohorts are planned controls, not current guarantees.",
+    "The private workflow supports one-time, Base-Account-bound invitations, reusable cohorts, assignment-only artifact access, and separate invited/network/hybrid reporting. The current public deployment remains a sandbox and does not recruit or pay live reviewers.",
   ],
   [
     "Can I Submit Sensitive Company Data?",
-    "Do not submit secrets, production credentials, regulated personal data, or material that participating raters must not see. Content is stored off-chain, but RateLoop and participating raters may be able to read it; enterprise confidentiality controls are not yet complete.",
+    "Private artifacts are encrypted and released only through short assignment leases, but reviewers still read their assigned material and the service retains controlled operational access. Do not use the sandbox for secrets, production credentials, regulated personal data, or safety-critical workflows.",
   ],
   [
     "What Does the On-Chain Trail Prove?",
@@ -111,6 +112,7 @@ function SectionTitle({ number, children, gradient }: { number: string; children
 }
 
 export default function TokenlessLandingPage() {
+  const sandboxMode = isTokenlessSandboxMode();
   return (
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
       <div className="relative flex w-full max-w-6xl flex-col items-center">
@@ -128,17 +130,25 @@ export default function TokenlessLandingPage() {
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
               Test AI-enabled work with blinded human panels before rollout.{" "}
               <br className="hidden lg:block 2xl:hidden" />
-              Get clear reasons and verifiable settlement evidence.
+              {sandboxMode
+                ? "Preview the suite, reviewer, and decision-evidence workflow with simulated activity."
+                : "Get clear reasons and verifiable settlement evidence."}
             </p>
+            {sandboxMode ? (
+              <p className="mt-4 max-w-[40rem] rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-sm leading-6 text-amber-50 lg:text-left">
+                This isolated deployment is a product sandbox. Reviewer activity, results, and payments are simulated;
+                use only synthetic or redacted test material.
+              </p>
+            ) : null}
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/ask" className="rateloop-gradient-action min-h-11 px-5 text-base">
-                Validate a Workflow
+                {sandboxMode ? "Set Up a Sandbox Suite" : "Validate a Workflow"}
               </Link>
               <Link
                 href="/rate"
                 className="btn min-h-11 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                Earn by Evaluating AI
+                {sandboxMode ? "Preview Reviewer Flow" : "Earn by Evaluating AI"}
               </Link>
             </div>
           </div>

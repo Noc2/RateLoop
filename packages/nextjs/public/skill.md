@@ -2,6 +2,8 @@
 
 Use RateLoop for public or explicitly authorized, non-urgent decisions where blinded human judgment can test one quality criterion in an AI-enabled workflow.
 
+The current public tokenless deployment is a sandbox. Reviewer activity, results, settlement, and payments are simulated; use only synthetic or redacted test material and never present its output as live human evidence.
+
 1. Identify the accountable human decision owner and the next action the result can change.
 2. Reduce the decision to one binary or A/B criterion and remove secrets or regulated personal data.
 3. Quote a human panel.
