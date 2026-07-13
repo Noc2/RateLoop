@@ -26,11 +26,13 @@ lint:
 	node --check scripts-js/parseArgs.js
 	node --check scripts-js/tokenlessDeployArgs.js
 	node --check scripts-js/tokenlessDeployment.js
+	node --check scripts-js/checkTokenlessContractSizes.js
 	node --check scripts-js/exportTokenlessDeploymentFromBroadcast.js
 	node --check scripts-js/generateTokenlessArtifacts.js
 
 check-contract-sizes:
-	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --offline --sizes --skip test --skip script
+	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --offline --sizes --skip test --skip script --deny warnings
+	node scripts-js/checkTokenlessContractSizes.js
 
 deploy: deploy-tokenless-and-generate-artifacts
 
