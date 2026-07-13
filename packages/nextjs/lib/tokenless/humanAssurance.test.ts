@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAssuranceRunOrchestration } from "~~/lib/tokenless/assuranceRunOrchestration";
 import {
   addAssuranceCase,
   archiveAssuranceProject,
   canonicalizeHumanAssuranceDocument,
+  completeUnpaidInvitedAssuranceCases,
   createAssuranceAudiencePolicy,
   createAssuranceProject,
   createAssuranceRun,
@@ -92,6 +94,27 @@ function audiencePolicy() {
   };
 }
 
+function unpaidInvitedAudiencePolicy() {
+  return {
+    reviewerSource: "customer_invited" as const,
+    compensation: "unpaid" as const,
+    cohorts: [{ cohortId: "invited_reviewers", minimumReviewers: 1, maximumReviewers: 1 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requiredCapabilities: ["customer_invitation" as const],
+      allowedProviders: [],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 2,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: false,
+  };
+}
+
 async function createProject(principal: ProductPrincipal, name = "Support QA") {
   return createAssuranceProject({
     principal,
@@ -164,6 +187,101 @@ async function frozenSuite(principal: ProductPrincipal, projectId: string) {
     suiteVersion: suite.version,
   });
   return { ...suite, ...frozen, caseId: assuranceCase.caseId };
+}
+
+async function seedCompletedInvitedAssignment(input: {
+  caseId: string;
+  paid: boolean;
+  policyHash: string;
+  policyId: string;
+  projectId: string;
+  runId: string;
+  runManifestHash: string;
+  workspaceId: string;
+}) {
+  const now = new Date();
+  const cohortId = `${input.runId}_cohort`;
+  const subpanelId = `${input.runId}_subpanel`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_cohorts
+          (cohort_id, project_id, name, source, selection, capacity, active_reservations,
+           qualification_rules_json, status, created_by, created_at, updated_at)
+          VALUES (?, ?, 'Invited reviewers', 'customer_invited', 'customer_named', 1, 0,
+                  '[]', 'active', ?, ?, ?)`,
+    args: [cohortId, input.projectId, ADDRESS_A, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_cohort_reviewers
+          (project_id, cohort_id, reviewer_account_address, qualification_provenance_json,
+           maximum_active_assignments, active_reservations, status, created_by, created_at, updated_at)
+          VALUES (?, ?, ?, '[]', 1, 0, 'active', ?, ?, ?)`,
+    args: [input.projectId, cohortId, ADDRESS_B, ADDRESS_A, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_run_subpanels
+          (subpanel_id, workspace_id, project_id, run_id, cohort_id, source, selection,
+           target_count, active_reservations, policy_id, policy_version, policy_hash,
+           run_manifest_hash, created_at)
+          VALUES (?, ?, ?, ?, ?, 'customer_invited', 'customer_named', 1, 0, ?, 1, ?, ?, ?)`,
+    args: [
+      subpanelId,
+      input.workspaceId,
+      input.projectId,
+      input.runId,
+      cohortId,
+      input.policyId,
+      input.policyHash,
+      input.runManifestHash,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_assignments
+          (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
+           reviewer_account_address, source, selection, status, confidentiality_terms_hash,
+           confidentiality_accepted_at, qualification_provenance_json, blinding_json,
+           paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
+           assignment_expires_at, lease_issuer_account_address, lease_state,
+           created_at, accepted_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'customer_invited', 'customer_named', 'completed',
+                  ?, ?, '[]', '{}', ?, ?, ?, ?, ?, 'expired', ?, ?, ?)`,
+    args: [
+      `${input.runId}_assignment`,
+      input.workspaceId,
+      input.projectId,
+      input.runId,
+      subpanelId,
+      cohortId,
+      ADDRESS_B,
+      fixtureHash("confidentiality"),
+      now,
+      input.paid,
+      input.paid ? now : null,
+      new Date(now.getTime() + 60_000),
+      new Date(now.getTime() + 60_000),
+      ADDRESS_A,
+      now,
+      now,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_responses
+          (response_id, run_id, case_id, reviewer_key, reviewer_source, choice,
+           failure_tag_keys_json, qualification_keys_json, assurance_capabilities_json,
+           response_digest, settlement_reference, validity, submitted_at, updated_at)
+          VALUES (?, ?, ?, 'reviewer_invited', 'customer_invited', 'candidate',
+                  '[]', '[]', '["customer_invitation"]', ?, ?, 'valid', ?, ?)`,
+    args: [
+      `${input.runId}_response`,
+      input.runId,
+      input.caseId,
+      fixtureHash(`${input.runId}:response`),
+      input.paid ? `receipt:${input.runId}` : null,
+      now,
+      now,
+    ],
+  });
 }
 
 test("audience policies canonicalize exact v2 content and are content-bound", async () => {
@@ -310,11 +428,84 @@ test("suite, case, and run manifests freeze immutably with strict lifecycle tran
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assurance_run_transition",
   );
   await transitionAssuranceRun({ principal, runId: run.runId, status: "aggregating" });
-  await transitionAssuranceRun({ principal, runId: run.runId, status: "completed" });
-  assert.deepEqual(await archiveAssuranceProject({ principal, projectId }), {
-    projectId,
+  await assert.rejects(
+    () => transitionAssuranceRun({ principal, runId: run.runId, status: "completed" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_not_terminal",
+  );
+  await assert.rejects(
+    () => archiveAssuranceProject({ principal, projectId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_project_has_active_runs",
+  );
+
+  const archived = await createProject(principal, "Archive-ready project");
+  assert.deepEqual(await archiveAssuranceProject({ principal, projectId: archived.projectId }), {
+    projectId: archived.projectId,
     status: "archived",
   });
+});
+
+test("unpaid invited runs require complete judgments and explicit off-chain terminal cases", async () => {
+  const { principal, workspaceId } = await principalFor(ADDRESS_A, "Unpaid invited");
+  const { projectId } = await createProject(principal);
+  const suite = await frozenSuite(principal, projectId);
+  const policy = await createAssuranceAudiencePolicy({
+    principal,
+    projectId,
+    policy: unpaidInvitedAudiencePolicy(),
+  });
+  const run = await createAssuranceRun({
+    principal,
+    suiteId: suite.suiteId,
+    suiteVersion: suite.version,
+    audiencePolicyId: policy.policy.policyId,
+    audiencePolicyVersion: policy.policy.version,
+  });
+  const frozen = await freezeAssuranceRunOrchestration({ principal, runId: run.runId });
+  await seedCompletedInvitedAssignment({
+    caseId: suite.caseId,
+    paid: false,
+    policyHash: policy.policyHash,
+    policyId: policy.policy.policyId,
+    projectId,
+    runId: run.runId,
+    runManifestHash: frozen.manifestHash,
+    workspaceId,
+  });
+  for (const status of ["recruiting", "collecting", "aggregating"] as const) {
+    await transitionAssuranceRun({ principal, runId: run.runId, status });
+  }
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_responses SET validity = 'pending' WHERE run_id = ?`,
+    args: [run.runId],
+  });
+  await assert.rejects(
+    () => completeUnpaidInvitedAssuranceCases({ principal, runId: run.runId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_responses_incomplete",
+  );
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_responses SET validity = 'valid' WHERE run_id = ?`,
+    args: [run.runId],
+  });
+  await assert.rejects(
+    () => transitionAssuranceRun({ principal, runId: run.runId, status: "completed" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_not_terminal",
+  );
+  assert.deepEqual(await completeUnpaidInvitedAssuranceCases({ principal, runId: run.runId }), {
+    runId: run.runId,
+    caseCount: 1,
+    status: "offchain_complete",
+  });
+  assert.deepEqual(await transitionAssuranceRun({ principal, runId: run.runId, status: "completed" }), {
+    runId: run.runId,
+    status: "completed",
+  });
+  const terminal = await dbClient.execute({
+    sql: `SELECT round_status, round_id FROM tokenless_assurance_run_cases WHERE run_id = ?`,
+    args: [run.runId],
+  });
+  assert.equal(terminal.rows[0]?.round_status, "offchain_complete");
+  assert.equal(terminal.rows[0]?.round_id, null);
 });
 
 test("case and run bindings are derived from parents and reject cross-project resources", async () => {

@@ -99,6 +99,13 @@
       "when": 1783904400000,
       "tag": "0013_assurance_evidence_packets",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783908000000,
+      "tag": "0014_assurance_terminal_gates",
+      "breakpoints": true
     }
   ]
 }

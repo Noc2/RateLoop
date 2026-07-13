@@ -104,6 +104,7 @@ const ROUND_STATUSES = [
   "finalized",
   "terminal",
   "failed",
+  "offchain_complete",
 ] as const;
 export type AssuranceCaseRoundStatus = (typeof ROUND_STATUSES)[number];
 const ROUND_STATUS_TRANSITIONS = new Map<AssuranceCaseRoundStatus, ReadonlySet<AssuranceCaseRoundStatus>>([
@@ -115,6 +116,7 @@ const ROUND_STATUS_TRANSITIONS = new Map<AssuranceCaseRoundStatus, ReadonlySet<A
   ["finalized", new Set()],
   ["terminal", new Set()],
   ["failed", new Set()],
+  ["offchain_complete", new Set()],
 ]);
 
 function rowString(row: QueryRow | undefined, key: string) {
@@ -914,7 +916,11 @@ export async function bindAssuranceCaseRound(input: {
   status: Exclude<AssuranceCaseRoundStatus, "planned">;
 }) {
   if (!ROUND_ID_PATTERN.test(input.roundId)) serviceError("roundId must be an unsigned base-10 integer string.");
-  if (!(ROUND_STATUSES as readonly string[]).includes(input.status) || String(input.status) === "planned") {
+  if (
+    !(ROUND_STATUSES as readonly string[]).includes(input.status) ||
+    String(input.status) === "planned" ||
+    String(input.status) === "offchain_complete"
+  ) {
     serviceError("Round status is invalid.");
   }
   const client = await dbPool.connect();

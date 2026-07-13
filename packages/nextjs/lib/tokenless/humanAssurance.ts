@@ -7,6 +7,7 @@ import {
   parseHumanAssuranceRubric,
 } from "@rateloop/sdk";
 import { createHash, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
@@ -19,6 +20,7 @@ type AudiencePolicyDefinition = Omit<HumanAssuranceAudiencePolicy, "policyId" | 
 
 const WRITE_ROLES = new Set<TokenlessWorkspaceRole>(["owner", "admin", "member"]);
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const ONCHAIN_TERMINAL_CASE_STATUSES = new Set(["finalized", "terminal", "failed"]);
 const RUN_TRANSITIONS = new Map<string, ReadonlySet<string>>([
   ["draft", new Set(["frozen", "cancelled"])],
   ["frozen", new Set(["recruiting", "cancelled"])],
@@ -752,6 +754,292 @@ async function loadRunForWrite(principal: AssurancePrincipal, runId: string) {
   return row!;
 }
 
+type AssuranceCompletionSource = {
+  assigned: number;
+  completedAssignments: number;
+  paidAssignments: number;
+  responses: number;
+  settledResponses: number;
+  targetReviewers: number;
+  validResponses: number;
+};
+
+type AssuranceCompletionState = {
+  cases: QueryRow[];
+  policyCompensation: string;
+  policyReviewerSource: string;
+  terminalSettlementCaseIds: Set<string>;
+  sources: Map<string, AssuranceCompletionSource>;
+};
+
+function completionError(message: string, code: string): never {
+  throw new TokenlessServiceError(message, 409, code);
+}
+
+function completionSource(map: Map<string, AssuranceCompletionSource>, source: string) {
+  const existing = map.get(source);
+  if (existing) return existing;
+  const created: AssuranceCompletionSource = {
+    assigned: 0,
+    completedAssignments: 0,
+    paidAssignments: 0,
+    responses: 0,
+    settledResponses: 0,
+    targetReviewers: 0,
+    validResponses: 0,
+  };
+  map.set(source, created);
+  return created;
+}
+
+async function loadAssuranceCompletionState(client: PoolClient, runId: string): Promise<AssuranceCompletionState> {
+  const runResult = await client.query(
+    `SELECT r.status, r.policy_hash, p.policy_hash AS current_policy_hash,
+            p.compensation, p.reviewer_source
+     FROM tokenless_assurance_runs r
+     JOIN tokenless_assurance_audience_policies p
+       ON p.policy_id = r.audience_policy_id AND p.version = r.audience_policy_version
+     WHERE r.run_id = $1 LIMIT 1 FOR UPDATE`,
+    [runId],
+  );
+  const run = runResult.rows[0] as QueryRow | undefined;
+  if (
+    !run ||
+    rowString(run, "status") !== "aggregating" ||
+    rowString(run, "policy_hash") !== rowString(run, "current_policy_hash")
+  ) {
+    completionError("Only an aggregating run with its exact frozen policy can complete.", "assurance_run_not_terminal");
+  }
+  const [caseResult, subpanelResult, assignmentResult, responseResult, terminalSettlementResult] = await Promise.all([
+    client.query(
+      `SELECT case_id, round_id, round_status, deterministic_checks_status
+       FROM tokenless_assurance_run_cases WHERE run_id = $1 ORDER BY position ASC FOR UPDATE`,
+      [runId],
+    ),
+    client.query(
+      `SELECT source, SUM(target_count) AS target_reviewers
+       FROM tokenless_assurance_run_subpanels WHERE run_id = $1 GROUP BY source`,
+      [runId],
+    ),
+    client.query(
+      `SELECT source, paid_assignment, status, COUNT(*) AS count
+       FROM tokenless_assurance_assignments WHERE run_id = $1
+       GROUP BY source, paid_assignment, status`,
+      [runId],
+    ),
+    client.query(
+      `SELECT reviewer_source, validity, settlement_reference
+       FROM tokenless_assurance_responses WHERE run_id = $1`,
+      [runId],
+    ),
+    client.query(
+      `SELECT rc.case_id, rc.round_id AS case_round_id,
+              ce.round_id AS execution_round_id, ce.state AS execution_state,
+              te.round_id AS event_round_id, te.event_type
+       FROM tokenless_assurance_run_cases rc
+       LEFT JOIN tokenless_chain_executions ce ON ce.content_id = rc.content_id
+       LEFT JOIN tokenless_transparency_events te ON te.operation_key = ce.operation_key
+       WHERE rc.run_id = $1`,
+      [runId],
+    ),
+  ]);
+  if (caseResult.rows.length === 0 || subpanelResult.rows.length === 0) {
+    completionError("A run needs frozen cases and source subpanels before completion.", "assurance_run_not_terminal");
+  }
+  const sources = new Map<string, AssuranceCompletionSource>();
+  for (const raw of subpanelResult.rows) {
+    const row = raw as QueryRow;
+    const source = rowString(row, "source")!;
+    completionSource(sources, source).targetReviewers = rowNumber(row, "target_reviewers") ?? -1;
+  }
+  for (const raw of assignmentResult.rows) {
+    const row = raw as QueryRow;
+    const source = rowString(row, "source")!;
+    const state = sources.get(source);
+    if (!state) completionError("An assignment is outside the frozen source panels.", "assurance_responses_incomplete");
+    const count = rowNumber(row, "count") ?? -1;
+    state.assigned += count;
+    if (rowString(row, "status") === "completed") state.completedAssignments += count;
+    if (row.paid_assignment === true) state.paidAssignments += count;
+  }
+  for (const raw of responseResult.rows) {
+    const row = raw as QueryRow;
+    const source = rowString(row, "reviewer_source")!;
+    const state = sources.get(source);
+    if (!state) completionError("A response is outside the frozen source panels.", "assurance_responses_incomplete");
+    state.responses += 1;
+    if (rowString(row, "validity") === "valid") state.validResponses += 1;
+    if (rowString(row, "settlement_reference")?.trim()) state.settledResponses += 1;
+  }
+  const terminalSettlementCaseIds = new Set<string>();
+  for (const raw of terminalSettlementResult.rows) {
+    const row = raw as QueryRow;
+    const caseRoundId = rowString(row, "case_round_id");
+    if (
+      caseRoundId &&
+      caseRoundId === rowString(row, "execution_round_id") &&
+      caseRoundId === rowString(row, "event_round_id") &&
+      rowString(row, "execution_state") === "confirmed" &&
+      ["RoundTerminal", "round.terminal", "round.finalized"].includes(rowString(row, "event_type") ?? "")
+    ) {
+      terminalSettlementCaseIds.add(rowString(row, "case_id")!);
+    }
+  }
+  return {
+    cases: caseResult.rows as QueryRow[],
+    policyCompensation: rowString(run, "compensation")!,
+    policyReviewerSource: rowString(run, "reviewer_source")!,
+    terminalSettlementCaseIds,
+    sources,
+  };
+}
+
+function assertResponseCompletion(state: AssuranceCompletionState) {
+  const caseCount = state.cases.length;
+  let paidSourceCount = 0;
+  for (const [source, counts] of state.sources) {
+    if (!Number.isSafeInteger(counts.targetReviewers) || counts.targetReviewers < 1) {
+      completionError("Every frozen source must target at least one reviewer.", "assurance_responses_incomplete");
+    }
+    if (
+      counts.assigned !== counts.targetReviewers ||
+      counts.completedAssignments !== counts.targetReviewers ||
+      counts.responses !== counts.targetReviewers * caseCount ||
+      counts.validResponses !== counts.responses
+    ) {
+      completionError(
+        `Every expected ${source} reviewer-case judgment must be valid before completion.`,
+        "assurance_responses_incomplete",
+      );
+    }
+    if (counts.paidAssignments !== 0 && counts.paidAssignments !== counts.assigned) {
+      completionError(
+        "A frozen source cannot mix paid and unpaid assignments.",
+        "assurance_paid_settlement_incomplete",
+      );
+    }
+    if (counts.paidAssignments > 0) {
+      paidSourceCount += 1;
+      if (counts.settledResponses !== counts.responses) {
+        completionError(
+          "Every paid reviewer-case judgment needs a terminal settlement receipt before completion.",
+          "assurance_paid_settlement_incomplete",
+        );
+      }
+    } else if (counts.settledResponses !== 0) {
+      completionError(
+        "Unpaid reviewer-case judgments must not claim settlement receipts.",
+        "assurance_settlement_mismatch",
+      );
+    }
+  }
+  if (
+    (state.policyCompensation === "unpaid" && paidSourceCount !== 0) ||
+    (state.policyCompensation === "paid" && paidSourceCount !== state.sources.size) ||
+    (state.policyCompensation === "mixed" && (paidSourceCount === 0 || paidSourceCount === state.sources.size))
+  ) {
+    completionError("Assignment compensation does not match the frozen policy.", "assurance_settlement_mismatch");
+  }
+  return paidSourceCount > 0;
+}
+
+function assertRunCasesTerminal(state: AssuranceCompletionState, hasPaidSources: boolean) {
+  for (const row of state.cases) {
+    if (rowString(row, "deterministic_checks_status") === "pending") {
+      completionError("Deterministic checks must finish before completion.", "assurance_run_not_terminal");
+    }
+    const status = rowString(row, "round_status");
+    const roundId = rowString(row, "round_id");
+    if (hasPaidSources) {
+      if (!roundId || !ONCHAIN_TERMINAL_CASE_STATUSES.has(status ?? "")) {
+        completionError("Every paid case needs a terminal bound round.", "assurance_run_not_terminal");
+      }
+      if (!state.terminalSettlementCaseIds.has(rowString(row, "case_id")!)) {
+        completionError(
+          "Every paid case needs a stored terminal settlement receipt.",
+          "assurance_paid_settlement_incomplete",
+        );
+      }
+    } else if (status !== "offchain_complete" || roundId) {
+      completionError("Unpaid invited cases must end explicitly off-chain.", "assurance_run_not_terminal");
+    }
+  }
+}
+
+export async function completeUnpaidInvitedAssuranceCases(input: { principal: AssurancePrincipal; runId: string }) {
+  await loadRunForWrite(input.principal, input.runId);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const state = await loadAssuranceCompletionState(client, input.runId);
+    if (
+      state.policyCompensation !== "unpaid" ||
+      state.policyReviewerSource !== "customer_invited" ||
+      [...state.sources.keys()].some(source => source !== "customer_invited") ||
+      [...state.sources.values()].some(source => source.paidAssignments !== 0)
+    ) {
+      completionError(
+        "Only a strictly unpaid customer-invited run can complete without chain settlement.",
+        "assurance_offchain_completion_forbidden",
+      );
+    }
+    assertResponseCompletion(state);
+    if (
+      state.cases.some(
+        row =>
+          !["planned", "offchain_complete"].includes(rowString(row, "round_status") ?? "") ||
+          Boolean(rowString(row, "round_id")),
+      )
+    ) {
+      completionError(
+        "An on-chain case cannot be converted to off-chain completion.",
+        "assurance_offchain_completion_forbidden",
+      );
+    }
+    const now = new Date();
+    await client.query(
+      `UPDATE tokenless_assurance_run_cases
+       SET round_status = 'offchain_complete', updated_at = $1
+       WHERE run_id = $2 AND round_status = 'planned' AND round_id IS NULL`,
+      [now, input.runId],
+    );
+    await client.query("COMMIT");
+    return { runId: input.runId, caseCount: state.cases.length, status: "offchain_complete" as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function completeAssuranceRun(principal: AssurancePrincipal, runId: string) {
+  await loadRunForWrite(principal, runId);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const state = await loadAssuranceCompletionState(client, runId);
+    const hasPaidSources = assertResponseCompletion(state);
+    assertRunCasesTerminal(state, hasPaidSources);
+    const now = new Date();
+    const result = await client.query(
+      `UPDATE tokenless_assurance_runs SET status = 'completed', updated_at = $1, completed_at = $1
+       WHERE run_id = $2 AND status = 'aggregating'`,
+      [now, runId],
+    );
+    if (result.rowCount !== 1) {
+      completionError("The run changed while it was being completed.", "assurance_run_conflict");
+    }
+    await client.query("COMMIT");
+    return { runId, status: "completed" as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function freezeAssuranceRun(input: { principal: AssurancePrincipal; runId: string }) {
   const run = await loadRunForWrite(input.principal, input.runId);
   const existingHash = rowString(run, "manifest_hash");
@@ -816,6 +1104,7 @@ export async function transitionAssuranceRun(input: {
   runId: string;
   status: "recruiting" | "collecting" | "aggregating" | "completed" | "cancelled";
 }) {
+  if (input.status === "completed") return completeAssuranceRun(input.principal, input.runId);
   const run = await loadRunForWrite(input.principal, input.runId);
   const current = rowString(run, "status")!;
   if (!RUN_TRANSITIONS.get(current)?.has(input.status)) {
@@ -828,9 +1117,9 @@ export async function transitionAssuranceRun(input: {
   const now = new Date();
   const result = await dbClient.execute({
     sql: `UPDATE tokenless_assurance_runs
-          SET status = ?, updated_at = ?, completed_at = ?
+          SET status = ?, updated_at = ?
           WHERE run_id = ? AND status = ?`,
-    args: [input.status, now, input.status === "completed" ? now : null, input.runId, current],
+    args: [input.status, now, input.runId, current],
   });
   if (result.rowCount !== 1) {
     throw new TokenlessServiceError("The run changed while it was being advanced.", 409, "assurance_run_conflict");
