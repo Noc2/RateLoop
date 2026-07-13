@@ -9,7 +9,7 @@ import {
 import { keccak256 } from "viem";
 import { commitKey, creditOwnerKey, resolveTokenlessDeployment, roundKey } from "./protocol-deployment";
 import { tokenlessPanelAbi } from "./tokenlessAbi";
-import { creditBalanceAfterEvent, ROUND_STATE } from "./status";
+import { creditBalanceAfterEvent, revealTalliesAfterVote, ROUND_STATE } from "./status";
 
 const deployment = resolveTokenlessDeployment();
 
@@ -122,7 +122,10 @@ ponder.on("TokenlessPanel:RevealAccepted", async ({ event, context }) => {
     });
   await context.db
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
-    .set((row) => ({ revealCount: row.revealCount + 1, updatedAt: event.block.timestamp }));
+    .set((row) => ({
+      ...revealTalliesAfterVote(row, vote),
+      updatedAt: event.block.timestamp,
+    }));
 });
 
 ponder.on("TokenlessPanel:SettlementBegun", async ({ event, context }) => {

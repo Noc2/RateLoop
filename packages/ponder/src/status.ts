@@ -36,6 +36,17 @@ export interface KeeperRound {
   staleReturned: boolean;
 }
 
+export function revealTalliesAfterVote(
+  current: { revealCount: number; upVotes: number },
+  vote: number,
+): { revealCount: number; upVotes: number } {
+  if (vote !== 0 && vote !== 1) throw new Error("vote must be 0 or 1");
+  return {
+    revealCount: current.revealCount + 1,
+    upVotes: current.upVotes + vote,
+  };
+}
+
 export function publicRoundStatus(round: Pick<KeeperRound, "state" | "commitDeadline" | "revealDeadline">, now: bigint) {
   if (round.state === ROUND_STATE.OPEN && now > round.commitDeadline && now <= round.revealDeadline) {
     return "revealable";

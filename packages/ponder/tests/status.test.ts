@@ -3,6 +3,7 @@ import {
   creditBalanceAfterEvent,
   keeperAction,
   publicRoundStatus,
+  revealTalliesAfterVote,
   ROUND_STATE,
   type KeeperRound,
   verdictStatus,
@@ -63,6 +64,20 @@ describe("tokenless public and keeper state", () => {
     expect(creditBalanceAfterEvent(2_500_000n, "withdrawn", 2_500_000n)).toBe(0n);
     expect(() => creditBalanceAfterEvent(1n, "withdrawn", 2n)).toThrow(
       "exceeds the indexed owner balance",
+    );
+  });
+
+  it("counts accepted reveals and their revealed up-votes", () => {
+    expect(revealTalliesAfterVote({ revealCount: 2, upVotes: 1 }, 1)).toEqual({
+      revealCount: 3,
+      upVotes: 2,
+    });
+    expect(revealTalliesAfterVote({ revealCount: 3, upVotes: 2 }, 0)).toEqual({
+      revealCount: 4,
+      upVotes: 2,
+    });
+    expect(() => revealTalliesAfterVote({ revealCount: 0, upVotes: 0 }, 2)).toThrow(
+      "vote must be 0 or 1",
     );
   });
 });
