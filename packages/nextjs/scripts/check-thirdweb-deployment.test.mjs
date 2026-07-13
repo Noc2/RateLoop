@@ -17,6 +17,13 @@ test("hosted thirdweb auth accepts only the isolated tokenless project and match
     validateThirdwebDeployment({ env: validEnv(), projectLinks: [TOKENLESS_VERCEL_PROJECT], production: true }),
     [],
   );
+  assert.deepEqual(
+    validateThirdwebDeployment({
+      env: { ...validEnv(), VERCEL_PROJECT_ID: TOKENLESS_VERCEL_PROJECT.projectId },
+      production: true,
+    }),
+    [],
+  );
 });
 
 test("hosted thirdweb auth rejects legacy production, secret exposure, and missing configuration", () => {
@@ -39,4 +46,18 @@ test("hosted thirdweb auth rejects legacy production, secret exposure, and missi
 
 test("local builds remain build-safe without hosted auth variables", () => {
   assert.deepEqual(validateThirdwebDeployment({ env: {}, production: false }), []);
+});
+
+test("hosted thirdweb auth still requires the exact immutable project ID", () => {
+  const missingProjectId = validateThirdwebDeployment({
+    env: { ...validEnv(), VERCEL_PROJECT_NAME: TOKENLESS_VERCEL_PROJECT.projectName },
+    production: true,
+  });
+  assert.match(missingProjectId.join("\n"), /unexpected vercel project/i);
+
+  const legacyProjectId = validateThirdwebDeployment({
+    env: { ...validEnv(), VERCEL_PROJECT_ID: "prj_legacy" },
+    production: true,
+  });
+  assert.match(legacyProjectId.join("\n"), /unexpected vercel project/i);
 });

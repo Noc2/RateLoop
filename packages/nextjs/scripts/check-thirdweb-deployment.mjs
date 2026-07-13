@@ -55,10 +55,9 @@ export function validateThirdwebDeployment({ env, projectLinks = [], production 
     errors.push("The Vercel project link is unavailable; expected rateloop-tokenless.");
   }
   for (const link of links) {
-    if (
-      link.projectId !== TOKENLESS_VERCEL_PROJECT.projectId ||
-      link.projectName !== TOKENLESS_VERCEL_PROJECT.projectName
-    ) {
+    const projectIdMismatch = !link.projectId || link.projectId !== TOKENLESS_VERCEL_PROJECT.projectId;
+    const projectNameMismatch = link.projectName != null && link.projectName !== TOKENLESS_VERCEL_PROJECT.projectName;
+    if (projectIdMismatch || projectNameMismatch) {
       errors.push(
         `Unexpected Vercel project ${link.projectName ?? "unknown"} (${link.projectId ?? "unknown"}); expected ${TOKENLESS_VERCEL_PROJECT.projectName} (${TOKENLESS_VERCEL_PROJECT.projectId}).`,
       );
