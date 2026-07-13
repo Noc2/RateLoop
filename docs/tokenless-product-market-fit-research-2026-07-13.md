@@ -8,11 +8,13 @@
 
 ## Executive recommendation
 
-RateLoop should become **a B2B external-human decision-assurance API for teams shipping customer-facing AI products**, starting with one narrow job:
+RateLoop should become **a B2B human-assurance layer for companies deploying AI-enabled workflows**, starting with one narrow job:
 
-> Before a team ships a prompt, model, agent, or customer-facing AI behavior change, RateLoop returns a blinded multi-rater A/B or go/no-go verdict, written reasons, and a portable decision receipt linked to independently verifiable settlement evidence.
+> Before an AI-assisted workflow or customer-facing behavior goes live or materially changes, RateLoop returns a blinded multi-rater comparison or go/no-go signal, written reasons, and a portable decision receipt linked to independently verifiable settlement evidence.
 
-The first ideal customer is not a frontier lab, a general market researcher, or an autonomous agent with its own wallet. It is a **small-to-mid-sized AI software company that ships frequently, lacks a research-operations team, and needs human calibration before it has enough production traffic for a real A/B test**. The initial buyer is likely an AI product lead, evaluation engineer, or applied-AI founder.
+The initial market should no longer be defined by whether the customer calls itself “AI-native.” That label unnecessarily limits the addressable market and misses the much larger set of ordinary companies adding AI to support, marketing, sales, operations, and digital products. The market should instead be defined by a repeated workflow: **a company changes AI-generated or AI-mediated output often enough that subjective quality, trust, tone, or usability needs a documented human acceptance test**.
+
+The recommended first route to those companies is **AI implementation consultancies, digital agencies, and AI/software agencies that can reuse RateLoop across multiple client engagements**, alongside a smaller set of direct design partners in AI-enabled software and digitally mature service businesses. The consultancy is the channel and often the operating user; the end-client company is the beneficiary and sometimes the economic buyer. RateLoop should learn both buying arrangements rather than assume one narrow startup persona.
 
 The operating model should nevertheless be **asymmetric B2B2C**:
 
@@ -22,12 +24,12 @@ The operating model should nevertheless be **asymmetric B2B2C**:
 
 That combination can create a useful cross-side loop—more relevant active raters improve fill time and buyer value, while more business work improves rater earnings and retention—without forcing RateLoop to market two unrelated demand products.
 
-The initial use cases should be subjective but consequential and understandable by a qualified non-expert cohort:
+The initial use cases should be subjective but consequential, repeated across industries, and understandable by an appropriately qualified cohort:
 
-- Which of two assistant responses is more helpful, clear, and trustworthy?
-- Is a proposed support-agent behavior acceptable under a short rubric?
-- Does a new prompt or model version improve the user-facing experience enough to release?
-- Does an AI-generated message match the intended tone and avoid obvious failure modes?
+- Which of two customer-support responses is more helpful, clear, and trustworthy?
+- Is an AI-assisted sales, service, or internal knowledge workflow acceptable under a short rubric?
+- Does a new prompt, model, or process version improve the user or employee experience enough to roll out?
+- Does AI-generated campaign, product, or client material match the intended tone and avoid obvious failure modes?
 
 This is **not yet proven PMF**. It is the strongest hypothesis after comparing the current tokenless build with the market. The next milestone should be paid design-partner evidence, not a broad public launch.
 
@@ -46,11 +48,13 @@ The positioning should therefore be **centralized operations with private-by-def
 
 ### Revised conclusion after the additional research
 
-Three considerations materially sharpen the original recommendation:
+Five considerations materially sharpen the original recommendation:
 
-1. **Privacy moves from P1 to P0.** A customer-facing AI team may submit unreleased prompts, model outputs, transcripts, product plans, or user-derived material. “Gated” access is not enough unless RateLoop can explain exactly what the operator, raters, chain observers, subprocessors, and future auditors can see and for how long.
+1. **Privacy moves from P1 to P0.** A customer or its consultant may submit unreleased prompts, model outputs, transcripts, campaign material, operating procedures, or user-derived data. “Gated” access is not enough unless RateLoop can explain exactly what the operator, raters, chain observers, subprocessors, and future auditors can see and for how long.
 2. **The rating system is a hypothesis to benchmark, not a truth claim.** The current v0 mechanism rewards accurate prediction of the leave-one-out panel share; it is intentionally not a full Robust Bayesian Truth Serum implementation. Its extra prediction input is defensible only if it improves information quality enough to justify rater effort and buyer explanation cost.
 3. **Combine B2B demand with B2C supply, not two equal product categories.** The consumer side should initially be the participant product—discovery, practice, qualification, paid tasks, receipts, and earnings—not a general-purpose social polling marketplace competing for roadmap and moderation capacity.
+4. **Broaden the customer by workflow, not by making the product generic.** “Small AI-native software company” is a useful direct-sales design partner, but too narrow as the market definition. Consultancies and agencies can aggregate demand from many non-AI-native companies while RateLoop keeps one repeated job: human acceptance and regression evidence for AI-enabled workflows.
+5. **A consulting channel creates a conflict-of-interest boundary.** A consultant may implement the workflow and operate the evaluation, but the client must approve the cases, rubric, reviewer source, and acceptance rule. The result must disclose who funded, configured, and interpreted the evaluation. Deterministic settlement can prove that accepted inputs were not changed; it cannot prove that the implementer selected an unbiased test.
 
 ## What “best fit” means in this report
 
@@ -95,9 +99,23 @@ The [production-readiness assessment](tokenless-production-readiness-2026-07.md)
 
 This report recommends what to validate and build next; it does not relax those gates.
 
-## Market evidence: the problem is real
+## Market evidence: the problem is broader than AI-native software
 
-### AI teams need human validation, but not on every request
+### Ordinary companies are already the larger adoption market
+
+[Eurostat reports](https://ec.europa.eu/eurostat/web/products-eurostat-news/w/ddn-20251211-2) that 20.0% of EU enterprises with at least 10 employees used AI in 2025, up from 13.5% in 2024. Written-language analysis and generation were among the most common and fastest-growing uses. In Germany, [KfW Research](https://www.kfw.de/About-KfW/Newsroom/Latest-News/Pressemitteilungen-Details_880896.html) estimates that almost 780,000 SMEs used AI during 2022–2024; adoption reached 36% among companies with more than 50 employees and was strongest in knowledge-based services.
+
+The important gap is between trying AI and operationalizing it. The [OECD's 2025 SME survey](https://www.oecd.org/en/publications/generative-ai-and-the-sme-workforce_2d08b99d-en/full-report/component-4.html) found that only 29% of generative-AI-using SMEs applied it in core company activities; use skewed toward text and simpler, one-off tasks. [U.S. Census Bureau research](https://www.census.gov/library/working-papers/2026/adrm/CES-WP-26-25.html) likewise found AI use across business functions, with sales and marketing, strategy and business development, and IT the most common functions among adopters, while most adopters still used AI in three or fewer functions.
+
+These figures do not prove that hundreds of thousands of companies will buy RateLoop. They do invalidate “small AI-native software companies” as the only plausible demand pool. The better qualification is operational:
+
+> Is there a repeated AI-mediated output, a named decision owner, subjective downside if quality slips, and enough volume or risk to justify a recurring acceptance test?
+
+That qualifier reaches AI product teams, agencies, service companies, e-commerce operations, and internal customer-experience or transformation teams without claiming that every AI user needs an external panel.
+
+The intermediary route is also credible enough to test. The [European Commission's Joint Research Centre](https://joint-research-centre.ec.europa.eu/jrc-news-and-updates/speeding-digitalisation-and-ai-uptake-european-businesses-2025-04-11_en) describes European Digital Innovation Hubs as intermediaries between technology providers and users and reports strong demand for their testing, training, and transformation services. That is evidence that businesses accept help through trusted adoption partners—not proof that private consultancies can resell RateLoop. Paid cross-client pilots remain the required channel test.
+
+### AI-enabled workflows need human validation, but not on every request
 
 [McKinsey's 2025 global AI survey](https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai/) reports that 51% of respondents at organizations using AI had seen at least one negative consequence, with nearly one-third reporting consequences from inaccuracy. It also identifies defined processes for deciding when model outputs need human validation as one of the practices that most distinguishes AI high performers.
 
@@ -105,9 +123,9 @@ This report recommends what to validate and build next; it does not relax those 
 
 [NIST's AI Resource Center](https://airc.nist.gov/) likewise describes evaluation work that combines expert annotators and human testers, while its [Generative AI Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence) places evaluation inside the AI risk-management lifecycle.
 
-The buying trigger is therefore not “humans are better than AI.” It is:
+The buying trigger is therefore not “humans are better than AI” or “this company builds AI.” It is:
 
-> Automated graders cover scale; an external human panel calibrates subjective quality, ambiguous edge cases, and important release decisions.
+> Automated checks cover scale; an appropriate human cohort calibrates subjective quality, ambiguous edge cases, and important workflow or release decisions.
 
 ### Existing vendors prove demand and expose the competitive bar
 
@@ -150,22 +168,22 @@ The near-term economic buyer remains a company. The agent is a calling client ac
 
 ## Candidate wedge assessment
 
-Scores are directional judgments from 1 (poor) to 5 (strong). Weights reflect a pre-PMF company that should exploit current assets without walking into a market dominated by scale and procurement.
+Scores are directional judgments from 1 (poor) to 5 (strong). Weights reflect a pre-PMF company that should exploit current assets without walking into a market dominated by scale and procurement. The candidates are jobs, not company identities.
 
 | Candidate wedge | Pain and frequency (25%) | Current product fit (20%) | Differentiation (20%) | Budget evidence (15%) | GTM reachability (10%) | Feasibility (10%) | Weighted score |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| External human release gates for customer-facing AI | 5 | 4 | 4 | 4 | 4 | 3 | **83/100** |
+| Human assurance for AI-enabled workflow and release decisions | 5 | 4 | 4 | 4 | 4 | 3 | **83/100** |
 | Confidential creative/message pretesting | 4 | 3 | 2 | 4 | 3 | 3 | **64/100** |
 | Simple human approval checkpoints for agents | 5 | 2 | 1 | 2 | 4 | 4 | **59/100** |
 | General agent-created consumer polls | 3 | 4 | 1 | 3 | 3 | 4 | **58/100** |
 | High-stakes expert or compliance review | 5 | 1 | 2 | 5 | 2 | 1 | **58/100** |
 | Public/social “verified verdicts” | 2 | 4 | 3 | 1 | 3 | 2 | **51/100** |
 
-### 1. Recommended: external human release gates for customer-facing AI
+### 1. Recommended: human assurance for AI-enabled workflow and release decisions
 
 Why it leads:
 
-- The buyer problem is repeated whenever a team changes a model, prompt, workflow, or agent behavior.
+- The buyer problem is repeated whenever a company or its implementation partner changes a model, prompt, workflow, or AI-generated customer/employee experience.
 - The current API lifecycle, idempotency, webhooks, prepaid workspace model, A/B format, sealed answers, and result artifact fit a release workflow.
 - It complements automated eval platforms rather than replacing them.
 - Small panels can be economically rational for release-level decisions even though they are unsuitable for scoring every trace.
@@ -204,15 +222,15 @@ The legal reference correctly constrains the output to paid panel research, not 
 
 Recommended category language:
 
-> **External human evaluation for AI release decisions**
+> **Human assurance for AI-enabled workflows**
 
 Recommended one-line description:
 
-> Send an A/B or go/no-go evaluation from your AI workflow. Get a blinded panel verdict, written reasons, and a verifier-ready decision receipt before you ship.
+> Test an AI-assisted workflow or output change with the right human cohort. Get a blinded comparison, written reasons, and a verifier-ready decision receipt before rollout.
 
 Recommended job-to-be-done:
 
-> When automated graders and internal reviewers cannot confidently resolve a subjective release decision, give me a fast independent human signal that my pipeline can consume and my team can inspect.
+> When automated checks and internal reviewers cannot confidently resolve a subjective workflow or release decision, give me a fast human signal from the right reviewer source that my team can inspect and my systems can consume.
 
 ### What should be visible to the buyer
 
@@ -235,24 +253,44 @@ Recommended job-to-be-done:
 
 These can support trust, supply, and integration. They are not the buyer's core outcome.
 
-## Ideal customer profile
+## Customer and channel strategy
 
-### Beachhead customer
+### Define the customer by the workflow
 
-An AI-native software company with roughly 10–200 employees that:
+The first end client should usually have 20–500 employees or equivalent workflow volume, but company size is a proxy rather than the definition. A qualifying company:
 
-- ships a customer-facing assistant, support agent, content tool, research agent, or conversational workflow;
-- releases prompt/model/agent changes at least weekly;
-- already uses traces, automated scorers, or ad hoc internal review;
-- has too little traffic for fast production A/B significance or wants a pre-release signal;
-- lacks a dedicated panel/research-operations team; and
-- can use English-language general users or AI power users rather than regulated-domain experts.
+- runs a repeated customer- or employee-facing workflow containing AI-generated or AI-mediated output;
+- changes the model, prompt, sources, automation, or operating process often enough to require regression checks;
+- has a named business owner who can approve test cases, reviewer provenance, and the final decision;
+- has subjective criteria such as clarity, usefulness, tone, trust, preference, or escalation quality that objective tests cannot fully resolve;
+- can submit representative, redacted, or synthetic cases under a workable confidentiality model; and
+- has enough frequency, downside, or client value to pay for more than a one-off poll.
 
-### Buyer and user
+This includes AI-enabled SaaS, customer-support operations, digital agencies, B2B service firms, e-commerce brands, and internal AI/transformation teams. It excludes companies that merely allow employees to use a chatbot without a repeated owned workflow.
 
-- **Economic buyer:** Head of AI, VP Product, founder, or engineering leader.
-- **Daily user/integrator:** evaluation engineer, applied-AI engineer, or AI product manager.
-- **Internal champion:** the person currently chasing colleagues in Slack to compare outputs before a release.
+### Prioritize three routes to demand
+
+Scores are directional, using repeat demand (25%), ability to aggregate demand (25%), current product fit (20%), budget (15%), and near-term reachability (15%).
+
+| Route | Who operates RateLoop | Typical beneficiary | Score | Recommendation |
+|---|---|---|---:|---|
+| AI consultancies, AI/software agencies, and digitally mature agencies | Consultant, agency AI lead, or delivery team | Multiple client companies | **90/100** | Primary channel and paid design-partner route |
+| AI-enabled SaaS and software companies | Product, evaluation, or applied-AI team | The company and its users | **81/100** | Primary direct design-partner route |
+| Digitally mature service, e-commerce, CX, and marketing teams | Workflow owner, operations lead, or transformation team | The company, employees, and customers | **75/100** | Expand through validated templates and partner introductions |
+| Large enterprise direct | Central AI, innovation, or risk team | Multiple business units | **65/100** | Defer broad selling until security and procurement maturity improve |
+| Microbusinesses with occasional AI use | Owner | One local business | **57/100** | Avoid as a core segment; weak frequency and project economics |
+
+The top score does not mean “build software for consultants.” It means consultants can be a lower-friction distribution and learning channel because one relationship can expose RateLoop to multiple end-client workflows. The product primitives—projects, artifact comparisons, cohorts, evidence, privacy, and recurring suites—must remain useful to direct customers too.
+
+### Buyer, operator, beneficiary, and decision owner
+
+- **Channel/economic buyer:** consultancy founder, AI practice lead, agency owner, or delivery lead buying evaluation capacity for client work.
+- **Direct economic buyer:** Head of AI, Product, Customer Experience, Operations, Marketing, Digital Transformation, or a business-unit leader.
+- **Daily operator:** consultant/project lead, evaluation engineer, applied-AI engineer, product manager, or workflow owner.
+- **End beneficiary:** the client company whose workflow and customer/employee experience are being evaluated.
+- **Final decision owner:** a named person at the end-client company; neither RateLoop nor the consultant should be represented as authorizing the rollout.
+
+The [AI Consulting + RateLoop strategy](ai-consulting-rateloop-integration-strategy-2026-07-13.md) defines the complementary service motion: consulting discovers and implements the workflow; RateLoop provides the repeatable evaluation and evidence layer during the pilot and after the consultant leaves.
 
 ### Disqualifiers for the first year
 
@@ -262,7 +300,8 @@ An AI-native software company with roughly 10–200 employees that:
 - a need for dozens of narrow domain-expert categories before the first run;
 - use cases where the respondent must be an authorized employee;
 - secrets that cannot be shown to RateLoop or eligible raters; and
-- procurement that requires mature SOC 2, SSO/SAML, VPC, and enterprise indemnity before a pilot.
+- procurement that requires mature SOC 2, SSO/SAML, VPC, and enterprise indemnity before a pilot; and
+- a consultant who has no repeated client workflow, will not disclose its role in designing the test, or wants the result to function as its own unqualified “independent certification.”
 
 ## How B2B and B2C should combine
 
@@ -272,7 +311,7 @@ That maps well to RateLoop: operate the rater side as managed, qualified supply 
 
 | Surface | Primary user | Initial job | Commercial role | Visibility |
 |---|---|---|---|---|
-| Buyer workspace/API | AI product teams | Run private release evaluations | Revenue side: subscription + execution + participant costs | Private by default |
+| Buyer workspace/API | Consultancies, agencies, and internal AI/workflow teams | Run private workflow and release evaluations in client-isolated projects | Revenue side: subscription + execution + participant costs | Private by default |
 | Rater app | Individual participants | Qualify, receive tasks, judge, explain, and earn | Supply side: paid per accepted work | Only assigned context |
 | Advisory/practice feed | Prospective raters | Learn the mechanism and demonstrate quality | Acquisition and calibration cost | Public or synthetic content only |
 | Customer-invited cohort | Customer's users, experts, or community | Judge context where external generalists are insufficient | Premium cohort orchestration | Customer-scoped |
@@ -305,7 +344,7 @@ Total signups are a vanity metric for this product. The unit of supply is a **qu
 - gold-question performance, disagreement structure, and appeal overturns; and
 - concentration: how much of each verdict comes from the same identity, device, referral, geography, or behavior cluster.
 
-Recruit supply against signed design-partner demand. A large generic crowd does not help if the first customers need English-speaking weekly users of AI assistants during European working hours.
+Recruit supply against signed design-partner demand. A large generic crowd does not help if one client needs German e-commerce customers, another needs English-speaking weekly AI users, and an internal workflow requires customer-invited employees. Broadening demand makes explicit reviewer provenance and cohort operations more important, not less.
 
 ## Privacy and auditability: use layered evidence
 
@@ -368,14 +407,15 @@ If design partners still reject the residual public metadata, that is a product-
 ### P0: required for a credible design-partner pilot
 
 1. **Finish the existing live-product gates.** Complete fresh Base Sepolia deployment, deployment-key propagation, automated pipeline driving, smoke E2E, and the rater/funder post-submit loops from the readiness assessment.
-2. **Add evaluation context and artifacts.** The current [`TokenlessQuestion`](../packages/sdk/src/tokenlessTypes.ts) carries a prompt and labels but no source artifact, response pair, transcript bundle, rubric, URL, or image. A release decision cannot be judged from a bare sentence.
+2. **Add evaluation context and artifacts.** The current [`TokenlessQuestion`](../packages/sdk/src/tokenlessTypes.ts) carries a prompt and labels but no source artifact, response pair, transcript bundle, rubric, URL, or image. A workflow or release decision cannot be judged from a bare sentence.
 3. **Guarantee the rater type.** The current [landing page](<../packages/nextjs/app/(public)/page.tsx>) says “Human and AI raters guide decisions.” The recommended product needs an explicit **verified-human panel** mode. Synthetic or agent raters can remain in a labeled sandbox, but must never be mixed into a human-calibration result.
 4. **Add job-relevant cohorts.** Current audience selection is identity assurance (`selfie`, `passport`, `orb`, `presence`). The buyer needs language, geography, AI-tool familiarity, role/industry when applicable, and repeat-cohort controls. Personhood is an input to quality, not the finished audience product.
 5. **Return decision evidence, not a magic confidence score.** For small panels, expose sample size, cohort definition, vote split, rationale themes, disagreement, completion/failure state, and methodology. Do not imply statistical representativeness from an opaque `confidenceBps` field.
 6. **Orchestrate an eval run.** Add an off-chain run object that groups multiple binary/A/B rounds, tracks a release candidate or experiment, and emits one webhook summary. This need not expand the fund-holding contract.
-7. **Make private-by-default evidence a launch gate.** Complete the field/event-level public-metadata threat model, DPIA/data map, keyed commitment scheme, per-rater mapping encryption, tenant access controls, deletion/retention path, and a clear managed-panel confidentiality contract before accepting private customer artifacts.
-8. **Benchmark the scoring mechanism.** Label v0 correctly as consensus-prediction accuracy, publish worked examples, and compare it in sandbox/concierge studies with equal-pay simple majority. Measure task time, completion, comprehension, honest minority preservation, repeatability, manipulation response, and whether the prediction bucket changes the business decision.
-9. **Stand up one managed supply cohort.** Recruit and qualify only the rater segment required by the first design partners; implement the advisory/practice funnel, active-capacity metrics, task notifications, receipts, and a minimum fill-rate operating playbook.
+7. **Capture evaluation provenance and client acceptance.** Record who funded the work, selected cases, wrote the rubric, chose the cohort, operated the run, interpreted the result, and owned the final decision. For concierge pilots, a signed client approval of the manifest is enough; do not build a full consultant portal before repeated demand.
+8. **Make private-by-default evidence a launch gate.** Complete the field/event-level public-metadata threat model, DPIA/data map, keyed commitment scheme, per-rater mapping encryption, tenant access controls, deletion/retention path, and a clear managed-panel confidentiality contract before accepting private customer artifacts. Consultant access must be scoped to its client engagement rather than an undifferentiated agency account.
+9. **Benchmark the scoring mechanism.** Label v0 correctly as consensus-prediction accuracy, publish worked examples, and compare it in sandbox/concierge studies with equal-pay simple majority. Measure task time, completion, comprehension, honest minority preservation, repeatability, manipulation response, and whether the prediction bucket changes the business decision.
+10. **Stand up one managed supply cohort.** Recruit and qualify only the rater segment required by the first design partners; implement the advisory/practice funnel, active-capacity metrics, task notifications, receipts, and a minimum fill-rate operating playbook.
 
 ### P1: required for repeated paid use
 
@@ -386,8 +426,9 @@ If design partners still reject the residual public metadata, that is a product-
 5. rater calibration, gold questions, cohort-quality dashboards, and published service-level data;
 6. a signed, exportable evidence packet plus workspace access/read audit logs;
 7. data retention controls, customer deletion workflows, DPA/subprocessor documentation, and security basics expected for private model outputs;
-8. a result comparison view across releases, prompts, cohorts, and time; and
-9. customer-invited cohorts with explicit labels separating internal, community, and independent external panels.
+8. a result comparison view across releases, workflows, prompts, cohorts, and time;
+9. customer-invited cohorts with explicit labels separating internal, community, and independent external panels; and
+10. a consultant/agency portfolio with hard client-workspace isolation, cost allocation, client guest review, and reusable templates after at least two paid multi-client pilots request it.
 
 ### P2: only after customer pull
 
@@ -397,7 +438,7 @@ If design partners still reject the residual public metadata, that is a product-
 - SSO/SAML and formal enterprise security packages;
 - customer-controlled/BYOC data planes and regional deployment options;
 - a native integration marketplace;
-- white-label panel infrastructure; and
+- white-label or reseller panel infrastructure; and
 - production mainnet hardening beyond what actual usage requires.
 
 ## Differentiation: what must be true
@@ -431,12 +472,15 @@ The compounding asset is the consented quality history needed to form reliable c
 
 1. a private, portable decision packet connecting artifact, rubric, cohort claims, responses, mechanism version, and result;
 2. a tamper-evident tenant action/access log;
-3. independently verifiable accepted-input and financial settlement references; and
-4. an optional redacted public artifact, never automatic publication.
+3. an explicit provenance record naming the funder, test designer, operator, reviewer source, interpreter, and client decision owner;
+4. independently verifiable accepted-input and financial settlement references; and
+5. an optional redacted public artifact, never automatic publication.
 
 Together, the product remains:
 
-> Small, repeated, private-by-default external decision panels with a measurable incentive mechanism and a verifier-ready receipt.
+> Small, repeated, private-by-default human-assurance panels for AI-enabled workflows, with explicit reviewer provenance, a measurable incentive mechanism, and a verifier-ready receipt.
+
+The evidence layer proves what was submitted, accepted, scored, and paid under the declared process. It does **not** prove that a consultant selected representative cases, wrote a neutral rubric, or interpreted disagreement fairly. Client approval, provenance disclosure, blinded assignment, and later outcome comparison are the safeguards for those risks.
 
 This thesis must be tested. If buyers do not pay more, adopt faster, or trust results more because of the mechanism, cohort quality, independence, and evidence, the chain layer is implementation complexity rather than differentiation. If customers value the evidence but reject public per-round metadata, preserve non-custodial settlement and redesign the publication boundary.
 
@@ -454,6 +498,13 @@ Recommended pricing architecture:
 4. **Managed evaluation:** optional higher-priced rubric/cohort setup for customers without evaluation expertise.
 5. **x402:** optional per-run or per-result lane for programmatic buyers without an account.
 
+Use two commercial paths without creating two products:
+
+- **Channel-led:** a consultancy or agency includes clearly itemized RateLoop evaluation in a paid implementation pilot, then buys recurring execution or workspace capacity across client-isolated projects.
+- **Direct:** an internal product, CX, marketing, operations, or AI team buys the same evaluation runs and evidence without the consulting layer.
+
+The companion [AI Consulting + RateLoop strategy](ai-consulting-rateloop-integration-strategy-2026-07-13.md) describes the larger implementation-pilot and Quality Loop pricing hypotheses. RateLoop participant and evaluation costs should remain visible on those proposals so the product is not mistaken for a free consulting add-on.
+
 The participant app is not a second subscription business in the first year. Raters should never pay, stake, or buy premium access to paid work. Practice tasks, qualification, notifications, and receipts are supply-acquisition and quality costs funded by the B2B economics. Consumer-funded asks can be tested later under a separate legal and product gate; do not use them to subsidize an unproven B2B funnel.
 
 Pricing hypotheses to test—not publish as final pricing:
@@ -462,25 +513,36 @@ Pricing hypotheses to test—not publish as final pricing:
 - Team: $500–$1,500 per month plus participant costs for private cohorts, history, webhooks, and budgets.
 - Managed: fixed setup/run fee based on cohort and rubric complexity.
 
-The first proof is not whether a founder says that $500 sounds reasonable. It is whether a team pays, runs the workflow repeatedly, and uses the result in an actual release decision.
+The first proof is not whether a founder or consultant says that $500 sounds reasonable. It is whether a channel partner or internal team pays, runs the workflow repeatedly, and uses the result in an actual rollout decision.
 
 ## Go-to-market recommendation
 
 ### Design-partner offer
 
-> We help AI product teams resolve subjective release decisions before production traffic. Send us two model or agent variants and a short rubric; we return a blinded human preference panel with reasons and a private verifier-ready result.
+> We help you prove that an AI-assisted workflow is good enough to roll out. Send representative baseline and candidate outputs plus a short rubric; we return a blinded human comparison with reasons, disagreement, provenance, and a private verifier-ready result.
 
 For the first three to five partners, run this as a concierge service even if some workflow steps are manual. The product should learn the repeated schema before automation hardens it.
 
 ### Where to find the first partners
 
-- founders and product leads of customer-facing AI startups;
+- DACH AI implementation consultancies and AI/software agencies with at least two active client workflows;
+- digital and marketing agencies already producing AI-assisted customer content and able to become a repeated channel;
+- founders and product leads of customer-facing AI-enabled software companies;
+- customer-experience, support, marketing, operations, and digital-transformation leaders in digitally mature service or e-commerce companies;
 - evaluation/platform engineers already using Braintrust, LangSmith, Langfuse, Arize, or home-grown evals;
-- teams launching support, research, voice, or content agents;
-- AI agencies that repeatedly need client sign-off on output quality; and
+- teams launching support, research, voice, content, or internal knowledge workflows; and
 - Base/x402 builders only where they also have a real evaluation need.
 
 Do not lead acquisition with rater earnings or crypto communities. Demand discovery should start where AI release quality is discussed.
+
+### Channel-led land and expand
+
+1. **Land with a paid workflow-selection or implementation pilot.** The consultant and client define the current process, representative cases, measurable objectives, subjective rubric, reviewer source, and stop conditions before the candidate is built.
+2. **Use RateLoop for the acceptance comparison.** Run deterministic checks first, then use the relevant external, customer-invited, or internal cohort only for criteria that require judgment.
+3. **Convert to a recurring Quality Loop.** Freeze the cases and rerun them when prompts, models, sources, or workflow rules change.
+4. **Expand through the channel.** After one consultancy repeats the same schema for two client-isolated projects, test portfolio, cost-center, and partner features. Do not build white-labeling from verbal interest.
+
+The client must approve the evaluation manifest and own the final decision. RateLoop should describe the panel as procedurally independent only when the reviewers are external to the implementer and client; it should never describe the whole engagement as independent if the implementing consultant chose the cases and rubric without client governance.
 
 ### Supply-side launch strategy
 
@@ -512,13 +574,19 @@ This avoids competing with platforms that already own traces, experiments, datas
 
 ## Twelve-week validation plan
 
-### Weeks 1–2: problem interviews, no new protocol work
+### Weeks 1–2: two-sided buyer interviews, no new protocol work
 
-Interview 15–20 people in the beachhead ICP. Ask for the last real release decision, not opinions about the concept.
+Interview 18–24 people across both routes:
+
+- 8–10 AI consultants, AI/software agencies, or digitally mature agencies that could reuse the workflow across clients;
+- 8–10 end-client decision owners in software, services, e-commerce, CX, marketing, operations, or transformation; and
+- 2–4 evaluation/product practitioners who can pressure-test the methodology.
+
+Ask for the last real workflow or release decision, not opinions about the concept.
 
 Questions:
 
-1. What AI change did you hesitate to ship in the last month?
+1. What AI-assisted workflow or output change did you hesitate to roll out in the last month?
 2. What evidence did you use and who reviewed it?
 3. How long did the decision take and what delayed it?
 4. Where did automated graders and internal review disagree?
@@ -530,8 +598,10 @@ Questions:
 10. Would a signed private evidence packet plus minimal public settlement proof satisfy the audit need better than a public result?
 11. When do you need independent external users, your own customers/community, or internal subject-matter experts?
 12. Does a prediction-based incentive make the result more credible, less understandable, or neither?
+13. For consultants: how many current clients share this problem, who would pay for the evaluation, and could the same project/run schema be reused?
+14. For end clients: would you trust an evaluation operated by the implementer, and what approvals or disclosures would make its result decision-useful?
 
-Success gate: at least five interviewees provide a recent qualifying artifact, at least three agree to a live design-partner run, and those partners accept one documented privacy mode without requiring an entirely different enterprise architecture.
+Success gate: at least six interviewees provide a recent qualifying artifact; at least two channel partners identify two real client opportunities each; at least three end clients agree to a live design-partner run; and those partners accept one documented privacy and provenance mode without requiring an entirely different enterprise architecture.
 
 ### Weeks 3–5: concierge pilot surface
 
@@ -544,13 +614,14 @@ Build only the minimum P0 additions around the existing API:
 - result with split, reasons, disagreement, and evidence;
 - a private-by-default artifact store, customer-visible access log, retention control, and signed exportable evidence manifest;
 - a rater practice/qualification path using only public or synthetic content; and
-- one eval-platform export or generic webhook example.
+- one eval-platform export or generic webhook example; and
+- a signed evaluation manifest recording funder, case/rubric author, operator, reviewer source, acceptance rule, interpreter, and client decision owner.
 
 Use sandbox/test funds until the production-readiness gates for real money are closed.
 
 ### Weeks 6–9: run repeated partner decisions
 
-Target three partners and at least five real release decisions per partner. Compare:
+Target at least two channel partners across three client-isolated projects, plus one direct design partner, and run at least three real workflow or release decisions per end client. Compare:
 
 - internal reviewer decision;
 - LLM-judge result;
@@ -569,17 +640,22 @@ Ask every active partner to move to a paid monthly design-partner plan plus part
 
 Continue the wedge if:
 
-- at least two partners pay;
-- at least two partners run five or more panels in a month;
+- at least two channel partners or direct customers pay for RateLoop as an explicit part of a project rather than receiving it as a free extra;
+- at least one channel partner repeats the evaluation schema across two client-isolated projects;
+- at least three end-client decision owners use the result or reasons in a real go, revise, or stop decision;
+- at least two customer organizations run five or more panels in a month;
 - at least half of active partners return within 30 days;
 - at least 30% of runs either change a decision or materially resolve documented disagreement;
-- median end-to-end turnaround is below four hours during concierge supply; and
+- median end-to-end turnaround is below four hours during concierge supply;
 - private-context/security requirements are achievable without an enterprise rebuild;
 - every pilot can identify exactly what is public, private, retained, and deleted, with no critical leakage finding left unresolved; and
 - the starter cohort can fill the promised panel size repeatedly without depending on one small referral or behavior cluster.
 
 Reconsider or stop if:
 
+- consultants express interest but cannot attach RateLoop to paid client work;
+- end clients treat implementer-operated evidence as conflicted even with approved manifests and external reviewers;
+- every segment requires a different artifact, cohort, report, and sales motion before any one pattern repeats;
 - teams say their own staff or users are always the only credible judges;
 - buyers want bulk annotation rather than release decisions;
 - PickFu/Prolific solve the job well enough with less friction;
@@ -596,7 +672,7 @@ The RateLoop ratings workflow would normally be useful for testing the positioni
 
 After the isolated tokenless deployment has a real human-panel path, run three separate tests:
 
-1. a **target-buyer test** with qualified AI product/evaluation professionals comparing the release-gate positioning against generic “human judgment for agents”; and
+1. a **target-buyer test** split between AI consultants/agencies and end-client workflow owners, comparing “human assurance for AI workflows” against narrow “AI release gate” and generic “human judgment for agents” positioning; and
 2. a **rater-comprehension test** checking whether first-time raters understand the choice, five-bucket prediction, base/bonus compensation, privacy obligations, and one concrete improvement they would make; and
 3. a **buyer privacy test** comparing “publicly auditable result” with “private evidence packet + minimal public settlement proof,” including what metadata each buyer will permit on a public chain.
 
@@ -608,25 +684,29 @@ Each prompt should ask one bounded question and use paid written feedback when t
 
 **Headline**
 
-> Human verdicts for AI release decisions.
+> Know when an AI workflow is good enough to use.
 
 **Subhead**
 
-> Send an A/B or go/no-go evaluation from your workflow. Get blinded human judgment, written reasons, and a verifiable decision receipt before you ship—without publishing your prompts or customer data.
+> Compare an AI-assisted workflow with your current process. Get blinded human judgment, written reasons, and a verifiable decision receipt before rollout—without publishing your client, prompt, or customer data.
 
 **Primary CTA**
 
-> Run a sandbox evaluation
+> Validate a workflow
 
 **Secondary CTA**
 
-> Become a design partner
+> Partner with RateLoop
 
 **Rater path**
 
 > Earn by evaluating AI experiences
 
 The rater path should be important but secondary. “For Agents” should describe integration by the buying team's software, not suggest that AI raters are interchangeable with the external human calibration being sold.
+
+Add a channel-specific line below the primary buyer story rather than making “for consultants” the category:
+
+> Implement AI for clients? Add a repeatable acceptance test and recurring quality loop to every workflow you deliver.
 
 Add a short privacy line near the first artifact upload, not only in the footer:
 
@@ -638,7 +718,7 @@ Do not say “anonymous,” “zero knowledge,” “fully confidential,” or �
 
 Show one real case study with:
 
-- the release question and redacted candidate artifacts;
+- the workflow or release question and redacted candidate artifacts;
 - cohort definition and panel size;
 - blinded result and disagreement;
 - representative written reasons;
@@ -652,13 +732,15 @@ One credible repeated workflow is worth more than a broad use-case catalog.
 
 ## Final decision
 
-**Go B2B2C, but asymmetrically and without going broad.**
+**Go B2B2C with a broader customer universe, a narrow workflow job, and a channel-led beachhead.**
 
 The best current PMF hypothesis is:
 
-> RateLoop is the external-human release-gate layer in an AI evaluation stack, serving small-to-mid-sized teams that need fast subjective judgment before production traffic can answer the question.
+> RateLoop is the human-assurance layer for AI-enabled workflows, initially distributed through AI consultancies and agencies and sold directly to AI-enabled software and digitally mature business teams that need fast subjective judgment before rollout or production evidence can answer the question.
 
-Businesses are the paying demand side. Individual raters are the participant/supply product, supported by an open advisory-to-qualified funnel. Public consumer-funded polling and a social result feed remain deferred. This combination can grow the rater network and improve panel liquidity without splitting the company between enterprise evaluation and consumer social polling.
+The market is not “all companies,” and it is not limited to companies that build AI as their product. A customer qualifies when it owns a repeated AI-mediated workflow, has a named decision owner, faces subjective quality risk, can supply safe representative cases, and will pay for recurring evidence. The consultancy channel aggregates those qualified workflows; it does not redefine RateLoop as consulting software.
+
+Businesses are the paying demand side. Consultancies can be buyers, operators, or resellers, while the end-client company remains the beneficiary and final decision owner. Individual raters are the participant/supply product, supported by an open advisory-to-qualified funnel. Public consumer-funded polling and a social result feed remain deferred. This combination can grow demand and panel liquidity without splitting the company between enterprise evaluation and consumer social polling.
 
 The strongest use of the more centralized tokenless architecture is to operate qualified cohorts, private workspaces, quality controls, billing, and service levels. The smart contracts should remain a narrow trust and settlement substrate. The complete decision audit trail should be layered: minimal public settlement evidence, tenant-private artifacts and rationales, a tamper-evident access log, and a portable selectively disclosed receipt. x402 should remain an optional lane. Neither blockchain nor x402 should define the category.
 
@@ -669,17 +751,19 @@ The rating mechanism and auditability can be distinctive together, but the hones
 - a public chain proves process and payment properties, not correctness or representativeness; and
 - public permanence creates enterprise privacy risk unless the metadata boundary is designed and tested before real-money B2B use.
 
-The make-or-break discovery question is simple:
+The make-or-break discovery question is now broader and more commercially useful:
 
-> Will AI teams repeatedly pay for an external, blinded, auditable human verdict at release time when automated evals and internal reviewers disagree?
+> Will consultancies and internal workflow owners repeatedly pay for blinded, provenance-rich human evidence when deciding whether an AI-enabled workflow is good enough to roll out or keep running?
 
-Two companion questions are now equally load-bearing:
+Three companion questions are equally load-bearing:
+
+> Can one consultancy reuse the same RateLoop project, cohort, privacy, and report schema across multiple client-isolated engagements?
 
 > Does the prediction-based mechanism produce measurably better decisions or incentives than a simpler panel?
 
 > Can RateLoop provide enough independent evidence while keeping customer content, rater identity mappings, rationales, and commercially sensitive metadata private by default?
 
-The next 12 weeks should answer those questions with artifacts, mechanism benchmarks, privacy reviews, paid pilots, cohort-liquidity data, and repeated usage before RateLoop expands its panel types, consumer-funded asks, protocol, or enterprise surface.
+The next 12 weeks should answer those questions with partner and end-client interviews, paid workflow pilots, cross-client schema reuse, artifacts, mechanism benchmarks, privacy/provenance reviews, cohort-liquidity data, and repeated usage before RateLoop expands its panel types, consumer-funded asks, protocol, or enterprise surface.
 
 ## Source index
 
@@ -688,6 +772,7 @@ The next 12 weeks should answer those questions with artifacts, mechanism benchm
 - [Tokenless architecture and implementation plan](tokenless-immutable-implementation-plan-2026-07.md)
 - [Tokenless production-readiness assessment](tokenless-production-readiness-2026-07.md)
 - [Legal and revenue reference](legal-revenue-assessment-tokenless-design-2026-07.md)
+- [AI Consulting + RateLoop strategy](ai-consulting-rateloop-integration-strategy-2026-07-13.md)
 - [Agent package workflow](../packages/agents/README.md)
 - [SDK workflow](../packages/sdk/README.md)
 - [Tokenless SDK types](../packages/sdk/src/tokenlessTypes.ts)
@@ -696,6 +781,11 @@ The next 12 weeks should answer those questions with artifacts, mechanism benchm
 
 ### External sources
 
+- [Eurostat — 20% of EU enterprises used AI technologies in 2025](https://ec.europa.eu/eurostat/web/products-eurostat-news/w/ddn-20251211-2)
+- [KfW Research — German SME AI adoption](https://www.kfw.de/About-KfW/Newsroom/Latest-News/Pressemitteilungen-Details_880896.html)
+- [OECD — Generative AI and the SME Workforce](https://www.oecd.org/en/publications/generative-ai-and-the-sme-workforce_2d08b99d-en/full-report/component-4.html)
+- [U.S. Census Bureau — The Microstructure of AI Diffusion](https://www.census.gov/library/working-papers/2026/adrm/CES-WP-26-25.html)
+- [European Commission JRC — Digital innovation hubs as intermediaries for AI adoption](https://joint-research-centre.ec.europa.eu/jrc-news-and-updates/speeding-digitalisation-and-ai-uptake-european-businesses-2025-04-11_en)
 - [Anthropic — Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
 - [McKinsey — The State of AI: Global Survey 2025](https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai/)
 - [NIST — AI Resource Center](https://airc.nist.gov/)

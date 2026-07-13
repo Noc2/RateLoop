@@ -10,9 +10,9 @@ Use AI implementation consulting as a **paid design-partner and distribution cha
 
 The combined offer should be:
 
-> We implement one valuable AI-assisted workflow and prove that it saves time without lowering customer-facing quality. Before rollout, the new workflow is tested against the current process with a blinded human evaluation and a documented acceptance decision.
+> We implement one valuable AI-assisted workflow and prove that it saves time without lowering decision-relevant quality. Before rollout, the new workflow is tested against the current process with a blinded human evaluation and a documented acceptance decision.
 
-RateLoop's role is the independent evaluation and evidence layer:
+RateLoop's role is the structured human-evaluation and evidence layer:
 
 - it turns vague claims such as “the agent looks good” into a predefined acceptance test;
 - it supplies external or customer-invited raters for subjective quality judgments;
@@ -22,7 +22,9 @@ RateLoop's role is the independent evaluation and evidence layer:
 
 RateLoop should **not** become the automation builder, CRM, prompt library, AI training portal, or compliance consultant. The consulting engagement supplies those services around RateLoop. This preserves a scalable software thesis while using consulting revenue to discover the workflows, artifacts, cohorts, and reports that buyers will repeatedly pay for.
 
-The first target should not be “all local businesses.” Start with **digitally mature, customer-facing service SMEs in the DACH market**, especially agencies and service businesses with repeated marketing, sales, or support outputs. They have enough volume and budget to benefit from AI, their quality is partly subjective, and their artifacts can often be redacted. Restaurants, tradespeople, and heavily regulated professional decisions are poor first targets.
+The first target should not be “all local businesses,” but it should also not be limited to AI-native software companies. Use a two-level market: start with **DACH AI implementation consultancies, AI/software agencies, and digitally mature agencies as the primary channel**, then serve their customer-facing SME and mid-market clients plus a small number of direct design partners. One capable partner can expose RateLoop to several support, marketing, sales, content, and internal-knowledge workflows while the product keeps one repeated job: proving that an AI-assisted workflow is good enough to roll out and keep running.
+
+Restaurants, tradespeople, companies with only occasional chatbot use, and heavily regulated professional decisions are poor first targets. The end client needs repeated workflow volume, a named decision owner, safe representative cases, and enough quality risk or value to justify recurring evaluation.
 
 ## Why this combination is commercially credible
 
@@ -30,7 +32,11 @@ The first target should not be “all local businesses.” Start with **digitall
 
 [KfW Research](https://www.kfw.de/About-KfW/Newsroom/Latest-News/Pressemitteilungen-Details_880896.html) reports that 20% of German SMEs used AI during 2022–2024, rising to 36% among businesses with more than 50 employees. Knowledge-based services led at 28%. This is a useful market, but it is not an untouched one.
 
-[OECD research](https://www.oecd.org/en/publications/ai-adoption-by-small-and-medium-sized-enterprises_426399c1-en.html) finds that SME adoption still lags larger firms and identifies skills, data, compute/connectivity, and finance as core enablers. In its cross-G7 evidence, about half of SMEs report that employees lack the skills to use generative AI.
+[Eurostat](https://ec.europa.eu/eurostat/web/products-eurostat-news/w/ddn-20251211-2) reports that 20.0% of EU enterprises with at least 10 employees used AI in 2025, up 6.5 percentage points in one year. KfW estimates the German SME total at almost 780,000 AI users. That is much broader than the population of small AI-native software vendors, although adoption alone does not make a company a RateLoop customer.
+
+[OECD research](https://www.oecd.org/en/publications/ai-adoption-by-small-and-medium-sized-enterprises_426399c1-en.html) finds that SME adoption still lags larger firms and identifies skills, data, compute/connectivity, and finance as core enablers. In its cross-G7 evidence, about half of SMEs report that employees lack the skills to use generative AI. A separate [OECD SME survey](https://www.oecd.org/en/publications/generative-ai-and-the-sme-workforce_2d08b99d-en/full-report/component-4.html) found that only 29% of generative-AI users applied it in core company activities and that use skewed toward simpler, one-off tasks. The commercial opportunity is therefore not generic awareness; it is helping companies cross from experimentation into a measured operating workflow.
+
+The [European Commission's Joint Research Centre](https://joint-research-centre.ec.europa.eu/jrc-news-and-updates/speeding-digitalisation-and-ai-uptake-european-businesses-2025-04-11_en) reports that European Digital Innovation Hubs already act as intermediaries between technology providers and SMEs and have delivered thousands of testing, training, and transformation services. This supports a partner-led route, but it also means generic readiness and education face subsidized competition. A paid consultancy + RateLoop offer must win on implementation, acceptance evidence, and recurring quality control.
 
 At the same time, Germany's publicly funded [Mittelstand-Digital AI trainers](https://www.mittelstand-digital.de/MD/Navigation/DE/Praxis/KI-Trainer/ki-trainer.html) offer vendor-neutral workshops, company visits, and implementation support free of charge. Local consultants advertise entry workshops from roughly €800 to €4,500; examples include [Prompteur Berlin](https://prompteur.berlin/leistungen-preise/) and [Context Studios](https://www.kiberatung.berlin/).
 
@@ -61,22 +67,35 @@ RateLoop is not the complete measurement system. It should measure subjective qu
 
 ### Recommended first segment
 
-Target businesses with all five traits:
+Treat the go-to-market as two linked ICPs.
 
-1. 10–100 employees, or an equivalent operating budget;
-2. at least one repeated text-heavy customer workflow;
-3. 20 or more hours of manual effort or enough output volume each week to matter;
-4. a clear internal process owner who can supply examples and approve changes; and
-5. content that can be safely redacted or replaced with representative test cases.
+**Primary channel partner:** a 3–50 person AI consultancy, AI/software agency, or digitally mature agency that:
+
+1. has at least two active clients using or implementing AI-assisted workflows;
+2. controls or materially influences the implementation and acceptance-test process;
+3. can sell a paid pilot rather than only free discovery;
+4. is willing to show RateLoop and participant costs as a distinct part of the engagement; and
+5. accepts hard client-workspace isolation, reviewer-provenance disclosure, and client ownership of the rollout decision.
+
+**Qualifying end client:** usually a 20–500 person company, or a smaller company with equivalent workflow volume, that:
+
+1. owns at least one repeated text-, image-, or voice-heavy customer/employee workflow;
+2. changes the model, prompt, sources, or process often enough to need regression checks;
+3. has enough manual effort, output volume, downside, or client value each week to matter;
+4. has a clear internal process owner who can supply cases, approve the rubric, and own the decision; and
+5. can safely redact the content or replace it with representative test cases.
+
+Firm size is a useful proxy for budget and adoption, not the product category. The decisive qualifier is a repeated, consequential AI-mediated workflow.
 
 Best initial segments:
 
 | Segment | Why it fits | Suitable first workflow | RateLoop role |
 |---|---|---|---|
+| AI implementation consultancies and AI/software agencies | Already understand evals and can bring multiple end customers | Agent, workflow, or model acceptance and regression checks | Primary channel, external calibration layer, and recurring Quality Loop |
 | Digital and marketing agencies | Repeated client output, quality is subjective, potential reseller channel | Campaign concepts, landing-page copy, client-report summaries | Blinded preference and message-clarity panels |
+| AI-enabled software companies | Frequent model, prompt, and product changes with direct integration ability | Assistant, support, research, content, or internal-copilot release checks | Direct design partner and API customer |
 | B2B service firms | Repetitive sales and support communication, clear owner, measurable editing time | Inquiry triage, draft replies, proposal summaries | Tone, clarity, usefulness, and escalation-quality checks |
 | E-commerce brands with support volume | Repeated public copy and customer questions | Support drafts, product copy, FAQ assistant | Customer-facing quality and source-support panels |
-| AI/software agencies | Already understand evals and can bring multiple end customers | Agent or model release checks | External calibration layer and channel partnership |
 
 Avoid initially:
 
@@ -206,7 +225,7 @@ Use two connected offers:
 
 The implementation invoice should itemize RateLoop participant costs and evaluation operations rather than pretending they are free. A temporary design-partner discount is fine, but the customer should see that external evaluation is a distinct service with a cost.
 
-After three successful direct pilots, offer an agency/channel version. Agencies are a more scalable path than personally consulting every local business, but white-label infrastructure should wait until an agency has paid for repeated evaluations.
+Run direct and channel pilots in parallel so consultancy enthusiasm is checked against end-client willingness to pay. Add consultant portfolio, reseller, or white-label infrastructure only after one agency has paid for repeated evaluations across client-isolated projects.
 
 ## How the evaluation should work
 
@@ -228,11 +247,27 @@ For each pilot:
 
 Never mix customer-invited, independent external, and simulated raters under one generic “human verified” label. The source and qualification of the reviewers are part of the result.
 
+### Define independence honestly
+
+A channel strategy introduces a real conflict: the consultant may design and sell the workflow, operate the test, and benefit when the client approves rollout. RateLoop can make the reviewer process blinded and the accepted data tamper-evident, but neither the rating mechanism nor the chain can prove that the consultant selected representative cases or wrote a neutral rubric.
+
+Every client evaluation should therefore use a signed manifest that records:
+
+- who funded the engagement;
+- who implemented the candidate;
+- who selected the baseline and candidate cases;
+- who wrote and approved the rubric and acceptance threshold;
+- whether reviewers were external, customer-invited, internal, or simulated;
+- who operated the run and interpreted the result; and
+- the named client owner who made the go, revise, or stop decision.
+
+The client should approve the cases, rubric, reviewer source, and acceptance rule before the candidate result is known. RateLoop may call the panel **externally reviewed** when the reviewers are independent of the client and implementer. It should not call the full engagement “independent” when the implementing consultant controls the test design. Later production evidence should be compared with the pre-rollout result so weak or biased test design becomes visible over time.
+
 ## How RateLoop should change
 
 ### Core product decision
 
-Do **not** change the tokenless fund core or settlement mechanism for the consulting use case. The useful changes are off-chain product and orchestration capabilities that also support the primary AI-team PMF thesis.
+Do **not** change the tokenless fund core or settlement mechanism for the consulting use case. The useful changes are off-chain product and orchestration capabilities that also support the broader human-assurance PMF thesis.
 
 The current repo already has workspaces, hash-only API keys, prepaid mode, private content records, webhooks, and a coherent `quote -> ask -> wait -> result` flow. The current [`TokenlessQuestion`](../packages/sdk/src/tokenlessTypes.ts), however, contains only a prompt, labels, and rationale mode. It cannot yet represent the artifact-rich evaluation described above.
 
@@ -262,15 +297,19 @@ The current repo already has workspaces, hash-only API keys, prepaid mode, priva
    - Add baseline-versus-candidate and run-over-time comparison.
    - Export a private decision packet suitable for a client report.
 
-6. **Privacy and retention controls**
+6. **Evaluation provenance and client approval**
+   - Bind the funder, implementer, case/rubric authors, reviewer source, operator, interpreter, acceptance rule, and client decision owner into the private evidence manifest.
+   - For concierge pilots, client sign-off can remain manual and signed; do not block learning on a full approval workflow.
+
+7. **Privacy and retention controls**
    - Tenant access controls, retention period, deletion workflow, access log, DPA/subprocessor documentation, and a complete public-metadata map are launch requirements for customer material.
    - Default to redacted/synthetic cases during the first consulting pilots.
 
-7. **Recurring evaluation suites**
+8. **Recurring evaluation suites**
    - Let a customer rerun the same frozen cases after a prompt, model, source, or workflow change.
    - Trigger alerts only when predefined quality or disagreement thresholds fail.
 
-These changes belong on the existing PMF backlog because they also serve AI product teams. The consulting channel is evidence for their priority, not a separate architecture.
+These changes belong on the existing PMF backlog because they also serve direct AI-enabled software and business teams. The consulting channel is evidence for their priority, not a separate architecture.
 
 ### P1: build only after two paid pilots request it
 
@@ -311,19 +350,22 @@ The concierge process should capture the exact data structures and result format
 
 ### Week 1: choose one segment and build the offer
 
-Recommended segment: DACH digital/marketing agencies or B2B service firms with 10–100 employees and recurring customer communication.
+Recommended partner segment: DACH AI consultancies, AI/software agencies, and digitally mature digital/marketing agencies with at least two active client AI workflows. Recruit direct end-client design partners in service, e-commerce, software, CX, marketing, or operations only when they meet the same workflow qualification.
 
 Create:
 
 - a one-page “Validated AI Workflow Pilot” offer;
 - one concrete before/after example using synthetic data;
 - a sample acceptance report;
+- a one-page evaluation-provenance manifest and client approval step;
 - a workflow qualification calculator; and
 - a short data/privacy checklist.
 
 Do not build consultant-specific RateLoop UI yet.
 
-### Week 2: conduct 12–15 problem interviews
+### Week 2: conduct 16–20 paired problem interviews
+
+Split the sample between 8–10 channel candidates and 8–10 end-client decision owners. Where possible, interview a consultant and one of its clients separately about the same kind of rollout decision.
 
 Ask about a recent workflow, not general AI interest:
 
@@ -335,16 +377,18 @@ Ask about a recent workflow, not general AI interest:
 6. What would a failed deployment cost?
 7. Has the business paid for implementation help before, and what budget owner approved it?
 8. Would an external/customer panel change the rollout decision, or is internal sign-off enough?
+9. For the consultant: how many active client workflows could use the same cases/rubric/run/report structure?
+10. For the client: would implementer-operated evidence feel conflicted, and which approvals or provenance disclosures would make it useful?
 
 Do not ask “Would you use RateLoop?” Show the report and ask what decision it would or would not support.
 
 ### Week 3: sell, do not only validate copy
 
-Offer three fixed-scope pilot slots. Require a paid selection sprint or a 30–50% pilot deposit. A free letter of intent does not validate the business.
+Offer three fixed-scope pilot slots: two through channel partners and one direct. Require a paid selection sprint or a 30–50% pilot deposit. A free letter of intent does not validate the business, and a consultant's interest without an end client does not validate channel demand.
 
 The most useful positioning comparison is:
 
-- **A — Validated Workflow Pilot:** implement one workflow and independently test the result; versus
+- **A — Validated Workflow Pilot:** implement one workflow and test the result with blinded reviewers and declared provenance; versus
 - **B — AI Readiness Audit:** identify opportunities and deliver a roadmap.
 
 Direct buyer conversations are more probative than a general public poll. If the isolated RateLoop human path becomes available, use a targeted founder/operator panel with paid written reasons as supplemental evidence, not as the purchasing signal.
@@ -356,6 +400,7 @@ Use synthetic or fully redacted cases. Produce:
 - baseline and candidate outputs;
 - deterministic metrics;
 - a blinded invited-reviewer comparison;
+- the approved provenance manifest and acceptance rule;
 - reason and disagreement themes;
 - the named owner's rollout decision; and
 - the report the customer would receive.
@@ -366,7 +411,9 @@ Record every manual step. Only automate a step that appears in at least two paid
 
 After 90 days, continue building the consulting integration only if:
 
-- at least three customers pay for a sprint or pilot;
+- at least two channel partners or direct clients pay for a sprint or pilot with RateLoop evaluation itemized;
+- at least one channel partner repeats the same evaluation schema across two client-isolated projects;
+- at least three end-client companies reach a real go, revise, or stop decision;
 - at least two pilots reach a production or controlled-rollout decision;
 - at least two customers run a second evaluation or buy the Quality Loop;
 - customers explicitly use the result or reasons in the decision;
@@ -377,7 +424,9 @@ Interpret failure carefully:
 
 | Evidence | Meaning | Response |
 |---|---|---|
-| Buyers pay for implementation but ignore external evaluation | RateLoop is not differentiating this segment | Keep consulting separate; preserve the AI-team release-gate thesis |
+| Buyers pay for implementation but ignore external evaluation | RateLoop is not differentiating this segment | Keep consulting separate; test the direct workflow-assurance thesis |
+| Consultants like the story but cannot attach it to paid client work | The channel has interest but no economic pull | Stop consultant-specific product work; interview end-client owners directly |
+| Clients reject implementer-operated evidence despite disclosed provenance | The conflict boundary is not credible enough | Use client-invited governance or a separate evaluator; do not claim independence |
 | Buyers value evaluation but only with their own staff/users | Orchestration and receipts matter more than an external crowd | Prioritize customer-invited cohorts with explicit provenance |
 | Buyers value results but reject public metadata | The evidence boundary, not the consulting offer, is wrong | Revisit privacy architecture before mainnet |
 | Agencies buy repeatedly across clients | Channel and consultant portfolio may scale | Build P1 multi-client and reseller capabilities |
@@ -402,7 +451,9 @@ The consulting business and RateLoop can reinforce each other, but only if they 
 - the customer owns the decision; and
 - recurring RateLoop runs monitor the workflow after the consultant leaves.
 
-The strongest near-term move is to sell **Validated AI Workflow Pilots** to a narrow set of DACH service SMEs, deliver the first ones manually, and use the repeated evaluation schema to prioritize RateLoop's artifact, run, cohort, privacy, and evidence features. Do not pivot RateLoop into a broad local-business AI platform, and do not delay consulting revenue until the tokenless product is ready for real money.
+The strongest near-term move is to sell **Validated AI Workflow Pilots** through a narrow set of DACH AI consultancies and agencies, while keeping several direct AI-enabled software and digitally mature business design partners in the sample. This expands the end market without turning RateLoop into a generic local-business AI platform: the company type broadens, but the job remains human acceptance and regression evidence for repeated AI-mediated workflows.
+
+Deliver the first evaluations manually, require client-approved cases/rubrics and explicit provenance, and use cross-client schema reuse to prioritize RateLoop's artifact, run, cohort, privacy, and evidence features. Do not build consultant-specific portfolio or white-label surfaces until a partner repeats paid work across client-isolated projects, and do not delay consulting revenue until the tokenless product is ready for real money.
 
 ## Source index
 
@@ -418,8 +469,12 @@ The strongest near-term move is to sell **Validated AI Workflow Pilots** to a na
 
 ### External sources
 
+- [Eurostat: 20% of EU enterprises used AI technologies in 2025](https://ec.europa.eu/eurostat/web/products-eurostat-news/w/ddn-20251211-2)
 - [KfW Research: German SME AI adoption](https://www.kfw.de/About-KfW/Newsroom/Latest-News/Pressemitteilungen-Details_880896.html)
 - [OECD: AI adoption by SMEs](https://www.oecd.org/en/publications/ai-adoption-by-small-and-medium-sized-enterprises_426399c1-en.html)
+- [OECD: Generative AI and the SME Workforce](https://www.oecd.org/en/publications/generative-ai-and-the-sme-workforce_2d08b99d-en/full-report/component-4.html)
+- [U.S. Census Bureau: The Microstructure of AI Diffusion](https://www.census.gov/library/working-papers/2026/adrm/CES-WP-26-25.html)
+- [European Commission JRC: digital innovation hubs as intermediaries for AI adoption](https://joint-research-centre.ec.europa.eu/jrc-news-and-updates/speeding-digitalisation-and-ai-uptake-european-businesses-2025-04-11_en)
 - [Mittelstand-Digital AI trainers](https://www.mittelstand-digital.de/MD/Navigation/DE/Praxis/KI-Trainer/ki-trainer.html)
 - [McKinsey: State of AI 2025](https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai/)
 - [OpenAI: How evals drive the next chapter in AI for businesses](https://openai.com/index/evals-drive-next-chapter-of-ai/)
