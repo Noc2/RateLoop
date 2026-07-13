@@ -1,0 +1,56 @@
+{
+  "observations": [
+    {
+      "reviewerId": "fixture-ring-alpha-1",
+      "eligible": true,
+      "observedAt": "2026-07-12T08:00:00.000Z",
+      "hardLinks": [
+        { "kind": "payout_ownership_conflict", "value": "fixture-payout-alpha" },
+        { "kind": "account_recovery_binding", "value": "fixture-recovery-alpha" }
+      ],
+      "behavioralRiskBps": 8200,
+      "behaviorReasonCodes": ["repeated_coassignment_high"]
+    },
+    {
+      "reviewerId": "fixture-ring-alpha-2",
+      "eligible": true,
+      "observedAt": "2026-07-12T08:05:00.000Z",
+      "hardLinks": [{ "kind": "payout_ownership_conflict", "value": "fixture-payout-alpha" }],
+      "behavioralRiskBps": 7900,
+      "behaviorReasonCodes": ["historical_agreement_residual_high"]
+    },
+    {
+      "reviewerId": "fixture-ring-alpha-3",
+      "eligible": false,
+      "observedAt": "2026-07-12T08:10:00.000Z",
+      "hardLinks": [{ "kind": "account_recovery_binding", "value": "fixture-recovery-alpha" }],
+      "behavioralRiskBps": 500,
+      "behaviorReasonCodes": [],
+      "exclusionReasonCodes": ["assurance_expired"]
+    },
+    {
+      "reviewerId": "fixture-behavior-only-1",
+      "eligible": true,
+      "observedAt": "2026-07-12T09:00:00.000Z",
+      "hardLinks": [],
+      "behavioralRiskBps": 6200,
+      "behaviorReasonCodes": ["timing_similarity_medium"]
+    },
+    {
+      "reviewerId": "fixture-behavior-only-2",
+      "eligible": true,
+      "observedAt": "2026-07-12T09:01:00.000Z",
+      "hardLinks": [],
+      "behavioralRiskBps": 6200,
+      "behaviorReasonCodes": ["timing_similarity_medium"]
+    },
+    {
+      "reviewerId": "fixture-independent",
+      "eligible": true,
+      "observedAt": "2026-07-12T10:00:00.000Z",
+      "hardLinks": [],
+      "behavioralRiskBps": 0,
+      "behaviorReasonCodes": []
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+CREATE TABLE "tokenless_integrity_epochs" (
+  "epoch_id" text PRIMARY KEY NOT NULL,
+  "schema_version" text NOT NULL,
+  "cutoff_at" timestamp with time zone NOT NULL,
+  "source_window_started_at" timestamp with time zone NOT NULL,
+  "source_window_ended_at" timestamp with time zone NOT NULL,
+  "private_features_expire_at" timestamp with time zone NOT NULL,
+  "feature_spec_hash" text NOT NULL,
+  "parameter_hash" text NOT NULL,
+  "scorer_build_hash" text NOT NULL,
+  "private_leaf_root" text NOT NULL,
+  "aggregate_cluster_counts_json" text NOT NULL,
+  "eligible_reviewer_count" integer NOT NULL,
+  "excluded_reviewer_count" integer NOT NULL,
+  "manifest_hash" text NOT NULL,
+  "manifest_json" text NOT NULL,
+  "signature_algorithm" text NOT NULL,
+  "signer_key_id" text NOT NULL,
+  "signing_public_key" text NOT NULL,
+  "signature" text NOT NULL,
+  "lookup_key_version" text NOT NULL,
+  "pseudonym_key_version" text NOT NULL,
+  "vault_key_version" text NOT NULL,
+  "created_at" timestamp with time zone NOT NULL,
+  CONSTRAINT "tokenless_integrity_epochs_schema_check" CHECK ("schema_version" = 'rateloop-integrity-epoch-v1'),
+  CONSTRAINT "tokenless_integrity_epochs_window_check" CHECK ("source_window_started_at" <= "source_window_ended_at" AND "source_window_ended_at" = "cutoff_at"),
+  CONSTRAINT "tokenless_integrity_epochs_retention_check" CHECK ("private_features_expire_at" > "cutoff_at"),
+  CONSTRAINT "tokenless_integrity_epochs_counts_check" CHECK ("eligible_reviewer_count" >= 0 AND "excluded_reviewer_count" >= 0),
+  CONSTRAINT "tokenless_integrity_epochs_signature_check" CHECK ("signature_algorithm" = 'Ed25519'),
+  CONSTRAINT "tokenless_integrity_epochs_manifest_unique" UNIQUE("manifest_hash")
+);--> statement-breakpoint
+CREATE INDEX "tokenless_integrity_epochs_cutoff_idx" ON "tokenless_integrity_epochs" USING btree ("cutoff_at", "created_at");--> statement-breakpoint
+CREATE TABLE "tokenless_integrity_epoch_members" (
+  "epoch_id" text NOT NULL REFERENCES "tokenless_integrity_epochs"("epoch_id"),
+  "reviewer_lookup" text NOT NULL,
+  "reviewer_pseudonym" text NOT NULL,
+  "cluster_pseudonym" text NOT NULL,
+  "risk_band" text NOT NULL,
+  "eligibility_status" text NOT NULL,
+  "reason_codes_json" text NOT NULL,
+  "feature_commitment" text NOT NULL,
+  "private_leaf_hash" text NOT NULL,
+  "vault_ciphertext" text NOT NULL,
+  "vault_key_version" text NOT NULL,
+  "created_at" timestamp with time zone NOT NULL,
+  PRIMARY KEY ("epoch_id", "reviewer_lookup"),
+  CONSTRAINT "tokenless_integrity_epoch_members_reviewer_unique" UNIQUE("epoch_id", "reviewer_pseudonym"),
+  CONSTRAINT "tokenless_integrity_epoch_members_leaf_unique" UNIQUE("epoch_id", "private_leaf_hash"),
+  CONSTRAINT "tokenless_integrity_epoch_members_risk_check" CHECK ("risk_band" IN ('low', 'medium', 'high')),
+  CONSTRAINT "tokenless_integrity_epoch_members_eligibility_check" CHECK ("eligibility_status" IN ('eligible', 'excluded'))
+);--> statement-breakpoint
+CREATE INDEX "tokenless_integrity_epoch_members_cluster_idx" ON "tokenless_integrity_epoch_members" USING btree ("epoch_id", "cluster_pseudonym");--> statement-breakpoint
+CREATE INDEX "tokenless_integrity_epoch_members_eligibility_idx" ON "tokenless_integrity_epoch_members" USING btree ("epoch_id", "eligibility_status", "risk_band");
