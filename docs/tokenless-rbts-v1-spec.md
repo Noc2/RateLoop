@@ -38,7 +38,7 @@ public evidence names `base-future-blockhash-v1`; the Base sequencer can still i
 not be called unbiasable. Before mainnet or material-value use, replace it with a reviewed verifiable beacon.
 
 Aggregation builds an order-independent reveal-set commitment from both the XOR and modular sum of
-`keccak256(commitKey)`. After aggregation:
+`keccak256(abi.encode(commitKey))`. After aggregation:
 
 ```text
 scoringSeed = keccak256(

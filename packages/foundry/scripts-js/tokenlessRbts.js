@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
+import { encodeAbiParameters, keccak256 } from "viem";
 
 export const BPS = 10_000;
 export const MIN_USER_PREDICTION_BPS = 100;
 export const MAX_USER_PREDICTION_BPS = 9_900;
 export const TOKENLESS_RBTS_VERSION = "tokenless-rbts-v1-candidate";
+export const SOLIDITY_SCORING_SEED_DOMAIN = "rateloop-tokenless-rbts-v1";
+const UINT256_MODULUS = 1n << 256n;
 
 function requireBps(value, name) {
   if (!Number.isInteger(value) || value < 0 || value > BPS) {
@@ -17,8 +20,8 @@ function requireVote(value, name) {
 
 export function requireUserPrediction(value) {
   requireBps(value, "predictedUpBps");
-  if (value < MIN_USER_PREDICTION_BPS || value > MAX_USER_PREDICTION_BPS) {
-    throw new RangeError("predictedUpBps must be between 100 and 9900.");
+  if (value < MIN_USER_PREDICTION_BPS || value > MAX_USER_PREDICTION_BPS || value % 100 !== 0) {
+    throw new RangeError("predictedUpBps must be between 100 and 9900 on the 100-bps grid.");
   }
 }
 
@@ -99,6 +102,89 @@ export function scorePanel(reports, seed) {
     });
     return { index, ...assignment, ...score };
   });
+}
+
+export function accumulateSolidityRevealSet(commitKeys) {
+  let revealSetXor = 0n;
+  let revealSetSum = 0n;
+  for (const commitKey of commitKeys) {
+    const leaf = BigInt(keccak256(encodeAbiParameters([{ type: "bytes32" }], [commitKey])));
+    revealSetXor ^= leaf;
+    revealSetSum = (revealSetSum + leaf) % UINT256_MODULUS;
+  }
+  return {
+    revealSetXor: `0x${revealSetXor.toString(16).padStart(64, "0")}`,
+    revealSetSum,
+  };
+}
+
+export function solidityScoringSeed({
+  chainId,
+  panelAddress,
+  roundId,
+  frozenRevealCount,
+  revealSetXor,
+  revealSetSum,
+  entropy,
+}) {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "string" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        SOLIDITY_SCORING_SEED_DOMAIN,
+        BigInt(chainId),
+        panelAddress,
+        BigInt(roundId),
+        frozenRevealCount,
+        revealSetXor,
+        BigInt(revealSetSum),
+        entropy,
+      ],
+    ),
+  );
+}
+
+export function solidityRankHash(seed, commitKey) {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [seed, commitKey],
+    ),
+  );
+}
+
+export function canonicalSolidityPeerAssignments(seed, commitKeys) {
+  if (commitKeys.length < 3 || new Set(commitKeys.map(key => key.toLowerCase())).size !== commitKeys.length) {
+    throw new RangeError("RBTS requires at least three distinct commit keys.");
+  }
+  const ranked = commitKeys
+    .map(commitKey => ({ commitKey, rankHash: solidityRankHash(seed, commitKey) }))
+    .sort((left, right) => {
+      const rankComparison = BigInt(left.rankHash) < BigInt(right.rankHash) ? -1 : BigInt(left.rankHash) > BigInt(right.rankHash) ? 1 : 0;
+      if (rankComparison !== 0) return rankComparison;
+      return BigInt(left.commitKey) < BigInt(right.commitKey) ? -1 : BigInt(left.commitKey) > BigInt(right.commitKey) ? 1 : 0;
+    });
+  return Object.fromEntries(
+    ranked.map((entry, index) => [
+      entry.commitKey,
+      {
+        referenceCommitKey: ranked[(index + 1) % ranked.length].commitKey,
+        peerCommitKey: ranked[(index + 2) % ranked.length].commitKey,
+      },
+    ]),
+  );
 }
 
 function nearestBucket(value) {

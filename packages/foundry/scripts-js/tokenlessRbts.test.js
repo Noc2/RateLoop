@@ -3,12 +3,18 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   ATTACK_SCENARIOS,
+  accumulateSolidityRevealSet,
   benchmarkAllScenarios,
+  canonicalSolidityPeerAssignments,
   peerAssignments,
   quadraticScoreBps,
   rbtsScoreBps,
   shadowPredictionBps,
+  solidityRankHash,
+  solidityScoringSeed,
 } from "./tokenlessRbts.js";
+
+const bytes32 = value => `0x${BigInt(value).toString(16).padStart(64, "0")}`;
 
 test("candidate math matches frozen worked examples", () => {
   assert.equal(shadowPredictionBps(7_000, 1), 10_000);
@@ -40,6 +46,38 @@ test("candidate score is bounded and own vote can change its information compone
   const up = rbtsScoreBps({ ownVote: 1, predictedUpBps: 7_000, referencePredictionBps: 7_000, peerVote: 1 });
   const down = rbtsScoreBps({ ownVote: 0, predictedUpBps: 7_000, referencePredictionBps: 7_000, peerVote: 1 });
   assert.notEqual(up.informationScoreBps, down.informationScoreBps);
+  assert.throws(
+    () => rbtsScoreBps({ ownVote: 1, predictedUpBps: 150, referencePredictionBps: 7_000, peerVote: 1 }),
+    /100-bps grid/,
+  );
+});
+
+test("Solidity seed, rank, and canonical circular assignments match the frozen vectors", () => {
+  const seed = solidityScoringSeed({
+    chainId: 84_532,
+    panelAddress: "0x1111111111111111111111111111111111111111",
+    roundId: 42,
+    frozenRevealCount: 3,
+    revealSetXor: `0x${"aa".repeat(32)}`,
+    revealSetSum: 123_456,
+    entropy: `0x${"bb".repeat(32)}`,
+  });
+  assert.equal(seed, "0xb31ec78a68f9fafb9fb8a2306cdb0f66274cf1611dfd001862bf44dc3d16d889");
+  assert.equal(solidityRankHash(seed, bytes32(1)), "0x7cedd517134e283c3967fd4b44d532d0ab4f8c52bb14addb802db9fca715ec10");
+
+  const keys = [1, 2, 3, 4, 5].map(bytes32);
+  assert.deepEqual(canonicalSolidityPeerAssignments(seed, keys), {
+    [bytes32(3)]: { referenceCommitKey: bytes32(1), peerCommitKey: bytes32(2) },
+    [bytes32(1)]: { referenceCommitKey: bytes32(2), peerCommitKey: bytes32(4) },
+    [bytes32(2)]: { referenceCommitKey: bytes32(4), peerCommitKey: bytes32(5) },
+    [bytes32(4)]: { referenceCommitKey: bytes32(5), peerCommitKey: bytes32(3) },
+    [bytes32(5)]: { referenceCommitKey: bytes32(3), peerCommitKey: bytes32(1) },
+  });
+  assert.deepEqual(
+    canonicalSolidityPeerAssignments(seed, [...keys].reverse()),
+    canonicalSolidityPeerAssignments(seed, keys),
+  );
+  assert.deepEqual(accumulateSolidityRevealSet(keys), accumulateSolidityRevealSet([...keys].reverse()));
 });
 
 test("deterministic peer assignments never select self or duplicate roles", () => {
