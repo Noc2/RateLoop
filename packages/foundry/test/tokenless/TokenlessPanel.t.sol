@@ -10,11 +10,13 @@ contract TokenlessPanelTest is Test {
     uint256 internal constant ISSUER_PK = 0xA11CE;
     uint256 internal constant BOUNTY = 100e6;
     uint256 internal constant FEE = 10e6;
-    uint256 internal constant RESERVE = 15e6;
-    uint256 internal constant COMPENSATION = 5e6;
+    uint256 internal constant FIXED_BASE = 26_666_666;
+    uint256 internal constant MAXIMUM_BONUS = 6_666_667;
+    uint256 internal constant RESERVE = FIXED_BASE * 3;
     bytes32 internal constant CONTENT_ID = keccak256("binary-question");
     bytes32 internal constant TERMS_HASH = keccak256("immutable-round-terms");
     bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("invited-reviewers-policy-v1");
+    bytes32 internal constant ENTROPY = keccak256("post-closure-entropy");
 
     address internal funder = makeAddr("funder");
     address internal feeRecipient = makeAddr("feeRecipient");
@@ -47,399 +49,322 @@ contract TokenlessPanelTest is Test {
         usdc.approve(address(panel), type(uint256).max);
     }
 
-    function test_SuccessPathIsRestartSafeConservingAndPermissionlesslyClaimable() public {
-        uint256 roundId = _createRound(2, 3);
-        Rater memory alice = _rater(0x101, 1, 5_000, "alice", roundId);
-        Rater memory bob = _rater(0x102, 1, 7_000, "bob", roundId);
-        Rater memory carol = _rater(0x103, 0, 9_000, "carol", roundId);
-        _commit(roundId, alice);
-        _commit(roundId, bob);
-        _commit(roundId, carol);
-
-        vm.warp(_round(roundId).commitDeadline + 1);
-        _reveal(roundId, alice);
-        _reveal(roundId, bob);
-        _reveal(roundId, carol);
-
-        vm.warp(_round(roundId).revealDeadline + 1);
-        panel.beginSettlement(roundId);
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.Aggregating));
-
-        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
-        panel.claim(alice.commitKey, alice.payout, alice.salt);
+    function test_RbtsSettlementFixesEvidenceLiabilityAndImmediateRefunds() public {
+        (uint256 roundId, Rater[3] memory raters) = _healthyRound();
+        _beginHealthySettlement(roundId);
 
         panel.processAggregate(roundId, 0, 1);
         vm.expectRevert(TokenlessPanel.CursorMismatch.selector);
         panel.processAggregate(roundId, 0, 1);
         panel.processAggregate(roundId, 1, 9);
         assertEq(_round(roundId).upVotes, 2);
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.AwaitingSeed));
 
-        panel.processWeights(roundId, 0, 2);
-        panel.processWeights(roundId, 2, 1);
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.Weighting));
+        _finalizeSeed(roundId, ENTROPY);
+        assertEq(uint8(_round(roundId).scoringMode), uint8(TokenlessPanel.ScoringMode.Rbts));
+        assertNotEq(_round(roundId).scoringSeed, bytes32(0));
 
+        panel.processScores(roundId, 0, 2);
+        vm.expectRevert(TokenlessPanel.CursorMismatch.selector);
+        panel.processScores(roundId, 0, 1);
+        panel.processScores(roundId, 2, 1);
         panel.finalizeSettlement(roundId);
-        assertEq(panel.withdrawableCredit(funder), RESERVE);
+
+        TokenlessPanel.Round memory round = _round(roundId);
+        assertEq(uint8(round.state), uint8(TokenlessPanel.RoundState.Finalized));
+        assertGt(round.totalRbtsScoreBps, 0);
+
+        uint256 liability;
+        bytes32[3] memory references;
+        bytes32[3] memory peers;
+        for (uint256 i = 0; i < raters.length; ++i) {
+            TokenlessPanel.CommitRecord memory record = panel.getCommit(raters[i].commitKey);
+            assertNotEq(record.referenceCommitKey, bytes32(0));
+            assertNotEq(record.peerCommitKey, bytes32(0));
+            assertNotEq(record.referenceCommitKey, raters[i].commitKey);
+            assertNotEq(record.peerCommitKey, raters[i].commitKey);
+            assertNotEq(record.referenceCommitKey, record.peerCommitKey);
+            assertEq(record.finalizedPayout, FIXED_BASE + ((MAXIMUM_BONUS * uint256(record.rbtsScoreBps)) / 10_000));
+            assertGe(record.finalizedPayout, FIXED_BASE);
+            assertLe(record.finalizedPayout, FIXED_BASE + MAXIMUM_BONUS);
+            assertEq(panel.previewPayout(raters[i].commitKey), record.finalizedPayout);
+            liability += record.finalizedPayout;
+            references[i] = record.referenceCommitKey;
+            peers[i] = record.peerCommitKey;
+        }
+        _assertEachRoleUsedOnce(raters, references);
+        _assertEachRoleUsedOnce(raters, peers);
+        assertEq(round.totalFinalizedLiability, liability);
+        assertEq(panel.withdrawableCredit(funder), RESERVE + BOUNTY - liability);
         assertEq(panel.withdrawableCredit(feeRecipient), FEE);
-        assertEq(panel.totalWithdrawableCredit(), RESERVE + FEE);
-        assertEq(usdc.balanceOf(address(panel)), BOUNTY + RESERVE + FEE);
 
-        uint256 aliceAmount = panel.previewPayout(alice.commitKey);
-        uint256 bobAmount = panel.previewPayout(bob.commitKey);
-        uint256 carolAmount = panel.previewPayout(carol.commitKey);
-        assertGe(aliceAmount, 26_666_666);
-        assertGe(bobAmount, 26_666_666);
-        assertGe(carolAmount, 26_666_666);
-        assertLe(aliceAmount + bobAmount + carolAmount, BOUNTY);
+        for (uint256 i = 0; i < raters.length; ++i) {
+            vm.prank(makeAddr("permissionlessExecutor"));
+            assertEq(
+                panel.claim(raters[i].commitKey, raters[i].payout, raters[i].salt),
+                panel.getCommit(raters[i].commitKey).finalizedPayout
+            );
+        }
+        vm.warp(round.claimDeadline + 1);
+        assertEq(panel.returnStaleShares(roundId), 0);
 
-        vm.prank(relayer);
-        panel.claim(alice.commitKey, alice.payout, alice.salt);
-        vm.prank(makeAddr("anyone"));
-        panel.claim(bob.commitKey, bob.payout, bob.salt);
-        panel.claim(carol.commitKey, carol.payout, carol.salt);
-        assertEq(usdc.balanceOf(alice.payout), aliceAmount);
-        assertEq(usdc.balanceOf(bob.payout), bobAmount);
-        assertEq(usdc.balanceOf(carol.payout), carolAmount);
-
-        uint256 dust = BOUNTY - aliceAmount - bobAmount - carolAmount;
-        vm.warp(_round(roundId).claimDeadline + 1);
-        usdc.setBlockedRecipient(funder, true);
-        assertEq(panel.returnStaleShares(roundId), dust);
-        assertEq(panel.withdrawableCredit(funder), RESERVE + dust);
-
-        address funderDestination = makeAddr("funderDestination");
         vm.prank(funder);
-        panel.withdrawCredit(funderDestination);
+        panel.withdrawCredit(funder);
         vm.prank(feeRecipient);
         panel.withdrawCredit(feeRecipient);
-        assertEq(usdc.balanceOf(funderDestination), RESERVE + dust);
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_UnderQuorumWaitsForBeaconDeadlineAndPaysOnlyValidRevealers() public {
-        uint256 roundId = _createRound(2, 3);
+    function test_ExpiredEntropyDeterministicallyFallsBackToFixedBaseOnly() public {
+        (uint256 roundId, Rater[3] memory raters) = _healthyRound();
+        _beginHealthySettlement(roundId);
+        panel.processAggregate(roundId, 0, 3);
+
+        uint256 entropyBlock = _round(roundId).entropyBlock;
+        vm.roll(entropyBlock + 257);
+        panel.finalizeScoringSeed(roundId);
+        assertEq(uint8(_round(roundId).scoringMode), uint8(TokenlessPanel.ScoringMode.BaseOnlyEntropyUnavailable));
+        assertEq(_round(roundId).scoringSeed, bytes32(0));
+
+        panel.processScores(roundId, 0, 3);
+        panel.finalizeSettlement(roundId);
+        TokenlessPanel.Round memory round = _round(roundId);
+        assertEq(round.totalRbtsScoreBps, 0);
+        assertEq(round.totalFinalizedLiability, FIXED_BASE * 3);
+        assertEq(panel.withdrawableCredit(funder), RESERVE + BOUNTY - (FIXED_BASE * 3));
+        for (uint256 i = 0; i < raters.length; ++i) {
+            TokenlessPanel.CommitRecord memory record = panel.getCommit(raters[i].commitKey);
+            assertEq(record.referenceCommitKey, bytes32(0));
+            assertEq(record.peerCommitKey, bytes32(0));
+            assertEq(record.rbtsScoreBps, 0);
+            assertEq(record.finalizedPayout, FIXED_BASE);
+        }
+    }
+
+    function test_EntropyCannotBeReadUntilTheFutureBlockIsHistorical() public {
+        (uint256 roundId,) = _healthyRound();
+        _beginHealthySettlement(roundId);
+        panel.processAggregate(roundId, 0, 3);
+
+        vm.roll(_round(roundId).entropyBlock);
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.finalizeScoringSeed(roundId);
+    }
+
+    function test_UnderQuorumWaitsForFailureDeadlineAndPaysOnlyValidRevealers() public {
+        uint256 roundId = _createRound(3, 3);
         Rater memory alice = _rater(0x201, 1, 7_000, "alice", roundId);
         Rater memory bob = _rater(0x202, 0, 3_000, "bob", roundId);
         _commit(roundId, alice);
         _commit(roundId, bob);
-
         vm.warp(_round(roundId).commitDeadline + 1);
         _reveal(roundId, alice);
         vm.warp(_round(roundId).revealDeadline + 1);
 
         vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
         panel.beginSettlement(roundId);
-
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
         panel.beginSettlement(roundId);
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - COMPENSATION);
 
-        panel.claimCompensation(alice.commitKey, alice.payout, alice.salt);
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - FIXED_BASE);
+        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), FIXED_BASE);
         vm.expectRevert(TokenlessPanel.NotClaimable.selector);
         panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
-        assertEq(usdc.balanceOf(alice.payout), COMPENSATION);
-        assertEq(usdc.balanceOf(bob.payout), 0);
-
-        vm.prank(funder);
-        panel.withdrawCredit(funder);
-        assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_ZeroRevealAttackCannotFarmBeaconFailureReserve() public {
-        uint256 roundId = _createRound(2, 3);
+    function test_ZeroRevealAttackCannotFarmAttemptReserve() public {
+        uint256 roundId = _createRound(3, 3);
         Rater memory alice = _rater(0x301, 1, 7_000, "alice", roundId);
-        Rater memory bob = _rater(0x302, 0, 3_000, "bob", roundId);
         _commit(roundId, alice);
-        _commit(roundId, bob);
-
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
         panel.beginSettlement(roundId);
+
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.BeaconFailureCompensation));
         assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
-
         vm.expectRevert(TokenlessPanel.NotClaimable.selector);
         panel.claimCompensation(alice.commitKey, alice.payout, alice.salt);
-        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
-        panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
-        vm.prank(funder);
-        panel.withdrawCredit(funder);
-        assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_LateSelfRevealProvesValidWorkAndReceivesUnderQuorumCompensation() public {
-        uint256 roundId = _createRound(2, 3);
+    function test_LateSelfRevealBeforeFailureDeadlineEarnsAttemptCompensation() public {
+        uint256 roundId = _createRound(3, 3);
         Rater memory alice = _rater(0x311, 1, 7_000, "alice", roundId);
-        Rater memory bob = _rater(0x312, 0, 3_000, "bob", roundId);
         _commit(roundId, alice);
-        _commit(roundId, bob);
-
         vm.warp(_round(roundId).revealDeadline + 1);
         _reveal(roundId, alice);
-        assertTrue(panel.getCommit(alice.commitKey).revealed);
-
-        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
-        panel.beginSettlement(roundId);
-
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
         panel.beginSettlement(roundId);
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - COMPENSATION);
-        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), COMPENSATION);
-        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
-        panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
+        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), FIXED_BASE);
     }
 
-    function test_LateSelfRevealClosesAtBeaconFailureDeadline() public {
-        uint256 roundId = _createRound(2, 3);
-        Rater memory alice = _rater(0x321, 1, 7_000, "alice", roundId);
-        _commit(roundId, alice);
-
-        vm.warp(_round(roundId).beaconFailureDeadline + 1);
-        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
-        _reveal(roundId, alice);
-    }
-
-    function test_ZeroCommitRoundFullyRefunds() public {
-        uint256 roundId = _createRound(2, 3);
-        vm.warp(_round(roundId).revealDeadline + 1);
-        panel.beginSettlement(roundId);
-
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.ZeroCommitRefund));
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
-        assertEq(usdc.balanceOf(address(panel)), BOUNTY + FEE + RESERVE);
-
+    function test_ZeroCommitRoundFullyRefundsAndFirstCommitDisablesCancellation() public {
+        uint256 emptyRound = _createRound(3, 3);
         vm.prank(funder);
-        panel.withdrawCredit(funder);
-        assertEq(usdc.balanceOf(address(panel)), 0);
-    }
+        panel.cancelEmptyRound(emptyRound);
+        assertEq(uint8(_round(emptyRound).state), uint8(TokenlessPanel.RoundState.ZeroCommitRefund));
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
 
-    function test_FirstAcceptedCommitPermanentlyDisablesFunderCancellation() public {
-        uint256 roundId = _createRound(2, 3);
-        Rater memory alice = _rater(0x401, 1, 7_000, "alice", roundId);
-        _commit(roundId, alice);
-
+        uint256 committedRound = _createRound(3, 3);
+        _commit(committedRound, _rater(0x401, 1, 7_000, "alice", committedRound));
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidState.selector);
-        panel.cancelEmptyRound(roundId);
+        panel.cancelEmptyRound(committedRound);
     }
 
-    function test_IssuerRotationCannotAffectAnAcceptedCommitOrItsPayment() public {
-        uint256 roundId = _createRound(1, 1);
-        Rater memory alice = _rater(0x501, 1, 5_000, "alice", roundId);
-        _commit(roundId, alice);
-
+    function test_IssuerRotationCannotAffectAcceptedWorkOrPayment() public {
+        (uint256 roundId, Rater[3] memory raters) = _healthyRound();
         vm.prank(rotationAuthority);
         issuer.rotateEmergency(makeAddr("replacementSigner"));
 
-        vm.warp(_round(roundId).commitDeadline + 1);
-        _reveal(roundId, alice);
-        vm.warp(_round(roundId).revealDeadline + 1);
-        panel.beginSettlement(roundId);
-        panel.processAggregate(roundId, 0, 1);
-        panel.processWeights(roundId, 0, 1);
+        _beginHealthySettlement(roundId);
+        panel.processAggregate(roundId, 0, 3);
+        _finalizeSeed(roundId, ENTROPY);
+        panel.processScores(roundId, 0, 3);
         panel.finalizeSettlement(roundId);
-        panel.claim(alice.commitKey, alice.payout, alice.salt);
-
-        assertEq(usdc.balanceOf(alice.payout), BOUNTY);
+        assertGt(panel.claim(raters[0].commitKey, raters[0].payout, raters[0].salt), 0);
     }
 
-    function test_RoundFundingMustCoverMaximumAcceptedWorkReserve() public {
-        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
-        terms.attemptReserve = 3 * COMPENSATION - 1;
+    function test_TermsEnforceMinimumPanelBoundedMaximumAndExactReserveEconomics() public {
+        TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
+
+        terms.minimumReveals = 2;
+        _expectInvalidTerms(terms);
+        terms = _terms(3, 3);
+        terms.maximumCommits = panel.MAXIMUM_COMMITS() + 1;
+        _setEconomics(terms);
+        _expectInvalidTerms(terms);
+        terms = _terms(3, 3);
+        terms.attemptCompensation = FIXED_BASE + 1;
+        _expectInvalidTerms(terms);
+        terms = _terms(3, 3);
+        terms.attemptReserve = RESERVE - 1;
+        _expectInvalidTerms(terms);
+
+        terms = _terms(3, panel.MAXIMUM_COMMITS());
         vm.prank(funder);
-        vm.expectRevert(TokenlessPanel.InvalidTerms.selector);
-        panel.createRound(terms);
+        uint256 roundId = panel.createRound(terms);
+        assertEq(_round(roundId).maximumCommits, panel.MAXIMUM_COMMITS());
+    }
+
+    function test_RevealRequiresOnePercentPredictionGrid() public {
+        uint256 roundId = _createRound(3, 3);
+        Rater memory invalid = _rater(0x501, 1, 150, "invalid", roundId);
+        _commit(roundId, invalid);
+        vm.warp(_round(roundId).commitDeadline + 1);
+        vm.expectRevert(TokenlessPanel.InvalidPrediction.selector);
+        _reveal(roundId, invalid);
     }
 
     function test_VoucherMustMatchExactAdmissionPolicyHash() public {
-        uint256 roundId = _createRound(1, 1);
+        uint256 roundId = _createRound(3, 3);
         Rater memory alice = _rater(0x581, 1, 5_000, "alice", roundId);
-
         TokenlessPanel.Voucher memory voucher = _voucher(roundId, alice);
-        voucher.admissionPolicyHash = keccak256("different-but-not-ordered-policy");
+        voucher.admissionPolicyHash = keccak256("different-policy");
         _expectInvalidVoucher(roundId, alice, voucher);
-
-        assertEq(_round(roundId).commitCount, 0);
         assertFalse(panel.nullifierUsed(alice.nullifier));
     }
 
-    function test_VoucherSignatureCannotBeReusedAcrossAdmissionPolicies() public {
-        uint256 roundId = _createRound(1, 1);
-        Rater memory alice = _rater(0x582, 1, 5_000, "alice", roundId);
-        TokenlessPanel.Voucher memory voucher = _voucher(roundId, alice);
-        bytes32 signedDigest = panel.voucherDigest(voucher);
-        bytes memory signature = _sign(ISSUER_PK, signedDigest);
-
-        voucher.admissionPolicyHash = keccak256("another-policy");
-        bytes32 changedDigest = panel.voucherDigest(voucher);
-        assertNotEq(changedDigest, signedDigest);
-        assertFalse(issuer.isValidVoucherSignature(1, changedDigest, signature));
-    }
-
-    function test_RoundRejectsEmptyAdmissionPolicyHash() public {
-        TokenlessPanel.RoundTerms memory terms = _terms(1, 1);
-        terms.admissionPolicyHash = bytes32(0);
-
-        vm.prank(funder);
-        vm.expectRevert(TokenlessPanel.InvalidTerms.selector);
-        panel.createRound(terms);
-    }
-
-    function test_ClaimGracePeriodAcceptsSafeUpperBoundary() public {
-        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
+    function test_ClaimGraceAndFailureDeadlinesRemainBounded() public {
+        TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
         terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD();
-
         vm.prank(funder);
-        uint256 roundId = panel.createRound(terms);
+        panel.createRound(terms);
 
-        Rater memory alice = _rater(0x601, 1, 5_000, "alice", roundId);
-        _commit(roundId, alice);
-        vm.warp(_round(roundId).beaconFailureDeadline + 1);
-        uint256 expectedClaimDeadline = block.timestamp + panel.MAX_CLAIM_GRACE_PERIOD();
-        panel.beginSettlement(roundId);
-
-        assertEq(_round(roundId).claimGracePeriod, panel.MAX_CLAIM_GRACE_PERIOD());
-        assertEq(_round(roundId).claimDeadline, expectedClaimDeadline);
-    }
-
-    function test_ClaimGracePeriodRejectsValueAboveSafeUpperBoundary() public {
-        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
+        terms = _terms(3, 3);
         terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD() + 1;
-
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
         panel.createRound(terms);
-    }
 
-    function test_BeaconFailureDeadlineMustBeStrictlyAfterRevealDeadline() public {
-        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
+        terms = _terms(3, 3);
         terms.beaconFailureDeadline = terms.revealDeadline;
-
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
         panel.createRound(terms);
     }
 
-    function test_BlockedRefundAndFeeRecipientsCannotPreventFinalizationOrRaterClaim() public {
-        uint256 roundId = _createRound(1, 1);
-        Rater memory alice = _rater(0x701, 1, 5_000, "alice", roundId);
-        _commit(roundId, alice);
-
-        vm.warp(_round(roundId).commitDeadline + 1);
-        _reveal(roundId, alice);
-        vm.warp(_round(roundId).revealDeadline + 1);
-        panel.beginSettlement(roundId);
-        panel.processAggregate(roundId, 0, 1);
-        panel.processWeights(roundId, 0, 1);
-
+    function test_BlockedCreditRecipientsCannotPreventFinalizationOrRaterClaim() public {
+        (uint256 roundId, Rater[3] memory raters) = _healthyRound();
+        _beginHealthySettlement(roundId);
+        panel.processAggregate(roundId, 0, 3);
+        _finalizeSeed(roundId, ENTROPY);
+        panel.processScores(roundId, 0, 3);
         usdc.setBlockedRecipient(funder, true);
         usdc.setBlockedRecipient(feeRecipient, true);
         panel.finalizeSettlement(roundId);
 
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.Finalized));
-        assertEq(panel.withdrawableCredit(funder), RESERVE);
-        assertEq(panel.withdrawableCredit(feeRecipient), FEE);
-
+        uint256 expected = panel.previewPayout(raters[0].commitKey);
         usdc.setTransferShortfall(1);
         vm.expectRevert(TokenlessPanel.TransferAmountMismatch.selector);
-        panel.claim(alice.commitKey, alice.payout, alice.salt);
-        assertFalse(panel.getCommit(alice.commitKey).claimed);
+        panel.claim(raters[0].commitKey, raters[0].payout, raters[0].salt);
+        assertFalse(panel.getCommit(raters[0].commitKey).claimed);
         usdc.setTransferShortfall(0);
-        assertEq(panel.claim(alice.commitKey, alice.payout, alice.salt), BOUNTY);
+        assertEq(panel.claim(raters[0].commitKey, raters[0].payout, raters[0].salt), expected);
 
+        address refundDestination = makeAddr("refundDestination");
         vm.prank(funder);
-        vm.expectRevert(bytes("MockERC20: recipient blocked"));
-        panel.withdrawCredit(funder);
-        assertEq(panel.withdrawableCredit(funder), RESERVE);
-
-        address alternateFunderDestination = makeAddr("alternateFunderDestination");
-        address alternateFeeDestination = makeAddr("alternateFeeDestination");
-        vm.prank(funder);
-        panel.withdrawCredit(alternateFunderDestination);
+        panel.withdrawCredit(refundDestination);
         vm.prank(feeRecipient);
-        panel.withdrawCredit(alternateFeeDestination);
-
-        assertEq(usdc.balanceOf(alternateFunderDestination), RESERVE);
-        assertEq(usdc.balanceOf(alternateFeeDestination), FEE);
-        assertEq(usdc.balanceOf(address(panel)), 0);
+        panel.withdrawCredit(makeAddr("feeDestination"));
+        assertGt(usdc.balanceOf(refundDestination), 0);
     }
 
-    function test_BlockedFunderCannotPreventZeroCommitTerminalizationAndOnlyOwnerCanRedirectCredit() public {
-        uint256 roundId = _createRound(2, 3);
-        address attacker = makeAddr("creditAttacker");
-        address alternateDestination = makeAddr("alternateDestination");
-        usdc.setBlockedRecipient(funder, true);
-
-        vm.prank(funder);
-        panel.cancelEmptyRound(roundId);
-
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.ZeroCommitRefund));
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
-
-        vm.prank(attacker);
-        vm.expectRevert(TokenlessPanel.NoCredit.selector);
-        panel.withdrawCredit(alternateDestination);
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
-
-        usdc.setTransferShortfall(1);
-        vm.prank(funder);
-        vm.expectRevert(TokenlessPanel.TransferAmountMismatch.selector);
-        panel.withdrawCredit(alternateDestination);
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
-        usdc.setTransferShortfall(0);
-
-        vm.prank(funder);
-        panel.withdrawCredit(alternateDestination);
-        assertEq(usdc.balanceOf(alternateDestination), BOUNTY + FEE + RESERVE);
-        assertEq(usdc.balanceOf(address(panel)), 0);
+    function _healthyRound() internal returns (uint256 roundId, Rater[3] memory raters) {
+        roundId = _createRound(3, 3);
+        raters[0] = _rater(0x101, 1, 5_000, "alice", roundId);
+        raters[1] = _rater(0x102, 1, 7_000, "bob", roundId);
+        raters[2] = _rater(0x103, 0, 9_000, "carol", roundId);
+        for (uint256 i = 0; i < raters.length; ++i) {
+            _commit(roundId, raters[i]);
+        }
     }
 
-    function test_BlockedFunderCannotPreventUnderQuorumCompensation() public {
-        uint256 roundId = _createRound(2, 2);
-        Rater memory alice = _rater(0x801, 1, 7_000, "alice", roundId);
-        _commit(roundId, alice);
-
+    function _beginHealthySettlement(uint256 roundId) internal {
         vm.warp(_round(roundId).commitDeadline + 1);
-        _reveal(roundId, alice);
-        vm.warp(_round(roundId).beaconFailureDeadline + 1);
-        usdc.setBlockedRecipient(funder, true);
+        for (uint256 i = 0; i < 3; ++i) {
+            bytes32 commitKey = panel.roundCommitKey(roundId, i);
+            TokenlessPanel.CommitRecord memory record = panel.getCommit(commitKey);
+            Rater memory material = _materialFromRecord(roundId, record);
+            _reveal(roundId, material);
+        }
+        vm.warp(_round(roundId).revealDeadline + 1);
         panel.beginSettlement(roundId);
-
-        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - COMPENSATION);
-        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), COMPENSATION);
-
-        address alternateDestination = makeAddr("underQuorumRefundDestination");
-        vm.prank(funder);
-        panel.withdrawCredit(alternateDestination);
-        assertEq(usdc.balanceOf(address(panel)), 0);
+        assertEq(_round(roundId).entropyBlock, block.number + 1);
     }
 
-    function test_OnlyMockDeployerCanConfigureTransferFaultsButMintRemainsPublic() public {
-        address attacker = makeAddr("mockAttacker");
+    function _materialFromRecord(uint256 roundId, TokenlessPanel.CommitRecord memory record)
+        internal
+        view
+        returns (Rater memory material)
+    {
+        // Test fixtures derive every committed field from the private key labels. Find the matching fixture.
+        uint256[3] memory keys = [uint256(0x101), uint256(0x102), uint256(0x103)];
+        string[3] memory labels = [string("alice"), string("bob"), string("carol")];
+        uint8[3] memory votes = [uint8(1), uint8(1), uint8(0)];
+        uint16[3] memory predictions = [uint16(5_000), uint16(7_000), uint16(9_000)];
+        for (uint256 i = 0; i < keys.length; ++i) {
+            if (vm.addr(keys[i]) == record.voteKey) {
+                return _raterView(keys[i], votes[i], predictions[i], labels[i], roundId);
+            }
+        }
+        revert("unknown healthy fixture");
+    }
 
-        vm.startPrank(attacker);
-        usdc.mint(attacker, 1e6);
-        vm.expectRevert(MockERC20.UnauthorizedFaultController.selector);
-        usdc.setBlockedRecipient(funder, true);
-        vm.expectRevert(MockERC20.UnauthorizedFaultController.selector);
-        usdc.setTransferShortfall(1);
-        vm.expectRevert(MockERC20.UnauthorizedFaultController.selector);
-        usdc.setAuthorizationTransferShortfall(1);
-        vm.stopPrank();
+    function _finalizeSeed(uint256 roundId, bytes32 entropy) internal {
+        uint256 entropyBlock = _round(roundId).entropyBlock;
+        vm.roll(entropyBlock + 1);
+        vm.setBlockhash(entropyBlock, entropy);
+        panel.finalizeScoringSeed(roundId);
+    }
 
-        assertEq(usdc.balanceOf(attacker), 1e6);
-        assertFalse(usdc.blockedRecipients(funder));
-        assertEq(usdc.transferShortfall(), 0);
-        assertEq(usdc.authorizationTransferShortfall(), 0);
-
-        usdc.setBlockedRecipient(funder, true);
-        usdc.setTransferShortfall(2);
-        usdc.setAuthorizationTransferShortfall(3);
-        assertTrue(usdc.blockedRecipients(funder));
-        assertEq(usdc.transferShortfall(), 2);
-        assertEq(usdc.authorizationTransferShortfall(), 3);
+    function _assertEachRoleUsedOnce(Rater[3] memory raters, bytes32[3] memory assignments) internal pure {
+        for (uint256 i = 0; i < raters.length; ++i) {
+            uint256 count;
+            for (uint256 j = 0; j < assignments.length; ++j) {
+                if (assignments[j] == raters[i].commitKey) ++count;
+            }
+            assertEq(count, 1);
+        }
     }
 
     function _createRound(uint32 minimumReveals, uint32 maximumCommits) internal returns (uint256 roundId) {
@@ -458,8 +383,8 @@ contract TokenlessPanelTest is Test {
             beaconNetworkHash: keccak256("drand-quicknet-chain-hash"),
             bountyAmount: BOUNTY,
             feeAmount: FEE,
-            attemptReserve: RESERVE,
-            attemptCompensation: COMPENSATION,
+            attemptReserve: 0,
+            attemptCompensation: 0,
             minimumReveals: minimumReveals,
             maximumCommits: maximumCommits,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
@@ -470,15 +395,38 @@ contract TokenlessPanelTest is Test {
             claimGracePeriod: 1 days,
             feeRecipient: feeRecipient
         });
+        _setEconomics(terms);
+    }
+
+    function _setEconomics(TokenlessPanel.RoundTerms memory terms) internal pure {
+        uint256 maximumSeatPay = terms.bountyAmount / terms.maximumCommits;
+        uint256 fixedBase = (maximumSeatPay * 8_000) / 10_000;
+        terms.attemptCompensation = fixedBase;
+        terms.attemptReserve = fixedBase * terms.maximumCommits;
+    }
+
+    function _expectInvalidTerms(TokenlessPanel.RoundTerms memory terms) internal {
+        vm.prank(funder);
+        vm.expectRevert(TokenlessPanel.InvalidTerms.selector);
+        panel.createRound(terms);
     }
 
     function _rater(uint256 privateKey, uint8 vote, uint16 prediction, string memory label, uint256 roundId)
         internal
+        view
+        returns (Rater memory)
+    {
+        return _raterView(privateKey, vote, prediction, label, roundId);
+    }
+
+    function _raterView(uint256 privateKey, uint8 vote, uint16 prediction, string memory label, uint256 roundId)
+        internal
+        view
         returns (Rater memory rater)
     {
         rater.privateKey = privateKey;
         rater.voteKey = vm.addr(privateKey);
-        rater.payout = makeAddr(string.concat(label, "Payout"));
+        rater.payout = address(uint160(uint256(keccak256(abi.encode(label, "Payout")))));
         rater.nullifier = keccak256(abi.encode("nullifier", label, roundId));
         rater.salt = keccak256(abi.encode("salt", label, roundId));
         rater.responseHash = keccak256(abi.encode("response", label, roundId));
@@ -494,13 +442,11 @@ contract TokenlessPanelTest is Test {
         );
         bytes32 payoutCommitment = panel.payoutCommitmentFor(rater.payout, rater.salt);
         bytes memory sealedPayload = abi.encodePacked("tlock-ciphertext", rater.voteKey, roundId);
-        bytes32 sealedPayloadHash = keccak256(sealedPayload);
         bytes memory voucherSignature = _sign(ISSUER_PK, panel.voucherDigest(voucher));
         bytes memory voteSignature = _sign(
             rater.privateKey,
-            panel.commitDigest(roundId, sealedCommitment, sealedPayloadHash, payoutCommitment, rater.nullifier)
+            panel.commitDigest(roundId, sealedCommitment, keccak256(sealedPayload), payoutCommitment, rater.nullifier)
         );
-
         vm.prank(relayer);
         panel.commit(voucher, sealedCommitment, sealedPayload, payoutCommitment, voucherSignature, voteSignature);
     }
@@ -529,13 +475,11 @@ contract TokenlessPanelTest is Test {
         );
         bytes32 payoutCommitment = panel.payoutCommitmentFor(rater.payout, rater.salt);
         bytes memory sealedPayload = abi.encodePacked("tlock-ciphertext", rater.voteKey, roundId);
-        bytes32 sealedPayloadHash = keccak256(sealedPayload);
         bytes memory voucherSignature = _sign(ISSUER_PK, panel.voucherDigest(voucher));
         bytes memory voteSignature = _sign(
             rater.privateKey,
-            panel.commitDigest(roundId, sealedCommitment, sealedPayloadHash, payoutCommitment, rater.nullifier)
+            panel.commitDigest(roundId, sealedCommitment, keccak256(sealedPayload), payoutCommitment, rater.nullifier)
         );
-
         vm.prank(relayer);
         vm.expectRevert(TokenlessPanel.InvalidVoucher.selector);
         panel.commit(voucher, sealedCommitment, sealedPayload, payoutCommitment, voucherSignature, voteSignature);

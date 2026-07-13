@@ -68,6 +68,22 @@ contract TokenlessRbtsHarness {
     }
 }
 
+/// @dev Includes the storage-to-memory copy used by one paginated panel scoring call.
+contract TokenlessRbtsStorageGasHarness {
+    bytes32[] internal _keys;
+
+    constructor(uint256 count) {
+        for (uint256 i = 0; i < count; ++i) {
+            _keys.push(keccak256(abi.encode("maximum-panel-key", i)));
+        }
+    }
+
+    function selectAt(bytes32 seed, uint256 index) external view returns (bytes32 referenceKey, bytes32 peerKey) {
+        bytes32[] memory keys = _keys;
+        return TokenlessRbts.selectReferenceAndPeer(seed, keys[index], keys);
+    }
+}
+
 contract TokenlessRbtsTest is Test {
     TokenlessRbtsHarness internal rbts = new TokenlessRbtsHarness();
 
@@ -245,6 +261,19 @@ contract TokenlessRbtsTest is Test {
         duplicateOwn[2] = bytes32(uint256(2));
         vm.expectRevert(TokenlessRbts.InvalidRevealSet.selector);
         rbts.selectReferenceAndPeer(VECTOR_SEED, duplicateOwn[0], duplicateOwn);
+    }
+
+    function test_GasMaximumPanelSingleSeatSelectionRemainsPaginateable() public {
+        TokenlessRbtsStorageGasHarness harness = new TokenlessRbtsStorageGasHarness(500);
+        uint256 gasBefore = gasleft();
+        (bytes32 referenceKey, bytes32 peerKey) = harness.selectAt(VECTOR_SEED, 249);
+        uint256 gasUsed = gasBefore - gasleft();
+
+        emit log_named_uint("500-seat storage-copy plus single selection gas", gasUsed);
+        assertNotEq(referenceKey, bytes32(0));
+        assertNotEq(peerKey, bytes32(0));
+        assertNotEq(referenceKey, peerKey);
+        assertLt(gasUsed, 2_000_000);
     }
 
     function _assertAssignment(bytes32[] memory keys, uint256 own, uint256 referenceKey, uint256 peerKey) private view {

@@ -112,16 +112,20 @@ contract X402PanelSubmitterTest is Test {
     }
 
     function _terms() private view returns (TokenlessPanel.RoundTerms memory) {
+        uint256 bountyAmount = 25e6;
+        uint32 maximumCommits = 3;
+        uint256 maximumSeatPay = bountyAmount / maximumCommits;
+        uint256 fixedBasePay = (maximumSeatPay * 8_000) / 10_000;
         return TokenlessPanel.RoundTerms({
             contentId: keccak256("question"),
             termsHash: keccak256("terms"),
             beaconNetworkHash: keccak256("drand-quicknet"),
-            bountyAmount: 25e6,
+            bountyAmount: bountyAmount,
             feeAmount: 2e6,
-            attemptReserve: 3e6,
-            attemptCompensation: 1e6,
-            minimumReveals: 2,
-            maximumCommits: 3,
+            attemptReserve: fixedBasePay * maximumCommits,
+            attemptCompensation: fixedBasePay,
+            minimumReveals: 3,
+            maximumCommits: maximumCommits,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),

@@ -13,24 +13,21 @@ contract TokenlessPanelInvariantHandler is Test {
         115792089237316195423570985008687907852837564279074904382605163141518161494337;
     uint256 internal constant BOUNTY = 100e6;
     uint256 internal constant FEE = 10e6;
-    uint256 internal constant RESERVE = 10e6;
-    uint256 internal constant COMPENSATION = 5e6;
+    uint256 internal constant FIXED_BASE = 26_666_666;
+    uint256 internal constant RESERVE = FIXED_BASE * 3;
     uint256 internal constant ROUND_TOTAL = BOUNTY + FEE + RESERVE;
     uint256 internal constant MAX_TRACKED_ROUNDS = 24;
     bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("invariant-audience-policy");
 
     struct RaterMaterial {
-        uint256 privateKey;
         address voteKey;
         address payout;
-        bytes32 nullifier;
         bytes32 salt;
         bytes32 responseHash;
         bytes32 commitKey;
         uint8 vote;
         uint16 prediction;
         bool shouldReveal;
-        bool exists;
     }
 
     MockERC20 public immutable usdc;
@@ -39,7 +36,7 @@ contract TokenlessPanelInvariantHandler is Test {
     address public immutable creditDestination;
 
     uint256[] internal _roundIds;
-    mapping(uint256 roundId => RaterMaterial material) internal _material;
+    mapping(uint256 roundId => RaterMaterial[] materials) internal _materials;
 
     uint256 public totalFunded;
     uint256 public totalDirectPaid;
@@ -60,13 +57,11 @@ contract TokenlessPanelInvariantHandler is Test {
         usdc.approve(address(panel), type(uint256).max);
     }
 
-    /// @dev Variants cover empty cancellation, successful settlement, under-quorum valid-reveal compensation,
+    /// @dev Variants cover empty cancellation, RBTS settlement, under-quorum compensation,
     ///      and a zero-reveal beacon-failure refund.
     function createRound(uint256 variantSeed) external {
         if (_roundIds.length >= MAX_TRACKED_ROUNDS) return;
         uint8 variant = uint8(variantSeed % 4);
-        uint32 minimumReveals = variant == 2 ? 2 : 1;
-        uint32 maximumCommits = variant == 2 ? 2 : 1;
         TokenlessPanel.RoundTerms memory terms = TokenlessPanel.RoundTerms({
             contentId: keccak256(abi.encode("content", _roundIds.length, block.timestamp)),
             termsHash: keccak256(abi.encode("terms", variant, _roundIds.length, block.timestamp)),
@@ -74,9 +69,9 @@ contract TokenlessPanelInvariantHandler is Test {
             bountyAmount: BOUNTY,
             feeAmount: FEE,
             attemptReserve: RESERVE,
-            attemptCompensation: COMPENSATION,
-            minimumReveals: minimumReveals,
-            maximumCommits: maximumCommits,
+            attemptCompensation: FIXED_BASE,
+            minimumReveals: 3,
+            maximumCommits: 3,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10),
             revealDeadline: uint64(block.timestamp + 20),
@@ -89,14 +84,23 @@ contract TokenlessPanelInvariantHandler is Test {
         uint256 roundId = panel.createRound(terms);
         totalFunded += ROUND_TOTAL;
         _roundIds.push(roundId);
-        if (variant != 0) _commitRater(roundId, terms.contentId, variant);
+        if (variant == 1) {
+            for (uint256 i = 0; i < 3; ++i) {
+                _commitRater(roundId, terms.contentId, i, true);
+            }
+        } else if (variant == 2) {
+            for (uint256 i = 0; i < 2; ++i) {
+                _commitRater(roundId, terms.contentId, i, true);
+            }
+        } else if (variant == 3) {
+            _commitRater(roundId, terms.contentId, 0, false);
+        }
     }
 
     function advanceRound(uint256 seed) external {
         if (_roundIds.length == 0) return;
         uint256 roundId = _roundIds[seed % _roundIds.length];
         TokenlessPanel.Round memory round = panel.getRound(roundId);
-        RaterMaterial storage material = _material[roundId];
 
         if (round.state == TokenlessPanel.RoundState.Open || round.state == TokenlessPanel.RoundState.Revealable) {
             if (round.commitCount == 0) {
@@ -106,18 +110,22 @@ contract TokenlessPanelInvariantHandler is Test {
                 return;
             }
 
-            if (material.shouldReveal && !panel.getCommit(material.commitKey).revealed) {
+            if (block.timestamp <= round.beaconFailureDeadline) {
                 _warpForward(round.commitDeadline + 1);
-                if (block.timestamp <= round.revealDeadline) {
-                    panel.reveal(
-                        roundId,
-                        material.voteKey,
-                        material.vote,
-                        material.prediction,
-                        material.responseHash,
-                        material.payout,
-                        material.salt
-                    );
+                RaterMaterial[] storage materials = _materials[roundId];
+                for (uint256 i = 0; i < materials.length; ++i) {
+                    RaterMaterial storage material = materials[i];
+                    if (material.shouldReveal && !panel.getCommit(material.commitKey).revealed) {
+                        panel.reveal(
+                            roundId,
+                            material.voteKey,
+                            material.vote,
+                            material.prediction,
+                            material.responseHash,
+                            material.payout,
+                            material.salt
+                        );
+                    }
                 }
             }
             _warpForward(round.beaconFailureDeadline + 1);
@@ -138,32 +146,46 @@ contract TokenlessPanelInvariantHandler is Test {
             return;
         }
 
-        if (round.state == TokenlessPanel.RoundState.Weighting) {
-            if (round.weightCursor < round.frozenRevealCount) {
-                uint32 cursorBefore = round.weightCursor;
+        if (round.state == TokenlessPanel.RoundState.AwaitingSeed) {
+            if (block.number <= round.entropyBlock) vm.roll(round.entropyBlock + 1);
+            if (block.number - round.entropyBlock <= 256) {
+                vm.setBlockhash(round.entropyBlock, keccak256(abi.encode("invariant-entropy", roundId)));
+            }
+            panel.finalizeScoringSeed(roundId);
+            return;
+        }
+
+        if (round.state == TokenlessPanel.RoundState.Scoring) {
+            if (round.scoreCursor < round.frozenRevealCount) {
+                uint32 cursorBefore = round.scoreCursor;
                 (bool invalidSucceeded,) =
-                    address(panel).call(abi.encodeCall(panel.processWeights, (roundId, cursorBefore + 1, uint32(1))));
-                if (invalidSucceeded || panel.getRound(roundId).weightCursor != cursorBefore) {
+                    address(panel).call(abi.encodeCall(panel.processScores, (roundId, cursorBefore + 1, uint32(1))));
+                if (invalidSucceeded || panel.getRound(roundId).scoreCursor != cursorBefore) {
                     retryOrderViolations += 1;
                 }
-                panel.processWeights(roundId, cursorBefore, uint32((seed % 3) + 1));
-            } else {
+                panel.processScores(roundId, cursorBefore, uint32((seed % 3) + 1));
+            }
+            if (panel.getRound(roundId).scoreCursor == round.frozenRevealCount) {
                 panel.finalizeSettlement(roundId);
                 finalizedRounds += 1;
+                _withdrawCredit();
             }
             return;
         }
 
         bool compensated = round.state == TokenlessPanel.RoundState.UnderQuorumCompensation
             || round.state == TokenlessPanel.RoundState.BeaconFailureCompensation;
-        if ((round.state == TokenlessPanel.RoundState.Finalized || compensated) && material.exists) {
-            TokenlessPanel.CommitRecord memory record = panel.getCommit(material.commitKey);
-            bool eligible = record.revealed;
-            if (!record.claimed && eligible && block.timestamp <= round.claimDeadline) {
-                uint256 amount = round.state == TokenlessPanel.RoundState.Finalized
-                    ? panel.claim(material.commitKey, material.payout, material.salt)
-                    : panel.claimCompensation(material.commitKey, material.payout, material.salt);
-                totalDirectPaid += amount;
+        if (round.state == TokenlessPanel.RoundState.Finalized || compensated) {
+            RaterMaterial[] storage materials = _materials[roundId];
+            for (uint256 i = 0; i < materials.length; ++i) {
+                RaterMaterial storage material = materials[i];
+                TokenlessPanel.CommitRecord memory record = panel.getCommit(material.commitKey);
+                if (!record.claimed && record.revealed && block.timestamp <= round.claimDeadline) {
+                    uint256 amount = round.state == TokenlessPanel.RoundState.Finalized
+                        ? panel.claim(material.commitKey, material.payout, material.salt)
+                        : panel.claimCompensation(material.commitKey, material.payout, material.salt);
+                    totalDirectPaid += amount;
+                }
             }
             _warpForward(round.claimDeadline + 1);
             if (!panel.getRound(roundId).staleReturned) panel.returnStaleShares(roundId);
@@ -175,22 +197,19 @@ contract TokenlessPanelInvariantHandler is Test {
         _withdrawCredit();
     }
 
-    function roundCount() external view returns (uint256) {
-        return _roundIds.length;
-    }
-
     function allRoundsHaveExitClassification() external view returns (bool) {
         for (uint256 i = 0; i < _roundIds.length; ++i) {
             TokenlessPanel.Round memory round = panel.getRound(_roundIds[i]);
             if (uint8(round.state) > uint8(TokenlessPanel.RoundState.BeaconFailureCompensation)) return false;
+            if (round.minimumReveals < 3 || round.maximumCommits > panel.MAXIMUM_COMMITS()) return false;
+            if (round.attemptCompensation != round.fixedBasePay) return false;
+            if (round.attemptReserve < round.fixedBasePay * round.maximumCommits) return false;
             if (round.beaconFailureDeadline <= round.revealDeadline) return false;
-            if (round.state == TokenlessPanel.RoundState.Open && round.commitDeadline == 0) return false;
-            if (round.state == TokenlessPanel.RoundState.Revealable && round.revealDeadline == 0) return false;
             if (round.state == TokenlessPanel.RoundState.Aggregating && round.aggregateCursor > round.frozenRevealCount)
             {
                 return false;
             }
-            if (round.state == TokenlessPanel.RoundState.Weighting && round.weightCursor > round.frozenRevealCount) {
+            if (round.state == TokenlessPanel.RoundState.Scoring && round.scoreCursor > round.frozenRevealCount) {
                 return false;
             }
             if (
@@ -217,15 +236,15 @@ contract TokenlessPanelInvariantHandler is Test {
         return true;
     }
 
-    function _commitRater(uint256 roundId, bytes32 contentId, uint8 variant) private {
-        uint256 privateKey = (uint256(keccak256(abi.encode("rater", roundId))) % (CURVE_ORDER - 1)) + 1;
+    function _commitRater(uint256 roundId, bytes32 contentId, uint256 index, bool shouldReveal) private {
+        uint256 privateKey = (uint256(keccak256(abi.encode("rater", roundId, index))) % (CURVE_ORDER - 1)) + 1;
         address voteKey = vm.addr(privateKey);
-        address payout = address(uint160(uint256(keccak256(abi.encode("payout", roundId)))));
-        bytes32 nullifier = keccak256(abi.encode("nullifier", roundId));
-        bytes32 salt = keccak256(abi.encode("salt", roundId));
-        bytes32 responseHash = keccak256(abi.encode("response", roundId));
-        uint8 vote = uint8(roundId % 2);
-        uint16 prediction = vote == 1 ? 7_000 : 3_000;
+        address payout = address(uint160(uint256(keccak256(abi.encode("payout", roundId, index)))));
+        bytes32 nullifier = keccak256(abi.encode("nullifier", roundId, index));
+        bytes32 salt = keccak256(abi.encode("salt", roundId, index));
+        bytes32 responseHash = keccak256(abi.encode("response", roundId, index));
+        uint8 vote = uint8((roundId + index) % 2);
+        uint16 prediction = uint16((index + 3) * 1_000);
         TokenlessPanel.Voucher memory voucher = TokenlessPanel.Voucher({
             voteKey: voteKey,
             contentId: contentId,
@@ -238,7 +257,7 @@ contract TokenlessPanelInvariantHandler is Test {
         bytes32 sealedCommitment =
             panel.revealCommitment(roundId, voteKey, vote, prediction, responseHash, payout, salt);
         bytes32 payoutCommitment = panel.payoutCommitmentFor(payout, salt);
-        bytes memory sealedPayload = abi.encodePacked("invariant-tlock", roundId);
+        bytes memory sealedPayload = abi.encodePacked("invariant-tlock", roundId, index);
         bytes memory voucherSignature = _sign(ISSUER_PK, panel.voucherDigest(voucher));
         bytes memory voteKeySignature = _sign(
             privateKey,
@@ -246,26 +265,24 @@ contract TokenlessPanelInvariantHandler is Test {
         );
         panel.commit(voucher, sealedCommitment, sealedPayload, payoutCommitment, voucherSignature, voteKeySignature);
 
-        _material[roundId] = RaterMaterial({
-            privateKey: privateKey,
-            voteKey: voteKey,
-            payout: payout,
-            nullifier: nullifier,
-            salt: salt,
-            responseHash: responseHash,
-            commitKey: panel.commitKeyFor(roundId, voteKey),
-            vote: vote,
-            prediction: prediction,
-            shouldReveal: variant != 3,
-            exists: true
-        });
+        _materials[roundId].push(
+            RaterMaterial({
+                voteKey: voteKey,
+                payout: payout,
+                salt: salt,
+                responseHash: responseHash,
+                commitKey: panel.commitKeyFor(roundId, voteKey),
+                vote: vote,
+                prediction: prediction,
+                shouldReveal: shouldReveal
+            })
+        );
     }
 
     function _withdrawCredit() private {
         uint256 amount = panel.withdrawableCredit(address(this));
         if (amount == 0) return;
-        uint256 withdrawn = panel.withdrawCredit(creditDestination);
-        totalCreditWithdrawn += withdrawn;
+        totalCreditWithdrawn += panel.withdrawCredit(creditDestination);
     }
 
     function _warpForward(uint256 timestamp) private {
@@ -313,7 +330,7 @@ contract TokenlessPanelInvariantTest is StdInvariant, Test {
     function test_HandlerCanDriveEveryLifecycleToAConservingTerminalState() external {
         for (uint256 variant = 0; variant < 4; ++variant) {
             handler.createRound(variant);
-            for (uint256 pass = 0; pass < 8; ++pass) {
+            for (uint256 pass = 0; pass < 12; ++pass) {
                 handler.advanceRound(variant);
             }
         }
