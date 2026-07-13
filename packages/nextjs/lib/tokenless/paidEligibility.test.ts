@@ -1,3 +1,4 @@
+import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
@@ -5,6 +6,7 @@ import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   type EligibilityProvider,
   __setPaidEligibilityOverridesForTests,
@@ -26,7 +28,9 @@ const CONTENT_ID = `0x${"55".repeat(32)}` as const;
 const VOTE_KEY = "0x6666666666666666666666666666666666666666" as const;
 const SIGNER_PRIVATE_KEY = `0x${"01".padStart(64, "0")}` as const;
 const SIGNER = privateKeyToAccount(SIGNER_PRIVATE_KEY);
-const VAULT_KEY = Buffer.alloc(32, 7);
+const PROVIDER_EVIDENCE_KEY = Buffer.alloc(32, 7);
+const TAX_RECORDS_KEY = Buffer.alloc(32, 8);
+const VOTE_MAPPING_KEY = Buffer.alloc(32, 9);
 const originalProviderId = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID;
 const originalProviderKey = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY;
 const originalAppUrl = process.env.APP_URL;
@@ -39,11 +43,13 @@ function provider(overrides: Partial<Awaited<ReturnType<EligibilityProvider["ver
         assertionId: "assertion-00000001",
         subjectId: "provider-subject-123",
         accountAddress: ACCOUNT,
-        identityTierId: 2,
-        adultVerified: true,
-        residenceCountry: "DE",
-        identityVerifiedAt: new Date(input.now.getTime() - 60_000),
-        identityExpiresAt: new Date(input.now.getTime() + 86_400_000),
+        capabilities: ["live_human", "unique_human", "document_holder", "minimum_age"],
+        minimumAgeVerified: 18,
+        documentIssuingCountry: "DE",
+        nationalityCountry: "DE",
+        verifiedResidenceCountry: "DE",
+        evidenceVerifiedAt: new Date(input.now.getTime() - 60_000),
+        evidenceExpiresAt: new Date(input.now.getTime() + 86_400_000),
         sanctionsStatus: "clear",
         sanctionsReference: "sanctions-screen-1",
         sanctionsScreenedAt: new Date(input.now.getTime() - 60_000),
@@ -59,6 +65,7 @@ function submission(payoutAccount = ACCOUNT) {
   return {
     providerResult: { provider: "identity-production", payload: "opaque", signature: "signed" },
     sanctionsConsent: true as const,
+    declaredResidenceCountry: "DE",
     taxResidenceCountry: "DE",
     payoutAccount,
     dac7: {
@@ -75,7 +82,11 @@ function submission(payoutAccount = ACCOUNT) {
 function installOverrides(providerValue = provider(), verifyIssuerState = async () => {}) {
   __setPaidEligibilityOverridesForTests({
     provider: providerValue,
-    vault: { currentVersion: "test-v1", keys: new Map([["test-v1", VAULT_KEY]]) },
+    vault: {
+      provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", PROVIDER_EVIDENCE_KEY]]) },
+      tax_records: { currentVersion: "test-v1", keys: new Map([["test-v1", TAX_RECORDS_KEY]]) },
+      vote_mapping: { currentVersion: "test-v1", keys: new Map([["test-v1", VOTE_MAPPING_KEY]]) },
+    },
     issuerConfig: {
       chainId: 84532,
       panelAddress: PANEL,
@@ -113,34 +124,68 @@ async function unlockPaidTasks() {
 }
 
 async function openRound() {
+  const admissionPolicy = {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    policyId: "policy_paid_network",
+    version: 1,
+    reviewerSource: "rateloop_network" as const,
+    compensation: "paid" as const,
+    cohorts: [],
+    selection: "randomized" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requiredCapabilities: ["account_control" as const, "live_human" as const, "minimum_age" as const],
+      allowedProviders: ["identity-production"],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 10,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
   await registerVoucherRound({
     chainId: 84532,
     panelAddress: PANEL,
     roundId: "42",
     contentId: CONTENT_ID,
-    requiredTierId: 2,
+    admissionPolicy,
+    maximumCommits: 15,
     voucherNotBefore: new Date(NOW.getTime() - 60_000),
     voucherDeadline: new Date(NOW.getTime() + 20 * 60_000),
   });
+  return freezeAdmissionPolicy(admissionPolicy);
 }
 
 test("paid-task unlock persists every gate while vaulting DAC7 and nullifier material", async () => {
   const result = await unlockPaidTasks();
-  assert.deepEqual(result, { status: "eligible", blockedReason: null, identityTierId: 2 });
+  assert.deepEqual(result, {
+    status: "eligible",
+    blockedReason: null,
+    capabilities: ["account_control", "document_holder", "live_human", "minimum_age", "unique_human"],
+  });
   const publicState = await getPaidEligibility(ACCOUNT, NOW);
   assert.equal(publicState.status, "eligible");
   assert.equal(publicState.dac7Status, "complete");
   assert.equal(publicState.payoutAccount, ACCOUNT);
+  assert.equal(publicState.declaredResidenceCountry, "DE");
+  assert.equal(publicState.documentIssuingCountry, "DE");
 
   const rows = await dbClient.execute(
-    `SELECT p.nullifier_seed_ciphertext, e.dac7_vault_ciphertext
-     FROM tokenless_rater_profiles p JOIN tokenless_paid_eligibility e ON e.rater_id = p.rater_id`,
+    `SELECT p.nullifier_seed_ciphertext, p.nullifier_key_domain,
+            e.tax_vault_ciphertext, e.tax_vault_key_domain, e.provider_evidence_key_domain
+     FROM tokenless_rater_profiles p
+     JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id`,
   );
   const seedCiphertext = String(rows.rows[0]?.nullifier_seed_ciphertext);
-  const dac7Ciphertext = String(rows.rows[0]?.dac7_vault_ciphertext);
+  const dac7Ciphertext = String(rows.rows[0]?.tax_vault_ciphertext);
   assert.match(seedCiphertext, /^v1\./);
   assert.match(dac7Ciphertext, /^v1\./);
   assert.doesNotMatch(dac7Ciphertext, /Ada Rater|DE-PRIVATE-TIN/);
+  assert.equal(rows.rows[0]?.nullifier_key_domain, "vote_mapping");
+  assert.equal(rows.rows[0]?.tax_vault_key_domain, "tax_records");
+  assert.equal(rows.rows[0]?.provider_evidence_key_domain, "provider_evidence");
 
   await unlockPaidTasks();
   const refreshed = await dbClient.execute("SELECT nullifier_seed_ciphertext FROM tokenless_rater_profiles");
@@ -148,6 +193,48 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
     String(refreshed.rows[0]?.nullifier_seed_ciphertext),
     seedCiphertext,
     "identity refresh keeps its stable seed",
+  );
+});
+
+test("document and nationality countries remain distinct from residence and tax eligibility", async () => {
+  installOverrides(
+    provider({
+      documentIssuingCountry: "FR",
+      nationalityCountry: "IT",
+      verifiedResidenceCountry: "DE",
+    }),
+  );
+  const result = await unlockPaidTasks();
+  assert.equal(result.status, "eligible");
+  const state = await getPaidEligibility(ACCOUNT, NOW);
+  assert.equal(state.documentIssuingCountry, "FR");
+  assert.equal(state.nationalityCountry, "IT");
+  assert.equal(state.verifiedResidenceCountry, "DE");
+  assert.equal(state.declaredResidenceCountry, "DE");
+  assert.equal(state.taxResidenceCountry, "DE");
+});
+
+test("declared and tax residence mismatch is persisted distinctly and blocks paid vouchers", async () => {
+  const result = await submitPaidEligibility({
+    accountAddress: ACCOUNT,
+    submission: { ...submission(), taxResidenceCountry: "FR" },
+    now: NOW,
+  });
+  assert.equal(result.status, "review");
+  assert.equal(result.blockedReason, "residence_tax_review");
+  const state = await getPaidEligibility(ACCOUNT, NOW);
+  assert.equal(state.declaredResidenceCountry, "DE");
+  assert.equal(state.taxResidenceCountry, "FR");
+  assert.equal(state.residenceTaxStatus, "review");
+  await openRound();
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { idempotencyKey: "voucher:test:residence", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
   );
 });
 
@@ -166,22 +253,28 @@ test("production provider results require an Ed25519 signature bound to the sign
     .toString();
   __setPaidEligibilityOverridesForTests({
     provider: null,
-    vault: { currentVersion: "test-v1", keys: new Map([["test-v1", VAULT_KEY]]) },
+    vault: {
+      provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", PROVIDER_EVIDENCE_KEY]]) },
+      tax_records: { currentVersion: "test-v1", keys: new Map([["test-v1", TAX_RECORDS_KEY]]) },
+      vote_mapping: { currentVersion: "test-v1", keys: new Map([["test-v1", VOTE_MAPPING_KEY]]) },
+    },
     requiresDac7: () => true,
     handoff: { startUrl: "https://identity.example/start", secret: Buffer.alloc(32, 9) },
   });
   const payload = Buffer.from(
     JSON.stringify({
-      version: 1,
+      version: 2,
       provider: "verified-provider",
       assertionId: "assertion-signed-1",
       subjectId: "subject-signed-1",
       accountAddress: ACCOUNT,
-      identityTierId: 2,
-      adultVerified: true,
-      residenceCountry: "DE",
-      identityVerifiedAt: new Date(NOW.getTime() - 60_000).toISOString(),
-      identityExpiresAt: new Date(NOW.getTime() + 86_400_000).toISOString(),
+      capabilities: ["live_human", "minimum_age"],
+      minimumAgeVerified: 18,
+      documentIssuingCountry: "DE",
+      nationalityCountry: "DE",
+      verifiedResidenceCountry: "DE",
+      evidenceVerifiedAt: new Date(NOW.getTime() - 60_000).toISOString(),
+      evidenceExpiresAt: new Date(NOW.getTime() + 86_400_000).toISOString(),
       sanctions: {
         status: "clear",
         reference: "screen-signed-1",
@@ -242,7 +335,7 @@ test("sanctions review is persisted but remains fail-closed for paid vouchers", 
   );
 });
 
-test("voucher issuance fails before eligibility and for an insufficient identity tier", async () => {
+test("voucher issuance fails before eligibility and for missing required capabilities", async () => {
   await openRound();
   const request = {
     idempotencyKey: "voucher:test:before",
@@ -254,21 +347,46 @@ test("voucher issuance fails before eligibility and for an insufficient identity
     () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
   );
-  installOverrides(provider({ identityTierId: 1 }));
+  installOverrides(provider({ capabilities: ["minimum_age"], minimumAgeVerified: 18 }));
   await unlockPaidTasks();
   await assert.rejects(
     () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "identity_tier_insufficient",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "admission_policy_not_satisfied",
   );
 });
 
-test("voucher is domain-bound, exact, idempotent, and one-per-identity-per-round", async () => {
+test("voucher issuance rejects policy JSON that no longer matches its frozen hash", async () => {
+  await unlockPaidTasks();
+  await openRound();
+  const source = await dbClient.execute(
+    "SELECT admission_policy_json FROM tokenless_voucher_rounds WHERE round_id = 42",
+  );
+  const changedPolicy = {
+    ...(JSON.parse(String(source.rows[0]?.admission_policy_json)) as Record<string, unknown>),
+    version: 2,
+  };
+  await dbClient.execute({
+    sql: "UPDATE tokenless_voucher_rounds SET admission_policy_json = ? WHERE round_id = 42",
+    args: [freezeAdmissionPolicy(changedPolicy).policyJson],
+  });
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { idempotencyKey: "voucher:test:tamper", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "admission_policy_mismatch",
+  );
+});
+
+test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", async () => {
   let issuerChecks = 0;
   installOverrides(provider(), async () => {
     issuerChecks += 1;
   });
   await unlockPaidTasks();
-  await openRound();
+  const frozenPolicy = await openRound();
   const request = {
     idempotencyKey: "voucher:test:exact",
     roundId: "42",
@@ -282,6 +400,7 @@ test("voucher is domain-bound, exact, idempotent, and one-per-identity-per-round
   assert.equal(issuerChecks, 1, "idempotent replay does not sign again or recheck the chain");
   assert.equal(first.voucher.issuerEpoch, "7");
   assert.equal(first.voucher.roundId, "42");
+  assert.equal(first.voucher.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
 
   const recovered = await recoverTypedDataAddress({
     domain: { name: "RateLoop Tokenless Panel", version: "1", chainId: 84532, verifyingContract: PANEL },
@@ -291,7 +410,7 @@ test("voucher is domain-bound, exact, idempotent, and one-per-identity-per-round
         { name: "contentId", type: "bytes32" },
         { name: "roundId", type: "uint256" },
         { name: "nullifier", type: "bytes32" },
-        { name: "tierId", type: "uint32" },
+        { name: "admissionPolicyHash", type: "bytes32" },
         { name: "issuerEpoch", type: "uint64" },
         { name: "expiresAt", type: "uint64" },
       ],
@@ -302,7 +421,7 @@ test("voucher is domain-bound, exact, idempotent, and one-per-identity-per-round
       contentId: CONTENT_ID,
       roundId: 42n,
       nullifier: first.voucher.nullifier as `0x${string}`,
-      tierId: 2,
+      admissionPolicyHash: frozenPolicy.admissionPolicyHash,
       issuerEpoch: 7n,
       expiresAt: BigInt(first.voucher.expiresAt as string),
     },

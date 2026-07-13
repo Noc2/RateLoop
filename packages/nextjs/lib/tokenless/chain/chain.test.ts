@@ -9,13 +9,16 @@ import {
 } from "./payments";
 import { type TokenlessChainRuntime, assertLiveTokenlessDeployment } from "./runtime";
 import { TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
+import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { type Address, type Hash, type Hex, encodeAbiParameters, encodeEventTopics, getAddress } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
-import { createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const PANEL = getAddress("0x1111111111111111111111111111111111111111");
 const ISSUER = getAddress("0x2222222222222222222222222222222222222222");
@@ -83,7 +86,7 @@ function mockRuntime(
           claimGracePeriod: terms.claimGracePeriod,
           minimumReveals: terms.minimumReveals,
           maximumCommits: terms.maximumCommits,
-          requiredTier: terms.requiredTier,
+          admissionPolicyHash: terms.admissionPolicyHash,
         };
       }
       throw new Error(`Unexpected read ${address}:${functionName}`);
@@ -153,10 +156,70 @@ test("deployment validation rejects on-chain immutable wiring from a mixed bundl
   await assert.rejects(() => assertLiveTokenlessDeployment(config(), runtime), /mixed deployment bundle/);
 });
 
-async function walletAsk() {
+function admissionPolicy() {
+  return {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    policyId: "policy_chain_paid_network",
+    version: 1,
+    reviewerSource: "rateloop_network" as const,
+    compensation: "paid" as const,
+    cohorts: [],
+    selection: "randomized" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requiredCapabilities: ["account_control" as const, "live_human" as const, "minimum_age" as const],
+      allowedProviders: ["identity-production"],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 10,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function freezeAskAdmissionPolicy(operationKey: string) {
+  const source = await dbClient.execute({
+    sql: `SELECT q.question_id, q.terms_json FROM tokenless_ask_ownership o
+          JOIN tokenless_question_records q ON q.question_id = o.question_id
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [operationKey],
+  });
+  const row = source.rows[0];
+  assert.ok(row);
+  const terms = {
+    ...(JSON.parse(String(row.terms_json)) as Record<string, unknown>),
+    audiencePolicy: admissionPolicy(),
+  };
+  const termsJson = stableJson(terms);
+  const termsHash = createHash("sha256").update(termsJson).digest("hex");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_question_records SET terms_json = ?, terms_hash = ?, updated_at = ? WHERE question_id = ?",
+    args: [termsJson, termsHash, new Date(), row.question_id],
+  });
+}
+
+async function walletAsk(options: { includeAdmissionPolicy?: boolean } = {}) {
   await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
   const quote = await createTokenlessQuote({
-    audience: { tierId: "passport" },
+    audience: {
+      admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
+      source: "rateloop_network",
+    },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
@@ -169,10 +232,21 @@ async function walletAsk() {
   const prepared = await prepareProductAsk({ principal: { kind: "session", accountAddress: FUNDER }, request });
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
   await attachProductAsk(prepared, ask);
+  if (options.includeAdmissionPolicy !== false) await freezeAskAdmissionPolicy(ask.operationKey);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
   return ask.operationKey;
 }
+
+test("legacy tier-only asks fail closed instead of being converted into capability admission", async () => {
+  const operationKey = await walletAsk({ includeAdmissionPolicy: false });
+  await assert.rejects(
+    () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "capability_policy_required",
+  );
+  const executions = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_chain_executions");
+  assert.equal(Number(executions.rows[0]?.count), 0);
+});
 
 function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment>>, roundId = 7n) {
   const topics = encodeEventTopics({
@@ -187,12 +261,14 @@ function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment
   const data = encodeAbiParameters(
     [
       { name: "termsHash", type: "bytes32" },
+      { name: "admissionPolicyHash", type: "bytes32" },
       { name: "bountyAmount", type: "uint256" },
       { name: "feeAmount", type: "uint256" },
       { name: "attemptReserve", type: "uint256" },
     ],
     [
       expected.roundTerms.termsHash,
+      expected.roundTerms.admissionPolicyHash,
       BigInt(expected.roundTerms.bountyAmount),
       BigInt(expected.roundTerms.feeAmount),
       BigInt(expected.roundTerms.attemptReserve),
@@ -253,6 +329,20 @@ test("receipt reconciliation rejects altered economics even when the panel and f
   );
 });
 
+test("receipt reconciliation rejects an altered admission policy hash", async () => {
+  const operationKey = await walletAsk();
+  const runtime = mockRuntime();
+  const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
+  const altered = {
+    ...expected,
+    roundTerms: { ...expected.roundTerms, admissionPolicyHash: `0x${"99".repeat(32)}` as Hex },
+  };
+  assert.throws(
+    () => __chainPaymentTestUtils.exactRoundCreated({ logs: [roundCreatedLog(altered)], expected }),
+    /exactly one RoundCreated event matching the quoted terms/,
+  );
+});
+
 test("round reconciliation reads back and rejects altered non-event terms", async () => {
   const operationKey = await walletAsk();
   const runtime = mockRuntime();
@@ -278,7 +368,10 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
 test("x402 authorization attaches after exact terms without breaking ask idempotency", async () => {
   await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
   const quote = await createTokenlessQuote({
-    audience: { tierId: "passport" },
+    audience: {
+      admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
+      source: "rateloop_network",
+    },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Fund this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
@@ -293,6 +386,7 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
   assert.equal(product.paymentState, "pending_chain_authorization");
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
   await attachProductAsk(product, ask);
+  await freezeAskAdmissionPolicy(ask.operationKey);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
   const runtime = mockRuntime();

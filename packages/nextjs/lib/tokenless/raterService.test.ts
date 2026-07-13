@@ -1,11 +1,37 @@
+import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/raterService";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
 const NOW = new Date("2026-07-12T20:00:00.000Z");
+
+function paidAdmissionPolicy() {
+  return {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    policyId: "policy_rater_tasks",
+    version: 1,
+    reviewerSource: "rateloop_network" as const,
+    compensation: "paid" as const,
+    cohorts: [],
+    selection: "randomized" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requiredCapabilities: ["account_control" as const, "live_human" as const, "minimum_age" as const],
+      allowedProviders: ["identity-production"],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 10,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+}
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
@@ -32,6 +58,7 @@ test("commit authorization rejects a sealed payload whose signed hash differs", 
 });
 
 async function seedTask(sandbox: boolean) {
+  const frozenPolicy = freezeAdmissionPolicy(paidAdmissionPolicy());
   await dbClient.execute({
     sql: "INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at) VALUES ('ws_tasks', 'Tasks', 'active', ?, ?)",
     args: [NOW, NOW],
@@ -75,6 +102,7 @@ async function seedTask(sandbox: boolean) {
         bountyAmount: "25000000",
         attemptCompensation: "333333",
         maximumCommits: 15,
+        admissionPolicyHash: frozenPolicy.admissionPolicyHash,
         beaconRound: "123",
         beaconNetworkHash: `0x${"66".repeat(32)}`,
       }),
@@ -83,9 +111,22 @@ async function seedTask(sandbox: boolean) {
     ],
   });
   await dbClient.execute({
-    sql: "INSERT INTO tokenless_voucher_rounds (chain_id, panel_address, round_id, content_id, required_tier_id, voucher_not_before, voucher_deadline, status, created_at, updated_at) VALUES (84532, ?, 42, ?, 2, ?, ?, 'open', ?, ?)",
-    args: [panel, `0x${"11".repeat(32)}`, new Date(NOW.getTime() - 1_000), new Date(NOW.getTime() + 60_000), NOW, NOW],
+    sql: `INSERT INTO tokenless_voucher_rounds
+          (chain_id, panel_address, round_id, content_id, admission_policy_hash, admission_policy_json,
+           maximum_commits, voucher_not_before, voucher_deadline, status, created_at, updated_at)
+          VALUES (84532, ?, 42, ?, ?, ?, 15, ?, ?, 'open', ?, ?)`,
+    args: [
+      panel,
+      `0x${"11".repeat(32)}`,
+      frozenPolicy.admissionPolicyHash,
+      frozenPolicy.policyJson,
+      new Date(NOW.getTime() - 1_000),
+      new Date(NOW.getTime() + 60_000),
+      NOW,
+      NOW,
+    ],
   });
+  return frozenPolicy;
 }
 
 test("task discovery fails closed for live content without an assignment", async () => {
@@ -94,9 +135,10 @@ test("task discovery fails closed for live content without an assignment", async
 });
 
 test("task discovery exposes exact compensation for explicit sandbox content", async () => {
-  await seedTask(true);
+  const frozenPolicy = await seedTask(true);
   const tasks = await listPaidRaterTasks(ACCOUNT, NOW);
   assert.equal(tasks[0]?.question.prompt, "Ship it?");
+  assert.equal(tasks[0]?.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
   assert.deepEqual(tasks[0]?.earnings, {
     guaranteedBaseAtomic: "1333333",
     possibleBonusAtomic: "333333",

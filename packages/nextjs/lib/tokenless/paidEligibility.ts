@@ -1,4 +1,5 @@
 import { CredentialIssuerAbi, TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
+import { HUMAN_ASSURANCE_CAPABILITIES, type HumanAssuranceCapability } from "@rateloop/sdk";
 import {
   createCipheriv,
   createDecipheriv,
@@ -15,6 +16,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import { getBaseAccountAuthOrigin } from "~~/lib/base-account/auth";
 import { dbClient, dbPool } from "~~/lib/db";
+import { evaluateFrozenAdmissionPolicy, freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const COUNTRY = /^[A-Z]{2}$/;
@@ -32,11 +34,13 @@ export type VerifiedEligibilityAssertion = {
   assertionId: string;
   subjectId: string;
   accountAddress: Address;
-  identityTierId: number;
-  adultVerified: boolean;
-  residenceCountry: string;
-  identityVerifiedAt: Date;
-  identityExpiresAt: Date;
+  capabilities: HumanAssuranceCapability[];
+  minimumAgeVerified: number | null;
+  documentIssuingCountry: string | null;
+  nationalityCountry: string | null;
+  verifiedResidenceCountry: string | null;
+  evidenceVerifiedAt: Date;
+  evidenceExpiresAt: Date;
   sanctionsStatus: "clear" | "review" | "match";
   sanctionsReference: string;
   sanctionsScreenedAt: Date;
@@ -58,6 +62,7 @@ export type EligibilitySubmission = {
   /** Development/test injection only. Production clients use providerState from the handoff. */
   providerResult?: { provider: string; payload: string; signature: string };
   sanctionsConsent: true;
+  declaredResidenceCountry: string;
   taxResidenceCountry: string;
   payoutAccount: string;
   dac7?: {
@@ -79,6 +84,8 @@ export type VoucherRequest = {
 };
 
 type VaultConfig = { currentVersion: string; keys: Map<string, Buffer> };
+type VaultDomain = "provider_evidence" | "tax_records" | "vote_mapping";
+type VaultDomains = Record<VaultDomain, VaultConfig>;
 type IssuerConfig = {
   chainId: number;
   panelAddress: Address;
@@ -93,7 +100,7 @@ type IssuerStateVerifier = (config: IssuerConfig) => Promise<void>;
 type HandoffConfig = { startUrl: string; secret: Buffer };
 
 let providerOverride: EligibilityProvider | null = null;
-let vaultOverride: VaultConfig | null = null;
+let vaultOverride: VaultDomains | null = null;
 let issuerConfigOverride: IssuerConfig | null = null;
 let issuerStateVerifierOverride: IssuerStateVerifier | null = null;
 let dac7PolicyOverride: ((country: string) => boolean) | null = null;
@@ -129,6 +136,20 @@ function parseDate(value: unknown, name: string) {
   return result;
 }
 
+const PROVIDER_CAPABILITIES = new Set<HumanAssuranceCapability>(
+  HUMAN_ASSURANCE_CAPABILITIES.filter(
+    capability => capability !== "account_control" && capability !== "customer_invitation",
+  ),
+);
+
+function optionalCountry(value: unknown, name: string) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || !COUNTRY.test(value.toUpperCase())) {
+    throw new TokenlessServiceError(`${name} is invalid.`, 400, "invalid_provider_result");
+  }
+  return value.toUpperCase();
+}
+
 function parseProviderPayload(payload: string, providerId: string, now: Date): VerifiedEligibilityAssertion {
   let parsed: Record<string, unknown>;
   try {
@@ -139,15 +160,21 @@ function parseProviderPayload(payload: string, providerId: string, now: Date): V
   const sanctions = parsed.sanctions as Record<string, unknown> | undefined;
   const assertionId = typeof parsed.assertionId === "string" ? parsed.assertionId : "";
   const subjectId = typeof parsed.subjectId === "string" ? parsed.subjectId : "";
-  const residenceCountry = typeof parsed.residenceCountry === "string" ? parsed.residenceCountry.toUpperCase() : "";
-  const tier = Number(parsed.identityTierId);
-  const identityVerifiedAt = parseDate(parsed.identityVerifiedAt, "identityVerifiedAt");
-  const identityExpiresAt = parseDate(parsed.identityExpiresAt, "identityExpiresAt");
+  const capabilities = Array.isArray(parsed.capabilities) ? [...new Set(parsed.capabilities)] : [];
+  const evidenceVerifiedAt = parseDate(parsed.evidenceVerifiedAt, "evidenceVerifiedAt");
+  const evidenceExpiresAt = parseDate(parsed.evidenceExpiresAt, "evidenceExpiresAt");
+  const minimumAgeVerified =
+    parsed.minimumAgeVerified === null || parsed.minimumAgeVerified === undefined
+      ? null
+      : Number(parsed.minimumAgeVerified);
+  const documentIssuingCountry = optionalCountry(parsed.documentIssuingCountry, "documentIssuingCountry");
+  const nationalityCountry = optionalCountry(parsed.nationalityCountry, "nationalityCountry");
+  const verifiedResidenceCountry = optionalCountry(parsed.verifiedResidenceCountry, "verifiedResidenceCountry");
   const sanctionsScreenedAt = parseDate(sanctions?.screenedAt, "sanctions.screenedAt");
   const sanctionsExpiresAt = parseDate(sanctions?.expiresAt, "sanctions.expiresAt");
   const sanctionsStatus = sanctions?.status;
   if (
-    parsed.version !== 1 ||
+    parsed.version !== 2 ||
     parsed.provider !== providerId ||
     assertionId.length < 8 ||
     assertionId.length > 256 ||
@@ -155,19 +182,22 @@ function parseProviderPayload(payload: string, providerId: string, now: Date): V
     subjectId.length > 256 ||
     typeof parsed.accountAddress !== "string" ||
     !ADDRESS.test(parsed.accountAddress) ||
-    !Number.isInteger(tier) ||
-    tier < 1 ||
-    tier > 3 ||
-    typeof parsed.adultVerified !== "boolean" ||
-    !COUNTRY.test(residenceCountry) ||
+    capabilities.length === 0 ||
+    capabilities.some(
+      capability =>
+        typeof capability !== "string" || !PROVIDER_CAPABILITIES.has(capability as HumanAssuranceCapability),
+    ) ||
+    (minimumAgeVerified !== null &&
+      (!Number.isInteger(minimumAgeVerified) || minimumAgeVerified < 0 || minimumAgeVerified > 120)) ||
+    (capabilities.includes("minimum_age") && minimumAgeVerified === null) ||
     !["clear", "review", "match"].includes(String(sanctionsStatus)) ||
     typeof sanctions?.reference !== "string" ||
     sanctions.reference.length < 4 ||
-    identityVerifiedAt.getTime() > now.getTime() + PROVIDER_CLOCK_SKEW_MS ||
+    evidenceVerifiedAt.getTime() > now.getTime() + PROVIDER_CLOCK_SKEW_MS ||
     sanctionsScreenedAt.getTime() > now.getTime() + PROVIDER_CLOCK_SKEW_MS ||
-    identityExpiresAt <= now ||
+    evidenceExpiresAt <= now ||
     sanctionsExpiresAt <= now ||
-    identityExpiresAt.getTime() - identityVerifiedAt.getTime() > MAX_PROVIDER_LIFETIME_MS ||
+    evidenceExpiresAt.getTime() - evidenceVerifiedAt.getTime() > MAX_PROVIDER_LIFETIME_MS ||
     sanctionsExpiresAt.getTime() - sanctionsScreenedAt.getTime() > MAX_PROVIDER_LIFETIME_MS
   ) {
     throw new TokenlessServiceError(
@@ -181,11 +211,13 @@ function parseProviderPayload(payload: string, providerId: string, now: Date): V
     assertionId,
     subjectId,
     accountAddress: getAddress(parsed.accountAddress),
-    identityTierId: tier,
-    adultVerified: parsed.adultVerified,
-    residenceCountry,
-    identityVerifiedAt,
-    identityExpiresAt,
+    capabilities: capabilities as HumanAssuranceCapability[],
+    minimumAgeVerified,
+    documentIssuingCountry,
+    nationalityCountry,
+    verifiedResidenceCountry,
+    evidenceVerifiedAt,
+    evidenceExpiresAt,
     sanctionsStatus: sanctionsStatus as VerifiedEligibilityAssertion["sanctionsStatus"],
     sanctionsReference: sanctions.reference,
     sanctionsScreenedAt,
@@ -249,19 +281,25 @@ function getProvider() {
   } satisfies EligibilityProvider;
 }
 
-function getVaultConfig(): VaultConfig {
-  if (vaultOverride) return vaultOverride;
-  if (process.env.NEXT_PUBLIC_TOKENLESS_ELIGIBILITY_VAULT_KEYS) {
-    throw new Error("Eligibility vault keys must never use a NEXT_PUBLIC_ environment variable.");
+function getVaultConfig(domain: VaultDomain): VaultConfig {
+  if (vaultOverride) return vaultOverride[domain];
+  const prefix =
+    domain === "provider_evidence"
+      ? "TOKENLESS_PROVIDER_EVIDENCE_VAULT"
+      : domain === "tax_records"
+        ? "TOKENLESS_TAX_VAULT"
+        : "TOKENLESS_VOTE_MAPPING_VAULT";
+  if (process.env[`NEXT_PUBLIC_${prefix}_KEYS`]) {
+    throw new Error(`${domain} vault keys must never use a NEXT_PUBLIC_ environment variable.`);
   }
-  const currentVersion = process.env.TOKENLESS_ELIGIBILITY_VAULT_KEY_VERSION?.trim();
-  const rawKeys = process.env.TOKENLESS_ELIGIBILITY_VAULT_KEYS?.trim();
+  const currentVersion = process.env[`${prefix}_KEY_VERSION`]?.trim();
+  const rawKeys = process.env[`${prefix}_KEYS`]?.trim();
   if (!currentVersion || !rawKeys) throw new Error("The eligibility vault keyring is not configured.");
   let source: Record<string, string>;
   try {
     source = JSON.parse(rawKeys) as Record<string, string>;
   } catch {
-    throw new Error("TOKENLESS_ELIGIBILITY_VAULT_KEYS must be a JSON object of base64 keys.");
+    throw new Error(`${prefix}_KEYS must be a JSON object of base64 keys.`);
   }
   const keys = new Map<string, Buffer>();
   for (const [version, encoded] of Object.entries(source)) {
@@ -273,8 +311,8 @@ function getVaultConfig(): VaultConfig {
   return { currentVersion, keys };
 }
 
-function encryptVaultValue(value: unknown) {
-  const config = getVaultConfig();
+function encryptVaultValue(domain: VaultDomain, value: unknown) {
+  const config = getVaultConfig(domain);
   const key = config.keys.get(config.currentVersion)!;
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -282,12 +320,13 @@ function encryptVaultValue(value: unknown) {
   const tag = cipher.getAuthTag();
   return {
     ciphertext: `v1.${iv.toString("base64url")}.${tag.toString("base64url")}.${ciphertext.toString("base64url")}`,
+    keyDomain: domain,
     keyVersion: config.currentVersion,
   };
 }
 
-function decryptVaultValue(value: string, keyVersion: string) {
-  const key = getVaultConfig().keys.get(keyVersion);
+function decryptVaultValue(value: string, keyVersion: string, domain: VaultDomain) {
+  const key = getVaultConfig(domain).keys.get(keyVersion);
   if (!key) throw new Error(`Eligibility vault key ${keyVersion} is unavailable.`);
   const [version, ivValue, tagValue, ciphertextValue] = value.split(".");
   if (version !== "v1" || !ivValue || !tagValue || !ciphertextValue) throw new Error("Invalid eligibility ciphertext.");
@@ -390,17 +429,17 @@ export async function completeEligibilityProviderHandoff(input: {
       "provider_account_mismatch",
     );
   }
-  const vaulted = encryptVaultValue(input.providerResult);
+  const vaulted = encryptVaultValue("provider_evidence", input.providerResult);
   const resultExpiresAt = new Date(
-    Math.min(assertion.identityExpiresAt.getTime(), assertion.sanctionsExpiresAt.getTime()),
+    Math.min(assertion.evidenceExpiresAt.getTime(), assertion.sanctionsExpiresAt.getTime()),
   );
   const updated = await dbClient.execute({
     sql: `UPDATE tokenless_eligibility_provider_handoffs
           SET status = 'verified', provider_result_ciphertext = ?, provider_result_key_version = ?,
-              provider_result_expires_at = ?, verified_at = ?
+              provider_result_key_domain = ?, provider_result_expires_at = ?, verified_at = ?
           WHERE state_hash = ? AND status = 'pending' AND expires_at > ?
           RETURNING state_hash`,
-    args: [vaulted.ciphertext, vaulted.keyVersion, resultExpiresAt, now, hash(input.state), now],
+    args: [vaulted.ciphertext, vaulted.keyVersion, vaulted.keyDomain, resultExpiresAt, now, hash(input.state), now],
   });
   if (updated.rowCount !== 1) {
     throw new TokenlessServiceError("Eligibility handoff state was already used.", 409, "invalid_provider_state");
@@ -411,7 +450,8 @@ export async function completeEligibilityProviderHandoff(input: {
 async function resolveEligibilityAssertion(input: EligibilitySubmission, accountAddress: Address, now: Date) {
   if (input.providerState) {
     const result = await dbClient.execute({
-      sql: `SELECT provider_result_ciphertext, provider_result_key_version, provider_result_expires_at, status,
+      sql: `SELECT provider_result_ciphertext, provider_result_key_version, provider_result_key_domain,
+                   provider_result_expires_at, status,
                    account_address
             FROM tokenless_eligibility_provider_handoffs WHERE state_hash = ? LIMIT 1`,
       args: [hash(input.providerState)],
@@ -423,7 +463,8 @@ async function resolveEligibilityAssertion(input: EligibilitySubmission, account
       stringValue(row, "account_address") !== accountAddress.toLowerCase() ||
       new Date(String(row.provider_result_expires_at)) <= now ||
       !stringValue(row, "provider_result_ciphertext") ||
-      !stringValue(row, "provider_result_key_version")
+      !stringValue(row, "provider_result_key_version") ||
+      stringValue(row, "provider_result_key_domain") !== "provider_evidence"
     ) {
       throw new TokenlessServiceError(
         "Complete the identity provider handoff first.",
@@ -432,9 +473,11 @@ async function resolveEligibilityAssertion(input: EligibilitySubmission, account
       );
     }
     const providerResult = JSON.parse(
-      decryptVaultValue(String(row.provider_result_ciphertext), String(row.provider_result_key_version)).toString(
-        "utf8",
-      ),
+      decryptVaultValue(
+        String(row.provider_result_ciphertext),
+        String(row.provider_result_key_version),
+        "provider_evidence",
+      ).toString("utf8"),
     ) as { provider: string; payload: string; signature: string };
     return { assertion: await getProvider().verify({ ...providerResult, now }), stateHash: hash(input.providerState) };
   }
@@ -513,11 +556,31 @@ function validateDac7(value: EligibilitySubmission["dac7"]) {
   }
 }
 
-function eligibilityState(assertion: VerifiedEligibilityAssertion) {
-  if (!assertion.adultVerified) return { status: "blocked", reason: "age_not_verified" };
-  if (assertion.sanctionsStatus === "match") return { status: "blocked", reason: "sanctions_match" };
-  if (assertion.sanctionsStatus === "review") return { status: "review", reason: "sanctions_review" };
-  return { status: "eligible", reason: null };
+function eligibilityState(
+  assertion: VerifiedEligibilityAssertion,
+  declaredResidenceCountry: string,
+  taxResidenceCountry: string,
+) {
+  if (
+    !assertion.capabilities.includes("minimum_age") ||
+    assertion.minimumAgeVerified === null ||
+    assertion.minimumAgeVerified < 18
+  ) {
+    return { status: "blocked", reason: "minimum_age_not_verified", residenceTaxStatus: "unreviewed" };
+  }
+  if (assertion.sanctionsStatus === "match") {
+    return { status: "blocked", reason: "sanctions_match", residenceTaxStatus: "unreviewed" };
+  }
+  if (assertion.sanctionsStatus === "review") {
+    return { status: "review", reason: "sanctions_review", residenceTaxStatus: "unreviewed" };
+  }
+  if (assertion.verifiedResidenceCountry && assertion.verifiedResidenceCountry !== declaredResidenceCountry) {
+    return { status: "review", reason: "verified_residence_mismatch", residenceTaxStatus: "review" };
+  }
+  if (declaredResidenceCountry !== taxResidenceCountry) {
+    return { status: "review", reason: "residence_tax_review", residenceTaxStatus: "review" };
+  }
+  return { status: "eligible", reason: null, residenceTaxStatus: "consistent" };
 }
 
 function publicBlockedReason(reason: string | null) {
@@ -547,8 +610,10 @@ export async function submitPaidEligibility(input: {
     );
   }
   const taxCountry = input.submission.taxResidenceCountry.toUpperCase();
-  if (!COUNTRY.test(taxCountry))
-    throw new TokenlessServiceError("Tax residence country is invalid.", 400, "tax_profile_invalid");
+  const declaredResidenceCountry = input.submission.declaredResidenceCountry.toUpperCase();
+  if (!COUNTRY.test(taxCountry) || !COUNTRY.test(declaredResidenceCountry)) {
+    throw new TokenlessServiceError("Residence and tax countries are invalid.", 400, "tax_profile_invalid");
+  }
   const resolvedAssertion = await resolveEligibilityAssertion(input.submission, accountAddress, now);
   const assertion = resolvedAssertion.assertion;
   if (assertion.accountAddress !== accountAddress) {
@@ -558,32 +623,54 @@ export async function submitPaidEligibility(input: {
       "provider_account_mismatch",
     );
   }
-  if (assertion.residenceCountry !== taxCountry) {
-    throw new TokenlessServiceError(
-      "Residence and tax residence require review before paid tasks.",
-      409,
-      "residence_mismatch",
-    );
-  }
   const dac7Required = requiresDac7(taxCountry);
   if (dac7Required) validateDac7(input.submission.dac7);
   const dac7Vault =
     dac7Required && input.submission.dac7
-      ? encryptVaultValue({ ...input.submission.dac7, taxResidenceCountry: taxCountry })
+      ? encryptVaultValue("tax_records", {
+          ...input.submission.dac7,
+          declaredResidenceCountry,
+          taxResidenceCountry: taxCountry,
+        })
       : null;
-  const seedVault = encryptVaultValue({ seed: `0x${randomBytes(32).toString("hex")}` });
+  const seedVault = encryptVaultValue("vote_mapping", { seed: `0x${randomBytes(32).toString("hex")}` });
+  const providerEvidenceVault = encryptVaultValue("provider_evidence", {
+    providerId: assertion.providerId,
+    assertionId: assertion.assertionId,
+    subjectId: assertion.subjectId,
+    capabilities: assertion.capabilities,
+    minimumAgeVerified: assertion.minimumAgeVerified,
+    documentIssuingCountry: assertion.documentIssuingCountry,
+    nationalityCountry: assertion.nationalityCountry,
+    verifiedResidenceCountry: assertion.verifiedResidenceCountry,
+    evidenceVerifiedAt: assertion.evidenceVerifiedAt.toISOString(),
+    evidenceExpiresAt: assertion.evidenceExpiresAt.toISOString(),
+  });
   const subjectHash = hash(`${assertion.providerId}:${assertion.subjectId}`);
   const assertionIdHash = hash(`${assertion.providerId}:${assertion.assertionId}`);
-  const state = eligibilityState(assertion);
+  const capabilities = [...new Set<HumanAssuranceCapability>(["account_control", ...assertion.capabilities])].sort();
+  const state = eligibilityState(assertion, declaredResidenceCountry, taxCountry);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
     const existing = await client.query(
-      "SELECT rater_id, identity_subject_hash FROM tokenless_rater_profiles WHERE account_address = $1 FOR UPDATE",
+      `SELECT rater_id, nullifier_key_domain
+       FROM tokenless_rater_profiles WHERE account_address = $1 FOR UPDATE`,
       [accountAddress.toLowerCase()],
     );
     const existingRow = existing.rows[0] as QueryRow | undefined;
-    if (existingRow && stringValue(existingRow, "identity_subject_hash") !== subjectHash) {
+    const existingCapability = existingRow
+      ? await client.query(
+          `SELECT provider_subject_hash FROM tokenless_capability_eligibility
+           WHERE rater_id = $1 FOR UPDATE`,
+          [stringValue(existingRow, "rater_id")],
+        )
+      : null;
+    const existingSubjectHash = stringValue(
+      existingCapability?.rows[0] as QueryRow | undefined,
+      "provider_subject_hash",
+    );
+    if (existingSubjectHash && existingSubjectHash !== subjectHash) {
       throw new TokenlessServiceError(
         "This account is already bound to another verified identity.",
         409,
@@ -594,55 +681,111 @@ export async function submitPaidEligibility(input: {
     if (!existingRow) {
       await client.query(
         `INSERT INTO tokenless_rater_profiles
-         (rater_id, account_address, identity_subject_hash, nullifier_seed_ciphertext, nullifier_key_version, created_at, updated_at)
+         (rater_id, account_address, nullifier_seed_ciphertext,
+          nullifier_key_version, nullifier_key_domain, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $6)`,
-        [raterId, accountAddress.toLowerCase(), subjectHash, seedVault.ciphertext, seedVault.keyVersion, now],
+        [raterId, accountAddress.toLowerCase(), seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now],
+      );
+    } else if (stringValue(existingRow, "nullifier_key_domain") !== "vote_mapping") {
+      await client.query(
+        `UPDATE tokenless_rater_profiles
+         SET nullifier_seed_ciphertext = $1, nullifier_key_version = $2,
+             nullifier_key_domain = $3, updated_at = $4
+         WHERE rater_id = $5`,
+        [seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now, raterId],
       );
     }
     await client.query(
-      `INSERT INTO tokenless_paid_eligibility
-       (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash, identity_tier_id,
-        identity_verified_at, identity_expires_at, adult_verified, residence_country, tax_residence_country,
-        tax_profile_status, dac7_status, dac7_vault_ciphertext, dac7_key_version, sanctions_consent_at,
-        sanctions_status, sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at, payout_account,
-        payout_ownership_method, payout_verified_at, eligibility_status, blocked_reason, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'complete',$11,$12,$13,$14,$15,$16,$17,$18,$19,
-               'siwe_base_account_session',$14,$20,$21,$14,$14)
+      `INSERT INTO tokenless_capability_eligibility
+       (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash,
+        provider_subject_hash, capabilities_json, provider_evidence_ciphertext,
+        provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
+        evidence_expires_at, minimum_age_verified, document_issuing_country,
+        nationality_country, verified_residence_country, declared_residence_country,
+        tax_residence_country, residence_tax_status, tax_profile_status, dac7_status,
+        tax_vault_ciphertext, tax_vault_key_version, tax_vault_key_domain,
+        sanctions_consent_at, sanctions_status, sanctions_reference_hash,
+        sanctions_screened_at, sanctions_expires_at, payout_account,
+        payout_ownership_method, payout_verified_at, reviewer_source, cohort_ids_json,
+        qualification_keys_json, eligibility_status, blocked_reason, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+               $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
        ON CONFLICT (rater_id) DO UPDATE SET
-        provider_id = EXCLUDED.provider_id, provider_assertion_hash = EXCLUDED.provider_assertion_hash,
-        provider_assertion_id_hash = EXCLUDED.provider_assertion_id_hash, identity_tier_id = EXCLUDED.identity_tier_id,
-        identity_verified_at = EXCLUDED.identity_verified_at, identity_expires_at = EXCLUDED.identity_expires_at,
-        adult_verified = EXCLUDED.adult_verified, residence_country = EXCLUDED.residence_country,
-        tax_residence_country = EXCLUDED.tax_residence_country, tax_profile_status = EXCLUDED.tax_profile_status,
-        dac7_status = EXCLUDED.dac7_status, dac7_vault_ciphertext = EXCLUDED.dac7_vault_ciphertext,
-        dac7_key_version = EXCLUDED.dac7_key_version, sanctions_consent_at = EXCLUDED.sanctions_consent_at,
-        sanctions_status = EXCLUDED.sanctions_status, sanctions_reference_hash = EXCLUDED.sanctions_reference_hash,
-        sanctions_screened_at = EXCLUDED.sanctions_screened_at, sanctions_expires_at = EXCLUDED.sanctions_expires_at,
-        payout_account = EXCLUDED.payout_account, payout_ownership_method = EXCLUDED.payout_ownership_method,
-        payout_verified_at = EXCLUDED.payout_verified_at, eligibility_status = EXCLUDED.eligibility_status,
-        blocked_reason = EXCLUDED.blocked_reason, updated_at = EXCLUDED.updated_at`,
+        provider_id = EXCLUDED.provider_id,
+        provider_assertion_hash = EXCLUDED.provider_assertion_hash,
+        provider_assertion_id_hash = EXCLUDED.provider_assertion_id_hash,
+        provider_subject_hash = EXCLUDED.provider_subject_hash,
+        capabilities_json = EXCLUDED.capabilities_json,
+        provider_evidence_ciphertext = EXCLUDED.provider_evidence_ciphertext,
+        provider_evidence_key_version = EXCLUDED.provider_evidence_key_version,
+        provider_evidence_key_domain = EXCLUDED.provider_evidence_key_domain,
+        evidence_verified_at = EXCLUDED.evidence_verified_at,
+        evidence_expires_at = EXCLUDED.evidence_expires_at,
+        minimum_age_verified = EXCLUDED.minimum_age_verified,
+        document_issuing_country = EXCLUDED.document_issuing_country,
+        nationality_country = EXCLUDED.nationality_country,
+        verified_residence_country = EXCLUDED.verified_residence_country,
+        declared_residence_country = EXCLUDED.declared_residence_country,
+        tax_residence_country = EXCLUDED.tax_residence_country,
+        residence_tax_status = EXCLUDED.residence_tax_status,
+        tax_profile_status = EXCLUDED.tax_profile_status,
+        dac7_status = EXCLUDED.dac7_status,
+        tax_vault_ciphertext = EXCLUDED.tax_vault_ciphertext,
+        tax_vault_key_version = EXCLUDED.tax_vault_key_version,
+        tax_vault_key_domain = EXCLUDED.tax_vault_key_domain,
+        sanctions_consent_at = EXCLUDED.sanctions_consent_at,
+        sanctions_status = EXCLUDED.sanctions_status,
+        sanctions_reference_hash = EXCLUDED.sanctions_reference_hash,
+        sanctions_screened_at = EXCLUDED.sanctions_screened_at,
+        sanctions_expires_at = EXCLUDED.sanctions_expires_at,
+        payout_account = EXCLUDED.payout_account,
+        payout_ownership_method = EXCLUDED.payout_ownership_method,
+        payout_verified_at = EXCLUDED.payout_verified_at,
+        reviewer_source = EXCLUDED.reviewer_source,
+        cohort_ids_json = EXCLUDED.cohort_ids_json,
+        qualification_keys_json = EXCLUDED.qualification_keys_json,
+        eligibility_status = EXCLUDED.eligibility_status,
+        blocked_reason = EXCLUDED.blocked_reason,
+        updated_at = EXCLUDED.updated_at`,
       [
         raterId,
         assertion.providerId,
         assertion.assertionHash,
         assertionIdHash,
-        assertion.identityTierId,
-        assertion.identityVerifiedAt,
-        assertion.identityExpiresAt,
-        assertion.adultVerified,
-        assertion.residenceCountry,
+        subjectHash,
+        JSON.stringify(capabilities),
+        providerEvidenceVault.ciphertext,
+        providerEvidenceVault.keyVersion,
+        providerEvidenceVault.keyDomain,
+        assertion.evidenceVerifiedAt,
+        assertion.evidenceExpiresAt,
+        assertion.minimumAgeVerified,
+        assertion.documentIssuingCountry,
+        assertion.nationalityCountry,
+        assertion.verifiedResidenceCountry,
+        declaredResidenceCountry,
         taxCountry,
+        state.residenceTaxStatus,
+        "complete",
         dac7Required ? "complete" : "not_required",
         dac7Vault?.ciphertext ?? null,
         dac7Vault?.keyVersion ?? null,
+        dac7Vault?.keyDomain ?? null,
         now,
         assertion.sanctionsStatus,
         hash(assertion.sanctionsReference),
         assertion.sanctionsScreenedAt,
         assertion.sanctionsExpiresAt,
         accountAddress.toLowerCase(),
+        "siwe_base_account_session",
+        now,
+        "rateloop_network",
+        "[]",
+        "[]",
         state.status,
         state.reason,
+        now,
+        now,
       ],
     );
     if (resolvedAssertion.stateHash) {
@@ -659,7 +802,7 @@ export async function submitPaidEligibility(input: {
     return {
       status: state.status,
       blockedReason: publicBlockedReason(state.reason),
-      identityTierId: assertion.identityTierId,
+      capabilities,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -678,28 +821,36 @@ export async function submitPaidEligibility(input: {
 
 export async function getPaidEligibility(accountAddress: string, now = new Date()) {
   const result = await dbClient.execute({
-    sql: `SELECT e.identity_tier_id, e.identity_expires_at, e.adult_verified, e.residence_country,
-                 e.tax_residence_country, e.tax_profile_status, e.dac7_status, e.sanctions_status,
-                 e.sanctions_expires_at, e.payout_account, e.payout_ownership_method, e.eligibility_status,
+    sql: `SELECT e.capabilities_json, e.evidence_expires_at, e.minimum_age_verified,
+                 e.document_issuing_country, e.nationality_country, e.verified_residence_country,
+                 e.declared_residence_country, e.tax_residence_country, e.residence_tax_status,
+                 e.tax_profile_status, e.dac7_status, e.sanctions_status, e.sanctions_expires_at,
+                 e.payout_account, e.payout_ownership_method, e.eligibility_status,
                  e.blocked_reason, e.updated_at
-          FROM tokenless_rater_profiles p JOIN tokenless_paid_eligibility e ON e.rater_id = p.rater_id
+          FROM tokenless_rater_profiles p
+          JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
           WHERE p.account_address = ? LIMIT 1`,
     args: [getAddress(accountAddress).toLowerCase()],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) return { status: "not_started" };
-  const identityExpiresAt = new Date(String(row.identity_expires_at));
+  const evidenceExpiresAt = new Date(String(row.evidence_expires_at));
   const sanctionsExpiresAt = new Date(String(row.sanctions_expires_at));
   const persisted = stringValue(row, "eligibility_status")!;
   const currentStatus =
-    persisted === "eligible" && (identityExpiresAt <= now || sanctionsExpiresAt <= now) ? "expired" : persisted;
+    persisted === "eligible" && (evidenceExpiresAt <= now || sanctionsExpiresAt <= now) ? "expired" : persisted;
   return {
     status: currentStatus,
     blockedReason: publicBlockedReason(stringValue(row, "blocked_reason")),
-    identityTierId: Number(row.identity_tier_id),
-    identityExpiresAt,
-    residenceCountry: stringValue(row, "residence_country"),
+    capabilities: JSON.parse(String(row.capabilities_json)) as HumanAssuranceCapability[],
+    evidenceExpiresAt,
+    minimumAgeVerified: row.minimum_age_verified === null ? null : Number(row.minimum_age_verified),
+    documentIssuingCountry: stringValue(row, "document_issuing_country"),
+    nationalityCountry: stringValue(row, "nationality_country"),
+    verifiedResidenceCountry: stringValue(row, "verified_residence_country"),
+    declaredResidenceCountry: stringValue(row, "declared_residence_country"),
     taxResidenceCountry: stringValue(row, "tax_residence_country"),
+    residenceTaxStatus: stringValue(row, "residence_tax_status"),
     taxProfileStatus: stringValue(row, "tax_profile_status"),
     dac7Status: stringValue(row, "dac7_status"),
     screeningStatus: stringValue(row, "sanctions_status") === "clear" ? "clear" : "review_required",
@@ -767,10 +918,13 @@ const verifyLiveIssuerState: IssuerStateVerifier = async config => {
 
 async function loadVoucherEligibility(accountAddress: Address, now: Date) {
   const result = await dbClient.execute({
-    sql: `SELECT p.rater_id, p.identity_subject_hash, p.nullifier_seed_ciphertext, p.nullifier_key_version,
-                 e.identity_tier_id, e.identity_expires_at, e.adult_verified, e.tax_profile_status, e.dac7_status,
-                 e.sanctions_status, e.sanctions_expires_at, e.payout_account, e.eligibility_status
-          FROM tokenless_rater_profiles p JOIN tokenless_paid_eligibility e ON e.rater_id = p.rater_id
+    sql: `SELECT p.rater_id, p.nullifier_seed_ciphertext, p.nullifier_key_version,
+                 p.nullifier_key_domain, e.provider_id, e.capabilities_json, e.evidence_expires_at,
+                 e.minimum_age_verified, e.tax_profile_status, e.dac7_status, e.sanctions_status,
+                 e.sanctions_expires_at, e.payout_account, e.payout_ownership_method,
+                 e.reviewer_source, e.cohort_ids_json, e.qualification_keys_json, e.eligibility_status
+          FROM tokenless_rater_profiles p
+          JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
           WHERE p.account_address = ? LIMIT 1`,
     args: [accountAddress.toLowerCase()],
   });
@@ -778,13 +932,15 @@ async function loadVoucherEligibility(accountAddress: Address, now: Date) {
   if (
     !row ||
     stringValue(row, "eligibility_status") !== "eligible" ||
-    row.adult_verified !== true ||
+    Number(row.minimum_age_verified) < 18 ||
     stringValue(row, "tax_profile_status") !== "complete" ||
     !["complete", "not_required"].includes(stringValue(row, "dac7_status") ?? "") ||
     stringValue(row, "sanctions_status") !== "clear" ||
-    new Date(String(row.identity_expires_at)) <= now ||
+    new Date(String(row.evidence_expires_at)) <= now ||
     new Date(String(row.sanctions_expires_at)) <= now ||
-    getAddress(String(row.payout_account)) !== accountAddress
+    getAddress(String(row.payout_account)) !== accountAddress ||
+    stringValue(row, "payout_ownership_method") !== "siwe_base_account_session" ||
+    stringValue(row, "nullifier_key_domain") !== "vote_mapping"
   ) {
     throw new TokenlessServiceError(
       "Paid-task eligibility must be completed before a voucher can be issued.",
@@ -800,7 +956,8 @@ export async function registerVoucherRound(input: {
   panelAddress: string;
   roundId: string;
   contentId: string;
-  requiredTierId: number;
+  admissionPolicy: unknown;
+  maximumCommits: number;
   voucherNotBefore: Date;
   voucherDeadline: Date;
   status?: "open" | "closed" | "takedown";
@@ -808,24 +965,42 @@ export async function registerVoucherRound(input: {
   if (
     !/^\d+$/.test(input.roundId) ||
     !BYTES32.test(input.contentId) ||
+    !Number.isSafeInteger(input.maximumCommits) ||
+    input.maximumCommits < 1 ||
     input.voucherDeadline <= input.voucherNotBefore
   ) {
     throw new Error("Invalid voucher round.");
   }
+  const frozenPolicy = freezeAdmissionPolicy(input.admissionPolicy);
+  const minimumQuota = frozenPolicy.policy.cohorts.reduce((sum, cohort) => sum + cohort.minimumReviewers, 0);
+  if (
+    frozenPolicy.policy.compensation === "unpaid" ||
+    !frozenPolicy.policy.legalEligibilityRequired ||
+    input.maximumCommits < frozenPolicy.policy.buyerPrivacy.minimumAggregationSize ||
+    input.maximumCommits < minimumQuota
+  ) {
+    throw new Error("Admission policy cannot fit this paid voucher round.");
+  }
   const now = new Date();
   await dbClient.execute({
     sql: `INSERT INTO tokenless_voucher_rounds
-          (chain_id, panel_address, round_id, content_id, required_tier_id, voucher_not_before, voucher_deadline, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (chain_id, panel_address, round_id, content_id, admission_policy_hash,
+           admission_policy_json, maximum_commits, voucher_not_before, voucher_deadline,
+           status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (chain_id, panel_address, round_id) DO UPDATE SET content_id = EXCLUDED.content_id,
-          required_tier_id = EXCLUDED.required_tier_id, voucher_not_before = EXCLUDED.voucher_not_before,
+          admission_policy_hash = EXCLUDED.admission_policy_hash,
+          admission_policy_json = EXCLUDED.admission_policy_json,
+          maximum_commits = EXCLUDED.maximum_commits, voucher_not_before = EXCLUDED.voucher_not_before,
           voucher_deadline = EXCLUDED.voucher_deadline, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at`,
     args: [
       input.chainId,
       getAddress(input.panelAddress).toLowerCase(),
       input.roundId,
       input.contentId.toLowerCase(),
-      input.requiredTierId,
+      frozenPolicy.admissionPolicyHash,
+      frozenPolicy.policyJson,
+      input.maximumCommits,
       input.voucherNotBefore,
       input.voucherDeadline,
       input.status ?? "open",
@@ -877,7 +1052,8 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   }
   const issuer = getIssuerConfig();
   const roundResult = await dbClient.execute({
-    sql: `SELECT content_id, required_tier_id, voucher_not_before, voucher_deadline, status
+    sql: `SELECT content_id, admission_policy_hash, admission_policy_json, maximum_commits,
+                 voucher_not_before, voucher_deadline, status
           FROM tokenless_voucher_rounds WHERE chain_id = ? AND panel_address = ? AND round_id = ? LIMIT 1`,
     args: [issuer.chainId, issuer.panelAddress.toLowerCase(), input.request.roundId],
   });
@@ -891,15 +1067,50 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   ) {
     throw new TokenlessServiceError("This round is not accepting vouchers.", 409, "round_not_open");
   }
-  const tierId = Number(eligibility.identity_tier_id);
-  if (tierId < Number(round.required_tier_id)) {
-    throw new TokenlessServiceError("This round requires a higher identity tier.", 403, "identity_tier_insufficient");
+  const policyJson = stringValue(round, "admission_policy_json");
+  const persistedPolicyHash = stringValue(round, "admission_policy_hash");
+  if (!policyJson || !persistedPolicyHash) {
+    throw new TokenlessServiceError(
+      "This historical tier round cannot issue capability-bound vouchers.",
+      409,
+      "capability_policy_required",
+    );
+  }
+  const frozenPolicy = freezeAdmissionPolicy(JSON.parse(policyJson));
+  if (
+    frozenPolicy.policyJson !== policyJson ||
+    frozenPolicy.admissionPolicyHash.toLowerCase() !== persistedPolicyHash.toLowerCase()
+  ) {
+    throw new TokenlessServiceError(
+      "The frozen admission policy does not match its persisted hash.",
+      409,
+      "admission_policy_mismatch",
+    );
+  }
+  const admission = evaluateFrozenAdmissionPolicy({
+    policy: frozenPolicy.policy,
+    evidence: {
+      providerId: stringValue(eligibility, "provider_id")!,
+      capabilities: JSON.parse(String(eligibility.capabilities_json)) as HumanAssuranceCapability[],
+      reviewerSource: stringValue(eligibility, "reviewer_source") as "customer_invited" | "rateloop_network",
+      cohortIds: JSON.parse(String(eligibility.cohort_ids_json)) as string[],
+      qualificationKeys: JSON.parse(String(eligibility.qualification_keys_json)) as string[],
+    },
+    maximumCommits: Number(round.maximum_commits),
+  });
+  if (!admission.eligible) {
+    throw new TokenlessServiceError(
+      "The rater does not satisfy this round's exact admission policy.",
+      403,
+      "admission_policy_not_satisfied",
+    );
   }
   await (issuerStateVerifierOverride ?? verifyLiveIssuerState)(issuer);
   const seedJson = JSON.parse(
     decryptVaultValue(
       String(eligibility.nullifier_seed_ciphertext),
       String(eligibility.nullifier_key_version),
+      "vote_mapping",
     ).toString("utf8"),
   ) as { seed?: Hex };
   if (!seedJson.seed || !BYTES32.test(seedJson.seed)) throw new Error("Invalid nullifier seed.");
@@ -918,7 +1129,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
     contentId: input.request.contentId,
     roundId: roundId.toString(),
     nullifier,
-    tierId,
+    admissionPolicyHash: frozenPolicy.admissionPolicyHash,
     issuerEpoch: issuer.issuerEpoch.toString(),
     expiresAt: Math.floor(expiresAt.getTime() / 1000).toString(),
   };
@@ -936,7 +1147,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
         { name: "contentId", type: "bytes32" },
         { name: "roundId", type: "uint256" },
         { name: "nullifier", type: "bytes32" },
-        { name: "tierId", type: "uint32" },
+        { name: "admissionPolicyHash", type: "bytes32" },
         { name: "issuerEpoch", type: "uint64" },
         { name: "expiresAt", type: "uint64" },
       ],
@@ -949,14 +1160,13 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   try {
     await dbClient.execute({
       sql: `INSERT INTO tokenless_paid_vouchers
-            (voucher_id, rater_id, identity_subject_hash, request_idempotency_key, request_hash, chain_id,
+            (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
              panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
-             nullifier, tier_id, expires_at, voucher_json, voucher_signature, status, issued_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
+             nullifier, admission_policy_hash, expires_at, voucher_json, voucher_signature, status, issued_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
       args: [
         voucherId,
         raterId,
-        String(eligibility.identity_subject_hash),
         input.request.idempotencyKey,
         requestHash,
         issuer.chainId,
@@ -968,7 +1178,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
         input.request.contentId.toLowerCase(),
         voteKey.toLowerCase(),
         nullifier.toLowerCase(),
-        tierId,
+        frozenPolicy.admissionPolicyHash,
         expiresAt,
         voucherJson,
         voucherSignature,
@@ -996,7 +1206,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
 
 export function __setPaidEligibilityOverridesForTests(input: {
   provider?: EligibilityProvider | null;
-  vault?: VaultConfig | null;
+  vault?: VaultDomains | null;
   issuerConfig?: IssuerConfig | null;
   verifyIssuerState?: IssuerStateVerifier | null;
   requiresDac7?: ((country: string) => boolean) | null;

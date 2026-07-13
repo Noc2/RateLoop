@@ -230,25 +230,31 @@ async function seedPaidEligibility(accountAddress = REVIEWER, now = new Date()) 
   const raterId = `rater_${accountAddress.slice(2, 10)}`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, identity_subject_hash, nullifier_seed_ciphertext,
+          (rater_id, account_address, nullifier_seed_ciphertext,
            nullifier_key_version, created_at, updated_at)
-          VALUES (?, ?, ?, 'ciphertext', 'v1', ?, ?)`,
-    args: [raterId, accountAddress.toLowerCase(), `identity_${raterId}`, now, now],
+          VALUES (?, ?, 'ciphertext', 'v1', ?, ?)`,
+    args: [raterId, accountAddress.toLowerCase(), now, now],
   });
   await dbClient.execute({
-    sql: `INSERT INTO tokenless_paid_eligibility
-          (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash, identity_tier_id,
-           identity_verified_at, identity_expires_at, adult_verified, residence_country,
-           tax_residence_country, tax_profile_status, dac7_status, sanctions_consent_at,
-           sanctions_status, sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at,
-           payout_account, payout_ownership_method, payout_verified_at, eligibility_status,
+    sql: `INSERT INTO tokenless_capability_eligibility
+          (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash,
+           provider_subject_hash, capabilities_json, provider_evidence_ciphertext,
+           provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
+           evidence_expires_at, minimum_age_verified, declared_residence_country,
+           tax_residence_country, residence_tax_status, tax_profile_status, dac7_status,
+           sanctions_consent_at, sanctions_status, sanctions_reference_hash, sanctions_screened_at,
+           sanctions_expires_at, payout_account, payout_ownership_method, payout_verified_at,
+           reviewer_source, cohort_ids_json, qualification_keys_json, eligibility_status,
            created_at, updated_at)
-          VALUES (?, 'test-provider', ?, ?, 1, ?, ?, true, 'DE', 'DE', 'complete', 'not_required', ?,
-                  'clear', ?, ?, ?, ?, 'base_account_signature', ?, 'eligible', ?, ?)`,
+          VALUES (?, 'test-provider', ?, ?, ?, '["account_control","minimum_age"]', 'ciphertext',
+                  'v1', 'provider_evidence', ?, ?, 18, 'DE', 'DE', 'declared_only', 'complete',
+                  'not_required', ?, 'clear', ?, ?, ?, ?, 'siwe_base_account_session', ?,
+                  'rateloop_network', '[]', '[]', 'eligible', ?, ?)`,
     args: [
       raterId,
       `assertion_${raterId}`,
       `assertion_id_${raterId}`,
+      `subject_${raterId}`,
       now,
       new Date(now.getTime() + 86_400_000),
       now,
@@ -500,7 +506,7 @@ test("paid randomized reservations require qualification and eligibility before 
   assert.equal(Number(recovery.rows[0]?.recovery_count), 1);
 
   await dbClient.execute({
-    sql: "UPDATE tokenless_paid_eligibility SET eligibility_status = 'blocked' WHERE payout_account = ?",
+    sql: "UPDATE tokenless_capability_eligibility SET eligibility_status = 'blocked' WHERE payout_account = ?",
     args: [REVIEWER.toLowerCase()],
   });
   await assert.rejects(
@@ -523,7 +529,7 @@ test("paid randomized reservations require qualification and eligibility before 
     null,
   );
   await dbClient.execute({
-    sql: "UPDATE tokenless_paid_eligibility SET eligibility_status = 'eligible' WHERE payout_account = ?",
+    sql: "UPDATE tokenless_capability_eligibility SET eligibility_status = 'eligible' WHERE payout_account = ?",
     args: [REVIEWER.toLowerCase()],
   });
   await acceptAudienceAssignment({

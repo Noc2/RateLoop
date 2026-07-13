@@ -7,12 +7,10 @@ import "server-only";
 import { type Address, type Hash, type Hex, decodeEventLog, encodeFunctionData, getAddress, isHash } from "viem";
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-// The issuer may only attest tier 4 after both a uniqueness base credential
-// and a recent presence check; "presence" is never a standalone selfie tier.
-const TIER_IDS: Record<string, number> = { selfie: 1, passport: 2, orb: 3, presence: 4 };
 const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296;
 const QUICKNET_T_PERIOD_SECONDS = 3;
 const APPROVE_ABI = [
@@ -49,7 +47,7 @@ export type PersistedRoundTerms = {
   attemptCompensation: string;
   minimumReveals: number;
   maximumCommits: number;
-  requiredTier: number;
+  admissionPolicyHash: Hex;
   commitDeadline: string;
   revealDeadline: string;
   beaconFailureDeadline: string;
@@ -121,7 +119,7 @@ function parseTerms(value: string): PersistedRoundTerms {
 async function operationSource(operationKey: string) {
   const result = await dbClient.execute({
     sql: `SELECT o.operation_key, o.payment_mode, o.payment_reference, o.payment_state,
-                 o.question_id, q.terms_hash, q.moderation_status AS question_moderation_status,
+                 o.question_id, q.terms_hash, q.terms_json, q.moderation_status AS question_moderation_status,
                  c.content_hash, c.moderation_status AS content_moderation_status,
                  a.quote_id, a.economics_json, a.sandbox, aq.response_json,
                  pi.payer_address, pi.payload_json, pi.amount_atomic AS intent_amount_atomic,
@@ -162,12 +160,28 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   const maximumCommits = quote.panel.requestedSize;
   const minimumReveals = quote.panel.minimumReveals;
   const attemptCompensation = maximumCommits > 0 ? attemptReserve / BigInt(maximumCommits) : 0n;
-  const requiredTier = TIER_IDS[quote.audience.tierId];
+  const frozenProductTerms = JSON.parse(rowString(row, "terms_json") ?? "null") as {
+    audiencePolicy?: unknown;
+  } | null;
+  if (!frozenProductTerms?.audiencePolicy) {
+    throw new TokenlessServiceError(
+      "Live execution requires an exact v2 admission policy; legacy identity tiers are not converted.",
+      409,
+      "capability_policy_required",
+    );
+  }
+  const admissionPolicy = freezeAdmissionPolicy(frozenProductTerms.audiencePolicy);
+  if (quote.audience.admissionPolicyHash.toLowerCase() !== admissionPolicy.admissionPolicyHash.toLowerCase()) {
+    throw new TokenlessServiceError(
+      "The quoted audience does not match the frozen admission policy.",
+      409,
+      "admission_policy_mismatch",
+    );
+  }
   if (
     bountyAmount <= 0n ||
     attemptCompensation <= 0n ||
     attemptReserve < attemptCompensation * BigInt(maximumCommits) ||
-    !requiredTier ||
     minimumReveals <= 0 ||
     maximumCommits < minimumReveals
   ) {
@@ -199,7 +213,7 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
     attemptCompensation: attemptCompensation.toString(),
     minimumReveals,
     maximumCommits,
-    requiredTier,
+    admissionPolicyHash: admissionPolicy.admissionPolicyHash,
     commitDeadline: String(commitDeadline),
     revealDeadline: String(revealDeadline),
     beaconFailureDeadline: String(beaconFailureDeadline),
@@ -346,6 +360,7 @@ function exactRoundCreated(input: {
         getAddress(args.funder) === getAddress(input.expected.funderAddress) &&
         args.contentId.toLowerCase() === terms.contentId.toLowerCase() &&
         args.termsHash.toLowerCase() === terms.termsHash.toLowerCase() &&
+        args.admissionPolicyHash.toLowerCase() === terms.admissionPolicyHash.toLowerCase() &&
         args.bountyAmount === BigInt(terms.bountyAmount) &&
         args.feeAmount === BigInt(terms.feeAmount) &&
         args.attemptReserve === BigInt(terms.attemptReserve)
@@ -395,7 +410,7 @@ async function assertCompleteRoundMatches(input: {
     round.claimGracePeriod !== terms.claimGracePeriod ||
     round.minimumReveals !== terms.minimumReveals ||
     round.maximumCommits !== terms.maximumCommits ||
-    round.requiredTier !== terms.requiredTier
+    round.admissionPolicyHash.toLowerCase() !== terms.admissionPolicyHash.toLowerCase()
   ) {
     throw new TokenlessServiceError(
       "The created on-chain round does not match the complete quoted terms.",
@@ -483,18 +498,47 @@ async function persistConfirmation(input: {
         [now, input.expected.operationKey],
       );
     }
+    const admissionSource = await client.query(
+      `SELECT q.terms_json FROM tokenless_ask_ownership o
+       JOIN tokenless_question_records q ON q.question_id = o.question_id
+       WHERE o.operation_key = $1 LIMIT 1`,
+      [input.expected.operationKey],
+    );
+    const productTerms = JSON.parse(String(admissionSource.rows[0]?.terms_json ?? "null")) as {
+      audiencePolicy?: unknown;
+    } | null;
+    if (!productTerms?.audiencePolicy) {
+      throw new TokenlessServiceError(
+        "The confirmed round has no frozen admission policy.",
+        409,
+        "capability_policy_required",
+      );
+    }
+    const frozenPolicy = freezeAdmissionPolicy(productTerms.audiencePolicy);
+    if (
+      frozenPolicy.admissionPolicyHash.toLowerCase() !== input.expected.roundTerms.admissionPolicyHash.toLowerCase()
+    ) {
+      throw new TokenlessServiceError(
+        "The confirmed round admission policy does not match its immutable terms.",
+        409,
+        "admission_policy_mismatch",
+      );
+    }
     await client.query(
       `INSERT INTO tokenless_voucher_rounds
-       (chain_id, panel_address, round_id, content_id, required_tier_id, voucher_not_before,
-        voucher_deadline, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $6, $6)
+       (chain_id, panel_address, round_id, content_id, admission_policy_hash,
+        admission_policy_json, maximum_commits, voucher_not_before, voucher_deadline,
+        status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $8, $8)
        ON CONFLICT (chain_id, panel_address, round_id) DO NOTHING`,
       [
         input.expected.chainId,
         input.expected.panelAddress.toLowerCase(),
         input.roundId.toString(),
         input.expected.roundTerms.contentId,
-        input.expected.roundTerms.requiredTier,
+        input.expected.roundTerms.admissionPolicyHash,
+        frozenPolicy.policyJson,
+        input.expected.roundTerms.maximumCommits,
         now,
         new Date(Number(input.expected.roundTerms.commitDeadline) * 1_000),
       ],

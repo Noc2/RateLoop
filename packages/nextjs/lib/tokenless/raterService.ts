@@ -64,7 +64,8 @@ function digest(value: string) {
 export async function listPaidRaterTasks(accountAddress: string, now = new Date()) {
   const address = getAddress(accountAddress).toLowerCase();
   const result = await dbClient.execute({
-    sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id, vr.required_tier_id, vr.voucher_deadline,
+    sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id,
+                 vr.admission_policy_hash, vr.voucher_deadline,
                  c.content_json, e.round_terms_json, e.operation_key,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
@@ -92,7 +93,7 @@ export async function listPaidRaterTasks(accountAddress: string, now = new Date(
       roundId: rowString(row, "round_id"),
       contentId: rowString(row, "content_id"),
       question: JSON.parse(rowString(row, "content_json")!),
-      requiredTierId: Number(row.required_tier_id),
+      admissionPolicyHash: rowString(row, "admission_policy_hash"),
       voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
       alreadyVouchered: Boolean(row.already_vouchered),
       earnings: {
@@ -177,7 +178,8 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
     throw new TokenlessServiceError("Sponsored commit relay is unavailable.", 503, "commit_relayer_unavailable", true);
   }
   const voucherResult = await dbClient.execute({
-    sql: `SELECT v.*, p.account_address, vr.voucher_deadline, e.round_terms_json
+    sql: `SELECT v.*, p.account_address, vr.voucher_deadline,
+                 vr.admission_policy_hash AS round_admission_policy_hash, e.round_terms_json
           FROM tokenless_paid_vouchers v
           JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
           JOIN tokenless_voucher_rounds vr ON vr.chain_id = v.chain_id AND vr.panel_address = v.panel_address AND vr.round_id = v.round_id
@@ -200,6 +202,9 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
     auth.roundId !== String(voucher.roundId) ||
     getAddress(auth.voteKey) !== getAddress(String(voucher.voteKey)) ||
     auth.nullifier.toLowerCase() !== String(voucher.nullifier).toLowerCase() ||
+    String(voucher.admissionPolicyHash).toLowerCase() !== String(voucherRow.admission_policy_hash).toLowerCase() ||
+    String(voucher.admissionPolicyHash).toLowerCase() !==
+      String(voucherRow.round_admission_policy_hash).toLowerCase() ||
     auth.chainId !== config.chainId ||
     getAddress(auth.panelAddress) !== config.panelAddress
   ) {
@@ -272,7 +277,7 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
     contentId: String(voucher.contentId) as Hex,
     roundId: BigInt(String(voucher.roundId)),
     nullifier: String(voucher.nullifier) as Hex,
-    tierId: Number(voucher.tierId),
+    admissionPolicyHash: String(voucher.admissionPolicyHash) as Hex,
     issuerEpoch: BigInt(String(voucher.issuerEpoch)),
     expiresAt: BigInt(String(voucher.expiresAt)),
   };

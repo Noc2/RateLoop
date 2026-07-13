@@ -620,11 +620,11 @@ export async function prepareRunAudience(input: {
 
 async function paidEligibility(client: PoolClient, accountAddress: string, now: Date) {
   const result = await client.query(
-    `SELECT p.rater_id, e.identity_expires_at, e.adult_verified, e.tax_profile_status,
+    `SELECT p.rater_id, e.evidence_expires_at, e.minimum_age_verified, e.tax_profile_status,
             e.dac7_status, e.sanctions_status, e.sanctions_expires_at,
-            e.payout_account, e.eligibility_status
+            e.payout_account, e.payout_ownership_method, e.eligibility_status
      FROM tokenless_rater_profiles p
-     JOIN tokenless_paid_eligibility e ON e.rater_id = p.rater_id
+     JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
      WHERE p.account_address = $1 LIMIT 1 FOR UPDATE`,
     [accountAddress],
   );
@@ -632,13 +632,14 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
   if (
     !row ||
     rowString(row, "eligibility_status") !== "eligible" ||
-    row.adult_verified !== true ||
+    (rowNumber(row, "minimum_age_verified") ?? 0) < 18 ||
     rowString(row, "tax_profile_status") !== "complete" ||
     !["complete", "not_required"].includes(rowString(row, "dac7_status") ?? "") ||
     rowString(row, "sanctions_status") !== "clear" ||
-    (rowDate(row, "identity_expires_at")?.getTime() ?? 0) <= now.getTime() ||
+    (rowDate(row, "evidence_expires_at")?.getTime() ?? 0) <= now.getTime() ||
     (rowDate(row, "sanctions_expires_at")?.getTime() ?? 0) <= now.getTime() ||
-    normalizeAddress(rowString(row, "payout_account") ?? "", "payoutAccount") !== accountAddress
+    normalizeAddress(rowString(row, "payout_account") ?? "", "payoutAccount") !== accountAddress ||
+    rowString(row, "payout_ownership_method") !== "siwe_base_account_session"
   ) {
     throw new TokenlessServiceError(
       "Paid-task eligibility must be complete before assignment.",

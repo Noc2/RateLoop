@@ -27,7 +27,7 @@ export type TokenlessRoundTerms = {
   attemptCompensation: bigint;
   minimumReveals: number;
   maximumCommits: number;
-  requiredTier: number;
+  admissionPolicyHash: Hex;
   commitDeadline: bigint;
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
