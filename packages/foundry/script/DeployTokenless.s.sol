@@ -12,6 +12,10 @@ import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.so
 /// @dev Tokenless artifacts live under the isolated deployments/tokenless-v2 schema.
 contract DeployTokenlessScript is Script {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84_532;
+    string internal constant TEST_USDC_ARTIFACT = "MockERC20.sol:MockERC20";
+    string internal constant CREDENTIAL_ISSUER_ARTIFACT = "CredentialIssuer.sol:CredentialIssuer";
+    string internal constant TOKENLESS_PANEL_ARTIFACT = "TokenlessPanel.sol:TokenlessPanel";
+    string internal constant X402_PANEL_SUBMITTER_ARTIFACT = "X402PanelSubmitter.sol:X402PanelSubmitter";
 
     error UnsupportedChain(uint256 chainId);
     error InvalidMaxScheduledGrace(uint256 value);
@@ -26,12 +30,18 @@ contract DeployTokenlessScript is Script {
             revert InvalidMaxScheduledGrace(maxScheduledGraceRaw);
         }
 
+        bytes memory testUsdcArgs = abi.encode("RateLoop Tokenless Test USDC", "tUSDC", uint8(6));
+        bytes memory credentialIssuerArgs = abi.encode(rotationAuthority, initialSigner, uint64(maxScheduledGraceRaw));
+
         vm.startBroadcast();
 
-        MockERC20 testUsdc = new MockERC20("RateLoop Tokenless Test USDC", "tUSDC", 6);
-        CredentialIssuer issuer = new CredentialIssuer(rotationAuthority, initialSigner, uint64(maxScheduledGraceRaw));
-        TokenlessPanel panel = new TokenlessPanel(address(testUsdc), address(issuer));
-        X402PanelSubmitter x402Submitter = new X402PanelSubmitter(address(testUsdc), address(panel));
+        MockERC20 testUsdc = MockERC20(deployCode(TEST_USDC_ARTIFACT, testUsdcArgs));
+        CredentialIssuer issuer = CredentialIssuer(deployCode(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs));
+        TokenlessPanel panel =
+            TokenlessPanel(deployCode(TOKENLESS_PANEL_ARTIFACT, abi.encode(address(testUsdc), address(issuer))));
+        X402PanelSubmitter x402Submitter = X402PanelSubmitter(
+            deployCode(X402_PANEL_SUBMITTER_ARTIFACT, abi.encode(address(testUsdc), address(panel)))
+        );
 
         vm.stopBroadcast();
 

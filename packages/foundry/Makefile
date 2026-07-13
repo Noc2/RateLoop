@@ -11,7 +11,7 @@ build compile:
 	forge build --offline
 
 test:
-	forge test --offline $(TEST_ARGS)
+	forge test --offline --ignored-error-codes 3860 --deny warnings $(TEST_ARGS)
 
 coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)
@@ -44,6 +44,7 @@ deploy-tokenless: check-contract-sizes
 		--rpc-url "$(RPC_URL)" \
 		--account "$(ETH_KEYSTORE_ACCOUNT)" \
 		--broadcast --gas-estimate-multiplier 200 --non-interactive \
+		--deny warnings \
 		$(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS)
 
 generate-tokenless-artifacts:

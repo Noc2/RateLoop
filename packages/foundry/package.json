@@ -11,7 +11,7 @@
     "deploy": "node scripts-js/parseArgs.js",
     "format": "forge fmt",
     "lint": "make lint",
-    "test": "forge test --offline",
+    "test": "forge test --offline --ignored-error-codes 3860 --deny warnings",
     "test:tooling": "node --test scripts-js/tokenlessDeployment.test.js scripts-js/foundryAccounts.test.js scripts-js/tokenlessDeployArgs.test.js",
     "check:sizes": "make check-contract-sizes",
     "coverage": "make coverage"
