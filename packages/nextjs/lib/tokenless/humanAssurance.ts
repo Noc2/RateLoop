@@ -27,6 +27,15 @@ const RUN_TRANSITIONS = new Map<string, ReadonlySet<string>>([
   ["aggregating", new Set(["completed"])],
 ]);
 
+export type AssurancePrincipal =
+  | ProductPrincipal
+  | {
+      kind: "workspace_session";
+      accountAddress: `0x${string}`;
+      workspaceId: string;
+      role: TokenlessWorkspaceRole;
+    };
+
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
   return value === null || value === undefined ? null : String(value);
@@ -77,7 +86,7 @@ export function hashHumanAssuranceDocument(value: unknown): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(canonicalizeHumanAssuranceDocument(value)).digest("hex")}`;
 }
 
-function principalLabel(principal: ProductPrincipal) {
+function principalLabel(principal: AssurancePrincipal) {
   return principal.kind === "api_key"
     ? `api_key:${principal.apiKeyId}`
     : `account:${principal.accountAddress.toLowerCase()}`;
@@ -89,7 +98,28 @@ function assertWriteRole(role: TokenlessWorkspaceRole) {
   }
 }
 
-async function resolveOnlyWritableWorkspace(principal: ProductPrincipal) {
+export async function scopeAssuranceSessionToWorkspace(input: {
+  accountAddress: `0x${string}`;
+  workspaceId: string;
+}): Promise<AssurancePrincipal> {
+  const result = await dbClient.execute({
+    sql: `SELECT m.role FROM tokenless_workspace_members m
+          JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id
+          WHERE m.workspace_id = ? AND m.account_address = ? AND w.status = 'active' LIMIT 1`,
+    args: [input.workspaceId, input.accountAddress.toLowerCase()],
+  });
+  const role = rowString(result.rows[0] as QueryRow | undefined, "role") as TokenlessWorkspaceRole | null;
+  if (!role || !WRITE_ROLES.has(role)) {
+    throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+  }
+  return { kind: "workspace_session", accountAddress: input.accountAddress, workspaceId: input.workspaceId, role };
+}
+
+async function resolveOnlyWritableWorkspace(principal: AssurancePrincipal) {
+  if (principal.kind === "workspace_session") {
+    assertWriteRole(principal.role);
+    return principal.workspaceId;
+  }
   if (principal.kind === "api_key") {
     assertWriteRole(principal.role);
     const result = await dbClient.execute({
@@ -127,7 +157,7 @@ async function resolveOnlyWritableWorkspace(principal: ProductPrincipal) {
 }
 
 async function requireProjectAccess(
-  principal: ProductPrincipal,
+  principal: AssurancePrincipal,
   projectId: string,
   options: { active?: boolean } = {},
 ) {
@@ -144,7 +174,7 @@ async function requireProjectAccess(
     throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
   }
 
-  if (principal.kind === "api_key") {
+  if (principal.kind === "api_key" || principal.kind === "workspace_session") {
     if (principal.workspaceId !== workspaceId) {
       throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
     }
@@ -168,7 +198,7 @@ async function requireProjectAccess(
 }
 
 export async function createAssuranceProject(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   name: string;
   description?: string;
   dataClassification: HumanAssuranceDataClassification;
@@ -218,8 +248,109 @@ export async function createAssuranceProject(input: {
   return { projectId, workspaceId };
 }
 
+export async function listAssuranceProjects(principal: AssurancePrincipal) {
+  const workspaceId = await resolveOnlyWritableWorkspace(principal);
+  const result = await dbClient.execute({
+    sql: `SELECT p.project_id, p.name, p.description, p.data_classification, p.status,
+                 p.retention_days, p.created_at, p.updated_at,
+                 COUNT(DISTINCT s.suite_id) AS suite_count,
+                 COUNT(DISTINCT r.run_id) AS run_count
+          FROM tokenless_assurance_projects p
+          LEFT JOIN tokenless_assurance_suites s ON s.project_id = p.project_id
+          LEFT JOIN tokenless_assurance_runs r ON r.project_id = p.project_id
+          WHERE p.workspace_id = ? AND p.status <> 'deleted'
+          GROUP BY p.project_id, p.name, p.description, p.data_classification, p.status,
+                   p.retention_days, p.created_at, p.updated_at
+          ORDER BY p.updated_at DESC`,
+    args: [workspaceId],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    return {
+      projectId: rowString(row, "project_id")!,
+      name: rowString(row, "name")!,
+      description: rowString(row, "description"),
+      dataClassification: rowString(row, "data_classification")!,
+      status: rowString(row, "status")!,
+      retentionDays: rowNumber(row, "retention_days")!,
+      suiteCount: rowNumber(row, "suite_count") ?? 0,
+      runCount: rowNumber(row, "run_count") ?? 0,
+      createdAt: new Date(String(row.created_at)).toISOString(),
+      updatedAt: new Date(String(row.updated_at)).toISOString(),
+    };
+  });
+}
+
+export async function getAssuranceProjectResources(input: { principal: AssurancePrincipal; projectId: string }) {
+  await requireProjectAccess(input.principal, input.projectId);
+  const [suites, policies, runs] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT s.suite_id, s.name, s.version, s.status, s.manifest_hash, s.frozen_at,
+                   COUNT(c.case_id) AS case_count
+            FROM tokenless_assurance_suites s
+            LEFT JOIN tokenless_assurance_cases c ON c.suite_id = s.suite_id AND c.suite_version = s.version
+            WHERE s.project_id = ?
+            GROUP BY s.suite_id, s.name, s.version, s.status, s.manifest_hash, s.frozen_at, s.updated_at
+            ORDER BY s.updated_at DESC`,
+      args: [input.projectId],
+    }),
+    dbClient.execute({
+      sql: `SELECT policy_id, version, reviewer_source, compensation, selection, policy_hash, created_at
+            FROM tokenless_assurance_audience_policies WHERE project_id = ? ORDER BY created_at DESC`,
+      args: [input.projectId],
+    }),
+    dbClient.execute({
+      sql: `SELECT run_id, suite_id, suite_version, audience_policy_id, audience_policy_version, status,
+                   manifest_hash, previous_run_id, created_at, updated_at, completed_at
+            FROM tokenless_assurance_runs WHERE project_id = ? ORDER BY created_at DESC`,
+      args: [input.projectId],
+    }),
+  ]);
+  return {
+    suites: suites.rows.map(value => {
+      const row = value as QueryRow;
+      return {
+        suiteId: rowString(row, "suite_id")!,
+        name: rowString(row, "name")!,
+        version: rowNumber(row, "version")!,
+        status: rowString(row, "status")!,
+        manifestHash: rowString(row, "manifest_hash"),
+        caseCount: rowNumber(row, "case_count") ?? 0,
+        frozenAt: row.frozen_at ? new Date(String(row.frozen_at)).toISOString() : null,
+      };
+    }),
+    policies: policies.rows.map(value => {
+      const row = value as QueryRow;
+      return {
+        policyId: rowString(row, "policy_id")!,
+        version: rowNumber(row, "version")!,
+        reviewerSource: rowString(row, "reviewer_source")!,
+        compensation: rowString(row, "compensation")!,
+        selection: rowString(row, "selection")!,
+        policyHash: rowString(row, "policy_hash")!,
+      };
+    }),
+    runs: runs.rows.map(value => {
+      const row = value as QueryRow;
+      return {
+        runId: rowString(row, "run_id")!,
+        suiteId: rowString(row, "suite_id")!,
+        suiteVersion: rowNumber(row, "suite_version")!,
+        audiencePolicyId: rowString(row, "audience_policy_id")!,
+        audiencePolicyVersion: rowNumber(row, "audience_policy_version")!,
+        status: rowString(row, "status")!,
+        manifestHash: rowString(row, "manifest_hash"),
+        previousRunId: rowString(row, "previous_run_id"),
+        createdAt: new Date(String(row.created_at)).toISOString(),
+        updatedAt: new Date(String(row.updated_at)).toISOString(),
+        completedAt: row.completed_at ? new Date(String(row.completed_at)).toISOString() : null,
+      };
+    }),
+  };
+}
+
 export async function createAssuranceSuite(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   projectId: string;
   name: string;
   rubric: RubricDefinition;
@@ -279,7 +410,7 @@ export async function createAssuranceSuite(input: {
   return { rubricId, suiteId, version };
 }
 
-async function loadSuiteForWrite(principal: ProductPrincipal, suiteId: string, suiteVersion: number) {
+async function loadSuiteForWrite(principal: AssurancePrincipal, suiteId: string, suiteVersion: number) {
   const result = await dbClient.execute({
     sql: `SELECT suite_id, version, project_id, status, rubric_id,
                  rubric_version, manifest_hash, manifest_json
@@ -320,7 +451,7 @@ async function requireArtifact(
 }
 
 export async function addAssuranceCase(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   suiteId: string;
   suiteVersion: number;
   title: string;
@@ -376,7 +507,7 @@ export async function addAssuranceCase(input: {
   return { caseId, position, projectId };
 }
 
-export async function markAssuranceCaseReady(input: { principal: ProductPrincipal; caseId: string }) {
+export async function markAssuranceCaseReady(input: { principal: AssurancePrincipal; caseId: string }) {
   const result = await dbClient.execute({
     sql: `SELECT c.*, s.status AS suite_status
           FROM tokenless_assurance_cases c
@@ -417,7 +548,7 @@ export async function markAssuranceCaseReady(input: { principal: ProductPrincipa
 }
 
 export async function freezeAssuranceSuite(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   suiteId: string;
   suiteVersion: number;
 }) {
@@ -497,7 +628,7 @@ export async function freezeAssuranceSuite(input: {
 }
 
 export async function createAssuranceAudiencePolicy(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   projectId: string;
   policy: AudiencePolicyDefinition;
 }) {
@@ -542,7 +673,7 @@ export async function createAssuranceAudiencePolicy(input: {
 }
 
 export async function createAssuranceRun(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   suiteId: string;
   suiteVersion: number;
   audiencePolicyId: string;
@@ -607,7 +738,7 @@ export async function createAssuranceRun(input: {
   return { projectId, runId, status: "draft" as const };
 }
 
-async function loadRunForWrite(principal: ProductPrincipal, runId: string) {
+async function loadRunForWrite(principal: AssurancePrincipal, runId: string) {
   const result = await dbClient.execute({
     sql: `SELECT * FROM tokenless_assurance_runs WHERE run_id = ? LIMIT 1`,
     args: [runId],
@@ -621,7 +752,7 @@ async function loadRunForWrite(principal: ProductPrincipal, runId: string) {
   return row!;
 }
 
-export async function freezeAssuranceRun(input: { principal: ProductPrincipal; runId: string }) {
+export async function freezeAssuranceRun(input: { principal: AssurancePrincipal; runId: string }) {
   const run = await loadRunForWrite(input.principal, input.runId);
   const existingHash = rowString(run, "manifest_hash");
   if (rowString(run, "status") === "frozen" && existingHash) {
@@ -681,7 +812,7 @@ export async function freezeAssuranceRun(input: { principal: ProductPrincipal; r
 }
 
 export async function transitionAssuranceRun(input: {
-  principal: ProductPrincipal;
+  principal: AssurancePrincipal;
   runId: string;
   status: "recruiting" | "collecting" | "aggregating" | "completed" | "cancelled";
 }) {
@@ -707,7 +838,7 @@ export async function transitionAssuranceRun(input: {
   return { runId: input.runId, status: input.status };
 }
 
-export async function archiveAssuranceProject(input: { principal: ProductPrincipal; projectId: string }) {
+export async function archiveAssuranceProject(input: { principal: AssurancePrincipal; projectId: string }) {
   await requireProjectAccess(input.principal, input.projectId);
   const running = await dbClient.execute({
     sql: `SELECT run_id FROM tokenless_assurance_runs

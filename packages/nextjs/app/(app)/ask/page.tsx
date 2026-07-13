@@ -1,6 +1,5 @@
-import { TokenlessAskClient } from "~~/components/tokenless/TokenlessAskClient";
-import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
+import { HumanAssuranceBuyerClient } from "~~/components/tokenless/HumanAssuranceBuyerClient";
 
 export default function AskPage() {
-  return <TokenlessAskClient sandboxMode={isTokenlessSandboxMode()} />;
+  return <HumanAssuranceBuyerClient />;
 }

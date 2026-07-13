@@ -14,7 +14,9 @@ import {
   freezeAssuranceRun,
   freezeAssuranceSuite,
   hashHumanAssuranceDocument,
+  listAssuranceProjects,
   markAssuranceCaseReady,
+  scopeAssuranceSessionToWorkspace,
   transitionAssuranceRun,
 } from "~~/lib/tokenless/humanAssurance";
 import { type ProductPrincipal, createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
@@ -367,5 +369,38 @@ test("case and run bindings are derived from parents and reject cross-project re
         audiencePolicyVersion: secondPolicy.policy.version,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assurance_audience_policy",
+  );
+});
+
+test("a Base Account explicitly scopes multi-workspace project lists without cross-tenant fallback", async () => {
+  const first = await createWorkspace({ name: "Client Alpha", ownerAddress: ADDRESS_A });
+  const second = await createWorkspace({ name: "Client Beta", ownerAddress: ADDRESS_A });
+  const firstPrincipal = await scopeAssuranceSessionToWorkspace({
+    accountAddress: ADDRESS_A,
+    workspaceId: first.workspaceId,
+  });
+  const secondPrincipal = await scopeAssuranceSessionToWorkspace({
+    accountAddress: ADDRESS_A,
+    workspaceId: second.workspaceId,
+  });
+  const created = await createAssuranceProject({
+    principal: firstPrincipal,
+    name: "Alpha support loop",
+    dataClassification: "internal",
+    retentionDays: 30,
+  });
+  assert.equal(created.workspaceId, first.workspaceId);
+  assert.deepEqual(
+    (await listAssuranceProjects(firstPrincipal)).map(project => project.projectId),
+    [created.projectId],
+  );
+  assert.deepEqual(await listAssuranceProjects(secondPrincipal), []);
+  await assert.rejects(
+    () =>
+      scopeAssuranceSessionToWorkspace({
+        accountAddress: ADDRESS_B,
+        workspaceId: first.workspaceId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
   );
 });
