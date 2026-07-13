@@ -1,40 +1,40 @@
 {
   "name": "rateloop",
-  "version": "0.1.1",
-  "description": "Use RateLoop MCP and skills to ask humans and open raters for public or gated product judgment.",
+  "version": "0.1.1+codex.20260713142906",
+  "description": "Use RateLoop for human assurance of public, synthetic, or redacted AI-enabled workflows.",
   "author": {
     "name": "RateLoop",
-    "url": "https://www.rateloop.ai"
+    "url": "https://rateloop-tokenless.vercel.app"
   },
-  "homepage": "https://www.rateloop.ai/docs/ai",
+  "homepage": "https://rateloop-tokenless.vercel.app/docs/how-it-works",
   "repository": "https://github.com/Noc2/RateLoop",
   "license": "MIT",
   "keywords": [
     "rateloop",
     "mcp",
     "agents",
-    "ratings",
-    "human-feedback"
+    "human-assurance",
+    "workflow-review"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "RateLoop",
-    "shortDescription": "Ask humans and open raters for product judgment",
-    "longDescription": "RateLoop gives Codex a reusable workflow and MCP tools for asking public or RateLoop-hosted gated questions, creating browser handoff links, quoting funded asks, polling status, and reading auditable results from humans, AI raters, teams, and open raters.",
+    "shortDescription": "Human assurance for AI-enabled workflows",
+    "longDescription": "RateLoop gives Codex a privacy-bounded workflow for preparing human review of public, synthetic, or redacted AI-enabled work. The user approves the exact payload before a tokenless browser handoff is created, reviews the ask in the browser, and can return later for status and auditable results.",
     "developerName": "RateLoop",
     "category": "Developer Tools",
     "capabilities": [
       "Interactive",
       "Write"
     ],
-    "websiteURL": "https://www.rateloop.ai/",
-    "privacyPolicyURL": "https://www.rateloop.ai/legal/privacy",
-    "termsOfServiceURL": "https://www.rateloop.ai/legal/terms",
+    "websiteURL": "https://rateloop-tokenless.vercel.app/",
+    "privacyPolicyURL": "https://rateloop-tokenless.vercel.app/legal/privacy",
+    "termsOfServiceURL": "https://rateloop-tokenless.vercel.app/legal/terms",
     "defaultPrompt": [
-      "Use RateLoop to review a decision or gate an agent action",
-      "Create a RateLoop browser handoff for this mockup",
-      "Use RateLoop to check whether this answer is supported"
+      "Prepare human assurance for this public AI workflow",
+      "Review this redacted output with a human panel",
+      "Check the status of my RateLoop assurance handoff"
     ],
     "brandColor": "#03CEA4",
     "composerIcon": "./assets/rateloop-logo.svg",

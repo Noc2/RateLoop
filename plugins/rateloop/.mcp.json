@@ -2,10 +2,7 @@
   "mcpServers": {
     "rateloop": {
       "type": "http",
-      "url": "https://www.rateloop.ai/api/mcp/public",
-      "headers": {
-        "MCP-Protocol-Version": "2025-11-25"
-      }
+      "url": "https://rateloop-tokenless.vercel.app/api/mcp"
     }
   }
 }
