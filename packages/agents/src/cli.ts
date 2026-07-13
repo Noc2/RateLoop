@@ -3,6 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import type {
+  HumanAssuranceProjectCreateRequest,
   TokenlessAskRequest,
   TokenlessQuoteRequest,
 } from "@rateloop/sdk";
@@ -83,10 +84,14 @@ Usage:
   rateloop-agents wait --operation-key op_... [--cursor ...] [--timeout-ms 30000]
   rateloop-agents wait --operation-key op_... --until-ready --max-wait-ms 300000
   rateloop-agents result --operation-key op_...
+  rateloop-agents assurance-projects
+  rateloop-agents assurance-project-create --file assurance-project.json
+  rateloop-agents assurance-project --project-id hap_...
+  rateloop-agents assurance-run --run-id hau_...
 
 Environment:
   RATELOOP_API_BASE_URL       Required isolated tokenless deployment URL
-  RATELOOP_AGENT_API_KEY      Optional scoped prepaid-agent bearer key
+  RATELOOP_AGENT_API_KEY      Workspace key; required for assurance commands and prepaid operations
   RATELOOP_AGENT_API_PATH     Optional API prefix; defaults to /api/agent/v1
   RATELOOP_REQUEST_TIMEOUT_MS Optional positive HTTP timeout
 
@@ -102,6 +107,11 @@ export async function runCli(args: string[]) {
   }
 
   const config = loadTokenlessAgentsRuntimeConfig();
+  if (command.startsWith("assurance-") && !config.apiKey) {
+    throw new Error(
+      "RATELOOP_AGENT_API_KEY is required for assurance project and run commands.",
+    );
+  }
   const client = createTokenlessAgentsClient({
     apiKey: config.apiKey,
     apiBaseUrl: config.apiBaseUrl,
@@ -110,6 +120,32 @@ export async function runCli(args: string[]) {
   });
 
   switch (command) {
+    case "assurance-projects":
+      printJson(await client.assurance.listProjects());
+      return;
+    case "assurance-project-create":
+      printJson(
+        await client.assurance.createProject(
+          await readJsonFile<HumanAssuranceProjectCreateRequest>(
+            requireString(options, "file"),
+          ),
+        ),
+      );
+      return;
+    case "assurance-project":
+      printJson(
+        await client.assurance.getProject({
+          projectId: requireString(options, "project-id"),
+        }),
+      );
+      return;
+    case "assurance-run":
+      printJson(
+        await client.assurance.getRunStatus({
+          runId: requireString(options, "run-id"),
+        }),
+      );
+      return;
     case "quote":
       printJson(
         await client.quote(

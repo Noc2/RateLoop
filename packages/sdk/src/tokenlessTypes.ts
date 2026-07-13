@@ -1,3 +1,5 @@
+import type { HumanAssuranceApiClient } from "./humanAssuranceApiTypes";
+
 export const TOKENLESS_SCHEMA_VERSION = "rateloop.tokenless.v2" as const;
 
 export const TOKENLESS_REVIEWER_SOURCES = [
@@ -277,6 +279,8 @@ export type TokenlessSubmitPaymentRequest =
   | { operationKey: string };
 
 export interface TokenlessRateLoopClient {
+  /** Workspace-scoped B2B project and run APIs. Requires a server-side workspace API key. */
+  assurance: HumanAssuranceApiClient;
   quote(request: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse>;
   ask(request: TokenlessAskRequest): Promise<TokenlessAskResponse>;
   paymentInstructions(request: {

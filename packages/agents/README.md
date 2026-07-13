@@ -30,7 +30,8 @@ const client = createTokenlessAgentsClient({
 
 const quote = await client.quote({
   audience: {
-    admissionPolicyHash: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    admissionPolicyHash:
+      "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     source: "customer_invited",
   },
   budget: {
@@ -102,11 +103,28 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 
 ## Environment
 
-| Variable                      | Purpose                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `RATELOOP_API_BASE_URL`       | Required isolated tokenless deployment origin. HTTPS is required except on loopback. |
-| `RATELOOP_AGENT_API_KEY`      | Optional scoped prepaid-agent bearer key. It is omitted from free quote requests.    |
-| `RATELOOP_AGENT_API_PATH`     | Optional API prefix. Defaults to `/api/agent/v1`.                                    |
-| `RATELOOP_REQUEST_TIMEOUT_MS` | Optional positive timeout for non-wait requests.                                     |
+| Variable                      | Purpose                                                                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `RATELOOP_API_BASE_URL`       | Required isolated tokenless deployment origin. HTTPS is required except on loopback.                            |
+| `RATELOOP_AGENT_API_KEY`      | Workspace key required by assurance commands and authenticated paid operations. It is omitted from free quotes. |
+| `RATELOOP_AGENT_API_PATH`     | Optional API prefix. Defaults to `/api/agent/v1`.                                                               |
+| `RATELOOP_REQUEST_TIMEOUT_MS` | Optional positive timeout for non-wait requests.                                                                |
 
-The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is only attached to ask, wait, and result requests sent to the configured tokenless origin.
+The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
+
+## Assurance integration commands
+
+Consultancies and evaluation platforms can create client-isolated projects and read aggregate run state with a workspace API key:
+
+```bash
+export RATELOOP_AGENT_API_KEY=rlk_...
+
+yarn workspace @rateloop/agents assurance-project-create \
+  --file packages/agents/examples/assurance-project.json
+
+yarn workspace @rateloop/agents assurance-projects
+yarn workspace @rateloop/agents assurance-project --project-id hap_...
+yarn workspace @rateloop/agents assurance-run --run-id hau_...
+```
+
+An evaluation platform can persist the returned project ID beside its test-suite ID and poll `assurance-run` after a run is configured in the buyer workflow. A consultancy can create one project per client/workflow and use `assurance-project` to enumerate frozen suites and recurring runs without receiving private artifacts or reviewer-level data. These commands do not create suites, upload artifacts, recruit reviewers, or fund rounds; they expose only the database-backed project inventory and aggregate run status currently implemented.

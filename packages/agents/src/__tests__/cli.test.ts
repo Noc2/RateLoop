@@ -3,6 +3,27 @@ import { parseCliArgs } from "../cli";
 import { validateCliOptions } from "../cliOptions";
 
 describe("tokenless CLI parsing", () => {
+  it("accepts bounded assurance project and run commands", () => {
+    for (const args of [
+      ["assurance-projects"],
+      ["assurance-project-create", "--file", "assurance-project.json"],
+      ["assurance-project", "--project-id", "hap_123"],
+      ["assurance-run", "--run-id", "hau_123"],
+    ]) {
+      const parsed = parseCliArgs(args);
+      expect(() =>
+        validateCliOptions(parsed.command, parsed.options),
+      ).not.toThrow();
+    }
+  });
+
+  it("rejects unscoped assurance identifiers", () => {
+    const parsed = parseCliArgs(["assurance-run", "--project-id", "hap_123"]);
+    expect(() => validateCliOptions(parsed.command, parsed.options)).toThrow(
+      /Unknown option/,
+    );
+  });
+
   it("parses one bounded wait request", () => {
     const parsed = parseCliArgs([
       "wait",

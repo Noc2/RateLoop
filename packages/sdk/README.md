@@ -8,6 +8,32 @@ quote -> ask -> wait -> result
 
 The SDK is HTTP-only and wallet-agnostic. It does not build transactions, manage keys, import contract deployment state, or expose the removed protocol generation.
 
+## Human-assurance projects and runs
+
+Server-side B2B callers can use the same client with a workspace API key. Project creation requires an explicit data classification and retention period; the server derives the workspace from the key rather than accepting a caller-supplied workspace ID.
+
+```ts
+const client = createTokenlessRateLoopClient({
+  apiBaseUrl: process.env.RATELOOP_API_BASE_URL!,
+  apiKey: process.env.RATELOOP_AGENT_API_KEY!,
+});
+
+const project = await client.assurance.createProject({
+  name: "Client support release quality",
+  dataClassification: "confidential",
+  retentionDays: 90,
+});
+
+const inventory = await client.assurance.getProject({
+  projectId: project.projectId,
+});
+const status = await client.assurance.getRunStatus({
+  runId: process.env.RATELOOP_ASSURANCE_RUN_ID!,
+});
+```
+
+The integration API creates and lists projects, returns project resource metadata, and reads aggregate run state. It does not return artifacts, reviewer identities, rationales, blinding secrets, or signing keys. Artifact upload and run creation are intentionally not exposed to API keys yet: uploads need a non-account actor audit model, while a runnable suite also needs explicit reviewer, funding, and frozen-manifest setup. Use the authenticated buyer workflow for those steps. The lower-level paid primitive remains `quote -> ask -> wait -> result`.
+
 ## Example
 
 ```ts
@@ -19,7 +45,8 @@ const client = createTokenlessRateLoopClient({
 
 const quote = await client.quote({
   audience: {
-    admissionPolicyHash: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    admissionPolicyHash:
+      "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     source: "customer_invited",
   },
   budget: {

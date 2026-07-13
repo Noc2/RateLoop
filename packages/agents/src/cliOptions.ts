@@ -3,6 +3,10 @@ export type CliOptions = Record<string, CliOptionValue>;
 
 const POSITIVE_DECIMAL_INTEGER_PATTERN = /^[1-9]\d*$/;
 const COMMAND_OPTIONS: Record<string, ReadonlySet<string>> = {
+  "assurance-project": new Set(["project-id"]),
+  "assurance-project-create": new Set(["file"]),
+  "assurance-projects": new Set(),
+  "assurance-run": new Set(["run-id"]),
   ask: new Set(["file"]),
   quote: new Set(["file"]),
   result: new Set(["operation-key"]),

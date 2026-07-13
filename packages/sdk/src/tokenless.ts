@@ -1,5 +1,13 @@
 import { RateLoopApiError, RateLoopSdkError } from "./errors";
 import {
+  parseHumanAssuranceProjectCreateRequest,
+  parseHumanAssuranceProjectCreateResponse,
+  parseHumanAssuranceProjectListResponse,
+  parseHumanAssuranceProjectResourcesResponse,
+  parseHumanAssuranceRunStatusResponse,
+} from "./humanAssuranceApiSchema";
+import type { HumanAssuranceProjectCreateRequest } from "./humanAssuranceApiTypes";
+import {
   parseTokenlessAskResponse,
   parseTokenlessPaymentInstructions,
   parseTokenlessQuoteResponse,
@@ -417,6 +425,44 @@ export function createTokenlessRateLoopClient(
   const config = normalizeOptions(options);
 
   return {
+    assurance: {
+      async listProjects() {
+        const response = await request(config, "/assurance/projects", {
+          method: "GET",
+        });
+        return parseHumanAssuranceProjectListResponse(response);
+      },
+
+      createProject(requestBody: HumanAssuranceProjectCreateRequest) {
+        return post(
+          config,
+          "/assurance/projects",
+          parseHumanAssuranceProjectCreateRequest(requestBody),
+          parseHumanAssuranceProjectCreateResponse,
+        );
+      },
+
+      async getProject(requestBody: { projectId: string }) {
+        const projectId = encodePathSegment(requestBody.projectId, "projectId");
+        const response = await request(
+          config,
+          `/assurance/projects/${projectId}`,
+          {
+            method: "GET",
+          },
+        );
+        return parseHumanAssuranceProjectResourcesResponse(response);
+      },
+
+      async getRunStatus(requestBody: { runId: string }) {
+        const runId = encodePathSegment(requestBody.runId, "runId");
+        const response = await request(config, `/assurance/runs/${runId}`, {
+          method: "GET",
+        });
+        return parseHumanAssuranceRunStatusResponse(response);
+      },
+    },
+
     quote(requestBody: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse> {
       assertQuoteRequest(requestBody);
       return post(config, "/quote", requestBody, parseTokenlessQuoteResponse);
