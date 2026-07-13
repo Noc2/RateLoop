@@ -98,7 +98,7 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.contracts.X402PanelSubmitter, undefined);
   assert.match(
     artifact.deploymentKey,
-    /^tokenless-v2:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}$/
+    /^tokenless-v3:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}$/
   );
 });
 
@@ -168,7 +168,7 @@ test("validates deployment keys against contract addresses", () => {
   );
 });
 
-test("export writes tokenless-v2 separately and leaves unrelated artifacts untouched", () => {
+test("export writes tokenless-v3 separately and leaves unrelated artifacts untouched", () => {
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-export-"));
   try {
     const unrelatedPath = join(root, "deployments", "unrelated.json");
@@ -176,7 +176,7 @@ test("export writes tokenless-v2 separately and leaves unrelated artifacts untou
     const tokenlessPath = join(
       root,
       "deployments",
-      "tokenless-v2",
+      "tokenless-v3",
       "84532.json"
     );
     mkdirSync(join(root, "deployments"), { recursive: true });
@@ -217,7 +217,7 @@ test("generated sources expose required ABIs and omit the absent adapter", () =>
   assert.equal(sources.has("abis/X402PanelSubmitterAbi.ts"), false);
   assert.match(
     sources.get("deployedContracts.ts"),
-    /rateloop-tokenless-deployment-v2/
+    /rateloop-tokenless-deployment-v3/
   );
   assert.doesNotMatch(sources.get("index.ts"), /X402PanelSubmitterAbi/);
 });
@@ -236,7 +236,7 @@ test("source-only ABI generation cannot emit or replace deployment metadata", ()
   assert.equal(sources.has("deployedContracts.ts"), false);
   assert.equal(sources.has("index.ts"), false);
   for (const source of sources.values()) {
-    assert.match(source, /rateloop-tokenless-deployment-v2/);
+    assert.match(source, /rateloop-tokenless-deployment-v3/);
     assert.doesNotMatch(source, /0x[0-9a-f]{40}/i);
   }
 });
@@ -248,7 +248,7 @@ test("full artifact generation rejects historical v1 deployment metadata", () =>
   historical.schemaVersion = "rateloop-tokenless-deployment-v1";
   historical.version = 1;
   historical.deploymentKey = historical.deploymentKey.replace(
-    "tokenless-v2:",
+    "tokenless-v3:",
     "tokenless-v1:"
   );
 

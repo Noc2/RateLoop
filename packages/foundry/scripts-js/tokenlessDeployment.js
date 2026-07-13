@@ -1,8 +1,8 @@
 import { isAddress, zeroAddress } from "viem";
 
-export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v2";
-export const TOKENLESS_DEPLOYMENT_VERSION = 2;
-export const TOKENLESS_DEPLOYMENT_KEY_VERSION = "tokenless-v2";
+export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v3";
+export const TOKENLESS_DEPLOYMENT_VERSION = 3;
+export const TOKENLESS_DEPLOYMENT_KEY_VERSION = "tokenless-v3";
 export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84532;
 export const TOKENLESS_BASE_SEPOLIA_NETWORK = "baseSepolia";
 

@@ -8,8 +8,8 @@ import { CredentialIssuer } from "../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
 import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
-/// @notice Disposable Base Sepolia deployment for the next tokenless-v2 stack.
-/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v2 schema.
+/// @notice Disposable Base Sepolia deployment for the next tokenless-v3 stack.
+/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v3 schema.
 contract DeployTokenlessScript is Script {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84_532;
     uint256 internal constant EIP170_RUNTIME_CODE_SIZE_LIMIT = 24_576;
@@ -61,7 +61,7 @@ contract DeployTokenlessScript is Script {
         console2.log("CredentialIssuer:", address(issuer));
         console2.log("TokenlessPanel:", address(panel));
         console2.log("X402PanelSubmitter:", address(x402Submitter));
-        console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v2");
+        console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v3");
     }
 
     function _assertDeployable(string memory artifact, bytes memory constructorArgs) internal view {
