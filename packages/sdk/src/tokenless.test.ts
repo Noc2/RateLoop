@@ -36,6 +36,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "HUMAN_ASSURANCE_SCHEMA_VERSION",
       "HUMAN_ASSURANCE_SUITE_JSON_SCHEMA",
       "TOKENLESS_RESULT_JSON_SCHEMA",
+      "TOKENLESS_REVIEWER_SOURCES",
       "TOKENLESS_SCHEMA_VERSION",
       "TOKENLESS_TERMINAL_VERDICT_STATUSES",
       "TOKENLESS_VERDICT_STATUSES",
@@ -113,13 +114,18 @@ function resultFixture(
     terminal: verdictStatus !== "pending_analytics",
     economics: economics(),
     audience: {
-      label: "Passport holders",
+      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      label: "Customer-invited reviewers",
       participantCount: 15,
-      tierId: "passport",
+      source: "customer_invited",
     },
     verdict:
       verdictStatus === "published"
-        ? { confidenceBps: 8200, scoreBps: 6700, selected: "yes" }
+        ? {
+            intervalBps: { lower: 4121, upper: 8510 },
+            preferenceShareBps: 6700,
+            selected: "yes",
+          }
         : null,
     methodologyUrl: "https://tokenless.example/docs/methodology/v1",
     updatedAt: "2026-07-12T12:00:00.000Z",
@@ -211,9 +217,13 @@ test("tokenless client performs quote and ask with a required idempotency header
           quoteId: "quote_12345678",
           expiresAt: "2026-07-12T12:10:00.000Z",
           economics: economics(),
-          audience: { label: "Passport holders", tierId: "passport" },
+          audience: {
+            admissionPolicyHash: `0x${"ab".repeat(32)}`,
+            label: "Customer-invited reviewers",
+            source: "customer_invited",
+          },
           panel: { minimumReveals: 12, requestedSize: 15 },
-          slo: { estimatedSeconds: 1800, tierId: "passport" },
+          slo: { estimatedSeconds: 1800 },
         });
       }
 
@@ -236,7 +246,10 @@ test("tokenless client performs quote and ask with a required idempotency header
   });
 
   const quote = await client.quote({
-    audience: { tierId: "passport" },
+    audience: {
+      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      source: "customer_invited",
+    },
     budget: {
       attemptReserveAtomic: "5000000",
       bountyAtomic: "25000000",
@@ -277,7 +290,10 @@ test("tokenless client performs quote and ask with a required idempotency header
   assert.throws(
     () =>
       client.quote({
-        audience: { tierId: "passport" },
+        audience: {
+          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          source: "customer_invited",
+        },
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -340,7 +356,10 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
   assert.throws(
     () =>
       client.quote({
-        audience: { tierId: "passport" },
+        audience: {
+          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          source: "customer_invited",
+        },
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -361,7 +380,10 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
   assert.throws(
     () =>
       client.quote({
-        audience: { tierId: "passport" },
+        audience: {
+          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          source: "customer_invited",
+        },
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",

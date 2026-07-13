@@ -1,6 +1,7 @@
 {
   "audience": {
-    "tierId": "presence"
+    "admissionPolicyHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "source": "customer_invited"
   },
   "budget": {
     "attemptReserveAtomic": "500000",

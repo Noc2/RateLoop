@@ -455,6 +455,28 @@ function selectedChoice(request: Row, scoreBps: number) {
   return scoreBps >= 5_000 ? "yes" : "no";
 }
 
+export function wilsonIntervalBps(successes: number, sampleSize: number) {
+  if (
+    !Number.isSafeInteger(successes) ||
+    !Number.isSafeInteger(sampleSize) ||
+    sampleSize <= 0 ||
+    successes < 0 ||
+    successes > sampleSize
+  ) {
+    throw new TokenlessServiceError("Wilson interval inputs are invalid.", 400, "invalid_analytics");
+  }
+  const z = 1.959963984540054;
+  const p = successes / sampleSize;
+  const zSquared = z * z;
+  const denominator = 1 + zSquared / sampleSize;
+  const center = (p + zSquared / (2 * sampleSize)) / denominator;
+  const margin = (z * Math.sqrt((p * (1 - p)) / sampleSize + zSquared / (4 * sampleSize * sampleSize))) / denominator;
+  return {
+    lower: Math.max(0, Math.floor((center - margin) * BPS_MAX)),
+    upper: Math.min(BPS_MAX, Math.ceil((center + margin) * BPS_MAX)),
+  };
+}
+
 export async function reviewAndPublishResult(input: {
   operationKey: string;
   metrics: AnalyticsMetrics;
@@ -506,12 +528,8 @@ export async function reviewAndPublishResult(input: {
   const quote = JSON.parse(rowString(ask, "response_json")!) as Row;
   const request = JSON.parse(rowString(ask, "request_json")!) as Row;
   const audience = quote.audience as Row;
-  const scoreBps = Math.floor((evidence.upVotes * BPS_MAX) / evidence.revealCount);
-  const marginBps = Math.min(BPS_MAX, Math.abs(scoreBps - 5_000) * 2);
-  const confidenceBps = Math.floor(
-    (marginBps * Math.min(evidence.revealCount, 25) * (BPS_MAX - evidence.diversity.largestClusterBps)) /
-      (25 * BPS_MAX),
-  );
+  const preferenceShareBps = Math.floor((evidence.upVotes * BPS_MAX) / evidence.revealCount);
+  const intervalBps = wilsonIntervalBps(evidence.upVotes, evidence.revealCount);
   const result = parseTokenlessResult({
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     operationKey: input.operationKey,
@@ -519,10 +537,19 @@ export async function reviewAndPublishResult(input: {
     verdictStatus: evaluation.decision,
     terminal: true,
     economics: evidence.economics,
-    audience: { tierId: audience.tierId, label: audience.label, participantCount: evidence.revealCount },
+    audience: {
+      admissionPolicyHash: audience.admissionPolicyHash,
+      label: audience.label,
+      participantCount: evidence.revealCount,
+      source: audience.source,
+    },
     verdict:
       evaluation.decision === "published"
-        ? { confidenceBps, scoreBps, selected: selectedChoice(request, scoreBps) }
+        ? {
+            intervalBps,
+            preferenceShareBps,
+            selected: selectedChoice(request, preferenceShareBps),
+          }
         : null,
     methodologyUrl: `${input.appOrigin.replace(/\/$/, "")}/docs/how-it-works`,
     updatedAt: now.toISOString(),

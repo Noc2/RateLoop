@@ -70,8 +70,12 @@ beforeEach(async () => {
     args: [
       JSON.stringify({ question: { kind: "binary", prompt: "Ship?" } }),
       JSON.stringify({
-        schemaVersion: "tokenless-v1",
-        audience: { tierId: "passport", label: "Passport-verified humans" },
+        schemaVersion: "rateloop.tokenless.v2",
+        audience: {
+          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          label: "Customer-invited reviewers",
+          source: "customer_invited",
+        },
       }),
       new Date("2027-01-01T00:00:00Z"),
       NOW,
@@ -219,7 +223,8 @@ test("finalized evidence publishes once and webhook retries preserve idempotency
   });
   assert.equal(replay.publicationId, published.publicationId);
   assert.equal(published.result.verdictStatus, "published");
-  assert.equal(published.result.verdict?.scoreBps, 8000);
+  assert.equal(published.result.verdict?.preferenceShareBps, 8000);
+  assert.deepEqual(published.result.verdict?.intervalBps, { lower: 3755, upper: 9638 });
 
   let calls = 0;
   let deliveryId = "";

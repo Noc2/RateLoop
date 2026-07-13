@@ -6,12 +6,16 @@ import {
 } from "../tokenless";
 
 describe("tokenless agents client", () => {
-  it("uses the isolated v1 quote route", async () => {
+  it("uses the isolated v2 quote route", async () => {
     const fetchImpl = vi.fn(
       async () =>
         new Response(
           JSON.stringify({
-            audience: { label: "Presence", tierId: "presence" },
+            audience: {
+              admissionPolicyHash: `0x${"ab".repeat(32)}`,
+              label: "Customer-invited reviewers",
+              source: "customer_invited",
+            },
             economics: {
               asset: "USDC",
               attemptReserve: {
@@ -47,8 +51,8 @@ describe("tokenless agents client", () => {
             expiresAt: "2026-07-12T20:00:00.000Z",
             panel: { minimumReveals: 4, requestedSize: 5 },
             quoteId: "qte_12345678",
-            schemaVersion: "rateloop.tokenless.v1",
-            slo: { estimatedSeconds: 1800, tierId: "presence" },
+            schemaVersion: "rateloop.tokenless.v2",
+            slo: { estimatedSeconds: 1800 },
           }),
           { headers: { "content-type": "application/json" }, status: 200 },
         ),
@@ -59,7 +63,10 @@ describe("tokenless agents client", () => {
       fetchImpl,
     });
     const quote = await client.quote({
-      audience: { tierId: "presence" },
+      audience: {
+        admissionPolicyHash: `0x${"ab".repeat(32)}`,
+        source: "customer_invited",
+      },
       budget: {
         attemptReserveAtomic: "100",
         bountyAtomic: "1000",
@@ -73,7 +80,7 @@ describe("tokenless agents client", () => {
       requestedPanelSize: 5,
     });
 
-    expect(quote.schemaVersion).toBe("rateloop.tokenless.v1");
+    expect(quote.schemaVersion).toBe("rateloop.tokenless.v2");
     expect(fetchImpl.mock.calls[0]?.[0]).toBe(
       "https://tokenless-preview.vercel.app/api/agent/v1/quote",
     );
@@ -97,7 +104,7 @@ describe("tokenless agents client", () => {
             idempotencyKey: "release-check-123",
             operationKey: "op_123",
             roundId: null,
-            schemaVersion: "rateloop.tokenless.v1",
+            schemaVersion: "rateloop.tokenless.v2",
             status: "awaiting_payment",
             webhookAccepted: false,
           }),
@@ -132,14 +139,14 @@ describe("tokenless agents client", () => {
           retryAfterMs: 1,
         },
         operationKey: "op_123",
-        schemaVersion: "rateloop.tokenless.v1",
+        schemaVersion: "rateloop.tokenless.v2",
         status: "pending",
         verdictStatus: null,
       })
       .mockResolvedValueOnce({
         continuation: null,
         operationKey: "op_123",
-        schemaVersion: "rateloop.tokenless.v1",
+        schemaVersion: "rateloop.tokenless.v2",
         status: "ready",
         verdictStatus: "published",
       });

@@ -18,7 +18,10 @@ const client = createTokenlessRateLoopClient({
 });
 
 const quote = await client.quote({
-  audience: { tierId: "passport" },
+  audience: {
+    admissionPolicyHash: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    source: "customer_invited",
+  },
   budget: {
     attemptReserveAtomic: "5000000",
     bountyAtomic: "25000000",

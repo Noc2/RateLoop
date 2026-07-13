@@ -19,11 +19,12 @@ const QUOTE_TTL_MS = 15 * 60_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
-const TIER_LABELS: Record<string, string> = {
-  orb: "Orb-verified unique humans",
-  passport: "Passport-verified humans",
-  presence: "Identity plus recent presence check",
-  selfie: "Live humans (not uniqueness-verified)",
+const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+const AUDIENCE_LABELS = {
+  customer_invited: "Customer-invited reviewers",
+  rateloop_network: "RateLoop-network reviewers",
+  hybrid: "Separate invited and RateLoop-network subpanels",
+  sandbox: "Simulated sandbox responses",
 };
 
 type StoredQuote = {
@@ -138,8 +139,11 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
   ) {
     throw new TokenlessServiceError("question.rationale is invalid.", 400, "invalid_quote");
   }
-  if (!request.audience?.tierId?.trim() || !TIER_LABELS[request.audience.tierId]) {
-    throw new TokenlessServiceError("audience.tierId is unsupported.", 400, "invalid_quote");
+  if (!request.audience || !BYTES32_PATTERN.test(request.audience.admissionPolicyHash ?? "")) {
+    throw new TokenlessServiceError("audience.admissionPolicyHash must be a bytes32 hex value.", 400, "invalid_quote");
+  }
+  if (!(request.audience.source in AUDIENCE_LABELS)) {
+    throw new TokenlessServiceError("audience.source is unsupported.", 400, "invalid_quote");
   }
   if (
     !Number.isSafeInteger(request.requestedPanelSize) ||
@@ -314,6 +318,13 @@ async function persistAsk(row: StoredAsk, sandboxMode: boolean) {
 export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
   const request = assertQuoteRequest(value);
   const sandboxMode = isTokenlessSandboxMode();
+  if ((request.audience.source === "sandbox") !== sandboxMode) {
+    throw new TokenlessServiceError(
+      "Sandbox audience policies are available only in sandbox mode.",
+      409,
+      "audience_environment_mismatch",
+    );
+  }
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + QUOTE_TTL_MS);
   const requestHash = hash(request);
@@ -323,12 +334,19 @@ export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuo
     quoteId,
     expiresAt: expiresAt.toISOString(),
     economics: buildEconomics(request),
-    audience: { tierId: request.audience.tierId, label: TIER_LABELS[request.audience.tierId] },
+    audience: {
+      admissionPolicyHash: request.audience.admissionPolicyHash,
+      label: AUDIENCE_LABELS[request.audience.source],
+      source: request.audience.source,
+    },
     panel: {
       minimumReveals: Math.max(3, Math.ceil(request.requestedPanelSize * 0.8)),
       requestedSize: request.requestedPanelSize,
     },
-    slo: { estimatedSeconds: request.audience.tierId === "orb" ? 3600 : 1800, tierId: request.audience.tierId },
+    slo: {
+      estimatedSeconds:
+        request.audience.source === "rateloop_network" || request.audience.source === "hybrid" ? 3600 : 1800,
+    },
   });
   await persistQuote(
     {
@@ -379,7 +397,11 @@ function buildSandboxResult(
     terminal: true,
     economics,
     audience: { ...quote.audience, participantCount: quote.panel.minimumReveals },
-    verdict: { confidenceBps: 7600, scoreBps: 6400, selected: "yes" },
+    verdict: {
+      intervalBps: { lower: 3921, upper: 8149 },
+      preferenceShareBps: 6400,
+      selected: "yes",
+    },
     methodologyUrl: `${appOrigin}/docs/how-it-works#sandbox-limitations`,
     updatedAt: row.updatedAt.toISOString(),
   });

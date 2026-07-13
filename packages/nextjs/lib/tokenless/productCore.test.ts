@@ -34,7 +34,10 @@ afterEach(() => {
 
 function quoteRequest() {
   return {
-    audience: { tierId: "passport" },
+    audience: {
+      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      source: "sandbox",
+    },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,

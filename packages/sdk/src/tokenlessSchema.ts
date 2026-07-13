@@ -1,6 +1,7 @@
 import { RateLoopSdkError } from "./errors";
 import {
   TOKENLESS_SCHEMA_VERSION,
+  TOKENLESS_REVIEWER_SOURCES,
   TOKENLESS_VERDICT_STATUSES,
   TOKENLESS_WEBHOOK_EVENT_TYPES,
   type TokenlessAskResponse,
@@ -13,6 +14,7 @@ import {
   type TokenlessPaymentInstructions,
   type TokenlessQuoteResponse,
   type TokenlessRefundAccounting,
+  type TokenlessReviewerSource,
   type TokenlessResult,
   type TokenlessVerdictStatus,
   type TokenlessWaitResponse,
@@ -23,6 +25,7 @@ type JsonRecord = Record<string, unknown>;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const verdictStatuses = new Set<string>(TOKENLESS_VERDICT_STATUSES);
 const webhookEventTypes = new Set<string>(TOKENLESS_WEBHOOK_EVENT_TYPES);
+const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
 
 function invalid(path: string, expectation: string): never {
   throw new RateLoopSdkError(
@@ -109,6 +112,22 @@ function verdictStatus(value: unknown, path: string): TokenlessVerdictStatus {
   if (!verdictStatuses.has(normalized))
     invalid(path, `one of ${TOKENLESS_VERDICT_STATUSES.join(", ")}`);
   return normalized as TokenlessVerdictStatus;
+}
+
+function reviewerSource(value: unknown, path: string): TokenlessReviewerSource {
+  const normalized = string(value, path);
+  if (!reviewerSources.has(normalized)) {
+    invalid(path, `one of ${TOKENLESS_REVIEWER_SOURCES.join(", ")}`);
+  }
+  return normalized as TokenlessReviewerSource;
+}
+
+function bytes32(value: unknown, path: string): `0x${string}` {
+  const normalized = string(value, path);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) {
+    invalid(path, "a bytes32 hex value");
+  }
+  return normalized as `0x${string}`;
 }
 
 function fundAccounting(value: unknown, path: string): TokenlessFundAccounting {
@@ -224,8 +243,12 @@ export function parseTokenlessQuoteResponse(
     expiresAt: isoDate(input.expiresAt, "expiresAt"),
     economics: economics(input.economics, "economics"),
     audience: {
-      tierId: string(audience.tierId, "audience.tierId"),
+      admissionPolicyHash: bytes32(
+        audience.admissionPolicyHash,
+        "audience.admissionPolicyHash",
+      ),
       label: string(audience.label, "audience.label"),
+      source: reviewerSource(audience.source, "audience.source"),
     },
     panel: {
       minimumReveals: integer(panel.minimumReveals, "panel.minimumReveals", 1),
@@ -237,7 +260,6 @@ export function parseTokenlessQuoteResponse(
         "slo.estimatedSeconds",
         1,
       ),
-      tierId: string(slo.tierId, "slo.tierId"),
     },
   };
 }
@@ -282,12 +304,6 @@ export function parseTokenlessPaymentInstructions(
   const address = (entry: unknown, path: string) => {
     const value = string(entry, path);
     if (!/^0x[0-9a-fA-F]{40}$/.test(value)) invalid(path, "an EVM address");
-    return value as `0x${string}`;
-  };
-  const bytes32 = (entry: unknown, path: string) => {
-    const value = string(entry, path);
-    if (!/^0x[0-9a-fA-F]{64}$/.test(value))
-      invalid(path, "a bytes32 hex value");
     return value as `0x${string}`;
   };
   const transactionHash =
@@ -414,14 +430,20 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
   if (input.verdict !== null) {
     const verdict = record(input.verdict, "verdict");
     parsedVerdict = {
-      confidenceBps:
-        verdict.confidenceBps === null
+      intervalBps:
+        verdict.intervalBps === null
           ? null
-          : integer(verdict.confidenceBps, "verdict.confidenceBps", 0, 10_000),
-      scoreBps:
-        verdict.scoreBps === null
+          : (() => {
+              const interval = record(verdict.intervalBps, "verdict.intervalBps");
+              const lower = integer(interval.lower, "verdict.intervalBps.lower", 0, 10_000);
+              const upper = integer(interval.upper, "verdict.intervalBps.upper", 0, 10_000);
+              if (lower > upper) invalid("verdict.intervalBps", "lower <= upper");
+              return { lower, upper };
+            })(),
+      preferenceShareBps:
+        verdict.preferenceShareBps === null
           ? null
-          : integer(verdict.scoreBps, "verdict.scoreBps", 0, 10_000),
+          : integer(verdict.preferenceShareBps, "verdict.preferenceShareBps", 0, 10_000),
       selected: nullableString(verdict.selected, "verdict.selected"),
     };
   }
@@ -434,12 +456,16 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
     terminal: parsedTerminal,
     economics: economics(input.economics, "economics"),
     audience: {
-      tierId: string(audience.tierId, "audience.tierId"),
+      admissionPolicyHash: bytes32(
+        audience.admissionPolicyHash,
+        "audience.admissionPolicyHash",
+      ),
       label: string(audience.label, "audience.label"),
       participantCount: integer(
         audience.participantCount,
         "audience.participantCount",
       ),
+      source: reviewerSource(audience.source, "audience.source"),
     },
     verdict: parsedVerdict,
     methodologyUrl: httpUrl(input.methodologyUrl, "methodologyUrl"),
@@ -482,7 +508,7 @@ const fundAccountingSchema = {
 } as const;
 
 export const TOKENLESS_RESULT_JSON_SCHEMA = {
-  $id: "urn:rateloop:tokenless:result:v1",
+  $id: "urn:rateloop:tokenless:result:v2",
   additionalProperties: false,
   properties: {
     schemaVersion: { const: TOKENLESS_SCHEMA_VERSION },
@@ -561,11 +587,20 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
     audience: {
       additionalProperties: false,
       properties: {
-        tierId: { minLength: 1, type: "string" },
+        admissionPolicyHash: {
+          pattern: "^0x[0-9a-fA-F]{64}$",
+          type: "string",
+        },
         label: { minLength: 1, type: "string" },
         participantCount: { minimum: 0, type: "integer" },
+        source: { enum: TOKENLESS_REVIEWER_SOURCES },
       },
-      required: ["tierId", "label", "participantCount"],
+      required: [
+        "admissionPolicyHash",
+        "label",
+        "participantCount",
+        "source",
+      ],
       type: "object",
     },
     verdict: {
@@ -574,19 +609,28 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
         {
           additionalProperties: false,
           properties: {
-            confidenceBps: {
-              maximum: 10_000,
-              minimum: 0,
-              type: ["integer", "null"],
+            intervalBps: {
+              anyOf: [
+                { type: "null" },
+                {
+                  additionalProperties: false,
+                  properties: {
+                    lower: { maximum: 10_000, minimum: 0, type: "integer" },
+                    upper: { maximum: 10_000, minimum: 0, type: "integer" },
+                  },
+                  required: ["lower", "upper"],
+                  type: "object",
+                },
+              ],
             },
-            scoreBps: {
+            preferenceShareBps: {
               maximum: 10_000,
               minimum: 0,
               type: ["integer", "null"],
             },
             selected: { type: ["string", "null"] },
           },
-          required: ["confidenceBps", "scoreBps", "selected"],
+          required: ["intervalBps", "preferenceShareBps", "selected"],
           type: "object",
         },
       ],
@@ -606,6 +650,6 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
     "methodologyUrl",
     "updatedAt",
   ],
-  title: "RateLoop tokenless result v1",
+  title: "RateLoop tokenless result v2",
   type: "object",
 } as const;

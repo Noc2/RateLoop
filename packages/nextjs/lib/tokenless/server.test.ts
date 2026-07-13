@@ -24,9 +24,9 @@ afterEach(() => {
   else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
 });
 
-function quoteRequest() {
+function quoteRequest(source: "customer_invited" | "sandbox" = "sandbox") {
   return {
-    audience: { tierId: "passport" },
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary", prompt: "Ship this?", rationale: { mode: "optional" } },
     requestedPanelSize: 15,
@@ -36,7 +36,7 @@ function quoteRequest() {
 test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
 
-  assert.equal(quote.schemaVersion, "rateloop.tokenless.v1");
+  assert.equal(quote.schemaVersion, "rateloop.tokenless.v2");
   assert.equal(quote.economics.bounty.fundedAtomic, "25000000");
   assert.equal(quote.economics.fee.fundedAtomic, "1875000");
   assert.equal(quote.economics.attemptReserve.fundedAtomic, "5000000");
@@ -81,7 +81,7 @@ test("sandbox asks are durable, idempotent, and expose exact result accounting",
 
 test("live asks remain pending payment and never synthesize a result", async () => {
   process.env.TOKENLESS_SANDBOX_MODE = "false";
-  const quote = await createTokenlessQuote(quoteRequest());
+  const quote = await createTokenlessQuote(quoteRequest("customer_invited"));
   const request = {
     idempotencyKey: "test:ask:live0001",
     payment: { mode: "prepaid" as const, workspaceId: "live" },

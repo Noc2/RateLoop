@@ -29,7 +29,10 @@ const client = createTokenlessAgentsClient({
 });
 
 const quote = await client.quote({
-  audience: { tierId: "presence" },
+  audience: {
+    admissionPolicyHash: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    source: "customer_invited",
+  },
   budget: {
     attemptReserveAtomic: "500000",
     bountyAtomic: "5000000",
@@ -86,7 +89,7 @@ Without `--until-ready`, `wait` performs one bounded request and prints either a
 
 ## Result contract
 
-All responses use `rateloop.tokenless.v1`. Verdict status is one of:
+All responses use `rateloop.tokenless.v2`. The audience binds the exact frozen admission policy; no ordered identity tier or fabricated confidence score is exposed. Verdict status is one of:
 
 - `pending_analytics`
 - `published`

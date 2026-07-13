@@ -34,7 +34,10 @@ async function prepaidAsk() {
   const { workspaceId } = await createWorkspace({ name: "Moderation", ownerAddress: OWNER });
   await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
   const quote = await createTokenlessQuote({
-    audience: { tierId: "passport" },
+    audience: {
+      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      source: "customer_invited",
+    },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Is this safe?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,

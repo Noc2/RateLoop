@@ -20,7 +20,10 @@ import type {
   TokenlessWaitResponse,
   TokenlessSubmitPaymentRequest,
 } from "./tokenlessTypes";
-import { TOKENLESS_WEBHOOK_EVENT_TYPES } from "./tokenlessTypes";
+import {
+  TOKENLESS_REVIEWER_SOURCES,
+  TOKENLESS_WEBHOOK_EVENT_TYPES,
+} from "./tokenlessTypes";
 
 const DEFAULT_API_PATH = "/api/agent/v1";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -30,7 +33,9 @@ const WAIT_TRANSPORT_BUFFER_MS = 5_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const webhookEventTypes = new Set<string>(TOKENLESS_WEBHOOK_EVENT_TYPES);
+const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
 
 interface NormalizedTokenlessClientOptions {
   apiBaseUrl: string;
@@ -149,8 +154,13 @@ function assertIdempotencyKey(value: string) {
 }
 
 function assertQuoteRequest(request: TokenlessQuoteRequest) {
-  if (!request.audience.tierId?.trim()) {
-    throw new RateLoopSdkError("audience.tierId is required.");
+  if (!BYTES32_PATTERN.test(request.audience.admissionPolicyHash)) {
+    throw new RateLoopSdkError(
+      "audience.admissionPolicyHash must be a bytes32 hex value.",
+    );
+  }
+  if (!reviewerSources.has(request.audience.source)) {
+    throw new RateLoopSdkError("audience.source is unsupported.");
   }
   if (!ATOMIC_AMOUNT_PATTERN.test(request.budget.bountyAtomic)) {
     throw new RateLoopSdkError(

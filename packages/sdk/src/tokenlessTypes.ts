@@ -1,4 +1,13 @@
-export const TOKENLESS_SCHEMA_VERSION = "rateloop.tokenless.v1" as const;
+export const TOKENLESS_SCHEMA_VERSION = "rateloop.tokenless.v2" as const;
+
+export const TOKENLESS_REVIEWER_SOURCES = [
+  "customer_invited",
+  "rateloop_network",
+  "hybrid",
+  "sandbox",
+] as const;
+export type TokenlessReviewerSource =
+  (typeof TOKENLESS_REVIEWER_SOURCES)[number];
 
 export const TOKENLESS_TERMINAL_VERDICT_STATUSES = [
   "published",
@@ -81,7 +90,8 @@ export type TokenlessRationaleRequirement =
 
 export interface TokenlessQuoteRequest {
   audience: {
-    tierId: string;
+    admissionPolicyHash: `0x${string}`;
+    source: TokenlessReviewerSource;
   };
   budget: {
     attemptReserveAtomic: TokenlessAtomicAmount;
@@ -98,8 +108,9 @@ export interface TokenlessQuoteResponse {
   expiresAt: string;
   economics: TokenlessEconomics;
   audience: {
-    tierId: string;
+    admissionPolicyHash: `0x${string}`;
     label: string;
+    source: TokenlessReviewerSource;
   };
   panel: {
     minimumReveals: number;
@@ -107,7 +118,6 @@ export interface TokenlessQuoteResponse {
   };
   slo: {
     estimatedSeconds: number;
-    tierId: string;
   };
 }
 
@@ -191,14 +201,15 @@ export interface TokenlessResult {
   terminal: boolean;
   economics: TokenlessEconomics;
   audience: {
-    tierId: string;
+    admissionPolicyHash: `0x${string}`;
     label: string;
     participantCount: number;
+    source: TokenlessReviewerSource;
   };
   verdict: {
-    confidenceBps: number | null;
+    intervalBps: { lower: number; upper: number } | null;
+    preferenceShareBps: number | null;
     selected: string | null;
-    scoreBps: number | null;
   } | null;
   methodologyUrl: string;
   updatedAt: string;
