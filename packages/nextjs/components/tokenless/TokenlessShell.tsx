@@ -67,7 +67,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
         >
           RateLoop
         </span>
-        <span className="truncate text-xs text-base-content/75">Human assurance for AI workflows</span>
+        <span className="truncate text-xs text-base-content/75">Human Assurance</span>
       </div>
     </Link>
   );
