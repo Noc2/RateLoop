@@ -2,14 +2,16 @@
 
 **Status:** Current design of record and implementation baseline. Smart-contract deployments on this branch are disposable until Phase 5; none of the current Base contracts should be treated as final or as a compatibility constraint. Legal/revenue reference in [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md).
 
-## Implementation status — 12 July 2026
+## Implementation status — 13 July 2026
 
 Phases 1-4 are implemented in the `tokenless` package graph: greenfield contracts and invariants; tokenless-only ABIs,
 Ponder and keeper; Base Account authentication/funding; B2B workspaces and API keys; prepaid, wallet, and x402 chain
 execution; pre-round moderation; paid eligibility and epoch-bound vouchers; per-round vote/payout keys with encrypted
 user-controlled recovery; sponsored commits; transparency analytics; signed webhooks; and the funder/rater journeys.
-The next deployment step is a fresh Base Sepolia contract deployment followed by one complete deployment-key update and
-live E2E verification. Phase 5 audit/bounty/mainnet hardening remains intentionally open.
+A fresh disposable Base Sepolia deployment was completed at block `44083251`, producing deployment key
+`tokenless-v1:84532:0x9f21adbac4c007dd45c55d24e38f0067d1e1c5ba:0x830bee10d5304142cd87acac983af140d946def0:0x226891915c1ccce315ddfe58195fdc0a16bd977d`.
+The generated package and isolated hosted deployment identities move together. Live E2E verification remains gated on
+the complete non-sandbox secret/provider bundle. Phase 5 audit/bounty/mainnet hardening remains intentionally open.
 
 ## Execution philosophy: build-first
 

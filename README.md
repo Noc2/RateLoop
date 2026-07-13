@@ -4,29 +4,29 @@ RateLoop is a USDC-funded human judgment protocol for people and agents. A funde
 
 ## Deployment status
 
-The production implementation is complete in code. A fresh Base Sepolia deployment is required because the fund-core
-contract changed after the previous isolated sandbox deployment. The checked-in `tokenless-v1/84532.json` artifact and
-the addresses below are therefore historical test evidence, not the deployment to configure for this revision.
+The current disposable tokenless contracts were deployed to Base Sepolia on 13 July 2026 at block `44083251`. The
+checked-in `tokenless-v1/84532.json` artifact and generated `@rateloop/contracts/tokenless` metadata are the canonical
+deployment identity for this test stack.
 
-- isolated sandbox app: <https://rateloop-tokenless.vercel.app>
-- previous isolated Ponder service: <https://tokenless-ponder-production.up.railway.app>
-- previous isolated keeper service: <https://tokenless-keeper-production.up.railway.app/live>
+- isolated app: <https://rateloop-tokenless.vercel.app>
+- isolated Ponder service: <https://tokenless-ponder-production.up.railway.app>
+- isolated keeper service: <https://tokenless-keeper-production.up.railway.app/live>
 
 ```text
-tokenless-v1:84532:0x0627e4f7f746e84edbd3ec066a58a7fdc3227e16:0xb046277842f11a0c371d860504694fd79a5afb40:0x442581f4732b0f18ed47bcfa46415a65e13f8a5e
+tokenless-v1:84532:0x9f21adbac4c007dd45c55d24e38f0067d1e1c5ba:0x830bee10d5304142cd87acac983af140d946def0:0x226891915c1ccce315ddfe58195fdc0a16bd977d
 ```
 
-- `TokenlessPanel`: `0x0627e4f7f746E84EdbD3EC066a58a7FDC3227E16`
-- `CredentialIssuer`: `0xB046277842F11a0c371D860504694fD79A5AfB40`
-- `X402PanelSubmitter`: `0x442581f4732B0F18eD47bcfA46415A65E13F8a5E`
-- unrestricted test `tUSDC`: `0x2FB6B468D9FCF89446cDadAA61e230419f76a838`
+- `TokenlessPanel`: `0x9f21ADBAC4C007dd45c55D24E38F0067D1e1C5ba`
+- `CredentialIssuer`: `0x830BEe10D5304142cD87ACAC983Af140D946dEf0`
+- `X402PanelSubmitter`: `0x226891915c1CCCe315ddFE58195Fdc0A16bd977D`
+- unrestricted test `tUSDC`: `0x1A63AF26F6bD65De51B20DBaeF093C088A52C9df`
 
-After redeployment, regenerate [`packages/foundry/deployments/tokenless-v1/84532.json`](packages/foundry/deployments/tokenless-v1/84532.json) and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless), then update Vercel, Ponder, keeper, and the deployment-scoped database together.
+After any future redeployment, regenerate [`packages/foundry/deployments/tokenless-v1/84532.json`](packages/foundry/deployments/tokenless-v1/84532.json) and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless), then update Vercel, Ponder, keeper, and the deployment-scoped database together.
 
 The explicit sandbox remains deterministic and simulated. Production mode implements Base Account funding, prepaid and
 x402 execution, paid eligibility and vouchers, sponsored sealed commits, permissionless keeper settlement, indexed
-evidence, analytics publication, and signed webhooks. Live E2E verification resumes only after the fresh contract
-deployment and complete environment bundle are available.
+evidence, analytics publication, and signed webhooks. The Vercel deployment remains explicitly sandboxed until the
+complete live secret/provider bundle is provisioned; configuring the contract identity alone does not enable paid mode.
 
 ## Architecture
 

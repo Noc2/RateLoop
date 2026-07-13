@@ -2,6 +2,11 @@
 
 **Status:** Snapshot of the `tokenless` branch after Phases 1–4 implementation, from a five-lens review (contracts, backend/services, UX-vs-invariants, legal-compliance implementation, deployment/E2E). Companion to the [implementation plan](tokenless-immutable-implementation-plan-2026-07.md) and [legal reference](legal-revenue-assessment-tokenless-design-2026-07.md). Findings are grouped by the gate they block: **testnet E2E** (blocks the fresh Base Sepolia deploy + live end-to-end run the plan calls the next step), **real users** (blocks opening the funnel to actual raters/funders, even at test scale), and **real money / scaled launch** (blocks third-party funds and the "final" mainnet deployment).
 
+**13 July deployment update:** Finding 1 is resolved. The fresh disposable Base Sepolia bundle was deployed at block
+`44083251` and propagated as one versioned identity to generated artifacts and isolated hosted configuration. Vercel
+remains deliberately sandboxed because the live signer/relayer/prepaid/provider bundle is not yet provisioned; no claim
+is made that the paid live E2E gate is complete.
+
 ## Headline
 
 The build is real and honest. Test health is clean (26/26 Foundry incl. stateful invariant suites; ~140 TS unit tests across 8 workspaces; typechecks pass), the adminless-funds claim genuinely holds on-chain (no owner/pause/sweep/upgrade path; issuer firewalled from funds and from accepted commits, proven by test), the copy discipline is excellent (no "reviews", no "fully keyless"/"unlinkable"/"zero deposits" overclaims — the honest formulations are used consistently), and the strongest compliance mechanics (DAC7 gating before the first voucher, checkout itemization, envelope-encrypted nullifier seeds, user-controlled payout-key recovery) are correctly built.
@@ -10,7 +15,7 @@ The build is real and honest. Test health is clean (26/26 Foundry incl. stateful
 
 ## Blocks testnet E2E (mechanical — do these first)
 
-1. **Stale deployment artifact.** `deployments/tokenless-v1/84532.json` is exactly one fund-core commit behind (written before `e5392b647` changed the contracts) but still marked `deploymentComplete`. Rerun the single-shot `yarn foundry:deploy:tokenless --network baseSepolia`, then propagate the new deployment key + 4 addresses to nextjs/ponder/keeper/agents together (mixed bundles fail closed).
+1. **Resolved — fresh deployment identity.** `deployments/tokenless-v1/84532.json` now records the 13 July deployment at block `44083251`; the generated package and isolated Vercel/Ponder/keeper identity variables use its complete deployment key. Vercel remains sandboxed until findings 4–5 are resolved.
 2. **The assert-no-funds-admin script doesn't exist.** The plan mandates a post-deploy script proving no role can reach fund-moving functions; there is only NatSpec. Add a viem/cast assertion chained into artifact generation — it's the deploy-time gate for the whole adminless claim.
 3. **E2E harness deleted, never rebuilt.** `e2e/{tests,fixtures,…}` are empty; no Playwright config, no CI E2E job. "Live E2E verification" is currently 100% manual with no checklist. Rebuild at least one Sepolia smoke journey (fund → voucher → tlock commit → reveal/settle → claim), or commit a written manual verification script.
 4. **Secret/provider provisioning.** ~12 live secrets block a non-sandbox deploy (issuer signer, distinct relayer + prepaid-funder keys, pipeline/webhook/keeper-work tokens, two Postgres URLs, the eligibility-provider bundle). Decide what fills the eligibility-provider slots on testnet; apply drizzle migrations `0000`–`0006` before `TOKENLESS_SANDBOX_MODE=false`. Fix the stale `NEXT_PUBLIC_TARGET_NETWORKS` var in `env-parity.md`.
