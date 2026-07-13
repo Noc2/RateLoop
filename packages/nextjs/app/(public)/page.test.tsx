@@ -34,10 +34,26 @@ test("landing page leads with buyer-facing human assurance and a secondary rater
   assert.match(html, /not suitable for secrets or regulated personal data/i);
   assert.match(html, /How It/);
   assert.match(html, /Why It/);
+  assert.match(html, /Agent-Ready/);
+  assert.match(html, /Claude Code/);
+  assert.match(html, /OpenAI Codex/);
+  assert.match(html, /Cursor/);
+  assert.match(html, /GitHub Copilot/);
+  assert.match(html, /Gemini CLI/);
+  assert.match(html, /OpenClaw/);
+  assert.match(html, /rateloop_capabilities/);
+  assert.match(html, /rateloop_create_handoff/);
+  assert.match(html, /rateloop_get_handoff_status/);
+  assert.match(html, /rateloop_get_result/);
+  assert.match(html, /exact outbound material for explicit approval/i);
+  assert.match(html, /browser review before quote and submission/i);
+  assert.match(html, /not live human reviews or paid evidence/i);
+  assert.match(html, /href="\/docs\/ai"/);
   assert.match(html, /Common/);
   assert.doesNotMatch(
     html,
     /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context|favorite AI agent|rateloop-promo\.mp4/i,
   );
   assert.doesNotMatch(html, /LREP|tokenless|protocol token|governance|leaderboard|manual claim/i);
+  assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
 });

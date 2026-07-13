@@ -4,7 +4,7 @@ export const DOCS_NAV = [
     links: [
       { label: "Introduction", href: "/docs" },
       { label: "How It Works", href: "/docs/how-it-works" },
-      { label: "For Integrations", href: "/docs/ai" },
+      { label: "Agents & MCP", href: "/docs/ai" },
     ],
   },
   {

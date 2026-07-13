@@ -19,6 +19,16 @@ export default function PrivacyPage() {
         reviewers receive short-lived leases only for their blinded cases. Sandbox responses are simulated test data.
         The site does not use advertising or cross-site profiling.
       </p>
+      <h2>Agent and browser handoffs</h2>
+      <p>
+        The public MCP accepts only material that the caller confirms is public, synthetic, or safely redacted. It
+        processes an approved draft to create a browser handoff but does not store that draft. The complete draft and a
+        high-entropy bearer token are placed in the URL fragment, which browsers do not send in normal HTTP requests.
+        The reviewed question and panel terms are stored when the user requests an exact quote; submitting the ask is a
+        separate explicit action. Anyone who receives the complete handoff URL may be able to inspect the draft and
+        later read its status or result, so users must not share it or include secrets, credentials, regulated personal
+        data, or confidential customer material.
+      </p>
       <h2>On-chain data</h2>
       <p>
         Future test interactions may publish transaction addresses, commitments, round terms, settlement data, and

@@ -17,6 +17,7 @@ results.
 
 ## API
 
+- `POST /api/mcp` for the stateless, four-tool Streamable HTTP handoff adapter
 - `POST /api/agent/v1/quote`
 - `POST /api/agent/v1/asks` with matching `Idempotency-Key` header and body field
 - `GET /api/agent/v1/asks/:operationKey/wait`
@@ -24,6 +25,12 @@ results.
 - `GET|POST /api/agent/v1/assurance/projects`
 - `GET /api/agent/v1/assurance/projects/:projectId`
 - `GET /api/agent/v1/assurance/runs/:runId`
+
+The public MCP exposes only capabilities, browser-handoff creation, handoff status, and result retrieval. It does not
+expose payments, wallet calls, private artifact upload, or the retired token/governance/rating protocol. Approved draft
+content is returned in the `/handoff` URL fragment and is not persisted by the MCP. The browser stores the reviewed
+question and panel terms when the user requests an exact quote; ask submission remains a separate explicit action.
+Treat the complete handoff URL as a bearer capability.
 
 The shared schema and client come from `@rateloop/sdk`. Quote economics always itemize the bounty, platform fee,
 maximum attempt reserve, total authorized funding, refunds, and accepted-work compensation.

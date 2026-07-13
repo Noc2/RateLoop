@@ -23,7 +23,7 @@ test("documentation uses the shared application sidebar instead of a second rail
   assert.deepEqual(
     DOCS_NAV.map(group => [group.section, group.links.map(link => link.label)]),
     [
-      ["Start Here", ["Introduction", "How It Works", "For Integrations"]],
+      ["Start Here", ["Introduction", "How It Works", "Agents & MCP"]],
       ["Settlement", ["Tech Stack", "Smart Contracts"]],
       ["Build", ["SDK", "API Errors"]],
     ],

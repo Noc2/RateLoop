@@ -335,7 +335,7 @@ These changes belong on the existing PMF backlog because they also serve direct 
 
 ## The immediate product constraint
 
-The [production-readiness assessment](tokenless-production-readiness-2026-07.md) is still controlling. The fresh isolated deployment, automated result pipeline, complete rater/funder loops, privacy hardening, and real-money controls are not finished. The current public MCP points at the legacy deployment and requires wallet context even for the attempted dry-run quote; it cannot be used as evidence that the isolated B2B flow is ready.
+The [production-readiness assessment](tokenless-production-readiness-2026-07.md) is still controlling. The fresh isolated contract deployment, automated result pipeline, complete rater/funder loops, privacy hardening, and real-money controls are not finished. The tokenless MCP is therefore limited to privacy-bounded browser handoffs, status, and results on the isolated deployment. Its deterministic sandbox proves the integration path, not that a live B2B human panel is ready.
 
 Therefore:
 
