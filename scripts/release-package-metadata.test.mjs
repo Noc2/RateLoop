@@ -101,6 +101,7 @@ test("root scripts expose only surviving tokenless commands", () => {
     "agents:test",
     "keeper:test",
     "ponder:test",
+    "promo-video:test",
     "next:test",
   ]) {
     assert.equal(typeof scripts[name], "string", name);
@@ -114,7 +115,6 @@ test("root scripts expose only surviving tokenless commands", () => {
     "agents:handoff",
     "agents:sandbox",
     "e2e",
-    "promo-video:test",
   ]) {
     assert.equal(scripts[removed], undefined, removed);
   }
