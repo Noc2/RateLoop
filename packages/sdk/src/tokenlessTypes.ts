@@ -235,7 +235,7 @@ export interface TokenlessRoundTerms {
   attemptCompensation: TokenlessAtomicAmount;
   minimumReveals: number;
   maximumCommits: number;
-  requiredTier: number;
+  admissionPolicyHash: `0x${string}`;
   commitDeadline: string;
   revealDeadline: string;
   beaconFailureDeadline: string;

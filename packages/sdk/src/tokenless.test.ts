@@ -390,7 +390,7 @@ test("direct B2B clients authenticate payment preparation without exposing API k
     attemptCompensation: "333333",
     minimumReveals: 12,
     maximumCommits: 15,
-    requiredTier: 2,
+    admissionPolicyHash: `0x${"44".repeat(32)}`,
     commitDeadline: "2000000000",
     revealDeadline: "2000000120",
     beaconFailureDeadline: "2000000420",
@@ -403,7 +403,7 @@ test("direct B2B clients authenticate payment preparation without exposing API k
     paymentMode: "x402",
     paymentState: "prepared",
     deploymentKey:
-      "tokenless-v1:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333",
+      "tokenless-v2:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333",
     chainId: 84532,
     panelAddress: "0x1111111111111111111111111111111111111111",
     x402SubmitterAddress: "0x3333333333333333333333333333333333333333",
@@ -426,8 +426,8 @@ test("direct B2B clients authenticate payment preparation without exposing API k
   });
   assert.equal(
     (await client.paymentInstructions({ operationKey: "op_payment" }))
-      .roundTerms.requiredTier,
-    2,
+      .roundTerms.admissionPolicyHash,
+    terms.admissionPolicyHash,
   );
   await client.submitPayment({
     operationKey: "op_payment",

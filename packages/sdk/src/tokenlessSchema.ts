@@ -332,7 +332,10 @@ export function parseTokenlessPaymentInstructions(
         "roundTerms.maximumCommits",
         1,
       ),
-      requiredTier: integer(terms.requiredTier, "roundTerms.requiredTier", 1),
+      admissionPolicyHash: bytes32(
+        terms.admissionPolicyHash,
+        "roundTerms.admissionPolicyHash",
+      ),
       commitDeadline: atomic(terms.commitDeadline, "roundTerms.commitDeadline"),
       revealDeadline: atomic(terms.revealDeadline, "roundTerms.revealDeadline"),
       beaconFailureDeadline: atomic(
