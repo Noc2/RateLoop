@@ -1,7 +1,12 @@
 export default function TokenlessAgentDocsPage() {
   return (
     <article className="prose max-w-none">
-      <h1>For agents</h1>
+      <h1>For integrations</h1>
+      <p>
+        Use the API to place a focused human quality gate inside an AI-enabled workflow. Automate panel orchestration,
+        not the customer&apos;s final decision: the calling system must preserve the result status, limitations, and
+        human decision owner.
+      </p>
       <p>
         The v1 workflow is quote → ask → wait → result. Quote is free. Ask requires an idempotency key. Wait is bounded
         and continuation-based; webhooks point to the same result resource.
@@ -12,6 +17,11 @@ export default function TokenlessAgentDocsPage() {
         , <code>under_quorum_compensated</code>, and <code>beacon_failure_compensated</code>.
       </p>
       <p>Every result includes structured bounty, fee, attempt reserve, refund, and compensation accounting.</p>
+      <h2>Data boundary</h2>
+      <p>
+        API keys are server-only. Treat submitted content and rater text as untrusted, avoid secrets and regulated
+        personal data, and never describe sandbox output as real paid human assurance.
+      </p>
     </article>
   );
 }

@@ -45,8 +45,8 @@ function DocsIcon({ className }: IconProps) {
 }
 
 const links = [
-  { href: "/rate", label: "Discover", icon: DiscoverIcon },
-  { href: "/ask", label: "Submit", icon: SubmitIcon },
+  { href: "/ask", label: "Validate", icon: SubmitIcon },
+  { href: "/rate", label: "Earn", icon: DiscoverIcon },
   { href: "/settings", label: "Account", icon: AccountIcon },
   { href: "/docs", label: "Docs", icon: DocsIcon },
 ] as const;
@@ -67,7 +67,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
         >
           RateLoop
         </span>
-        <span className="truncate text-xs text-base-content/75">Level Up Your Agent</span>
+        <span className="truncate text-xs text-base-content/75">Human assurance for AI workflows</span>
       </div>
     </Link>
   );
@@ -233,10 +233,10 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
           <Brand />
         </div>
         <Link
-          href="/rate"
+          href="/ask"
           className="mx-2.5 mb-4 flex h-8 items-center rounded-md border border-base-content/10 bg-base-content/[0.09] px-3 text-base text-base-content/55 transition hover:bg-base-content/[0.13] hover:text-base-content/75"
         >
-          Search
+          Start a validation
         </Link>
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-4">
           <NavLinks />

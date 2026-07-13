@@ -10,7 +10,7 @@ const scriptsDir = dirname(fileURLToPath(import.meta.url));
 
 test("promo voiceover generators share the same clip source", () => {
   assert.deepEqual(
-    clips.map(clip => clip.name),
+    clips.map((clip) => clip.name),
     [
       "vo-01-hook",
       "vo-02-ask",
@@ -22,13 +22,28 @@ test("promo voiceover generators share the same clip source", () => {
     ],
   );
 
-  const elevenlabsGenerator = readFileSync(join(scriptsDir, "generate-elevenlabs-voiceover.mjs"), "utf8");
-  const openaiGenerator = readFileSync(join(scriptsDir, "generate-openai-voiceover.mjs"), "utf8");
-  const offlineGenerator = readFileSync(join(scriptsDir, "generate-voiceover.zsh"), "utf8");
+  const elevenlabsGenerator = readFileSync(
+    join(scriptsDir, "generate-elevenlabs-voiceover.mjs"),
+    "utf8",
+  );
+  const openaiGenerator = readFileSync(
+    join(scriptsDir, "generate-openai-voiceover.mjs"),
+    "utf8",
+  );
+  const offlineGenerator = readFileSync(
+    join(scriptsDir, "generate-voiceover.zsh"),
+    "utf8",
+  );
 
-  assert.match(elevenlabsGenerator, /import \{ clips \} from "\.\/voiceover-clips\.mjs";/);
+  assert.match(
+    elevenlabsGenerator,
+    /import \{ clips \} from "\.\/voiceover-clips\.mjs";/,
+  );
   assert.doesNotMatch(elevenlabsGenerator, /const clips = \[/);
-  assert.match(openaiGenerator, /import \{ clips \} from "\.\/voiceover-clips\.mjs";/);
+  assert.match(
+    openaiGenerator,
+    /import \{ clips \} from "\.\/voiceover-clips\.mjs";/,
+  );
   assert.doesNotMatch(openaiGenerator, /const clips = \[/);
   assert.match(offlineGenerator, /voiceover-clips\.mjs" --tsv/);
   assert.doesNotMatch(offlineGenerator, /one sharp RateLoop question/);
@@ -36,15 +51,29 @@ test("promo voiceover generators share the same clip source", () => {
 });
 
 test("voiceover clip CLI emits the shared clips as TSV", () => {
-  const result = spawnSync(process.execPath, [join(scriptsDir, "voiceover-clips.mjs"), "--tsv"], {
-    encoding: "utf8",
-  });
+  const result = spawnSync(
+    process.execPath,
+    [join(scriptsDir, "voiceover-clips.mjs"), "--tsv"],
+    {
+      encoding: "utf8",
+    },
+  );
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, formatClipsAsTsv());
   assert.equal(result.stdout.trimEnd().split("\n").length, clips.length);
-  assert.match(result.stdout, /^vo-02-ask\tThat's where RateLoop comes in:/m);
-  assert.doesNotMatch(result.stdout, /LREP|stake|staking|reputation|token/i);
-  assert.match(result.stdout, /submit it sealed/i);
-  assert.match(result.stdout, /earns USDC/i);
+  assert.match(
+    result.stdout,
+    /^vo-02-ask\tRateLoop turns that rollout decision/m,
+  );
+  assert.match(result.stdout, /human-assurance panel/i);
+  assert.match(
+    result.stdout,
+    /accountable person still owns the rollout decision/i,
+  );
+  assert.match(result.stdout, /paid or compensated path/i);
+  assert.doesNotMatch(
+    result.stdout,
+    /Level up your agent|people and agents|AI raters|Reputation|confidential|autonomous|LREP|stake|staking|token/i,
+  );
 });

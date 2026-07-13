@@ -1,7 +1,7 @@
 {
-  "name": "RateLoop Tokenless Test",
+  "name": "RateLoop — Human Assurance",
   "short_name": "RateLoop",
-  "description": "Isolated test interface for tokenless paid human panels",
+  "description": "Blinded human assurance panels for AI-enabled workflows",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

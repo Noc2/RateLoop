@@ -68,12 +68,33 @@ export const Chip = ({
 };
 
 /** Bottom-left sound-off caption: the beat's narrative line. */
-export const Caption = ({ text, startFrame = 12 }: { text: string; startFrame?: number }) => {
+export const Caption = ({
+  text,
+  startFrame = 12,
+}: {
+  text: string;
+  startFrame?: number;
+}) => {
   const entrance = useFadeInUp(startFrame, 14);
   return (
     <div style={{ position: "absolute", left: 84, bottom: 64, ...entrance }}>
-      <div style={{ width: 64, height: 4, borderRadius: 2, backgroundImage: spectrumGradient, marginBottom: 14 }} />
-      <div style={{ fontFamily: headingFont, fontWeight: 600, fontSize: 34, color: "rgb(245 245 245 / 0.9)" }}>
+      <div
+        style={{
+          width: 64,
+          height: 4,
+          borderRadius: 2,
+          backgroundImage: spectrumGradient,
+          marginBottom: 14,
+        }}
+      />
+      <div
+        style={{
+          fontFamily: headingFont,
+          fontWeight: 600,
+          fontSize: 34,
+          color: "rgb(245 245 245 / 0.9)",
+        }}
+      >
         {text}
       </div>
     </div>
@@ -97,16 +118,19 @@ export const TypeOn = ({
   const frame = useCurrentFrame();
   const chars = Math.max(0, Math.floor((frame - startFrame) * charsPerFrame));
   const done = chars >= text.length;
-  const caretOn = !done && frame >= startFrame && Math.floor(frame / 9) % 2 === 0;
+  const caretOn =
+    !done && frame >= startFrame && Math.floor(frame / 9) % 2 === 0;
   return (
     <span style={style}>
       {text.slice(0, chars)}
-      <span style={{ opacity: caretOn ? 0.85 : 0, fontFamily: monoFont }}>|</span>
+      <span style={{ opacity: caretOn ? 0.85 : 0, fontFamily: monoFont }}>
+        |
+      </span>
     </span>
   );
 };
 
-/** Chat shell shared by the hook and report beats. */
+/** Workspace shell shared by the buyer prompt and report beats. */
 export const ChatPanel = ({
   children,
   startFrame = 0,
@@ -139,14 +163,37 @@ export const ChatPanel = ({
             opacity: dot,
           }}
         />
-        <span style={{ fontFamily: headingFont, fontWeight: 700, fontSize: 26, color: colors.warmWhite }}>
-          Your Agent
+        <span
+          style={{
+            fontFamily: headingFont,
+            fontWeight: 700,
+            fontSize: 26,
+            color: colors.warmWhite,
+          }}
+        >
+          Assurance Workspace
         </span>
-        <span style={{ marginLeft: "auto", fontFamily: monoFont, fontSize: 18, color: colors.steel }}>
-          agent session
+        <span
+          style={{
+            marginLeft: "auto",
+            fontFamily: monoFont,
+            fontSize: 18,
+            color: colors.steel,
+          }}
+        >
+          buyer session
         </span>
       </div>
-      <div style={{ padding: "30px 34px", display: "flex", flexDirection: "column", gap: 22 }}>{children}</div>
+      <div
+        style={{
+          padding: "30px 34px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 22,
+        }}
+      >
+        {children}
+      </div>
     </Card>
   );
 };
@@ -210,7 +257,16 @@ export const FieldRow = ({
         borderBottom: `1px solid rgb(245 245 245 / 0.06)`,
       }}
     >
-      <span style={{ fontFamily: monoFont, fontSize: 20, color: colors.steel, whiteSpace: "nowrap" }}>{label}</span>
+      <span
+        style={{
+          fontFamily: monoFont,
+          fontSize: 20,
+          color: colors.steel,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
       <span
         style={{
           fontFamily: bodyFont,
@@ -226,19 +282,52 @@ export const FieldRow = ({
   );
 };
 
-export const LockIcon = ({ size = 22, open = false, color }: { size?: number; open?: boolean; color: string }) => (
+export const LockIcon = ({
+  size = 22,
+  open = false,
+  color,
+}: {
+  size?: number;
+  open?: boolean;
+  color: string;
+}) => (
   <svg viewBox="0 0 24 24" width={size} height={size}>
     <rect x="5" y="10" width="14" height="10" rx="2" fill={color} />
     {open ? (
-      <path d="M8 10V7a4 4 0 0 1 7.5-2" stroke={color} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <path
+        d="M8 10V7a4 4 0 0 1 7.5-2"
+        stroke={color}
+        strokeWidth="2.4"
+        fill="none"
+        strokeLinecap="round"
+      />
     ) : (
-      <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke={color} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <path
+        d="M8 10V7a4 4 0 0 1 8 0v3"
+        stroke={color}
+        strokeWidth="2.4"
+        fill="none"
+        strokeLinecap="round"
+      />
     )}
   </svg>
 );
 
-export const CheckIcon = ({ size = 24, color }: { size?: number; color: string }) => (
+export const CheckIcon = ({
+  size = 24,
+  color,
+}: {
+  size?: number;
+  color: string;
+}) => (
   <svg viewBox="0 0 24 24" width={size} height={size}>
-    <path d="M4 12.5 9.5 18 20 6.5" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M4 12.5 9.5 18 20 6.5"
+      stroke={color}
+      strokeWidth="3"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );

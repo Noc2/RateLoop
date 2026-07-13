@@ -29,7 +29,7 @@ export function PromoVideo() {
         <button
           type="button"
           onClick={handlePlay}
-          aria-label="Play the RateLoop intro video"
+          aria-label="Play the RateLoop human assurance overview"
           className="group absolute inset-0 flex items-center justify-center bg-black/25 transition hover:bg-black/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-base-content"
         >
           <span className="flex h-20 w-20 items-center justify-center rounded-full border border-white/25 bg-black/55 backdrop-blur-sm transition group-hover:scale-105 group-hover:bg-black/70">

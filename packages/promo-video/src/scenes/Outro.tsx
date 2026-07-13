@@ -6,11 +6,11 @@ import { colors, radiusCard } from "../theme";
 import { OrbGlow } from "./Intro";
 
 const CHIPS = [
-  "Verified Human Panels",
+  "Blinded Human Panels",
+  "Focused Quality Gates",
+  "Written Rationale",
   "Sealed Responses",
-  "Prediction Accuracy",
-  "USDC Bounties",
-  "Public Settlement",
+  "Settlement Evidence",
 ];
 
 export const Outro = () => {
@@ -20,10 +20,31 @@ export const Outro = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <OrbGlow size={1000} opacity={0.18} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 44 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 44,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-          <LogoLoop size={120} startFrame={0} segmentStagger={2} segmentDraw={10} spinDegPerFrame={0.25} idPrefix="outro" />
-          <span style={{ fontFamily: headingFont, fontWeight: 700, fontSize: 72, color: colors.warmWhite }}>
+          <LogoLoop
+            size={120}
+            startFrame={0}
+            segmentStagger={2}
+            segmentDraw={10}
+            spinDegPerFrame={0.25}
+            idPrefix="outro"
+          />
+          <span
+            style={{
+              fontFamily: headingFont,
+              fontWeight: 700,
+              fontSize: 72,
+              color: colors.warmWhite,
+            }}
+          >
             RateLoop<GradientText>.ai</GradientText>
           </span>
         </div>
@@ -39,7 +60,7 @@ export const Outro = () => {
             textAlign: "center",
           }}
         >
-          Level Up Your <GradientText>Agent</GradientText>
+          Human Assurance for <GradientText>AI Workflows</GradientText>
         </h2>
         <div
           style={{
@@ -51,7 +72,7 @@ export const Outro = () => {
             maxWidth: 1180,
           }}
         >
-          {CHIPS.map(chip => (
+          {CHIPS.map((chip) => (
             <span
               key={chip}
               style={{

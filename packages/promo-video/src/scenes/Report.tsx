@@ -6,7 +6,7 @@ import { ChatBubble, ChatPanel, FieldRow, TypeOn } from "../ui";
 import { OutlineButton } from "../siteUi";
 import { OrbGlow } from "./Intro";
 
-/** Beat 6 — the agent's report, with the site's outline result button. */
+/** Beat 6 — the buyer receives decision evidence, not an automatic approval. */
 export const Report = () => {
   const reportCard = useFadeInUp(56, 16);
   return (
@@ -15,7 +15,7 @@ export const Report = () => {
       <ChatPanel startFrame={4} width={1160}>
         <ChatBubble from="agent" startFrame={16} width="94%">
           <TypeOn
-            text="Round settled — 25 verified raters. Here is your validation report:"
+            text="Round settled — 25 eligible human raters. Here is your assurance report:"
             startFrame={22}
             charsPerFrame={1.7}
             style={{ fontFamily: bodyFont }}
@@ -42,25 +42,50 @@ export const Report = () => {
               marginBottom: 6,
             }}
           >
-            Validation report — AI meeting-notes app
+            Human assurance result — AI support workflow
           </div>
-          <FieldRow label="rating" value="7.8 / 10 · 78% would try it" startFrame={86} valueColor={colors.voteYes} />
-          <FieldRow label="confidence" value="high · 25 of 25 revealed" startFrame={100} />
           <FieldRow
-            label="top objection"
-            value={'"Pricing section is unclear"'}
+            label="panel signal"
+            value="78% met the quality bar"
+            startFrame={86}
+            valueColor={colors.voteYes}
+          />
+          <FieldRow
+            label="coverage"
+            value="25 of 25 revealed"
+            startFrame={100}
+          />
+          <FieldRow
+            label="top concern"
+            value={'"Escalation wording is unclear"'}
             startFrame={114}
             valueColor={colors.yellow}
           />
-          <FieldRow label="recommendation" value="Ship it — fix the pricing section first" startFrame={128} />
-          <FieldRow label="autonomous mode" value="humans & agents stay in the loop" startFrame={150} />
+          <FieldRow
+            label="decision input"
+            value="Revise the wording, then retest"
+            startFrame={128}
+          />
+          <FieldRow
+            label="decision owner"
+            value="Customer support lead"
+            startFrame={150}
+          />
           <div style={{ marginTop: 22 }}>
-            <OutlineButton label="View public result" startFrame={168} />
+            <OutlineButton
+              label="Inspect settlement evidence"
+              startFrame={168}
+            />
           </div>
         </div>
 
         <ChatBubble from="user" startFrame={210}>
-          <TypeOn text="Shipping it." startFrame={218} charsPerFrame={0.8} style={{ fontFamily: bodyFont }} />
+          <TypeOn
+            text="We'll revise, retest, and decide."
+            startFrame={218}
+            charsPerFrame={0.8}
+            style={{ fontFamily: bodyFont }}
+          />
         </ChatBubble>
       </ChatPanel>
     </AbsoluteFill>

@@ -4,11 +4,11 @@ export const DOCS_NAV = [
     links: [
       { label: "Introduction", href: "/docs" },
       { label: "How It Works", href: "/docs/how-it-works" },
-      { label: "For Agents", href: "/docs/ai" },
+      { label: "For Integrations", href: "/docs/ai" },
     ],
   },
   {
-    section: "Protocol",
+    section: "Settlement",
     links: [
       { label: "Tech Stack", href: "/docs/tech-stack" },
       { label: "Smart Contracts", href: "/docs/smart-contracts" },

@@ -30,14 +30,12 @@ function resolveMetadataBaseUrl() {
 }
 
 const titleTemplate = "%s | RateLoop";
-const socialImageVersion = "20260708a";
-const socialImageAlt =
-  "RateLoop social image with the RateLoop wordmark, the subtitle Level Up Your Agent, and the orbital loop mark";
+const socialImageVersion = "20260713a";
+const socialImageAlt = "RateLoop orbital loop mark for human assurance in AI-enabled workflows";
 
 export const getMetadata = ({ title, description }: { title: string; description: string }): Metadata => {
   const baseUrl = resolveMetadataBaseUrl();
-  const openGraphImageUrl = `${baseUrl}/og-image.jpg?v=${socialImageVersion}`;
-  const twitterImageUrl = `${baseUrl}/twitter-image.jpg?v=${socialImageVersion}`;
+  const socialImageUrl = `${baseUrl}/favicon.png?v=${socialImageVersion}`;
 
   return {
     metadataBase: new URL(baseUrl),
@@ -55,15 +53,15 @@ export const getMetadata = ({ title, description }: { title: string; description
       description: description,
       images: [
         {
-          url: openGraphImageUrl,
-          width: 1200,
-          height: 630,
+          url: socialImageUrl,
+          width: 512,
+          height: 512,
           alt: socialImageAlt,
         },
       ],
     },
     twitter: {
-      card: "summary_large_image",
+      card: "summary",
       title: {
         default: title,
         template: titleTemplate,
@@ -71,9 +69,9 @@ export const getMetadata = ({ title, description }: { title: string; description
       description: description,
       images: [
         {
-          url: twitterImageUrl,
-          width: 1200,
-          height: 600,
+          url: socialImageUrl,
+          width: 512,
+          height: 512,
           alt: socialImageAlt,
         },
       ],

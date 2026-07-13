@@ -4,16 +4,22 @@ import { useFadeInUp } from "../primitives";
 import { RatingOrb } from "../RatingOrb";
 import { colors, spectrumGradient } from "../theme";
 import { Caption, Card, ChatBubble, Chip, LockIcon, TypeOn } from "../ui";
-import { GradientActionButton, MicroLabel, VoteButton, surfaceCardStyle, votingCardOverlay } from "../siteUi";
+import {
+  GradientActionButton,
+  MicroLabel,
+  VoteButton,
+  surfaceCardStyle,
+  votingCardOverlay,
+} from "../siteUi";
 import { OrbGlow } from "./Intro";
 
-type Rater = { initials: string; ai?: boolean; commitAt: number };
+type Rater = { initials: string; commitAt: number };
 
 const RATERS: Rater[] = [
   { initials: "MK", commitAt: 60 },
   { initials: "JR", commitAt: 84 },
   { initials: "AL", commitAt: 112 },
-  { initials: "AI", ai: true, commitAt: 136 },
+  { initials: "SK", commitAt: 136 },
   { initials: "TS", commitAt: 168 },
   { initials: "NV", commitAt: 196 },
   { initials: "PD", commitAt: 228 },
@@ -28,16 +34,35 @@ const RaterChip = ({ rater }: { rater: Rater }) => {
   const frame = useCurrentFrame();
   const entrance = useFadeInUp(rater.commitAt - 16, 14);
   const locked = frame >= rater.commitAt;
-  const lockPop = interpolate(frame, [rater.commitAt, rater.commitAt + 8], [0.6, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const earnT = interpolate(frame, [rater.commitAt + 10, rater.commitAt + 52], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const lockPop = interpolate(
+    frame,
+    [rater.commitAt, rater.commitAt + 8],
+    [0.6, 1],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
+  const earnT = interpolate(
+    frame,
+    [rater.commitAt + 10, rater.commitAt + 52],
+    [0, 1],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
   return (
-    <div style={{ ...entrance, position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+    <div
+      style={{
+        ...entrance,
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
       {earnT > 0 && earnT < 1 && (
         <div
           style={{
@@ -66,30 +91,20 @@ const RaterChip = ({ rater }: { rater: Rater }) => {
           fontWeight: 700,
           fontSize: 28,
           color: colors.warmWhite,
-          background: rater.ai ? "transparent" : colors.surfaceNested,
-          backgroundImage: rater.ai ? spectrumGradient : undefined,
+          background: colors.surfaceNested,
           border: `1px solid ${colors.shellBorder}`,
         }}
       >
-        <span
-          style={
-            rater.ai
-              ? {
-                  width: 80,
-                  height: 80,
-                  borderRadius: "50%",
-                  background: colors.surfaceElevated,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }
-              : undefined
-          }
-        >
-          {rater.initials}
-        </span>
+        <span>{rater.initials}</span>
       </div>
-      <div style={{ height: 26, display: "flex", alignItems: "center", transform: `scale(${locked ? lockPop : 0})` }}>
+      <div
+        style={{
+          height: 26,
+          display: "flex",
+          alignItems: "center",
+          transform: `scale(${locked ? lockPop : 0})`,
+        }}
+      >
         <LockIcon size={22} color={locked ? colors.yellow : "transparent"} />
       </div>
     </div>
@@ -98,7 +113,14 @@ const RaterChip = ({ rater }: { rater: Rater }) => {
 
 /** Range-slider replica for the crowd-forecast control. */
 const SheetSlider = ({ pct }: { pct: number }) => (
-  <div style={{ position: "relative", height: 12, borderRadius: 6, background: "rgb(245 245 245 / 0.1)" }}>
+  <div
+    style={{
+      position: "relative",
+      height: 12,
+      borderRadius: 6,
+      background: "rgb(245 245 245 / 0.1)",
+    }}
+  >
     <div
       style={{
         position: "absolute",
@@ -124,8 +146,23 @@ const SheetSlider = ({ pct }: { pct: number }) => (
   </div>
 );
 
-const SheetLabelRow = ({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) => (
-  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20 }}>
+const SheetLabelRow = ({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) => (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: 20,
+    }}
+  >
     <MicroLabel>{label}</MicroLabel>
     <span
       style={{
@@ -145,22 +182,37 @@ const SheetLabelRow = ({ label, value, valueColor }: { label: string; value: str
 export const Raters = () => {
   const frame = useCurrentFrame();
   const upPick = frame >= VOTE_AT;
-  const pickScale = interpolate(frame, [VOTE_AT, VOTE_AT + 8, VOTE_AT + 18], [1, 1.06, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const pickScale = interpolate(
+    frame,
+    [VOTE_AT, VOTE_AT + 8, VOTE_AT + 18],
+    [1, 1.06, 1],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
   const slider = interpolate(frame, [SHEET_AT + 25, SHEET_AT + 95], [50, 70], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const voteOpacity = interpolate(frame, [SHEET_AT - 5, SHEET_AT + 10], [1, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const sheetOpacity = interpolate(frame, [SHEET_AT + 6, SHEET_AT + 22], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const voteOpacity = interpolate(
+    frame,
+    [SHEET_AT - 5, SHEET_AT + 10],
+    [1, 0],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
+  const sheetOpacity = interpolate(
+    frame,
+    [SHEET_AT + 6, SHEET_AT + 22],
+    [0, 1],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
   const sheetRise = interpolate(frame, [SHEET_AT + 6, SHEET_AT + 24], [36, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -170,10 +222,17 @@ export const Raters = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <OrbGlow size={840} opacity={0.13} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 38 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 38,
+        }}
+      >
         {/* Committing raters */}
         <div style={{ display: "flex", gap: 34 }}>
-          {RATERS.map(r => (
+          {RATERS.map((r) => (
             <RaterChip key={r.initials} rater={r} />
           ))}
         </div>
@@ -191,7 +250,14 @@ export const Raters = () => {
               overflow: "hidden",
             }}
           >
-            <div style={{ position: "absolute", inset: 0, ...votingCardOverlay, pointerEvents: "none" }} />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                ...votingCardOverlay,
+                pointerEvents: "none",
+              }}
+            />
 
             {/* Phase A — blind vote on the signal card */}
             <div
@@ -205,17 +271,29 @@ export const Raters = () => {
                 alignItems: "center",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 14, alignSelf: "flex-start" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  alignSelf: "flex-start",
+                }}
+              >
                 <Chip startFrame={96} color={colors.green}>
-                  <CheckDot /> Verified · World ID
+                  <CheckDot /> Eligible human
                 </Chip>
                 <Chip startFrame={108}>blind vote</Chip>
                 <Chip startFrame={120} color={colors.yellow}>
-                  <LockIcon size={16} color={colors.yellow} /> terms signed
+                  <LockIcon size={16} color={colors.yellow} /> criterion fixed
                 </Chip>
               </div>
               <div style={{ marginTop: 26 }}>
-                <RatingOrb score={null} progress={0} size={230} idPrefix="raters" />
+                <RatingOrb
+                  score={null}
+                  progress={0}
+                  size={230}
+                  idPrefix="raters"
+                />
               </div>
               <div
                 style={{
@@ -251,14 +329,33 @@ export const Raters = () => {
                 gap: 24,
               }}
             >
-              <SheetLabelRow label="Your signal" value="Thumbs up" valueColor={colors.voteYes} />
-              <div style={{ borderTop: "1px solid rgb(245 245 245 / 0.1)", paddingTop: 22, display: "flex", flexDirection: "column", gap: 16 }}>
-                <SheetLabelRow label="Crowd forecast" value={`${Math.round(slider)}% up`} />
+              <SheetLabelRow
+                label="Your signal"
+                value="Thumbs up"
+                valueColor={colors.voteYes}
+              />
+              <div
+                style={{
+                  borderTop: "1px solid rgb(245 245 245 / 0.1)",
+                  paddingTop: 22,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 16,
+                }}
+              >
+                <SheetLabelRow
+                  label="Crowd forecast"
+                  value={`${Math.round(slider)}% up`}
+                />
                 <SheetSlider pct={slider} />
               </div>
               <div style={{ marginTop: "auto" }}>
                 <GradientActionButton
-                  label={frame >= SUBMIT_PRESS_AT + 12 ? "Submitting..." : "Submit sealed response"}
+                  label={
+                    frame >= SUBMIT_PRESS_AT + 12
+                      ? "Submitting..."
+                      : "Submit sealed response"
+                  }
                   frame={frame}
                   startFrame={SHEET_AT + 14}
                   pressedAt={SUBMIT_PRESS_AT}
@@ -268,13 +365,30 @@ export const Raters = () => {
           </Card>
 
           {/* Feedback note */}
-          <Card startFrame={250} style={{ ...surfaceCardStyle, width: 560, padding: "28px 34px", alignSelf: "center" }}>
-            <div style={{ fontFamily: monoFont, fontSize: 19, color: colors.steel, marginBottom: 14 }}>
-              RATIONALE · included in the panel
+          <Card
+            startFrame={250}
+            style={{
+              ...surfaceCardStyle,
+              width: 560,
+              padding: "28px 34px",
+              alignSelf: "center",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: monoFont,
+                fontSize: 19,
+                color: colors.steel,
+                marginBottom: 14,
+              }}
+            >
+              HUMAN RATIONALE · included in the panel
             </div>
             <ChatBubble from="agent" startFrame={258} width="100%">
               <TypeOn
-                text={'"Pricing section is unclear. Why two tiers at the same price?"'}
+                text={
+                  '"Pricing section is unclear. Why two tiers at the same price?"'
+                }
                 startFrame={266}
                 charsPerFrame={1.1}
                 style={{ fontFamily: bodyFont, fontStyle: "italic" }}
@@ -283,7 +397,10 @@ export const Raters = () => {
           </Card>
         </div>
       </div>
-      <Caption text="Sealed answers. Useful forecasts earn more." startFrame={252} />
+      <Caption
+        text="Sealed answers. Useful forecasts earn more."
+        startFrame={252}
+      />
     </AbsoluteFill>
   );
 };

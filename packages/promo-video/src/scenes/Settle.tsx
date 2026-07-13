@@ -24,24 +24,50 @@ export const Settle = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <OrbGlow size={900} opacity={0.18} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 36 }}>
-        <RatingOrb score={score.toFixed(1)} progress={score / 10} size={460} idPrefix="settle" />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 36,
+        }}
+      >
+        <RatingOrb
+          score={score.toFixed(1)}
+          progress={score / 10}
+          size={460}
+          idPrefix="settle"
+        />
 
-        <div style={{ ...subline, fontFamily: monoFont, fontSize: 23, color: colors.steel }}>
-          equal base pay · bounded accuracy bonus
+        <div
+          style={{
+            ...subline,
+            fontFamily: monoFont,
+            fontSize: 23,
+            color: colors.steel,
+          }}
+        >
+          equal base pay · bounded forecast bonus
         </div>
 
-        <div style={{ ...settled, display: "flex", alignItems: "center", gap: 16 }}>
+        <div
+          style={{ ...settled, display: "flex", alignItems: "center", gap: 16 }}
+        >
           <Chip color={colors.green}>
             <CheckIcon size={22} color={colors.green} />
-            Settled on-chain
+            Deterministic settlement
           </Chip>
           <Chip>
-            <span style={{ fontFamily: monoFont }}>Base · public settlement</span>
+            <span style={{ fontFamily: monoFont }}>
+              Itemized USDC accounting
+            </span>
           </Chip>
         </div>
       </div>
-      <Caption text="Public settlement. USDC payouts." startFrame={22} />
+      <Caption
+        text="Inspectable settlement. Paid or compensated human work."
+        startFrame={22}
+      />
     </AbsoluteFill>
   );
 };

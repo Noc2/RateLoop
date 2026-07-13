@@ -2,11 +2,26 @@ import { AbsoluteFill } from "remotion";
 import { bodyFont, headingFont, monoFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
 import { colors, radiusCard, spectrumGradient } from "../theme";
-import { Card, ChatBubble, ChatPanel, CheckIcon, FieldRow, TypeOn } from "../ui";
+import {
+  Card,
+  ChatBubble,
+  ChatPanel,
+  CheckIcon,
+  FieldRow,
+  TypeOn,
+} from "../ui";
 import { RewardChip, surfaceCardStyle } from "../siteUi";
 import { OrbGlow } from "./Intro";
 
-const ToolCall = ({ name, startFrame, doneFrame }: { name: string; startFrame: number; doneFrame: number }) => {
+const ToolCall = ({
+  name,
+  startFrame,
+  doneFrame,
+}: {
+  name: string;
+  startFrame: number;
+  doneFrame: number;
+}) => {
   const entrance = useFadeInUp(startFrame, 12);
   return (
     <div
@@ -38,32 +53,53 @@ const FadeCheck = ({ startFrame }: { startFrame: number }) => {
   );
 };
 
-/** Beat 2 — the agent drafts the question, previewed as a discover feed card. */
+/** Beat 2 — the workspace turns the rollout decision into a focused panel. */
 export const AgentAsk = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <OrbGlow size={780} opacity={0.14} />
       <div style={{ display: "flex", gap: 56, alignItems: "stretch" }}>
-        <div style={{ width: 760, display: "flex", flexDirection: "column", gap: 24 }}>
+        <div
+          style={{
+            width: 760,
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+          }}
+        >
           <ChatPanel startFrame={4} width={760}>
             <ChatBubble from="agent" startFrame={14} width="92%">
               <TypeOn
-                text="On it — drafting the question."
+                text="Turning that decision into one focused human panel."
                 startFrame={20}
                 charsPerFrame={1.6}
                 style={{ fontFamily: bodyFont }}
               />
             </ChatBubble>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 8px" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+                padding: "4px 8px",
+              }}
+            >
               <ToolCall name="rateloop_quote" startFrame={70} doneFrame={96} />
-              <ToolCall name="rateloop_prepare_ask" startFrame={106} doneFrame={140} />
+              <ToolCall
+                name="rateloop_prepare_ask"
+                startFrame={106}
+                doneFrame={140}
+              />
             </div>
           </ChatPanel>
         </div>
 
         {/* Question preview styled like a discover feed card: centered title header,
             brand reward chips with near-black text, borderless surface card. */}
-        <Card startFrame={60} style={{ ...surfaceCardStyle, width: 700, padding: "26px 30px" }}>
+        <Card
+          startFrame={60}
+          style={{ ...surfaceCardStyle, width: 700, padding: "26px 30px" }}
+        >
           <div
             style={{
               fontFamily: monoFont,
@@ -73,7 +109,7 @@ export const AgentAsk = () => {
               marginBottom: 16,
             }}
           >
-            RATELOOP QUESTION
+            HUMAN ASSURANCE PANEL
           </div>
           <div
             style={{
@@ -88,7 +124,11 @@ export const AgentAsk = () => {
               color: colors.warmWhite,
             }}
           >
-            <TypeOn text="Would this landing page convince you to try the app?" startFrame={74} charsPerFrame={1.5} />
+            <TypeOn
+              text="Would you approve this AI-drafted reply for a customer?"
+              startFrame={74}
+              charsPerFrame={1.5}
+            />
           </div>
           <div
             style={{
@@ -109,7 +149,11 @@ export const AgentAsk = () => {
             </RewardChip>
           </div>
           <FieldRow label="raters" value="25 votes required" startFrame={146} />
-          <FieldRow label="audience" value="founders · freelancers" startFrame={160} />
+          <FieldRow
+            label="audience"
+            value="support leads · customers"
+            startFrame={160}
+          />
         </Card>
       </div>
     </AbsoluteFill>

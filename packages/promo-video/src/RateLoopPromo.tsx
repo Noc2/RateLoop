@@ -1,4 +1,10 @@
-import { AbsoluteFill, Audio, Sequence, interpolate, staticFile } from "remotion";
+import {
+  AbsoluteFill,
+  Audio,
+  Sequence,
+  interpolate,
+  staticFile,
+} from "remotion";
 import { SceneFade } from "./primitives";
 import { AgentAsk } from "./scenes/AgentAsk";
 import { Handoff } from "./scenes/Handoff";
@@ -11,7 +17,7 @@ import { colors } from "./theme";
 
 /**
  * One narrative ask, end to end. The product beats reuse the real site UI —
- * the RatingOrb, Up/Down vote buttons, the sealed-response sheet, the agent-ask handoff
+ * the RatingOrb, Up/Down vote buttons, the sealed-response sheet, the buyer handoff
  * page, and the discover-card question preview.
  */
 
@@ -25,7 +31,8 @@ const SETTLE = 240;
 const REPORT = 360;
 const OUTRO = 315;
 
-export const PROMO_DURATION_IN_FRAMES = HOOK + ASK + HANDOFF + RATERS + SETTLE + REPORT + OUTRO;
+export const PROMO_DURATION_IN_FRAMES =
+  HOOK + ASK + HANDOFF + RATERS + SETTLE + REPORT + OUTRO;
 
 type Beat = {
   start: number;
@@ -37,13 +44,50 @@ type Beat = {
   fadeOut?: number;
 };
 
-const starts = [0, HOOK, HOOK + ASK, HOOK + ASK + HANDOFF, HOOK + ASK + HANDOFF + RATERS];
+const starts = [
+  0,
+  HOOK,
+  HOOK + ASK,
+  HOOK + ASK + HANDOFF,
+  HOOK + ASK + HANDOFF + RATERS,
+];
 const BEATS: Beat[] = [
-  { start: 0, duration: HOOK, vo: "audio/vo-01-hook.m4a", voDurationInFrames: 138, Scene: Hook, fadeIn: 6 },
-  { start: starts[1], duration: ASK, vo: "audio/vo-02-ask.m4a", voDurationInFrames: 201, Scene: AgentAsk },
-  { start: starts[2], duration: HANDOFF, vo: "audio/vo-03-handoff.m4a", voDurationInFrames: 148, Scene: Handoff },
-  { start: starts[3], duration: RATERS, vo: "audio/vo-04-raters.m4a", voDurationInFrames: 261, Scene: Raters },
-  { start: starts[4], duration: SETTLE, vo: "audio/vo-05-settle.m4a", voDurationInFrames: 112, Scene: Settle },
+  {
+    start: 0,
+    duration: HOOK,
+    vo: "audio/vo-01-hook.m4a",
+    voDurationInFrames: 138,
+    Scene: Hook,
+    fadeIn: 6,
+  },
+  {
+    start: starts[1],
+    duration: ASK,
+    vo: "audio/vo-02-ask.m4a",
+    voDurationInFrames: 201,
+    Scene: AgentAsk,
+  },
+  {
+    start: starts[2],
+    duration: HANDOFF,
+    vo: "audio/vo-03-handoff.m4a",
+    voDurationInFrames: 148,
+    Scene: Handoff,
+  },
+  {
+    start: starts[3],
+    duration: RATERS,
+    vo: "audio/vo-04-raters.m4a",
+    voDurationInFrames: 261,
+    Scene: Raters,
+  },
+  {
+    start: starts[4],
+    duration: SETTLE,
+    vo: "audio/vo-05-settle.m4a",
+    voDurationInFrames: 112,
+    Scene: Settle,
+  },
   {
     start: starts[4] + SETTLE,
     duration: REPORT,
@@ -64,7 +108,11 @@ const BEATS: Beat[] = [
 const VO_OFFSET = 6;
 
 const VO_WINDOWS = BEATS.map(
-  beat => [beat.start + VO_OFFSET, beat.start + VO_OFFSET + beat.voDurationInFrames] as const,
+  (beat) =>
+    [
+      beat.start + VO_OFFSET,
+      beat.start + VO_OFFSET + beat.voDurationInFrames,
+    ] as const,
 );
 
 const musicVolume = (frame: number) => {
@@ -81,7 +129,14 @@ const musicVolume = (frame: number) => {
   }
   const base = interpolate(
     frame,
-    [0, HOOK, starts[3], starts[4], PROMO_DURATION_IN_FRAMES - OUTRO, PROMO_DURATION_IN_FRAMES - 30],
+    [
+      0,
+      HOOK,
+      starts[3],
+      starts[4],
+      PROMO_DURATION_IN_FRAMES - OUTRO,
+      PROMO_DURATION_IN_FRAMES - 30,
+    ],
     [0.44, 0.34, 0.36, 0.38, 0.42, 0.48],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
@@ -89,14 +144,23 @@ const musicVolume = (frame: number) => {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const fadeOut = interpolate(frame, [PROMO_DURATION_IN_FRAMES - 60, PROMO_DURATION_IN_FRAMES], [1, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const fadeOut = interpolate(
+    frame,
+    [PROMO_DURATION_IN_FRAMES - 60, PROMO_DURATION_IN_FRAMES],
+    [1, 0],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
   return base * duck * fadeIn * fadeOut;
 };
 
-export const RateLoopPromo = ({ musicSrc = "audio/music.mp3" }: { musicSrc?: string }) => (
+export const RateLoopPromo = ({
+  musicSrc = "audio/music.mp3",
+}: {
+  musicSrc?: string;
+}) => (
   <AbsoluteFill style={{ background: colors.surface }}>
     <Audio src={staticFile(musicSrc)} volume={musicVolume} />
     {BEATS.map(({ start, duration, vo, Scene, fadeIn, fadeOut }) => (

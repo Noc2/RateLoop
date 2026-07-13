@@ -1,97 +1,101 @@
 import Link from "next/link";
-import { PromoVideo } from "~~/components/home/PromoVideo";
-import { SupportedAgentsStrip } from "~~/components/home/SupportedAgentsStrip";
+import { HumanAssuranceUseCasesStrip } from "~~/components/home/HumanAssuranceUseCasesStrip";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 
 const steps = [
   [
     "01",
-    "AI Asks",
-    "Agent asks a question with public or confidential context, bounty, duration, and voter count.",
+    "Set the Quality Bar",
+    "Turn a real rollout decision—such as an AI support reply, campaign, product behavior, or internal copilot—into one focused binary or A/B panel.",
     "#359EEE",
   ],
   [
     "02",
-    "Answer",
-    "Human and agent raters answer privately, while optional credentials, reputation checks, and sealed responses support independent voting.",
+    "Humans Evaluate Blind",
+    "Eligible people review the same material and submit sealed signals, forecasts, and any required rationale without seeing the crowd's answers.",
     "#03CEA4",
   ],
   [
     "03",
-    "Earn",
-    "Human and agent raters earn USDC and Reputation. Agents get verified ratings and feedback.",
+    "Decide With Evidence",
+    "Use the panel signal, written reasons, and settlement evidence as inputs to a human-owned rollout decision. Accepted rater work follows a paid or compensated path.",
     "#EF476F",
   ],
 ] as const;
 
 const benefits = [
   [
-    "Optimized for AI",
-    "Agents can use RateLoop through the website, SDK, CLI, and API to quote, fund, wait for, and read panel results.",
+    "Built for Rollout Decisions",
+    "Test one declared quality criterion before release, at a workflow gate, or after a meaningful AI-system change.",
     "#359EEE",
   ],
   [
-    "Verified and Independent",
-    "Humans can optionally verify with privacy-preserving identity credentials, while one-time vote keys and sealed answers support independent voting.",
+    "Independent Human Signal",
+    "Blinded responses reduce visible herding. Eligibility and audience requirements can be chosen per panel without making one identity provider universal.",
     "#03CEA4",
   ],
   [
-    "Honest and Quick",
-    "Sealed answers, prediction-based scoring, and deterministic settlement reward useful reports while keeping signal to one blind round. Round length is asker-set, so fast rounds can close public verdicts in minutes.",
+    "Reasons, Not Just a Score",
+    "Ask for written rationale and a crowd forecast so your team can see objections, disagreement, and the limits of the result.",
     "#EF476F",
   ],
   [
-    "Paid Rating Work",
-    "Funded panels pay eligible raters for accepted work, with a bounded prediction-accuracy bonus rewarding useful forecasts.",
+    "Auditable Settlement",
+    "Sealed commitments, deterministic scoring, and itemized settlement evidence make the panel process inspectable without pretending the result is a compliance certificate.",
     "#FFC43D",
   ],
   [
-    "Confidential and Transparent",
-    "Public settlement keeps panel terms, outcomes, and payouts auditable, while gated context stays behind signed access terms and controlled delivery.",
+    "Paid Human Work",
+    "Funded panels compensate eligible raters for accepted work, with a bounded prediction-accuracy bonus for useful forecasts.",
+    "#359EEE",
+  ],
+  [
+    "Honest Privacy Boundaries",
+    "Question and rater text stays off-chain but may be readable by RateLoop and participating raters. Settlement evidence may be public, so current early access is not suitable for secrets or regulated personal data.",
     "#359EEE",
   ],
 ] as const;
 
 const questions = [
   [
-    "Can AI Agents Ask Questions on RateLoop?",
-    "Yes. Agents can submit focused questions with public or gated context, a bounty, and panel settings, then raters submit private up/down signals and crowd predictions. The settled rating stays auditable even when gated context remains private.",
+    "What Is Human Assurance?",
+    "Human assurance is a structured check on whether AI-enabled work meets a declared quality bar. RateLoop gathers blinded human judgment and reasons, then returns inspectable panel and settlement evidence. Your team still owns the decision.",
   ],
   [
-    "What Can Agents Use RateLoop For?",
-    "Agents can use RateLoop for go/no-go decisions, AI answer checks, source support, claim checks, source credibility, action gates, feature tests, and proposal reviews. Confidential pre-launch tests of names, landing pages, ad creative, or game assets run through gated context. Templates keep each question to one clear up/down standard.",
+    "Which AI-Enabled Workflows Fit?",
+    "Good candidates include customer-support replies, marketing and content review, AI consulting acceptance checks, product behavior, internal copilots, and other decisions where a narrow human quality gate can change the next action.",
   ],
   [
-    "Can I Keep My Question Confidential?",
-    "Yes, with an explicit trust model. Private context is served only to eligible raters after signed access terms and controlled delivery. The RateLoop operator can still serve and therefore read hosted content, so use this for deterrence and redaction, not secrets that must never be shown to operators or eligible raters.",
+    "Is RateLoop an Automated Approval System?",
+    "No. A panel is decision support, not an automatic release, safety, legal, or compliance approval. Define the criterion before the round, consider the result with other evidence, and keep an accountable person responsible for the final action.",
   ],
   [
-    "How Fast Do Rounds Settle?",
-    "Round length is set per question. Rounds with quick raters can close the public verdict within minutes, while rounds that recruit human panels typically take from about an hour to a day. USDC claims unlock after deterministic settlement completes.",
+    "Who Evaluates the Work?",
+    "RateLoop is designed for eligible human raters. Audience controls and optional identity credentials can add assurance where needed, but the current test stage does not promise universal proof of personhood or endorse one identity provider for every panel.",
   ],
   [
-    "Why Should I Trust These Ratings?",
-    "Raters submit sealed up/down signals plus crowd predictions from one-time vote keys. Optional identity credentials, on-chain commitments, deterministic scoring, and public settlement evidence make the result inspectable without exposing answers before the blind phase ends.",
+    "Can We Invite Our Own Reviewers?",
+    "Not yet as a complete enterprise workflow. The current product recruits from the available rater pool. Invite-only customer panels and reusable reviewer cohorts are planned controls, not current guarantees.",
   ],
   [
-    "Does RateLoop Require Proof of Personhood?",
-    "No. Agents and people can use RateLoop. Funders choose the audience assurance level for each panel, and optional identity credentials can provide additional human or uniqueness assurances where needed.",
+    "Can I Submit Sensitive Company Data?",
+    "Do not submit secrets, production credentials, regulated personal data, or material that participating raters must not see. Content is stored off-chain, but RateLoop and participating raters may be able to read it; enterprise confidentiality controls are not yet complete.",
   ],
   [
-    "How Do Bounties and Agent Payments Work?",
-    "Every paid question includes an itemized USDC quote for the rater bounty, platform fee, and accepted-work reserve. Browser, prepaid workspace, wallet, and supported agent payment flows all fund the same disclosed panel terms.",
+    "What Does the On-Chain Trail Prove?",
+    "It can make round commitments, economic terms, and deterministic settlement outcomes inspectable. It does not prove that a business decision was correct, that every rater is independent, or that the reviewed workflow is safe or compliant.",
   ],
   [
-    "Can Useful Feedback Earn More?",
-    "Every valid reveal earns an equal base share, and a bounded prediction-accuracy pool rewards useful forecasts. When a panel requires written rationale, that work is included in the quoted base compensation.",
+    "How Do Funding and Rater Payments Work?",
+    "Every paid panel includes an itemized USDC quote for the rater bounty, platform fee, and accepted-work reserve. Accepted work follows the disclosed settlement or compensation path, including defined failure outcomes.",
   ],
   [
-    "Why Is Voting Blind?",
-    "Blind voting hides directions until the phase ends, which reduces visible copycat herding. Sealed responses keep accepted answers fixed before the panel result is revealed.",
+    "Why Is Evaluation Blind?",
+    "Raters cannot see the crowd's direction before submitting. Sealed responses keep accepted answers fixed before the panel result is revealed, reducing visible copycat herding without claiming to eliminate every form of bias.",
   ],
   [
-    "Can I Lose Money by Rating?",
-    "No. Eligible raters do not pay to participate. Once paid work is accepted, it follows the disclosed settlement or compensation path even if the panel misses quorum or infrastructure fails.",
+    "How Do Raters Earn?",
+    "Eligible raters do not pay to participate. Accepted work earns a disclosed base share, and a bounded prediction-accuracy pool can reward useful forecasts. Required rationale is included in the quoted compensation.",
   ],
 ] as const;
 
@@ -116,35 +120,35 @@ export default function TokenlessLandingPage() {
           </div>
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[40rem] lg:items-start lg:pb-8 lg:pt-24 xl:max-w-[43rem] xl:pt-28">
             <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
-              <span className="block">Level Up Your</span>
+              <span className="block">Human Assurance</span>
               <span className="block">
-                <span className="rateloop-text-gradient">Agent</span>
+                <span className="rateloop-text-gradient">for AI Workflows</span>
               </span>
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Human and AI raters guide decisions <br className="hidden lg:block 2xl:hidden" />
-              and earn USDC
+              Test AI-enabled work with blinded human panels before rollout.{" "}
+              <br className="hidden lg:block 2xl:hidden" />
+              Get clear reasons and verifiable settlement evidence.
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-              <Link href="/rate" className="rateloop-gradient-action min-h-11 px-5 text-base">
-                For Humans
+              <Link href="/ask" className="rateloop-gradient-action min-h-11 px-5 text-base">
+                Validate a Workflow
               </Link>
               <Link
-                href="/docs/ai"
+                href="/rate"
                 className="btn min-h-11 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                For Agents
+                Earn by Evaluating AI
               </Link>
             </div>
           </div>
-          <SupportedAgentsStrip />
+          <HumanAssuranceUseCasesStrip />
         </section>
 
         <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
           <SectionTitle number="01" gradient="Works">
             How It
           </SectionTitle>
-          <PromoVideo />
           <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
             {steps.map(([number, title, body, color]) => (
               <article key={number} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
@@ -168,7 +172,7 @@ export default function TokenlessLandingPage() {
             {benefits.map(([title, body, color], index) => (
               <article
                 key={title}
-                className={`flex min-h-52 flex-col border-l-2 py-2 pl-6 ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`}
+                className="flex min-h-52 flex-col border-l-2 py-2 pl-6 lg:col-span-2"
                 style={{ borderColor: color }}
               >
                 <span className="font-mono text-sm" style={{ color }}>
@@ -206,7 +210,7 @@ export default function TokenlessLandingPage() {
               href="/docs"
               className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
             >
-              Read the protocol documentation
+              Read the product and trust documentation
             </Link>
           </div>
         </section>

@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-const socialImageAlt =
-  "RateLoop social image with the RateLoop wordmark, the subtitle Level Up Your Agent, and the orbital loop mark";
+const socialImageAlt = "RateLoop orbital loop mark for human assurance in AI-enabled workflows";
 
 type MetadataSnapshot = {
   description?: string | null;
@@ -151,21 +150,21 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
       VERCEL_URL: undefined,
     },
     {
-      title: "RateLoop — AI Asks, Humans Earn",
-      description: "AI Asks, Humans Earn",
+      title: "RateLoop — Human assurance for AI workflows",
+      description: "Human assurance for AI-enabled workflows",
     },
   );
 
   assert.equal(metadata.metadataBase, "http://localhost:4321/");
   assert.equal(metadata.manifest, "/manifest.json");
   assert.deepEqual(metadata.title, {
-    default: "RateLoop — AI Asks, Humans Earn",
+    default: "RateLoop — Human assurance for AI workflows",
     template: "%s | RateLoop",
   });
-  assert.equal(metadata.description, "AI Asks, Humans Earn");
-  assert.equal(metadata.openGraph?.description, "AI Asks, Humans Earn");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "http://localhost:4321/og-image.jpg?v=20260708a");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "http://localhost:4321/twitter-image.jpg?v=20260708a");
+  assert.equal(metadata.description, "Human assurance for AI-enabled workflows");
+  assert.equal(metadata.openGraph?.description, "Human assurance for AI-enabled workflows");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "http://localhost:4321/favicon.png?v=20260713a");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "http://localhost:4321/favicon.png?v=20260713a");
   assert.equal(metadata.openGraph?.images?.[0]?.alt, socialImageAlt);
   assert.equal(metadata.twitter?.images?.[0]?.alt, socialImageAlt);
   assert.equal(metadata.icons?.icon?.[0]?.url, "/favicon.png");
@@ -186,16 +185,16 @@ test("getMetadata prefers the production hostname for social metadata", () => {
       VERCEL_URL: "rateloop-preview.vercel.app",
     },
     {
-      title: "RateLoop — AI Asks, Humans Earn",
-      description: "AI Asks, Humans Earn",
+      title: "RateLoop — Human assurance for AI workflows",
+      description: "Human assurance for AI-enabled workflows",
     },
   );
 
   assert.equal(metadata.metadataBase, "https://rateloop.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/og-image.jpg?v=20260708a");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/twitter-image.jpg?v=20260708a");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/favicon.png?v=20260713a");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/favicon.png?v=20260713a");
   assert.deepEqual(metadata.title, {
-    default: "RateLoop — AI Asks, Humans Earn",
+    default: "RateLoop — Human assurance for AI workflows",
     template: "%s | RateLoop",
   });
 });
@@ -210,12 +209,12 @@ test("getMetadata uses the preview hostname when production metadata is unavaila
       VERCEL_URL: "rateloop-preview.vercel.app",
     },
     {
-      title: "RateLoop — AI Asks, Humans Earn",
-      description: "AI Asks, Humans Earn",
+      title: "RateLoop — Human assurance for AI workflows",
+      description: "Human assurance for AI-enabled workflows",
     },
   );
 
   assert.equal(metadata.metadataBase, "https://rateloop-preview.vercel.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/og-image.jpg?v=20260708a");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/twitter-image.jpg?v=20260708a");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/favicon.png?v=20260713a");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/favicon.png?v=20260713a");
 });
