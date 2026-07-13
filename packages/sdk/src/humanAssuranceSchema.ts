@@ -517,10 +517,16 @@ export function parseHumanAssuranceEvidencePacket(
 ): HumanAssuranceEvidencePacket {
   const input = record(value, "evidencePacket");
   const result = record(input.result, "result");
-  const interval =
-    result.interval === null
-      ? null
-      : record(result.interval, "result.interval");
+  const reviewerCoverage = record(
+    result.reviewerCoverage,
+    "result.reviewerCoverage",
+  );
+  const judgmentCoverage = record(
+    result.judgmentCoverage,
+    "result.judgmentCoverage",
+  );
+  if (!Array.isArray(result.cases)) invalid("result.cases", "an array");
+  const suite = record(result.suite, "result.suite");
   return {
     schemaVersion: schemaVersion(input.schemaVersion),
     packetId: string(input.packetId, "packetId"),
@@ -530,41 +536,158 @@ export function parseHumanAssuranceEvidencePacket(
     responseRoot: digest(input.responseRoot, "responseRoot"),
     aggregationVersion: string(input.aggregationVersion, "aggregationVersion"),
     result: {
-      candidatePreferenceShareBps:
-        result.candidatePreferenceShareBps === null
-          ? null
-          : bps(
-              result.candidatePreferenceShareBps,
-              "result.candidatePreferenceShareBps",
+      method: enumeration(result.method, "result.method", [
+        "descriptive_per_case",
+      ]),
+      reviewerCoverage: {
+        targetReviewerCount: integer(
+          reviewerCoverage.targetReviewerCount,
+          "result.reviewerCoverage.targetReviewerCount",
+        ),
+        assignedReviewerCount: integer(
+          reviewerCoverage.assignedReviewerCount,
+          "result.reviewerCoverage.assignedReviewerCount",
+        ),
+        paidReviewerCount: integer(
+          reviewerCoverage.paidReviewerCount,
+          "result.reviewerCoverage.paidReviewerCount",
+        ),
+        respondingReviewerCount: integer(
+          reviewerCoverage.respondingReviewerCount,
+          "result.reviewerCoverage.respondingReviewerCount",
+        ),
+        completeJudgmentSetReviewerCount: integer(
+          reviewerCoverage.completeJudgmentSetReviewerCount,
+          "result.reviewerCoverage.completeJudgmentSetReviewerCount",
+        ),
+      },
+      judgmentCoverage: {
+        caseCount: integer(
+          judgmentCoverage.caseCount,
+          "result.judgmentCoverage.caseCount",
+        ),
+        targetExpectedJudgmentCount: integer(
+          judgmentCoverage.targetExpectedJudgmentCount,
+          "result.judgmentCoverage.targetExpectedJudgmentCount",
+        ),
+        assignedExpectedJudgmentCount: integer(
+          judgmentCoverage.assignedExpectedJudgmentCount,
+          "result.judgmentCoverage.assignedExpectedJudgmentCount",
+        ),
+        submittedJudgmentCount: integer(
+          judgmentCoverage.submittedJudgmentCount,
+          "result.judgmentCoverage.submittedJudgmentCount",
+        ),
+        validJudgmentCount: integer(
+          judgmentCoverage.validJudgmentCount,
+          "result.judgmentCoverage.validJudgmentCount",
+        ),
+        invalidJudgmentCount: integer(
+          judgmentCoverage.invalidJudgmentCount,
+          "result.judgmentCoverage.invalidJudgmentCount",
+        ),
+        pendingJudgmentCount: integer(
+          judgmentCoverage.pendingJudgmentCount,
+          "result.judgmentCoverage.pendingJudgmentCount",
+        ),
+        missingTargetJudgmentCount: integer(
+          judgmentCoverage.missingTargetJudgmentCount,
+          "result.judgmentCoverage.missingTargetJudgmentCount",
+        ),
+        missingAssignedJudgmentCount: integer(
+          judgmentCoverage.missingAssignedJudgmentCount,
+          "result.judgmentCoverage.missingAssignedJudgmentCount",
+        ),
+      },
+      cases: result.cases.map((value, index) => {
+        const path = `result.cases[${index}]`;
+        const entry = record(value, path);
+        const quorum = record(entry.quorum, `${path}.quorum`);
+        return {
+          caseId: string(entry.caseId, `${path}.caseId`),
+          targetReviewerCount: integer(
+            entry.targetReviewerCount,
+            `${path}.targetReviewerCount`,
+          ),
+          assignedReviewerCount: integer(
+            entry.assignedReviewerCount,
+            `${path}.assignedReviewerCount`,
+          ),
+          submittedJudgmentCount: integer(
+            entry.submittedJudgmentCount,
+            `${path}.submittedJudgmentCount`,
+          ),
+          validReviewerCount: integer(
+            entry.validReviewerCount,
+            `${path}.validReviewerCount`,
+          ),
+          invalidJudgmentCount: integer(
+            entry.invalidJudgmentCount,
+            `${path}.invalidJudgmentCount`,
+          ),
+          pendingJudgmentCount: integer(
+            entry.pendingJudgmentCount,
+            `${path}.pendingJudgmentCount`,
+          ),
+          missingTargetJudgmentCount: integer(
+            entry.missingTargetJudgmentCount,
+            `${path}.missingTargetJudgmentCount`,
+          ),
+          missingAssignedJudgmentCount: integer(
+            entry.missingAssignedJudgmentCount,
+            `${path}.missingAssignedJudgmentCount`,
+          ),
+          quorum: {
+            requiredValidReviewers: integer(
+              quorum.requiredValidReviewers,
+              `${path}.quorum.requiredValidReviewers`,
             ),
-      validResponseCount: integer(
-        result.validResponseCount,
-        "result.validResponseCount",
-      ),
-      invalidResponseCount: integer(
-        result.invalidResponseCount,
-        "result.invalidResponseCount",
-      ),
-      missingCaseCount: integer(
-        result.missingCaseCount,
-        "result.missingCaseCount",
-      ),
-      disagreementBps:
-        result.disagreementBps === null
-          ? null
-          : bps(result.disagreementBps, "result.disagreementBps"),
-      interval:
-        interval === null
-          ? null
-          : {
-              method: enumeration(interval.method, "result.interval.method", [
-                "wilson_95",
-              ]),
-              lowerBps: bps(interval.lowerBps, "result.interval.lowerBps"),
-              upperBps: bps(interval.upperBps, "result.interval.upperBps"),
-            },
-      passed:
-        result.passed === null ? null : boolean(result.passed, "result.passed"),
+            met: boolean(quorum.met, `${path}.quorum.met`),
+          },
+          candidatePreferenceShareBps:
+            entry.candidatePreferenceShareBps === null
+              ? null
+              : bps(
+                  entry.candidatePreferenceShareBps,
+                  `${path}.candidatePreferenceShareBps`,
+                ),
+          disagreementBps:
+            entry.disagreementBps === null
+              ? null
+              : bps(entry.disagreementBps, `${path}.disagreementBps`),
+          outcome: enumeration(entry.outcome, `${path}.outcome`, [
+            "pass",
+            "fail",
+            "insufficient",
+          ]),
+        };
+      }),
+      suite: {
+        method: enumeration(suite.method, "result.suite.method", [
+          "all_cases_must_pass",
+        ]),
+        evaluatedCaseCount: integer(
+          suite.evaluatedCaseCount,
+          "result.suite.evaluatedCaseCount",
+        ),
+        passCaseCount: integer(
+          suite.passCaseCount,
+          "result.suite.passCaseCount",
+        ),
+        failCaseCount: integer(
+          suite.failCaseCount,
+          "result.suite.failCaseCount",
+        ),
+        insufficientCaseCount: integer(
+          suite.insufficientCaseCount,
+          "result.suite.insufficientCaseCount",
+        ),
+        outcome: enumeration(suite.outcome, "result.suite.outcome", [
+          "pass",
+          "fail",
+          "insufficient",
+        ]),
+      },
     },
     limitations: stringArray(input.limitations, "limitations"),
     chainReferences: stringArray(input.chainReferences, "chainReferences"),
@@ -878,7 +1001,134 @@ export const HUMAN_ASSURANCE_EVIDENCE_PACKET_JSON_SCHEMA = {
     caseRoot: digestSchema,
     responseRoot: digestSchema,
     aggregationVersion: idSchema,
-    result: { type: "object" },
+    result: {
+      properties: {
+        method: { const: "descriptive_per_case" },
+        reviewerCoverage: {
+          properties: {
+            targetReviewerCount: { minimum: 0, type: "integer" },
+            assignedReviewerCount: { minimum: 0, type: "integer" },
+            paidReviewerCount: { minimum: 0, type: "integer" },
+            respondingReviewerCount: { minimum: 0, type: "integer" },
+            completeJudgmentSetReviewerCount: {
+              minimum: 0,
+              type: "integer",
+            },
+          },
+          required: [
+            "targetReviewerCount",
+            "assignedReviewerCount",
+            "paidReviewerCount",
+            "respondingReviewerCount",
+            "completeJudgmentSetReviewerCount",
+          ],
+          type: "object",
+        },
+        judgmentCoverage: {
+          properties: {
+            caseCount: { minimum: 0, type: "integer" },
+            targetExpectedJudgmentCount: { minimum: 0, type: "integer" },
+            assignedExpectedJudgmentCount: { minimum: 0, type: "integer" },
+            submittedJudgmentCount: { minimum: 0, type: "integer" },
+            validJudgmentCount: { minimum: 0, type: "integer" },
+            invalidJudgmentCount: { minimum: 0, type: "integer" },
+            pendingJudgmentCount: { minimum: 0, type: "integer" },
+            missingTargetJudgmentCount: { minimum: 0, type: "integer" },
+            missingAssignedJudgmentCount: { minimum: 0, type: "integer" },
+          },
+          required: [
+            "caseCount",
+            "targetExpectedJudgmentCount",
+            "assignedExpectedJudgmentCount",
+            "submittedJudgmentCount",
+            "validJudgmentCount",
+            "invalidJudgmentCount",
+            "pendingJudgmentCount",
+            "missingTargetJudgmentCount",
+            "missingAssignedJudgmentCount",
+          ],
+          type: "object",
+        },
+        cases: {
+          items: {
+            properties: {
+              caseId: idSchema,
+              targetReviewerCount: { minimum: 0, type: "integer" },
+              assignedReviewerCount: { minimum: 0, type: "integer" },
+              submittedJudgmentCount: { minimum: 0, type: "integer" },
+              validReviewerCount: { minimum: 0, type: "integer" },
+              invalidJudgmentCount: { minimum: 0, type: "integer" },
+              pendingJudgmentCount: { minimum: 0, type: "integer" },
+              missingTargetJudgmentCount: { minimum: 0, type: "integer" },
+              missingAssignedJudgmentCount: { minimum: 0, type: "integer" },
+              quorum: {
+                properties: {
+                  requiredValidReviewers: { minimum: 0, type: "integer" },
+                  met: { type: "boolean" },
+                },
+                required: ["requiredValidReviewers", "met"],
+                type: "object",
+              },
+              candidatePreferenceShareBps: {
+                maximum: 10_000,
+                minimum: 0,
+                type: ["integer", "null"],
+              },
+              disagreementBps: {
+                maximum: 10_000,
+                minimum: 0,
+                type: ["integer", "null"],
+              },
+              outcome: { enum: ["pass", "fail", "insufficient"] },
+            },
+            required: [
+              "caseId",
+              "targetReviewerCount",
+              "assignedReviewerCount",
+              "submittedJudgmentCount",
+              "validReviewerCount",
+              "invalidJudgmentCount",
+              "pendingJudgmentCount",
+              "missingTargetJudgmentCount",
+              "missingAssignedJudgmentCount",
+              "quorum",
+              "candidatePreferenceShareBps",
+              "disagreementBps",
+              "outcome",
+            ],
+            type: "object",
+          },
+          type: "array",
+        },
+        suite: {
+          properties: {
+            method: { const: "all_cases_must_pass" },
+            evaluatedCaseCount: { minimum: 0, type: "integer" },
+            passCaseCount: { minimum: 0, type: "integer" },
+            failCaseCount: { minimum: 0, type: "integer" },
+            insufficientCaseCount: { minimum: 0, type: "integer" },
+            outcome: { enum: ["pass", "fail", "insufficient"] },
+          },
+          required: [
+            "method",
+            "evaluatedCaseCount",
+            "passCaseCount",
+            "failCaseCount",
+            "insufficientCaseCount",
+            "outcome",
+          ],
+          type: "object",
+        },
+      },
+      required: [
+        "method",
+        "reviewerCoverage",
+        "judgmentCoverage",
+        "cases",
+        "suite",
+      ],
+      type: "object",
+    },
     limitations: { items: idSchema, type: "array" },
     chainReferences: { items: idSchema, type: "array" },
     generatedAt: { format: "date-time", type: "string" },

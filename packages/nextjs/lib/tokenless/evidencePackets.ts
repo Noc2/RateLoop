@@ -20,15 +20,24 @@ type ReviewerSource = "customer_invited" | "rateloop_network" | "sandbox";
 type ClientDecision = "go" | "revise" | "stop";
 type EvidenceSigner = { keyId?: string; privateKey: KeyObject };
 
-type SourceCount = {
+type ReviewerSourceCount = {
   source: ReviewerSource;
-  targetCount: number;
-  assignedCount: number;
+  targetReviewerCount: number;
+  assignedReviewerCount: number;
+  paidReviewerCount: number;
+  respondingReviewerCount: number;
+  completeJudgmentSetReviewerCount: number;
+};
+
+type CaseJudgmentCount = {
+  source?: ReviewerSource;
+  targetReviewerCount: number;
+  assignedReviewerCount: number;
   candidate: number;
   baseline: number;
   tie: number;
-  invalidCount: number;
-  pendingCount: number;
+  invalidJudgmentCount: number;
+  pendingJudgmentCount: number;
 };
 
 type EvidenceExport = {
@@ -258,70 +267,146 @@ function rationaleDigest(row: QueryRow) {
   });
 }
 
-async function collectCounts(client: Queryable, runId: string, responses: QueryRow[], policy: Record<string, any>) {
+async function collectAggregationInputs(
+  client: Queryable,
+  runId: string,
+  runCases: QueryRow[],
+  responses: QueryRow[],
+  policy: Record<string, any>,
+) {
   const [subpanelResult, assignmentResult] = await Promise.all([
     client.query(
       `SELECT source, SUM(target_count) AS target_count
        FROM tokenless_assurance_run_subpanels WHERE run_id = $1 GROUP BY source ORDER BY source ASC`,
       [runId],
     ),
-    client.query(`SELECT source, paid_assignment FROM tokenless_assurance_assignments WHERE run_id = $1`, [runId]),
+    client.query(
+      `SELECT source, reviewer_account_address, paid_assignment
+       FROM tokenless_assurance_assignments WHERE run_id = $1`,
+      [runId],
+    ),
   ]);
-  const counts = new Map<ReviewerSource, SourceCount>();
+  const reviewerCounts = new Map<
+    ReviewerSource,
+    {
+      source: ReviewerSource;
+      targetReviewerCount: number;
+      assignedReviewers: Set<string>;
+      paidReviewers: Set<string>;
+      respondingReviewers: Set<string>;
+      responseCasesByReviewer: Map<string, Set<string>>;
+    }
+  >();
   for (const row of subpanelResult.rows) {
     const source = reviewerSource(row.source);
-    counts.set(source, {
+    reviewerCounts.set(source, {
       source,
-      targetCount: rowNumber(row, "target_count"),
-      assignedCount: 0,
-      candidate: 0,
-      baseline: 0,
-      tie: 0,
-      invalidCount: 0,
-      pendingCount: 0,
+      targetReviewerCount: rowNumber(row, "target_count"),
+      assignedReviewers: new Set(),
+      paidReviewers: new Set(),
+      respondingReviewers: new Set(),
+      responseCasesByReviewer: new Map(),
     });
   }
-  if (counts.size === 0) evidenceError("The run has no frozen source subpanels.");
+  if (reviewerCounts.size === 0) evidenceError("The run has no frozen source subpanels.");
   let paidAssignments = 0;
   for (const row of assignmentResult.rows) {
     const source = reviewerSource(row.source);
-    const count = counts.get(source);
-    if (!count) evidenceError("An assignment is outside the frozen source subpanels.");
-    count.assignedCount += 1;
-    if (row.paid_assignment === true) paidAssignments += 1;
+    const reviewerCount = reviewerCounts.get(source);
+    if (!reviewerCount) evidenceError("An assignment is outside the frozen source subpanels.");
+    const reviewer = rowString(row, "reviewer_account_address");
+    if (!reviewer) evidenceError("An assignment has no reviewer.", "assurance_evidence_source_invalid");
+    reviewerCount.assignedReviewers.add(reviewer);
+    if (row.paid_assignment === true) {
+      reviewerCount.paidReviewers.add(reviewer);
+      paidAssignments += 1;
+    }
+  }
+  const caseIds = new Set(runCases.map(runCase => rowString(runCase, "case_id")!));
+  const emptyCaseCount = (source?: ReviewerSource): CaseJudgmentCount => ({
+    ...(source ? { source } : {}),
+    targetReviewerCount: source
+      ? reviewerCounts.get(source)!.targetReviewerCount
+      : [...reviewerCounts.values()].reduce((total, entry) => total + entry.targetReviewerCount, 0),
+    assignedReviewerCount: source
+      ? reviewerCounts.get(source)!.assignedReviewers.size
+      : [...reviewerCounts.values()].reduce((total, entry) => total + entry.assignedReviewers.size, 0),
+    candidate: 0,
+    baseline: 0,
+    tie: 0,
+    invalidJudgmentCount: 0,
+    pendingJudgmentCount: 0,
+  });
+  const caseCounts = new Map<
+    string,
+    { caseId: string; overall: CaseJudgmentCount; sourceCounts: Map<ReviewerSource, CaseJudgmentCount> }
+  >();
+  for (const caseId of caseIds) {
+    caseCounts.set(caseId, {
+      caseId,
+      overall: emptyCaseCount(),
+      sourceCounts: new Map([...reviewerCounts.keys()].map(source => [source, emptyCaseCount(source)])),
+    });
   }
   const failureTags = new Map<string, number>();
   const rationaleDigests: string[] = [];
   for (const row of responses) {
+    const caseId = rowString(row, "case_id");
+    const reviewerKey = rowString(row, "reviewer_key");
+    const caseCount = caseId ? caseCounts.get(caseId) : undefined;
+    if (!caseId || !reviewerKey || !caseCount) {
+      evidenceError("A response is outside the frozen run cases.", "assurance_evidence_source_invalid");
+    }
     const source = reviewerSource(row.reviewer_source);
-    const count = counts.get(source);
-    if (!count) evidenceError("A response is outside the frozen source subpanels.");
+    const reviewerCount = reviewerCounts.get(source);
+    const sourceCaseCount = caseCount.sourceCounts.get(source);
+    if (!reviewerCount || !sourceCaseCount) evidenceError("A response is outside the frozen source subpanels.");
+    reviewerCount.respondingReviewers.add(reviewerKey);
+    const reviewerCases = reviewerCount.responseCasesByReviewer.get(reviewerKey) ?? new Set<string>();
+    reviewerCases.add(caseId);
+    reviewerCount.responseCasesByReviewer.set(reviewerKey, reviewerCases);
     const validity = rowString(row, "validity");
     if (validity === "valid") {
       const choice = rowString(row, "choice");
       if (choice !== "candidate" && choice !== "baseline" && choice !== "tie") {
         evidenceError("A valid response has an unsupported choice.", "assurance_evidence_source_invalid");
       }
-      count[choice] += 1;
+      caseCount.overall[choice] += 1;
+      sourceCaseCount[choice] += 1;
       for (const key of parseJson<string[]>(row.failure_tag_keys_json, "Failure tags")) {
         failureTags.set(key, (failureTags.get(key) ?? 0) + 1);
       }
-    } else if (validity === "invalid") {
-      count.invalidCount += 1;
+    } else if (validity === "invalid" || validity === "withdrawn") {
+      caseCount.overall.invalidJudgmentCount += 1;
+      sourceCaseCount.invalidJudgmentCount += 1;
     } else if (validity === "pending") {
-      count.pendingCount += 1;
+      caseCount.overall.pendingJudgmentCount += 1;
+      sourceCaseCount.pendingJudgmentCount += 1;
     } else {
       evidenceError("A response has an unsupported validity state.", "assurance_evidence_source_invalid");
     }
     const digest = rationaleDigest(row);
     if (digest) rationaleDigests.push(digest);
   }
+  const publicReviewerCounts: ReviewerSourceCount[] = [...reviewerCounts.values()]
+    .sort((left, right) => left.source.localeCompare(right.source))
+    .map(entry => ({
+      source: entry.source,
+      targetReviewerCount: entry.targetReviewerCount,
+      assignedReviewerCount: entry.assignedReviewers.size,
+      paidReviewerCount: entry.paidReviewers.size,
+      respondingReviewerCount: entry.respondingReviewers.size,
+      completeJudgmentSetReviewerCount: [...entry.responseCasesByReviewer.values()].filter(
+        reviewerCases => reviewerCases.size === caseIds.size,
+      ).length,
+    }));
   const minimumAggregationSize = Number(policy.buyerPrivacy?.minimumAggregationSize);
   if (!Number.isSafeInteger(minimumAggregationSize) || minimumAggregationSize < 1 || minimumAggregationSize > 10_000) {
     evidenceError("The frozen minimum aggregation size is invalid.", "assurance_evidence_source_invalid");
   }
   return {
-    sourceCounts: [...counts.values()].sort((left, right) => left.source.localeCompare(right.source)),
+    reviewerCounts: publicReviewerCounts,
+    caseCounts: [...caseCounts.values()].sort((left, right) => left.caseId.localeCompare(right.caseId)),
     minimumAggregationSize,
     paidAssignments,
     failureTagCounts: [...failureTags.entries()]
@@ -331,47 +416,35 @@ async function collectCounts(client: Queryable, runId: string, responses: QueryR
   };
 }
 
-function privacySafeRecomputation(sourceCounts: SourceCount[], minimumAggregationSize: number) {
-  const safeEntry = (entry: SourceCount) => {
-    const sampleSize = entry.candidate + entry.baseline + entry.tie;
+function privacySafeRecomputation(
+  reviewerCounts: ReviewerSourceCount[],
+  caseCounts: { caseId: string; overall: CaseJudgmentCount; sourceCounts: Map<ReviewerSource, CaseJudgmentCount> }[],
+  minimumAggregationSize: number,
+) {
+  const safeCaseEntry = (entry: CaseJudgmentCount) => {
+    const validReviewerCount = entry.candidate + entry.baseline + entry.tie;
     const common = {
-      source: entry.source,
-      targetCount: entry.targetCount,
-      assignedCount: entry.assignedCount,
-      sampleSize,
-      invalidCount: entry.invalidCount,
-      pendingCount: entry.pendingCount,
-      suppressed: sampleSize < minimumAggregationSize,
+      ...(entry.source ? { source: entry.source } : {}),
+      targetReviewerCount: entry.targetReviewerCount,
+      assignedReviewerCount: entry.assignedReviewerCount,
+      validReviewerCount,
+      invalidJudgmentCount: entry.invalidJudgmentCount,
+      pendingJudgmentCount: entry.pendingJudgmentCount,
+      suppressed: validReviewerCount < minimumAggregationSize,
     };
     return common.suppressed
       ? common
       : { ...common, candidate: entry.candidate, baseline: entry.baseline, tie: entry.tie };
   };
-  const overall = sourceCounts.reduce<SourceCount>(
-    (result, entry) => ({
-      ...result,
-      targetCount: result.targetCount + entry.targetCount,
-      assignedCount: result.assignedCount + entry.assignedCount,
-      candidate: result.candidate + entry.candidate,
-      baseline: result.baseline + entry.baseline,
-      tie: result.tie + entry.tie,
-      invalidCount: result.invalidCount + entry.invalidCount,
-      pendingCount: result.pendingCount + entry.pendingCount,
-    }),
-    {
-      source: "sandbox",
-      targetCount: 0,
-      assignedCount: 0,
-      candidate: 0,
-      baseline: 0,
-      tie: 0,
-      invalidCount: 0,
-      pendingCount: 0,
-    },
-  );
   return {
-    overallCounts: { ...safeEntry(overall), source: "overall" },
-    sourceCounts: sourceCounts.map(safeEntry),
+    reviewerSources: reviewerCounts,
+    cases: caseCounts.map(entry => ({
+      caseId: entry.caseId,
+      overall: safeCaseEntry(entry.overall),
+      sourceCounts: [...entry.sourceCounts.values()]
+        .sort((left, right) => left.source!.localeCompare(right.source!))
+        .map(safeCaseEntry),
+    })),
   };
 }
 
@@ -427,7 +500,7 @@ async function collectChainEvidence(client: Queryable, runCases: QueryRow[]) {
           deploymentBlock: rowString(execution, "deployment_block"),
           chainId: rowNumber(execution, "chain_id"),
           panelAddress: rowString(execution, "panel_address"),
-          transactionHash: rowString(execution, "submission_transaction_hash"),
+          roundCreationTransactionHash: rowString(execution, "submission_transaction_hash"),
           receiptBlockNumber: rowString(execution, "receipt_block_number"),
           receiptBlockHash: rowString(execution, "receipt_block_hash"),
           state: rowString(execution, "state"),
@@ -445,33 +518,25 @@ async function collectChainEvidence(client: Queryable, runCases: QueryRow[]) {
   return rounds;
 }
 
-function transactionLink(chainId: number, hash: string) {
-  if (chainId === 84532) return `https://sepolia.basescan.org/tx/${hash}`;
-  if (chainId === 8453) return `https://basescan.org/tx/${hash}`;
-  return `eip155:${chainId}/tx:${hash}`;
-}
-
 function settlementSummary(input: {
   chainEvidence: Record<string, any>[];
   paidAssignments: number;
   policy: Record<string, any>;
-  sourceCounts: SourceCount[];
+  reviewerCounts: ReviewerSourceCount[];
   responses: QueryRow[];
 }) {
+  const paidSources = new Set(
+    input.reviewerCounts.filter(entry => entry.paidReviewerCount > 0).map(entry => entry.source),
+  );
   const links = new Set<string>();
-  for (const round of input.chainEvidence) {
-    const chainId = round.execution?.chainId;
-    const hash = round.execution?.transactionHash;
-    if (Number.isSafeInteger(chainId) && typeof hash === "string" && hash) links.add(transactionLink(chainId, hash));
-  }
   for (const response of input.responses) {
     const reference = rowString(response, "settlement_reference");
-    if (reference) links.add(reference);
+    if (reference && paidSources.has(reviewerSource(response.reviewer_source))) links.add(reference);
   }
   const unpaidInvited =
     input.paidAssignments === 0 &&
     input.policy.compensation === "unpaid" &&
-    input.sourceCounts.every(entry => entry.source === "customer_invited");
+    input.reviewerCounts.every(entry => entry.source === "customer_invited");
   if (unpaidInvited) {
     return {
       mode: "no_onchain_settlement_unpaid_invited",
@@ -496,12 +561,124 @@ function settlementSummary(input: {
   };
 }
 
+function isTerminalIndexedEvent(eventType: unknown) {
+  return eventType === "RoundTerminal" || eventType === "round.terminal" || eventType === "round.finalized";
+}
+
+function assertTerminalPacket(input: {
+  aggregation: Record<string, any>;
+  chainEvidence: Record<string, any>[];
+  paidAssignments: number;
+  policy: Record<string, any>;
+  responses: QueryRow[];
+  runCases: QueryRow[];
+}) {
+  const reviewerCoverage = input.aggregation.reviewerCoverage;
+  if (
+    reviewerCoverage.assignedReviewerCount !== reviewerCoverage.targetReviewerCount ||
+    reviewerCoverage.respondingReviewerCount !== reviewerCoverage.targetReviewerCount ||
+    reviewerCoverage.completeJudgmentSetReviewerCount !== reviewerCoverage.targetReviewerCount
+  ) {
+    evidenceError(
+      "The frozen reviewer target and complete reviewer count must match before evidence is generated.",
+      "assurance_run_not_terminal",
+    );
+  }
+  const judgmentCoverage = input.aggregation.judgmentCoverage;
+  if (
+    judgmentCoverage.submittedJudgmentCount !== judgmentCoverage.targetExpectedJudgmentCount ||
+    judgmentCoverage.validJudgmentCount !== judgmentCoverage.targetExpectedJudgmentCount ||
+    judgmentCoverage.invalidJudgmentCount !== 0 ||
+    judgmentCoverage.missingTargetJudgmentCount !== 0 ||
+    judgmentCoverage.pendingJudgmentCount !== 0
+  ) {
+    evidenceError(
+      "Every targeted reviewer must submit one valid terminal judgment for every frozen case.",
+      "assurance_run_not_terminal",
+    );
+  }
+  const sourceSubpanels = reviewerCoverage.sourceSubpanels as Record<string, any>[];
+  const paidSourceSubpanels = sourceSubpanels.filter(entry => entry.paidReviewerCount > 0);
+  const paidReviewerCount = sourceSubpanels.reduce((total, entry) => total + entry.paidReviewerCount, 0);
+  if (
+    paidReviewerCount !== input.paidAssignments ||
+    paidSourceSubpanels.some(entry => entry.paidReviewerCount !== entry.assignedReviewerCount)
+  ) {
+    evidenceError(
+      "A frozen reviewer source cannot mix paid and unpaid assignments.",
+      "assurance_settlement_evidence_invalid",
+    );
+  }
+  if (
+    (input.policy.compensation === "unpaid" && paidSourceSubpanels.length !== 0) ||
+    (input.policy.compensation === "paid" && paidSourceSubpanels.length !== sourceSubpanels.length) ||
+    (input.policy.compensation === "mixed" &&
+      (paidSourceSubpanels.length === 0 || paidSourceSubpanels.length === sourceSubpanels.length))
+  ) {
+    evidenceError("Assignment compensation does not match the frozen policy.", "assurance_settlement_evidence_invalid");
+  }
+  if (paidSourceSubpanels.length === 0) {
+    if (
+      input.runCases.some(
+        runCase =>
+          rowString(runCase, "round_status") !== "offchain_complete" || rowString(runCase, "round_id") !== null,
+      )
+    ) {
+      evidenceError(
+        "Unpaid cases require the explicit off-chain terminal state and no round ID.",
+        "assurance_run_not_terminal",
+      );
+    }
+    if (input.responses.some(response => rowString(response, "settlement_reference"))) {
+      evidenceError("Unpaid evidence cannot claim an on-chain settlement.", "assurance_settlement_evidence_invalid");
+    }
+    return;
+  }
+  const onchainTerminalStates = new Set(["finalized", "terminal", "failed"]);
+  if (
+    input.runCases.some(
+      runCase =>
+        !onchainTerminalStates.has(rowString(runCase, "round_status") ?? "") || !rowString(runCase, "round_id"),
+    )
+  ) {
+    evidenceError("Paid cases require a bound round in a terminal on-chain state.", "assurance_run_not_terminal");
+  }
+  const paidSources = new Set(paidSourceSubpanels.map(entry => entry.source));
+  if (
+    input.responses.some(response => {
+      const paid = paidSources.has(reviewerSource(response.reviewer_source));
+      const reference = rowString(response, "settlement_reference");
+      return paid ? !reference : Boolean(reference);
+    })
+  ) {
+    evidenceError(
+      "Paid responses require terminal settlement references and unpaid responses must not claim them.",
+      "assurance_settlement_evidence_pending",
+    );
+  }
+  if (
+    input.chainEvidence.some(
+      round => !round.indexedEvents?.some((event: Record<string, unknown>) => isTerminalIndexedEvent(event.eventType)),
+    )
+  ) {
+    evidenceError(
+      "Paid evidence requires a stored terminal settlement event for every case.",
+      "assurance_settlement_evidence_pending",
+    );
+  }
+}
+
 function buildLimitations(input: {
   aggregation: Record<string, any>;
   settlement: Record<string, any>;
   chainEvidence: Record<string, any>[];
 }) {
   const limitations = [
+    {
+      code: "descriptive_case_results",
+      message:
+        "Preference shares are descriptive per-case reviewer results; judgments across cases are not treated as independent samples and no confidence interval is claimed.",
+    },
     {
       code: "rationale_minimized",
       message: "The export contains rationale digests only; raw or decryptable rationale is excluded.",
@@ -511,19 +688,27 @@ function buildLimitations(input: {
       message: "The measured packet is separate from the client's go, revise, or stop sign-off.",
     },
   ];
-  if (input.aggregation.suppressed) {
+  if (input.aggregation.cases.some((entry: Record<string, any>) => entry.suppressed)) {
     limitations.push({
       code: "minimum_aggregation_not_met",
       message: "Preference and disagreement metrics are suppressed until the frozen minimum aggregate size is met.",
     });
   }
-  if (input.aggregation.sourceSubpanels.some((panel: Record<string, any>) => panel.suppressed)) {
+  if (
+    input.aggregation.cases.some((entry: Record<string, any>) =>
+      entry.sourceSubpanels.some((panel: Record<string, any>) => panel.suppressed),
+    )
+  ) {
     limitations.push({
       code: "small_source_cells_suppressed",
       message: "One or more source-separated panels are below the frozen minimum aggregate size.",
     });
   }
-  if (input.aggregation.missingCount > 0 || input.aggregation.invalidCount > 0 || input.aggregation.pendingCount > 0) {
+  if (
+    input.aggregation.judgmentCoverage.missingTargetJudgmentCount > 0 ||
+    input.aggregation.judgmentCoverage.invalidJudgmentCount > 0 ||
+    input.aggregation.judgmentCoverage.pendingJudgmentCount > 0
+  ) {
     limitations.push({
       code: "incomplete_or_invalid_work",
       message: "Missing, invalid, or pending responses are counted separately and excluded from preference statistics.",
@@ -610,24 +795,43 @@ export async function generateAssuranceEvidencePacket(input: {
         [input.runId],
       ),
       client.query(
-        `SELECT case_id, reviewer_source, choice, failure_tag_keys_json, rationale_ciphertext,
+        `SELECT case_id, reviewer_key, reviewer_source, choice, failure_tag_keys_json, rationale_ciphertext,
                 rationale_key_ref, qualification_keys_json, response_digest, settlement_reference, validity
          FROM tokenless_assurance_responses WHERE run_id = $1 ORDER BY response_id ASC`,
         [input.runId],
       ),
     ]);
     if (caseResult.rows.length === 0) evidenceError("The completed run has no frozen cases.");
-    const counts = await collectCounts(client, input.runId, responseResult.rows, frozen.policy);
+    const counts = await collectAggregationInputs(
+      client,
+      input.runId,
+      caseResult.rows,
+      responseResult.rows,
+      frozen.policy,
+    );
     const passRule = passRuleFrom(row, frozen.runManifest);
-    const aggregation = computeEvidenceAggregation(counts.sourceCounts, counts.minimumAggregationSize, passRule);
+    const recomputation = privacySafeRecomputation(
+      counts.reviewerCounts,
+      counts.caseCounts,
+      counts.minimumAggregationSize,
+    );
+    const aggregation = computeEvidenceAggregation(recomputation, counts.minimumAggregationSize, passRule);
     const caseLeaves = caseResult.rows.map(caseLeaf).sort();
     const responseLeaves = responseResult.rows.map(responseLeaf).sort();
     const chainEvidence = await collectChainEvidence(client, caseResult.rows);
+    assertTerminalPacket({
+      aggregation,
+      chainEvidence,
+      paidAssignments: counts.paidAssignments,
+      policy: frozen.policy,
+      responses: responseResult.rows,
+      runCases: caseResult.rows,
+    });
     const settlement = settlementSummary({
       chainEvidence,
       paidAssignments: counts.paidAssignments,
       policy: frozen.policy,
-      sourceCounts: counts.sourceCounts,
+      reviewerCounts: counts.reviewerCounts,
       responses: responseResult.rows,
     });
     const limitations = buildLimitations({ aggregation, settlement, chainEvidence });
@@ -658,7 +862,9 @@ export async function generateAssuranceEvidencePacket(input: {
       },
       roots: { caseRoot: evidenceMerkleRoot(caseLeaves), responseRoot: evidenceMerkleRoot(responseLeaves) },
       aggregation,
-      failureTagCounts: aggregation.suppressed ? [] : counts.failureTagCounts,
+      failureTagCounts: counts.failureTagCounts.filter(
+        (entry: { count: number }) => entry.count >= counts.minimumAggregationSize,
+      ),
       rationaleDigests: counts.rationaleDigests,
       settlement,
       chainEvidence,
@@ -666,7 +872,7 @@ export async function generateAssuranceEvidencePacket(input: {
       recomputation: {
         caseLeaves,
         responseLeaves,
-        ...privacySafeRecomputation(counts.sourceCounts, counts.minimumAggregationSize),
+        ...recomputation,
       },
     };
     const packet = signPacket(payload, input.signer ?? loadEvidenceSigner());

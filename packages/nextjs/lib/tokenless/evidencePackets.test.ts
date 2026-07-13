@@ -1,5 +1,6 @@
 import {
   canonicalizeEvidenceValue,
+  computeEvidenceAggregation,
   evidenceSigningKeyId,
   sha256EvidenceValue,
 } from "../../scripts/assurance-evidence-core.mjs";
@@ -34,6 +35,7 @@ const NOW = new Date("2026-07-13T12:00:00.000Z");
 type SourceFixture = {
   source: "customer_invited" | "rateloop_network" | "sandbox";
   targetCount: number;
+  paid?: boolean;
   responses: { choice: "baseline" | "candidate" | "tie"; validity: "valid" | "invalid" | "pending" }[];
 };
 
@@ -45,6 +47,66 @@ afterEach(() => {
   __setDatabaseResourcesForTests(null);
 });
 
+test("aggregation keeps reviewer targets separate from multi-case judgments", () => {
+  const passRule = {
+    metric: "candidate_preference_share_bps",
+    operator: "gte",
+    thresholdBps: 6000,
+    minimumValidResponses: 2,
+  };
+  const source = {
+    source: "customer_invited",
+    targetReviewerCount: 3,
+    assignedReviewerCount: 3,
+    paidReviewerCount: 0,
+    respondingReviewerCount: 3,
+    completeJudgmentSetReviewerCount: 3,
+  };
+  const caseCounts = (caseId: string, candidate: number, baseline: number) => ({
+    caseId,
+    overall: {
+      targetReviewerCount: 3,
+      assignedReviewerCount: 3,
+      validReviewerCount: 3,
+      invalidJudgmentCount: 0,
+      pendingJudgmentCount: 0,
+      suppressed: false,
+      candidate,
+      baseline,
+      tie: 0,
+    },
+    sourceCounts: [
+      {
+        source: "customer_invited",
+        targetReviewerCount: 3,
+        assignedReviewerCount: 3,
+        validReviewerCount: 3,
+        invalidJudgmentCount: 0,
+        pendingJudgmentCount: 0,
+        suppressed: false,
+        candidate,
+        baseline,
+        tie: 0,
+      },
+    ],
+  });
+  const aggregation = computeEvidenceAggregation(
+    { reviewerSources: [source], cases: [caseCounts("case_a", 2, 1), caseCounts("case_b", 1, 2)] },
+    2,
+    passRule,
+  );
+  assert.equal(aggregation.reviewerCoverage.targetReviewerCount, 3);
+  assert.equal(aggregation.reviewerCoverage.respondingReviewerCount, 3);
+  assert.equal(aggregation.judgmentCoverage.caseCount, 2);
+  assert.equal(aggregation.judgmentCoverage.targetExpectedJudgmentCount, 6);
+  assert.equal(aggregation.judgmentCoverage.submittedJudgmentCount, 6);
+  assert.equal(aggregation.cases[0].preference.candidateShareBps, 6667);
+  assert.equal(aggregation.cases[1].preference.candidateShareBps, 3333);
+  assert.equal(aggregation.suite.outcome, "fail");
+  assert.equal("preference" in aggregation.reviewerCoverage, false);
+  assert.doesNotMatch(JSON.stringify(aggregation), /wilson|interval/i);
+});
+
 function address(index: number) {
   return `0x${(1000 + index).toString(16).padStart(40, "0")}`;
 }
@@ -54,7 +116,7 @@ async function insert(sql: string, args: unknown[]) {
 }
 
 async function seedEvidenceFixture(input: {
-  compensation: "paid" | "unpaid";
+  compensation: "paid" | "unpaid" | "mixed";
   minimumAggregationSize: number;
   sources: SourceFixture[];
   withChain?: boolean;
@@ -97,7 +159,7 @@ async function seedEvidenceFixture(input: {
       minimumAggregationSize: input.minimumAggregationSize,
       suppressSmallCells: true,
     },
-    legalEligibilityRequired: input.compensation === "paid",
+    legalEligibilityRequired: input.compensation !== "unpaid",
   };
   const policyHash = hashHumanAssuranceDocument(policy);
   const runManifest = {
@@ -174,7 +236,7 @@ async function seedEvidenceFixture(input: {
       JSON.stringify(policy.fallbacks),
       JSON.stringify(policy.assurance),
       JSON.stringify(policy.buyerPrivacy),
-      input.compensation === "paid",
+      input.compensation !== "unpaid",
       policyHash,
       canonicalizeHumanAssuranceDocument(policy),
       NOW,
@@ -215,7 +277,7 @@ async function seedEvidenceFixture(input: {
       contentId,
       admissionPolicyHash,
       input.withChain ? "42" : null,
-      input.withChain ? "terminal" : "planned",
+      input.withChain ? "terminal" : "offchain_complete",
       NOW,
       NOW,
     ],
@@ -223,6 +285,7 @@ async function seedEvidenceFixture(input: {
 
   let reviewerIndex = 0;
   for (const [sourceIndex, source] of input.sources.entries()) {
+    const paidSource = source.paid ?? input.compensation === "paid";
     const cohortId = `cohort_${sourceIndex}`;
     const subpanelId = `subpanel_${sourceIndex}`;
     await insert(
@@ -281,8 +344,8 @@ async function seedEvidenceFixture(input: {
           source.source,
           hashHumanAssuranceDocument({ confidentiality: true }),
           NOW,
-          input.compensation === "paid",
-          input.compensation === "paid" ? NOW : null,
+          paidSource,
+          paidSource ? NOW : null,
           new Date(NOW.getTime() + 60_000),
           new Date(NOW.getTime() + 60_000),
           OWNER,
@@ -299,7 +362,7 @@ async function seedEvidenceFixture(input: {
             failure_tag_keys_json, rationale_ciphertext, rationale_key_ref,
             qualification_keys_json, assurance_capabilities_json, response_digest,
             settlement_reference, validity, submitted_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', ?, NULL, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, ?, ?)`,
           [
             `response_${sourceIndex}_${index}`,
             runId,
@@ -311,6 +374,7 @@ async function seedEvidenceFixture(input: {
             `ciphertext:private-rationale-${sourceIndex}-${index}`,
             `key:${sourceIndex}:${index}`,
             hashHumanAssuranceDocument({ sourceIndex, index, response }),
+            paidSource ? `https://sepolia.basescan.org/tx/0x${"88".repeat(32)}` : null,
             response.validity,
             NOW,
             NOW,
@@ -364,7 +428,7 @@ async function seedEvidenceFixture(input: {
        (event_id, operation_key, workspace_id, deployment_key, round_id, sequence,
         event_type, evidence_hash, evidence_json, occurred_at, recorded_at)
        VALUES ('event_evidence', 'operation_evidence', ?, 'tokenless-v2:test', 42, 1,
-               'RoundSettled', ?, '{"private":"not exported"}', ?, ?)`,
+               'round.finalized', ?, '{"private":"not exported"}', ?, ?)`,
       [workspaceId, hashHumanAssuranceDocument({ event: "settled" }), NOW, NOW],
     );
   }
@@ -389,7 +453,8 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
           { choice: "candidate", validity: "valid" },
           { choice: "candidate", validity: "valid" },
           { choice: "baseline", validity: "valid" },
-          { choice: "baseline", validity: "invalid" },
+          { choice: "baseline", validity: "valid" },
+          { choice: "baseline", validity: "valid" },
         ],
       },
     ],
@@ -403,11 +468,17 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     signer: { privateKey: signer.privateKey },
     tenantCommitmentKey: TENANT_KEY,
   });
-  assert.equal(packet.payload.aggregation.sampleSize, 4);
-  assert.equal(packet.payload.aggregation.invalidCount, 1);
-  assert.equal(packet.payload.aggregation.missingCount, 1);
-  assert.equal(packet.payload.aggregation.preference.candidateShareBps, 7500);
-  assert.ok(packet.payload.aggregation.preference.wilson95Bps.lowerBps < 7500);
+  assert.equal(packet.payload.aggregation.reviewerCoverage.targetReviewerCount, 6);
+  assert.equal(packet.payload.aggregation.reviewerCoverage.respondingReviewerCount, 6);
+  assert.equal(packet.payload.aggregation.judgmentCoverage.targetExpectedJudgmentCount, 6);
+  assert.equal(packet.payload.aggregation.judgmentCoverage.submittedJudgmentCount, 6);
+  assert.equal(packet.payload.aggregation.judgmentCoverage.validJudgmentCount, 6);
+  assert.equal(packet.payload.aggregation.judgmentCoverage.invalidJudgmentCount, 0);
+  assert.equal(packet.payload.aggregation.judgmentCoverage.missingTargetJudgmentCount, 0);
+  assert.equal(packet.payload.aggregation.cases[0].preference.candidateShareBps, 5000);
+  assert.equal(packet.payload.aggregation.cases[0].preference.method, "descriptive_case_share");
+  assert.equal(packet.payload.aggregation.suite.outcome, "fail");
+  assert.doesNotMatch(JSON.stringify(packet.payload.aggregation), /wilson|interval/i);
   assert.equal(packet.payload.settlement.mode, "no_onchain_settlement_unpaid_invited");
   assert.equal(packet.payload.settlement.links.length, 0);
   assert.match(packet.payload.tenantCommitment, /^hmac-sha256:[0-9a-f]{64}$/);
@@ -487,14 +558,15 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   }
 });
 
-test("evidence keeps source panels separate and links only stored deployment-pinned chain evidence", async () => {
+test("evidence keeps mixed paid and unpaid source panels separate and links only stored settlement evidence", async () => {
   const fixture = await seedEvidenceFixture({
-    compensation: "paid",
+    compensation: "mixed",
     minimumAggregationSize: 3,
     withChain: true,
     sources: [
       {
         source: "customer_invited",
+        paid: false,
         targetCount: 3,
         responses: [
           { choice: "candidate", validity: "valid" },
@@ -504,11 +576,11 @@ test("evidence keeps source panels separate and links only stored deployment-pin
       },
       {
         source: "rateloop_network",
-        targetCount: 3,
+        paid: true,
+        targetCount: 2,
         responses: [
           { choice: "candidate", validity: "valid" },
           { choice: "tie", validity: "valid" },
-          { choice: "baseline", validity: "invalid" },
         ],
       },
     ],
@@ -522,18 +594,26 @@ test("evidence keeps source panels separate and links only stored deployment-pin
     tenantCommitmentKey: TENANT_KEY,
   });
   assert.deepEqual(
-    packet.payload.aggregation.sourceSubpanels.map((panel: Record<string, unknown>) => panel.source),
+    packet.payload.aggregation.reviewerCoverage.sourceSubpanels.map((panel: Record<string, unknown>) => panel.source),
     ["customer_invited", "rateloop_network"],
   );
-  assert.equal(packet.payload.aggregation.sourceSubpanels[1].suppressed, true);
-  assert.equal(packet.payload.aggregation.sourceSubpanels[1].preference, null);
-  assert.equal("candidate" in packet.payload.recomputation.sourceCounts[1], false);
-  assert.equal("baseline" in packet.payload.recomputation.sourceCounts[1], false);
-  assert.equal("tie" in packet.payload.recomputation.sourceCounts[1], false);
+  assert.equal(packet.payload.aggregation.reviewerCoverage.paidReviewerCount, 2);
+  assert.deepEqual(
+    packet.payload.aggregation.reviewerCoverage.sourceSubpanels.map(
+      (panel: Record<string, unknown>) => panel.paidReviewerCount,
+    ),
+    [0, 2],
+  );
+  assert.equal(packet.payload.aggregation.cases[0].sourceSubpanels[1].suppressed, true);
+  assert.equal(packet.payload.aggregation.cases[0].sourceSubpanels[1].preference, null);
+  assert.equal("candidate" in packet.payload.recomputation.cases[0].sourceCounts[1], false);
+  assert.equal("baseline" in packet.payload.recomputation.cases[0].sourceCounts[1], false);
+  assert.equal("tie" in packet.payload.recomputation.cases[0].sourceCounts[1], false);
   assert.equal(packet.payload.settlement.mode, "onchain_evidence_recorded");
-  assert.deepEqual(packet.payload.settlement.links, [`https://sepolia.basescan.org/tx/0x${"66".repeat(32)}`]);
+  assert.deepEqual(packet.payload.settlement.links, [`https://sepolia.basescan.org/tx/0x${"88".repeat(32)}`]);
   assert.equal(packet.payload.chainEvidence[0].execution.deploymentKey, "tokenless-v2:test");
-  assert.equal(packet.payload.chainEvidence[0].indexedEvents[0].eventType, "RoundSettled");
+  assert.equal(packet.payload.chainEvidence[0].execution.roundCreationTransactionHash, `0x${"66".repeat(32)}`);
+  assert.equal(packet.payload.chainEvidence[0].indexedEvents[0].eventType, "round.finalized");
   assert.doesNotMatch(JSON.stringify(packet), /\"private\":\"not exported\"/);
 });
 
@@ -620,6 +700,35 @@ test("client sign-off is decision-owner scoped, separate, and bound to the measu
     "SELECT result_json FROM tokenless_assurance_evidence_packets WHERE run_id = 'run_evidence'",
   );
   assert.doesNotMatch(String(stored.rows[0]?.result_json), /revise|decision_owner/);
+});
+
+test("packet generation rejects a completed label with unaccounted reviewer-case judgments", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 2,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 3,
+        responses: [
+          { choice: "candidate", validity: "valid" },
+          { choice: "baseline", validity: "valid" },
+        ],
+      },
+    ],
+  });
+  const signer = generateKeyPairSync("ed25519");
+  await assert.rejects(
+    () =>
+      generateAssuranceEvidencePacket({
+        accountAddress: OWNER,
+        workspaceId: fixture.workspaceId,
+        runId: fixture.runId,
+        signer: { privateKey: signer.privateKey },
+        tenantCommitmentKey: TENANT_KEY,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_not_terminal",
+  );
 });
 
 test("callers cannot inject measured outcome fields", () => {

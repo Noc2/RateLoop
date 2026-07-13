@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v1";
-export const EVIDENCE_AGGREGATION_VERSION = "rateloop.preference-wilson.v1";
+export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v2";
+export const EVIDENCE_AGGREGATION_VERSION = "rateloop.descriptive-case-quorum.v2";
 
 export function canonicalizeEvidenceValue(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalizeEvidenceValue).join(",")}]`;
@@ -37,198 +37,193 @@ export function evidenceMerkleRoot(leaves) {
   return level[0];
 }
 
-export function wilsonIntervalBps(successes, sampleSize) {
-  if (!Number.isSafeInteger(successes) || !Number.isSafeInteger(sampleSize) || successes < 0 || sampleSize < 1) {
-    return null;
-  }
-  const boundedSuccesses = Math.min(successes, sampleSize);
-  const z = 1.959963984540054;
-  const proportion = boundedSuccesses / sampleSize;
-  const zSquared = z * z;
-  const denominator = 1 + zSquared / sampleSize;
-  const center = (proportion + zSquared / (2 * sampleSize)) / denominator;
-  const margin =
-    (z * Math.sqrt((proportion * (1 - proportion) + zSquared / (4 * sampleSize)) / sampleSize)) / denominator;
-  return {
-    lowerBps: Math.max(0, Math.round((center - margin) * 10_000)),
-    upperBps: Math.min(10_000, Math.round((center + margin) * 10_000)),
-  };
-}
-
-function normalizedCount(value, name) {
+function count(value, name) {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer.`);
   return value;
 }
 
-export function computeEvidenceAggregation(sourceCounts, minimumAggregationSize, passRule) {
-  if (!Number.isSafeInteger(minimumAggregationSize) || minimumAggregationSize < 1) {
-    throw new Error("minimumAggregationSize must be a positive integer.");
-  }
-  const sources = sourceCounts.map(entry => {
-    const targetCount = normalizedCount(entry.targetCount, "targetCount");
-    const assignedCount = normalizedCount(entry.assignedCount, "assignedCount");
-    const candidate = normalizedCount(entry.candidate, "candidate");
-    const baseline = normalizedCount(entry.baseline, "baseline");
-    const tie = normalizedCount(entry.tie, "tie");
-    const invalidCount = normalizedCount(entry.invalidCount, "invalidCount");
-    const pendingCount = normalizedCount(entry.pendingCount, "pendingCount");
-    const sampleSize = candidate + baseline + tie;
-    const submittedCount = sampleSize + invalidCount + pendingCount;
-    const missingCount = Math.max(0, targetCount - submittedCount);
-    const suppressed = sampleSize < minimumAggregationSize;
-    return {
-      source: entry.source,
-      targetCount,
-      assignedCount,
-      submittedCount,
-      sampleSize,
-      invalidCount,
-      pendingCount,
-      missingCount,
-      suppressed,
-      preference: suppressed
-        ? null
-        : {
-            candidate,
-            baseline,
-            tie,
-            candidateShareBps: Math.round((candidate * 10_000) / sampleSize),
-            wilson95Bps: wilsonIntervalBps(candidate, sampleSize),
-          },
-      disagreement: suppressed
-        ? null
-        : {
-            nonCandidateCount: baseline + tie,
-            rateBps: Math.round(((baseline + tie) * 10_000) / sampleSize),
-          },
-    };
-  });
-  const totals = sourceCounts.reduce(
-    (result, entry) => ({
-      targetCount: result.targetCount + normalizedCount(entry.targetCount, "targetCount"),
-      assignedCount: result.assignedCount + normalizedCount(entry.assignedCount, "assignedCount"),
-      candidate: result.candidate + normalizedCount(entry.candidate, "candidate"),
-      baseline: result.baseline + normalizedCount(entry.baseline, "baseline"),
-      tie: result.tie + normalizedCount(entry.tie, "tie"),
-      invalidCount: result.invalidCount + normalizedCount(entry.invalidCount, "invalidCount"),
-      pendingCount: result.pendingCount + normalizedCount(entry.pendingCount, "pendingCount"),
-    }),
-    { targetCount: 0, assignedCount: 0, candidate: 0, baseline: 0, tie: 0, invalidCount: 0, pendingCount: 0 },
-  );
-  const sampleSize = totals.candidate + totals.baseline + totals.tie;
-  const submittedCount = sampleSize + totals.invalidCount + totals.pendingCount;
-  const missingCount = Math.max(0, totals.targetCount - submittedCount);
-  const suppressed = sampleSize < minimumAggregationSize;
-  const candidateShareBps = suppressed ? null : Math.round((totals.candidate * 10_000) / sampleSize);
-  const outcome =
-    candidateShareBps === null || sampleSize < passRule.minimumValidResponses
-      ? "insufficient"
-      : candidateShareBps >= passRule.thresholdBps
-        ? "pass"
-        : "fail";
+function reviewerPanel(entry) {
   return {
-    aggregationVersion: EVIDENCE_AGGREGATION_VERSION,
-    minimumAggregationSize,
-    targetCount: totals.targetCount,
-    assignedCount: totals.assignedCount,
-    submittedCount,
-    sampleSize,
-    invalidCount: totals.invalidCount,
-    pendingCount: totals.pendingCount,
-    missingCount,
-    suppressed,
-    preference: suppressed
-      ? null
-      : {
-          candidate: totals.candidate,
-          baseline: totals.baseline,
-          tie: totals.tie,
-          candidateShareBps,
-          wilson95Bps: wilsonIntervalBps(totals.candidate, sampleSize),
-        },
-    disagreement: suppressed
-      ? null
-      : {
-          nonCandidateCount: totals.baseline + totals.tie,
-          rateBps: Math.round(((totals.baseline + totals.tie) * 10_000) / sampleSize),
-        },
-    passRule,
-    outcome,
-    sourceSubpanels: sources,
+    source: entry.source,
+    targetReviewerCount: count(entry.targetReviewerCount, "targetReviewerCount"),
+    assignedReviewerCount: count(entry.assignedReviewerCount, "assignedReviewerCount"),
+    paidReviewerCount: count(entry.paidReviewerCount, "paidReviewerCount"),
+    respondingReviewerCount: count(entry.respondingReviewerCount, "respondingReviewerCount"),
+    completeJudgmentSetReviewerCount: count(entry.completeJudgmentSetReviewerCount, "completeJudgmentSetReviewerCount"),
   };
 }
 
-function panelFromPrivacySafeCounts(entry, minimumAggregationSize) {
-  const targetCount = normalizedCount(entry.targetCount, "targetCount");
-  const assignedCount = normalizedCount(entry.assignedCount, "assignedCount");
-  const sampleSize = normalizedCount(entry.sampleSize, "sampleSize");
-  const invalidCount = normalizedCount(entry.invalidCount, "invalidCount");
-  const pendingCount = normalizedCount(entry.pendingCount, "pendingCount");
-  const submittedCount = sampleSize + invalidCount + pendingCount;
-  const missingCount = Math.max(0, targetCount - submittedCount);
-  if (entry.suppressed) {
-    if (sampleSize >= minimumAggregationSize || entry.candidate !== undefined) {
-      throw new Error("Suppressed recomputation counts expose an invalid small cell.");
+function descriptiveCasePanel(entry, minimumAggregationSize, passRule) {
+  const targetReviewerCount = count(entry.targetReviewerCount, "targetReviewerCount");
+  const assignedReviewerCount = count(entry.assignedReviewerCount, "assignedReviewerCount");
+  const validReviewerCount = count(entry.validReviewerCount, "validReviewerCount");
+  const invalidJudgmentCount = count(entry.invalidJudgmentCount, "invalidJudgmentCount");
+  const pendingJudgmentCount = count(entry.pendingJudgmentCount, "pendingJudgmentCount");
+  const submittedJudgmentCount = validReviewerCount + invalidJudgmentCount + pendingJudgmentCount;
+  const suppressed = validReviewerCount < minimumAggregationSize;
+  let preference = null;
+  let disagreement = null;
+  if (suppressed) {
+    if (entry.candidate !== undefined || entry.baseline !== undefined || entry.tie !== undefined) {
+      throw new Error("Suppressed per-case recomputation counts expose a small-cell preference.");
     }
-    return {
-      source: entry.source,
-      targetCount,
-      assignedCount,
-      submittedCount,
-      sampleSize,
-      invalidCount,
-      pendingCount,
-      missingCount,
-      suppressed: true,
-      preference: null,
-      disagreement: null,
+  } else {
+    const candidate = count(entry.candidate, "candidate");
+    const baseline = count(entry.baseline, "baseline");
+    const tie = count(entry.tie, "tie");
+    if (candidate + baseline + tie !== validReviewerCount) {
+      throw new Error("Per-case valid reviewer count does not match its choices.");
+    }
+    preference = {
+      candidate,
+      baseline,
+      tie,
+      candidateShareBps: Math.round((candidate * 10_000) / validReviewerCount),
+      method: "descriptive_case_share",
+    };
+    disagreement = {
+      nonCandidateCount: baseline + tie,
+      rateBps: Math.round(((baseline + tie) * 10_000) / validReviewerCount),
+      method: "descriptive_case_share",
     };
   }
-  const computed = computeEvidenceAggregation(
-    [
-      {
-        source: entry.source,
-        targetCount,
-        assignedCount,
-        candidate: normalizedCount(entry.candidate, "candidate"),
-        baseline: normalizedCount(entry.baseline, "baseline"),
-        tie: normalizedCount(entry.tie, "tie"),
-        invalidCount,
-        pendingCount,
-      },
-    ],
-    minimumAggregationSize,
-    { metric: "candidate_preference_share_bps", operator: "gte", thresholdBps: 0, minimumValidResponses: 0 },
-  );
-  if (computed.sampleSize !== sampleSize) throw new Error("Recomputation sample size does not match its choices.");
-  return computed.sourceSubpanels[0];
-}
-
-function aggregationFromPrivacySafeCounts(recomputation, minimumAggregationSize, passRule) {
-  const overallPanel = panelFromPrivacySafeCounts(recomputation.overallCounts, minimumAggregationSize);
-  const candidateShareBps = overallPanel.preference?.candidateShareBps ?? null;
+  const quorumMet = validReviewerCount >= passRule.minimumValidResponses;
   const outcome =
-    candidateShareBps === null || overallPanel.sampleSize < passRule.minimumValidResponses
+    suppressed || !quorumMet || !preference
       ? "insufficient"
-      : candidateShareBps >= passRule.thresholdBps
+      : preference.candidateShareBps >= passRule.thresholdBps
         ? "pass"
         : "fail";
   return {
-    aggregationVersion: EVIDENCE_AGGREGATION_VERSION,
-    minimumAggregationSize,
-    targetCount: overallPanel.targetCount,
-    assignedCount: overallPanel.assignedCount,
-    submittedCount: overallPanel.submittedCount,
-    sampleSize: overallPanel.sampleSize,
-    invalidCount: overallPanel.invalidCount,
-    pendingCount: overallPanel.pendingCount,
-    missingCount: overallPanel.missingCount,
-    suppressed: overallPanel.suppressed,
-    preference: overallPanel.preference,
-    disagreement: overallPanel.disagreement,
-    passRule,
+    ...(entry.source ? { source: entry.source } : {}),
+    targetReviewerCount,
+    assignedReviewerCount,
+    submittedJudgmentCount,
+    validReviewerCount,
+    invalidJudgmentCount,
+    pendingJudgmentCount,
+    missingTargetJudgmentCount: Math.max(0, targetReviewerCount - submittedJudgmentCount),
+    missingAssignedJudgmentCount: Math.max(0, assignedReviewerCount - submittedJudgmentCount),
+    suppressed,
+    quorum: { requiredValidReviewers: passRule.minimumValidResponses, met: quorumMet },
+    preference,
+    disagreement,
     outcome,
-    sourceSubpanels: recomputation.sourceCounts.map(entry => panelFromPrivacySafeCounts(entry, minimumAggregationSize)),
+  };
+}
+
+export function computeEvidenceAggregation(recomputation, minimumAggregationSize, passRule) {
+  if (!Number.isSafeInteger(minimumAggregationSize) || minimumAggregationSize < 1) {
+    throw new Error("minimumAggregationSize must be a positive integer.");
+  }
+  if (!Array.isArray(recomputation.reviewerSources) || !Array.isArray(recomputation.cases)) {
+    throw new Error("Evidence recomputation inputs are incomplete.");
+  }
+  const sourceReviewerPanels = recomputation.reviewerSources.map(reviewerPanel);
+  const reviewerCoverage = sourceReviewerPanels.reduce(
+    (result, panel) => ({
+      targetReviewerCount: result.targetReviewerCount + panel.targetReviewerCount,
+      assignedReviewerCount: result.assignedReviewerCount + panel.assignedReviewerCount,
+      paidReviewerCount: result.paidReviewerCount + panel.paidReviewerCount,
+      respondingReviewerCount: result.respondingReviewerCount + panel.respondingReviewerCount,
+      completeJudgmentSetReviewerCount:
+        result.completeJudgmentSetReviewerCount + panel.completeJudgmentSetReviewerCount,
+      sourceSubpanels: result.sourceSubpanels,
+    }),
+    {
+      targetReviewerCount: 0,
+      assignedReviewerCount: 0,
+      paidReviewerCount: 0,
+      respondingReviewerCount: 0,
+      completeJudgmentSetReviewerCount: 0,
+      sourceSubpanels: sourceReviewerPanels,
+    },
+  );
+  const cases = recomputation.cases.map(entry => {
+    const overall = descriptiveCasePanel(entry.overall, minimumAggregationSize, passRule);
+    const sourceSubpanels = entry.sourceCounts.map(source =>
+      descriptiveCasePanel(source, minimumAggregationSize, passRule),
+    );
+    const sourceTotals = sourceSubpanels.reduce(
+      (result, panel) => ({
+        target: result.target + panel.targetReviewerCount,
+        assigned: result.assigned + panel.assignedReviewerCount,
+        submitted: result.submitted + panel.submittedJudgmentCount,
+        valid: result.valid + panel.validReviewerCount,
+        invalid: result.invalid + panel.invalidJudgmentCount,
+        pending: result.pending + panel.pendingJudgmentCount,
+      }),
+      { target: 0, assigned: 0, submitted: 0, valid: 0, invalid: 0, pending: 0 },
+    );
+    if (
+      sourceTotals.target !== overall.targetReviewerCount ||
+      sourceTotals.assigned !== overall.assignedReviewerCount ||
+      sourceTotals.submitted !== overall.submittedJudgmentCount ||
+      sourceTotals.valid !== overall.validReviewerCount ||
+      sourceTotals.invalid !== overall.invalidJudgmentCount ||
+      sourceTotals.pending !== overall.pendingJudgmentCount
+    ) {
+      throw new Error("Per-case source counts do not reconcile to the case total.");
+    }
+    return { caseId: entry.caseId, ...overall, sourceSubpanels };
+  });
+  const judgmentCoverage = cases.reduce(
+    (result, entry) => ({
+      caseCount: result.caseCount + 1,
+      targetExpectedJudgmentCount: result.targetExpectedJudgmentCount + entry.targetReviewerCount,
+      assignedExpectedJudgmentCount: result.assignedExpectedJudgmentCount + entry.assignedReviewerCount,
+      submittedJudgmentCount: result.submittedJudgmentCount + entry.submittedJudgmentCount,
+      validJudgmentCount: result.validJudgmentCount + entry.validReviewerCount,
+      invalidJudgmentCount: result.invalidJudgmentCount + entry.invalidJudgmentCount,
+      pendingJudgmentCount: result.pendingJudgmentCount + entry.pendingJudgmentCount,
+      missingTargetJudgmentCount: result.missingTargetJudgmentCount + entry.missingTargetJudgmentCount,
+      missingAssignedJudgmentCount: result.missingAssignedJudgmentCount + entry.missingAssignedJudgmentCount,
+    }),
+    {
+      caseCount: 0,
+      targetExpectedJudgmentCount: 0,
+      assignedExpectedJudgmentCount: 0,
+      submittedJudgmentCount: 0,
+      validJudgmentCount: 0,
+      invalidJudgmentCount: 0,
+      pendingJudgmentCount: 0,
+      missingTargetJudgmentCount: 0,
+      missingAssignedJudgmentCount: 0,
+    },
+  );
+  if (
+    judgmentCoverage.targetExpectedJudgmentCount !== reviewerCoverage.targetReviewerCount * cases.length ||
+    judgmentCoverage.assignedExpectedJudgmentCount !== reviewerCoverage.assignedReviewerCount * cases.length
+  ) {
+    throw new Error("Expected case judgments do not reconcile to reviewer coverage.");
+  }
+  const passCaseCount = cases.filter(entry => entry.outcome === "pass").length;
+  const failCaseCount = cases.filter(entry => entry.outcome === "fail").length;
+  const insufficientCaseCount = cases.filter(entry => entry.outcome === "insufficient").length;
+  const suiteOutcome =
+    failCaseCount > 0
+      ? "fail"
+      : insufficientCaseCount > 0
+        ? "insufficient"
+        : cases.length > 0
+          ? "pass"
+          : "insufficient";
+  return {
+    aggregationVersion: EVIDENCE_AGGREGATION_VERSION,
+    method: "descriptive_per_case",
+    minimumAggregationSize,
+    reviewerCoverage,
+    judgmentCoverage,
+    passRule,
+    cases,
+    suite: {
+      method: "all_cases_must_pass",
+      evaluatedCaseCount: passCaseCount + failCaseCount,
+      passCaseCount,
+      failCaseCount,
+      insufficientCaseCount,
+      outcome: suiteOutcome,
+    },
   };
 }
 
@@ -265,7 +260,7 @@ export function verifyEvidenceExport(packet, trust = {}) {
     if (evidenceMerkleRoot(packet.payload.recomputation.responseLeaves) !== packet.payload.roots.responseRoot) {
       errors.push("response_root_mismatch");
     }
-    const aggregation = aggregationFromPrivacySafeCounts(
+    const aggregation = computeEvidenceAggregation(
       packet.payload.recomputation,
       packet.payload.aggregation.minimumAggregationSize,
       packet.payload.aggregation.passRule,

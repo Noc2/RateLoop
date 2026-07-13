@@ -197,17 +197,51 @@ export interface HumanAssuranceEvidencePacket {
   responseRoot: `sha256:${string}`;
   aggregationVersion: string;
   result: {
-    candidatePreferenceShareBps: number | null;
-    validResponseCount: number;
-    invalidResponseCount: number;
-    missingCaseCount: number;
-    disagreementBps: number | null;
-    interval: {
-      method: "wilson_95";
-      lowerBps: number;
-      upperBps: number;
-    } | null;
-    passed: boolean | null;
+    method: "descriptive_per_case";
+    reviewerCoverage: {
+      targetReviewerCount: number;
+      assignedReviewerCount: number;
+      paidReviewerCount: number;
+      respondingReviewerCount: number;
+      completeJudgmentSetReviewerCount: number;
+    };
+    judgmentCoverage: {
+      caseCount: number;
+      targetExpectedJudgmentCount: number;
+      assignedExpectedJudgmentCount: number;
+      submittedJudgmentCount: number;
+      validJudgmentCount: number;
+      invalidJudgmentCount: number;
+      pendingJudgmentCount: number;
+      missingTargetJudgmentCount: number;
+      missingAssignedJudgmentCount: number;
+    };
+    cases: {
+      caseId: string;
+      targetReviewerCount: number;
+      assignedReviewerCount: number;
+      submittedJudgmentCount: number;
+      validReviewerCount: number;
+      invalidJudgmentCount: number;
+      pendingJudgmentCount: number;
+      missingTargetJudgmentCount: number;
+      missingAssignedJudgmentCount: number;
+      quorum: {
+        requiredValidReviewers: number;
+        met: boolean;
+      };
+      candidatePreferenceShareBps: number | null;
+      disagreementBps: number | null;
+      outcome: "pass" | "fail" | "insufficient";
+    }[];
+    suite: {
+      method: "all_cases_must_pass";
+      evaluatedCaseCount: number;
+      passCaseCount: number;
+      failCaseCount: number;
+      insufficientCaseCount: number;
+      outcome: "pass" | "fail" | "insufficient";
+    };
   };
   limitations: string[];
   chainReferences: string[];
