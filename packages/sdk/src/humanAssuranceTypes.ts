@@ -102,9 +102,12 @@ export interface HumanAssuranceAudiencePolicy {
     value: string | number | boolean | string[];
   }>;
   assurance: {
-    requiredCapabilities: HumanAssuranceCapability[];
-    allowedProviders: string[];
-    freshnessSeconds?: number;
+    requirements: Array<{
+      capability: HumanAssuranceCapability;
+      reviewerSources: Array<Exclude<HumanAssuranceReviewerSource, "hybrid">>;
+      allowedProviders: string[];
+      freshnessSeconds?: number;
+    }>;
   };
   buyerPrivacy: {
     visibleFields: Array<

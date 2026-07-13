@@ -108,9 +108,19 @@ test("v2 parsers cover the complete human-assurance domain", () => {
         { key: "support_experience", operator: "attested", value: true },
       ],
       assurance: {
-        requiredCapabilities: ["customer_invitation", "live_human"],
-        allowedProviders: ["world-id", "self"],
-        freshnessSeconds: 3600,
+        requirements: [
+          {
+            capability: "customer_invitation",
+            reviewerSources: ["customer_invited"],
+            allowedProviders: ["rateloop:invitation"],
+          },
+          {
+            capability: "live_human",
+            reviewerSources: ["rateloop_network"],
+            allowedProviders: ["world-id", "self"],
+            freshnessSeconds: 3600,
+          },
+        ],
       },
       buyerPrivacy: {
         visibleFields: ["reviewer_source", "qualification_summary"],
@@ -118,7 +128,7 @@ test("v2 parsers cover the complete human-assurance domain", () => {
         suppressSmallCells: true,
       },
       legalEligibilityRequired: true,
-    }).assurance.requiredCapabilities,
+    }).assurance.requirements.map((value) => value.capability),
     ["customer_invitation", "live_human"],
   );
 
@@ -287,8 +297,13 @@ test("v2 refuses ordered tiers, fake confidence, and unpaid eligibility bypasses
         requiredQualifications: [],
         assurance: {
           tierId: "passport",
-          requiredCapabilities: ["document_holder"],
-          allowedProviders: ["world-id"],
+          requirements: [
+            {
+              capability: "document_holder",
+              reviewerSources: ["rateloop_network"],
+              allowedProviders: ["world-id"],
+            },
+          ],
         },
         buyerPrivacy: {
           visibleFields: ["reviewer_source"],
@@ -307,6 +322,40 @@ test("v2 refuses ordered tiers, fake confidence, and unpaid eligibility bypasses
   );
   assert.equal(schemaText.includes("confidence"), false);
   assert.equal(schemaText.includes("tierId"), false);
+});
+
+test("v2 assurance requirements must identify a concrete reviewer source", () => {
+  assert.throws(
+    () =>
+      parseHumanAssuranceAudiencePolicy({
+        ...base,
+        policyId: "policy_source_required",
+        version: 1,
+        reviewerSource: "rateloop_network",
+        compensation: "paid",
+        cohorts: [],
+        selection: "randomized",
+        fallbacks: { allowed: false, sources: [] },
+        requiredQualifications: [],
+        assurance: {
+          requirements: [
+            {
+              capability: "unique_human",
+              reviewerSources: [],
+              allowedProviders: ["world-id"],
+            },
+          ],
+        },
+        buyerPrivacy: {
+          visibleFields: ["reviewer_source"],
+          minimumAggregationSize: 5,
+          suppressSmallCells: true,
+        },
+        legalEligibilityRequired: true,
+      }),
+    (error: unknown) =>
+      error instanceof RateLoopSdkError && error.message.includes("reviewerSources"),
+  );
 });
 
 test("v2 JSON schemas are distinct, versioned public contracts", () => {

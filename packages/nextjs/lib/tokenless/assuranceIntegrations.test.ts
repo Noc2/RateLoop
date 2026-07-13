@@ -149,7 +149,15 @@ test("run status is aggregate-only and fails closed across workspaces", async ()
       selection: "customer_named",
       fallbacks: { allowed: false, sources: [] },
       requiredQualifications: [],
-      assurance: { requiredCapabilities: ["customer_invitation"], allowedProviders: [] },
+      assurance: {
+        requirements: [
+          {
+            capability: "customer_invitation",
+            reviewerSources: ["customer_invited"],
+            allowedProviders: ["rateloop:invitation"],
+          },
+        ],
+      },
       buyerPrivacy: {
         visibleFields: ["reviewer_source"],
         minimumAggregationSize: 3,

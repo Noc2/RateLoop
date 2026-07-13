@@ -140,7 +140,15 @@ async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
       selection: "customer_named",
       fallbacks: { allowed: false, sources: [] },
       requiredQualifications: [{ key: "customer_invitation", operator: "attested", value: true }],
-      assurance: { requiredCapabilities: ["customer_invitation"], allowedProviders: [] },
+      assurance: {
+        requirements: [
+          {
+            capability: "customer_invitation",
+            reviewerSources: ["customer_invited"],
+            allowedProviders: ["rateloop:invitation"],
+          },
+        ],
+      },
       buyerPrivacy: {
         visibleFields: ["reviewer_source", "qualification_summary"],
         minimumAggregationSize: 2,
@@ -222,6 +230,10 @@ type QueryRow = Record<string, unknown>;
 
 test("unpaid assigned responses persist atomically with encrypted rationale, pseudonym, canonical choices, and replay", async () => {
   const seeded = await fixture();
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_assignments SET qualification_provenance_json = '[]' WHERE assignment_id = ?",
+    args: [seeded.assignmentId],
+  });
   const responses = requestFor(seeded.runCases);
   const accepted = await submitAssuranceResponses({
     assignmentId: seeded.assignmentId,

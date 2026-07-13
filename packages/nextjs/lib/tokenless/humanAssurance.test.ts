@@ -82,8 +82,13 @@ function audiencePolicy() {
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [{ key: "support_experience", operator: "attested" as const, value: true }],
     assurance: {
-      requiredCapabilities: ["customer_invitation" as const],
-      allowedProviders: [],
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["rateloop:invitation"],
+        },
+      ],
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const, "qualification_summary" as const],
@@ -103,8 +108,13 @@ function unpaidInvitedAudiencePolicy() {
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
-      requiredCapabilities: ["customer_invitation" as const],
-      allowedProviders: [],
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["rateloop:invitation"],
+        },
+      ],
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const],
@@ -239,12 +249,15 @@ async function seedCompletedInvitedAssignment(input: {
     sql: `INSERT INTO tokenless_assurance_assignments
           (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
            reviewer_account_address, source, selection, status, confidentiality_terms_hash,
-           confidentiality_accepted_at, qualification_provenance_json, blinding_json,
+           confidentiality_accepted_at, qualification_provenance_json,
+           assurance_snapshot_json, assurance_snapshot_hash, blinding_json,
            paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
            assignment_expires_at, lease_issuer_account_address, lease_state,
            created_at, accepted_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, 'customer_invited', 'customer_named', 'completed',
-                  ?, ?, '[]', '{}', ?, ?, ?, ?, ?, 'expired', ?, ?, ?)`,
+                  ?, ?, '[]', '{"assertions":[],"qualifications":[]}',
+                  'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+                  '{}', ?, ?, ?, ?, ?, 'expired', ?, ?, ?)`,
     args: [
       `${input.runId}_assignment`,
       input.workspaceId,

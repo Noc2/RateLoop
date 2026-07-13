@@ -8,11 +8,19 @@ import { createHash } from "node:crypto";
 import "server-only";
 
 export type CapabilityAdmissionEvidence = {
-  providerId: string;
-  capabilities: HumanAssuranceCapability[];
-  reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid" | "sandbox">;
+  assertions: Array<{
+    assertionId: string;
+    bindingId: string;
+    providerId: string;
+    providerNamespace: string;
+    subjectReferenceHash: string;
+    capabilities: HumanAssuranceCapability[];
+    verifiedAt: Date;
+    expiresAt: Date;
+  }>;
+  reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid">;
   cohortIds: string[];
-  qualificationKeys: string[];
+  qualifications: Array<{ key: string; value: string | number | boolean | string[] }>;
 };
 
 function canonicalJson(value: unknown): string {
@@ -50,29 +58,66 @@ export function evaluateFrozenAdmissionPolicy(input: {
   policy: HumanAssuranceAudiencePolicy;
   evidence: CapabilityAdmissionEvidence;
   maximumCommits: number;
+  now?: Date;
 }) {
+  const now = input.now ?? new Date();
   const failures: string[] = [];
-  const capabilities = new Set(input.evidence.capabilities);
   const cohorts = new Set(input.evidence.cohortIds);
-  const qualifications = new Set(input.evidence.qualificationKeys);
+  const qualifications = new Map<string, string | number | boolean | string[]>();
+  for (const qualification of input.evidence.qualifications) {
+    if (!qualifications.has(qualification.key)) qualifications.set(qualification.key, qualification.value);
+  }
+  const usedAssertionIds = new Set<string>();
+  const usedQualificationKeys = new Set<string>();
+  let applicableAssuranceRequirements = 0;
 
   if (input.policy.compensation === "unpaid" || !input.policy.legalEligibilityRequired) {
     failures.push("paid_eligibility_not_required");
   }
-  if (input.policy.reviewerSource === "sandbox" || !sourceAllowed(input.policy, input.evidence.reviewerSource)) {
+  if (
+    input.policy.reviewerSource === "sandbox" ||
+    input.evidence.reviewerSource === "sandbox" ||
+    !sourceAllowed(input.policy, input.evidence.reviewerSource)
+  ) {
     failures.push("reviewer_source");
   }
-  for (const capability of input.policy.assurance.requiredCapabilities) {
-    if (!capabilities.has(capability)) failures.push(`capability:${capability}`);
+  for (const requirement of input.policy.assurance.requirements) {
+    if (!requirement.reviewerSources.includes(input.evidence.reviewerSource)) continue;
+    applicableAssuranceRequirements += 1;
+    const candidates = input.evidence.assertions.filter(
+      assertion =>
+        assertion.capabilities.includes(requirement.capability) &&
+        (requirement.allowedProviders.length === 0 || requirement.allowedProviders.includes(assertion.providerId)),
+    );
+    const current = candidates.find(assertion => {
+      if (assertion.expiresAt <= now || assertion.verifiedAt > now) return false;
+      return (
+        requirement.freshnessSeconds === undefined ||
+        assertion.verifiedAt.getTime() >= now.getTime() - requirement.freshnessSeconds * 1_000
+      );
+    });
+    if (current) usedAssertionIds.add(current.assertionId);
+    else if (candidates.length > 0) failures.push(`freshness:${requirement.capability}`);
+    else failures.push(`capability:${requirement.capability}`);
   }
-  if (
-    input.policy.assurance.allowedProviders.length > 0 &&
-    !input.policy.assurance.allowedProviders.includes(input.evidence.providerId)
-  ) {
-    failures.push("provider");
-  }
+  if (applicableAssuranceRequirements === 0) failures.push("assurance_requirement");
   for (const qualification of input.policy.requiredQualifications) {
-    if (!qualifications.has(qualification.key)) failures.push(`qualification:${qualification.key}`);
+    const actual = qualifications.get(qualification.key);
+    let satisfied = false;
+    if (qualification.operator === "attested") satisfied = actual === true;
+    else if (qualification.operator === "equals")
+      satisfied = canonicalJson(actual) === canonicalJson(qualification.value);
+    else if (qualification.operator === "at_least") {
+      satisfied =
+        typeof actual === "number" && typeof qualification.value === "number" && actual >= qualification.value;
+    } else {
+      const allowed = Array.isArray(qualification.value) ? qualification.value : [qualification.value];
+      satisfied = Array.isArray(actual)
+        ? actual.some(value => allowed.some(expected => canonicalJson(value) === canonicalJson(expected)))
+        : allowed.some(expected => canonicalJson(actual) === canonicalJson(expected));
+    }
+    if (satisfied) usedQualificationKeys.add(qualification.key);
+    else failures.push(`qualification:${qualification.key}`);
   }
   if (input.policy.cohorts.length > 0 && !input.policy.cohorts.some(cohort => cohorts.has(cohort.cohortId))) {
     failures.push("cohort");
@@ -82,5 +127,10 @@ export function evaluateFrozenAdmissionPolicy(input: {
     failures.push("panel_capacity");
   }
 
-  return { eligible: failures.length === 0, failures };
+  return {
+    eligible: failures.length === 0,
+    failures,
+    usedAssertionIds: [...usedAssertionIds].sort(),
+    usedQualificationKeys: [...usedQualificationKeys].sort(),
+  };
 }

@@ -256,16 +256,9 @@ export function parseHumanAssuranceAudiencePolicy(
   if (!Array.isArray(input.requiredQualifications)) {
     invalid("requiredQualifications", "an array");
   }
-  const requiredCapabilities = stringArray(
-    assurance.requiredCapabilities,
-    "assurance.requiredCapabilities",
-  ).map((capability, index) =>
-    enumeration(
-      capability,
-      `assurance.requiredCapabilities[${index}]`,
-      HUMAN_ASSURANCE_CAPABILITIES,
-    ),
-  );
+  if (!Array.isArray(assurance.requirements)) {
+    invalid("assurance.requirements", "an array");
+  }
   const compensation = enumeration(input.compensation, "compensation", [
     "paid",
     "unpaid",
@@ -366,20 +359,46 @@ export function parseHumanAssuranceAudiencePolicy(
       };
     }),
     assurance: {
-      requiredCapabilities,
-      allowedProviders: stringArray(
-        assurance.allowedProviders,
-        "assurance.allowedProviders",
-      ),
-      freshnessSeconds:
-        assurance.freshnessSeconds === undefined
-          ? undefined
-          : integer(
-              assurance.freshnessSeconds,
-              "assurance.freshnessSeconds",
-              1,
-              31_536_000,
-            ),
+      requirements: assurance.requirements.map((value, index) => {
+        const requirement = record(value, `assurance.requirements[${index}]`);
+        const reviewerSources: HumanAssuranceAudiencePolicy["assurance"]["requirements"][number]["reviewerSources"] = stringArray(
+          requirement.reviewerSources,
+          `assurance.requirements[${index}].reviewerSources`,
+        ).map((source, sourceIndex) =>
+          enumeration(
+            source,
+            `assurance.requirements[${index}].reviewerSources[${sourceIndex}]`,
+            ["customer_invited", "rateloop_network", "sandbox"],
+          ),
+        );
+        if (reviewerSources.length === 0) {
+          invalid(
+            `assurance.requirements[${index}].reviewerSources`,
+            "at least one concrete reviewer source",
+          );
+        }
+        return {
+          capability: enumeration(
+            requirement.capability,
+            `assurance.requirements[${index}].capability`,
+            HUMAN_ASSURANCE_CAPABILITIES,
+          ),
+          reviewerSources,
+          allowedProviders: stringArray(
+            requirement.allowedProviders,
+            `assurance.requirements[${index}].allowedProviders`,
+          ),
+          freshnessSeconds:
+            requirement.freshnessSeconds === undefined
+              ? undefined
+              : integer(
+                  requirement.freshnessSeconds,
+                  `assurance.requirements[${index}].freshnessSeconds`,
+                  1,
+                  31_536_000,
+                ),
+        };
+      }),
     },
     buyerPrivacy: {
       visibleFields,
@@ -861,7 +880,36 @@ export const HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA = {
     selection: { enum: ["randomized", "customer_named"] },
     fallbacks: { type: "object" },
     requiredQualifications: { type: "array" },
-    assurance: { type: "object" },
+    assurance: {
+      additionalProperties: false,
+      properties: {
+        requirements: {
+          items: {
+            additionalProperties: false,
+            properties: {
+              capability: { enum: HUMAN_ASSURANCE_CAPABILITIES },
+              reviewerSources: {
+                items: {
+                  enum: ["customer_invited", "rateloop_network", "sandbox"],
+                },
+                type: "array",
+              },
+              allowedProviders: { items: { type: "string" }, type: "array" },
+              freshnessSeconds: {
+                maximum: 31_536_000,
+                minimum: 1,
+                type: "integer",
+              },
+            },
+            required: ["capability", "reviewerSources", "allowedProviders"],
+            type: "object",
+          },
+          type: "array",
+        },
+      },
+      required: ["requirements"],
+      type: "object",
+    },
     buyerPrivacy: { type: "object" },
     legalEligibilityRequired: { type: "boolean" },
   },

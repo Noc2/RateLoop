@@ -186,3 +186,35 @@ test("provider subject uniqueness is scoped to provider and RP namespace", () =>
   `);
   assert.equal(database.public.one("SELECT count(*) AS count FROM tokenless_provider_subject_bindings").count, 2);
 });
+
+test("reader cutover creates immutable snapshot storage before dropping the legacy aggregate", () => {
+  const database = newDb();
+  applyMigrationsThrough0016(database);
+  seedLegacyEligibility(database);
+  applyMigration(database, "0017_composable_assurance_eligibility.sql");
+  applyMigration(database, "0018_composable_eligibility_readers.sql");
+
+  assert.throws(() => database.public.one("SELECT count(*) FROM tokenless_capability_eligibility"), /does not exist/);
+  assert.equal(database.public.one("SELECT count(*) AS count FROM tokenless_voucher_assurance_snapshots").count, 0);
+  assert.deepEqual(
+    database.public.many(`
+      SELECT column_name, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'tokenless_assurance_assignments'
+        AND column_name IN ('assurance_snapshot_json', 'assurance_snapshot_hash')
+      ORDER BY column_name
+    `),
+    [
+      { column_name: "assurance_snapshot_hash", is_nullable: "NO" },
+      { column_name: "assurance_snapshot_json", is_nullable: "NO" },
+    ],
+  );
+  assert.equal(
+    database.public.one(`
+      SELECT is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'tokenless_paid_vouchers' AND column_name = 'assurance_snapshot_hash'
+    `).is_nullable,
+    "NO",
+  );
+});

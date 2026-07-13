@@ -1,5 +1,9 @@
 import { CredentialIssuerAbi, TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
-import { HUMAN_ASSURANCE_CAPABILITIES, type HumanAssuranceCapability } from "@rateloop/sdk";
+import {
+  HUMAN_ASSURANCE_CAPABILITIES,
+  type HumanAssuranceCapability,
+  type HumanAssuranceReviewerSource,
+} from "@rateloop/sdk";
 import {
   createCipheriv,
   createDecipheriv,
@@ -81,6 +85,7 @@ export type VoucherRequest = {
   roundId: string;
   contentId: Hex;
   voteKey: Address;
+  reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid" | "sandbox">;
 };
 
 type VaultConfig = { currentVersion: string; keys: Map<string, Buffer> };
@@ -648,6 +653,7 @@ export async function submitPaidEligibility(input: {
   });
   const subjectHash = hash(`${assertion.providerId}:${assertion.subjectId}`);
   const assertionIdHash = hash(`${assertion.providerId}:${assertion.assertionId}`);
+  const providerNamespace = "legacy:v2";
   const capabilities = [...new Set<HumanAssuranceCapability>(["account_control", ...assertion.capabilities])].sort();
   const state = eligibilityState(assertion, declaredResidenceCountry, taxCountry);
   const client = await dbPool.connect();
@@ -661,14 +667,15 @@ export async function submitPaidEligibility(input: {
     const existingRow = existing.rows[0] as QueryRow | undefined;
     const existingCapability = existingRow
       ? await client.query(
-          `SELECT provider_subject_hash FROM tokenless_capability_eligibility
-           WHERE rater_id = $1 FOR UPDATE`,
-          [stringValue(existingRow, "rater_id")],
+          `SELECT subject_reference_hash FROM tokenless_provider_subject_bindings
+           WHERE rater_id = $1 AND provider_id = $2 AND provider_namespace = $3 AND status = 'active'
+           LIMIT 1 FOR UPDATE`,
+          [stringValue(existingRow, "rater_id"), assertion.providerId, providerNamespace],
         )
       : null;
     const existingSubjectHash = stringValue(
       existingCapability?.rows[0] as QueryRow | undefined,
-      "provider_subject_hash",
+      "subject_reference_hash",
     );
     if (existingSubjectHash && existingSubjectHash !== subjectHash) {
       throw new TokenlessServiceError(
@@ -695,26 +702,57 @@ export async function submitPaidEligibility(input: {
         [seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now, raterId],
       );
     }
-    await client.query(
-      `INSERT INTO tokenless_capability_eligibility
-       (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash,
-        provider_subject_hash, capabilities_json, provider_evidence_ciphertext,
-        provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
-        evidence_expires_at, minimum_age_verified, document_issuing_country,
-        nationality_country, verified_residence_country, declared_residence_country,
-        tax_residence_country, residence_tax_status, tax_profile_status, dac7_status,
-        tax_vault_ciphertext, tax_vault_key_version, tax_vault_key_domain,
-        sanctions_consent_at, sanctions_status, sanctions_reference_hash,
-        sanctions_screened_at, sanctions_expires_at, payout_account,
-        payout_ownership_method, payout_verified_at, reviewer_source, cohort_ids_json,
-        qualification_keys_json, eligibility_status, blocked_reason, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-               $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
-       ON CONFLICT (rater_id) DO UPDATE SET
-        provider_id = EXCLUDED.provider_id,
-        provider_assertion_hash = EXCLUDED.provider_assertion_hash,
-        provider_assertion_id_hash = EXCLUDED.provider_assertion_id_hash,
-        provider_subject_hash = EXCLUDED.provider_subject_hash,
+    const proposedBindingId = `bind_${hash(`${assertion.providerId}:${providerNamespace}:${subjectHash}`).slice(0, 48)}`;
+    const bindingResult = await client.query(
+      `INSERT INTO tokenless_provider_subject_bindings
+       (binding_id, rater_id, provider_id, provider_namespace, subject_reference_hash,
+        subject_reference_scheme, status, bound_at, last_verified_at, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,'legacy-sha256-v2','active',$6,$6,$7,$7)
+       ON CONFLICT (rater_id, provider_id, provider_namespace) DO UPDATE SET
+        last_verified_at = EXCLUDED.last_verified_at, updated_at = EXCLUDED.updated_at
+       RETURNING binding_id`,
+      [
+        proposedBindingId,
+        raterId,
+        assertion.providerId,
+        providerNamespace,
+        subjectHash,
+        assertion.evidenceVerifiedAt,
+        now,
+      ],
+    );
+    const bindingId = stringValue(bindingResult.rows[0] as QueryRow | undefined, "binding_id")!;
+    const assuranceAssertionId = `assert_${assertionIdHash.slice(0, 48)}`;
+    const existingAssertionResult = await client.query(
+      `SELECT rater_id, binding_id, provider_assertion_hash
+       FROM tokenless_assurance_assertions
+       WHERE provider_id = $1 AND provider_namespace = $2 AND provider_assertion_id_hash = $3
+       LIMIT 1 FOR UPDATE`,
+      [assertion.providerId, providerNamespace, assertionIdHash],
+    );
+    const existingAssertion = existingAssertionResult.rows[0] as QueryRow | undefined;
+    if (
+      existingAssertion &&
+      (stringValue(existingAssertion, "rater_id") !== raterId ||
+        stringValue(existingAssertion, "binding_id") !== bindingId ||
+        stringValue(existingAssertion, "provider_assertion_hash") !== assertion.assertionHash)
+    ) {
+      throw new TokenlessServiceError(
+        "This provider assertion is already bound to different immutable evidence.",
+        409,
+        "identity_already_bound",
+      );
+    }
+    const assertionResult = await client.query(
+      `INSERT INTO tokenless_assurance_assertions
+       (assertion_id, rater_id, binding_id, provider_id, provider_namespace,
+        provider_assertion_hash, provider_assertion_id_hash, provider_assertion_reference_scheme,
+        capabilities_json, provider_evidence_ciphertext, provider_evidence_key_version,
+        provider_evidence_key_domain, evidence_verified_at, evidence_expires_at,
+        minimum_age_verified, document_issuing_country, nationality_country,
+        verified_residence_country, status, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'legacy-sha256-v2',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'active',$18,$18)
+       ON CONFLICT (provider_id, provider_namespace, provider_assertion_id_hash) DO UPDATE SET
         capabilities_json = EXCLUDED.capabilities_json,
         provider_evidence_ciphertext = EXCLUDED.provider_evidence_ciphertext,
         provider_evidence_key_version = EXCLUDED.provider_evidence_key_version,
@@ -725,34 +763,19 @@ export async function submitPaidEligibility(input: {
         document_issuing_country = EXCLUDED.document_issuing_country,
         nationality_country = EXCLUDED.nationality_country,
         verified_residence_country = EXCLUDED.verified_residence_country,
-        declared_residence_country = EXCLUDED.declared_residence_country,
-        tax_residence_country = EXCLUDED.tax_residence_country,
-        residence_tax_status = EXCLUDED.residence_tax_status,
-        tax_profile_status = EXCLUDED.tax_profile_status,
-        dac7_status = EXCLUDED.dac7_status,
-        tax_vault_ciphertext = EXCLUDED.tax_vault_ciphertext,
-        tax_vault_key_version = EXCLUDED.tax_vault_key_version,
-        tax_vault_key_domain = EXCLUDED.tax_vault_key_domain,
-        sanctions_consent_at = EXCLUDED.sanctions_consent_at,
-        sanctions_status = EXCLUDED.sanctions_status,
-        sanctions_reference_hash = EXCLUDED.sanctions_reference_hash,
-        sanctions_screened_at = EXCLUDED.sanctions_screened_at,
-        sanctions_expires_at = EXCLUDED.sanctions_expires_at,
-        payout_account = EXCLUDED.payout_account,
-        payout_ownership_method = EXCLUDED.payout_ownership_method,
-        payout_verified_at = EXCLUDED.payout_verified_at,
-        reviewer_source = EXCLUDED.reviewer_source,
-        cohort_ids_json = EXCLUDED.cohort_ids_json,
-        qualification_keys_json = EXCLUDED.qualification_keys_json,
-        eligibility_status = EXCLUDED.eligibility_status,
-        blocked_reason = EXCLUDED.blocked_reason,
-        updated_at = EXCLUDED.updated_at`,
+        status = 'active', revoked_at = NULL, updated_at = EXCLUDED.updated_at
+       WHERE tokenless_assurance_assertions.rater_id = EXCLUDED.rater_id
+         AND tokenless_assurance_assertions.binding_id = EXCLUDED.binding_id
+         AND tokenless_assurance_assertions.provider_assertion_hash = EXCLUDED.provider_assertion_hash
+       RETURNING assertion_id`,
       [
+        assuranceAssertionId,
         raterId,
+        bindingId,
         assertion.providerId,
+        providerNamespace,
         assertion.assertionHash,
         assertionIdHash,
-        subjectHash,
         JSON.stringify(capabilities),
         providerEvidenceVault.ciphertext,
         providerEvidenceVault.keyVersion,
@@ -763,10 +786,53 @@ export async function submitPaidEligibility(input: {
         assertion.documentIssuingCountry,
         assertion.nationalityCountry,
         assertion.verifiedResidenceCountry,
+        now,
+      ],
+    );
+    if (assertionResult.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "This provider assertion is already bound to different immutable evidence.",
+        409,
+        "identity_already_bound",
+      );
+    }
+    await client.query(
+      `INSERT INTO tokenless_legal_eligibility
+       (rater_id, minimum_age_verified, age_evidence_verified_at, age_evidence_expires_at,
+        verified_residence_country, declared_residence_country, tax_residence_country,
+        residence_tax_status, tax_profile_status, dac7_status, tax_vault_ciphertext,
+        tax_vault_key_version, tax_vault_key_domain, sanctions_consent_at, sanctions_status,
+        sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at,
+        eligibility_status, blocked_reason, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'complete',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)
+       ON CONFLICT (rater_id) DO UPDATE SET
+        minimum_age_verified = EXCLUDED.minimum_age_verified,
+        age_evidence_verified_at = EXCLUDED.age_evidence_verified_at,
+        age_evidence_expires_at = EXCLUDED.age_evidence_expires_at,
+        verified_residence_country = EXCLUDED.verified_residence_country,
+        declared_residence_country = EXCLUDED.declared_residence_country,
+        tax_residence_country = EXCLUDED.tax_residence_country,
+        residence_tax_status = EXCLUDED.residence_tax_status,
+        tax_profile_status = EXCLUDED.tax_profile_status, dac7_status = EXCLUDED.dac7_status,
+        tax_vault_ciphertext = EXCLUDED.tax_vault_ciphertext,
+        tax_vault_key_version = EXCLUDED.tax_vault_key_version,
+        tax_vault_key_domain = EXCLUDED.tax_vault_key_domain,
+        sanctions_consent_at = EXCLUDED.sanctions_consent_at,
+        sanctions_status = EXCLUDED.sanctions_status,
+        sanctions_reference_hash = EXCLUDED.sanctions_reference_hash,
+        sanctions_screened_at = EXCLUDED.sanctions_screened_at,
+        sanctions_expires_at = EXCLUDED.sanctions_expires_at,
+        eligibility_status = EXCLUDED.eligibility_status,
+        blocked_reason = EXCLUDED.blocked_reason, updated_at = EXCLUDED.updated_at`,
+      [
+        raterId,
+        assertion.minimumAgeVerified,
+        assertion.evidenceVerifiedAt,
+        assertion.evidenceExpiresAt,
+        assertion.verifiedResidenceCountry,
         declaredResidenceCountry,
         taxCountry,
         state.residenceTaxStatus,
-        "complete",
         dac7Required ? "complete" : "not_required",
         dac7Vault?.ciphertext ?? null,
         dac7Vault?.keyVersion ?? null,
@@ -776,17 +842,30 @@ export async function submitPaidEligibility(input: {
         hash(assertion.sanctionsReference),
         assertion.sanctionsScreenedAt,
         assertion.sanctionsExpiresAt,
-        accountAddress.toLowerCase(),
-        "siwe_base_account_session",
-        now,
-        "rateloop_network",
-        "[]",
-        "[]",
         state.status,
         state.reason,
         now,
-        now,
       ],
+    );
+    await client.query(
+      `INSERT INTO tokenless_payout_eligibility
+       (rater_id, payout_account, payout_ownership_method, payout_verified_at,
+        payout_expires_at, eligibility_status, blocked_reason, created_at, updated_at)
+       VALUES ($1,$2,'siwe_base_account_session',$3,NULL,'ready',NULL,$3,$3)
+       ON CONFLICT (rater_id) DO UPDATE SET payout_account = EXCLUDED.payout_account,
+        payout_ownership_method = EXCLUDED.payout_ownership_method,
+        payout_verified_at = EXCLUDED.payout_verified_at, payout_expires_at = NULL,
+        eligibility_status = 'ready', blocked_reason = NULL, updated_at = EXCLUDED.updated_at`,
+      [raterId, accountAddress.toLowerCase(), now],
+    );
+    await client.query(
+      `INSERT INTO tokenless_reviewer_qualifications
+       (qualification_id, rater_id, reviewer_source, qualification_kind, cohort_ids_json,
+        qualification_keys_json, verified_at, expires_at, status, created_at, updated_at)
+       VALUES ($1,$2,'rateloop_network','legacy_snapshot','[]','[]',$3,$4,'active',$5,$5)
+       ON CONFLICT (qualification_id) DO UPDATE SET verified_at = EXCLUDED.verified_at,
+        expires_at = EXCLUDED.expires_at, status = 'active', revoked_at = NULL, updated_at = EXCLUDED.updated_at`,
+      [`qual_legacy_${raterId}`, raterId, assertion.evidenceVerifiedAt, assertion.evidenceExpiresAt, now],
     );
     if (resolvedAssertion.stateHash) {
       const consumed = await client.query(
@@ -821,33 +900,61 @@ export async function submitPaidEligibility(input: {
 
 export async function getPaidEligibility(accountAddress: string, now = new Date()) {
   const result = await dbClient.execute({
-    sql: `SELECT e.capabilities_json, e.evidence_expires_at, e.minimum_age_verified,
-                 e.document_issuing_country, e.nationality_country, e.verified_residence_country,
-                 e.declared_residence_country, e.tax_residence_country, e.residence_tax_status,
-                 e.tax_profile_status, e.dac7_status, e.sanctions_status, e.sanctions_expires_at,
-                 e.payout_account, e.payout_ownership_method, e.eligibility_status,
-                 e.blocked_reason, e.updated_at
+    sql: `SELECT p.rater_id, l.minimum_age_verified, l.age_evidence_expires_at,
+                 l.verified_residence_country, l.declared_residence_country,
+                 l.tax_residence_country, l.residence_tax_status, l.tax_profile_status,
+                 l.dac7_status, l.sanctions_status, l.sanctions_expires_at,
+                 l.eligibility_status, l.blocked_reason, l.updated_at,
+                 pe.payout_account, pe.payout_ownership_method, pe.payout_expires_at,
+                 pe.eligibility_status AS payout_eligibility_status
           FROM tokenless_rater_profiles p
-          JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
+          JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
+          JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
           WHERE p.account_address = ? LIMIT 1`,
     args: [getAddress(accountAddress).toLowerCase()],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) return { status: "not_started" };
-  const evidenceExpiresAt = new Date(String(row.evidence_expires_at));
+  const assertionsResult = await dbClient.execute({
+    sql: `SELECT capabilities_json, evidence_expires_at, document_issuing_country,
+                 nationality_country, verified_residence_country
+          FROM tokenless_assurance_assertions
+          WHERE rater_id = ? AND status = 'active'
+          ORDER BY evidence_verified_at DESC`,
+    args: [stringValue(row, "rater_id")!],
+  });
+  const assertions = assertionsResult.rows as QueryRow[];
+  const currentAssertions = assertions.filter(value => new Date(String(value.evidence_expires_at)) > now);
+  const capabilities = [
+    ...new Set(
+      currentAssertions.flatMap(value => JSON.parse(String(value.capabilities_json)) as HumanAssuranceCapability[]),
+    ),
+  ].sort();
+  const latestAssertion = assertions[0];
+  // Human-assurance assertions are independent from the legal age gate. A
+  // short-lived World ID (or future provider) assertion must not expire an
+  // otherwise-current legal eligibility record.
+  const evidenceExpiresAt = new Date(String(row.age_evidence_expires_at));
   const sanctionsExpiresAt = new Date(String(row.sanctions_expires_at));
   const persisted = stringValue(row, "eligibility_status")!;
   const currentStatus =
-    persisted === "eligible" && (evidenceExpiresAt <= now || sanctionsExpiresAt <= now) ? "expired" : persisted;
+    persisted === "eligible" &&
+    (evidenceExpiresAt <= now ||
+      sanctionsExpiresAt <= now ||
+      (row.payout_expires_at !== null && new Date(String(row.payout_expires_at)) <= now) ||
+      stringValue(row, "payout_eligibility_status") !== "ready")
+      ? "expired"
+      : persisted;
   return {
     status: currentStatus,
     blockedReason: publicBlockedReason(stringValue(row, "blocked_reason")),
-    capabilities: JSON.parse(String(row.capabilities_json)) as HumanAssuranceCapability[],
+    capabilities,
     evidenceExpiresAt,
     minimumAgeVerified: row.minimum_age_verified === null ? null : Number(row.minimum_age_verified),
-    documentIssuingCountry: stringValue(row, "document_issuing_country"),
-    nationalityCountry: stringValue(row, "nationality_country"),
-    verifiedResidenceCountry: stringValue(row, "verified_residence_country"),
+    documentIssuingCountry: stringValue(latestAssertion, "document_issuing_country"),
+    nationalityCountry: stringValue(latestAssertion, "nationality_country"),
+    verifiedResidenceCountry:
+      stringValue(latestAssertion, "verified_residence_country") ?? stringValue(row, "verified_residence_country"),
     declaredResidenceCountry: stringValue(row, "declared_residence_country"),
     taxResidenceCountry: stringValue(row, "tax_residence_country"),
     residenceTaxStatus: stringValue(row, "residence_tax_status"),
@@ -916,15 +1023,21 @@ const verifyLiveIssuerState: IssuerStateVerifier = async config => {
   }
 };
 
-async function loadVoucherEligibility(accountAddress: Address, now: Date) {
+async function loadVoucherEligibility(
+  accountAddress: Address,
+  reviewerSource: VoucherRequest["reviewerSource"],
+  now: Date,
+) {
   const result = await dbClient.execute({
     sql: `SELECT p.rater_id, p.nullifier_seed_ciphertext, p.nullifier_key_version,
-                 p.nullifier_key_domain, e.provider_id, e.capabilities_json, e.evidence_expires_at,
-                 e.minimum_age_verified, e.tax_profile_status, e.dac7_status, e.sanctions_status,
-                 e.sanctions_expires_at, e.payout_account, e.payout_ownership_method,
-                 e.reviewer_source, e.cohort_ids_json, e.qualification_keys_json, e.eligibility_status
+                 p.nullifier_key_domain, l.minimum_age_verified, l.age_evidence_expires_at,
+                 l.tax_profile_status, l.dac7_status, l.sanctions_status,
+                 l.sanctions_expires_at, l.eligibility_status,
+                 pe.payout_account, pe.payout_ownership_method, pe.payout_expires_at,
+                 pe.eligibility_status AS payout_eligibility_status
           FROM tokenless_rater_profiles p
-          JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
+          JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
+          JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
           WHERE p.account_address = ? LIMIT 1`,
     args: [accountAddress.toLowerCase()],
   });
@@ -936,10 +1049,12 @@ async function loadVoucherEligibility(accountAddress: Address, now: Date) {
     stringValue(row, "tax_profile_status") !== "complete" ||
     !["complete", "not_required"].includes(stringValue(row, "dac7_status") ?? "") ||
     stringValue(row, "sanctions_status") !== "clear" ||
-    new Date(String(row.evidence_expires_at)) <= now ||
+    new Date(String(row.age_evidence_expires_at)) <= now ||
     new Date(String(row.sanctions_expires_at)) <= now ||
     getAddress(String(row.payout_account)) !== accountAddress ||
     stringValue(row, "payout_ownership_method") !== "siwe_base_account_session" ||
+    stringValue(row, "payout_eligibility_status") !== "ready" ||
+    (row.payout_expires_at !== null && new Date(String(row.payout_expires_at)) <= now) ||
     stringValue(row, "nullifier_key_domain") !== "vote_mapping"
   ) {
     throw new TokenlessServiceError(
@@ -948,7 +1063,61 @@ async function loadVoucherEligibility(accountAddress: Address, now: Date) {
       "paid_eligibility_required",
     );
   }
-  return row;
+  const raterId = stringValue(row, "rater_id")!;
+  const assertionsResult = await dbClient.execute({
+    sql: `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
+                 b.subject_reference_hash, a.capabilities_json, a.evidence_verified_at,
+                 a.evidence_expires_at
+          FROM tokenless_assurance_assertions a
+          JOIN tokenless_provider_subject_bindings b ON b.binding_id = a.binding_id
+          WHERE a.rater_id = ? AND a.status = 'active' AND b.status = 'active'
+            AND a.evidence_expires_at > ?`,
+    args: [raterId, now],
+  });
+  const assertions = (assertionsResult.rows as QueryRow[]).map(assertion => ({
+    assertionId: stringValue(assertion, "assertion_id")!,
+    bindingId: stringValue(assertion, "binding_id")!,
+    providerId: stringValue(assertion, "provider_id")!,
+    providerNamespace: stringValue(assertion, "provider_namespace")!,
+    subjectReferenceHash: stringValue(assertion, "subject_reference_hash")!,
+    capabilities: JSON.parse(String(assertion.capabilities_json)) as HumanAssuranceCapability[],
+    verifiedAt: new Date(String(assertion.evidence_verified_at)),
+    expiresAt: new Date(String(assertion.evidence_expires_at)),
+  }));
+  const qualificationsResult = await dbClient.execute({
+    sql: `SELECT qualification_id, reviewer_source, qualification_kind, cohort_ids_json,
+                 qualification_keys_json, verified_at, expires_at
+          FROM tokenless_reviewer_qualifications
+          WHERE rater_id = ? AND reviewer_source = ? AND status = 'active'
+            AND (expires_at IS NULL OR expires_at > ?)
+          ORDER BY verified_at DESC, qualification_id ASC`,
+    args: [raterId, reviewerSource, now],
+  });
+  const qualificationRows = qualificationsResult.rows as QueryRow[];
+  const qualificationRecords = qualificationRows.map(value => {
+    const parsed = JSON.parse(String(value.qualification_keys_json)) as Array<
+      string | { key: string; value: string | number | boolean | string[] }
+    >;
+    return {
+      qualificationId: stringValue(value, "qualification_id")!,
+      qualificationKind: stringValue(value, "qualification_kind")!,
+      reviewerSource,
+      cohortIds: JSON.parse(String(value.cohort_ids_json)) as string[],
+      qualifications: parsed.map(entry => (typeof entry === "string" ? { key: entry, value: true } : entry)),
+      verifiedAt: new Date(String(value.verified_at)),
+      expiresAt: value.expires_at === null ? null : new Date(String(value.expires_at)),
+    };
+  });
+  const cohortIds = [...new Set(qualificationRecords.flatMap(value => value.cohortIds))].sort();
+  const qualifications = qualificationRecords.flatMap(value => value.qualifications);
+  if (qualificationRecords.length === 0) {
+    throw new TokenlessServiceError(
+      "Current reviewer qualification evidence is required before a voucher can be issued.",
+      403,
+      "paid_eligibility_required",
+    );
+  }
+  return { row, assertions, cohortIds, qualificationRecords, qualifications, reviewerSource };
 }
 
 export async function registerVoucherRound(input: {
@@ -1015,6 +1184,7 @@ function voucherResponse(row: QueryRow) {
     voucherId: stringValue(row, "voucher_id"),
     voucher: JSON.parse(String(row.voucher_json)) as Record<string, string | number>,
     voucherSignature: stringValue(row, "voucher_signature"),
+    assuranceSnapshotHash: stringValue(row, "assurance_snapshot_hash"),
     issuedAt: new Date(String(row.issued_at)),
   };
 }
@@ -1033,8 +1203,8 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   const requestHash = hash(
     stableJson({ ...input.request, voteKey: voteKey.toLowerCase(), contentId: input.request.contentId.toLowerCase() }),
   );
-  const eligibility = await loadVoucherEligibility(accountAddress, now);
-  const raterId = stringValue(eligibility, "rater_id")!;
+  const eligibility = await loadVoucherEligibility(accountAddress, input.request.reviewerSource, now);
+  const raterId = stringValue(eligibility.row, "rater_id")!;
   const previous = await dbClient.execute({
     sql: "SELECT * FROM tokenless_paid_vouchers WHERE rater_id = ? AND request_idempotency_key = ? LIMIT 1",
     args: [raterId, input.request.idempotencyKey],
@@ -1090,13 +1260,13 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   const admission = evaluateFrozenAdmissionPolicy({
     policy: frozenPolicy.policy,
     evidence: {
-      providerId: stringValue(eligibility, "provider_id")!,
-      capabilities: JSON.parse(String(eligibility.capabilities_json)) as HumanAssuranceCapability[],
-      reviewerSource: stringValue(eligibility, "reviewer_source") as "customer_invited" | "rateloop_network",
-      cohortIds: JSON.parse(String(eligibility.cohort_ids_json)) as string[],
-      qualificationKeys: JSON.parse(String(eligibility.qualification_keys_json)) as string[],
+      assertions: eligibility.assertions,
+      reviewerSource: eligibility.reviewerSource,
+      cohortIds: eligibility.cohortIds,
+      qualifications: eligibility.qualifications,
     },
     maximumCommits: Number(round.maximum_commits),
+    now,
   });
   if (!admission.eligible) {
     throw new TokenlessServiceError(
@@ -1105,11 +1275,46 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
       "admission_policy_not_satisfied",
     );
   }
+  const assuranceSnapshot = {
+    schemaVersion: "rateloop.voucher-assurance-snapshot.v1",
+    reviewerSource: eligibility.reviewerSource,
+    assertions: eligibility.assertions
+      .filter(value => admission.usedAssertionIds.includes(value.assertionId))
+      .map(value => ({
+        assertionId: value.assertionId,
+        bindingId: value.bindingId,
+        providerId: value.providerId,
+        providerNamespace: value.providerNamespace,
+        subjectReferenceHash: value.subjectReferenceHash,
+        capabilities: [...value.capabilities].sort(),
+        verifiedAt: value.verifiedAt.toISOString(),
+        expiresAt: value.expiresAt.toISOString(),
+      }))
+      .sort((left, right) => left.assertionId.localeCompare(right.assertionId)),
+    qualifications: eligibility.qualificationRecords
+      .map(value => ({
+        qualificationId: value.qualificationId,
+        qualificationKind: value.qualificationKind,
+        reviewerSource: value.reviewerSource,
+        cohortIds: [...value.cohortIds].sort(),
+        qualifications: value.qualifications
+          .filter(qualification => admission.usedQualificationKeys.includes(qualification.key))
+          .sort((left, right) => left.key.localeCompare(right.key)),
+        verifiedAt: value.verifiedAt.toISOString(),
+        expiresAt: value.expiresAt?.toISOString() ?? null,
+      }))
+      .filter(value => value.qualifications.length > 0)
+      .sort((left, right) => left.qualificationId.localeCompare(right.qualificationId)),
+    cohortIds: eligibility.cohortIds,
+    capturedAt: now.toISOString(),
+  };
+  const assuranceSnapshotJson = stableJson(assuranceSnapshot);
+  const assuranceSnapshotHash = `sha256:${hash(assuranceSnapshotJson)}`;
   await (issuerStateVerifierOverride ?? verifyLiveIssuerState)(issuer);
   const seedJson = JSON.parse(
     decryptVaultValue(
-      String(eligibility.nullifier_seed_ciphertext),
-      String(eligibility.nullifier_key_version),
+      String(eligibility.row.nullifier_seed_ciphertext),
+      String(eligibility.row.nullifier_key_version),
       "vote_mapping",
     ).toString("utf8"),
   ) as { seed?: Hex };
@@ -1157,14 +1362,17 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   });
   const voucherId = `vch_${randomUUID().replaceAll("-", "")}`;
   const voucherJson = stableJson(voucher);
+  const insertClient = await dbPool.connect();
   try {
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_paid_vouchers
+    await insertClient.query("BEGIN");
+    await insertClient.query(
+      `INSERT INTO tokenless_paid_vouchers
             (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
              panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
-             nullifier, admission_policy_hash, expires_at, voucher_json, voucher_signature, status, issued_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
-      args: [
+             nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at,
+             voucher_json, voucher_signature, status, issued_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'issued',$19)`,
+      [
         voucherId,
         raterId,
         input.request.idempotencyKey,
@@ -1179,13 +1387,22 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
         voteKey.toLowerCase(),
         nullifier.toLowerCase(),
         frozenPolicy.admissionPolicyHash,
+        assuranceSnapshotHash,
         expiresAt,
         voucherJson,
         voucherSignature,
         now,
       ],
-    });
+    );
+    await insertClient.query(
+      `INSERT INTO tokenless_voucher_assurance_snapshots
+       (voucher_id, rater_id, reviewer_source, snapshot_json, snapshot_hash, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [voucherId, raterId, eligibility.reviewerSource, assuranceSnapshotJson, assuranceSnapshotHash, now],
+    );
+    await insertClient.query("COMMIT");
   } catch (error) {
+    await insertClient.query("ROLLBACK");
     if ((error as { code?: string }).code === "23505") {
       const replay = await dbClient.execute({
         sql: "SELECT * FROM tokenless_paid_vouchers WHERE rater_id = ? AND request_idempotency_key = ? LIMIT 1",
@@ -1200,8 +1417,10 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
       );
     }
     throw error;
+  } finally {
+    insertClient.release();
   }
-  return { voucherId, voucher, voucherSignature, issuedAt: now };
+  return { voucherId, voucher, voucherSignature, assuranceSnapshotHash, issuedAt: now };
 }
 
 export function __setPaidEligibilityOverridesForTests(input: {

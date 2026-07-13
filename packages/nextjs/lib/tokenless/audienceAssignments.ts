@@ -107,6 +107,18 @@ function hashToken(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function parseJson<T>(value: unknown, field: string): T {
   try {
     return JSON.parse(String(value)) as T;
@@ -649,11 +661,13 @@ export async function prepareRunAudience(input: {
 
 async function paidEligibility(client: PoolClient, accountAddress: string, now: Date) {
   const result = await client.query(
-    `SELECT p.rater_id, e.evidence_expires_at, e.minimum_age_verified, e.tax_profile_status,
-            e.dac7_status, e.sanctions_status, e.sanctions_expires_at,
-            e.payout_account, e.payout_ownership_method, e.eligibility_status
+    `SELECT p.rater_id, l.age_evidence_expires_at, l.minimum_age_verified, l.tax_profile_status,
+            l.dac7_status, l.sanctions_status, l.sanctions_expires_at,
+            pe.payout_account, pe.payout_ownership_method, pe.payout_expires_at,
+            pe.eligibility_status AS payout_eligibility_status, l.eligibility_status
      FROM tokenless_rater_profiles p
-     JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
+     JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
+     JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
      WHERE p.account_address = $1 LIMIT 1 FOR UPDATE`,
     [accountAddress],
   );
@@ -665,8 +679,10 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
     rowString(row, "tax_profile_status") !== "complete" ||
     !["complete", "not_required"].includes(rowString(row, "dac7_status") ?? "") ||
     rowString(row, "sanctions_status") !== "clear" ||
-    (rowDate(row, "evidence_expires_at")?.getTime() ?? 0) <= now.getTime() ||
+    (rowDate(row, "age_evidence_expires_at")?.getTime() ?? 0) <= now.getTime() ||
     (rowDate(row, "sanctions_expires_at")?.getTime() ?? 0) <= now.getTime() ||
+    (rowDate(row, "payout_expires_at")?.getTime() ?? Number.POSITIVE_INFINITY) <= now.getTime() ||
+    rowString(row, "payout_eligibility_status") !== "ready" ||
     normalizeAddress(rowString(row, "payout_account") ?? "", "payoutAccount") !== accountAddress ||
     rowString(row, "payout_ownership_method") !== "siwe_base_account_session"
   ) {
@@ -676,7 +692,32 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
       "paid_eligibility_required",
     );
   }
-  return rowString(row, "rater_id")!;
+  const raterId = rowString(row, "rater_id")!;
+  const assertions = await client.query(
+    `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
+            b.subject_reference_hash, a.capabilities_json, a.evidence_verified_at, a.evidence_expires_at
+     FROM tokenless_assurance_assertions a
+     JOIN tokenless_provider_subject_bindings b ON b.binding_id = a.binding_id
+     WHERE a.rater_id = $1 AND a.status = 'active' AND b.status = 'active'
+       AND a.evidence_expires_at > $2`,
+    [raterId, now],
+  );
+  return {
+    raterId,
+    assertions: assertions.rows.map(value => {
+      const assertion = value as QueryRow;
+      return {
+        assertionId: rowString(assertion, "assertion_id")!,
+        bindingId: rowString(assertion, "binding_id")!,
+        providerId: rowString(assertion, "provider_id")!,
+        providerNamespace: rowString(assertion, "provider_namespace")!,
+        subjectReferenceHash: rowString(assertion, "subject_reference_hash")!,
+        capabilities: parseJson<string[]>(assertion.capabilities_json, "assurance capabilities").sort(),
+        verifiedAt: rowDate(assertion, "evidence_verified_at")!.toISOString(),
+        expiresAt: rowDate(assertion, "evidence_expires_at")!.toISOString(),
+      };
+    }),
+  };
 }
 
 async function expireLockedAssignment(client: PoolClient, row: QueryRow, now: Date) {
@@ -845,7 +886,11 @@ export async function reserveAudienceAssignment(input: {
       ...validateQualificationRules(parseJson<QualificationRule[]>(cohort.qualification_rules_json, "cohort rules")),
       ...validateQualificationRules(policy.requiredQualifications),
     ];
-    const eligible: Array<{ row: QueryRow; provenance: QualificationProvenance[]; raterId: string | null }> = [];
+    const eligible: Array<{
+      row: QueryRow;
+      provenance: QualificationProvenance[];
+      paidEligibility: Awaited<ReturnType<typeof paidEligibility>> | null;
+    }> = [];
     for (const value of reviewerResult.rows) {
       const reviewer = value as QueryRow;
       if (alreadyAssigned.has(rowString(reviewer, "reviewer_account_address"))) continue;
@@ -854,16 +899,20 @@ export async function reserveAudienceAssignment(input: {
         "qualification provenance",
       );
       if (!satisfiesQualifications(rules, provenance, now)) continue;
-      let raterId: string | null = null;
+      let paidEligibilitySnapshot: Awaited<ReturnType<typeof paidEligibility>> | null = null;
       if (isPaid) {
         try {
-          raterId = await paidEligibility(client, rowString(reviewer, "reviewer_account_address")!, now);
+          paidEligibilitySnapshot = await paidEligibility(
+            client,
+            rowString(reviewer, "reviewer_account_address")!,
+            now,
+          );
         } catch (error) {
           if (namedReviewer) throw error;
           continue;
         }
       }
-      eligible.push({ row: reviewer, provenance, raterId });
+      eligible.push({ row: reviewer, provenance, paidEligibility: paidEligibilitySnapshot });
     }
     if (!eligible.length) {
       throw new TokenlessServiceError(
@@ -876,15 +925,40 @@ export async function reserveAudienceAssignment(input: {
     const reviewerAccountAddress = rowString(chosen.row, "reviewer_account_address")!;
     const assignmentId = `haas_${randomUUID().replaceAll("-", "")}`;
     const reservationExpiresAt = new Date(now.getTime() + ttl);
+    const assuranceSnapshot = {
+      schemaVersion: "rateloop.assignment-assurance-snapshot.v1",
+      reviewerSource: source,
+      assertions:
+        chosen.paidEligibility?.assertions ??
+        (source === "customer_invited"
+          ? [
+              {
+                assertionId: `invite_${assignmentId}`,
+                bindingId: `invite_${reviewerAccountAddress}`,
+                providerId: "rateloop:invitation",
+                providerNamespace: "rateloop:assignment:v1",
+                subjectReferenceHash: `sha256:${hashToken(`${input.runId}:${reviewerAccountAddress}`)}`,
+                capabilities: ["customer_invitation"],
+                verifiedAt: now.toISOString(),
+                expiresAt: reservationExpiresAt.toISOString(),
+              },
+            ]
+          : []),
+      qualifications: chosen.provenance,
+      capturedAt: now.toISOString(),
+    };
+    const assuranceSnapshotJson = canonicalJson(assuranceSnapshot);
+    const assuranceSnapshotHash = `sha256:${hashToken(assuranceSnapshotJson)}`;
     await client.query(
       `INSERT INTO tokenless_assurance_assignments
        (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
         reviewer_account_address, source, selection, status, confidentiality_terms_hash,
-        qualification_provenance_json, blinding_json, paid_assignment,
+        qualification_provenance_json, assurance_snapshot_json, assurance_snapshot_hash,
+        blinding_json, paid_assignment,
         paid_eligibility_checked_at, voucher_marker, reservation_expires_at,
         lease_issuer_account_address, lease_state, recovery_count, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'reserved', $10, $11, $12,
-               $13, $14, NULL, $15, $16, 'pending', 0, $17, $17)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'reserved', $10, $11, $12, $13, $14,
+               $15, $16, NULL, $17, $18, 'pending', 0, $19, $19)`,
       [
         assignmentId,
         input.workspaceId,
@@ -897,6 +971,8 @@ export async function reserveAudienceAssignment(input: {
         selection,
         input.confidentialityTermsHash,
         JSON.stringify(chosen.provenance),
+        assuranceSnapshotJson,
+        assuranceSnapshotHash,
         JSON.stringify({ swap: randomInt(2) === 1 }),
         isPaid,
         isPaid ? now : null,
@@ -1223,8 +1299,8 @@ export async function acceptAudienceAssignment(input: {
       }
       let voucherMarker: string | null = null;
       if (row.paid_assignment === true) {
-        const raterId = await paidEligibility(client, reviewer, now);
-        voucherMarker = `eligibility:${raterId}:${createHash("sha256").update(`${input.assignmentId}:${reviewer}`).digest("hex")}`;
+        const eligibility = await paidEligibility(client, reviewer, now);
+        voucherMarker = `eligibility:${eligibility.raterId}:${createHash("sha256").update(`${input.assignmentId}:${reviewer}`).digest("hex")}`;
       }
       await client.query(
         `UPDATE tokenless_assurance_assignments

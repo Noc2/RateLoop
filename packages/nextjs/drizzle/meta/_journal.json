@@ -127,6 +127,13 @@
       "when": 1783918800000,
       "tag": "0017_composable_assurance_eligibility",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783922400000,
+      "tag": "0018_composable_eligibility_readers",
+      "breakpoints": true
     }
   ]
 }

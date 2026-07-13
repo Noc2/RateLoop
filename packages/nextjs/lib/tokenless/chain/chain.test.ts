@@ -168,8 +168,11 @@ function admissionPolicy() {
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
-      requiredCapabilities: ["account_control" as const, "live_human" as const, "minimum_age" as const],
-      allowedProviders: ["identity-production"],
+      requirements: ["account_control", "live_human", "minimum_age"].map(capability => ({
+        capability: capability as "account_control" | "live_human" | "minimum_age",
+        reviewerSources: ["rateloop_network" as const],
+        allowedProviders: ["identity-production"],
+      })),
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const],

@@ -681,10 +681,11 @@ export async function deriveFinalizedRoundEvidence(input: {
   }
   const vouchersResult = await dbClient.execute({
     sql: `SELECT v.vote_key, v.admission_policy_hash, v.content_id, v.issuer_address,
-                 p.account_address, e.provider_subject_hash, e.provider_id, e.reviewer_source
+                 v.assurance_snapshot_hash, p.account_address, s.snapshot_json,
+                 s.reviewer_source, s.snapshot_hash
           FROM tokenless_paid_vouchers v
           JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
-          JOIN tokenless_capability_eligibility e ON e.rater_id = v.rater_id
+          JOIN tokenless_voucher_assurance_snapshots s ON s.voucher_id = v.voucher_id
           WHERE v.chain_id = ? AND lower(v.panel_address) = ? AND v.round_id = ?`,
     args: [
       Number(execution.chain_id),
@@ -715,9 +716,30 @@ export async function deriveFinalizedRoundEvidence(input: {
   const identityCounts = new Map<string, number>();
   const revealedAccounts = new Set<string>();
   for (const voucher of revealedVouchers as Row[]) {
-    const tier = `provider:${stringValue(voucher.provider_id, "Voucher provider")}`;
+    const snapshotJson = stringValue(voucher.snapshot_json, "Voucher assurance snapshot");
+    const snapshotHash = stringValue(voucher.snapshot_hash, "Voucher assurance snapshot hash");
+    const voucherSnapshotHash = stringValue(voucher.assurance_snapshot_hash, "Voucher-bound assurance snapshot hash");
+    if (`sha256:${digest(snapshotJson)}` !== snapshotHash || voucherSnapshotHash !== snapshotHash) {
+      throw new TokenlessServiceError("Voucher assurance provenance hash is invalid.", 409, "evidence_source_mismatch");
+    }
+    const snapshot = objectValue(JSON.parse(snapshotJson), "Voucher assurance snapshot");
+    if (snapshot.reviewerSource !== voucher.reviewer_source || !Array.isArray(snapshot.assertions)) {
+      throw new TokenlessServiceError("Voucher assurance provenance is inconsistent.", 409, "evidence_source_mismatch");
+    }
+    const assertions = snapshot.assertions as Array<{
+      providerId?: unknown;
+      subjectReferenceHash?: unknown;
+    }>;
+    const providers = [...new Set(assertions.map(value => stringValue(value.providerId, "Voucher provider")))].sort();
+    const subjects = [
+      ...new Set(assertions.map(value => stringValue(value.subjectReferenceHash, "Voucher identity subject"))),
+    ].sort();
+    if (!providers.length || !subjects.length) {
+      throw new TokenlessServiceError("Voucher assurance provenance is incomplete.", 409, "evidence_source_mismatch");
+    }
+    const tier = `providers:${providers.join("+")}`;
     tierMix[tier] = (tierMix[tier] ?? 0) + 1;
-    const identity = stringValue(voucher.provider_subject_hash, "Voucher identity subject");
+    const identity = subjects.join("+");
     identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1);
     revealedAccounts.add(exactAddress(voucher.account_address, "Voucher account"));
   }
@@ -728,7 +750,17 @@ export async function deriveFinalizedRoundEvidence(input: {
     revealCount,
     revealedAccounts,
   });
-  const issuedIdentities = new Set(vouchersResult.rows.map(value => rowString(value as Row, "provider_subject_hash")!));
+  const issuedIdentities = new Set(
+    vouchersResult.rows.map(value => {
+      const snapshot = JSON.parse(rowString(value as Row, "snapshot_json")!) as {
+        assertions: Array<{
+          subjectReferenceHash?: unknown;
+        }>;
+      };
+      const assertions = snapshot.assertions;
+      return [...new Set(assertions.map(assertion => String(assertion.subjectReferenceHash)))].sort().join("+");
+    }),
+  );
   const largestIdentityCluster = Math.max(...identityCounts.values());
   const quoteEconomics = objectValue(JSON.parse(rowString(execution, "economics_json")!), "Stored economics");
   const fee = objectValue(quoteEconomics.fee, "Stored fee economics");

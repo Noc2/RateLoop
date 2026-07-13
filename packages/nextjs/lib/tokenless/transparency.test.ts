@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -202,6 +202,26 @@ beforeEach(async () => {
     const accountAddress = `0x${String(index + 101).padStart(40, "0")}`;
     const identitySubjectHash = `identity_${index}`;
     const voteKey = `0x${String(index + 1).padStart(40, "0")}`;
+    const assuranceSnapshotJson = stableTransparencyJson({
+      schemaVersion: "rateloop.voucher-assurance-snapshot.v1",
+      reviewerSource: "rateloop_network",
+      assertions: [
+        {
+          assertionId: `assertion_${index}`,
+          bindingId: `binding_${index}`,
+          providerId: "self_xyz",
+          providerNamespace: "self:test",
+          subjectReferenceHash: identitySubjectHash,
+          capabilities: ["live_human", "unique_human"],
+          verifiedAt: NOW.toISOString(),
+          expiresAt: "2027-01-01T00:00:00.000Z",
+        },
+      ],
+      qualifications: [],
+      cohortIds: [],
+      capturedAt: NOW.toISOString(),
+    });
+    const assuranceSnapshotHash = `sha256:${createHash("sha256").update(assuranceSnapshotJson).digest("hex")}`;
     await dbClient.execute({
       sql: `INSERT INTO tokenless_rater_profiles
             (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
@@ -210,43 +230,13 @@ beforeEach(async () => {
       args: [raterId, accountAddress, NOW, NOW],
     });
     await dbClient.execute({
-      sql: `INSERT INTO tokenless_capability_eligibility
-            (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash,
-             provider_subject_hash, capabilities_json, provider_evidence_ciphertext,
-             provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
-             evidence_expires_at, declared_residence_country, tax_residence_country,
-             residence_tax_status, tax_profile_status, dac7_status, sanctions_consent_at,
-             sanctions_status, sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at,
-             payout_account, payout_ownership_method, payout_verified_at, reviewer_source,
-             cohort_ids_json, qualification_keys_json, eligibility_status, created_at, updated_at)
-            VALUES (?, 'self_xyz', ?, ?, ?, '["live_human","unique_human"]', 'ciphertext',
-                    'v1', 'provider_evidence', ?, ?, 'DE', 'DE', 'consistent', 'complete',
-                    'complete', ?, 'clear', ?, ?, ?, ?, 'siwe_base_account_session', ?,
-                    'rateloop_network', '[]', '[]', 'eligible', ?, ?)`,
-      args: [
-        raterId,
-        `assertion_hash_${index}`,
-        `assertion_id_hash_${index}`,
-        identitySubjectHash,
-        NOW,
-        new Date("2027-01-01T00:00:00Z"),
-        NOW,
-        `sanctions_hash_${index}`,
-        NOW,
-        new Date("2027-01-01T00:00:00Z"),
-        accountAddress,
-        NOW,
-        NOW,
-        NOW,
-      ],
-    });
-    await dbClient.execute({
       sql: `INSERT INTO tokenless_paid_vouchers
             (voucher_id, rater_id, request_idempotency_key, request_hash,
              chain_id, panel_address, issuer_address, issuer_epoch, signer_address, round_id,
-             content_id, vote_key, nullifier, admission_policy_hash, expires_at, voucher_json, voucher_signature,
+             content_id, vote_key, nullifier, admission_policy_hash, assurance_snapshot_hash,
+             expires_at, voucher_json, voucher_signature,
              status, issued_at)
-            VALUES (?, ?, ?, ?, 84532, ?, ?, 1, ?, 42, ?, ?, ?, ?, ?, '{}', 'signature', 'committed', ?)`,
+            VALUES (?, ?, ?, ?, 84532, ?, ?, 1, ?, 42, ?, ?, ?, ?, ?, ?, '{}', 'signature', 'committed', ?)`,
       args: [
         `voucher_${index}`,
         raterId,
@@ -259,9 +249,16 @@ beforeEach(async () => {
         voteKey,
         `0x${String(index + 11).padStart(64, "0")}`,
         POLICY_HASH,
+        assuranceSnapshotHash,
         new Date("2027-01-01T00:00:00Z"),
         NOW,
       ],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_voucher_assurance_snapshots
+            (voucher_id, rater_id, reviewer_source, snapshot_json, snapshot_hash, created_at)
+            VALUES (?, ?, 'rateloop_network', ?, ?, ?)`,
+      args: [`voucher_${index}`, raterId, assuranceSnapshotJson, assuranceSnapshotHash, NOW],
     });
   }
 });
@@ -304,6 +301,18 @@ test("finalized evidence rejects malformed Ponder provenance and altered frozen 
         ponderUrl: "https://ponder.example.test",
       }),
     /do not match the frozen terms/,
+  );
+  await dbClient.execute(
+    "UPDATE tokenless_voucher_assurance_snapshots SET snapshot_json = '{}' WHERE voucher_id = 'voucher_0'",
+  );
+  await assert.rejects(
+    () =>
+      appendFinalizedRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch(),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /provenance hash is invalid/,
   );
 });
 

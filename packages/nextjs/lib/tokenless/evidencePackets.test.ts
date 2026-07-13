@@ -153,7 +153,7 @@ async function seedEvidenceFixture(input: {
     selection: "customer_named",
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
-    assurance: { requiredCapabilities: [], allowedProviders: [] },
+    assurance: { requirements: [] },
     buyerPrivacy: {
       visibleFields: ["reviewer_source"],
       minimumAggregationSize: input.minimumAggregationSize,
@@ -327,11 +327,15 @@ async function seedEvidenceFixture(input: {
         `INSERT INTO tokenless_assurance_assignments
          (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
           reviewer_account_address, source, selection, status, confidentiality_terms_hash,
-          confidentiality_accepted_at, qualification_provenance_json, blinding_json,
+          confidentiality_accepted_at, qualification_provenance_json,
+          assurance_snapshot_json, assurance_snapshot_hash, blinding_json,
           paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
           assignment_expires_at, lease_issuer_account_address, lease_state,
           created_at, accepted_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer_named', 'completed', ?, ?, '[]', '{"swap":false}',
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer_named', 'completed', ?, ?, '[]',
+                 '{"assertions":[],"qualifications":[]}',
+                 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+                 '{"swap":false}',
                  ?, ?, ?, ?, ?, 'expired', ?, ?, ?)`,
         [
           `assignment_${sourceIndex}_${index}`,

@@ -14,6 +14,7 @@ type EligibilityState = {
 };
 
 type UnlockForm = {
+  declaredResidenceCountry: string;
   taxResidenceCountry: string;
   fullName: string;
   birthDate: string;
@@ -26,6 +27,7 @@ type UnlockForm = {
 };
 
 const initialForm: UnlockForm = {
+  declaredResidenceCountry: "DE",
   taxResidenceCountry: "DE",
   fullName: "",
   birthDate: "",
@@ -127,6 +129,7 @@ export function PaidEligibilityClient() {
           body: JSON.stringify({
             providerState,
             sanctionsConsent: form.sanctionsConsent,
+            declaredResidenceCountry: form.declaredResidenceCountry.toUpperCase(),
             taxResidenceCountry: form.taxResidenceCountry.toUpperCase(),
             payoutAccount: accountAddress,
             dac7: {
@@ -202,6 +205,17 @@ export function PaidEligibilityClient() {
               can be issued.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm text-base-content/60">
+                Residence country
+                <input
+                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
+                  value={form.declaredResidenceCountry}
+                  onChange={event => update("declaredResidenceCountry", event.target.value)}
+                  minLength={2}
+                  maxLength={2}
+                  required
+                />
+              </label>
               <label className="text-sm text-base-content/60">
                 Tax residence country
                 <input

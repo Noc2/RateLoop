@@ -100,7 +100,7 @@ function audiencePolicy(
     selection: input.selection ?? "randomized",
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: input.requiredQualifications ?? [],
-    assurance: { requiredCapabilities: [], allowedProviders: [] },
+    assurance: { requirements: [] },
     buyerPrivacy: {
       visibleFields: ["reviewer_source", "qualification_summary"],
       minimumAggregationSize: 2,

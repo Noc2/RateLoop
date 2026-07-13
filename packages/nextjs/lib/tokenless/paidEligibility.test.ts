@@ -135,8 +135,11 @@ async function openRound() {
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
-      requiredCapabilities: ["account_control" as const, "live_human" as const, "minimum_age" as const],
-      allowedProviders: ["identity-production"],
+      requirements: ["account_control", "live_human", "minimum_age"].map(capability => ({
+        capability: capability as "account_control" | "live_human" | "minimum_age",
+        reviewerSources: ["rateloop_network" as const],
+        allowedProviders: ["identity-production"],
+      })),
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const],
@@ -174,9 +177,10 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
 
   const rows = await dbClient.execute(
     `SELECT p.nullifier_seed_ciphertext, p.nullifier_key_domain,
-            e.tax_vault_ciphertext, e.tax_vault_key_domain, e.provider_evidence_key_domain
+            l.tax_vault_ciphertext, l.tax_vault_key_domain, a.provider_evidence_key_domain
      FROM tokenless_rater_profiles p
-     JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id`,
+     JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
+     JOIN tokenless_assurance_assertions a ON a.rater_id = p.rater_id`,
   );
   const seedCiphertext = String(rows.rows[0]?.nullifier_seed_ciphertext);
   const dac7Ciphertext = String(rows.rows[0]?.tax_vault_ciphertext);
@@ -231,7 +235,13 @@ test("declared and tax residence mismatch is persisted distinctly and blocks pai
     () =>
       issuePaidVoucher({
         accountAddress: ACCOUNT,
-        request: { idempotencyKey: "voucher:test:residence", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        request: {
+          idempotencyKey: "voucher:test:residence",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "rateloop_network",
+        },
         now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
@@ -317,6 +327,33 @@ test("production provider results require an Ed25519 signature bound to the sign
   );
 });
 
+test("a provider assertion id cannot be replayed onto another immutable identity binding", async () => {
+  await unlockPaidTasks();
+  installOverrides(
+    provider({
+      accountAddress: OTHER_ACCOUNT,
+      subjectId: "provider-subject-other",
+    }),
+  );
+  await assert.rejects(
+    () =>
+      submitPaidEligibility({
+        accountAddress: OTHER_ACCOUNT,
+        submission: submission(OTHER_ACCOUNT),
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "identity_already_bound",
+  );
+  const assertions = await dbClient.execute(`
+    SELECT p.account_address, a.provider_assertion_hash
+    FROM tokenless_assurance_assertions a
+    JOIN tokenless_rater_profiles p ON p.rater_id = a.rater_id
+  `);
+  assert.deepEqual(assertions.rows, [
+    { account_address: ACCOUNT.toLowerCase(), provider_assertion_hash: "provider-assertion-hash" },
+  ]);
+});
+
 test("sanctions review is persisted but remains fail-closed for paid vouchers", async () => {
   installOverrides(provider({ sanctionsStatus: "review" }));
   const result = await unlockPaidTasks();
@@ -328,7 +365,13 @@ test("sanctions review is persisted but remains fail-closed for paid vouchers", 
     () =>
       issuePaidVoucher({
         accountAddress: ACCOUNT,
-        request: { idempotencyKey: "voucher:test:review", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        request: {
+          idempotencyKey: "voucher:test:review",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "rateloop_network",
+        },
         now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
@@ -342,6 +385,7 @@ test("voucher issuance fails before eligibility and for missing required capabil
     roundId: "42",
     contentId: CONTENT_ID,
     voteKey: VOTE_KEY,
+    reviewerSource: "rateloop_network",
   } as const;
   await assert.rejects(
     () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
@@ -373,11 +417,112 @@ test("voucher issuance rejects policy JSON that no longer matches its frozen has
     () =>
       issuePaidVoucher({
         accountAddress: ACCOUNT,
-        request: { idempotencyKey: "voucher:test:tamper", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        request: {
+          idempotencyKey: "voucher:test:tamper",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "rateloop_network",
+        },
         now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "admission_policy_mismatch",
   );
+});
+
+test("voucher admission composes independent provider assertions and snapshots the exact mix", async () => {
+  await unlockPaidTasks();
+  const rater = await dbClient.execute("SELECT rater_id FROM tokenless_rater_profiles LIMIT 1");
+  const raterId = String(rater.rows[0]?.rater_id);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_assertions SET capabilities_json = ? WHERE rater_id = ?",
+    args: [JSON.stringify(["account_control", "live_human"]), raterId],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_provider_subject_bindings
+          (binding_id, rater_id, provider_id, provider_namespace, subject_reference_hash,
+           subject_reference_scheme, status, bound_at, last_verified_at, created_at, updated_at)
+          VALUES ('binding_age', ?, 'age-provider', 'age:test', ?, 'legacy-sha256-v2',
+                  'active', ?, ?, ?, ?)`,
+    args: [raterId, `sha256:${"7".repeat(64)}`, NOW, NOW, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_assertions
+          (assertion_id, rater_id, binding_id, provider_id, provider_namespace,
+           provider_assertion_hash, provider_assertion_id_hash, provider_assertion_reference_scheme,
+           capabilities_json, provider_evidence_ciphertext, provider_evidence_key_version,
+           provider_evidence_key_domain, evidence_verified_at, evidence_expires_at,
+           minimum_age_verified, status, created_at, updated_at)
+          SELECT 'assertion_age', rater_id, 'binding_age', 'age-provider', 'age:test',
+                 'age-hash', 'age-id-hash', 'legacy-sha256-v2', '["minimum_age"]',
+                 provider_evidence_ciphertext, provider_evidence_key_version,
+                 provider_evidence_key_domain, evidence_verified_at, evidence_expires_at,
+                 18, 'active', created_at, updated_at
+          FROM tokenless_assurance_assertions WHERE rater_id = ? LIMIT 1`,
+    args: [raterId],
+  });
+  await registerVoucherRound({
+    chainId: 84532,
+    panelAddress: PANEL,
+    roundId: "42",
+    contentId: CONTENT_ID,
+    admissionPolicy: {
+      schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+      policyId: "policy_composed",
+      version: 1,
+      reviewerSource: "rateloop_network",
+      compensation: "paid",
+      cohorts: [],
+      selection: "randomized",
+      fallbacks: { allowed: false, sources: [] },
+      requiredQualifications: [],
+      assurance: {
+        requirements: [
+          {
+            capability: "account_control",
+            reviewerSources: ["rateloop_network"],
+            allowedProviders: ["identity-production"],
+          },
+          {
+            capability: "live_human",
+            reviewerSources: ["rateloop_network"],
+            allowedProviders: ["identity-production"],
+          },
+          {
+            capability: "minimum_age",
+            reviewerSources: ["rateloop_network"],
+            allowedProviders: ["age-provider"],
+          },
+        ],
+      },
+      buyerPrivacy: { visibleFields: ["reviewer_source"], minimumAggregationSize: 10, suppressSmallCells: true },
+      legalEligibilityRequired: true,
+    },
+    maximumCommits: 15,
+    voucherNotBefore: new Date(NOW.getTime() - 60_000),
+    voucherDeadline: new Date(NOW.getTime() + 20 * 60_000),
+  });
+  const issued = await issuePaidVoucher({
+    accountAddress: ACCOUNT,
+    request: {
+      idempotencyKey: "voucher:test:composed",
+      roundId: "42",
+      contentId: CONTENT_ID,
+      voteKey: VOTE_KEY,
+      reviewerSource: "rateloop_network",
+    },
+    now: NOW,
+  });
+  const snapshot = await dbClient.execute({
+    sql: "SELECT snapshot_json FROM tokenless_voucher_assurance_snapshots WHERE voucher_id = ?",
+    args: [issued.voucherId],
+  });
+  const assertions = (
+    JSON.parse(String(snapshot.rows[0]?.snapshot_json)) as {
+      assertions: Array<{ providerId: string }>;
+    }
+  ).assertions;
+  assert.deepEqual(assertions.map(value => value.providerId).sort(), ["age-provider", "identity-production"]);
 });
 
 test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", async () => {
@@ -387,13 +532,46 @@ test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", 
   });
   await unlockPaidTasks();
   const frozenPolicy = await openRound();
+  const rater = await dbClient.execute("SELECT rater_id FROM tokenless_rater_profiles LIMIT 1");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_reviewer_qualifications
+          (qualification_id, rater_id, reviewer_source, qualification_kind, cohort_ids_json,
+           qualification_keys_json, verified_at, expires_at, status, created_at, updated_at)
+          VALUES ('qual_invited_competing', ?, 'customer_invited', 'invitation', '[]', '[]',
+                  ?, ?, 'active', ?, ?)`,
+    args: [String(rater.rows[0]?.rater_id), NOW, new Date(NOW.getTime() + 86_400_000), NOW, NOW],
+  });
   const request = {
     idempotencyKey: "voucher:test:exact",
     roundId: "42",
     contentId: CONTENT_ID,
     voteKey: VOTE_KEY,
+    reviewerSource: "rateloop_network",
   } as const;
   const first = await issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW });
+  const snapshotBefore = await dbClient.execute({
+    sql: `SELECT snapshot_json, snapshot_hash
+          FROM tokenless_voucher_assurance_snapshots WHERE voucher_id = ?`,
+    args: [first.voucherId],
+  });
+  const snapshottedAssertions = JSON.parse(String(snapshotBefore.rows[0]?.snapshot_json)) as {
+    reviewerSource: string;
+    assertions: Array<{ providerId: string; capabilities: string[] }>;
+  };
+  assert.equal(snapshottedAssertions.reviewerSource, "rateloop_network");
+  const assertions = snapshottedAssertions.assertions;
+  assert.equal(assertions.length, 1);
+  assert.equal(assertions[0]?.providerId, "identity-production");
+  assert.deepEqual(assertions[0]?.capabilities, [
+    "account_control",
+    "document_holder",
+    "live_human",
+    "minimum_age",
+    "unique_human",
+  ]);
+  await dbClient.execute(
+    "UPDATE tokenless_assurance_assertions SET capabilities_json = '[]', status = 'revoked' WHERE rater_id IS NOT NULL",
+  );
   const replay = await issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW });
   assert.equal(replay.voucherId, first.voucherId);
   assert.equal(replay.voucherSignature, first.voucherSignature);
@@ -401,6 +579,16 @@ test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", 
   assert.equal(first.voucher.issuerEpoch, "7");
   assert.equal(first.voucher.roundId, "42");
   assert.equal(first.voucher.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
+  const snapshotAfter = await dbClient.execute({
+    sql: `SELECT snapshot_json, snapshot_hash
+          FROM tokenless_voucher_assurance_snapshots WHERE voucher_id = ?`,
+    args: [first.voucherId],
+  });
+  assert.deepEqual(snapshotAfter.rows[0], snapshotBefore.rows[0]);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_assertions SET capabilities_json = ?, status = 'active' WHERE rater_id IS NOT NULL",
+    args: [JSON.stringify(assertions[0]?.capabilities)],
+  });
 
   const recovered = await recoverTypedDataAddress({
     domain: { name: "RateLoop Tokenless Panel", version: "1", chainId: 84532, verifyingContract: PANEL },
@@ -454,7 +642,13 @@ test("issuer acceptance is checked before any voucher record is created", async 
     () =>
       issuePaidVoucher({
         accountAddress: ACCOUNT,
-        request: { idempotencyKey: "voucher:test:epoch", roundId: "42", contentId: CONTENT_ID, voteKey: VOTE_KEY },
+        request: {
+          idempotencyKey: "voucher:test:epoch",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "rateloop_network",
+        },
         now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "issuer_mismatch",

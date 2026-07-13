@@ -173,29 +173,28 @@ function validateResponseBatch(responses: AssuranceCaseResponseInput[]) {
   });
 }
 
-async function loadCapabilitySnapshot(client: PoolClient, assignment: QueryRow) {
-  const source = rowString(assignment, "source")!;
-  const provenance = parseJson<Array<{ key?: unknown }>>(
-    assignment.qualification_provenance_json,
-    "qualification provenance",
-  );
-  const qualificationKeys = [...new Set(provenance.map(value => value.key).filter(value => typeof value === "string"))]
-    .map(String)
-    .sort();
-  const result = await client.query(
-    `SELECT e.capabilities_json FROM tokenless_rater_profiles p
-     JOIN tokenless_capability_eligibility e ON e.rater_id = p.rater_id
-     WHERE p.account_address = $1 LIMIT 1`,
-    [rowString(assignment, "reviewer_account_address")],
-  );
-  const eligibility = result.rows[0] as QueryRow | undefined;
-  const persisted = eligibility
-    ? parseJson<unknown[]>(eligibility.capabilities_json, "assurance capabilities").filter(
-        value => typeof value === "string",
-      )
-    : [];
+function loadCapabilitySnapshot(assignment: QueryRow) {
+  const snapshot = parseJson<{
+    assertions?: Array<{ capabilities?: unknown[] }>;
+    qualifications?: Array<{ key?: unknown }>;
+  }>(assignment.assurance_snapshot_json, "assignment assurance snapshot");
+  if (
+    !rowString(assignment, "assurance_snapshot_hash") ||
+    hashHumanAssuranceDocument(snapshot) !== rowString(assignment, "assurance_snapshot_hash")
+  ) {
+    serviceError("The assignment assurance snapshot is invalid.", "assurance_snapshot_mismatch", 409);
+  }
+  const qualificationKeys = [
+    ...new Set(
+      (snapshot.qualifications ?? []).map(value => value.key).filter(value => typeof value === "string") as string[],
+    ),
+  ].sort();
   const assuranceCapabilities = [
-    ...new Set<string>([...persisted.map(String), ...(source === "customer_invited" ? ["customer_invitation"] : [])]),
+    ...new Set(
+      (snapshot.assertions ?? []).flatMap(value =>
+        (value.capabilities ?? []).filter(capability => typeof capability === "string").map(String),
+      ),
+    ),
   ].sort();
   return { assuranceCapabilities, qualificationKeys };
 }
@@ -416,7 +415,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     if (runCases.some(row => !inputByCase.has(rowString(row, "case_id")!))) {
       serviceError("Every assigned case must be submitted exactly once.", "incomplete_assurance_response", 400);
     }
-    const { assuranceCapabilities, qualificationKeys } = await loadCapabilitySnapshot(client, assignment);
+    const { assuranceCapabilities, qualificationKeys } = loadCapabilitySnapshot(assignment);
     const pseudonymCandidates = [...keyrings.reviewerMapping.keys.keys()].map(version =>
       reviewerKey({ accountAddress, runId: rowString(assignment, "run_id")! }, keyrings.reviewerMapping, version),
     );

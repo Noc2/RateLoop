@@ -16,12 +16,24 @@ export async function POST(request: NextRequest) {
       throw new TokenlessServiceError("Voucher request must be valid JSON.", 400, "invalid_voucher_request");
     }
     const idempotencyKey = request.headers.get("idempotency-key")?.trim() || body.idempotencyKey;
-    if (!idempotencyKey || !body.roundId || !body.contentId || !body.voteKey) {
+    if (
+      !idempotencyKey ||
+      !body.roundId ||
+      !body.contentId ||
+      !body.voteKey ||
+      !["customer_invited", "rateloop_network"].includes(body.reviewerSource ?? "")
+    ) {
       throw new TokenlessServiceError("Voucher request fields are incomplete.", 400, "invalid_voucher_request");
     }
     const result = await issuePaidVoucher({
       accountAddress: session.address,
-      request: { idempotencyKey, roundId: body.roundId, contentId: body.contentId, voteKey: body.voteKey },
+      request: {
+        idempotencyKey,
+        roundId: body.roundId,
+        contentId: body.contentId,
+        voteKey: body.voteKey,
+        reviewerSource: body.reviewerSource!,
+      },
     });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
