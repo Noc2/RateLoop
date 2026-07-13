@@ -64,6 +64,13 @@
       "when": 1783886400000,
       "tag": "0008_workspace_governance",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783890000000,
+      "tag": "0009_artifact_privacy",
+      "breakpoints": true
     }
   ]
 }

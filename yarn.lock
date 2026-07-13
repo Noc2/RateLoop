@@ -2796,6 +2796,7 @@ __metadata:
     "@types/node": ^24.0.0
     "@types/pg": ^8.15.6
     "@types/react": ~19.2.3
+    "@vercel/blob": 2.4.0
     "@wagmi/core": 2.22.1
     daisyui: 5.0.9
     drizzle-kit: ^0.31.10
