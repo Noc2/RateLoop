@@ -31,7 +31,7 @@ test("commit authorization rejects a sealed payload whose signed hash differs", 
   );
 });
 
-test("task discovery exposes exact compensation without any private rater material", async () => {
+async function seedTask(sandbox: boolean) {
   await dbClient.execute({
     sql: "INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at) VALUES ('ws_tasks', 'Tasks', 'active', ?, ?)",
     args: [NOW, NOW],
@@ -41,8 +41,8 @@ test("task discovery exposes exact compensation without any private rater materi
     args: [new Date(NOW.getTime() + 60_000), NOW],
   });
   await dbClient.execute({
-    sql: "INSERT INTO tokenless_agent_asks (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json, status, sandbox, created_at, updated_at) VALUES ('op_tasks', 'task:test:1234', 'hash', 'quote_tasks', '{}', '{}', 'open', false, ?, ?)",
-    args: [NOW, NOW],
+    sql: "INSERT INTO tokenless_agent_asks (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json, status, sandbox, created_at, updated_at) VALUES ('op_tasks', 'task:test:1234', 'hash', 'quote_tasks', '{}', '{}', 'open', ?, ?, ?)",
+    args: [sandbox, NOW, NOW],
   });
   await dbClient.execute({
     sql: "INSERT INTO tokenless_content_records (content_id, workspace_id, content_hash, content_json, moderation_status, created_at, updated_at) VALUES ('cnt_tasks', 'ws_tasks', ?, ?, 'approved', ?, ?)",
@@ -86,6 +86,15 @@ test("task discovery exposes exact compensation without any private rater materi
     sql: "INSERT INTO tokenless_voucher_rounds (chain_id, panel_address, round_id, content_id, required_tier_id, voucher_not_before, voucher_deadline, status, created_at, updated_at) VALUES (84532, ?, 42, ?, 2, ?, ?, 'open', ?, ?)",
     args: [panel, `0x${"11".repeat(32)}`, new Date(NOW.getTime() - 1_000), new Date(NOW.getTime() + 60_000), NOW, NOW],
   });
+}
+
+test("task discovery fails closed for live content without an assignment", async () => {
+  await seedTask(false);
+  assert.deepEqual(await listPaidRaterTasks(ACCOUNT, NOW), []);
+});
+
+test("task discovery exposes exact compensation for explicit sandbox content", async () => {
+  await seedTask(true);
   const tasks = await listPaidRaterTasks(ACCOUNT, NOW);
   assert.equal(tasks[0]?.question.prompt, "Ship it?");
   assert.deepEqual(tasks[0]?.earnings, {
