@@ -8,12 +8,12 @@ Phases 1-4 are implemented in the `tokenless` package graph: greenfield contract
 Ponder and keeper; Base Account authentication/funding; B2B workspaces and API keys; prepaid, wallet, and x402 chain
 execution; pre-round moderation; paid eligibility and epoch-bound vouchers; per-round vote/payout keys with encrypted
 user-controlled recovery; sponsored commits; transparency analytics; signed webhooks; and the funder/rater journeys.
-A disposable Base Sepolia deployment was completed at block `44083251`, producing the historical deployment key
-`tokenless-v1:84532:0x9f21adbac4c007dd45c55d24e38f0067d1e1c5ba:0x830bee10d5304142cd87acac983af140d946def0:0x226891915c1ccce315ddfe58195fdc0a16bd977d`.
-It is stale after the current fund-core changes and must not be used as a live compatibility target. The next test deployment
-must be fresh and must move the generated package, Ponder, keeper, app, and isolated service configuration together under one
-new deployment key. Live E2E verification remains gated on that deployment and the complete non-sandbox secret/provider
-bundle. Phase 5 audit/bounty/mainnet hardening remains intentionally open.
+A disposable Base Sepolia v2 deployment was completed at block `44090502`, producing deployment key
+`tokenless-v2:84532:0x465174830061bdaf829567b3253b5001e1d885f5:0x9fdd25d3bc526c5dddfb34cf629ab1f70736a9e3:0x3fb8d0b01d4101bf7038f7d103f35c307dce0d42`.
+The generated package and isolated Vercel app, Ponder, and keeper are aligned on that complete key; the app remains an
+explicit sandbox publication. Live paid E2E verification remains gated on the assurance settlement integration and the
+complete non-sandbox secret/provider bundle. Any later fund-core change invalidates this disposable bundle and requires the
+same atomic redeployment procedure. Phase 5 audit/bounty/mainnet hardening remains intentionally open.
 
 ## Execution philosophy: build-first
 

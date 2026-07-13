@@ -2,10 +2,10 @@
 
 **Status:** Pre-redesign snapshot of the `tokenless` branch after Phases 1–4 implementation, from a five-lens review (contracts, backend/services, UX-vs-invariants, legal-compliance implementation, deployment/E2E). The [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md) now controls product sequencing; this document remains the blocker register. Companion to the [implementation plan](tokenless-immutable-implementation-plan-2026-07.md) and [legal reference](legal-revenue-assessment-tokenless-design-2026-07.md). Findings are grouped by the gate they block: **testnet E2E**, **real users**, and **real money / scaled launch**.
 
-**13 July deployment update:** the Base Sepolia bundle deployed at block `44083251` is now a historical artifact. It is
-stale after subsequent fund-core changes and must not be used as the next live compatibility target. A fresh isolated
-deployment remains required after the planned contract work, with generated artifacts, Ponder, keeper, app, and service
-configuration updated together. No claim is made that the paid live E2E gate is complete.
+**13 July deployment update:** the Base Sepolia v1 bundle at block `44083251` is historical. The replacement v2 bundle at
+block `44090502` is recorded in `packages/foundry/deployments/tokenless-v2/84532.json`; generated exports and the isolated
+Vercel app, Ponder, and keeper are aligned on its complete deployment key. The app remains in explicit sandbox mode, and no
+claim is made that the paid live E2E gate or real-money readiness is complete.
 
 ## Human-assurance implementation recheck — 13 July 2026
 
@@ -21,13 +21,14 @@ assessment remains as historical rationale and must not be read as current imple
 | Reviewer workflow | Implemented for unpaid invited panels: invitation, assignment-only A/B cases, frozen tags, encrypted rationale, server-persisted responses, and lease recovery | Paid assignment/commit/receipt integration, notifications, earnings history, appeals, and live E2E |
 | Evidence | Implemented for completed unpaid invited runs: source-derived signed packets, separate reviewer/judgment coverage, per-case descriptive aggregation, separate client decision, and offline verification with a pinned trust anchor | Paid packets fail closed without terminal receipts; operational key publication/rotation, external verifier review, and a live settlement fixture remain |
 | Settlement pipeline | Implemented source derivation: caller-supplied outcomes are rejected; Ponder finalization provenance and stored assignment/voucher/response records drive publication and webhooks | Scheduled production worker, monitoring/alerts, and deployment-pinned live exercise |
-| Fund-core economics | Implemented and property-tested: exact policy equality, strict reveal/beacon deadline separation, self-reveal fallback, zero-reveal refund, and accepted-valid-work compensation | External real-money contract review, deploy assertion, gas/size report, then one fresh deployment |
-| Deployment | Active bundle intentionally invalidated; source ABIs are v2-only | Fresh Base Sepolia contracts and atomic app/Ponder/keeper/Postgres configuration; sandbox-only app publication is allowed before this |
+| Fund-core economics | Implemented and property-tested: exact policy equality, strict reveal/beacon deadline separation, self-reveal fallback, zero-reveal refund, and accepted-valid-work compensation | External real-money contract review, deploy assertion, gas/size report, then a fresh deployment after any later fund-core change |
+| Deployment | Disposable Base Sepolia v2 bundle, generated exports, isolated Vercel app, Ponder, and keeper share one complete deployment key; app remains sandbox-only | Paid live E2E, complete non-sandbox provider/secret configuration, and atomic redeployment after any later fund-core change |
 | B2B/legal operations | Workspace trader/VAT/DPA/retention fields exist; public legal copy reflects reviewer modes and evidence limits | Geoblocking, screening operations, invoices/reconciliation, notice/action, KMS, rate limits, runbooks, and German legal review remain blockers to real money |
 
 The decisive remaining boundary is therefore narrower but still important: the isolated application can be published in
 explicit sandbox mode for product review, and an unpaid invited pilot can be rehearsed after migrations and operational
-privacy review. Paid testnet work requires both the missing assurance settlement integration and a fresh deployment.
+privacy review. Paid testnet work requires the missing assurance settlement integration and complete non-sandbox
+provider/secret configuration; the current v2 bundle may be used unless a later fund-core change invalidates it.
 Real-money launch remains blocked by the controls listed in the final row.
 
 ## Headline
@@ -37,8 +38,8 @@ The build is real and honest. Test health is clean (26/26 Foundry incl. stateful
 **The settlement substrate and unpaid invited human-assurance foundation are implemented, but the paid assurance stack
 is intentionally disabled.** The access, storage, response, and unpaid evidence blockers identified in the snapshot
 were addressed in source. The remaining gates are assignment-specific paid settlement, live end-to-end validation,
-operational key/privacy controls, fuller buyer and reviewer loops, B2B legal/payment operations, external review, and a
-fresh atomic contract/service deployment.
+operational key/privacy controls, fuller buyer and reviewer loops, B2B legal/payment operations, external review, and
+atomic redeployment after any later fund-core change.
 
 ## Historical pre-redesign human-assurance blockers
 
@@ -54,7 +55,7 @@ fresh atomic contract/service deployment.
 
 ## Blocks testnet E2E (mechanical — do these first)
 
-1. **Stale deployment identity.** `deployments/tokenless-v1/84532.json` records the historical 13 July deployment at block `44083251`, but it is stale after current fund-core changes. Do not propagate it further. Redeploy only after the planned contract commits, then move the generated package and isolated Vercel/Ponder/keeper identity variables together.
+1. **Deployment identity — resolved for the current disposable bundle.** `deployments/tokenless-v1/84532.json` remains historical. The v2 artifact at block `44090502`, generated package, isolated Vercel production environment, Ponder, and keeper now share one complete deployment key. Treat all of them as stale again after any fund-core change, and repeat the atomic redeployment before further live testing.
 2. **The assert-no-funds-admin script doesn't exist.** The plan mandates a post-deploy script proving no role can reach fund-moving functions; there is only NatSpec. Add a viem/cast assertion chained into artifact generation — it's the deploy-time gate for the whole adminless claim.
 3. **E2E harness deleted, never rebuilt.** `e2e/{tests,fixtures,…}` are empty; no Playwright config, no CI E2E job. "Live E2E verification" is currently 100% manual with no checklist. Rebuild at least one Sepolia smoke journey (fund → voucher → tlock commit → reveal/settle → claim), or commit a written manual verification script.
 4. **Secret/provider provisioning.** ~12 live secrets block a non-sandbox deploy (issuer signer, distinct relayer + prepaid-funder keys, pipeline/webhook/keeper-work tokens, two Postgres URLs, the eligibility-provider bundle). Decide what fills the eligibility-provider slots on testnet; apply drizzle migrations `0000`–`0006` before `TOKENLESS_SANDBOX_MODE=false`. Fix the stale `NEXT_PUBLIC_TARGET_NETWORKS` var in `env-parity.md`.
@@ -95,6 +96,6 @@ Adminless fund core verified by test (no operator path to funds; issuer never co
 1. **Fail closed before private data** (0a–0d): restrict task visibility, introduce assignment authorization, encrypt customer artifacts and identity linkage under separate key domains, and replace operator-supplied results with source-derived evidence.
 2. **Build the human-assurance domain and loops** (0e, 6–12) using the [redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md): projects/suites/runs, invited and external cohorts, frozen manifests, complete buyer/rater journeys, decision packets, receipts, and failure states.
 3. **Before any real money**, fix reserve farming (#13), stand up issuer-key KMS + caps + circuit breaker (#14), complete encrypted mapping and legal/data controls (#16–20), benchmark the mechanism, and pass privacy/contract review.
-4. **Redeploy last:** after all fund-core changes, create one fresh Base Sepolia deployment and move the isolated app, package, Ponder, keeper, database, and configuration together; then run the human-assurance E2E matrix before Phase 5 hardening.
+4. **Redeploy after any further fund-core change:** create one fresh Base Sepolia deployment and move the isolated app, package, Ponder, keeper, database, and configuration together; otherwise retain the current v2 bundle and run the human-assurance E2E matrix before Phase 5 hardening.
 
 This preserves build-first iteration without exposing customer data or turning a historical deployment into an accidental compatibility constraint.
