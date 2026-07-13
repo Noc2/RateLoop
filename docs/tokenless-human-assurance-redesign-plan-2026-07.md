@@ -196,7 +196,7 @@ Projects, artifacts, rubrics, raw rationales, cohort membership, identity attrib
 | Ponder/pipeline | Derive evidence from chain data; remove caller-supplied outcome metrics; add deployment/run correlation and reproducible exports |
 | Buyer app | Replace the three-field `/ask` demo with project setup, suite import, cohort composer, reviewer preview, run dashboard, result packet, and recurrence |
 | Rater app | Assignment-only task feed, correct A/B rendering, rationales/tags, invitations, qualification, notifications, receipts, queue recovery, and appeals |
-| SDK/agents/MCP | Versioned run APIs and safe artifact upload while retaining quote -> ask -> wait -> result as an internal per-round primitive |
+| SDK/agents/MCP | A thin Streamable HTTP adapter and installable agent skills over versioned run APIs, with draft-first browser approval and quote -> ask -> wait -> result retained as the internal per-round primitive |
 | Workspaces/billing | Team invitations, client isolation, partner roles, B2B/trader and VAT controls, prepaid reconciliation, invoices, usage/cost centers |
 | Public product | Reposition landing, shell, metadata, docs, static AI files, OG assets, promo video, and examples around human assurance; buyer CTA first, rater CTA second |
 | Trust/legal | Update privacy, terms, TRUST, DPA/subprocessor material, evidence limits, identity-provider disclosures, on-chain permanence, and reviewer-source labels |
@@ -263,19 +263,22 @@ Each numbered item is one intended commit. Keep contract, schema, privacy, produ
 17. **`feat(pipeline): automate settlement receipts and webhooks`**
     Replace the manual operator-input publication path with a deployment-pinned worker, deterministic analytics, signed webhook delivery, rater earnings, buyer/rater notifications, and retry/alerting.
 
-18. **`feat(integrations): expose assurance runs through SDK CLI and MCP`**
-    Add project/run endpoints, safe artifact uploads, batch status/results, signed webhooks, and examples for one eval platform and one consulting workflow.
+18. **`feat(mcp): restore privacy-safe agent handoffs`**
+    Add a fresh tokenless MCP adapter rather than reviving the legacy tool graph. Start with capabilities, quote, draft handoff, handoff status, bounded wait, and result tools. Bundle a Codex skill that defines when external judgment is useful. Keep the draft payload in the URL fragment until browser approval, require tool approval for mutations, and keep sandbox output explicitly simulated. Do not expose private artifact upload until owner/admin approval has server-recorded provenance and an access-log event.
 
-19. **`docs(marketing): reposition every public surface`**
+19. **`feat(integrations): expose authenticated assurance runs`**
+    Add project/run endpoints, owner-approved artifact uploads, batch status/results, signed webhooks, OAuth for interactive MCP clients, scoped API keys for server integrations, and examples for one eval platform and one consulting workflow. A workspace may preauthorize bounded audience, budget, classification, and retention policies; otherwise submission continues through the browser handoff.
+
+20. **`docs(marketing): reposition every public surface`**
     Update landing, navigation, docs, metadata, manifests, static AI files, OG assets, promo video, examples, and snapshots. Remove “Level Up Your Agent,” AI-rater, Reputation, generic-question, and unsupported privacy claims.
 
-20. **`feat(compliance): close B2B money and data controls`**
+21. **`feat(compliance): close B2B money and data controls`**
     Add trader/VAT gating, funder screening/geoblocking, invoices and reconciliation, German legal furniture, DPA/subprocessors, notice/action, retention/export, KMS roles, rate limits, monitoring, and continuity runbooks.
 
-21. **`test(e2e): verify human-assurance golden paths`**
+22. **`test(e2e): verify human-assurance golden paths`**
     Cover invited unpaid, invited paid, external paid, hybrid, confidential artifact, provider failure, quota race, replay, no-post-commit cancellation, failed quorum compensation, evidence verification, deletion, and access-log review in CI.
 
-22. **`chore(deploy): publish a fresh isolated tokenless stack`**
+23. **`chore(deploy): publish a fresh isolated tokenless stack`**
     Deploy the final contract set once, regenerate addresses/ABIs, migrate isolated Postgres, update Ponder/keeper/app atomically, run live smoke journeys, and verify `origin/main` and `rateloop.ai` did not move.
 
 ## Product-market-fit gates
