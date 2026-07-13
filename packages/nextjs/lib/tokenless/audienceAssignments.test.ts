@@ -132,6 +132,23 @@ async function seedRun(project: { workspaceId: string; projectId: string }, poli
   const runId = `run_${project.projectId}`;
   const policyId = `${policy.policyId}_${project.projectId}`;
   const artifactIds = [`artifact_${project.projectId}_a`, `artifact_${project.projectId}_b`];
+  const rubric = {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    rubricId,
+    projectId: project.projectId,
+    version: 1,
+    prompt: "Select the better answer",
+    choices: ["baseline", "candidate", "tie"],
+    failureTags: [{ key: "incorrect", label: "Incorrect" }],
+    rationale: { mode: "required", minLength: 10, maxLength: 500 },
+    passRule: {
+      metric: "candidate_preference_share_bps",
+      operator: "gte",
+      thresholdBps: 6_000,
+      minimumValidResponses: 1,
+    },
+  };
+  const suiteManifest = JSON.stringify({ rubric });
 
   for (const [index, artifactId] of artifactIds.entries()) {
     const role = index === 0 ? "baseline" : "candidate";
@@ -174,15 +191,23 @@ async function seedRun(project: { workspaceId: string; projectId: string }, poli
     sql: `INSERT INTO tokenless_assurance_rubrics
           (rubric_id, project_id, version, prompt, failure_tags_json, rationale_json,
            pass_rule_json, rubric_json, created_at)
-          VALUES (?, ?, 1, 'Select the better answer', '[]', '{}', '{}', '{}', ?)`,
-    args: [rubricId, project.projectId, now],
+          VALUES (?, ?, 1, 'Select the better answer', ?, ?, ?, ?, ?)`,
+    args: [
+      rubricId,
+      project.projectId,
+      JSON.stringify(rubric.failureTags),
+      JSON.stringify(rubric.rationale),
+      JSON.stringify(rubric.passRule),
+      JSON.stringify(rubric),
+      now,
+    ],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_suites
           (suite_id, project_id, name, version, status, rubric_id, rubric_version, manifest_hash,
            manifest_json, frozen_at, created_at, updated_at)
-          VALUES (?, ?, 'Release gate', 1, 'frozen', ?, 1, ?, '{}', ?, ?, ?)`,
-    args: [suiteId, project.projectId, rubricId, `sha256:${"f".repeat(64)}`, now, now, now],
+          VALUES (?, ?, 'Release gate', 1, 'frozen', ?, 1, ?, ?, ?, ?, ?)`,
+    args: [suiteId, project.projectId, rubricId, `sha256:${"f".repeat(64)}`, suiteManifest, now, now, now],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_cases
@@ -222,6 +247,26 @@ async function seedRun(project: { workspaceId: string; projectId: string }, poli
            status, policy_hash, manifest_hash, manifest_json, created_by, created_at, updated_at, frozen_at)
           VALUES (?, ?, ?, 1, ?, 1, 'frozen', ?, ?, '{}', ?, ?, ?, ?)`,
     args: [runId, project.projectId, suiteId, policyId, POLICY_HASH, RUN_HASH, OWNER, now, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_run_cases
+          (run_id, case_id, position, variant_a_artifact_id, variant_b_artifact_id,
+           blinding_commitment, blinding_secret_json, deterministic_checks_json,
+           deterministic_checks_hash, deterministic_checks_status, content_id,
+           admission_policy_hash, round_status, created_at, updated_at)
+          VALUES (?, ?, 0, ?, ?, ?, '{}', '[]', ?, 'not_applicable', ?, ?, 'planned', ?, ?)`,
+    args: [
+      runId,
+      caseId,
+      artifactIds[0],
+      artifactIds[1],
+      `sha256:${"1".repeat(64)}`,
+      `sha256:${"2".repeat(64)}`,
+      `0x${"3".repeat(64)}`,
+      `0x${"4".repeat(64)}`,
+      now,
+      now,
+    ],
   });
   return { runId, caseId, artifactIds };
 }
@@ -563,6 +608,37 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
     selection: "customer_named",
   });
   const seeded = await seedRun(project, policy);
+  const secondCaseId = `case_${project.projectId}_opposite`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_cases
+          (case_id, project_id, suite_id, suite_version, position, title, instructions,
+           baseline_artifact_id, candidate_artifact_id, context_artifact_ids_json,
+           objective_reference, status, deterministic_checks_json, created_at, updated_at)
+          SELECT ?, project_id, suite_id, suite_version, 1, 'Second support response', instructions,
+                 baseline_artifact_id, candidate_artifact_id, '[]', 'ticket-43', 'ready', '[]', created_at, updated_at
+          FROM tokenless_assurance_cases WHERE case_id = ?`,
+    args: [secondCaseId, seeded.caseId],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_run_cases
+          (run_id, case_id, position, variant_a_artifact_id, variant_b_artifact_id,
+           blinding_commitment, blinding_secret_json, deterministic_checks_json,
+           deterministic_checks_hash, deterministic_checks_status, content_id,
+           admission_policy_hash, round_status, created_at, updated_at)
+          VALUES (?, ?, 1, ?, ?, ?, '{}', '[]', ?, 'not_applicable', ?, ?, 'planned', ?, ?)`,
+    args: [
+      seeded.runId,
+      secondCaseId,
+      seeded.artifactIds[1],
+      seeded.artifactIds[0],
+      `sha256:${"5".repeat(64)}`,
+      `sha256:${"6".repeat(64)}`,
+      `0x${"7".repeat(64)}`,
+      `0x${"4".repeat(64)}`,
+      now,
+      now,
+    ],
+  });
   const [subpanel] = await prepareRunAudience({
     accountAddress: OWNER,
     workspaceId: project.workspaceId,
@@ -622,8 +698,24 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
     assignmentId: reserved.assignmentId,
     now: new Date(now.getTime() + 1),
   });
-  assert.equal(task.cases.length, 1);
-  assert.deepEqual(new Set(task.cases[0]!.options.map(value => value.artifactId)), new Set(seeded.artifactIds));
+  assert.equal(task.cases.length, 2);
+  assert.deepEqual(
+    task.rubric.failureTags.map(value => ({ key: value.key, label: value.label })),
+    [{ key: "incorrect", label: "Incorrect" }],
+  );
+  assert.deepEqual(
+    task.cases.map(value => value.options.map(option => [option.key, option.artifactId])),
+    [
+      [
+        ["A", seeded.artifactIds[0]],
+        ["B", seeded.artifactIds[1]],
+      ],
+      [
+        ["A", seeded.artifactIds[1]],
+        ["B", seeded.artifactIds[0]],
+      ],
+    ],
+  );
   const serialized = JSON.stringify(task);
   assert.doesNotMatch(serialized, /hidden_response|other_reviewer|"choice"|"validity"/);
   await assert.rejects(

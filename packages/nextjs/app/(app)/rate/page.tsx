@@ -1,6 +1,17 @@
-import { TokenlessRateClient } from "~~/components/tokenless/TokenlessRateClient";
+import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
 import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
-export default function RatePage() {
-  return <TokenlessRateClient sandboxMode={isTokenlessSandboxMode()} />;
+export default async function RatePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ assignment?: string | string[]; terms?: string | string[] }>;
+}) {
+  const { assignment, terms } = await searchParams;
+  return (
+    <HumanAssuranceRaterClient
+      initialAssignmentId={assignment}
+      initialTermsHash={terms}
+      sandboxMode={isTokenlessSandboxMode()}
+    />
+  );
 }

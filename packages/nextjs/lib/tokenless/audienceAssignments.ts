@@ -1,4 +1,4 @@
-import type { HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
+import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@rateloop/sdk";
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
@@ -1126,10 +1126,12 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
   const now = input.now ?? new Date();
   const assignmentResult = await dbClient.execute({
     sql: `SELECT a.*, r.suite_id, r.suite_version, r.manifest_hash AS current_run_manifest_hash,
-                 r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash
+                 r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
+                 s.manifest_json AS suite_manifest_json
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+          JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
           WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
             AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ?
             AND a.lease_state = 'issued' LIMIT 1`,
@@ -1144,12 +1146,16 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
     throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
   }
   const caseResult = await dbClient.execute({
-    sql: `SELECT case_id, position, title, instructions, baseline_artifact_id,
-                 candidate_artifact_id, context_artifact_ids_json, objective_reference
-          FROM tokenless_assurance_cases
-          WHERE suite_id = ? AND suite_version = ? AND status = 'ready' ORDER BY position ASC`,
-    args: [rowString(assignment, "suite_id"), rowNumber(assignment, "suite_version")],
+    sql: `SELECT rc.case_id, rc.position, rc.variant_a_artifact_id, rc.variant_b_artifact_id,
+                 c.title, c.instructions, c.context_artifact_ids_json, c.objective_reference
+          FROM tokenless_assurance_run_cases rc
+          JOIN tokenless_assurance_cases c ON c.case_id = rc.case_id AND c.status = 'ready'
+          WHERE rc.run_id = ? ORDER BY rc.position ASC`,
+    args: [rowString(assignment, "run_id")],
   });
+  if (!caseResult.rows.length) {
+    throw new TokenlessServiceError("Assignment has no frozen run cases.", 409, "assignment_not_ready");
+  }
   const leaseResult = await dbClient.execute({
     sql: `SELECT lease_id, artifact_id, expires_at FROM tokenless_assurance_artifact_leases
           WHERE assignment_id = ? AND account_address = ? AND revoked_at IS NULL AND expires_at > ?
@@ -1167,7 +1173,8 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
       });
     }
   }
-  const swap = parseJson<{ swap: boolean }>(assignment.blinding_json, "blinding").swap;
+  const suiteManifest = parseJson<{ rubric?: unknown }>(assignment.suite_manifest_json, "suite manifest");
+  const rubric = parseHumanAssuranceRubric(suiteManifest.rubric);
   const artifact = (artifactId: string) => {
     const lease = leases.get(artifactId);
     if (!lease) throw new TokenlessServiceError("Artifact lease expired.", 410, "artifact_lease_expired");
@@ -1183,24 +1190,24 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
       assignment.qualification_provenance_json,
       "qualification provenance",
     ),
+    rubric: {
+      prompt: rubric.prompt,
+      failureTags: rubric.failureTags,
+      rationale: rubric.rationale,
+    },
     cases: caseResult.rows.map(value => {
       const row = value as QueryRow;
-      const baselineId = rowString(row, "baseline_artifact_id")!;
-      const candidateId = rowString(row, "candidate_artifact_id")!;
+      const variantAId = rowString(row, "variant_a_artifact_id")!;
+      const variantBId = rowString(row, "variant_b_artifact_id")!;
       return {
         caseId: rowString(row, "case_id"),
         position: rowNumber(row, "position"),
         title: rowString(row, "title"),
         instructions: rowString(row, "instructions"),
-        options: swap
-          ? [
-              { key: "A", ...artifact(candidateId) },
-              { key: "B", ...artifact(baselineId) },
-            ]
-          : [
-              { key: "A", ...artifact(baselineId) },
-              { key: "B", ...artifact(candidateId) },
-            ],
+        options: [
+          { key: "A", ...artifact(variantAId) },
+          { key: "B", ...artifact(variantBId) },
+        ],
         context: parseJson<string[]>(row.context_artifact_ids_json, "context artifact ids").map(artifact),
         objectiveReference: rowString(row, "objective_reference"),
       };
