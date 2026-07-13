@@ -6,8 +6,8 @@ import { readBaseAccountSession } from "~~/lib/base-account/client";
 type EligibilityState = {
   status: "not_started" | "eligible" | "review" | "blocked" | "expired";
   blockedReason?: string | null;
-  identityTierId?: number;
-  identityExpiresAt?: string;
+  capabilities?: string[];
+  evidenceExpiresAt?: string;
   dac7Status?: string;
   screeningStatus?: string;
   payoutAccount?: string;
@@ -58,6 +58,10 @@ function statusLabel(state: EligibilityState | null) {
   if (state.status === "blocked") return "Paid tasks unavailable";
   if (state.status === "expired") return "Verification expired";
   return "Not started";
+}
+
+function formatCapability(value: string) {
+  return value.replaceAll("_", " ");
 }
 
 export function PaidEligibilityClient() {
@@ -160,7 +164,7 @@ export function PaidEligibilityClient() {
           <span
             className={`rounded-md px-3 py-1.5 text-xs font-medium ${eligible ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.05] text-base-content/55"}`}
           >
-            {eligible ? `Tier ${state.identityTierId}` : (state?.status ?? "checking")}
+            {eligible ? "Capability checked" : (state?.status ?? "checking")}
           </span>
         </div>
 
@@ -181,6 +185,14 @@ export function PaidEligibilityClient() {
             <div className="border-l-2 border-[var(--rateloop-pink)] pl-4">
               <span className="text-xs text-base-content/45">Payout Base Account</span>
               <strong className="mt-1 block break-all text-sm">{state.payoutAccount}</strong>
+            </div>
+            <div className="border-l-2 border-white/20 pl-4 sm:col-span-2">
+              <span className="text-xs text-base-content/45">Current assurance capabilities</span>
+              <strong className="mt-1 block text-sm font-medium capitalize">
+                {state.capabilities?.length
+                  ? state.capabilities.map(formatCapability).join(" · ")
+                  : "No provider claim exposed"}
+              </strong>
             </div>
           </div>
         ) : providerState ? (
