@@ -165,17 +165,6 @@ function Footer() {
               X
             </a>
           </li>
-          <li className="flex items-center gap-2">
-            <span className="text-base-content/40">·</span>
-            <a
-              href="https://t.me/rateloopchannel"
-              target="_blank"
-              rel="noreferrer"
-              className="transition-colors hover:text-base-content"
-            >
-              Telegram
-            </a>
-          </li>
         </ul>
       </nav>
     </footer>
