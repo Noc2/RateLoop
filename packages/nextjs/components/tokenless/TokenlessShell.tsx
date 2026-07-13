@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { BaseAccountSessionButton } from "~~/components/base-account/BaseAccountSessionButton";
+import { DOCS_NAV } from "~~/constants/docsNav";
 
 type IconProps = { className?: string };
 
@@ -79,20 +80,55 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
     <>
       {links.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
+        const showDocsNavigation = href === "/docs" && active;
+
         return (
-          <Link
-            key={href}
-            href={href}
-            className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors ${
-              active ? "text-base-content" : "text-base-content/75 hover:bg-base-content/[0.04] hover:text-base-content"
-            }`}
-          >
-            <Icon className="h-6 w-6 shrink-0" />
-            <span className="text-base font-medium">{label}</span>
-            {active ? (
-              <span className="absolute bottom-2 right-2 top-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)]" />
+          <div key={href} className="w-full">
+            <Link
+              href={href}
+              className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors ${
+                active
+                  ? "text-base-content"
+                  : "text-base-content/75 hover:bg-base-content/[0.04] hover:text-base-content"
+              }`}
+            >
+              <Icon className="h-6 w-6 shrink-0" />
+              <span className="text-base font-medium">{label}</span>
+              {active ? (
+                <span className="absolute bottom-2 right-2 top-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)]" />
+              ) : null}
+            </Link>
+            {showDocsNavigation ? (
+              <div className={`flex flex-col gap-5 pb-4 pt-3 ${mobile ? "px-2" : "px-1"}`}>
+                {DOCS_NAV.map(group => (
+                  <section key={group.section}>
+                    <h2 className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                      {group.section}
+                    </h2>
+                    <div className="flex flex-col gap-0.5">
+                      {group.links.map(link => {
+                        const linkActive = pathname === link.href;
+
+                        return (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                              linkActive
+                                ? "bg-base-content font-semibold text-base-100"
+                                : "text-base-content/70 hover:bg-base-content/[0.05] hover:text-base-content"
+                            }`}
+                          >
+                            {link.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
             ) : null}
-          </Link>
+          </div>
         );
       })}
       {mobile ? (
@@ -185,7 +221,7 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </summary>
-            <nav className="dropdown-content z-40 mt-3 w-64 rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
+            <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
               <NavLinks mobile />
             </nav>
           </details>
@@ -202,7 +238,7 @@ export function TokenlessShell({ children, sandboxMode }: { children: React.Reac
         >
           Search
         </Link>
-        <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 px-2.5">
+        <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-4">
           <NavLinks />
         </nav>
         <div className="mx-2.5 border-t border-[color:var(--rateloop-shell-border-strong)] pt-4">
