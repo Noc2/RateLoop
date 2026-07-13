@@ -1,5 +1,11 @@
 # RateLoop Tokenless: Product-Market-Fit Research and Recommendation
 
+> **13 July mechanism amendment:** the
+> [incentive and integrity reintegration plan](tokenless-incentive-integrity-reintegration-plan-2026-07.md) supersedes
+> this report where it treats the current prediction-only score as a candidate production mechanism or World ID as
+> merely optional for RateLoop-network supply. The market findings remain current; paid network/hybrid launch now
+> requires World ID 4, a vote-linked fixed RBTS bonus, and prospective correlation integrity epochs.
+
 **Date:** 13 July 2026
 
 **Status:** Product recommendation and validation plan, not proof of product-market fit. The dependency-ordered implementation is in the [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md).

@@ -15,8 +15,10 @@
 - Paid, RateLoop-network, and hybrid assurance assignments now fail closed. They must not be re-enabled until the frozen
   assignment policy is carried through voucher issuance, sealed commit, terminal settlement, and a receipt for every
   expected judgment. The existing generic paid settlement primitive is not a substitute for that product integration.
-- Identity-provider commits 15 and 16 remain deliberately deferred behind the PMF gates below. Base Account plus
-  one-time customer invitations is the active private path; neither World ID nor Self is a production dependency.
+- Identity-provider commits 15 and 16 remain unimplemented. Base Account plus one-time customer invitations is the
+  active private path. The [mechanism-integrity amendment](tokenless-incentive-integrity-reintegration-plan-2026-07.md)
+  now makes World ID 4 Proof of Human a production dependency for RateLoop-network and hybrid-network paid panels;
+  Self remains a later optional document-predicate provider. Customer-invited private panels do not inherit that gate.
 - Pipeline and integration foundations are present, but production scheduling, safe artifact upload, settlement
   notifications, earnings, full buyer APIs/UI, compliance operations, browser E2E, and the atomic fresh deployment
   remain open. The isolated web deployment may be published only as an explicitly simulated sandbox meanwhile.
@@ -66,12 +68,12 @@ Customer invitations should be the default private B2B path. A one-time access c
 - Freeze cases, artifact versions, rubric, reviewer policy, randomization, and acceptance rule before responses become visible.
 - Use pairwise preference plus bounded rubric failure tags and a short rationale in v1. Add multi-axis scoring only after inter-rater reliability and buyer usefulness are measured.
 - Replace the current handcrafted `confidenceBps` label. Report preference share, sample size, an appropriate interval, disagreement, missing/invalid cases, and the exact aggregation rule.
-- Benchmark the prediction tap and bonus mechanism against equal-pay voting. Keep it only if it materially improves quality, calibration, or resistance to herding without damaging completion.
+- Replace the current vote-invariant prediction-only payout before any paid network launch. Benchmark fixed-base binary RBTS against equal-pay and the current baseline; keep the prediction input only if it materially improves quality, calibration, or resistance to random/herding behavior without unacceptable completion loss. Keep Surprisingly Popular output shadow-only until it proves incremental value.
 - Record the client's final `go`, `revise`, or `stop` decision separately from the panel result. RateLoop supplies evidence; the customer owns the deployment decision.
 
 ## Identity and audience recommendation
 
-Do not replace World ID with Self, and do not make either provider mandatory for customer-invited reviews. Replace the globally ordered `selfie < passport < orb < presence` product model with a versioned, provider-neutral audience policy.
+Do not replace World ID with Self, and do not make either provider mandatory for customer-invited reviews. Require World ID 4 Proof of Human for RateLoop-network supply while retaining a versioned, provider-neutral audience policy that can compose later providers and never reduces assurance to `selfie < passport < orb < presence`.
 
 ```text
 source: invited | rateloop_network | hybrid | sandbox
@@ -109,13 +111,13 @@ A passport does not prove legal or tax residence. Public receipts should expose 
 | Option | Recommended role | Constraints |
 |---|---|---|
 | Access code / roster | Default for private invited cohorts | Hash one-time tokens, bind redemption to the signed-in browser principal, expire them, and prevent reuse; no uniqueness claim |
-| World ID 4 Proof of Human | Optional global-uniqueness capability for open panels | Use server verification and bind the proof to the RateLoop account/context; do not add World contracts to the Base fund core |
+| World ID 4 Proof of Human | Required global-uniqueness capability for RateLoop-network and hybrid-network panels | Use server verification and bind the proof to the RateLoop account/context; do not add World contracts to the Base fund core |
 | World passport / NFC | Optional document-uniqueness capability | Coverage and authentication strength vary by document and country |
 | World Selfie Check | Optional low-friction liveness signal | It is beta/low assurance and currently uses a legacy proof path while v4 support rolls out; do not market it as global uniqueness |
 | World Identity Check | Possible document-attribute capability | It is preview; procurement and production access must be confirmed before planning around it |
 | Self | Optional age/document/country-predicate adapter | Prefer backend verification and predicates; avoid name, date of birth, passport number, and direct Base contract integration |
 
-World ID remains the better candidate for a low-friction open-panel path because it combines Proof of Human, passport, and fresh-presence flows. Self is useful when a paid audience policy genuinely needs document-derived age or country predicates. Neither provider should be selected until RateLoop confirms completion rates, coverage, pricing, rate limits, support, data-processing terms, deletion behavior, and production stability. Provider subjects are unique only within their own namespace; do not claim cross-provider deduplication.
+World ID 4 Proof of Human is the initial uniqueness provider for RateLoop-network supply. Production activation still requires completion-rate, coverage, pricing, rate-limit, support, data-processing, deletion, outage, and recovery verification. Self is useful later when a paid audience policy genuinely needs document-derived age or country predicates. Provider subjects are unique only within their own namespace; do not claim cross-provider deduplication, and do not treat personhood as expertise, paid eligibility, or behavioral independence.
 
 ## Privacy and evidence architecture
 
