@@ -11,6 +11,7 @@ export const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid
 export type AudienceSource = (typeof AUDIENCE_SOURCES)[number];
 export type CohortSource = Exclude<AudienceSource, "hybrid">;
 export type AudienceSelection = "customer_named" | "randomized";
+export const ASSURANCE_ASSIGNMENT_SETTLEMENT_UNAVAILABLE_CODE = "assurance_assignment_settlement_unavailable";
 
 export type QualificationRule = HumanAssuranceAudiencePolicy["requiredQualifications"][number];
 export type QualificationProvenance = {
@@ -33,6 +34,29 @@ const ACCEPTED_ASSIGNMENT_TTL_MS = 24 * 60 * 60_000;
 const ARTIFACT_LEASE_TTL_MS = 10 * 60_000;
 
 type QueryRow = Record<string, unknown>;
+
+export function assertAssuranceAssignmentSettlementAvailable(input: {
+  policy: Pick<HumanAssuranceAudiencePolicy, "compensation" | "reviewerSource">;
+  source?: CohortSource;
+  paidAssignment?: boolean;
+}) {
+  const invitedUnpaid =
+    input.policy.reviewerSource === "customer_invited" &&
+    input.policy.compensation === "unpaid" &&
+    (!input.source || input.source === "customer_invited") &&
+    input.paidAssignment !== true;
+  const sandboxSimulation =
+    input.policy.reviewerSource === "sandbox" &&
+    input.policy.compensation === "unpaid" &&
+    (!input.source || input.source === "sandbox") &&
+    input.paidAssignment !== true;
+  if (invitedUnpaid || sandboxSimulation) return;
+  throw new TokenlessServiceError(
+    "Paid, hybrid, and network assurance assignments are unavailable until assignment policy snapshots are bound through settlement and receipts.",
+    409,
+    ASSURANCE_ASSIGNMENT_SETTLEMENT_UNAVAILABLE_CODE,
+  );
+}
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -511,6 +535,7 @@ export async function prepareRunAudience(input: {
       throw new TokenlessServiceError("Frozen run not found.", 404, "run_not_found");
     }
     const policy = parseJson<HumanAssuranceAudiencePolicy>(run.policy_json, "audience policy");
+    assertAssuranceAssignmentSettlementAvailable({ policy });
     const existing = await client.query(
       "SELECT * FROM tokenless_assurance_run_subpanels WHERE run_id = $1 ORDER BY source, cohort_id",
       [input.runId],
@@ -749,6 +774,10 @@ export async function reserveAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Audience subpanel not found.", 404, "subpanel_not_found");
     }
+    const policy = parseJson<HumanAssuranceAudiencePolicy>(subpanel.policy_json, "audience policy");
+    const source = rowString(subpanel, "source") as CohortSource;
+    const isPaid = assignmentIsPaid(policy.compensation, source);
+    assertAssuranceAssignmentSettlementAvailable({ paidAssignment: isPaid, policy, source });
     const selection = rowString(subpanel, "selection") as AudienceSelection;
     if ((selection === "customer_named") !== Boolean(namedReviewer)) {
       throw new TokenlessServiceError(
@@ -808,13 +837,10 @@ export async function reserveAudienceAssignment(input: {
     const alreadyAssigned = new Set(
       alreadyAssignedResult.rows.map(value => rowString(value as QueryRow, "reviewer_account_address")),
     );
-    const policy = parseJson<HumanAssuranceAudiencePolicy>(subpanel.policy_json, "audience policy");
     const rules = [
       ...validateQualificationRules(parseJson<QualificationRule[]>(cohort.qualification_rules_json, "cohort rules")),
       ...validateQualificationRules(policy.requiredQualifications),
     ];
-    const source = rowString(subpanel, "source") as CohortSource;
-    const isPaid = assignmentIsPaid(policy.compensation, source);
     const eligible: Array<{ row: QueryRow; provenance: QualificationProvenance[]; raterId: string | null }> = [];
     for (const value of reviewerResult.rows) {
       const reviewer = value as QueryRow;
@@ -948,7 +974,7 @@ export async function recoverExpiredAudienceAssignment(input: {
               c.capacity, c.active_reservations AS cohort_reservations,
               cr.maximum_active_assignments, cr.active_reservations AS reviewer_reservations,
               r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-              r.policy_hash AS current_policy_hash
+              r.policy_hash AS current_policy_hash, ap.policy_json
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
        JOIN tokenless_assurance_cohorts c ON c.project_id = a.project_id AND c.cohort_id = a.cohort_id
@@ -956,6 +982,8 @@ export async function recoverExpiredAudienceAssignment(input: {
          ON cr.project_id = a.project_id AND cr.cohort_id = a.cohort_id
         AND cr.reviewer_account_address = a.reviewer_account_address
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id
+       JOIN tokenless_assurance_audience_policies ap
+         ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
        WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2 AND a.status = 'expired'
        LIMIT 1 FOR UPDATE`,
       [input.assignmentId, reviewer],
@@ -970,6 +998,11 @@ export async function recoverExpiredAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
     }
+    assertAssuranceAssignmentSettlementAvailable({
+      paidAssignment: row.paid_assignment === true,
+      policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
+      source: rowString(row, "source") as CohortSource,
+    });
     if (
       (rowNumber(row, "subpanel_reservations") ?? 0) >= (rowNumber(row, "target_count") ?? 0) ||
       (rowNumber(row, "cohort_reservations") ?? 0) >= (rowNumber(row, "capacity") ?? 0) ||
@@ -1043,16 +1076,25 @@ async function issueAssignmentArtifactLeases(
     sql: `SELECT a.workspace_id, a.project_id, a.reviewer_account_address,
                  a.lease_issuer_account_address, a.confidentiality_terms_hash,
                  a.confidentiality_accepted_at, a.assignment_expires_at,
+                 a.source, a.paid_assignment,
                  r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-                 r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash
+                 r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
+                 ap.policy_json
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+          JOIN tokenless_assurance_audience_policies ap
+            ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
           WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted' LIMIT 1`,
     args: [assignmentId, reviewerAccountAddress],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  assertAssuranceAssignmentSettlementAvailable({
+    paidAssignment: row.paid_assignment === true,
+    policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
+    source: rowString(row, "source") as CohortSource,
+  });
   if ((rowDate(row, "assignment_expires_at")?.getTime() ?? 0) <= now.getTime()) {
     throw new TokenlessServiceError("Assignment expired.", 410, "assignment_expired");
   }
@@ -1139,10 +1181,13 @@ export async function acceptAudienceAssignment(input: {
     await client.query("BEGIN");
     const result = await client.query(
       `SELECT a.*, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-              r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash
+              r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
+              ap.policy_json
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+       JOIN tokenless_assurance_audience_policies ap
+         ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
        WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2 LIMIT 1 FOR UPDATE`,
       [input.assignmentId, reviewer],
     );
@@ -1155,6 +1200,11 @@ export async function acceptAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
     }
+    assertAssuranceAssignmentSettlementAvailable({
+      paidAssignment: row.paid_assignment === true,
+      policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
+      source: rowString(row, "source") as CohortSource,
+    });
     if (rowString(row, "confidentiality_terms_hash") !== input.confidentialityTermsHash) {
       throw new TokenlessServiceError("Confidentiality terms changed.", 409, "confidentiality_terms_mismatch");
     }
@@ -1197,11 +1247,13 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
   const assignmentResult = await dbClient.execute({
     sql: `SELECT a.*, r.suite_id, r.suite_version, r.manifest_hash AS current_run_manifest_hash,
                  r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
-                 s.manifest_json AS suite_manifest_json
+                 s.manifest_json AS suite_manifest_json, ap.policy_json
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
           JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
+          JOIN tokenless_assurance_audience_policies ap
+            ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
           WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
             AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ?
             AND a.lease_state = 'issued' LIMIT 1`,
@@ -1215,6 +1267,11 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
   ) {
     throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
   }
+  assertAssuranceAssignmentSettlementAvailable({
+    paidAssignment: assignment.paid_assignment === true,
+    policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.policy_json, "audience policy"),
+    source: rowString(assignment, "source") as CohortSource,
+  });
   const caseResult = await dbClient.execute({
     sql: `SELECT rc.case_id, rc.position, rc.variant_a_artifact_id, rc.variant_b_artifact_id,
                  c.title, c.instructions, c.context_artifact_ids_json, c.objective_reference

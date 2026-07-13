@@ -85,8 +85,16 @@ async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
     },
   });
   const caseInputs = [
-    { baseline: "response_base_1", candidate: "response_candidate_1", marker: ["b", "c"] },
-    { baseline: "response_base_2", candidate: "response_candidate_2", marker: ["d", "e"] },
+    {
+      baseline: `response_base_1_${projectId}`,
+      candidate: `response_candidate_1_${projectId}`,
+      marker: ["b", "c"],
+    },
+    {
+      baseline: `response_base_2_${projectId}`,
+      candidate: `response_candidate_2_${projectId}`,
+      marker: ["d", "e"],
+    },
   ];
   const caseIds: string[] = [];
   for (const [index, value] of caseInputs.entries()) {
@@ -150,7 +158,6 @@ async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
   });
   await freezeAssuranceRunOrchestration({ principal, runId: run.runId });
   const [subpanel] = await prepareRunAudience({ accountAddress: OWNER, workspaceId, projectId, runId: run.runId });
-  if (input.paid) await seedPaidCapability();
   const reserved = await reserveAudienceAssignment({
     accountAddress: OWNER,
     workspaceId,
@@ -184,45 +191,6 @@ async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
     args: [run.runId],
   });
   return { assignmentId: reserved.assignmentId, principal, runId: run.runId, runCases: runCases.rows };
-}
-
-async function seedPaidCapability() {
-  const now = new Date();
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
-           nullifier_key_domain, created_at, updated_at)
-          VALUES ('rater_response', ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
-    args: [REVIEWER.toLowerCase(), now, now],
-  });
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_capability_eligibility
-          (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash,
-           provider_subject_hash, capabilities_json, provider_evidence_ciphertext,
-           provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
-           evidence_expires_at, minimum_age_verified, declared_residence_country,
-           tax_residence_country, residence_tax_status, tax_profile_status, dac7_status,
-           sanctions_consent_at, sanctions_status, sanctions_reference_hash, sanctions_screened_at,
-           sanctions_expires_at, payout_account, payout_ownership_method, payout_verified_at,
-           reviewer_source, cohort_ids_json, qualification_keys_json, eligibility_status,
-           created_at, updated_at)
-          VALUES ('rater_response', 'test', 'assertion', 'assertion-id', 'subject',
-                  '["account_control","minimum_age"]', 'ciphertext', 'v1', 'provider_evidence', ?, ?, 18,
-                  'DE', 'DE', 'consistent', 'complete', 'not_required', ?, 'clear', 'sanctions', ?, ?, ?,
-                  'siwe_base_account_session', ?, 'customer_invited', '[]', '["customer_invitation"]',
-                  'eligible', ?, ?)`,
-    args: [
-      now,
-      new Date(now.getTime() + 86_400_000),
-      now,
-      now,
-      new Date(now.getTime() + 86_400_000),
-      REVIEWER.toLowerCase(),
-      now,
-      now,
-      now,
-    ],
-  });
 }
 
 function requestFor(runCases: QueryRow[], rationaleSuffix = "") {
@@ -406,19 +374,56 @@ test("response rationale must satisfy the frozen rubric minimum as well as the g
   assert.equal(assignment.rows[0]?.status, "accepted");
 });
 
-test("paid assigned responses remain pending without a settlement reference or payment receipt", async () => {
-  const seeded = await fixture({ paid: true });
-  const accepted = await submitAssuranceResponses({
-    assignmentId: seeded.assignmentId,
-    baseAccountAddress: REVIEWER,
-    idempotencyKey: "response:test:paid",
-    responses: requestFor(seeded.runCases),
-  });
-  assert.equal(accepted.compensation, "paid");
-  assert.equal(accepted.settlementStatus, "pending");
-  const stored = await dbClient.execute({
-    sql: "SELECT validity, settlement_reference FROM tokenless_assurance_responses WHERE run_id = ?",
+test("paid assurance responses fail closed before assignments can claim a terminal state", async () => {
+  await assert.rejects(
+    () => fixture({ paid: true }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),
+    0,
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_responses")).rows[0]?.count),
+    0,
+  );
+
+  const seeded = await fixture();
+  const storedPolicy = await dbClient.execute({
+    sql: `SELECT ap.policy_id, ap.policy_json FROM tokenless_assurance_audience_policies ap
+          JOIN tokenless_assurance_runs r
+            ON r.audience_policy_id = ap.policy_id AND r.audience_policy_version = ap.version
+          WHERE r.run_id = ?`,
     args: [seeded.runId],
   });
-  assert.ok(stored.rows.every(row => row.validity === "pending" && row.settlement_reference === null));
+  const paidPolicy = { ...JSON.parse(String(storedPolicy.rows[0]?.policy_json)), compensation: "paid" };
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_audience_policies SET policy_json = ? WHERE policy_id = ?",
+    args: [JSON.stringify(paidPolicy), storedPolicy.rows[0]?.policy_id],
+  });
+  await assert.rejects(
+    () =>
+      submitAssuranceResponses({
+        assignmentId: seeded.assignmentId,
+        baseAccountAddress: REVIEWER,
+        idempotencyKey: "response:test:paid-gate",
+        responses: requestFor(seeded.runCases),
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_responses")).rows[0]?.count),
+    0,
+  );
+  assert.equal(
+    (
+      await dbClient.execute({
+        sql: "SELECT status FROM tokenless_assurance_assignments WHERE assignment_id = ?",
+        args: [seeded.assignmentId],
+      })
+    ).rows[0]?.status,
+    "accepted",
+  );
 });

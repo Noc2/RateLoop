@@ -10,7 +10,6 @@ import {
   acceptAudienceAssignment,
   createProjectCohort,
   createReviewerInvitation,
-  expireAudienceAssignments,
   getAssignmentOnlyTask,
   prepareRunAudience,
   recoverExpiredAudienceAssignment,
@@ -271,50 +270,6 @@ async function seedRun(project: { workspaceId: string; projectId: string }, poli
   return { runId, caseId, artifactIds };
 }
 
-async function seedPaidEligibility(accountAddress = REVIEWER, now = new Date()) {
-  const raterId = `rater_${accountAddress.slice(2, 10)}`;
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, nullifier_seed_ciphertext,
-           nullifier_key_version, created_at, updated_at)
-          VALUES (?, ?, 'ciphertext', 'v1', ?, ?)`,
-    args: [raterId, accountAddress.toLowerCase(), now, now],
-  });
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_capability_eligibility
-          (rater_id, provider_id, provider_assertion_hash, provider_assertion_id_hash,
-           provider_subject_hash, capabilities_json, provider_evidence_ciphertext,
-           provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
-           evidence_expires_at, minimum_age_verified, declared_residence_country,
-           tax_residence_country, residence_tax_status, tax_profile_status, dac7_status,
-           sanctions_consent_at, sanctions_status, sanctions_reference_hash, sanctions_screened_at,
-           sanctions_expires_at, payout_account, payout_ownership_method, payout_verified_at,
-           reviewer_source, cohort_ids_json, qualification_keys_json, eligibility_status,
-           created_at, updated_at)
-          VALUES (?, 'test-provider', ?, ?, ?, '["account_control","minimum_age"]', 'ciphertext',
-                  'v1', 'provider_evidence', ?, ?, 18, 'DE', 'DE', 'declared_only', 'complete',
-                  'not_required', ?, 'clear', ?, ?, ?, ?, 'siwe_base_account_session', ?,
-                  'rateloop_network', '[]', '[]', 'eligible', ?, ?)`,
-    args: [
-      raterId,
-      `assertion_${raterId}`,
-      `assertion_id_${raterId}`,
-      `subject_${raterId}`,
-      now,
-      new Date(now.getTime() + 86_400_000),
-      now,
-      `sanctions_${raterId}`,
-      now,
-      new Date(now.getTime() + 86_400_000),
-      accountAddress.toLowerCase(),
-      now,
-      now,
-      now,
-    ],
-  });
-  return raterId;
-}
-
 async function createCohort(
   project: { workspaceId: string; projectId: string },
   input: {
@@ -395,7 +350,7 @@ test("one-time invitations store only token hashes and bind redemption to the in
   );
 });
 
-test("hybrid policies create separate source subpanels and reject ambiguous source-selection combinations", async () => {
+test("hybrid audiences fail closed while unpaid sandbox simulation remains available", async () => {
   const project = await seedProject();
   const invited = await createCohort(project, { source: "customer_invited" });
   const network = await createCohort(project, { source: "rateloop_network" });
@@ -407,25 +362,16 @@ test("hybrid policies create separate source subpanels and reject ambiguous sour
     { reviewerSource: "hybrid", selection: "randomized", compensation: "mixed" },
   );
   const { runId } = await seedRun(project, policy);
-  const subpanels = await prepareRunAudience({
-    accountAddress: OWNER,
-    workspaceId: project.workspaceId,
-    projectId: project.projectId,
-    runId,
-  });
-  assert.deepEqual(subpanels.map(value => value.source).sort(), ["customer_invited", "rateloop_network"]);
-  assert.equal(
-    subpanels.some(value => value.source === "hybrid"),
-    false,
-  );
-  assert.deepEqual(
-    await prepareRunAudience({
-      accountAddress: OWNER,
-      workspaceId: project.workspaceId,
-      projectId: project.projectId,
-      runId,
-    }),
-    subpanels,
+  await assert.rejects(
+    () =>
+      prepareRunAudience({
+        accountAddress: OWNER,
+        workspaceId: project.workspaceId,
+        projectId: project.projectId,
+        runId,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
   );
 
   await assert.rejects(
@@ -437,22 +383,23 @@ test("hybrid policies create separate source subpanels and reject ambiguous sour
   const sandbox = await createCohort(sandboxProject, { source: "sandbox" });
   const sandboxPolicy = audiencePolicy([{ ...sandbox, source: "sandbox" }], {
     reviewerSource: "sandbox",
-    compensation: "paid",
+    compensation: "unpaid",
   });
   const sandboxRun = await seedRun(sandboxProject, sandboxPolicy);
-  await assert.rejects(
-    () =>
-      prepareRunAudience({
+  assert.equal(
+    (
+      await prepareRunAudience({
         accountAddress: OWNER,
         workspaceId: sandboxProject.workspaceId,
         projectId: sandboxProject.projectId,
         runId: sandboxRun.runId,
-      }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_sandbox_compensation",
+      })
+    )[0]?.source,
+    "sandbox",
   );
 });
 
-test("paid randomized reservations require qualification and eligibility before capacity is consumed", async () => {
+test("paid network audiences fail closed before subpanels or assignments are created", async () => {
   const project = await seedProject();
   const now = new Date();
   const cohort = await createCohort(project, {
@@ -474,120 +421,25 @@ test("paid randomized reservations require qualification and eligibility before 
     requiredQualifications: [{ key: "support_years", operator: "at_least", value: 4 }],
   });
   const { runId } = await seedRun(project, policy);
-  const [subpanel] = await prepareRunAudience({
-    accountAddress: OWNER,
-    workspaceId: project.workspaceId,
-    projectId: project.projectId,
-    runId,
-  });
-  assert.ok(subpanel?.subpanelId);
-
   await assert.rejects(
     () =>
-      reserveAudienceAssignment({
+      prepareRunAudience({
         accountAddress: OWNER,
         workspaceId: project.workspaceId,
         projectId: project.projectId,
         runId,
-        subpanelId: subpanel!.subpanelId!,
-        confidentialityTermsHash: TERMS_HASH,
-        now,
       }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "reviewer_capacity_unavailable",
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
   );
   assert.equal(
-    Number(
-      (await dbClient.execute("SELECT active_reservations FROM tokenless_assurance_cohorts")).rows[0]
-        ?.active_reservations,
-    ),
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_run_subpanels")).rows[0]?.count),
     0,
   );
-
-  await seedPaidEligibility(REVIEWER, now);
-  const reserved = await reserveAudienceAssignment({
-    accountAddress: OWNER,
-    workspaceId: project.workspaceId,
-    projectId: project.projectId,
-    runId,
-    subpanelId: subpanel!.subpanelId!,
-    confidentialityTermsHash: TERMS_HASH,
-    reservationTtlMs: 60_000,
-    now,
-  });
-  assert.equal(reserved.paidAssignment, true);
-  const paidMarker = await dbClient.execute({
-    sql: `SELECT paid_eligibility_checked_at, voucher_marker
-          FROM tokenless_assurance_assignments WHERE assignment_id = ?`,
-    args: [reserved.assignmentId],
-  });
-  assert.ok(paidMarker.rows[0]?.paid_eligibility_checked_at);
-  assert.equal(paidMarker.rows[0]?.voucher_marker, null);
-  await assert.rejects(
-    () =>
-      reserveAudienceAssignment({
-        accountAddress: OWNER,
-        workspaceId: project.workspaceId,
-        projectId: project.projectId,
-        runId,
-        subpanelId: subpanel!.subpanelId!,
-        confidentialityTermsHash: TERMS_HASH,
-        now,
-      }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "audience_capacity_exhausted",
-  );
-
-  assert.deepEqual(await expireAudienceAssignments(new Date(now.getTime() + 60_001)), { expired: 1 });
-  const recovered = await recoverExpiredAudienceAssignment({
-    baseAccountAddress: REVIEWER,
-    assignmentId: reserved.assignmentId,
-    now: new Date(now.getTime() + 60_002),
-  });
-  assert.equal(recovered.assignmentId, reserved.assignmentId);
-  const recovery = await dbClient.execute({
-    sql: "SELECT status, recovery_count FROM tokenless_assurance_assignments WHERE assignment_id = ?",
-    args: [reserved.assignmentId],
-  });
-  assert.equal(recovery.rows[0]?.status, "reserved");
-  assert.equal(Number(recovery.rows[0]?.recovery_count), 1);
-
-  await dbClient.execute({
-    sql: "UPDATE tokenless_capability_eligibility SET eligibility_status = 'blocked' WHERE payout_account = ?",
-    args: [REVIEWER.toLowerCase()],
-  });
-  await assert.rejects(
-    () =>
-      acceptAudienceAssignment({
-        baseAccountAddress: REVIEWER,
-        assignmentId: reserved.assignmentId,
-        confidentialityTermsHash: TERMS_HASH,
-        now: new Date(now.getTime() + 60_003),
-      }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
-  );
   assert.equal(
-    (
-      await dbClient.execute({
-        sql: "SELECT voucher_marker FROM tokenless_assurance_assignments WHERE assignment_id = ?",
-        args: [reserved.assignmentId],
-      })
-    ).rows[0]?.voucher_marker,
-    null,
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),
+    0,
   );
-  await dbClient.execute({
-    sql: "UPDATE tokenless_capability_eligibility SET eligibility_status = 'eligible' WHERE payout_account = ?",
-    args: [REVIEWER.toLowerCase()],
-  });
-  await acceptAudienceAssignment({
-    baseAccountAddress: REVIEWER,
-    assignmentId: reserved.assignmentId,
-    confidentialityTermsHash: TERMS_HASH,
-    now: new Date(now.getTime() + 60_004),
-  });
-  const voucher = await dbClient.execute({
-    sql: "SELECT voucher_marker FROM tokenless_assurance_assignments WHERE assignment_id = ?",
-    args: [reserved.assignmentId],
-  });
-  assert.match(String(voucher.rows[0]?.voucher_marker), /^eligibility:rater_/);
 });
 
 test("confidentiality acceptance unlocks only the assigned blinded task and short artifact leases", async () => {
@@ -645,6 +497,33 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
     projectId: project.projectId,
     runId: seeded.runId,
   });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_audience_policies SET policy_json = ? WHERE project_id = ?",
+    args: [JSON.stringify({ ...policy, compensation: "paid", legalEligibilityRequired: true }), project.projectId],
+  });
+  await assert.rejects(
+    () =>
+      reserveAudienceAssignment({
+        accountAddress: OWNER,
+        workspaceId: project.workspaceId,
+        projectId: project.projectId,
+        runId: seeded.runId,
+        subpanelId: subpanel!.subpanelId!,
+        confidentialityTermsHash: TERMS_HASH,
+        reviewerAccountAddress: REVIEWER,
+        now,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),
+    0,
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_audience_policies SET policy_json = ? WHERE project_id = ?",
+    args: [JSON.stringify(policy), project.projectId],
+  });
   const reserved = await reserveAudienceAssignment({
     accountAddress: OWNER,
     workspaceId: project.workspaceId,
@@ -665,6 +544,25 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
     () => getAssignmentOnlyTask({ baseAccountAddress: REVIEWER, assignmentId: reserved.assignmentId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
   );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_audience_policies SET policy_json = ? WHERE project_id = ?",
+    args: [JSON.stringify({ ...policy, compensation: "paid", legalEligibilityRequired: true }), project.projectId],
+  });
+  await assert.rejects(
+    () =>
+      acceptAudienceAssignment({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsHash: TERMS_HASH,
+        now,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_audience_policies SET policy_json = ? WHERE project_id = ?",
+    args: [JSON.stringify(policy), project.projectId],
+  });
   await assert.rejects(
     () =>
       acceptAudienceAssignment({

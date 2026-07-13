@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import { requireBaseAccountRequest } from "~~/lib/base-account/request";
 import { dbClient } from "~~/lib/db";
 import { readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
+import { assertAssuranceAssignmentSettlementAvailable } from "~~/lib/tokenless/audienceAssignments";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +22,13 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBaseAccountRequest(request);
     const { artifactId, assignmentId } = await context.params;
     const result = await dbClient.execute({
-      sql: `SELECT workspace_id, project_id FROM tokenless_assurance_assignments
-            WHERE assignment_id = ? AND reviewer_account_address = ? AND status = 'accepted'
-              AND confidentiality_accepted_at IS NOT NULL AND assignment_expires_at > ? LIMIT 1`,
+      sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment, ap.policy_json
+            FROM tokenless_assurance_assignments a
+            JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
+            JOIN tokenless_assurance_audience_policies ap
+              ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
+            WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
+              AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ? LIMIT 1`,
       args: [assignmentId, session.address.toLowerCase(), new Date()],
     });
     const assignment = result.rows[0] as QueryRow | undefined;
@@ -31,6 +37,11 @@ export async function GET(request: NextRequest, context: Context) {
     if (!workspaceId || !projectId) {
       throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
     }
+    assertAssuranceAssignmentSettlementAvailable({
+      paidAssignment: assignment?.paid_assignment === true,
+      policy: JSON.parse(String(assignment?.policy_json)) as HumanAssuranceAudiencePolicy,
+      source: rowString(assignment, "source") as "customer_invited" | "rateloop_network" | "sandbox",
+    });
     const artifact = await readEncryptedArtifact({
       accountAddress: session.address,
       artifactId,

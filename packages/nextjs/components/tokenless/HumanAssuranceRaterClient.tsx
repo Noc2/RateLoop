@@ -63,8 +63,8 @@ export type AssuranceServerAcceptance = {
   accepted: true;
   replay: boolean;
   responseCount: number;
-  compensation: "paid" | "unpaid";
-  settlementStatus: "pending" | "not_applicable";
+  compensation: "unpaid";
+  settlementStatus: "not_applicable";
 };
 
 class AssuranceRequestError extends Error {
@@ -322,8 +322,8 @@ export function HumanAssuranceRaterClient({
         typeof body.replay !== "boolean" ||
         typeof body.responseCount !== "number" ||
         !Number.isSafeInteger(body.responseCount) ||
-        (body.compensation !== "paid" && body.compensation !== "unpaid") ||
-        (body.settlementStatus !== "pending" && body.settlementStatus !== "not_applicable")
+        body.compensation !== "unpaid" ||
+        body.settlementStatus !== "not_applicable"
       ) {
         throw new Error("The response acceptance was incomplete.");
       }
@@ -651,20 +651,11 @@ export function HumanAssuranceRaterClient({
                       : "Submit assigned review"}
                 </button>
                 {serverAcceptance ? (
-                  <p
-                    role="status"
-                    className={`mt-4 rounded-lg p-3 text-sm leading-6 ${
-                      serverAcceptance.settlementStatus === "pending"
-                        ? "bg-amber-300/10 text-amber-100"
-                        : "bg-emerald-300/10 text-emerald-100"
-                    }`}
-                  >
+                  <p role="status" className="mt-4 rounded-lg bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-100">
                     {serverAcceptance.replay ? "The server confirmed" : "The server accepted"}{" "}
                     {serverAcceptance.responseCount} assigned response
-                    {serverAcceptance.responseCount === 1 ? "" : "s"} and completed the assignment.{" "}
-                    {serverAcceptance.settlementStatus === "pending"
-                      ? "This assignment expects compensation, but settlement is still pending; this is not a payment receipt or appeal reference."
-                      : "This was an unpaid invited review, so no settlement reference is expected."}
+                    {serverAcceptance.responseCount === 1 ? "" : "s"} and completed the assignment. This was an unpaid
+                    invited review, so no settlement reference is expected.
                   </p>
                 ) : (
                   <p className="mt-3 text-xs leading-5 text-base-content/45">
@@ -686,11 +677,11 @@ export function HumanAssuranceRaterClient({
         <aside className="rateloop-surface-card sticky top-24 h-fit p-6">
           <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Capability status</p>
           <h2 className="mt-2 text-xl font-semibold">
-            {eligibility?.status === "eligible" ? "Paid-task eligibility current" : "Private reviews first"}
+            {eligibility?.status === "eligible" ? "Capability evidence current" : "Private reviews first"}
           </h2>
           <p className="mt-3 text-sm leading-6 text-base-content/60">
-            Customer invitations can qualify you for private unpaid work. Paid assignments also require current legal,
-            screening, tax, payout, and exact policy capabilities before assignment—not after you earn.
+            Customer invitations can qualify you for private unpaid work. Paid human-assurance assignments remain
+            unavailable until their frozen policy snapshot is bound through settlement and receipts.
           </p>
           {eligibility?.capabilities?.length ? (
             <ul className="mt-4 flex flex-wrap gap-2" aria-label="Current eligibility capabilities">
@@ -702,8 +693,7 @@ export function HumanAssuranceRaterClient({
             </ul>
           ) : (
             <p className="mt-4 rounded-lg bg-white/[0.04] p-3 text-xs leading-5 text-base-content/50">
-              No paid-task capability evidence is shown for this session. This does not block a customer-invited unpaid
-              review.
+              No capability evidence is shown for this session. This does not block a customer-invited unpaid review.
             </p>
           )}
           <Link href="/settings" className="rateloop-gradient-action mt-5 w-full px-5">

@@ -24,7 +24,8 @@ test("private rater queue is assignment-scoped and makes no unsupported payment 
   assert.match(html, /haas_private_assignment/);
   assert.match(html, /Confidentiality terms hash/);
   assert.match(html, /Only your assigned, blinded cases are returned/);
-  assert.match(html, /No paid-task capability evidence is shown/);
+  assert.match(html, /No capability evidence is shown/);
+  assert.match(html, /Paid human-assurance assignments remain unavailable/i);
   assert.match(html, /payment receipts.*appear only after settlement/i);
   assert.doesNotMatch(html, /Tier \d|World ID|Self\.xyz|passport uniqueness|guaranteed base|on-chain payment/i);
 });

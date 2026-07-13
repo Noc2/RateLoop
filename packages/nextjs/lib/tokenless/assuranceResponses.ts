@@ -1,9 +1,10 @@
-import { parseHumanAssuranceRubric } from "@rateloop/sdk";
+import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@rateloop/sdk";
 import { createCipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { dbPool } from "~~/lib/db";
+import { type CohortSource, assertAssuranceAssignmentSettlementAvailable } from "~~/lib/tokenless/audienceAssignments";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -188,13 +189,6 @@ async function loadCapabilitySnapshot(client: PoolClient, assignment: QueryRow) 
     [rowString(assignment, "reviewer_account_address")],
   );
   const eligibility = result.rows[0] as QueryRow | undefined;
-  if (rowBoolean(assignment, "paid_assignment") && !eligibility) {
-    serviceError(
-      "The paid assignment capability snapshot is unavailable.",
-      "assignment_capability_snapshot_missing",
-      409,
-    );
-  }
   const persisted = eligibility
     ? parseJson<unknown[]>(eligibility.capabilities_json, "assurance capabilities").filter(
         value => typeof value === "string",
@@ -385,6 +379,11 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     );
     const assignment = assignmentResult.rows[0] as QueryRow | undefined;
     if (!assignment) serviceError("Assignment not found.", "assignment_not_found", 404);
+    assertAssuranceAssignmentSettlementAvailable({
+      paidAssignment: rowBoolean(assignment, "paid_assignment"),
+      policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy"),
+      source: rowString(assignment, "source") as CohortSource,
+    });
     const assignmentStatus = rowString(assignment, "status");
     const completedReplay = assignmentStatus === "completed";
     if (!completedReplay && !ACTIVE_RUN_STATUSES.has(rowString(assignment, "run_status") ?? "")) {
@@ -465,16 +464,13 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
         accepted: true as const,
         replay: true,
         responseCount: existing.length,
-        compensation: rowBoolean(assignment, "paid_assignment") ? ("paid" as const) : ("unpaid" as const),
-        settlementStatus: rowBoolean(assignment, "paid_assignment")
-          ? ("pending" as const)
-          : ("not_applicable" as const),
+        compensation: "unpaid" as const,
+        settlementStatus: "not_applicable" as const,
       };
     }
     if (completedReplay) {
       serviceError("The completed assignment has no matching response batch.", "assurance_response_conflict", 409);
     }
-    const paid = rowBoolean(assignment, "paid_assignment");
     for (const record of records) {
       await client.query(
         `INSERT INTO tokenless_assurance_responses
@@ -496,7 +492,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
           canonicalizeHumanAssuranceDocument(qualificationKeys),
           canonicalizeHumanAssuranceDocument(assuranceCapabilities),
           record.responseDigest,
-          paid ? "pending" : "valid",
+          "valid",
           now,
         ],
       );
@@ -533,8 +529,8 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       accepted: true as const,
       replay: false,
       responseCount: records.length,
-      compensation: paid ? ("paid" as const) : ("unpaid" as const),
-      settlementStatus: paid ? ("pending" as const) : ("not_applicable" as const),
+      compensation: "unpaid" as const,
+      settlementStatus: "not_applicable" as const,
     };
   } catch (error) {
     await client.query("ROLLBACK");
