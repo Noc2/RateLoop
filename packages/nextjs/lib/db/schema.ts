@@ -1,5 +1,7 @@
 import { boolean, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
+export * from "./humanAssuranceSchema";
+
 export const tokenlessAgentQuotes = pgTable(
   "tokenless_agent_quotes",
   {

@@ -50,6 +50,13 @@
       "when": 1783879200000,
       "tag": "0006_tokenless_rater_commits",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783882800000,
+      "tag": "0007_human_assurance_foundation",
+      "breakpoints": true
     }
   ]
 }
