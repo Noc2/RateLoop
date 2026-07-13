@@ -907,12 +907,32 @@ export async function reserveAudienceAssignment(input: {
 export async function recoverExpiredAudienceAssignment(input: {
   baseAccountAddress: string;
   assignmentId: string;
+  confidentialityTermsHash?: string;
   reservationTtlMs?: number;
   now?: Date;
 }) {
   const reviewer = normalizeAddress(input.baseAccountAddress, "baseAccountAddress");
   const now = input.now ?? new Date();
   await expireAudienceAssignments(now);
+  const accepted = await dbClient.execute({
+    sql: `SELECT assignment_id FROM tokenless_assurance_assignments
+          WHERE assignment_id = ? AND reviewer_account_address = ? AND status = 'accepted' LIMIT 1`,
+    args: [input.assignmentId, reviewer],
+  });
+  if (accepted.rowCount) {
+    if (!input.confidentialityTermsHash || !HASH_PATTERN.test(input.confidentialityTermsHash)) {
+      throw new TokenlessServiceError(
+        "Confidentiality terms hash is required to renew artifact access.",
+        400,
+        "invalid_confidentiality_terms",
+      );
+    }
+    return {
+      assignmentId: input.assignmentId,
+      accepted: true as const,
+      leases: await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash),
+    };
+  }
   const ttl = integer(
     input.reservationTtlMs ?? DEFAULT_RESERVATION_TTL_MS,
     "reservationTtlMs",
@@ -1013,18 +1033,68 @@ async function assignmentArtifactIds(assignmentId: string) {
   return [...ids];
 }
 
-async function issueAssignmentArtifactLeases(assignmentId: string, now: Date) {
+async function issueAssignmentArtifactLeases(
+  assignmentId: string,
+  now: Date,
+  reviewerAccountAddress: string,
+  confidentialityTermsHash: string,
+) {
   const result = await dbClient.execute({
-    sql: `SELECT workspace_id, project_id, reviewer_account_address, lease_issuer_account_address
-          FROM tokenless_assurance_assignments
-          WHERE assignment_id = ? AND status = 'accepted' LIMIT 1`,
-    args: [assignmentId],
+    sql: `SELECT a.workspace_id, a.project_id, a.reviewer_account_address,
+                 a.lease_issuer_account_address, a.confidentiality_terms_hash,
+                 a.confidentiality_accepted_at, a.assignment_expires_at,
+                 r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
+                 r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash
+          FROM tokenless_assurance_assignments a
+          JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
+          JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+          WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted' LIMIT 1`,
+    args: [assignmentId, reviewerAccountAddress],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  if ((rowDate(row, "assignment_expires_at")?.getTime() ?? 0) <= now.getTime()) {
+    throw new TokenlessServiceError("Assignment expired.", 410, "assignment_expired");
+  }
+  if (
+    !rowDate(row, "confidentiality_accepted_at") ||
+    rowString(row, "confidentiality_terms_hash") !== confidentialityTermsHash
+  ) {
+    throw new TokenlessServiceError("Confidentiality terms changed.", 409, "confidentiality_terms_mismatch");
+  }
+  if (
+    !["frozen", "recruiting", "collecting"].includes(rowString(row, "run_status") ?? "") ||
+    rowString(row, "run_manifest_hash") !== rowString(row, "current_run_manifest_hash") ||
+    rowString(row, "policy_hash") !== rowString(row, "current_policy_hash")
+  ) {
+    throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  }
   const leases = [];
   try {
-    for (const artifactId of await assignmentArtifactIds(assignmentId)) {
+    const artifactIds = await assignmentArtifactIds(assignmentId);
+    const active = await dbClient.execute({
+      sql: `SELECT lease_id, artifact_id, expires_at FROM tokenless_assurance_artifact_leases
+            WHERE assignment_id = ? AND account_address = ? AND revoked_at IS NULL AND expires_at > ?
+            ORDER BY created_at DESC`,
+      args: [assignmentId, reviewerAccountAddress, now],
+    });
+    const activeByArtifact = new Map<string, { leaseId: string; expiresAt: string }>();
+    for (const value of active.rows) {
+      const lease = value as QueryRow;
+      const artifactId = rowString(lease, "artifact_id")!;
+      if (!activeByArtifact.has(artifactId)) {
+        activeByArtifact.set(artifactId, {
+          leaseId: rowString(lease, "lease_id")!,
+          expiresAt: rowDate(lease, "expires_at")!.toISOString(),
+        });
+      }
+    }
+    for (const artifactId of artifactIds) {
+      const existing = activeByArtifact.get(artifactId);
+      if (existing) {
+        leases.push({ artifactId, ...existing });
+        continue;
+      }
       const lease = await issueArtifactLease({
         accountAddress: rowString(row, "lease_issuer_account_address")!,
         artifactId,
@@ -1040,13 +1110,13 @@ async function issueAssignmentArtifactLeases(assignmentId: string, now: Date) {
     }
     await dbClient.execute({
       sql: "UPDATE tokenless_assurance_assignments SET lease_state = 'issued', updated_at = ? WHERE assignment_id = ?",
-      args: [new Date(), assignmentId],
+      args: [now, assignmentId],
     });
     return leases;
   } catch (error) {
     await dbClient.execute({
       sql: "UPDATE tokenless_assurance_assignments SET lease_state = 'failed', updated_at = ? WHERE assignment_id = ?",
-      args: [new Date(), assignmentId],
+      args: [now, assignmentId],
     });
     throw error;
   }
@@ -1117,7 +1187,7 @@ export async function acceptAudienceAssignment(input: {
   } finally {
     client.release();
   }
-  const leases = await issueAssignmentArtifactLeases(input.assignmentId, now);
+  const leases = await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash);
   return { assignmentId: input.assignmentId, accepted: true, replay, leases };
 }
 

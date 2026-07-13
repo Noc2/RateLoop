@@ -683,6 +683,28 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
   });
   assert.equal(accepted.leases.length, 2);
   assert.ok(accepted.leases.every(value => new Date(value.expiresAt).getTime() - now.getTime() === 600_000));
+  const activeReplay = await recoverExpiredAudienceAssignment({
+    baseAccountAddress: REVIEWER,
+    assignmentId: reserved.assignmentId,
+    confidentialityTermsHash: TERMS_HASH,
+    now: new Date(now.getTime() + 1),
+  });
+  if (activeReplay.accepted !== true) assert.fail("accepted assignment recovery must return artifact leases");
+  assert.deepEqual(
+    activeReplay.leases.map(value => value.leaseId).sort(),
+    accepted.leases.map(value => value.leaseId).sort(),
+  );
+  assert.equal(
+    Number(
+      (
+        await dbClient.execute({
+          sql: "SELECT COUNT(*) AS count FROM tokenless_assurance_access_logs WHERE project_id = ? AND action = 'lease'",
+          args: [project.projectId],
+        })
+      ).rows[0]?.count,
+    ),
+    accepted.leases.length,
+  );
 
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_responses
@@ -735,4 +757,120 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
   assert.ok(assignment.rows[0]?.confidentiality_accepted_at);
   assert.equal(assignment.rows[0]?.voucher_marker, null);
   assert.equal(assignment.rows[0]?.lease_state, "issued");
+
+  const originalExpiry = (
+    await dbClient.execute({
+      sql: "SELECT assignment_expires_at FROM tokenless_assurance_assignments WHERE assignment_id = ?",
+      args: [reserved.assignmentId],
+    })
+  ).rows[0]?.assignment_expires_at;
+  const leaseExpiredAt = new Date(now.getTime() + 600_001);
+  await assert.rejects(
+    () =>
+      getAssignmentOnlyTask({ baseAccountAddress: REVIEWER, assignmentId: reserved.assignmentId, now: leaseExpiredAt }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_lease_expired",
+  );
+  await assert.rejects(
+    () =>
+      recoverExpiredAudienceAssignment({
+        baseAccountAddress: SECOND_REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsHash: TERMS_HASH,
+        now: leaseExpiredAt,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_recovery_unavailable",
+  );
+  await assert.rejects(
+    () =>
+      recoverExpiredAudienceAssignment({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsHash: POLICY_HASH,
+        now: leaseExpiredAt,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "confidentiality_terms_mismatch",
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_run_subpanels SET policy_hash = ? WHERE run_id = ?",
+    args: [`sha256:${"8".repeat(64)}`, seeded.runId],
+  });
+  await assert.rejects(
+    () =>
+      recoverExpiredAudienceAssignment({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsHash: TERMS_HASH,
+        now: leaseExpiredAt,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_run_subpanels SET policy_hash = ? WHERE run_id = ?",
+    args: [POLICY_HASH, seeded.runId],
+  });
+
+  const renewed = await recoverExpiredAudienceAssignment({
+    baseAccountAddress: REVIEWER,
+    assignmentId: reserved.assignmentId,
+    confidentialityTermsHash: TERMS_HASH,
+    now: leaseExpiredAt,
+  });
+  if (renewed.accepted !== true) assert.fail("expired artifact access must renew the accepted assignment leases");
+  assert.equal(renewed.leases.length, accepted.leases.length);
+  assert.ok(renewed.leases.every(value => new Date(value.expiresAt).getTime() - leaseExpiredAt.getTime() === 600_000));
+  assert.notDeepEqual(
+    renewed.leases.map(value => value.leaseId).sort(),
+    accepted.leases.map(value => value.leaseId).sort(),
+  );
+  const renewedAssignment = await dbClient.execute({
+    sql: `SELECT assignment_expires_at, recovery_count, lease_state
+          FROM tokenless_assurance_assignments WHERE assignment_id = ?`,
+    args: [reserved.assignmentId],
+  });
+  assert.equal(
+    new Date(String(renewedAssignment.rows[0]?.assignment_expires_at)).getTime(),
+    new Date(String(originalExpiry)).getTime(),
+  );
+  assert.equal(Number(renewedAssignment.rows[0]?.recovery_count), 0);
+  assert.equal(renewedAssignment.rows[0]?.lease_state, "issued");
+  const leaseAudit = await dbClient.execute({
+    sql: `SELECT lease_id FROM tokenless_assurance_access_logs
+          WHERE project_id = ? AND action = 'lease' ORDER BY occurred_at ASC`,
+    args: [project.projectId],
+  });
+  assert.equal(leaseAudit.rows.length, accepted.leases.length + renewed.leases.length);
+  assert.ok(leaseAudit.rows.every(row => row.lease_id));
+  assert.equal(
+    (
+      await getAssignmentOnlyTask({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        now: new Date(leaseExpiredAt.getTime() + 1),
+      })
+    ).cases.length,
+    2,
+  );
+
+  const afterAssignmentExpiry = new Date(new Date(String(originalExpiry)).getTime() + 1);
+  await assert.rejects(
+    () =>
+      recoverExpiredAudienceAssignment({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsHash: TERMS_HASH,
+        now: afterAssignmentExpiry,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_expired",
+  );
+  assert.equal(
+    Number(
+      (
+        await dbClient.execute({
+          sql: "SELECT COUNT(*) AS count FROM tokenless_assurance_access_logs WHERE project_id = ? AND action = 'lease'",
+          args: [project.projectId],
+        })
+      ).rows[0]?.count,
+    ),
+    leaseAudit.rows.length,
+  );
 });

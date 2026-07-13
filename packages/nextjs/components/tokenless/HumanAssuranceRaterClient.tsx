@@ -260,6 +260,7 @@ export function HumanAssuranceRaterClient({
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confidentialityTermsHash: termsHash.trim() }),
         }),
       );
       setCanRecover(false);
@@ -456,7 +457,7 @@ export function HumanAssuranceRaterClient({
                     disabled={busyAction !== null}
                     onClick={() => void recoverAssignment()}
                   >
-                    {busyAction === "recovery" ? "Checking capacity…" : "Retry expired assignment access"}
+                    {busyAction === "recovery" ? "Restoring access…" : "Retry expired assignment access"}
                   </button>
                 ) : null}
                 <p className="mt-4 text-xs leading-5 text-base-content/45">
