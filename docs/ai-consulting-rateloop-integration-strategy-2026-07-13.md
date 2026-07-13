@@ -2,7 +2,7 @@
 
 **Date:** 13 July 2026
 
-**Status:** Companion recommendation to the tokenless [implementation plan](tokenless-immutable-implementation-plan-2026-07.md), [product-market-fit research](tokenless-product-market-fit-research-2026-07-13.md), and [production-readiness assessment](tokenless-production-readiness-2026-07.md). This document does not change the tokenless trust model or relax any launch gate.
+**Status:** Companion recommendation to the tokenless [implementation plan](tokenless-immutable-implementation-plan-2026-07.md), [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md), [product-market-fit research](tokenless-product-market-fit-research-2026-07-13.md), and [production-readiness assessment](tokenless-production-readiness-2026-07.md). This document does not relax any trust or launch gate.
 
 ## Executive decision
 
@@ -459,6 +459,7 @@ Deliver the first evaluations manually, require client-approved cases/rubrics an
 
 ### Repo sources
 
+- [Human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md)
 - [Tokenless architecture and implementation plan](tokenless-immutable-implementation-plan-2026-07.md)
 - [Tokenless product-market-fit research](tokenless-product-market-fit-research-2026-07-13.md)
 - [Tokenless production-readiness assessment](tokenless-production-readiness-2026-07.md)

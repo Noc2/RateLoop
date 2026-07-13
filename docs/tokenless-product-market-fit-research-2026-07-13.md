@@ -2,7 +2,7 @@
 
 **Date:** 13 July 2026
 
-**Status:** Product recommendation and validation plan, not proof of product-market fit
+**Status:** Product recommendation and validation plan, not proof of product-market fit. The dependency-ordered implementation is in the [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md).
 
 **Scope:** The `tokenless` product line only. The legacy token/governance product and `rateloop.ai` deployment are not treated as constraints or launch channels.
 
@@ -769,6 +769,7 @@ The next 12 weeks should answer those questions with partner and end-client inte
 
 ### Repo sources
 
+- [Human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md)
 - [Tokenless architecture and implementation plan](tokenless-immutable-implementation-plan-2026-07.md)
 - [Tokenless production-readiness assessment](tokenless-production-readiness-2026-07.md)
 - [Legal and revenue reference](legal-revenue-assessment-tokenless-design-2026-07.md)

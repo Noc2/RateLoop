@@ -9,7 +9,7 @@ The package exports exactly four ABIs:
 - `X402PanelSubmitterAbi`
 - `TokenlessTestUSDCAbi`
 
-It also exports `tokenlessDeployedContracts` and `tokenlessDeploymentSchema`. The checked-in deployment is the disposable Base Sepolia stack on chain `84532`; its stable key binds the panel, issuer, and adapter addresses.
+It also exports `tokenlessDeployedContracts` and `tokenlessDeploymentSchema`. The checked-in chain-`84532` metadata records a historical disposable Base Sepolia stack and is stale after current fund-core changes. Do not use it as a live compatibility target. A fresh deployment will replace it atomically; its key will bind the panel, issuer, and adapter addresses.
 
 ```ts
 import {
