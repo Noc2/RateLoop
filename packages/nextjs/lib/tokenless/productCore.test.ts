@@ -17,8 +17,8 @@ import {
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
-const ADDRESS_A = "0x1111111111111111111111111111111111111111";
-const ADDRESS_B = "0x2222222222222222222222222222222222222222";
+const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
+const ADDRESS_B: `0x${string}` = "0x2222222222222222222222222222222222222222";
 const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
 
 beforeEach(() => {
@@ -145,6 +145,94 @@ test("ask ownership is bound to its workspace for wait and result authorization"
       ),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "ask_not_found",
   );
+});
+
+test("terminal sandbox asks release prepaid reservations idempotently", async () => {
+  const workspace = await workspaceWithKey(ADDRESS_A);
+  await recordPrepaidLedgerEntry({ workspaceId: workspace.workspaceId, amountAtomic: "100000000", source: "invoice" });
+  const { quote, request } = await quoteAndRequest(workspace.workspaceId, "sandbox:prepaid:12345678");
+  const principal = {
+    kind: "api_key" as const,
+    apiKeyId: workspace.apiKeyId,
+    workspaceId: workspace.workspaceId,
+    role: "member" as const,
+  };
+  const prepared = await prepareProductAsk({ principal, request });
+  assert.equal((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid.reservedAtomic, quote.economics.totalFundedAtomic);
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+
+  await attachProductAsk(prepared, ask);
+  await attachProductAsk(prepared, ask);
+  const firstState = await dbClient.execute({
+    sql: `SELECT r.status, r.operation_key, o.payment_state
+          FROM tokenless_prepaid_reservations r
+          JOIN tokenless_ask_ownership o ON o.payment_reference = r.reservation_id
+          WHERE r.reservation_id = ?`,
+    args: [prepared.paymentReference],
+  });
+  assert.deepEqual(firstState.rows[0], {
+    operation_key: ask.operationKey,
+    payment_state: "simulated",
+    status: "released",
+  });
+  assert.deepEqual((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid, {
+    settledAtomic: "100000000",
+    reservedAtomic: "0",
+    availableAtomic: "100000000",
+  });
+
+  const replayPrepared = await prepareProductAsk({ principal, request });
+  const replayAsk = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  assert.equal(replayAsk.operationKey, ask.operationKey);
+  await attachProductAsk(replayPrepared, replayAsk);
+  const replayState = await dbClient.execute({
+    sql: `SELECT status, operation_key FROM tokenless_prepaid_reservations WHERE reservation_id = ?`,
+    args: [prepared.paymentReference],
+  });
+  assert.deepEqual(replayState.rows[0], { operation_key: ask.operationKey, status: "released" });
+  assert.equal((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid.reservedAtomic, "0");
+});
+
+test("terminal sandbox asks mark wallet payment intents as simulated without holding value", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Sandbox wallet", ownerAddress: ADDRESS_A });
+  const quote = await createTokenlessQuote(quoteRequest());
+  const request = {
+    idempotencyKey: "sandbox:wallet:12345678",
+    payment: { mode: "wallet" as const, payerAddress: ADDRESS_A },
+    quoteId: quote.quoteId,
+  };
+  const principal = { kind: "session" as const, accountAddress: ADDRESS_A };
+  const prepared = await prepareProductAsk({ principal, request });
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+
+  await attachProductAsk(prepared, ask);
+  await attachProductAsk(prepared, ask);
+  const state = await dbClient.execute({
+    sql: `SELECT p.state, p.operation_key, o.payment_state
+          FROM tokenless_payment_intents p
+          JOIN tokenless_ask_ownership o ON o.payment_reference = p.payment_intent_id
+          WHERE p.payment_intent_id = ?`,
+    args: [prepared.paymentReference],
+  });
+  assert.deepEqual(state.rows[0], {
+    operation_key: ask.operationKey,
+    payment_state: "simulated",
+    state: "simulated",
+  });
+  assert.deepEqual((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid, {
+    settledAtomic: "0",
+    reservedAtomic: "0",
+    availableAtomic: "0",
+  });
+
+  const replayPrepared = await prepareProductAsk({ principal, request });
+  await attachProductAsk(replayPrepared, ask);
+  const replay = await dbClient.execute({
+    sql: `SELECT state, operation_key FROM tokenless_payment_intents WHERE payment_intent_id = ?`,
+    args: [prepared.paymentReference],
+  });
+  assert.deepEqual(replay.rows[0], { operation_key: ask.operationKey, state: "simulated" });
+  assert.equal(workspaceId, prepared.workspaceId);
 });
 
 test("wallet payment intents require the signed-in Base Account to be the payer", async () => {

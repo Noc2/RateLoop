@@ -604,43 +604,107 @@ export async function prepareProductAsk(input: {
 
 export async function attachProductAsk(prepared: PreparedProductAsk, ask: TokenlessAskResponse) {
   const now = new Date();
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_ask_ownership
-          (operation_key, workspace_id, owner_account_address, api_key_id, question_id, payment_mode,
-           payment_state, payment_reference, idempotency_key, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (operation_key) DO NOTHING`,
-    args: [
-      ask.operationKey,
-      prepared.workspaceId,
-      prepared.ownerAccountAddress,
-      prepared.apiKeyId,
-      prepared.questionId,
-      prepared.paymentMode,
-      prepared.paymentState,
-      prepared.paymentReference,
-      prepared.idempotencyKey,
-      now,
-      now,
-    ],
-  });
-  const result = await dbClient.execute({
-    sql: "SELECT workspace_id, payment_reference FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
-    args: [ask.operationKey],
-  });
-  const row = result.rows[0] as QueryRow | undefined;
-  if (
-    rowString(row, "workspace_id") !== prepared.workspaceId ||
-    rowString(row, "payment_reference") !== prepared.paymentReference
-  ) {
-    throw new TokenlessServiceError("Ask ownership conflicts with this request.", 409, "ask_ownership_conflict");
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const askResult = await client.query(
+      `SELECT sandbox, result_json FROM tokenless_agent_asks WHERE operation_key = $1 LIMIT 1 FOR UPDATE`,
+      [ask.operationKey],
+    );
+    const storedAsk = askResult.rows[0] as QueryRow | undefined;
+    if (!storedAsk) {
+      throw new TokenlessServiceError("Ask ownership conflicts with this request.", 409, "ask_ownership_conflict");
+    }
+    const simulatedTerminal = storedAsk.sandbox === true && rowString(storedAsk, "result_json") !== null;
+    const ownershipPaymentState = simulatedTerminal ? "simulated" : prepared.paymentState;
+    await client.query(
+      `INSERT INTO tokenless_ask_ownership
+       (operation_key, workspace_id, owner_account_address, api_key_id, question_id, payment_mode,
+        payment_state, payment_reference, idempotency_key, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+       ON CONFLICT (operation_key) DO NOTHING`,
+      [
+        ask.operationKey,
+        prepared.workspaceId,
+        prepared.ownerAccountAddress,
+        prepared.apiKeyId,
+        prepared.questionId,
+        prepared.paymentMode,
+        ownershipPaymentState,
+        prepared.paymentReference,
+        prepared.idempotencyKey,
+        now,
+      ],
+    );
+    const ownershipResult = await client.query(
+      `SELECT workspace_id, payment_reference FROM tokenless_ask_ownership WHERE operation_key = $1 LIMIT 1`,
+      [ask.operationKey],
+    );
+    const ownership = ownershipResult.rows[0] as QueryRow | undefined;
+    if (
+      rowString(ownership, "workspace_id") !== prepared.workspaceId ||
+      rowString(ownership, "payment_reference") !== prepared.paymentReference
+    ) {
+      throw new TokenlessServiceError("Ask ownership conflicts with this request.", 409, "ask_ownership_conflict");
+    }
+
+    if (simulatedTerminal) {
+      await client.query(
+        `UPDATE tokenless_ask_ownership SET payment_state = 'simulated', updated_at = $1
+         WHERE operation_key = $2 AND payment_reference = $3`,
+        [now, ask.operationKey, prepared.paymentReference],
+      );
+      if (prepared.paymentMode === "prepaid") {
+        await client.query(
+          `UPDATE tokenless_prepaid_reservations SET status = 'released', operation_key = $1, updated_at = $2
+           WHERE reservation_id = $3 AND workspace_id = $4 AND idempotency_key = $5
+             AND status IN ('reserved', 'released') AND (operation_key IS NULL OR operation_key = $1)`,
+          [ask.operationKey, now, prepared.paymentReference, prepared.workspaceId, prepared.idempotencyKey],
+        );
+      } else {
+        await client.query(
+          `UPDATE tokenless_payment_intents SET state = 'simulated', operation_key = $1, updated_at = $2
+           WHERE payment_intent_id = $3 AND workspace_id = $4 AND idempotency_key = $5
+             AND state IN ('pending_user_signature', 'pending_chain_authorization', 'pending_chain_execution', 'simulated')
+             AND (operation_key IS NULL OR operation_key = $1)`,
+          [ask.operationKey, now, prepared.paymentReference, prepared.workspaceId, prepared.idempotencyKey],
+        );
+      }
+    } else {
+      const table = prepared.paymentMode === "prepaid" ? "tokenless_prepaid_reservations" : "tokenless_payment_intents";
+      const idColumn = prepared.paymentMode === "prepaid" ? "reservation_id" : "payment_intent_id";
+      await client.query(
+        `UPDATE ${table} SET operation_key = $1, updated_at = $2
+         WHERE ${idColumn} = $3 AND (operation_key IS NULL OR operation_key = $1)`,
+        [ask.operationKey, now, prepared.paymentReference],
+      );
+    }
+
+    const paymentResult =
+      prepared.paymentMode === "prepaid"
+        ? await client.query(
+            `SELECT operation_key, status AS state FROM tokenless_prepaid_reservations WHERE reservation_id = $1`,
+            [prepared.paymentReference],
+          )
+        : await client.query(
+            `SELECT operation_key, state FROM tokenless_payment_intents WHERE payment_intent_id = $1`,
+            [prepared.paymentReference],
+          );
+    const payment = paymentResult.rows[0] as QueryRow | undefined;
+    if (
+      rowString(payment, "operation_key") !== ask.operationKey ||
+      (simulatedTerminal &&
+        rowString(payment, "state") !== (prepared.paymentMode === "prepaid" ? "released" : "simulated"))
+    ) {
+      throw new TokenlessServiceError("Ask payment conflicts with this request.", 409, "payment_conflict");
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  const table = prepared.paymentMode === "prepaid" ? "tokenless_prepaid_reservations" : "tokenless_payment_intents";
-  const idColumn = prepared.paymentMode === "prepaid" ? "reservation_id" : "payment_intent_id";
-  await dbClient.execute({
-    sql: `UPDATE ${table} SET operation_key = ?, updated_at = ? WHERE ${idColumn} = ? AND operation_key IS NULL`,
-    args: [ask.operationKey, now, prepared.paymentReference],
-  });
 }
 
 export async function releasePreparedProductAsk(prepared: PreparedProductAsk) {
