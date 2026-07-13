@@ -1,0 +1,19 @@
+{
+  "schema": "rateloop-rbts-attack-benchmark-v1",
+  "mechanismVersion": "tokenless-rbts-v1-candidate",
+  "seed": "rateloop-rbts-v1",
+  "trials": 2000,
+  "panelSize": 15,
+  "results": [
+    { "scenario": "honest_continuous", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7238, "correctVoteBps": 7236, "upVoteBps": 5013 },
+    { "scenario": "honest_nearest_bucket", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7228, "correctVoteBps": 7236, "upVoteBps": 5013 },
+    { "scenario": "random_clicks", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 6245, "correctVoteBps": 5009, "upVoteBps": 5000 },
+    { "scenario": "constant_up", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 9950, "correctVoteBps": 4975, "upVoteBps": 10000 },
+    { "scenario": "constant_down", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 9950, "correctVoteBps": 5025, "upVoteBps": 0 },
+    { "scenario": "coordinated_minority", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 6630, "correctVoteBps": 5318, "upVoteBps": 5023 },
+    { "scenario": "coordinated_majority", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7792, "correctVoteBps": 5891, "upVoteBps": 8020 },
+    { "scenario": "selective_reveal", "completedTrials": 1999, "reportCount": 20180, "meanScoreBps": 7727, "correctVoteBps": 7230, "upVoteBps": 7452 },
+    { "scenario": "heterogeneous_priors", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7120, "correctVoteBps": 7236, "upVoteBps": 5013 },
+    { "scenario": "seeded_correlation_ring", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7843, "correctVoteBps": 8165, "upVoteBps": 5008 }
+  ]
+}
