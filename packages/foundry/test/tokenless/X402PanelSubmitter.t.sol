@@ -9,6 +9,7 @@ import { X402PanelSubmitter } from "../../contracts/tokenless/X402PanelSubmitter
 
 contract X402PanelSubmitterTest is Test {
     uint256 internal constant FUNDER_KEY = 0xA11CE;
+    bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("x402-audience-policy");
 
     MockERC20 internal usdc;
     TokenlessPanel internal panel;
@@ -85,6 +86,15 @@ contract X402PanelSubmitterTest is Test {
         assertEq(secondPanel.nextRoundId(), 1);
     }
 
+    function testRoundEnvelopeBindsTheExactAdmissionPolicy() external view {
+        TokenlessPanel.RoundTerms memory firstPolicy = _terms();
+        bytes32 firstPolicyDigest = adapter.roundTermsDigest(firstPolicy);
+        TokenlessPanel.RoundTerms memory secondPolicy = firstPolicy;
+        secondPolicy.admissionPolicyHash = keccak256("different-audience-policy");
+
+        assertNotEq(firstPolicyDigest, adapter.roundTermsDigest(secondPolicy));
+    }
+
     function _authorization(TokenlessPanel.RoundTerms memory terms, bytes32 nonce)
         private
         view
@@ -112,7 +122,7 @@ contract X402PanelSubmitterTest is Test {
             attemptCompensation: 1e6,
             minimumReveals: 2,
             maximumCommits: 3,
-            requiredTier: 1,
+            admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
             beaconFailureDeadline: uint64(block.timestamp + 30 minutes),

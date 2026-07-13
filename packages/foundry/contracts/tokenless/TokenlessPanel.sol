@@ -21,7 +21,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     uint8 public constant SCORING_VERSION = 1;
 
     bytes32 public constant VOUCHER_TYPEHASH = keccak256(
-        "Voucher(address voteKey,bytes32 contentId,uint256 roundId,bytes32 nullifier,uint32 tierId,uint64 issuerEpoch,uint64 expiresAt)"
+        "Voucher(address voteKey,bytes32 contentId,uint256 roundId,bytes32 nullifier,bytes32 admissionPolicyHash,uint64 issuerEpoch,uint64 expiresAt)"
     );
     bytes32 public constant COMMIT_TYPEHASH = keccak256(
         "Commit(uint256 roundId,bytes32 sealedCommitment,bytes32 sealedPayloadHash,bytes32 payoutCommitment,bytes32 nullifier)"
@@ -46,7 +46,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         bytes32 contentId;
         uint256 roundId;
         bytes32 nullifier;
-        uint32 tierId;
+        bytes32 admissionPolicyHash;
         uint64 issuerEpoch;
         uint64 expiresAt;
     }
@@ -61,7 +61,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint256 attemptCompensation;
         uint32 minimumReveals;
         uint32 maximumCommits;
-        uint32 requiredTier;
+        bytes32 admissionPolicyHash;
         uint64 commitDeadline;
         uint64 revealDeadline;
         uint64 beaconFailureDeadline;
@@ -91,7 +91,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint256 claimDeadline;
         uint32 minimumReveals;
         uint32 maximumCommits;
-        uint32 requiredTier;
+        bytes32 admissionPolicyHash;
         uint32 commitCount;
         uint32 revealCount;
         uint32 frozenRevealCount;
@@ -133,6 +133,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         address indexed funder,
         bytes32 indexed contentId,
         bytes32 termsHash,
+        bytes32 admissionPolicyHash,
         uint256 bountyAmount,
         uint256 feeAmount,
         uint256 attemptReserve
@@ -211,7 +212,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         round.attemptCompensation = terms.attemptCompensation;
         round.minimumReveals = terms.minimumReveals;
         round.maximumCommits = terms.maximumCommits;
-        round.requiredTier = terms.requiredTier;
+        round.admissionPolicyHash = terms.admissionPolicyHash;
         round.commitDeadline = terms.commitDeadline;
         round.revealDeadline = terms.revealDeadline;
         round.beaconFailureDeadline = terms.beaconFailureDeadline;
@@ -224,7 +225,14 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (usdc.balanceOf(address(this)) - beforeBalance != amount) revert TransferAmountMismatch();
 
         emit RoundCreated(
-            roundId, funder, terms.contentId, terms.termsHash, terms.bountyAmount, terms.feeAmount, terms.attemptReserve
+            roundId,
+            funder,
+            terms.contentId,
+            terms.termsHash,
+            terms.admissionPolicyHash,
+            terms.bountyAmount,
+            terms.feeAmount,
+            terms.attemptReserve
         );
     }
 
@@ -243,7 +251,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (round.commitCount >= round.maximumCommits) revert CapacityReached();
         if (
             voucher.voteKey == address(0) || voucher.contentId != round.contentId || voucher.nullifier == bytes32(0)
-                || voucher.tierId < round.requiredTier || voucher.expiresAt < block.timestamp
+                || voucher.admissionPolicyHash != round.admissionPolicyHash || voucher.expiresAt < block.timestamp
                 || sealedCommitment == bytes32(0) || sealedPayload.length == 0 || payoutCommitment == bytes32(0)
         ) revert InvalidVoucher();
         if (nullifierUsed[voucher.nullifier]) revert NullifierAlreadyUsed();
@@ -529,7 +537,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
                     voucher.contentId,
                     voucher.roundId,
                     voucher.nullifier,
-                    voucher.tierId,
+                    voucher.admissionPolicyHash,
                     voucher.issuerEpoch,
                     voucher.expiresAt
                 )
@@ -622,7 +630,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     function _validateTerms(RoundTerms calldata terms) private view {
         if (
             terms.contentId == bytes32(0) || terms.termsHash == bytes32(0) || terms.beaconNetworkHash == bytes32(0)
-                || terms.beaconRound == 0 || terms.bountyAmount == 0
+                || terms.admissionPolicyHash == bytes32(0) || terms.beaconRound == 0 || terms.bountyAmount == 0
         ) {
             revert InvalidTerms();
         }

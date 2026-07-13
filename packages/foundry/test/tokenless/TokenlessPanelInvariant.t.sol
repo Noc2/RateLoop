@@ -17,6 +17,7 @@ contract TokenlessPanelInvariantHandler is Test {
     uint256 internal constant COMPENSATION = 5e6;
     uint256 internal constant ROUND_TOTAL = BOUNTY + FEE + RESERVE;
     uint256 internal constant MAX_TRACKED_ROUNDS = 24;
+    bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("invariant-audience-policy");
 
     struct RaterMaterial {
         uint256 privateKey;
@@ -76,7 +77,7 @@ contract TokenlessPanelInvariantHandler is Test {
             attemptCompensation: COMPENSATION,
             minimumReveals: minimumReveals,
             maximumCommits: maximumCommits,
-            requiredTier: 1,
+            admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10),
             revealDeadline: uint64(block.timestamp + 20),
             beaconFailureDeadline: uint64(block.timestamp + 30),
@@ -230,7 +231,7 @@ contract TokenlessPanelInvariantHandler is Test {
             contentId: contentId,
             roundId: roundId,
             nullifier: nullifier,
-            tierId: 1,
+            admissionPolicyHash: ADMISSION_POLICY_HASH,
             issuerEpoch: 1,
             expiresAt: uint64(block.timestamp + 1 hours)
         });

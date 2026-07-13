@@ -14,6 +14,7 @@ contract TokenlessPanelTest is Test {
     uint256 internal constant COMPENSATION = 5e6;
     bytes32 internal constant CONTENT_ID = keccak256("binary-question");
     bytes32 internal constant TERMS_HASH = keccak256("immutable-round-terms");
+    bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("invited-reviewers-policy-v1");
 
     address internal funder = makeAddr("funder");
     address internal feeRecipient = makeAddr("feeRecipient");
@@ -251,6 +252,40 @@ contract TokenlessPanelTest is Test {
         panel.createRound(terms);
     }
 
+    function test_VoucherMustMatchExactAdmissionPolicyHash() public {
+        uint256 roundId = _createRound(1, 1);
+        Rater memory alice = _rater(0x581, 1, 5_000, "alice", roundId);
+
+        TokenlessPanel.Voucher memory voucher = _voucher(roundId, alice);
+        voucher.admissionPolicyHash = keccak256("different-but-not-ordered-policy");
+        _expectInvalidVoucher(roundId, alice, voucher);
+
+        assertEq(_round(roundId).commitCount, 0);
+        assertFalse(panel.nullifierUsed(alice.nullifier));
+    }
+
+    function test_VoucherSignatureCannotBeReusedAcrossAdmissionPolicies() public {
+        uint256 roundId = _createRound(1, 1);
+        Rater memory alice = _rater(0x582, 1, 5_000, "alice", roundId);
+        TokenlessPanel.Voucher memory voucher = _voucher(roundId, alice);
+        bytes32 signedDigest = panel.voucherDigest(voucher);
+        bytes memory signature = _sign(ISSUER_PK, signedDigest);
+
+        voucher.admissionPolicyHash = keccak256("another-policy");
+        bytes32 changedDigest = panel.voucherDigest(voucher);
+        assertNotEq(changedDigest, signedDigest);
+        assertFalse(issuer.isValidVoucherSignature(1, changedDigest, signature));
+    }
+
+    function test_RoundRejectsEmptyAdmissionPolicyHash() public {
+        TokenlessPanel.RoundTerms memory terms = _terms(1, 1);
+        terms.admissionPolicyHash = bytes32(0);
+
+        vm.prank(funder);
+        vm.expectRevert(TokenlessPanel.InvalidTerms.selector);
+        panel.createRound(terms);
+    }
+
     function test_ClaimGracePeriodAcceptsSafeUpperBoundary() public {
         TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
         terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD();
@@ -427,7 +462,7 @@ contract TokenlessPanelTest is Test {
             attemptCompensation: COMPENSATION,
             minimumReveals: minimumReveals,
             maximumCommits: maximumCommits,
-            requiredTier: 2,
+            admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
             beaconFailureDeadline: uint64(block.timestamp + 30 minutes),
@@ -453,15 +488,7 @@ contract TokenlessPanelTest is Test {
     }
 
     function _commit(uint256 roundId, Rater memory rater) internal {
-        TokenlessPanel.Voucher memory voucher = TokenlessPanel.Voucher({
-            voteKey: rater.voteKey,
-            contentId: CONTENT_ID,
-            roundId: roundId,
-            nullifier: rater.nullifier,
-            tierId: 2,
-            issuerEpoch: 1,
-            expiresAt: uint64(block.timestamp + 1 hours)
-        });
+        TokenlessPanel.Voucher memory voucher = _voucher(roundId, rater);
         bytes32 sealedCommitment = panel.revealCommitment(
             roundId, rater.voteKey, rater.vote, rater.prediction, rater.responseHash, rater.payout, rater.salt
         );
@@ -475,6 +502,42 @@ contract TokenlessPanelTest is Test {
         );
 
         vm.prank(relayer);
+        panel.commit(voucher, sealedCommitment, sealedPayload, payoutCommitment, voucherSignature, voteSignature);
+    }
+
+    function _voucher(uint256 roundId, Rater memory rater)
+        internal
+        view
+        returns (TokenlessPanel.Voucher memory voucher)
+    {
+        voucher = TokenlessPanel.Voucher({
+            voteKey: rater.voteKey,
+            contentId: CONTENT_ID,
+            roundId: roundId,
+            nullifier: rater.nullifier,
+            admissionPolicyHash: ADMISSION_POLICY_HASH,
+            issuerEpoch: 1,
+            expiresAt: uint64(block.timestamp + 1 hours)
+        });
+    }
+
+    function _expectInvalidVoucher(uint256 roundId, Rater memory rater, TokenlessPanel.Voucher memory voucher)
+        internal
+    {
+        bytes32 sealedCommitment = panel.revealCommitment(
+            roundId, rater.voteKey, rater.vote, rater.prediction, rater.responseHash, rater.payout, rater.salt
+        );
+        bytes32 payoutCommitment = panel.payoutCommitmentFor(rater.payout, rater.salt);
+        bytes memory sealedPayload = abi.encodePacked("tlock-ciphertext", rater.voteKey, roundId);
+        bytes32 sealedPayloadHash = keccak256(sealedPayload);
+        bytes memory voucherSignature = _sign(ISSUER_PK, panel.voucherDigest(voucher));
+        bytes memory voteSignature = _sign(
+            rater.privateKey,
+            panel.commitDigest(roundId, sealedCommitment, sealedPayloadHash, payoutCommitment, rater.nullifier)
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(TokenlessPanel.InvalidVoucher.selector);
         panel.commit(voucher, sealedCommitment, sealedPayload, payoutCommitment, voucherSignature, voteSignature);
     }
 
