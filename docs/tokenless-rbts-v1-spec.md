@@ -13,8 +13,8 @@ epochs, qualification, gold tasks, and verdict gates remain independent controls
 
 Each accepted reveal contains a binary `vote` and integer `predictedUpBps` from 100 through 9,900 inclusive. The
 contract accepts 1%-step predictions rather than the disposable five-bucket input. A scoring-v2 round requires
-`minimumReveals >= 3`. Fewer than three valid reveals use the existing disclosed under-quorum compensation path and do
-not receive an RBTS bonus.
+`minimumReveals >= 3`. Fewer than three valid reveals use the disclosed under-quorum compensation path, receive the
+same fixed base as a healthy-round reveal, and do not receive an RBTS bonus.
 
 The exact report commitment and EIP-712 reveal type remain:
 
@@ -25,15 +25,17 @@ Reveal(uint256 roundId,address voteKey,uint8 vote,uint16 predictedUpBps,
 
 ## Post-closure entropy and set binding
 
-`beginSettlement` is permissionless after the reveal deadline. It captures:
+`beginSettlement` is permissionless after the reveal deadline and fixes `entropyBlock = block.number + 1`. After the
+order-independent reveal-set commitment is complete, anyone finalizes the seed from that exact future block:
 
 ```text
-entropy = keccak256(block.prevrandao, blockhash(block.number - 1), block.number)
+entropy = blockhash(entropyBlock)
 ```
 
-This is a test-deployment compromise: the Base sequencer can influence block entropy, so the public evidence must name
-`base-prevrandao-v1` and must not call it unbiasable. Before mainnet or material-value use, replace it with a reviewed,
-verifiable post-closure beacon or retain base-only fallback when beacon verification fails.
+The seed cannot be finalized until `block.number > entropyBlock`. If the exact hash is unavailable after the EVM
+block-hash retention window, the round takes the deterministic base-only fallback and refunds every unused bonus. The
+public evidence names `base-future-blockhash-v1`; the Base sequencer can still influence block production, so it must
+not be called unbiasable. Before mainnet or material-value use, replace it with a reviewed verifiable beacon.
 
 Aggregation builds an order-independent reveal-set commitment from both the XOR and modular sum of
 `keccak256(commitKey)`. After aggregation:
@@ -56,17 +58,17 @@ so an independent verifier can recompute both accumulators and the seed.
 
 ## Reference and peer selection
 
-For each rater, rank every other revealed commit key by:
+Create a canonical circular permutation by ranking every revealed commit key by:
 
 ```text
-rank(role, candidate) = keccak256(scoringSeed, ownCommitKey, role, candidateCommitKey)
+rank(candidate) = (keccak256(scoringSeed, candidateCommitKey), candidateCommitKey)
 ```
 
-The smallest `(rank, candidateCommitKey)` for role `reference` is the reference. The smallest peer rank excluding the
-selected reference is the peer. This canonical hash-rank rule replaces the preliminary global-permutation wording: it
-is order-independent, excludes self, keeps the two roles distinct, and is directly recomputable. The Solidity path is
-quadratic in panel size but outer processing remains paginated; deployment limits and gas benchmarks must cap the
-maximum panel size.
+Sort ascending by the tuple. A rater's next entry, wrapping at the end, is the reference; the next-next entry is the
+peer. This canonical hash-rank permutation is order-independent, excludes self, keeps the two roles distinct, uses each
+report exactly once in each role, and is directly recomputable. Solidity finds the two successors by scanning the
+frozen set. The path is quadratic in panel size but outer processing remains paginated; deployment limits and gas
+benchmarks must cap the maximum panel size.
 
 ## Score
 
@@ -96,6 +98,11 @@ fixedBasePay   = floor(maximumSeatPay * 8_000 / 10_000)
 maximumBonus   = maximumSeatPay - fixedBasePay
 ```
 
+`attemptCompensation` must equal `fixedBasePay`, and `attemptReserve` must be at least
+`fixedBasePay * maximumCommits`. This makes the accepted-work guarantee identical in healthy, under-quorum, and
+beacon-failure paths instead of quietly substituting a smaller consolation payment. A healthy round returns the unused
+attempt reserve to the funder.
+
 For each valid reveal in a finalized round:
 
 ```text
@@ -110,7 +117,7 @@ as stale claims. Attempt reserve and fee accounting remain separate.
 ## Liveness and failure behavior
 
 - A valid reveal always reaches fixed base pay after a successful scoring-v2 settlement.
-- Under-quorum and beacon-failure compensation remain fixed by the funded attempt reserve.
+- Under-quorum and beacon-failure compensation pay the same fixed base from the separately funded attempt reserve.
 - No integrity epoch, World/Self provider, operator, keeper, verdict, takedown, or moderation decision can change the
   contract score, payout address, liability, or claimability after commit acceptance.
 - If future verifiable randomness is unavailable, the permitted fallback is fixed base with the maximum bonus refunded;

@@ -179,8 +179,10 @@ redistributed among other raters. This preserves non-negative, understandable pa
 a tournament.
 
 The attempt-reserve, no-post-commit-cancellation, under-quorum compensation, beacon-failure, claim, dust, and stale-share
-invariants remain controlling. A valid reveal is accepted work and always reaches fixed base compensation. A low score
-can reduce only the disclosed optional bonus; it can never create a loss, debt, clawback, or eligibility reversal.
+invariants remain controlling. `attemptCompensation` equals the healthy-round fixed base and the reserve covers that
+base for every commit seat, so a valid reveal is accepted work and always reaches the same fixed base compensation. A
+low score can reduce only the disclosed optional bonus; it can never create a loss, debt, clawback, or eligibility
+reversal.
 
 ### Result aggregation
 
