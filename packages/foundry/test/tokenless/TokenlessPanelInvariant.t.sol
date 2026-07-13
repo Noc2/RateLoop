@@ -59,8 +59,8 @@ contract TokenlessPanelInvariantHandler is Test {
         usdc.approve(address(panel), type(uint256).max);
     }
 
-    /// @dev Variants cover empty cancellation, successful settlement, under-quorum reveal compensation,
-    ///      and zero-reveal beacon-failure compensation.
+    /// @dev Variants cover empty cancellation, successful settlement, under-quorum valid-reveal compensation,
+    ///      and a zero-reveal beacon-failure refund.
     function createRound(uint256 variantSeed) external {
         if (_roundIds.length >= MAX_TRACKED_ROUNDS) return;
         uint8 variant = uint8(variantSeed % 4);
@@ -157,9 +157,7 @@ contract TokenlessPanelInvariantHandler is Test {
             || round.state == TokenlessPanel.RoundState.BeaconFailureCompensation;
         if ((round.state == TokenlessPanel.RoundState.Finalized || compensated) && material.exists) {
             TokenlessPanel.CommitRecord memory record = panel.getCommit(material.commitKey);
-            bool eligible = round.state == TokenlessPanel.RoundState.Finalized
-                ? record.revealed
-                : round.state == TokenlessPanel.RoundState.BeaconFailureCompensation || record.revealed;
+            bool eligible = record.revealed;
             if (!record.claimed && eligible && block.timestamp <= round.claimDeadline) {
                 uint256 amount = round.state == TokenlessPanel.RoundState.Finalized
                     ? panel.claim(material.commitKey, material.payout, material.salt)
@@ -184,6 +182,7 @@ contract TokenlessPanelInvariantHandler is Test {
         for (uint256 i = 0; i < _roundIds.length; ++i) {
             TokenlessPanel.Round memory round = panel.getRound(_roundIds[i]);
             if (uint8(round.state) > uint8(TokenlessPanel.RoundState.BeaconFailureCompensation)) return false;
+            if (round.beaconFailureDeadline <= round.revealDeadline) return false;
             if (round.state == TokenlessPanel.RoundState.Open && round.commitDeadline == 0) return false;
             if (round.state == TokenlessPanel.RoundState.Revealable && round.revealDeadline == 0) return false;
             if (round.state == TokenlessPanel.RoundState.Aggregating && round.aggregateCursor > round.frozenRevealCount)

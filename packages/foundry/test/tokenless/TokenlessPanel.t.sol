@@ -145,7 +145,7 @@ contract TokenlessPanelTest is Test {
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_BeaconFailurePaysEveryAcceptedCommitterAndRefundsRemainingFunds() public {
+    function test_ZeroRevealAttackCannotFarmBeaconFailureReserve() public {
         uint256 roundId = _createRound(2, 3);
         Rater memory alice = _rater(0x301, 1, 7_000, "alice", roundId);
         Rater memory bob = _rater(0x302, 0, 3_000, "bob", roundId);
@@ -155,13 +155,48 @@ contract TokenlessPanelTest is Test {
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
         panel.beginSettlement(roundId);
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.BeaconFailureCompensation));
-        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - 2 * COMPENSATION);
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE);
 
+        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
         panel.claimCompensation(alice.commitKey, alice.payout, alice.salt);
+        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
         panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
         vm.prank(funder);
         panel.withdrawCredit(funder);
         assertEq(usdc.balanceOf(address(panel)), 0);
+    }
+
+    function test_LateSelfRevealProvesValidWorkAndReceivesUnderQuorumCompensation() public {
+        uint256 roundId = _createRound(2, 3);
+        Rater memory alice = _rater(0x311, 1, 7_000, "alice", roundId);
+        Rater memory bob = _rater(0x312, 0, 3_000, "bob", roundId);
+        _commit(roundId, alice);
+        _commit(roundId, bob);
+
+        vm.warp(_round(roundId).revealDeadline + 1);
+        _reveal(roundId, alice);
+        assertTrue(panel.getCommit(alice.commitKey).revealed);
+
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.beginSettlement(roundId);
+
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
+        panel.beginSettlement(roundId);
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - COMPENSATION);
+        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), COMPENSATION);
+        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
+        panel.claimCompensation(bob.commitKey, bob.payout, bob.salt);
+    }
+
+    function test_LateSelfRevealClosesAtBeaconFailureDeadline() public {
+        uint256 roundId = _createRound(2, 3);
+        Rater memory alice = _rater(0x321, 1, 7_000, "alice", roundId);
+        _commit(roundId, alice);
+
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        _reveal(roundId, alice);
     }
 
     function test_ZeroCommitRoundFullyRefunds() public {
@@ -236,6 +271,15 @@ contract TokenlessPanelTest is Test {
     function test_ClaimGracePeriodRejectsValueAboveSafeUpperBoundary() public {
         TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
         terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD() + 1;
+
+        vm.prank(funder);
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.createRound(terms);
+    }
+
+    function test_BeaconFailureDeadlineMustBeStrictlyAfterRevealDeadline() public {
+        TokenlessPanel.RoundTerms memory terms = _terms(2, 3);
+        terms.beaconFailureDeadline = terms.revealDeadline;
 
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);

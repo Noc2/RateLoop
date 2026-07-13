@@ -283,7 +283,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     function openReveal(uint256 roundId) external {
         Round storage round = _rounds[roundId];
         if (round.state != RoundState.Open) revert InvalidState();
-        if (block.timestamp <= round.commitDeadline || block.timestamp > round.revealDeadline) {
+        if (block.timestamp <= round.commitDeadline || block.timestamp > round.beaconFailureDeadline) {
             revert InvalidDeadline();
         }
         round.state = RoundState.Revealable;
@@ -304,7 +304,10 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             round.state = RoundState.Revealable;
         }
         if (round.state != RoundState.Revealable) revert InvalidState();
-        if (block.timestamp > round.revealDeadline) revert InvalidDeadline();
+        // A rater can use locally retained plaintext to prove valid work after the normal
+        // tlock reveal window. This late path stays open until the disclosed beacon-failure
+        // deadline so a dead beacon cannot turn an accepted, valid response into unpaid work.
+        if (block.timestamp > round.beaconFailureDeadline) revert InvalidDeadline();
         if (vote > 1 || !TokenlessScoring.isPredictionBucket(predictedUpBps)) revert InvalidPrediction();
         if (payoutAddress == address(0)) revert InvalidAddress();
 
@@ -341,7 +344,9 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (round.revealCount < round.minimumReveals) {
             if (block.timestamp <= round.beaconFailureDeadline) revert InvalidDeadline();
             if (round.revealCount == 0) {
-                _terminalCompensation(roundId, round, RoundState.BeaconFailureCompensation, round.commitCount);
+                // A sealed commit alone is not evidence of a valid answer. Paying it would let
+                // voucher holders fill capacity, withhold every reveal, and farm the reserve.
+                _terminalCompensation(roundId, round, RoundState.BeaconFailureCompensation, 0);
             } else {
                 _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.revealCount);
             }
@@ -428,8 +433,9 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         CommitRecord storage record = _commits[commitKey];
         if (record.voteKey == address(0)) revert CommitNotFound();
         Round storage round = _rounds[record.roundId];
-        bool eligible = round.state == RoundState.BeaconFailureCompensation
-            || (round.state == RoundState.UnderQuorumCompensation && record.revealed);
+        bool eligible =
+            (round.state == RoundState.BeaconFailureCompensation || round.state == RoundState.UnderQuorumCompensation)
+                && record.revealed;
         if (!eligible || block.timestamp > round.claimDeadline) revert NotClaimable();
 
         amount = _claim(record, round, payoutAddress, salt, true);
@@ -447,8 +453,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         round.staleReturned = true;
         uint256 allocation = round.state == RoundState.Finalized
             ? round.bountyAmount
-            : round.compensationPerRecipient
-                * (round.state == RoundState.UnderQuorumCompensation ? round.revealCount : round.commitCount);
+            : round.compensationPerRecipient * round.revealCount;
         amount = allocation - round.totalPaid;
         _accrueCredit(roundId, round.funder, amount);
         emit StaleSharesReturned(roundId, round.funder, amount);
@@ -627,7 +632,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         ) revert InvalidTerms();
         if (
             terms.commitDeadline <= block.timestamp || terms.revealDeadline <= terms.commitDeadline
-                || terms.beaconFailureDeadline < terms.revealDeadline || terms.claimGracePeriod == 0
+                || terms.beaconFailureDeadline <= terms.revealDeadline || terms.claimGracePeriod == 0
                 || terms.claimGracePeriod > MAX_CLAIM_GRACE_PERIOD
         ) revert InvalidDeadline();
         if (terms.feeAmount > (terms.bountyAmount * MAX_FEE_BPS) / 10_000) revert InvalidTerms();
