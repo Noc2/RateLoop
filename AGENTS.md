@@ -4,6 +4,16 @@
 - Commit independent fixes separately. Before pushing, review the changed files and group commits by concern instead of bundling unrelated fixes together.
 - When the user asks to publish finished work, commit the intended fixes and push the current branch after verification passes.
 
+## Tokenless branch and deployment isolation guard
+
+- Treat `tokenless` and `main` as separate products and deployment lines. A generic request to push, publish, deploy, or continue while checked out on `tokenless` authorizes only `origin/tokenless` and the isolated tokenless services. It never authorizes updating `main`, the legacy `rate-loop-nextjs` Vercel project, or `rateloop.ai`.
+- Before every tokenless push, require `git branch --show-current` to return `tokenless` and `git rev-parse --abbrev-ref --symbolic-full-name @{u}` to return `origin/tokenless`. If either check fails, stop and fix the branch/upstream before pushing.
+- Record both remote branch SHAs with `git ls-remote --heads origin main tokenless` immediately before a tokenless push. Push only with the explicit single-ref command `git push origin HEAD:tokenless`; never use a refspec that writes tokenless `HEAD` to `main`, never push both refs in one command, and never rely on an ambiguous default push. Re-run the remote-SHA check afterward and fail closed unless `main` is unchanged.
+- Never merge, rebase, cherry-pick, reset, force-push, or otherwise move `main` as part of tokenless work. Do so only if the user explicitly asks to integrate tokenless into `main` and separately confirms that changing the production `rateloop.ai` application is intended. Requests such as "push everything", "publish finished work", or "deploy tokenless" are not that confirmation.
+- Before every tokenless Vercel deployment, inspect the active `.vercel/project.json` (and `packages/nextjs/.vercel/project.json` when deploying from that package) and require project name `rateloop-tokenless` and project ID `prj_H6C2pfWKEAupFroHbLfzhquaNCLm`. Abort if the checkout is linked to `rate-loop-nextjs` or any other project.
+- Tokenless deployment, promotion, rollback, alias, and environment commands may target only the `rateloop-tokenless` Vercel project and its Vercel-provided domain, with the public review path at `https://rateloop-tokenless.vercel.app/rate`. Never attach, alias, promote, roll back, or deploy tokenless code to `rateloop.ai`, `www.rateloop.ai`, or the legacy `rate-loop-nextjs` project.
+- Before and after a tokenless publish, inspect both `https://rateloop-tokenless.vercel.app/rate` and `https://www.rateloop.ai`. The tokenless URL must move only to the intended tokenless deployment, while the deployment ID serving `rateloop.ai` must remain unchanged. If the legacy deployment or `main` moves, stop all further mutations and report it immediately. Restore the recorded prior state only when the tokenless operation is proven to have caused the move; otherwise ask before touching potentially concurrent production work.
+
 ## Tokenless branch implementation notes
 
 - [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md) is the design of record for `tokenless`. Strategy and legal references are supporting documents; if they conflict, fix them to match the implementation plan or explicitly reopen the decision there.

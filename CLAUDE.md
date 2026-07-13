@@ -4,6 +4,31 @@ Claude should use [`AGENTS.md`](AGENTS.md) as the source of truth for repository
 workflow, tokenless implementation boundaries, redeploy policy, cleanup order,
 image handoff, and trust-model guidance.
 
+## Non-negotiable tokenless isolation
+
+While working on `tokenless`, a request to push, publish, or deploy means the
+`tokenless` branch and isolated tokenless services only. It does not authorize
+any change to `main`, the `rate-loop-nextjs` Vercel project, `rateloop.ai`, or
+`www.rateloop.ai`.
+
+Before pushing, verify that the current branch is `tokenless`, its upstream is
+`origin/tokenless`, and record the remote SHAs for both `main` and `tokenless`.
+Use only `git push origin HEAD:tokenless`, then verify that the remote `main` SHA
+did not change. Never push tokenless `HEAD` to `main`, push both branches in one
+command, or merge/rebase/cherry-pick/reset/force-update `main` without an
+explicit user request to integrate tokenless into `main` plus separate
+confirmation that changing the production `rateloop.ai` application is
+intended. Generic instructions such as "push everything" or "publish finished
+work" are not that confirmation.
+
+Before any Vercel mutation, require the active project linkage to be
+`rateloop-tokenless` (`prj_H6C2pfWKEAupFroHbLfzhquaNCLm`). Tokenless deployment,
+promotion, rollback, alias, and environment commands must target only that
+project and `https://rateloop-tokenless.vercel.app/rate`. Abort rather than
+touching `rate-loop-nextjs`, `rateloop.ai`, or `www.rateloop.ai`. Before and
+after publishing, verify that the remote `main` SHA and the deployment ID serving
+`rateloop.ai` are unchanged.
+
 On the `tokenless` branch, read
 [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md)
 before changing contracts, deployment artifacts, Ponder, Keeper, the app, SDK,
