@@ -141,7 +141,7 @@ export default function TokenlessLandingPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Give your agent frequent human feedback at first—then review only when the evidence calls for it.
+              Scale AI autonomy without scaling blind trust.
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">

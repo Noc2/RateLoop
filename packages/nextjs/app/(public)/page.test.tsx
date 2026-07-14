@@ -17,8 +17,8 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /The Human/);
   assert.match(html, /<span class="block">Assurance <span class="rateloop-text-gradient">Loop<\/span><\/span>/);
   assert.doesNotMatch(html, /class="rateloop-text-gradient[^\"]*">Assurance/);
-  assert.match(html, /Give your agent frequent human feedback at first/);
-  assert.match(html, /then review only when the evidence calls for it/);
+  assert.match(html, /Scale AI autonomy without scaling blind trust\./);
+  assert.doesNotMatch(html, /Give your agent frequent human feedback at first/);
   assert.match(html, /<span>For Humans<\/span>/);
   assert.match(html, /<span>For Agents<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
