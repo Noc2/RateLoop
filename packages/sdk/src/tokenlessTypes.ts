@@ -34,6 +34,19 @@ export type TokenlessVerdictStatus =
   (typeof TOKENLESS_VERDICT_STATUSES)[number];
 export type TokenlessAtomicAmount = string;
 
+export const TOKENLESS_VISIBILITIES = ["public", "private"] as const;
+export type TokenlessVisibility = (typeof TOKENLESS_VISIBILITIES)[number];
+
+export const TOKENLESS_DATA_CLASSIFICATIONS = [
+  "public",
+  "synthetic",
+  "redacted",
+  "internal",
+  "confidential",
+  "restricted",
+] as const;
+export type TokenlessDataClassification = (typeof TOKENLESS_DATA_CLASSIFICATIONS)[number];
+
 export interface TokenlessFundAccounting {
   fundedAtomic: TokenlessAtomicAmount;
   paidAtomic: TokenlessAtomicAmount;
@@ -95,6 +108,11 @@ export type TokenlessRationaleRequirement =
   | { mode: "required"; maxLength: number; minLength?: number };
 
 export interface TokenlessQuoteRequest {
+  /** Public questions must explicitly select public visibility and a safe classification. */
+  visibility?: TokenlessVisibility;
+  dataClassification?: TokenlessDataClassification;
+  redactionSummary?: string;
+  confirmedNoSensitiveData?: boolean;
   audience: {
     admissionPolicyHash: `0x${string}`;
     source: TokenlessReviewerSource;

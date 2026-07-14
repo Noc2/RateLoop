@@ -88,7 +88,13 @@ test("creates a 24-hour fragment-only bearer handoff without persisting raw capa
     payload.idempotencyKey,
     deriveMcpHandoffIdempotencyKey({ handoffId: handoff.handoffId, handoffToken: handoff.handoffToken }),
   );
-  assert.deepEqual(payload.request, quoteRequest());
+  assert.deepEqual(payload.request, {
+    ...quoteRequest(),
+    visibility: "public",
+    dataClassification: "redacted",
+    redactionSummary: "Customer identifiers and confidential inputs were removed.",
+    confirmedNoSensitiveData: true,
+  });
   assert.ok(Buffer.byteLength(url.hash, "utf8") <= 16 * 1_024);
 
   const asks = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_agent_asks");

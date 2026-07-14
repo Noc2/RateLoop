@@ -97,7 +97,7 @@ async function seedTask(sandbox: boolean) {
     args: [`${"11".repeat(32)}`, JSON.stringify({ kind: "binary", prompt: "Ship it?" }), NOW, NOW],
   });
   await dbClient.execute({
-    sql: "INSERT INTO tokenless_question_records (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, moderation_status, created_at, updated_at) VALUES ('qst_tasks', 'ws_tasks', 'cnt_tasks', 'quote_tasks', ?, '{}', 'approved', ?, ?)",
+    sql: "INSERT INTO tokenless_question_records (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility, data_classification, confirmed_no_sensitive_data, moderation_status, created_at, updated_at) VALUES ('qst_tasks', 'ws_tasks', 'cnt_tasks', 'quote_tasks', ?, '{}', 'public', 'synthetic', true, 'approved', ?, ?)",
     args: [`${"22".repeat(32)}`, NOW, NOW],
   });
   await dbClient.execute({

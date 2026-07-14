@@ -212,7 +212,13 @@ export function createMcpHandoff(
     toolError("dataClassification must be public, synthetic, or redacted.", "invalid_params");
   }
   const redactionSummary = string(input.redactionSummary, "redactionSummary", 10, 1_000).trim();
-  const request = parseMcpQuoteRequest(input.request);
+  const request = {
+    ...parseMcpQuoteRequest(input.request),
+    visibility: "public" as const,
+    dataClassification: input.dataClassification as "public" | "synthetic" | "redacted",
+    redactionSummary,
+    confirmedNoSensitiveData: true as const,
+  };
   const sandboxMode = isTokenlessSandboxMode();
   if ((request.audience.source === "sandbox") !== sandboxMode) {
     toolError(

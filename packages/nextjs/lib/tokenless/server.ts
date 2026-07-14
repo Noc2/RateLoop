@@ -158,6 +158,38 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
   if (!request.budget) {
     throw new TokenlessServiceError("budget is required.", 400, "invalid_quote");
   }
+  const visibility = request.visibility ?? "private";
+  const dataClassification = request.dataClassification ?? "internal";
+  if (visibility !== "public" && visibility !== "private") {
+    throw new TokenlessServiceError("visibility must be public or private.", 400, "invalid_quote");
+  }
+  if (!["public", "synthetic", "redacted", "internal", "confidential", "restricted"].includes(dataClassification)) {
+    throw new TokenlessServiceError("dataClassification is unsupported.", 400, "invalid_quote");
+  }
+  if (visibility === "public" && !["public", "synthetic", "redacted"].includes(dataClassification)) {
+    throw new TokenlessServiceError(
+      "Public questions cannot carry confidential or restricted data.",
+      400,
+      "invalid_public_privacy",
+    );
+  }
+  if (visibility === "public" && request.confirmedNoSensitiveData !== true) {
+    throw new TokenlessServiceError(
+      "Public questions require a no-sensitive-data confirmation.",
+      400,
+      "sensitive_data_confirmation_required",
+    );
+  }
+  if (
+    dataClassification === "redacted" &&
+    (typeof request.redactionSummary !== "string" || request.redactionSummary.trim().length < 10)
+  ) {
+    throw new TokenlessServiceError(
+      "Redacted questions require a redaction summary of at least 10 characters.",
+      400,
+      "invalid_redaction_summary",
+    );
+  }
   const bounty = parseAtomic(request.budget.bountyAtomic, "budget.bountyAtomic");
   const attemptReserve = parseAtomic(request.budget.attemptReserveAtomic, "budget.attemptReserveAtomic");
   if (bounty === 0n) {
@@ -173,7 +205,12 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
   if (!Number.isSafeInteger(request.budget.feeBps) || request.budget.feeBps < 0 || request.budget.feeBps > 2_000) {
     throw new TokenlessServiceError("budget.feeBps must be between 0 and 2000.", 400, "invalid_quote");
   }
-  return request as TokenlessQuoteRequest;
+  return {
+    ...request,
+    visibility,
+    dataClassification,
+    ...(request.redactionSummary === undefined ? {} : { redactionSummary: request.redactionSummary.trim() }),
+  } as TokenlessQuoteRequest;
 }
 
 function assertPayment(value: unknown): asserts value is TokenlessAskRequest["payment"] {

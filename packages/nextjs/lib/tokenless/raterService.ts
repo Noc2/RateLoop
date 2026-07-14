@@ -92,6 +92,7 @@ export async function listPaidRaterTasks(
           LEFT JOIN tokenless_paid_vouchers v ON v.rater_id = p.rater_id AND v.round_id = vr.round_id
              AND v.panel_address = vr.panel_address
           WHERE vr.status = 'open' AND vr.voucher_deadline > ? AND c.moderation_status = 'approved'
+            AND q.visibility = 'public' AND q.data_classification IN ('public', 'synthetic', 'redacted')
             AND (? = '' OR c.content_json ILIKE ?)
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
     args: [address, now, query, `%${query}%`],

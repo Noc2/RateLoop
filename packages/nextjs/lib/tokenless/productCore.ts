@@ -1019,6 +1019,10 @@ async function createQuestionRecords(input: {
   const contentId = `cnt_${digest(`${input.workspaceId}:${contentHash}`).slice(0, 32)}`;
   const terms = {
     audience: input.quote.audience,
+    visibility: input.quoteRequest.visibility ?? "private",
+    dataClassification: input.quoteRequest.dataClassification ?? "internal",
+    redactionSummary: input.quoteRequest.redactionSummary ?? null,
+    confirmedNoSensitiveData: input.quoteRequest.confirmedNoSensitiveData === true,
     economics: input.quote.economics,
     panel: input.quote.panel,
     questionHash: contentHash,
@@ -1037,10 +1041,24 @@ async function createQuestionRecords(input: {
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_question_records
-          (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, moderation_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility,
+           data_classification, redaction_summary, confirmed_no_sensitive_data, moderation_status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
           ON CONFLICT (question_id) DO NOTHING`,
-    args: [questionId, input.workspaceId, contentId, input.quoteId, termsHash, termsJson, now, now],
+    args: [
+      questionId,
+      input.workspaceId,
+      contentId,
+      input.quoteId,
+      termsHash,
+      termsJson,
+      input.quoteRequest.visibility ?? "private",
+      input.quoteRequest.dataClassification ?? "internal",
+      input.quoteRequest.redactionSummary ?? null,
+      input.quoteRequest.confirmedNoSensitiveData === true,
+      now,
+      now,
+    ],
   });
   return questionId;
 }
