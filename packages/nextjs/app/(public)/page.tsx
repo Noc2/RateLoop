@@ -135,13 +135,11 @@ export default function TokenlessLandingPage() {
           </div>
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[40rem] lg:items-start lg:pb-8 lg:pt-24 xl:max-w-[43rem] xl:pt-28">
             <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
-              <span className="block">Level Up Your </span>
-              <span className="block">
-                <span className="rateloop-text-gradient">Agent</span>
-              </span>
+              <span className="block">The Human</span>
+              <span className="rateloop-text-gradient block">Assurance Loop</span>
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Give your AI the right human feedback—first often, then exactly when evidence says it needs it.
+              Give your agent frequent human feedback at first—then review only when the evidence calls for it.
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">

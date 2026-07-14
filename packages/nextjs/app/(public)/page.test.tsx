@@ -14,9 +14,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const { default: HomePage } = await import("./page");
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Level Up Your/);
-  assert.match(html, />Agent<\/span>/);
-  assert.match(html, /Give your AI the right human feedback/);
+  assert.match(html, /The Human/);
+  assert.match(html, /Assurance Loop/);
+  assert.match(html, /Give your agent frequent human feedback at first/);
+  assert.match(html, /then review only when the evidence calls for it/);
   assert.match(html, /<span>For Humans<\/span>/);
   assert.match(html, /<span>For Agents<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
