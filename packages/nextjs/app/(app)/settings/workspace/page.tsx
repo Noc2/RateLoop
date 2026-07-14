@@ -1,9 +1,5 @@
-import { WorkspaceSettingsClient } from "~~/components/tokenless/WorkspaceSettingsClient";
+import { redirect } from "next/navigation";
 
 export default function WorkspaceSettingsPage() {
-  return (
-    <section className="space-y-5">
-      <WorkspaceSettingsClient />
-    </section>
-  );
+  redirect("/agents?tab=overview");
 }

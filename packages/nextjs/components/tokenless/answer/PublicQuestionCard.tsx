@@ -259,7 +259,10 @@ export function PublicQuestionCard({
             {error}
           </p>
         ) : null}
-        <Link href="/settings/eligibility" className="mt-4 block text-center text-xs underline underline-offset-4">
+        <Link
+          href="/human?tab=profile&section=paid-work"
+          className="mt-4 block text-center text-xs underline underline-offset-4"
+        >
           Paid-work eligibility
         </Link>
       </aside>

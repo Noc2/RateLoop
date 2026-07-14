@@ -1,10 +1,5 @@
-import { PaidEligibilityClient } from "~~/components/tokenless/PaidEligibilityClient";
-import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
+import { redirect } from "next/navigation";
 
 export default function PaidEligibilityPage() {
-  return (
-    <section className="space-y-5">
-      <PaidEligibilityClient networkPanelsEnabled={isWorldIdAssuranceEnabled()} />
-    </section>
-  );
+  redirect("/human?tab=profile&section=paid-work");
 }

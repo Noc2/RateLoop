@@ -1,5 +1,5 @@
-import { ProfileClient } from "~~/components/tokenless/account/ProfileClient";
+import { redirect } from "next/navigation";
 
 export default function AccountProfilePage() {
-  return <ProfileClient />;
+  redirect("/human?tab=profile");
 }

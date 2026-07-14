@@ -49,9 +49,11 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
     setQuery(searchParams.get("q") ?? "");
   }, [searchParams]);
 
+  const humanSearch = pathname === "/human" || pathname === "/rate";
+
   function navigate(value = query) {
     const next = value.trim();
-    router.push(`/rate?q=${encodeURIComponent(next)}&scope=all`);
+    router.push(`/human?tab=discover&q=${encodeURIComponent(next)}&scope=all`);
     if (mobile) setExpanded(false);
   }
 
@@ -62,8 +64,10 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
 
   function clear() {
     setQuery("");
-    if (pathname === "/rate") navigate("");
+    if (humanSearch) navigate("");
   }
+
+  if (!humanSearch) return null;
 
   if (mobile && !expanded) {
     return (

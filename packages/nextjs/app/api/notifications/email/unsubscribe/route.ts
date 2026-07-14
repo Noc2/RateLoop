@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const result = token ? await unsubscribeTokenlessEmailNotificationToken(token) : { ok: false };
   const url =
     buildTokenlessNotificationSettingsUrl(result.ok ? "unsubscribed" : "invalid_unsubscribe") ??
-    new URL("/settings", request.nextUrl.origin);
+    new URL("/human?tab=settings", request.nextUrl.origin);
   if (!url.searchParams.has("email")) url.searchParams.set("email", result.ok ? "unsubscribed" : "invalid_unsubscribe");
   url.hash = "notifications";
   return NextResponse.redirect(url, 303);

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function redirect(request: NextRequest, status: "verified" | "invalid") {
-  const url = buildTokenlessNotificationSettingsUrl(status) ?? new URL("/settings", request.nextUrl.origin);
+  const url = buildTokenlessNotificationSettingsUrl(status) ?? new URL("/human?tab=settings", request.nextUrl.origin);
   if (!url.searchParams.has("email")) url.searchParams.set("email", status);
   url.hash = "notifications";
   return NextResponse.redirect(url, 303);

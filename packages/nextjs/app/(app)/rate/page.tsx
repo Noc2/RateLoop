@@ -1,6 +1,4 @@
-import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
-import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClient";
-import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
+import { redirect } from "next/navigation";
 
 export default async function RatePage({
   searchParams,
@@ -12,27 +10,11 @@ export default async function RatePage({
     scope?: string | string[];
   }>;
 }) {
-  const { assignment, terms, q, scope } = await searchParams;
-  const assignmentId = Array.isArray(assignment) ? assignment[0] : assignment;
-  const normalizedScope = Array.isArray(scope) ? scope[0] : scope;
-  if (!assignmentId) {
-    const initialQuery = Array.isArray(q) ? q[0] : q;
-    const initialScope = ["all", "public", "private", "submitted"].includes(normalizedScope ?? "")
-      ? (normalizedScope as "all" | "public" | "private" | "submitted")
-      : "all";
-    return (
-      <AnswerPageClient
-        initialQuery={initialQuery}
-        initialScope={initialScope}
-        sandboxMode={isTokenlessSandboxMode()}
-      />
-    );
+  const params = await searchParams;
+  const next = new URLSearchParams({ tab: "discover" });
+  for (const key of ["assignment", "terms", "q", "scope"] as const) {
+    const value = Array.isArray(params[key]) ? params[key]?.[0] : params[key];
+    if (value) next.set(key, value);
   }
-  return (
-    <HumanAssuranceRaterClient
-      initialAssignmentId={assignment}
-      initialTermsHash={terms}
-      sandboxMode={isTokenlessSandboxMode()}
-    />
-  );
+  redirect(`/human?${next.toString()}`);
 }
