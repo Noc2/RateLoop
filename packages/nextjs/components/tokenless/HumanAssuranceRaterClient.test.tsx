@@ -20,7 +20,7 @@ test("private rater queue is assignment-scoped and makes no unsupported payment 
   ).replace(/\s+/g, " ");
 
   assert.match(html, /Private review queue/);
-  assert.match(html, /Redeem a one-time invitation/);
+  assert.match(html, /Open an assigned review/);
   assert.match(html, /haas_private_assignment/);
   assert.match(html, /Confidentiality terms hash/);
   assert.match(html, /Only your assigned, blinded cases are returned/);

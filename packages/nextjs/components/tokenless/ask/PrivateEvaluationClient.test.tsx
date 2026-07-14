@@ -8,10 +8,10 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("buyer workspace freezes a private suite before reviewer or funding approval", async () => {
+test("private evaluation freezes a suite before reviewer or funding approval", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const { HumanAssuranceBuyerClient } = await import("./HumanAssuranceBuyerClient");
-  const html = renderToStaticMarkup(<HumanAssuranceBuyerClient />).replace(/\s+/g, " ");
+  const { PrivateEvaluationClient } = await import("./PrivateEvaluationClient");
+  const html = renderToStaticMarkup(<PrivateEvaluationClient />).replace(/\s+/g, " ");
 
   assert.match(html, /Compare an AI-enabled workflow/);
   assert.match(html, /Current baseline/);

@@ -134,8 +134,6 @@ export function HumanAssuranceRaterClient({
   initialTermsHash?: string | string[];
   sandboxMode: boolean;
 }) {
-  const [invitationToken, setInvitationToken] = useState("");
-  const [invitationStatus, setInvitationStatus] = useState<string | null>(null);
   const [assignmentId, setAssignmentId] = useState(firstValue(initialAssignmentId));
   const [termsHash, setTermsHash] = useState(firstValue(initialTermsHash));
   const [confidentialityAccepted, setConfidentialityAccepted] = useState(false);
@@ -144,7 +142,7 @@ export function HumanAssuranceRaterClient({
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>(() =>
     initialTask ? emptyDrafts(initialTask.cases) : {},
   );
-  const [busyAction, setBusyAction] = useState<"invite" | "assignment" | "recovery" | "response" | null>(null);
+  const [busyAction, setBusyAction] = useState<"assignment" | "recovery" | "response" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canRecover, setCanRecover] = useState(false);
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
@@ -183,31 +181,6 @@ export function HumanAssuranceRaterClient({
         return draft?.selectedOption && rationaleLength >= minimum && rationaleLength <= maximum;
       }),
   );
-
-  async function redeemInvitation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusyAction("invite");
-    setError(null);
-    setInvitationStatus(null);
-    try {
-      const body = await readJson(
-        await fetch("/api/account/assurance/reviewer-invitations/redeem", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: invitationToken.trim() }),
-        }),
-      );
-      setInvitationToken("");
-      setInvitationStatus(
-        `Invitation accepted for project ${String(body.projectId ?? "unknown")}. A private assignment link appears only after the customer allocates capacity.`,
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to accept the reviewer invitation.");
-    } finally {
-      setBusyAction(null);
-    }
-  }
 
   async function loadAssignment(id: string) {
     const body = await readJson(
@@ -351,52 +324,8 @@ export function HumanAssuranceRaterClient({
           {!task ? (
             <>
               <section className="rateloop-surface-card p-5 sm:p-7">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-                  <div>
-                    <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
-                      01 · Join a customer cohort
-                    </p>
-                    <h2 className="mt-2 text-2xl font-semibold">Redeem a one-time invitation</h2>
-                  </div>
-                  <span className="rounded-md bg-white/[0.05] px-3 py-1.5 text-xs text-base-content/55">
-                    Account bound
-                  </span>
-                </div>
-                <p className="mt-5 text-sm leading-6 text-base-content/60">
-                  Paste the token directly instead of putting it in a URL. It is single-use, stored only as a hash, and
-                  can be redeemed only by the intended signed-in account.
-                </p>
-                <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={redeemInvitation}>
-                  <label className="grow text-sm text-base-content/60">
-                    Invitation token
-                    <input
-                      type="password"
-                      autoComplete="off"
-                      className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-                      value={invitationToken}
-                      onChange={event => setInvitationToken(event.target.value)}
-                      placeholder="rli_…"
-                      required
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    className="rateloop-gradient-action self-end px-6"
-                    disabled={busyAction !== null || invitationToken.trim().length < 12}
-                  >
-                    {busyAction === "invite" ? "Accepting…" : "Accept invitation"}
-                  </button>
-                </form>
-                {invitationStatus ? (
-                  <p className="mt-4 rounded-lg bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-100">
-                    {invitationStatus}
-                  </p>
-                ) : null}
-              </section>
-
-              <section className="rateloop-surface-card p-5 sm:p-7">
                 <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
-                  02 · Open an assigned review
+                  01 · Open an assigned review
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold">Confirm the private assignment</h2>
                 <p className="mt-4 text-sm leading-6 text-base-content/60">

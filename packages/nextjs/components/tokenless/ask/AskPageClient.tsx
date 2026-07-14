@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { HumanAssuranceBuyerClient } from "~~/components/tokenless/HumanAssuranceBuyerClient";
 import { AskHistoryClient } from "~~/components/tokenless/ask/AskHistoryClient";
 import { AskPageTabs, type AskTab } from "~~/components/tokenless/ask/AskPageTabs";
+import { PrivateEvaluationClient } from "~~/components/tokenless/ask/PrivateEvaluationClient";
 import { PublicQuestionClient } from "~~/components/tokenless/ask/PublicQuestionClient";
 
 export function AskPageClient({ sandboxMode }: { sandboxMode: boolean }) {
@@ -19,7 +19,7 @@ export function AskPageClient({ sandboxMode }: { sandboxMode: boolean }) {
       </div>
       <AskPageTabs active={tab} onChange={setTab} />
       {tab === "public" ? <PublicQuestionClient sandboxMode={sandboxMode} /> : null}
-      {tab === "private" ? <HumanAssuranceBuyerClient /> : null}
+      {tab === "private" ? <PrivateEvaluationClient /> : null}
       {tab === "history" ? <AskHistoryClient /> : null}
     </div>
   );

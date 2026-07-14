@@ -24,7 +24,7 @@ async function readJson(response: Response) {
   return body;
 }
 
-export function HumanAssuranceBuyerClient() {
+export function PrivateEvaluationClient() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
