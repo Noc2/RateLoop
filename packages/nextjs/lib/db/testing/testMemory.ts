@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Pool } from "pg";
-import { newDb } from "pg-mem";
+import { DataType, newDb } from "pg-mem";
 
 const MIGRATION_BREAKPOINT = "--> statement-breakpoint";
 
@@ -47,6 +47,24 @@ function createDatabaseClient(pool: Pool): DatabaseClient {
 export function createMemoryDatabaseResources(): DatabaseResources {
   const migrationDirectory = getMigrationDirectory();
   const memoryDb = newDb();
+  memoryDb.public.registerFunction({
+    name: "hashtext",
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: value => [...value].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) | 0, 0),
+  });
+  memoryDb.public.registerFunction({
+    name: "pg_advisory_lock",
+    args: [DataType.integer],
+    returns: DataType.bool,
+    implementation: () => true,
+  });
+  memoryDb.public.registerFunction({
+    name: "pg_advisory_unlock",
+    args: [DataType.integer],
+    returns: DataType.bool,
+    implementation: () => true,
+  });
 
   if (fs.existsSync(migrationDirectory)) {
     const files = fs
