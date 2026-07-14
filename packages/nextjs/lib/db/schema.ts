@@ -106,3 +106,19 @@ export const tokenlessBrowserIdentities = pgTable(
     emailDomainIdx: index("tokenless_browser_identities_email_domain_idx").on(table.emailDomain),
   }),
 );
+
+export const tokenlessAccountProfiles = pgTable(
+  "tokenless_account_profiles",
+  {
+    principalAddress: text("principal_address")
+      .primaryKey()
+      .references(() => tokenlessBrowserIdentities.principalAddress, { onDelete: "cascade" }),
+    displayName: text("display_name"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({ updatedAtIdx: index("tokenless_account_profiles_updated_at_idx").on(table.updatedAt) }),
+);
+
+export type TokenlessAccountProfile = typeof tokenlessAccountProfiles.$inferSelect;
+export type NewTokenlessAccountProfile = typeof tokenlessAccountProfiles.$inferInsert;
