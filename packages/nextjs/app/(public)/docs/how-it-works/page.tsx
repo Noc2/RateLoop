@@ -3,8 +3,8 @@ export default function HowTokenlessWorksPage() {
     <article className="prose max-w-none">
       <h1>How it works</h1>
       <p>
-        The public tokenless deployment is a simulated sandbox. It previews suite setup and the reviewer journey; it
-        does not currently recruit or pay live reviewers and its output is not live human evidence.
+        RateLoop turns a defined quality question into blinded human judgment, recomputable incentive evidence, and a
+        decision packet that keeps the final action with the customer.
       </p>
       <ol>
         <li>
@@ -12,22 +12,31 @@ export default function HowTokenlessWorksPage() {
           rubric, and a pass rule.
         </li>
         <li>
-          The customer chooses customer-invited reviewers, a RateLoop-network panel, separate hybrid subpanels, or a
-          simulated sandbox. The exact audience policy is content-hashed.
+          The customer chooses customer-invited reviewers, a RateLoop-network panel, or separate hybrid subpanels. The
+          exact audience policy is content-hashed.
         </li>
         <li>Submitted material is minimized, redacted, encrypted, and shown only through short assignment leases.</li>
         <li>Any paid quote itemizes bounty, fee, and maximum accepted-work reserve before funding.</li>
         <li>
           Before a paid assignment or voucher, reviewers complete the policy&apos;s capability and legal/payout gates.
+          RateLoop-network reviewers must enroll with World ID 4 Proof of Human.
         </li>
         <li>
-          Reviewers compare blinded A/B artifacts, choose an option, add bounded failure tags, and explain the
-          difference without seeing other answers.
+          Reviewers compare blinded A/B artifacts, choose an option, predict the panel&apos;s answer share, add bounded
+          failure tags, and explain the difference without seeing other answers.
         </li>
-        <li>Paid case rounds use sealed commits and permissionless deterministic settlement.</li>
+        <li>
+          Paid case rounds use sealed commits and permissionless deterministic settlement. Accepted work receives fixed
+          USDC plus a bounded binary Robust Bayesian Truth Serum bonus.
+        </li>
         <li>
           Zero-commit rounds refund fully; failed quorum or beacon paths refund bounty and fee while accepted valid work
           remains compensable from the disclosed reserve.
+        </li>
+        <li>
+          A Surprisingly Popular diagnostic compares the panel&apos;s actual answer share with its predicted share.
+          Correlation analytics can qualify or limit result publication, but neither control can reduce accepted-work
+          payment.
         </li>
         <li>
           A private decision packet separates reviewer coverage from case judgments and reports per-case descriptive
@@ -42,12 +51,18 @@ export default function HowTokenlessWorksPage() {
       </p>
       <h2>No post-commit cancellation</h2>
       <p>After the first accepted paid commit, the round follows its deterministic settlement or compensation path.</p>
+      <h2>Independent controls, explicit limits</h2>
+      <p>
+        World ID limits duplicate provider subjects, RBTS changes reporting incentives, and prospective integrity epochs
+        diversify assignments. None of these controls proves expertise, honest judgment, behavioral independence, or
+        objective truth on its own.
+      </p>
       <h2>Privacy, identity, and recovery</h2>
       <p>
         RateLoop can process encrypted private artifacts and participating reviewers see only their assigned material,
-        but customers must still minimize sensitive data and exclude regulated or safety-critical use cases from early
-        access. Invitations are the default private B2B access path. External identity assurance is optional and used
-        only when a frozen audience policy requires a specific capability.
+        but customers must still minimize sensitive data and keep regulated or safety-critical decisions under
+        accountable human control. Invitations are the default private B2B access path. External identity assurance is
+        used only when a frozen audience policy requires a specific capability.
       </p>
       <p>
         One-time vote and payout keys are created in the browser and exported in an encrypted recovery package. The

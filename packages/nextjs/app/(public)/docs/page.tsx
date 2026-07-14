@@ -22,8 +22,8 @@ export default function DocsPage() {
       <h2>Privacy and identity</h2>
       <p>
         Question and rater text stays off-chain, but RateLoop and participating raters may be able to read it.
-        Settlement evidence may be public. Do not submit secrets or regulated personal data in early access. Optional
-        credentials can support panel-specific eligibility; no single identity provider is required for every use case.
+        Settlement evidence may be public. Do not submit secrets or material you are not authorized to disclose.
+        Credentials support panel-specific eligibility; no single identity provider is required for every use case.
       </p>
       <h2>Fund custody and settlement</h2>
       <p>
@@ -37,11 +37,11 @@ export default function DocsPage() {
         <li>Admission and identity caps are operator-attested.</li>
         <li>A normal claim links a one-time vote key to its payout address.</li>
       </ul>
-      <h2>Deployment status</h2>
+      <h2>Operating model</h2>
       <p>
-        RateLoop is in early access. Sandbox results are deterministic simulations and are labeled as such. Base Sepolia
-        addresses remain disposable until hardening, and a fresh contract deployment plus complete environment update
-        are required before live end-to-end use.
+        Workspaces define who may publish, which reviewer sources are permitted, how much an agent may spend, and which
+        evidence must be present before a result is released. Reviewer source, compensation, limitations, and settlement
+        terms remain visible throughout the workflow.
       </p>
     </article>
   );

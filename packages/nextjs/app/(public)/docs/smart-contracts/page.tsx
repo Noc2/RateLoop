@@ -20,8 +20,8 @@ export default function TokenlessContractsPage() {
         <dd>Optional stateless funding adapter whose signed terms bind every economic field and panel address.</dd>
       </dl>
       <p>
-        The test contracts are disposable until Phase 5 hardening. No legacy address or storage-layout continuity is
-        promised.
+        Production releases pin the panel, issuer, funding adapter, chain, deployment block, and generated interfaces as
+        one complete deployment key. Services fail closed when any part of that bundle disagrees.
       </p>
     </article>
   );

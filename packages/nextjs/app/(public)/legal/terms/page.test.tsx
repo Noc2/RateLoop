@@ -8,13 +8,13 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("test terms state deployment limits and accepted-work protection", async () => {
+test("terms state service limits and accepted-work protection", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: TermsPage } = await import("./page");
   const html = renderToStaticMarkup(<TermsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /fresh contract deployment/i);
+  assert.match(html, /blinded human assurance/i);
   assert.match(html, /cannot cancel the round/i);
   assert.match(html, /not financial, legal, medical, or investment advice/i);
-  assert.doesNotMatch(html, /LREP|no token|token governance/i);
+  assert.doesNotMatch(html, /LREP|no token|token governance|test-only|sandbox|test deployment/i);
 });

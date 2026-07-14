@@ -8,7 +8,7 @@ export default function TokenlessTechStackPage() {
       </p>
       <h2>Settlement and reporting incentives</h2>
       <ul>
-        <li>Base Sepolia for the isolated test deployment; Base for the eventual hardened deployment.</li>
+        <li>Base for low-cost, USDC-denominated settlement and publicly recomputable contract evidence.</li>
         <li>An immutable, adminless fund core with USDC-denominated bounty, fee, and attempt reserve.</li>
         <li>Voucher-bound one-time vote keys, relayed commits, sealed reports, and permissionless settlement.</li>
         <li>
@@ -39,8 +39,9 @@ export default function TokenlessTechStackPage() {
           work payment. Appeals and the original epoch remain auditable.
         </li>
         <li>
-          A per-round Surprisingly Popular diagnostic runs in shadow mode only. It cannot change settlement or the
-          primary verdict unless a later, separately reviewed mechanism version explicitly adopts it.
+          A per-round Surprisingly Popular diagnostic is reported separately from the primary verdict. It cannot change
+          settlement or accepted-work payment; any future incentive use requires a separately reviewed mechanism
+          version.
         </li>
       </ul>
       <p>

@@ -1,8 +1,12 @@
 import Link from "next/link";
 
 const documents = [
-  ["Test terms", "/legal/terms", "Rules and limitations for this isolated test deployment."],
-  ["Privacy notice", "/legal/privacy", "What the test interface stores and what may become public on-chain."],
+  ["Terms", "/legal/terms", "Rules, responsibilities, payment terms, and service limitations."],
+  [
+    "Privacy notice",
+    "/legal/privacy",
+    "What RateLoop stores, why it is processed, and what may become public on-chain.",
+  ],
   ["Imprint", "/legal/imprint", "Operator and contact information."],
 ] as const;
 
@@ -14,8 +18,8 @@ export default function LegalPage() {
         <h1 className="display-section mt-3 text-4xl sm:text-5xl">Legal</h1>
       </div>
       <p className="mt-6 max-w-3xl text-lg leading-8 text-base-content/60">
-        These documents cover the isolated test application. The public sandbox is simulated; production-mode paid
-        vouchers and funding remain disabled until the current contracts are freshly deployed and configured.
+        These documents explain the RateLoop service, its privacy boundaries, payment and reviewer responsibilities,
+        public-chain records, and the operator behind the application.
       </p>
       <div className="mt-10 grid gap-4 md:grid-cols-3">
         {documents.map(([title, href, description], index) => (

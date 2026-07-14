@@ -37,8 +37,12 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);
   assert.match(html, /Why It/);
   assert.match(html, /Built for AI Workflows/);
-  assert.match(html, /Independent Human Review/);
-  assert.match(html, /Transparent Incentives/);
+  assert.match(html, /Proof-of-Human Panels/);
+  assert.match(html, /World ID 4 Proof of Human/);
+  assert.match(html, /correlation-diversified assignments/);
+  assert.match(html, /RBTS &amp; Surprise Signals/);
+  assert.match(html, /Robust Bayesian Truth Serum bonus/);
+  assert.match(html, /Surprisingly Popular diagnostic/);
   assert.match(html, /Auditable Settlement/);
   assert.match(html, /Privacy with Clear Limits/);
   assert.match(html, /Agents ask; human reviewers provide the judgment/i);
@@ -68,7 +72,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Common"));
   assert.doesNotMatch(
     html,
-    /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready/i,
+    /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready|test deployment|public sandbox|simulated reviewers/i,
   );
   assert.doesNotMatch(html, /Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context/i);
   assert.doesNotMatch(html, /Add a human check before AI reaches your customers\./i);

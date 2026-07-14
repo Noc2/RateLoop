@@ -45,8 +45,9 @@ const ImprintPage: NextPage = () => {
 
         <h2>Important Notice</h2>
         <p>
-          This imprint applies to the RateLoop test interface. Its current Base Sepolia contracts and services are an
-          isolated, disposable test deployment and must not be treated as a production financial service.
+          This imprint applies to the RateLoop application and related services. RateLoop provides software-supported
+          human assurance and settlement evidence; it does not provide banking, brokerage, custody, investment, legal,
+          or medical advice.
         </p>
 
         <h2>Dispute Resolution</h2>

@@ -35,8 +35,8 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "Independent Human Review",
-    body: "Blinded assignments prevent reviewers from following the crowd. Invited, network, and hybrid panels remain separate in the evidence.",
+    title: "Proof-of-Human Panels",
+    body: "RateLoop-network reviewers enroll with World ID 4 Proof of Human. Blinded, correlation-diversified assignments reduce duplicate and crowd-following risk; invited and hybrid panels remain separate in the evidence.",
     color: "#03CEA4",
     links: [
       ["Review Flow", "/docs/how-it-works"],
@@ -44,8 +44,8 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "Transparent Incentives",
-    body: "Accepted paid work receives a fixed USDC payment plus a bounded scoring bonus. The scoring rule rewards useful signal; it is not a truth oracle.",
+    title: "RBTS & Surprise Signals",
+    body: "Accepted paid work receives fixed USDC plus a bounded binary Robust Bayesian Truth Serum bonus. A separate Surprisingly Popular diagnostic shows when outcomes exceed panel expectations; neither is a truth oracle.",
     color: "#EF476F",
     links: [
       ["Scoring & Incentives", "/docs/tech-stack"],
@@ -78,12 +78,12 @@ const questions = [
     "It gathers blind human reviews of AI work and returns a clear result with reasons. Your team makes the final decision.",
   ],
   [
-    "What Can I Test?",
+    "What Can I Evaluate?",
     "Support replies, marketing, consulting work, product behavior, internal copilots, and other AI work with a clear quality bar.",
   ],
   [
     "Who Reviews the Work?",
-    "Your invited reviewers, RateLoop's network, or both. The public sandbox uses simulated reviewers.",
+    "Your invited reviewers, RateLoop's World ID-backed network, or a clearly separated hybrid panel.",
   ],
   [
     "Can an Agent Publish by Itself?",
@@ -91,7 +91,7 @@ const questions = [
   ],
   [
     "Can I Use Private Data?",
-    "Not in the sandbox. Use public, test, or safely redacted content. Reviewers and RateLoop may read what you submit.",
+    "Use only material you are authorized to share, minimize it, and redact unnecessary sensitive data. Assigned reviewers and RateLoop may read what you submit.",
   ],
   [
     "What Does the Blockchain Record?",

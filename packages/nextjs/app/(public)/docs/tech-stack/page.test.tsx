@@ -17,7 +17,8 @@ test("tech-stack docs explain the tokenless integrity layers and their limits", 
   assert.match(html, /fixed base payment.*Robust Bayesian Truth Serum bonus/i);
   assert.match(html, /World ID 4 Proof of Human/i);
   assert.match(html, /correlation epochs/i);
-  assert.match(html, /Surprisingly Popular.*shadow mode/i);
+  assert.match(html, /Surprisingly Popular.*reported separately/i);
+  assert.match(html, /cannot change settlement or accepted-work payment/i);
   assert.match(html, /not a truth oracle/i);
   assert.match(html, /never accepted work payment/i);
   assert.doesNotMatch(html, /token reward|stake-weighted|guarantees honest/i);

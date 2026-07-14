@@ -8,7 +8,7 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("agent docs describe the approval-bound four-tool MCP surface without overstating sandbox evidence", async () => {
+test("agent docs describe the approval-bound four-tool MCP surface and decision boundary", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: AgentDocsPage } = await import("./page");
   const html = renderToStaticMarkup(<AgentDocsPage />).replace(/\s+/g, " ");
@@ -24,14 +24,15 @@ test("agent docs describe the approval-bound four-tool MCP surface without overs
   assert.match(html, /rateloop_get_result/);
   assert.match(html, /tools\/list/);
   assert.match(html, /confirmedNoSensitiveData/);
-  assert.match(html, /0x0{64}/);
+  assert.match(html, /0x(?:12){32}/);
   assert.match(html, /requestedPanelSize/);
   assert.match(html, /explicit approval before calling the handoff tool/i);
   assert.match(html, /Creating a handoff is not submission/i);
   assert.match(html, /public.*synthetic.*redacted/i);
-  assert.match(html, /does not provide live human reviews/i);
+  assert.match(html, /does not issue an automatic production/i);
   assert.match(html, /wallet-transaction, LREP, governance, protocol-token/i);
   assert.match(html, /media-upload/);
   assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
+  assert.doesNotMatch(html, /sandbox|simulated|test deployment/i);
 });

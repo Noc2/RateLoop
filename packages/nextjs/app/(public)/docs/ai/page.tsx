@@ -33,8 +33,8 @@ const createHandoffRequest = `{
       "confirmedNoSensitiveData": true,
       "request": {
         "audience": {
-          "source": "sandbox",
-          "admissionPolicyHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          "source": "rateloop_network",
+          "admissionPolicyHash": "0x1212121212121212121212121212121212121212121212121212121212121212"
         },
         "budget": {
           "attemptReserveAtomic": "500000",
@@ -43,7 +43,7 @@ const createHandoffRequest = `{
         },
         "question": {
           "kind": "binary",
-          "prompt": "Is this synthetic release candidate ready for the next test stage?",
+          "prompt": "Is this release candidate ready for rollout?",
           "rationale": { "mode": "optional" }
         },
         "requestedPanelSize": 3
@@ -196,7 +196,7 @@ yarn workspace @rateloop/agents media-upload \\
       <CodeBlock>{toolsListRequest}</CodeBlock>
       <p>Then read capabilities without sending review content:</p>
       <CodeBlock>{capabilitiesRequest}</CodeBlock>
-      <p>After the user approves the exact outbound content, create a sandbox handoff:</p>
+      <p>After the user approves the exact outbound content, create a browser handoff:</p>
       <CodeBlock>{createHandoffRequest}</CodeBlock>
       <p>
         The response supplies the browser handoff URL, <code>handoffId</code>, and <code>handoffToken</code>. After the
@@ -208,11 +208,11 @@ yarn workspace @rateloop/agents media-upload \\
         when status says a result is available.
       </p>
 
-      <h2>Sandbox boundary</h2>
+      <h2>Decision boundary</h2>
       <p>
-        The public sandbox simulates reviewer activity, results, and payments. It does not provide live human reviews,
-        paid human evidence, or a production approval. Use synthetic or safely redacted test material and keep an
-        accountable person responsible for every rollout decision.
+        RateLoop supplies human-review evidence and disclosed limitations; it does not issue an automatic production,
+        safety, legal, or compliance approval. Use only authorized, minimized material and keep an accountable person
+        responsible for every rollout decision.
       </p>
     </article>
   );
