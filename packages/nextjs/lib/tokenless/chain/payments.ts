@@ -1,8 +1,12 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, type TokenlessChainConfig, loadTokenlessChainConfig } from "./config";
 import { type TokenlessChainRuntime, assertLiveTokenlessDeployment, getTokenlessChainRuntime } from "./runtime";
 import { TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
-import type { TokenlessQuoteResponse } from "@rateloop/sdk";
-import { randomUUID } from "node:crypto";
+import {
+  TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
+  type TokenlessPaymentInstructions,
+  type TokenlessQuoteResponse,
+} from "@rateloop/sdk";
+import { randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { type Address, type Hash, type Hex, decodeEventLog, encodeFunctionData, getAddress, isHash } from "viem";
 import { baseSepolia } from "viem/chains";
@@ -70,6 +74,7 @@ export type ChainPaymentInstructions = {
   roundTerms: PersistedRoundTerms;
   roundId: string | null;
   transactionHash: Hash | null;
+  authorizationSpec?: TokenlessPaymentInstructions["authorizationSpec"];
 };
 
 function rowString(row: QueryRow | undefined, key: string) {
@@ -235,9 +240,34 @@ async function executionRow(operationKey: string) {
 }
 
 function instructions(row: QueryRow): ChainPaymentInstructions {
+  const paymentMode = rowString(row, "payment_mode") as ChainPaymentInstructions["paymentMode"];
+  const authorizationNonce = rowString(row, "authorization_nonce");
+  const authorizationValidAfter = rowString(row, "authorization_valid_after");
+  const authorizationValidBefore = rowString(row, "authorization_valid_before");
+  const authorizationSpec =
+    paymentMode === "x402" && authorizationNonce && authorizationValidAfter && authorizationValidBefore
+      ? {
+          schemaVersion: TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
+          eip3009Domain: {
+            name: rowString(row, "authorization_eip712_name") ?? "RateLoop Tokenless Test USDC",
+            version: rowString(row, "authorization_eip712_version") ?? "2",
+            chainId: Number(row.chain_id),
+            verifyingContract: getAddress(rowString(row, "usdc_address")!),
+          },
+          roundAuthorizationDomain: {
+            name: "RateLoop X402 Panel Submitter",
+            version: "1",
+            chainId: Number(row.chain_id),
+            verifyingContract: getAddress(rowString(row, "x402_submitter_address")!),
+          },
+          validAfter: authorizationValidAfter,
+          validBefore: authorizationValidBefore,
+          nonce: authorizationNonce as Hex,
+        }
+      : undefined;
   return {
     operationKey: rowString(row, "operation_key")!,
-    paymentMode: rowString(row, "payment_mode") as ChainPaymentInstructions["paymentMode"],
+    paymentMode,
     paymentState: rowString(row, "state")!,
     deploymentKey: rowString(row, "deployment_key")!,
     chainId: Number(row.chain_id),
@@ -249,6 +279,7 @@ function instructions(row: QueryRow): ChainPaymentInstructions {
     roundTerms: parseTerms(rowString(row, "round_terms_json")!),
     roundId: rowString(row, "round_id"),
     transactionHash: rowString(row, "submission_transaction_hash") as Hash | null,
+    ...(authorizationSpec ? { authorizationSpec } : {}),
   };
 }
 
@@ -300,6 +331,10 @@ export async function prepareChainPayment(
     BigInt(terms.feeAmount) +
     BigInt(terms.attemptReserve)
   ).toString();
+  const authorizationNow = Math.floor((options.now ?? new Date()).getTime() / 1_000);
+  const authorizationValidAfter = (authorizationNow - 30).toString();
+  const authorizationValidBefore = (authorizationNow + 10 * 60).toString();
+  const authorizationNonce = `0x${randomBytes(32).toString("hex")}` as Hex;
   const executionId = `chx_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   await dbClient.execute({
@@ -307,8 +342,10 @@ export async function prepareChainPayment(
           (execution_id, operation_key, payment_mode, payment_reference, deployment_key, chain_id,
            deployment_block, panel_address, issuer_address, x402_submitter_address, usdc_address,
            funder_address, content_id, terms_hash, round_terms_json, total_funded_atomic, state,
-           created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           authorization_valid_after, authorization_valid_before, authorization_nonce,
+           authorization_eip712_name, authorization_eip712_version, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (operation_key) DO NOTHING`,
     args: [
       executionId,
@@ -332,6 +369,11 @@ export async function prepareChainPayment(
         : paymentMode === "x402" && rowString(source, "payment_state") === "pending_chain_authorization"
           ? "awaiting_authorization"
           : "prepared",
+      paymentMode === "x402" ? authorizationValidAfter : null,
+      paymentMode === "x402" ? authorizationValidBefore : null,
+      paymentMode === "x402" ? authorizationNonce : null,
+      paymentMode === "x402" ? config.usdcEip712Name : null,
+      paymentMode === "x402" ? config.usdcEip712Version : null,
       now,
       now,
     ],

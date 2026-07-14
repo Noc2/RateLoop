@@ -49,6 +49,8 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
     rpcUrl: "https://sepolia.base.org/",
     schemaVersion: "rateloop-tokenless-deployment-v3",
     usdcAddress: USDC,
+    usdcEip712Name: "RateLoop Tokenless Test USDC",
+    usdcEip712Version: "2",
     x402SubmitterAddress: ADAPTER,
     ...overrides,
   };
@@ -447,10 +449,12 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
   const runtime = mockRuntime();
-  assert.equal(
-    (await prepareChainPayment(ask.operationKey, { config: config(), runtime })).paymentState,
-    "awaiting_authorization",
-  );
+  const prepared = await prepareChainPayment(ask.operationKey, { config: config(), runtime });
+  assert.equal(prepared.paymentState, "awaiting_authorization");
+  assert.equal(prepared.authorizationSpec?.schemaVersion, "rateloop.tokenless.payment-authorization.v1");
+  assert.equal(prepared.authorizationSpec?.eip3009Domain.verifyingContract, USDC);
+  assert.equal(prepared.authorizationSpec?.roundAuthorizationDomain.verifyingContract, ADAPTER);
+  assert.equal(prepared.authorizationSpec?.eip3009Domain.version, "2");
   assert.equal(
     (await reconcileChainPayment(ask.operationKey, { config: config(), runtime }))?.paymentState,
     "awaiting_authorization",

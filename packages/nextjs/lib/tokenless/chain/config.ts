@@ -23,6 +23,8 @@ export type TokenlessChainConfig = {
   rpcUrl: string;
   schemaVersion: typeof TOKENLESS_DEPLOYMENT_SCHEMA;
   usdcAddress: Address;
+  usdcEip712Name: string;
+  usdcEip712Version: string;
   x402SubmitterAddress: Address;
 };
 
@@ -83,6 +85,11 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   const issuerAddress = requiredAddress(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS");
   const x402SubmitterAddress = requiredAddress(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS");
   const usdcAddress = requiredAddress(env, "TOKENLESS_USDC_ADDRESS");
+  const usdcEip712Name = env.TOKENLESS_USDC_EIP712_NAME?.trim() || "RateLoop Tokenless Test USDC";
+  const usdcEip712Version = env.TOKENLESS_USDC_EIP712_VERSION?.trim() || "2";
+  if (!usdcEip712Name || !usdcEip712Version) {
+    throw new Error("TOKENLESS_USDC_EIP712_NAME and TOKENLESS_USDC_EIP712_VERSION must not be empty.");
+  }
   const feeRecipient = requiredAddress(env, "TOKENLESS_FEE_RECIPIENT");
   const expectedKey = buildTokenlessDeploymentKey({
     chainId: configuredChainId,
@@ -132,6 +139,8 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     rpcUrl: parsedRpcUrl.toString(),
     schemaVersion: TOKENLESS_DEPLOYMENT_SCHEMA,
     usdcAddress,
+    usdcEip712Name,
+    usdcEip712Version,
     x402SubmitterAddress,
   };
 }
