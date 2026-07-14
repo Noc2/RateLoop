@@ -1,13 +1,13 @@
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { WorkspaceSettingsClient } from "~~/components/tokenless/WorkspaceSettingsClient";
 import { AgentIntegrationPanel } from "~~/components/tokenless/agents/AgentIntegrationPanel";
+import { AgentRegistryPanel } from "~~/components/tokenless/agents/AgentRegistryPanel";
 import { type AgentTab, AgentTabs } from "~~/components/tokenless/agents/AgentTabs";
 
 const AGENT_TABS = new Set<AgentTab>(["overview", "integrate", "agents", "groups", "evaluations"]);
 
-function PendingSurface({ tab }: { tab: Exclude<AgentTab, "overview" | "integrate"> }) {
+function PendingSurface({ tab }: { tab: Extract<AgentTab, "groups" | "evaluations"> }) {
   const copy = {
-    agents: ["Agent registry", "Register agent identities and immutable model versions."],
     groups: ["Private groups", "Manage durable memberships and scoped invitation tokens."],
     evaluations: ["Evaluations", "Compare human agreement, disagreement, latency, coverage, and cost."],
   } as const;
@@ -32,7 +32,8 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
       <AgentTabs active={tab} />
       {tab === "overview" ? <WorkspaceSettingsClient /> : null}
       {tab === "integrate" ? <AgentIntegrationPanel /> : null}
-      {tab === "agents" || tab === "groups" || tab === "evaluations" ? <PendingSurface tab={tab} /> : null}
+      {tab === "agents" ? <AgentRegistryPanel /> : null}
+      {tab === "groups" || tab === "evaluations" ? <PendingSurface tab={tab} /> : null}
     </AppPageShell>
   );
 }
