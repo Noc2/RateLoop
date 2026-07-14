@@ -16,7 +16,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
 
   assert.match(html, /Humans In The/);
   assert.match(html, />Loop<\/span>/);
-  assert.match(html, /Human raters guide decisions and earn USDC/);
+  assert.match(html, /Human raters evaluate AI outputs, guide better decisions, and earn USDC\./);
   assert.match(html, /Try the Sandbox/);
   assert.match(html, /View Reviewer Flow/);
   assert.ok(

@@ -96,7 +96,7 @@ export default function TokenlessLandingPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Human raters guide decisions and earn USDC
+              Human raters evaluate AI outputs, guide better decisions, and earn USDC.
             </p>
             {sandboxMode ? (
               <p className="mt-4 max-w-[40rem] rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-sm leading-6 text-amber-50 lg:text-left">
