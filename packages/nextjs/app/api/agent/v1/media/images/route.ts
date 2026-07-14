@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireBrowserSession } from "~~/lib/auth/request";
+import { authenticateProductPrincipal } from "~~/lib/tokenless/productCore";
 import { authorizePublicQuestionMediaOwner, stagePublicQuestionImage } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ workspaceId: string }> };
-
-export async function POST(request: NextRequest, context: Context) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await requireBrowserSession(request, { mutation: true });
-    const { workspaceId } = await context.params;
-    await authorizePublicQuestionMediaOwner({ accountAddress: session.address, workspaceId });
+    const principal = await authenticateProductPrincipal({
+      authorization: request.headers.get("authorization"),
+      sessionToken: undefined,
+    });
+    if (principal.kind !== "api_key") {
+      throw new TokenlessServiceError("A workspace API key is required.", 401, "api_key_required");
+    }
+    await authorizePublicQuestionMediaOwner({ apiKeyId: principal.apiKeyId, workspaceId: principal.workspaceId });
     const form = await request.formData();
     const file = form.get("file");
     const clientRequestId = form.get("clientRequestId");
@@ -20,11 +23,11 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("file and clientRequestId are required.", 400, "invalid_public_media_request");
     }
     const staged = await stagePublicQuestionImage({
-      accountAddress: session.address,
+      apiKeyId: principal.apiKeyId,
       bytes: new Uint8Array(await file.arrayBuffer()),
       clientRequestId,
       filename: file.name,
-      workspaceId,
+      workspaceId: principal.workspaceId,
     });
     return NextResponse.json(staged, { headers: { "Cache-Control": "private, no-store" }, status: 201 });
   } catch (error) {

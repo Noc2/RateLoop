@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, extname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
   HumanAssuranceProjectCreateRequest,
@@ -16,8 +16,14 @@ import {
 } from "./cliOptions";
 import { loadTokenlessAgentsRuntimeConfig } from "./config";
 import { resolveExistingInputPath } from "./inputPaths";
-import { createTokenlessAgentKeystore, loadTokenlessAgentAccount } from "./tokenlessSigner";
-import { runTokenlessAutonomous, type TokenlessAutonomousRunInput } from "./tokenlessRun";
+import {
+  createTokenlessAgentKeystore,
+  loadTokenlessAgentAccount,
+} from "./tokenlessSigner";
+import {
+  runTokenlessAutonomous,
+  type TokenlessAutonomousRunInput,
+} from "./tokenlessRun";
 import {
   createTokenlessAgentsClient,
   waitUntilTokenlessReady,
@@ -74,7 +80,8 @@ function requireEnvPassword(options: CliOptions, name: string) {
     typeof options["password-env"] === "string"
       ? options["password-env"].trim()
       : "RATELOOP_AGENT_KEYSTORE_PASSWORD";
-  if (!envName) throw new Error(`--${name} password environment name must not be empty`);
+  if (!envName)
+    throw new Error(`--${name} password environment name must not be empty`);
   const password = process.env[envName]?.trim();
   if (!password) throw new Error(`${envName} is required for ${name}`);
   return password;
@@ -95,6 +102,7 @@ function usage() {
 Usage:
   rateloop-agents quote --file quote.json
   rateloop-agents ask --file ask.json
+  rateloop-agents media-upload --file image.png --client-request-id release-image-01
   rateloop-agents wait --operation-key op_... [--cursor ...] [--timeout-ms 30000]
   rateloop-agents wait --operation-key op_... --until-ready --max-wait-ms 300000
   rateloop-agents result --operation-key op_...
@@ -162,7 +170,9 @@ export async function runCli(args: string[]) {
 
   if (command === "run" || command === "resume") {
     if (!config.apiKey) {
-      throw new Error("RATELOOP_AGENT_API_KEY is required for autonomous publishing.");
+      throw new Error(
+        "RATELOOP_AGENT_API_KEY is required for autonomous publishing.",
+      );
     }
     if (!config.keystorePath || !config.keystorePassword) {
       throw new Error(
@@ -202,6 +212,31 @@ export async function runCli(args: string[]) {
   }
 
   switch (command) {
+    case "media-upload": {
+      if (!config.apiKey)
+        throw new Error("RATELOOP_AGENT_API_KEY is required for media-upload.");
+      const path = resolveExistingInputPath(requireString(options, "file"), {
+        label: "image file",
+      });
+      const extension = extname(path).toLowerCase();
+      const contentType =
+        extension === ".jpg" || extension === ".jpeg"
+          ? "image/jpeg"
+          : extension === ".png"
+            ? "image/png"
+            : extension === ".webp"
+              ? "image/webp"
+              : undefined;
+      printJson(
+        await client.stageQuestionImage({
+          bytes: new Uint8Array(await readFile(path)),
+          clientRequestId: requireString(options, "client-request-id"),
+          ...(contentType ? { contentType } : {}),
+          filename: basename(path),
+        }),
+      );
+      return;
+    }
     case "assurance-projects":
       printJson(await client.assurance.listProjects());
       return;

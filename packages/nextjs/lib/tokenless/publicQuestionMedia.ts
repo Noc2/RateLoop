@@ -104,14 +104,45 @@ function responseFromRow(row: Row) {
   };
 }
 
-async function findIdempotentUpload(input: { accountAddress: string; clientRequestId: string; workspaceId: string }) {
+export async function authorizePublicQuestionMediaOwner(input: {
+  accountAddress?: string;
+  apiKeyId?: string;
+  now?: Date;
+  workspaceId: string;
+}) {
+  if (Boolean(input.accountAddress) === Boolean(input.apiKeyId)) {
+    throw new TokenlessServiceError(
+      "Exactly one authenticated media owner is required.",
+      401,
+      "invalid_public_media_owner",
+    );
+  }
+  const result = input.apiKeyId
+    ? await dbClient.execute({
+        sql: `SELECT k.key_id FROM tokenless_workspace_api_keys k
+              JOIN tokenless_workspaces w ON w.workspace_id = k.workspace_id AND w.status = 'active'
+              WHERE k.workspace_id = ? AND k.key_id = ? AND k.revoked_at IS NULL
+                AND (k.expires_at IS NULL OR k.expires_at > ?)
+              LIMIT 1`,
+        args: [input.workspaceId, input.apiKeyId, input.now ?? new Date()],
+      })
+    : await dbClient.execute({
+        sql: `SELECT m.account_address FROM tokenless_workspace_members m
+              JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id AND w.status = 'active'
+              WHERE m.workspace_id = ? AND m.account_address = ? LIMIT 1`,
+        args: [input.workspaceId, input.accountAddress!.toLowerCase()],
+      });
+  if (result.rowCount !== 1) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+}
+
+async function findIdempotentUpload(input: { clientRequestId: string; ownerReference: string; workspaceId: string }) {
   const result = await dbClient.execute({
     sql: `SELECT asset_id, digest, width, height, size_bytes
           FROM tokenless_public_question_media
           WHERE workspace_id = ? AND owner_account_address = ? AND client_request_id = ?
             AND technical_status = 'ready'
           LIMIT 1`,
-    args: [input.workspaceId, input.accountAddress.toLowerCase(), input.clientRequestId],
+    args: [input.workspaceId, input.ownerReference, input.clientRequestId],
   });
   return result.rows[0] as Row | undefined;
 }
@@ -155,7 +186,8 @@ async function normalizeImage(bytes: Uint8Array) {
 }
 
 export async function stagePublicQuestionImage(input: {
-  accountAddress: string;
+  accountAddress?: string;
+  apiKeyId?: string;
   bytes: Uint8Array;
   clientRequestId: string;
   filename: string;
@@ -169,6 +201,13 @@ export async function stagePublicQuestionImage(input: {
       "invalid_public_media_request",
     );
   }
+  if (Boolean(input.accountAddress) === Boolean(input.apiKeyId)) {
+    throw new TokenlessServiceError(
+      "Exactly one authenticated media owner is required.",
+      401,
+      "invalid_public_media_owner",
+    );
+  }
   if (
     !input.workspaceId.trim() ||
     input.bytes.byteLength < 1 ||
@@ -176,8 +215,8 @@ export async function stagePublicQuestionImage(input: {
   ) {
     throw new TokenlessServiceError("Image uploads must contain 1 byte to 10 MB.", 400, "invalid_public_media_size");
   }
-  const accountAddress = input.accountAddress.toLowerCase();
-  const idempotent = await findIdempotentUpload({ ...input, accountAddress });
+  const ownerReference = input.apiKeyId ? `api_key:${input.apiKeyId}` : input.accountAddress!.toLowerCase();
+  const idempotent = await findIdempotentUpload({ ...input, ownerReference });
   if (idempotent) return responseFromRow(idempotent);
 
   const normalized = await normalizeImage(input.bytes);
@@ -196,13 +235,22 @@ export async function stagePublicQuestionImage(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const member = await client.query(
-      `SELECT m.role FROM tokenless_workspace_members m
-       JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id AND w.status = 'active'
-       WHERE m.workspace_id = $1 AND m.account_address = $2
-       FOR UPDATE`,
-      [input.workspaceId, accountAddress],
-    );
+    const member = input.apiKeyId
+      ? await client.query(
+          `SELECT k.role FROM tokenless_workspace_api_keys k
+           JOIN tokenless_workspaces w ON w.workspace_id = k.workspace_id AND w.status = 'active'
+           WHERE k.workspace_id = $1 AND k.key_id = $2 AND k.revoked_at IS NULL
+             AND (k.expires_at IS NULL OR k.expires_at > $3)
+           FOR UPDATE`,
+          [input.workspaceId, input.apiKeyId, now],
+        )
+      : await client.query(
+          `SELECT m.role FROM tokenless_workspace_members m
+           JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id AND w.status = 'active'
+           WHERE m.workspace_id = $1 AND m.account_address = $2
+           FOR UPDATE`,
+          [input.workspaceId, ownerReference],
+        );
     if (member.rowCount !== 1) {
       throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
     }
@@ -211,7 +259,7 @@ export async function stagePublicQuestionImage(input: {
       `SELECT upload_count, upload_bytes FROM tokenless_public_media_daily_quotas
        WHERE workspace_id = $1 AND owner_account_address = $2 AND day_key = $3
        FOR UPDATE`,
-      [input.workspaceId, accountAddress, dayKey],
+      [input.workspaceId, ownerReference, dayKey],
     );
     const currentQuotaRow = currentQuota.rows[0] as Row | undefined;
     if (
@@ -234,7 +282,7 @@ export async function stagePublicQuestionImage(input: {
            upload_bytes = tokenless_public_media_daily_quotas.upload_bytes + EXCLUDED.upload_bytes,
            updated_at = EXCLUDED.updated_at
        RETURNING upload_count, upload_bytes`,
-      [input.workspaceId, accountAddress, dayKey, normalized.bytes.byteLength, now],
+      [input.workspaceId, ownerReference, dayKey, normalized.bytes.byteLength, now],
     );
     const quotaRow = quota.rows[0] as Row | undefined;
     if (
@@ -256,7 +304,7 @@ export async function stagePublicQuestionImage(input: {
       [
         assetId,
         input.workspaceId,
-        accountAddress,
+        ownerReference,
         input.clientRequestId,
         digest,
         storageRef,
@@ -315,15 +363,17 @@ export async function bindPublicQuestionMediaToQuestion(
     accountAddress: string | null;
     items: Array<{ assetId: string; digest: string }>;
     now: Date;
+    ownerReference?: string | null;
     questionId: string;
     workspaceId: string;
   },
 ) {
-  if (!input.accountAddress) {
+  const ownerReference = input.ownerReference ?? input.accountAddress?.toLowerCase() ?? null;
+  if (!ownerReference) {
     throw new TokenlessServiceError(
-      "Image questions must be completed through an authenticated browser handoff.",
+      "Image questions require an authenticated staged-media owner.",
       409,
-      "public_media_browser_handoff_required",
+      "public_media_owner_required",
     );
   }
   for (const item of input.items) {
@@ -333,7 +383,7 @@ export async function bindPublicQuestionMediaToQuestion(
        WHERE asset_id = $1 AND workspace_id = $2 AND owner_account_address = $3
          AND technical_status = 'ready'
        FOR UPDATE`,
-      [item.assetId, input.workspaceId, input.accountAddress.toLowerCase()],
+      [item.assetId, input.workspaceId, ownerReference],
     );
     const row = locked.rows[0] as Row | undefined;
     const existingQuestionId = rowString(row, "question_id");

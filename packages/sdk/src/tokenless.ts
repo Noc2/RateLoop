@@ -21,6 +21,8 @@ import type {
   TokenlessPaymentInstructions,
   TokenlessQuoteRequest,
   TokenlessQuoteResponse,
+  TokenlessQuestionImageUploadRequest,
+  TokenlessQuestionImageUploadResponse,
   TokenlessRateLoopClient,
   TokenlessResult,
   TokenlessResultRequest,
@@ -337,6 +339,35 @@ function errorMessage(value: unknown, status: number) {
   return `RateLoop tokenless request failed with HTTP ${status}.`;
 }
 
+function parseQuestionImageUpload(
+  value: unknown,
+): TokenlessQuestionImageUploadResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new RateLoopSdkError(
+      "Question image upload response must be an object.",
+    );
+  }
+  const response = value as Record<string, unknown>;
+  if (
+    typeof response.assetId !== "string" ||
+    !/^pqm_[A-Za-z0-9_-]{24,80}$/.test(response.assetId) ||
+    response.contentType !== "image/webp" ||
+    typeof response.digest !== "string" ||
+    !/^sha256:[0-9a-f]{64}$/.test(response.digest) ||
+    !Number.isSafeInteger(response.width) ||
+    Number(response.width) <= 0 ||
+    !Number.isSafeInteger(response.height) ||
+    Number(response.height) <= 0 ||
+    !Number.isSafeInteger(response.sizeBytes) ||
+    Number(response.sizeBytes) <= 0 ||
+    typeof response.previewUrl !== "string" ||
+    !response.previewUrl.startsWith("/api/public-media/images/")
+  ) {
+    throw new RateLoopSdkError("Question image upload response is invalid.");
+  }
+  return response as TokenlessQuestionImageUploadResponse;
+}
+
 async function request(
   config: NormalizedTokenlessClientOptions,
   path: string,
@@ -441,6 +472,33 @@ export function createTokenlessRateLoopClient(
         });
         return parseHumanAssuranceRunStatusResponse(response);
       },
+    },
+
+    async stageQuestionImage(requestBody: TokenlessQuestionImageUploadRequest) {
+      if (
+        !(requestBody.bytes instanceof Uint8Array) ||
+        requestBody.bytes.byteLength < 1 ||
+        requestBody.bytes.byteLength > 10 * 1024 * 1024 ||
+        !/^[A-Za-z0-9._:-]{8,160}$/.test(requestBody.clientRequestId) ||
+        !requestBody.filename.trim() ||
+        requestBody.filename.length > 180
+      ) {
+        throw new RateLoopSdkError("Question image upload request is invalid.");
+      }
+      const form = new FormData();
+      form.set("clientRequestId", requestBody.clientRequestId);
+      form.set(
+        "file",
+        new Blob([requestBody.bytes.slice().buffer], {
+          type: requestBody.contentType ?? "application/octet-stream",
+        }),
+        requestBody.filename,
+      );
+      const response = await request(config, "/media/images", {
+        body: form,
+        method: "POST",
+      });
+      return parseQuestionImageUpload(response);
     },
 
     quote(requestBody: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse> {

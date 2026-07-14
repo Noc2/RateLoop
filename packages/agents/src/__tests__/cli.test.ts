@@ -54,8 +54,30 @@ describe("tokenless CLI parsing", () => {
       ["resume", "--operation-key", "op_123"],
     ]) {
       const parsed = parseCliArgs(args);
-      expect(() => validateCliOptions(parsed.command, parsed.options)).not.toThrow();
+      expect(() =>
+        validateCliOptions(parsed.command, parsed.options),
+      ).not.toThrow();
     }
+  });
+
+  it("accepts file-backed authenticated media staging", () => {
+    const parsed = parseCliArgs([
+      "media-upload",
+      "--file",
+      "candidate.png",
+      "--client-request-id",
+      "release-candidate-01",
+    ]);
+    expect(parsed).toEqual({
+      command: "media-upload",
+      options: {
+        "client-request-id": "release-candidate-01",
+        file: "candidate.png",
+      },
+    });
+    expect(() =>
+      validateCliOptions(parsed.command, parsed.options),
+    ).not.toThrow();
   });
 
   it("does not accept positional or repeated operation identifiers", () => {

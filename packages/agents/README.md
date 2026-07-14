@@ -14,6 +14,10 @@ the autonomous API/CLI lane is authenticated, budgeted, revocable, and scoped.
 
 This package never defaults to `rateloop.ai`. Set the isolated deployment explicitly.
 
+Image context uses authenticated staging rather than embedding bytes or storage URLs in a quote. The server returns an
+opaque `assetId` and normalized-byte digest; put that descriptor and a meaningful `alt` value in `question.media.items`.
+YouTube context needs no upload and is represented only by its eleven-character `videoId`.
+
 ## Install
 
 ```bash
@@ -79,6 +83,10 @@ The bundled examples contain a quote and a sandbox/prepaid ask request:
 yarn workspace @rateloop/agents quote \
   --file packages/agents/examples/quote.json
 
+yarn workspace @rateloop/agents media-upload \
+  --file ./candidate.png \
+  --client-request-id release-check-candidate-01
+
 # Copy quoteId from the quote response into ask.json first.
 yarn workspace @rateloop/agents ask \
   --file packages/agents/examples/ask-prepaid.json
@@ -143,6 +151,10 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 | `RATELOOP_AGENT_RESUME_PATH` | Optional mode-0600 path for a non-secret autonomous-run receipt.                                               |
 
 The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
+
+`media-upload` accepts JPG, PNG, or WEBP input up to 10 MB. It sends file bytes as multipart data directly from disk,
+requires `RATELOOP_AGENT_API_KEY`, and prints only the staged descriptor. The public MCP surface remains four tools and
+does not accept raw image bytes.
 
 ## Assurance integration commands
 

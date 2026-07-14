@@ -1008,6 +1008,7 @@ async function releaseAgentPolicyBudget(reservationId: string | null) {
 }
 
 async function createQuestionRecords(input: {
+  apiKeyId: string | null;
   ownerAccountAddress: string | null;
   workspaceId: string;
   quoteId: string;
@@ -1072,6 +1073,7 @@ async function createQuestionRecords(input: {
         accountAddress: input.ownerAccountAddress,
         items: question.media.items,
         now,
+        ownerReference: input.apiKeyId ? `api_key:${input.apiKeyId}` : input.ownerAccountAddress,
         questionId,
         workspaceId: input.workspaceId,
       });
@@ -1287,6 +1289,7 @@ export async function prepareProductAsk(input: {
       });
     }
     const questionId = await createQuestionRecords({
+      apiKeyId: input.principal.kind === "api_key" ? input.principal.apiKeyId : null,
       ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
       workspaceId,
       quoteId: input.request.quoteId,

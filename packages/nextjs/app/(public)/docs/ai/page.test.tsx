@@ -31,5 +31,7 @@ test("agent docs describe the approval-bound four-tool MCP surface without overs
   assert.match(html, /public.*synthetic.*redacted/i);
   assert.match(html, /does not provide live human reviews/i);
   assert.match(html, /wallet-transaction, LREP, governance, protocol-token/i);
+  assert.match(html, /media-upload/);
+  assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
 });

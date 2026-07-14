@@ -1,6 +1,6 @@
 # Tokenless public question media restoration plan
 
-**Status:** implementation plan
+**Status:** implemented
 
 **Date:** 2026-07-14
 
@@ -90,8 +90,8 @@ Quote creation validates descriptor syntax but remains free and unauthenticated.
 The public MCP keeps exactly four tools: capabilities, create-browser-handoff, handoff-status, and result. It does not gain a raw upload tool.
 
 - Authenticated SDK/CLI callers receive a workspace-scoped multipart upload method and put the returned descriptor into the normal quote request.
-- File-backed browser handoffs stage bytes through a dedicated capability-bound upload route; image bytes never enter the 16 KiB URL fragment or the model transcript.
-- Handoff payload version 2 carries only staged descriptors and grants. The browser claims and binds those assets when the user approves the exact draft. Text-only version 1 links continue to decode during migration.
+- Browser authors stage images from the public Ask form through their RateLoop session. Image bytes never enter an MCP payload, URL fragment, or model transcript.
+- Existing version 1 browser handoffs carry text-only or YouTube drafts. API-key-staged images stay in the authenticated delegated lane; a future browser-claim grant must be designed before an agent-staged image can cross into a browser principal.
 
 ## Implementation commits
 
@@ -100,7 +100,7 @@ The public MCP keeps exactly four tools: capabilities, create-browser-handoff, h
 3. **Image staging:** add the media migration, private storage, decoding/normalization, quotas, authenticated upload, owner preview, cleanup, and ask-time atomic binding.
 4. **Moderation:** cover ordered digests in moderation and deny delivery after rejection or takedown while preserving accepted work.
 5. **Application:** add the Ask authoring controls, preview, accessible Answer gallery/lightbox, click-to-load YouTube renderer, and narrow CSP allowance.
-6. **Agents:** restore authenticated/file-backed image staging and handoff v2 without adding public MCP tools.
+6. **Agents:** restore authenticated SDK/CLI file-backed image staging without adding public MCP tools or overstating browser-claim support.
 
 ## Verification gates
 

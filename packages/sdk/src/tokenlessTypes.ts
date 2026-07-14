@@ -98,6 +98,23 @@ export type TokenlessQuestionMedia =
   | { kind: "images"; items: TokenlessQuestionImage[] }
   | { kind: "youtube"; videoId: string };
 
+export type TokenlessQuestionImageUploadRequest = {
+  bytes: Uint8Array;
+  clientRequestId: string;
+  contentType?: "image/jpeg" | "image/png" | "image/webp";
+  filename: string;
+};
+
+export type TokenlessQuestionImageUploadResponse = {
+  assetId: string;
+  contentType: "image/webp";
+  digest: `sha256:${string}`;
+  height: number;
+  previewUrl: string;
+  sizeBytes: number;
+  width: number;
+};
+
 export type TokenlessQuestion =
   | {
       kind: "binary";
@@ -350,6 +367,9 @@ export type TokenlessSubmitPaymentRequest =
 export interface TokenlessRateLoopClient {
   /** Workspace-scoped B2B project and run APIs. Requires a server-side workspace API key. */
   assurance: HumanAssuranceApiClient;
+  stageQuestionImage(
+    request: TokenlessQuestionImageUploadRequest,
+  ): Promise<TokenlessQuestionImageUploadResponse>;
   quote(request: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse>;
   ask(request: TokenlessAskRequest): Promise<TokenlessAskResponse>;
   paymentInstructions(request: {

@@ -84,6 +84,8 @@ export type {
   TokenlessPayment,
   TokenlessPollContinuation,
   TokenlessQuestion,
+  TokenlessQuestionImageUploadRequest,
+  TokenlessQuestionImageUploadResponse,
   TokenlessQuoteRequest,
   TokenlessQuoteResponse,
   TokenlessRateLoopClient,

@@ -203,6 +203,54 @@ test("canonical tokenless media rejects ambiguous, duplicate, and spoofed contex
   );
 });
 
+test("authenticated SDK image staging uses multipart bytes and returns a canonical descriptor", async () => {
+  const apiKey = `rlk_${"c".repeat(16)}_${"d".repeat(32)}`;
+  let captured: { form: FormData; headers: Headers; url: string } | null = null;
+  const client = createTokenlessRateLoopClient({
+    apiKey,
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input, init) => {
+      captured = {
+        form: init?.body as FormData,
+        headers: new Headers(init?.headers),
+        url: String(input),
+      };
+      return jsonResponse({
+        assetId: `pqm_${"A".repeat(24)}`,
+        contentType: "image/webp",
+        digest: `sha256:${"ab".repeat(32)}`,
+        height: 720,
+        previewUrl: `/api/public-media/images/pqm_${"A".repeat(24)}`,
+        sizeBytes: 1234,
+        width: 1280,
+      });
+    },
+  });
+
+  const staged = await client.stageQuestionImage({
+    bytes: new Uint8Array([1, 2, 3]),
+    clientRequestId: "upload:sdk:test1",
+    contentType: "image/png",
+    filename: "candidate.png",
+  });
+
+  assert.equal(
+    captured?.url,
+    "https://tokenless.example/api/agent/v1/media/images",
+  );
+  assert.equal(captured?.headers.get("authorization"), `Bearer ${apiKey}`);
+  assert.equal(captured?.headers.has("content-type"), false);
+  assert.equal(captured?.form.get("clientRequestId"), "upload:sdk:test1");
+  const file = captured?.form.get("file");
+  assert.ok(file instanceof Blob);
+  assert.equal(file.type, "image/png");
+  assert.deepEqual(
+    new Uint8Array(await file.arrayBuffer()),
+    new Uint8Array([1, 2, 3]),
+  );
+  assert.match(staged.digest, /^sha256:/);
+});
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/json" },

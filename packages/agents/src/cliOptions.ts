@@ -8,6 +8,7 @@ const COMMAND_OPTIONS: Record<string, ReadonlySet<string>> = {
   "assurance-projects": new Set(),
   "assurance-run": new Set(["run-id"]),
   ask: new Set(["file"]),
+  "media-upload": new Set(["client-request-id", "file"]),
   quote: new Set(["file"]),
   "wallet-create": new Set(["keystore", "overwrite", "password-env"]),
   "wallet-address": new Set(["keystore", "password-env"]),

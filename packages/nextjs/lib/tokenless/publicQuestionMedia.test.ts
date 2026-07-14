@@ -3,7 +3,12 @@ import { afterEach, beforeEach, test } from "node:test";
 import sharp from "sharp";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { createWorkspace, prepareProductAsk, recordPrepaidLedgerEntry } from "~~/lib/tokenless/productCore";
+import {
+  createWorkspace,
+  createWorkspaceApiKey,
+  prepareProductAsk,
+  recordPrepaidLedgerEntry,
+} from "~~/lib/tokenless/productCore";
 import {
   PUBLIC_QUESTION_IMAGE_MAX_BYTES,
   type PublicQuestionMediaStore,
@@ -245,4 +250,49 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
     args: [staged.assetId],
   });
   assert.equal((await readPublicQuestionImage({ assetId: staged.assetId })).public, true);
+});
+
+test("workspace API keys stage and bind the same canonical descriptor without public upload tools", async () => {
+  const key = await createWorkspaceApiKey({ name: "Media agent", workspaceId });
+  const staged = await stagePublicQuestionImage({
+    apiKeyId: key.apiKeyId,
+    bytes: await png(),
+    clientRequestId: "upload:agent:binding",
+    filename: "agent.png",
+    workspaceId,
+  });
+  const quote = await createTokenlessQuote({
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    question: {
+      kind: "binary",
+      media: {
+        kind: "images",
+        items: [{ alt: "Agent supplied context", assetId: staged.assetId, digest: staged.digest }],
+      },
+      prompt: "Should this agent-supplied image ship?",
+      rationale: { mode: "optional" },
+    },
+    requestedPanelSize: 15,
+  });
+  await recordPrepaidLedgerEntry({
+    amountAtomic: quote.economics.totalFundedAtomic,
+    source: "agent-media-test",
+    workspaceId,
+  });
+  const prepared = await prepareProductAsk({
+    principal: { apiKeyId: key.apiKeyId, kind: "api_key", role: "member", workspaceId },
+    request: {
+      idempotencyKey: "media:agent:binding",
+      payment: { mode: "prepaid", workspaceId },
+      quoteId: quote.quoteId,
+    },
+  });
+  const bound = await dbClient.execute({
+    sql: "SELECT owner_account_address, question_id FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [staged.assetId],
+  });
+  assert.deepEqual(bound.rows, [
+    { owner_account_address: `api_key:${key.apiKeyId}`, question_id: prepared.questionId },
+  ]);
 });

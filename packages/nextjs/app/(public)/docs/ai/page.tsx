@@ -149,6 +149,22 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
         endpoint.
       </p>
 
+      <h2>Image and YouTube context</h2>
+      <p>
+        YouTube context is canonicalized to one video ID and can travel in an ordinary public draft. Image bytes never
+        belong in MCP arguments or a handoff URL. A browser author uploads images in the public Ask form; an
+        authenticated delegated agent stages a local file with the SDK or CLI and places the returned opaque asset ID,
+        normalized digest, and meaningful alternative text in <code>question.media.items</code> before quoting.
+      </p>
+      <CodeBlock>{`export RATELOOP_AGENT_API_KEY=rlk_...
+yarn workspace @rateloop/agents media-upload \\
+  --file ./candidate.png \\
+  --client-request-id release-candidate-01`}</CodeBlock>
+      <p>
+        Staging accepts JPG, PNG, and WEBP files up to 10 MB. The private upload endpoint is not an MCP tool, and an
+        API-key-staged image cannot be silently claimed by a different browser principal.
+      </p>
+
       <h2>Approval and privacy boundary</h2>
       <ol>
         <li>Draft the question and request locally.</li>
