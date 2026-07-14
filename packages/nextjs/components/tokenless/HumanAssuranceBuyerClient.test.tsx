@@ -13,7 +13,7 @@ test("buyer workspace freezes a private suite before reviewer or funding approva
   const { HumanAssuranceBuyerClient } = await import("./HumanAssuranceBuyerClient");
   const html = renderToStaticMarkup(<HumanAssuranceBuyerClient />).replace(/\s+/g, " ");
 
-  assert.match(html, /Validate an AI-enabled workflow/);
+  assert.match(html, /Compare an AI-enabled workflow/);
   assert.match(html, /Current baseline/);
   assert.match(html, /Candidate workflow/);
   assert.match(html, /Create private evaluation suite/);

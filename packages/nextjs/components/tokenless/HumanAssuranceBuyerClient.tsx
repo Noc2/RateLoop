@@ -160,11 +160,12 @@ export function HumanAssuranceBuyerClient() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-14">
       <div className="max-w-4xl border-l-2 border-[var(--rateloop-blue)] pl-6">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Buyer workspace</p>
-        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Validate an AI-enabled workflow</h1>
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Private evaluation</p>
+        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Compare an AI-enabled workflow</h1>
         <p className="mt-4 max-w-3xl text-lg leading-8 text-base-content/60">
-          Freeze a baseline, a candidate, and the quality rule before reviewers see either result. The current isolated
-          release creates a private, reusable suite; reviewer configuration and funding remain a separate approval step.
+          Freeze a baseline, a candidate, and the quality rule before reviewers see either result. This private,
+          reusable suite keeps artifacts encrypted and tenant-isolated; reviewer configuration and funding remain a
+          separate approval step.
         </p>
       </div>
 
