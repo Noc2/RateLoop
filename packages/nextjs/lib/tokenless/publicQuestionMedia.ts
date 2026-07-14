@@ -335,6 +335,52 @@ export async function stagePublicQuestionImage(input: {
   }
 }
 
+export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; now?: Date } = {}) {
+  const limit = input.limit ?? 100;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    throw new TokenlessServiceError("Media sweep limit is invalid.", 400, "invalid_public_media_sweep");
+  }
+  const now = input.now ?? new Date();
+  const client = await dbPool.connect();
+  const expired: Array<{ assetId: string; storageRef: string }> = [];
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT asset_id, storage_ref FROM tokenless_public_question_media
+       WHERE question_id IS NULL AND technical_status = 'ready' AND expires_at <= $1
+       ORDER BY expires_at ASC LIMIT $2 FOR UPDATE`,
+      [now, limit],
+    );
+    for (const value of result.rows) {
+      const row = value as Row;
+      const assetId = rowString(row, "asset_id");
+      const storageRef = rowString(row, "storage_ref");
+      if (!assetId || !storageRef) continue;
+      await client.query(
+        `UPDATE tokenless_public_question_media SET technical_status = 'deleted', updated_at = $1
+         WHERE asset_id = $2 AND question_id IS NULL AND technical_status = 'ready'`,
+        [now, assetId],
+      );
+      expired.push({ assetId, storageRef });
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  const failed: string[] = [];
+  for (const item of expired) {
+    try {
+      await runtime().store.delete(item.storageRef);
+    } catch {
+      failed.push(item.assetId);
+    }
+  }
+  return { deleted: expired.length - failed.length, failed };
+}
+
 export async function deleteStagedPublicQuestionImage(input: {
   accountAddress: string;
   assetId: string;
@@ -408,12 +454,12 @@ export async function bindPublicQuestionMediaToQuestion(
   }
 }
 
-export async function readPublicQuestionImage(input: { accountAddress?: string | null; assetId: string }) {
+export async function readPublicQuestionImage(input: { accountAddress?: string | null; assetId: string; now?: Date }) {
   if (!ASSET_ID_PATTERN.test(input.assetId)) {
     throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
   }
   const result = await dbClient.execute({
-    sql: `SELECT m.storage_ref, m.content_type, m.owner_account_address,
+    sql: `SELECT m.storage_ref, m.content_type, m.owner_account_address, m.digest, m.question_id, m.expires_at,
                  m.technical_status, m.moderation_status AS media_moderation_status,
                  q.visibility, q.moderation_status AS question_moderation_status,
                  c.moderation_status AS content_moderation_status
@@ -425,7 +471,10 @@ export async function readPublicQuestionImage(input: { accountAddress?: string |
   });
   const row = result.rows[0] as Row | undefined;
   const isOwner =
-    Boolean(input.accountAddress) && rowString(row, "owner_account_address") === input.accountAddress?.toLowerCase();
+    Boolean(input.accountAddress) &&
+    rowString(row, "owner_account_address") === input.accountAddress?.toLowerCase() &&
+    (Boolean(rowString(row, "question_id")) ||
+      new Date(String(row?.expires_at)).getTime() > (input.now ?? new Date()).getTime());
   const isPublic =
     rowString(row, "visibility") === "public" &&
     rowString(row, "media_moderation_status") === "approved" &&
@@ -438,6 +487,7 @@ export async function readPublicQuestionImage(input: { accountAddress?: string |
   return {
     bytes: await runtime().store.get(storageRef),
     contentType: "image/webp" as const,
+    digest: rowString(row, "digest")!,
     public: isPublic,
   };
 }

@@ -16,6 +16,7 @@ import {
   deleteStagedPublicQuestionImage,
   readPublicQuestionImage,
   stagePublicQuestionImage,
+  sweepExpiredPublicQuestionMedia,
 } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError, createTokenlessQuote } from "~~/lib/tokenless/server";
 
@@ -186,6 +187,33 @@ test("daily quota is atomic and deleting an unbound staged image removes its pri
   assert.equal(store.objects.size, 0);
 });
 
+test("expired unbound previews fail closed and the bounded sweep deletes their private objects", async () => {
+  await stagePublicQuestionImage({
+    accountAddress: OWNER,
+    bytes: await png(),
+    clientRequestId: "upload:test:expiry",
+    filename: "expiry.png",
+    now: new Date("2026-07-14T12:00:00.000Z"),
+    workspaceId,
+  });
+  await assert.rejects(
+    () =>
+      readPublicQuestionImage({
+        accountAddress: OWNER,
+        assetId: ASSET_ID,
+        now: new Date("2026-07-15T12:00:01.000Z"),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
+  );
+  assert.deepEqual(await sweepExpiredPublicQuestionMedia({ limit: 10, now: new Date("2026-07-15T12:00:01.000Z") }), {
+    deleted: 1,
+    failed: [],
+  });
+  assert.equal(store.objects.size, 0);
+  const rows = await dbClient.execute("SELECT technical_status FROM tokenless_public_question_media");
+  assert.equal(rows.rows[0]?.technical_status, "deleted");
+});
+
 test("ask preparation binds exact owner assets and public reads stay closed until moderation approval", async () => {
   const staged = await stagePublicQuestionImage({
     accountAddress: OWNER,
@@ -231,7 +259,16 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
     args: [staged.assetId],
   });
   assert.equal(bound.rows[0]?.question_id, prepared.questionId);
-  assert.equal((await readPublicQuestionImage({ accountAddress: OWNER, assetId: staged.assetId })).public, false);
+  assert.equal(
+    (
+      await readPublicQuestionImage({
+        accountAddress: OWNER,
+        assetId: staged.assetId,
+        now: new Date("2026-07-14T12:00:01.000Z"),
+      })
+    ).public,
+    false,
+  );
   await assert.rejects(
     () => readPublicQuestionImage({ assetId: staged.assetId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
@@ -249,7 +286,9 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
     sql: "UPDATE tokenless_public_question_media SET moderation_status = 'approved' WHERE asset_id = ?",
     args: [staged.assetId],
   });
-  assert.equal((await readPublicQuestionImage({ assetId: staged.assetId })).public, true);
+  const publicImage = await readPublicQuestionImage({ assetId: staged.assetId });
+  assert.equal(publicImage.public, true);
+  assert.equal(publicImage.digest, staged.digest);
 });
 
 test("workspace API keys stage and bind the same canonical descriptor without public upload tools", async () => {

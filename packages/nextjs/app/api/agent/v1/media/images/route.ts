@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateProductPrincipal } from "~~/lib/tokenless/productCore";
-import { authorizePublicQuestionMediaOwner, stagePublicQuestionImage } from "~~/lib/tokenless/publicQuestionMedia";
+import {
+  authorizePublicQuestionMediaOwner,
+  stagePublicQuestionImage,
+  sweepExpiredPublicQuestionMedia,
+} from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +20,7 @@ export async function POST(request: NextRequest) {
       throw new TokenlessServiceError("A workspace API key is required.", 401, "api_key_required");
     }
     await authorizePublicQuestionMediaOwner({ apiKeyId: principal.apiKeyId, workspaceId: principal.workspaceId });
+    await sweepExpiredPublicQuestionMedia({ limit: 20 });
     const form = await request.formData();
     const file = form.get("file");
     const clientRequestId = form.get("clientRequestId");

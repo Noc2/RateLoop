@@ -19,6 +19,7 @@ export async function GET(request: NextRequest, context: Context) {
         "Content-Disposition": "inline",
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "Content-Type": image.contentType,
+        ETag: `"${image.digest.replace(/^sha256:/, "")}"`,
         "X-Content-Type-Options": "nosniff",
       },
     });

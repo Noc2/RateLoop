@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
+  __productCoreTestUtils,
   attachProductAsk,
   authenticateProductPrincipal,
   authorizeAskAccess,
@@ -64,6 +65,40 @@ async function quoteAndRequest(workspaceId: string, idempotencyKey = "product:te
     },
   };
 }
+
+test("ordered media descriptors change the immutable question hash", () => {
+  const first = { assetId: `pqm_${"A".repeat(24)}`, digest: `sha256:${"a".repeat(64)}`, alt: "Current" };
+  const second = { assetId: `pqm_${"B".repeat(24)}`, digest: `sha256:${"b".repeat(64)}`, alt: "Candidate" };
+  const question = {
+    kind: "binary",
+    media: { kind: "images", items: [first, second] },
+    prompt: "Which image should ship?",
+    rationale: { mode: "optional" },
+  };
+  const baseline = __productCoreTestUtils().hashJson(question);
+  assert.notEqual(
+    __productCoreTestUtils().hashJson({ ...question, media: { ...question.media, items: [second, first] } }),
+    baseline,
+  );
+  assert.notEqual(
+    __productCoreTestUtils().hashJson({
+      ...question,
+      media: { ...question.media, items: [{ ...first, alt: "Changed" }, second] },
+    }),
+    baseline,
+  );
+  assert.notEqual(
+    __productCoreTestUtils().hashJson({
+      ...question,
+      media: { ...question.media, items: [{ ...first, digest: `sha256:${"c".repeat(64)}` }, second] },
+    }),
+    baseline,
+  );
+  assert.notEqual(
+    __productCoreTestUtils().hashJson({ ...question, media: { kind: "youtube", videoId: "dQw4w9WgXcQ" } }),
+    baseline,
+  );
+});
 
 test("API keys are stored as hashes and resolve only their active workspace role", async () => {
   const { workspaceId, token } = await workspaceWithKey();
