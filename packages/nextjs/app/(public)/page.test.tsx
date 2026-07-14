@@ -41,9 +41,9 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Proof-of-Human Panels/);
   assert.match(html, /World ID 4 Proof of Human/);
   assert.match(html, /correlation-diversified assignments/);
-  assert.match(html, /RBTS &amp; Surprise Signals/);
+  assert.match(html, /Bayesian Reporting Incentives/);
   assert.match(html, /Robust Bayesian Truth Serum bonus/);
-  assert.match(html, /Surprisingly Popular diagnostic/);
+  assert.match(html, /platform-funded Surprisingly Popular bounty/);
   assert.match(html, /Auditable Settlement/);
   assert.match(html, /Privacy with Clear Limits/);
   assert.match(html, /Agents ask; human reviewers provide the judgment/i);

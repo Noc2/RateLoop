@@ -44,8 +44,8 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "RBTS & Surprise Signals",
-    body: "Accepted paid work receives fixed USDC plus a bounded binary Robust Bayesian Truth Serum bonus. A separate Surprisingly Popular diagnostic shows when outcomes exceed panel expectations; neither is a truth oracle.",
+    title: "Bayesian Reporting Incentives",
+    body: "Accepted paid work receives fixed USDC plus a bounded Robust Bayesian Truth Serum bonus. A separate, platform-funded Surprisingly Popular bounty rewards answers that outperform the panel's own predictions; neither changes the verdict or acts as a truth oracle.",
     color: "#EF476F",
     links: [
       ["Scoring & Incentives", "/docs/tech-stack"],

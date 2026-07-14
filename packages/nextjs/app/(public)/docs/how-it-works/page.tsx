@@ -30,13 +30,19 @@ export default function HowTokenlessWorksPage() {
           USDC plus a bounded binary Robust Bayesian Truth Serum bonus.
         </li>
         <li>
+          Before the round is funded, RateLoop reserves a separate platform-funded surprise-bounty maximum. After
+          finalization, a versioned Surprisingly Popular calculation compares actual answer share with the panel&apos;s
+          predicted share and uses leave-one-out scoring so a reviewer cannot score against their own report.
+        </li>
+        <li>
           Zero-commit rounds refund fully; failed quorum or beacon paths refund bounty and fee while accepted valid work
           remains compensable from the disclosed reserve.
         </li>
         <li>
-          A Surprisingly Popular diagnostic compares the panel&apos;s actual answer share with its predicted share.
-          Correlation analytics can qualify or limit result publication, but neither control can reduce accepted-work
-          payment.
+          A qualifying Surprisingly Popular answer earns a non-negative central USDC top-up, capped per reviewer and
+          paid to the same reviewer-selected address after the base claim. It never changes the majority verdict,
+          contract settlement, fixed pay, or RBTS pay. Correlation analytics can qualify or limit result publication,
+          but cannot reduce accepted-work payment.
         </li>
         <li>
           A private decision packet separates reviewer coverage from case judgments and reports per-case descriptive
@@ -54,7 +60,8 @@ export default function HowTokenlessWorksPage() {
       <h2>Independent controls, explicit limits</h2>
       <p>
         World ID limits duplicate provider subjects, RBTS changes reporting incentives, and prospective integrity epochs
-        diversify assignments. None of these controls proves expertise, honest judgment, behavioral independence, or
+        diversify assignments. Surprisingly Popular bounties reward collectively underestimated answers rather than
+        declaring them correct. None of these controls proves expertise, honest judgment, behavioral independence, or
         objective truth on its own.
       </p>
       <h2>Privacy, identity, and recovery</h2>
