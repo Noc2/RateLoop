@@ -1,5 +1,5 @@
 /**
- * Carried forward for the next rateloop-tokenless-deployment-v3 bundle.
+ * Generated from rateloop-tokenless-deployment-v3.
  * Do not edit manually.
  */
 export const CredentialIssuerAbi = [

@@ -1,5 +1,5 @@
 /**
- * Generated from the RBTS TokenlessPanel source for rateloop-tokenless-deployment-v3.
+ * Generated from rateloop-tokenless-deployment-v3.
  * Do not edit manually.
  */
 export const TokenlessPanelAbi = [
