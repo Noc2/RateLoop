@@ -1,6 +1,9 @@
 # Tokenless Answer, Ask, Account, and Search Reimplementation Plan
 
-**Status:** Proposed implementation plan for the `tokenless` branch
+**Status:** Superseded by
+[`tokenless-humans-agents-production-redesign-plan-2026-07.md`](tokenless-humans-agents-production-redesign-plan-2026-07.md).
+Retained only as an implementation-history record; its Ask and Account information architecture is not a compatibility
+requirement.
 
 **Date:** 2026-07-14
 **Design authority:** This plan implements

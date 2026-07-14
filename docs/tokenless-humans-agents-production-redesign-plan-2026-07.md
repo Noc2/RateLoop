@@ -1,8 +1,8 @@
 # RateLoop tokenless: Humans and Agents production redesign plan (July 2026)
 
-**Status:** Proposed product and implementation amendment for the `tokenless` branch. This plan supersedes the
+**Status:** Accepted product and implementation amendment for the `tokenless` branch. This plan supersedes the
 information architecture and human-authored `/ask` journey in the
-[Answer, Ask, and Account plan](tokenless-answer-ask-account-navigation-plan-2026-07.md) if accepted. It does not
+[Answer, Ask, and Account plan](tokenless-answer-ask-account-navigation-plan-2026-07.md). It does not
 supersede the fund-custody, settlement, identity, privacy, or deployment-isolation decisions in the
 [tokenless design of record](tokenless-immutable-implementation-plan-2026-07.md). It turns existing production-grade
 building blocks into a coherent two-sided product and closes the gap between an explicit sandbox publication and a
@@ -801,9 +801,9 @@ The redesign is production-ready only when all of the following are true:
   customer artifacts, identities, memberships, and evaluation details off-chain and limits the chain to settlement and
   hiding commitments.
 
-## 14. Recommended product defaults to approve with this plan
+## 14. Accepted product defaults
 
-To avoid reopening basic decisions during implementation, accept these defaults unless user research disproves them:
+The following defaults are accepted unless production evidence or user research disproves them:
 
 1. `/human` and `/agents` are the canonical product routes; old routes redirect.
 2. Public RateLoop-network work is always paid and World ID-gated.
