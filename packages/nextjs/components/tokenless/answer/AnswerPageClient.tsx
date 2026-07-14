@@ -28,7 +28,7 @@ export function AnswerPageClient({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [query] = useState(initialQuery);
+  const query = initialQuery;
   const [scope, setScope] = useState<Scope>(initialScope);
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
