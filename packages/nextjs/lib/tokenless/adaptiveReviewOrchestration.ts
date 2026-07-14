@@ -7,6 +7,10 @@ import type {
 import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import {
+  type AdaptiveReviewObservation,
+  finalizeAdaptiveReviewEvidence,
+} from "~~/lib/tokenless/adaptiveReviewEvidence";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import {
   type PreparedProductAsk,
@@ -400,10 +404,17 @@ export async function getAdaptiveHumanReviewResult(input: {
   schemaVersion: "rateloop.adaptive-review-result.v1";
   opportunityId: string;
   result: TokenlessResult;
+  observation: AdaptiveReviewObservation;
 }> {
   const opportunity = await requireBoundOperation(input);
   const result = await getTokenlessResult(opportunity.operationKey!);
-  return { schemaVersion: "rateloop.adaptive-review-result.v1", opportunityId: opportunity.opportunityId, result };
+  const observation = await finalizeAdaptiveReviewEvidence({ operationKey: opportunity.operationKey! });
+  return {
+    schemaVersion: "rateloop.adaptive-review-result.v1",
+    opportunityId: opportunity.opportunityId,
+    result,
+    observation,
+  };
 }
 
 export const __adaptiveReviewOrchestrationTestUtils = { canonicalQuestion, sha256 };

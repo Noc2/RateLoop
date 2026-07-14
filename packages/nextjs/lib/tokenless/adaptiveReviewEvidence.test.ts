@@ -1,0 +1,303 @@
+import { TOKENLESS_SCHEMA_VERSION, type TokenlessResult } from "@rateloop/sdk";
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, test } from "node:test";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { finalizeAdaptiveReviewEvidence } from "~~/lib/tokenless/adaptiveReviewEvidence";
+import {
+  type AdaptiveReviewIntegrationPrincipal,
+  __adaptiveReviewOrchestrationTestUtils,
+  getAdaptiveHumanReviewResult,
+  requestAdaptiveHumanReview,
+} from "~~/lib/tokenless/adaptiveReviewOrchestration";
+import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
+import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import {
+  authenticateProductPrincipal,
+  createAgentPublishingPolicy,
+  createWorkspace,
+  createWorkspaceApiKey,
+  recordPrepaidLedgerEntry,
+} from "~~/lib/tokenless/productCore";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+const OWNER = "0x1111111111111111111111111111111111111111";
+const ADMISSION_HASH = `0x${"ab".repeat(32)}` as const;
+const SOURCE_PAYLOAD = "The customer was charged twice for invoice 42.";
+const SUGGESTION_PAYLOAD = "Refund the confirmed duplicate charge.";
+const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
+const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
+const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+
+beforeEach(() => {
+  process.env.TOKENLESS_SANDBOX_MODE = "false";
+  process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "88".repeat(32);
+  process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "evidence-test-v1";
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+});
+
+afterEach(() => {
+  __setDatabaseResourcesForTests(null);
+  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
+  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
+  if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
+  else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
+  if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+  else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
+});
+
+async function fixture() {
+  const { workspaceId } = await createWorkspace({ name: "Adaptive evidence", ownerAddress: OWNER });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
+  const agent = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "duplicate-charge-agent",
+    version: {
+      displayName: "Duplicate Charge Agent",
+      provider: "OpenAI",
+      model: "gpt-test",
+      environment: "production",
+    },
+  });
+  const publishingPolicy = await createAgentPublishingPolicy({
+    accountAddress: OWNER,
+    workspaceId,
+    policy: {
+      name: "Evidence review publishing",
+      allowedPaymentModes: ["prepaid"],
+      maxPanelAtomic: "100000000",
+      maxDailyAtomic: "500000000",
+      maxMonthlyAtomic: "5000000000",
+      maxPanelSize: 20,
+      maxBountyAtomic: "50000000",
+      maxFeeBps: 1_000,
+      maxAttemptReserveAtomic: "20000000",
+      allowedReviewerSources: ["customer_invited"],
+      allowedAdmissionPolicyHashes: [ADMISSION_HASH],
+      allowedDataClassifications: ["internal"],
+    },
+  });
+  const reviewPolicyId = "arp_evidence_v1";
+  const audiencePolicy = { reviewerSource: "private_invited" };
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_policies
+          (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
+           agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json,
+           audience_policy_json, publishing_policy_id, created_by, approved_by, created_at)
+          VALUES (?, 1, ?, ?, ?, 'adaptive', true, 9000, 1000, 20, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      reviewPolicyId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      JSON.stringify({ criticalRiskTiers: ["critical"], requiredRiskTiers: [] }),
+      JSON.stringify(audiencePolicy),
+      publishingPolicy.policyId,
+      OWNER,
+      OWNER,
+      now,
+    ],
+  });
+  const key = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Evidence integration",
+    policyId: publishingPolicy.policyId,
+    scopes: ["review:decide", "evaluation:read", "panel:publish", "payment:submit", "result:read"],
+  });
+  const productPrincipal = await authenticateProductPrincipal({
+    authorization: `Bearer ${key.token}`,
+    sessionToken: undefined,
+  });
+  if (productPrincipal.kind !== "api_key") throw new Error("Expected API-key principal.");
+  const principal: AdaptiveReviewIntegrationPrincipal = {
+    kind: "integration",
+    principal: productPrincipal,
+    integration: {
+      integrationId: "int_evidence_v1",
+      workspaceId,
+      agentId: agent.agentId,
+      agentVersionId: agent.currentVersion.versionId,
+      reviewPolicyId,
+      reviewPolicyVersion: 1,
+      publishingPolicyId: publishingPolicy.policyId,
+      publishingPolicyVersion: 1,
+      status: "active",
+      enforcementMode: "advisory",
+      allowedWorkflowKeys: ["refund-review"],
+      lastSeenAt: null,
+    },
+  };
+  const decision = await evaluateAdaptiveReviewRequirement({
+    principal: productPrincipal,
+    request: {
+      externalOpportunityId: "duplicate-charge-0001",
+      agentId: agent.agentId,
+      agentVersionId: agent.currentVersion.versionId,
+      policyId: reviewPolicyId,
+      policyVersion: 1,
+      workflowKey: "refund-review",
+      riskTier: "low",
+      audiencePolicyHash: __adaptiveReviewOrchestrationTestUtils.sha256(JSON.stringify(audiencePolicy)),
+      suggestionCommitment: __adaptiveReviewOrchestrationTestUtils.sha256(SUGGESTION_PAYLOAD),
+      sourceEvidence: {
+        reference: "invoice/42/revision-1",
+        hash: __adaptiveReviewOrchestrationTestUtils.sha256(SOURCE_PAYLOAD),
+      },
+      declaredConfidenceBps: 8_500,
+      metadataComplete: true,
+    },
+  });
+  await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "test-funding" });
+  const requested = await requestAdaptiveHumanReview({
+    principal,
+    opportunityId: decision.opportunityId,
+    sourcePayload: SOURCE_PAYLOAD,
+    suggestionPayload: SUGGESTION_PAYLOAD,
+    economics: {
+      requestedPanelSize: 5,
+      bountyAtomic: "25000000",
+      attemptReserveAtomic: "5000000",
+      feeBps: 750,
+    },
+    appOrigin: "https://rateloop-tokenless.example",
+  });
+  return { workspaceId, principal, decision, operationKey: requested.ask.operationKey };
+}
+
+async function storedResult(
+  operationKey: string,
+  input: {
+    status?: TokenlessResult["verdictStatus"];
+    selected?: string | null;
+    preferenceShareBps?: number | null;
+    participantCount?: number;
+    sandbox?: boolean;
+    updatedAt?: string;
+  } = {},
+) {
+  const ask = await dbClient.execute({
+    sql: "SELECT economics_json FROM tokenless_agent_asks WHERE operation_key = ?",
+    args: [operationKey],
+  });
+  const status = input.status ?? "publishable";
+  const publishable = status === "publishable" || status === "published";
+  const result: TokenlessResult = {
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    operationKey,
+    roundId: "round_evidence_0001",
+    verdictStatus: status,
+    terminal: status !== "pending",
+    economics: JSON.parse(String(ask.rows[0]?.economics_json)) as TokenlessResult["economics"],
+    audience: {
+      admissionPolicyHash: ADMISSION_HASH,
+      label: input.sandbox ? "Simulated sandbox responses" : "Customer-invited reviewers",
+      participantCount: input.participantCount ?? 5,
+      source: input.sandbox ? "sandbox" : "customer_invited",
+    },
+    verdict: publishable
+      ? {
+          intervalBps: { lower: 4_500, upper: 9_500 },
+          preferenceShareBps: input.preferenceShareBps ?? 8_000,
+          selected: input.selected === undefined ? "yes" : input.selected,
+        }
+      : null,
+    methodologyUrl: "https://rateloop-tokenless.example/docs/how-it-works",
+    updatedAt: input.updatedAt ?? new Date(Date.now() + 1_000).toISOString(),
+  };
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks
+          SET result_json = ?, verdict_status = ?, sandbox = ?, updated_at = ?
+          WHERE operation_key = ?`,
+    args: [JSON.stringify(result), status, input.sandbox ?? false, new Date(result.updatedAt), operationKey],
+  });
+  return result;
+}
+
+async function observationRow(opportunityId: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT observation_id, evidence_reference, source_payload_hash, agent_outcome_commitment,
+                 human_outcome_commitment, agreement, comparable, responding_human_count,
+                 human_human_agreement_bps, latency_ms, cost_atomic, finalized_at
+          FROM tokenless_agent_evaluation_observations WHERE opportunity_id = ?`,
+    args: [opportunityId],
+  });
+  return result.rows[0] as Record<string, unknown> | undefined;
+}
+
+test("idempotently derives comparable yes evidence from the bound server result", async () => {
+  const setup = await fixture();
+  const result = await storedResult(setup.operationKey, { preferenceShareBps: 8_000, participantCount: 5 });
+  const completed = await getAdaptiveHumanReviewResult({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+  });
+  const first = completed.observation;
+  const replay = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+
+  assert.deepEqual(completed.result, result);
+  assert.deepEqual(replay, first);
+  assert.equal(first.agreement, "agree");
+  assert.equal(first.comparable, true);
+  assert.equal(first.respondingHumanCount, 5);
+  assert.equal(first.humanHumanAgreementBps, 8_000);
+  assert.equal(first.sourcePayloadHash, __adaptiveReviewOrchestrationTestUtils.sha256(SOURCE_PAYLOAD));
+  assert.equal(first.agentOutcomeCommitment, __adaptiveReviewOrchestrationTestUtils.sha256(SUGGESTION_PAYLOAD));
+  assert.match(first.humanOutcomeCommitment, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(first.costAtomic, "0");
+  assert.equal(first.finalizedAt, result.updatedAt);
+
+  const stored = await observationRow(setup.decision.opportunityId);
+  assert.equal(stored?.observation_id, first.observationId);
+  assert.equal(stored?.agreement, "agree");
+  assert.equal(stored?.comparable, true);
+  const opportunity = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_agent_review_opportunities WHERE opportunity_id = ?",
+    args: [setup.decision.opportunityId],
+  });
+  assert.equal(opportunity.rows[0]?.status, "completed");
+});
+
+test("maps no to disagreement and invalidates comparability after a terminal delisting", async () => {
+  const setup = await fixture();
+  await storedResult(setup.operationKey, { selected: "no", preferenceShareBps: 2_500, participantCount: 4 });
+  const disagreement = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.equal(disagreement.agreement, "disagree");
+  assert.equal(disagreement.comparable, true);
+  assert.equal(disagreement.humanHumanAgreementBps, 7_500);
+
+  await storedResult(setup.operationKey, { status: "delisted", participantCount: 4 });
+  const delisted = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.equal(delisted.observationId, disagreement.observationId);
+  assert.equal(delisted.agreement, "inconclusive");
+  assert.equal(delisted.comparable, false);
+  assert.equal(delisted.respondingHumanCount, 4);
+  assert.equal(delisted.humanHumanAgreementBps, null);
+  assert.notEqual(delisted.humanOutcomeCommitment, disagreement.humanOutcomeCommitment);
+  const stored = await observationRow(setup.decision.opportunityId);
+  assert.equal(stored?.comparable, false);
+  assert.equal(stored?.agreement, "inconclusive");
+});
+
+test("fails before terminal evidence and records sandbox output only as non-comparable", async () => {
+  const setup = await fixture();
+  await assert.rejects(
+    () => finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "result_not_ready" && error.retryable,
+  );
+  assert.equal(await observationRow(setup.decision.opportunityId), undefined);
+
+  await storedResult(setup.operationKey, { status: "published", sandbox: true, participantCount: 5 });
+  const sandbox = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.equal(sandbox.comparable, false);
+  assert.equal(sandbox.agreement, "inconclusive");
+  assert.equal(sandbox.respondingHumanCount, 0);
+  assert.equal(sandbox.humanHumanAgreementBps, null);
+});
