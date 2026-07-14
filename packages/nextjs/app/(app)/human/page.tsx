@@ -5,6 +5,7 @@ import { NotificationSettingsPanel } from "~~/components/tokenless/account/Notif
 import { ProfileClient } from "~~/components/tokenless/account/ProfileClient";
 import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClient";
 import { type HumanTab, HumanTabs } from "~~/components/tokenless/human/HumanTabs";
+import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
 import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
@@ -62,8 +63,9 @@ export default async function HumanPage({
       {tab === "profile" ? (
         <>
           <ProfileClient />
+          {isWorldIdAssuranceEnabled() ? <WorldIdProfilePanel /> : null}
           <section id="paid-work" className="scroll-mt-24">
-            <PaidEligibilityClient networkPanelsEnabled={isWorldIdAssuranceEnabled()} />
+            <PaidEligibilityClient />
           </section>
         </>
       ) : (

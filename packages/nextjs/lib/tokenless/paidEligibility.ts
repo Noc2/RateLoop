@@ -15,6 +15,7 @@ import {
   timingSafeEqual,
   verify,
 } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { type Address, type Hex, createPublicClient, encodePacked, getAddress, http, keccak256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -342,6 +343,44 @@ function encryptVaultValue(domain: VaultDomain, value: unknown) {
     keyDomain: domain,
     keyVersion: config.currentVersion,
   };
+}
+
+export async function ensureAssuranceRaterProfile(
+  client: Pick<PoolClient, "query">,
+  accountAddress: string,
+  now = new Date(),
+) {
+  const normalizedAddress = getAddress(accountAddress).toLowerCase();
+  const existing = await client.query(
+    `SELECT rater_id FROM tokenless_rater_profiles
+     WHERE account_address = $1 LIMIT 1 FOR UPDATE`,
+    [normalizedAddress],
+  );
+  const existingId = stringValue(existing.rows[0] as QueryRow | undefined, "rater_id");
+  if (existingId) return existingId;
+
+  const raterId = `rtr_${randomUUID().replaceAll("-", "")}`;
+  const seedVault = encryptVaultValue("vote_mapping", { seed: `0x${randomBytes(32).toString("hex")}` });
+  const inserted = await client.query(
+    `INSERT INTO tokenless_rater_profiles
+     (rater_id, account_address, nullifier_seed_ciphertext,
+      nullifier_key_version, nullifier_key_domain, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$6)
+     ON CONFLICT (account_address) DO NOTHING
+     RETURNING rater_id`,
+    [raterId, normalizedAddress, seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now],
+  );
+  const insertedId = stringValue(inserted.rows[0] as QueryRow | undefined, "rater_id");
+  if (insertedId) return insertedId;
+
+  const raced = await client.query(
+    `SELECT rater_id FROM tokenless_rater_profiles
+     WHERE account_address = $1 LIMIT 1 FOR UPDATE`,
+    [normalizedAddress],
+  );
+  const racedId = stringValue(raced.rows[0] as QueryRow | undefined, "rater_id");
+  if (!racedId) throw new Error("Unable to create the minimal RateLoop human identity record.");
+  return racedId;
 }
 
 function decryptVaultValue(value: string, keyVersion: string, domain: VaultDomain) {

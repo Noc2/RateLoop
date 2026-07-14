@@ -5,6 +5,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
+import { ensureAssuranceRaterProfile } from "~~/lib/tokenless/paidEligibility";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const PROVIDER_ID = "world:poh";
@@ -274,21 +275,10 @@ export async function createWorldIdAssuranceContext(input: { accountAddress: str
   const now = input.now ?? new Date();
   const accountAddress = getAddress(input.accountAddress).toLowerCase();
   const config = loadConfig();
-  const profile = await dbClient.execute({
-    sql: `SELECT rater_id FROM tokenless_rater_profiles WHERE account_address = ? LIMIT 1`,
-    args: [accountAddress],
-  });
-  const raterId = stringValue(profile.rows[0] as QueryRow | undefined, "rater_id");
-  if (!raterId) {
-    throw new TokenlessServiceError(
-      "Complete paid-task legal and payout eligibility before adding World ID assurance.",
-      409,
-      "rater_profile_required",
-    );
-  }
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const raterId = await ensureAssuranceRaterProfile(client, accountAddress, now);
     await freezeActionAndKeys(client, config, now);
     await client.query(`DELETE FROM tokenless_world_id_requests WHERE expires_at < $1`, [
       new Date(now.getTime() - REQUEST_RETENTION_MS),
@@ -720,7 +710,11 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
       [stringValue(locked, "rater_id"), accountAddress],
     );
     if (profileResult.rowCount !== 1) {
-      throw new TokenlessServiceError("A pre-existing rater profile is required.", 409, "rater_profile_required");
+      throw new TokenlessServiceError(
+        "The World ID account binding is no longer available.",
+        409,
+        "world_id_binding_missing",
+      );
     }
     const persisted = await persistInitial(client, { request, parsed, config, remoteCreatedAt: remote.createdAt, now });
     const consumed = await client.query(
@@ -752,6 +746,26 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
   } finally {
     client.release();
   }
+}
+
+export async function getWorldIdAssuranceStatus(accountAddress: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT a.evidence_verified_at, a.assurance_validity_model
+          FROM tokenless_rater_profiles p
+          JOIN tokenless_provider_subject_bindings b ON b.rater_id = p.rater_id
+          JOIN tokenless_assurance_assertions a ON a.binding_id = b.binding_id
+          WHERE p.account_address = ? AND b.provider_id = ? AND b.status = 'active'
+            AND a.status = 'active' AND a.capabilities_json LIKE '%"unique_human"%'
+          ORDER BY a.evidence_verified_at DESC LIMIT 1`,
+    args: [getAddress(accountAddress).toLowerCase(), PROVIDER_ID],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  return {
+    verified: Boolean(row),
+    providerId: PROVIDER_ID,
+    validityModel: row ? stringValue(row, "assurance_validity_model") : null,
+    verifiedAt: row?.evidence_verified_at ? new Date(String(row.evidence_verified_at)).toISOString() : null,
+  };
 }
 
 export function __setWorldIdAssuranceOverridesForTests(input: {

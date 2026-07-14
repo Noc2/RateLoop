@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { __setPaidEligibilityOverridesForTests } from "~~/lib/tokenless/paidEligibility";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   __setWorldIdAssuranceOverridesForTests,
@@ -23,6 +24,7 @@ const NULLIFIER_LOWER = NULLIFIER_MIXED.toLowerCase();
 const SUBJECT_KEY_V1 = Buffer.alloc(32, 17);
 const SUBJECT_KEY_V2 = Buffer.alloc(32, 19);
 const EVIDENCE_KEY = Buffer.alloc(32, 23);
+const VOTE_MAPPING_KEY = Buffer.alloc(32, 29);
 const KEY_VERSION = "world-test-v1";
 let nonceCounter = 0;
 
@@ -119,10 +121,18 @@ beforeEach(() => {
   nonceCounter = 0;
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   install();
+  __setPaidEligibilityOverridesForTests({
+    vault: {
+      provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", Buffer.alloc(32, 31)]]) },
+      tax_records: { currentVersion: "test-v1", keys: new Map([["test-v1", Buffer.alloc(32, 37)]]) },
+      vote_mapping: { currentVersion: "test-v1", keys: new Map([["test-v1", VOTE_MAPPING_KEY]]) },
+    },
+  });
 });
 
 afterEach(() => {
   __setWorldIdAssuranceOverridesForTests({ config: null, signer: null, fetch: null });
+  __setPaidEligibilityOverridesForTests({});
   __setDatabaseResourcesForTests(null);
 });
 
@@ -139,15 +149,18 @@ test("creates a bounded v4-only uniqueness context and supersedes the previous p
   assert.deepEqual(rows.rows.map(row => row.status).sort(), ["pending", "superseded"]);
 });
 
-test("requires a pre-existing rater and rate-limits normal context creation", async () => {
-  await assert.rejects(
-    createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "rater_profile_required",
-  );
-  await insertRater();
+test("creates only the minimal rater identity and rate-limits normal context creation", async () => {
   for (let index = 0; index < 5; index += 1) {
     await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
   }
+  const profile = await dbClient.execute({
+    sql: `SELECT nullifier_key_domain FROM tokenless_rater_profiles WHERE account_address = ?`,
+    args: [ACCOUNT],
+  });
+  assert.equal(profile.rowCount, 1);
+  assert.equal(profile.rows[0]?.nullifier_key_domain, "vote_mapping");
+  const legal = await dbClient.execute(`SELECT COUNT(*) AS count FROM tokenless_legal_eligibility`);
+  assert.equal(Number(legal.rows[0]?.count), 0);
   const count = await dbClient.execute(`SELECT COUNT(*) AS count FROM tokenless_world_id_requests`);
   assert.equal(Number(count.rows[0]?.count), 5);
   await assert.rejects(
