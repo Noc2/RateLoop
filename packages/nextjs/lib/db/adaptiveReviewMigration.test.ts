@@ -4,6 +4,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 const migration = readFileSync(join(process.cwd(), "drizzle", "0031_adaptive_review_evidence.sql"), "utf8");
+const sourceMigration = readFileSync(
+  join(process.cwd(), "drizzle", "0032_adaptive_review_source_evidence.sql"),
+  "utf8",
+);
 
 test("adaptive evidence migration records every decision and immutable agent-version provenance", () => {
   for (const table of [
@@ -23,6 +27,8 @@ test("adaptive evidence migration records every decision and immutable agent-ver
   assert.match(migration, /"suggestion_ciphertext" text/);
   assert.match(migration, /"suggestion_key_ref" text/);
   assert.doesNotMatch(migration, /"suggestion_json"/);
+  assert.match(sourceMigration, /"source_evidence_reference" text NOT NULL/);
+  assert.match(sourceMigration, /"source_evidence_hash" text NOT NULL/);
 });
 
 test("adaptive observations remain rebuildable from source evidence and preserve uncertainty inputs", () => {

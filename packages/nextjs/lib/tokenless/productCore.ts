@@ -20,6 +20,8 @@ export const TOKENLESS_AGENT_SCOPES = [
   "payment:submit",
   "result:read",
   "webhook:use",
+  "evaluation:read",
+  "review:decide",
 ] as const;
 export type TokenlessAgentScope = (typeof TOKENLESS_AGENT_SCOPES)[number];
 const TOKENLESS_AGENT_SCOPE_SET = new Set<string>(TOKENLESS_AGENT_SCOPES);
@@ -161,11 +163,13 @@ function normalizedScopes(value: unknown): TokenlessAgentScope[] {
   return scopes as TokenlessAgentScope[];
 }
 
-function assertScope(principal: ProductPrincipal, scope: TokenlessAgentScope) {
+export function requireProductPrincipalScope(principal: ProductPrincipal, scope: TokenlessAgentScope) {
   if (principal.kind === "api_key" && !(principal.scopes ?? [...TOKENLESS_AGENT_SCOPES]).includes(scope)) {
     throw new TokenlessServiceError(`This credential lacks ${scope}.`, 403, "insufficient_scope");
   }
 }
+
+const assertScope = requireProductPrincipalScope;
 
 function assertAskRole(role: TokenlessWorkspaceRole) {
   if (!ASK_ROLES.has(role)) {
