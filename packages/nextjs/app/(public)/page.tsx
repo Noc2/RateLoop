@@ -137,18 +137,18 @@ export default function TokenlessLandingPage() {
             </p>
             {sandboxMode ? (
               <p className="mt-4 max-w-[40rem] rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-sm leading-6 text-amber-50 lg:text-left">
-                Sandbox only. Reviews and payments are simulated. Use test or redacted content.
+                Reviews and payments are simulated. Use test or redacted content.
               </p>
             ) : null}
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-              <Link href="/ask" className="rateloop-gradient-action min-h-11 px-5 text-base">
-                {sandboxMode ? "Try the Sandbox" : "Start a Review"}
+              <Link href="/rate" className="rateloop-gradient-action min-h-11 px-5 text-base">
+                Answer
               </Link>
               <Link
-                href="/rate"
+                href="/ask"
                 className="btn min-h-11 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                {sandboxMode ? "View Reviewer Flow" : "Become a Reviewer"}
+                Ask
               </Link>
             </div>
           </div>
