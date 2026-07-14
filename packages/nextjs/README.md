@@ -23,6 +23,9 @@ explicit funding and payout-proof flows. Every sign-in method signs a domain-bou
 server-side and creates its own opaque, hashed, HttpOnly session. The thirdweb browser token and client-reported profiles
 are never workspace authorization.
 
+The application shell does not mount Wagmi or any external wallet connector. Thirdweb is the only browser identity
+provider, and automatic wallet reconnection is disabled.
+
 Configure `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`, `NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN`, and the server-only
 `THIRDWEB_SECRET_KEY`. Apply migration `0016_thirdweb_enterprise_auth.sql`, then run
 `yarn workspace @rateloop/nextjs auth:check` before a hosted rollout.

@@ -292,11 +292,28 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@base-org/account@npm:2.5.7":
-  version: 2.5.7
-  resolution: "@base-org/account@npm:2.5.7"
+"@base-org/account@npm:2.4.0":
+  version: 2.4.0
+  resolution: "@base-org/account@npm:2.4.0"
   dependencies:
-    "@coinbase/cdp-sdk": ^1.48.3
+    "@coinbase/cdp-sdk": ^1.0.0
+    "@noble/hashes": 1.4.0
+    clsx: 1.2.1
+    eventemitter3: 5.0.1
+    idb-keyval: 6.2.1
+    ox: 0.6.9
+    preact: 10.24.2
+    viem: ^2.31.7
+    zustand: 5.0.3
+  checksum: 6e824da6108756a3c3efab6c660186ecc06c355b0053d5721c0578111c058f01ae8d967b2a6490857498421eea610d6e4195d9bcd5496aa4a268420b4da52451
+  languageName: node
+  linkType: hard
+
+"@base-org/account@npm:2.5.0":
+  version: 2.5.0
+  resolution: "@base-org/account@npm:2.5.0"
+  dependencies:
+    "@coinbase/cdp-sdk": ^1.0.0
     brotli-wasm: ^3.0.0
     clsx: 1.2.1
     eventemitter3: 5.0.1
@@ -305,7 +322,7 @@ __metadata:
     preact: 10.24.2
     viem: ^2.31.7
     zustand: 5.0.3
-  checksum: 26bbde2352b48f1da2aaaf046725b1b60a7016b49d0b7e31714354d86014e841576d6d7242243232355c0e9dd4a6f091f7970aa82a8a48d34dec45c84cb227ae
+  checksum: 3339af69650edcdfd0fb92f9e2e99b48d4a373f9f5992e7827af2f5343558275c6761b14b6f804904b6ecaef7e605c4eaf649df5f9b63d9b7e9fa052bf11b705
   languageName: node
   linkType: hard
 
@@ -316,7 +333,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@coinbase/cdp-sdk@npm:^1.48.3":
+"@coinbase/cdp-sdk@npm:^1.0.0":
   version: 1.52.0
   resolution: "@coinbase/cdp-sdk@npm:1.52.0"
   dependencies:
@@ -3525,7 +3542,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@rateloop/nextjs@workspace:packages/nextjs"
   dependencies:
-    "@base-org/account": 2.5.7
     "@next/bundle-analyzer": ^16.1.6
     "@rateloop/contracts": "workspace:*"
     "@rateloop/sdk": "workspace:*"
@@ -3536,7 +3552,6 @@ __metadata:
     "@types/pg": ^8.15.6
     "@types/react": ~19.2.3
     "@vercel/blob": 2.4.0
-    "@wagmi/core": 2.22.1
     "@worldcoin/idkit": 4.2.0
     "@worldcoin/idkit-core": 4.2.1
     daisyui: 5.0.9
@@ -3563,7 +3578,6 @@ __metadata:
     typescript: ~5.8.2
     vercel: 54.18.0
     viem: 2.39.0
-    wagmi: 2.19.5
   languageName: unknown
   linkType: soft
 
@@ -18268,7 +18282,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"wagmi@npm:2.19.5, wagmi@npm:^2.15.6":
+"wagmi@npm:^2.15.6":
   version: 2.19.5
   resolution: "wagmi@npm:2.19.5"
   dependencies:

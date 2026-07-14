@@ -86,7 +86,6 @@
     "node": ">=24 <25"
   },
   "resolutions": {
-    "@base-org/account": "2.5.7",
     "react-spinners@^0.14.1": "patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch",
     "axios@^1.12.2": "1.16.0",
     "vite@5.0.7": "6.4.3",
