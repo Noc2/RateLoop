@@ -386,6 +386,53 @@ test("policy-bound agent keys enforce exact audience and panel caps and reserve 
   );
 });
 
+test("publishing policies fail closed on unsupported reviewer sources and data classifications", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Classified", ownerAddress: ADDRESS_A });
+  const basePolicy = {
+    name: "Internal-only agent",
+    allowedPaymentModes: ["prepaid" as const],
+    maxPanelAtomic: "50000000",
+    maxDailyAtomic: "50000000",
+    maxMonthlyAtomic: "100000000",
+    maxPanelSize: 20,
+    maxBountyAtomic: "30000000",
+    maxFeeBps: 1000,
+    maxAttemptReserveAtomic: "10000000",
+    allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+  };
+  await assert.rejects(
+    () =>
+      createAgentPublishingPolicy({
+        accountAddress: ADDRESS_A,
+        workspaceId,
+        policy: { ...basePolicy, allowedReviewerSources: ["untrusted_network"] },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_policy",
+  );
+
+  const policy = await createAgentPublishingPolicy({
+    accountAddress: ADDRESS_A,
+    workspaceId,
+    policy: {
+      ...basePolicy,
+      allowedReviewerSources: ["sandbox"],
+      allowedDataClassifications: ["public"],
+      onPolicyMiss: "handoff",
+    },
+  });
+  const key = await createWorkspaceApiKey({ workspaceId, name: "Public only", policyId: policy.policyId });
+  await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
+  const { request } = await quoteAndRequest(workspaceId, "classified:ask:12345678");
+  const principal = await authenticateProductPrincipal({
+    authorization: `Bearer ${key.token}`,
+    sessionToken: undefined,
+  });
+  await assert.rejects(
+    () => prepareProductAsk({ principal, request }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "approval_required",
+  );
+});
+
 test("policy-bound x402 keys require the configured wallet binding", async () => {
   const { workspaceId } = await createWorkspace({ name: "Wallet delegated", ownerAddress: ADDRESS_A });
   const policy = await createAgentPublishingPolicy({

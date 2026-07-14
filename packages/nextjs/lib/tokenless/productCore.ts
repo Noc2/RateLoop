@@ -25,6 +25,16 @@ export type TokenlessAgentScope = (typeof TOKENLESS_AGENT_SCOPES)[number];
 const TOKENLESS_AGENT_SCOPE_SET = new Set<string>(TOKENLESS_AGENT_SCOPES);
 const TOKENLESS_AGENT_PAYMENT_MODES = ["prepaid", "x402"] as const;
 export type TokenlessAgentPaymentMode = (typeof TOKENLESS_AGENT_PAYMENT_MODES)[number];
+const TOKENLESS_AGENT_REVIEWER_SOURCES = ["customer_invited", "rateloop_network", "hybrid", "sandbox"] as const;
+const TOKENLESS_AGENT_REVIEWER_SOURCE_SET = new Set<string>(TOKENLESS_AGENT_REVIEWER_SOURCES);
+const TOKENLESS_DATA_CLASSIFICATION_SET = new Set<string>([
+  "public",
+  "synthetic",
+  "redacted",
+  "internal",
+  "confidential",
+  "restricted",
+]);
 
 export type AgentPublishingPolicyInput = {
   name: string;
@@ -483,6 +493,14 @@ function normalizePolicyInput(input: AgentPublishingPolicyInput) {
     }
     return normalized;
   };
+  const reviewerSources = arrayField(input.allowedReviewerSources, "allowedReviewerSources");
+  if (reviewerSources.length === 0 || reviewerSources.some(value => !TOKENLESS_AGENT_REVIEWER_SOURCE_SET.has(value))) {
+    throw new TokenlessServiceError("Policies require at least one supported reviewer source.", 400, "invalid_policy");
+  }
+  const dataClassifications = arrayField(input.allowedDataClassifications, "allowedDataClassifications");
+  if (dataClassifications.some(value => !TOKENLESS_DATA_CLASSIFICATION_SET.has(value))) {
+    throw new TokenlessServiceError("Policy data classifications are invalid.", 400, "invalid_policy");
+  }
   if (
     input.maxRetentionDays !== undefined &&
     input.maxRetentionDays !== null &&
@@ -505,9 +523,9 @@ function normalizePolicyInput(input: AgentPublishingPolicyInput) {
     maxFeeBps: input.maxFeeBps,
     maxAttemptReserveAtomic: maxAttemptReserveAtomic.toString(),
     allowedProjectIds: arrayField(input.allowedProjectIds, "allowedProjectIds"),
-    allowedReviewerSources: arrayField(input.allowedReviewerSources, "allowedReviewerSources"),
+    allowedReviewerSources: reviewerSources,
     allowedAdmissionPolicyHashes: admissionHashes,
-    allowedDataClassifications: arrayField(input.allowedDataClassifications, "allowedDataClassifications"),
+    allowedDataClassifications: dataClassifications,
     maxRetentionDays: input.maxRetentionDays ?? null,
     allowPublicUrls: input.allowPublicUrls ?? false,
     allowedWebhookEndpointIds: arrayField(input.allowedWebhookEndpointIds, "allowedWebhookEndpointIds"),
@@ -832,6 +850,7 @@ async function enforcePublishingPolicy(input: {
   const quoteRequest = input.quoteRequest as {
     audience?: { admissionPolicyHash?: string; source?: string };
     budget?: { bountyAtomic?: string; attemptReserveAtomic?: string; feeBps?: number };
+    dataClassification?: string;
     requestedPanelSize?: number;
   };
   if (
@@ -846,6 +865,13 @@ async function enforcePublishingPolicy(input: {
     !policy.allowedReviewerSources.includes(quoteRequest.audience.source)
   ) {
     policyMiss(policy, "The reviewer source is outside the delegated publishing policy.");
+  }
+  const allowedDataClassifications = policy.allowedDataClassifications ?? [];
+  if (
+    allowedDataClassifications.length > 0 &&
+    !allowedDataClassifications.includes(quoteRequest.dataClassification ?? "internal")
+  ) {
+    policyMiss(policy, "The data classification is outside the delegated publishing policy.");
   }
   const bounty = atomic(quoteRequest.budget?.bountyAtomic, "budget.bountyAtomic");
   const attemptReserve = atomic(quoteRequest.budget?.attemptReserveAtomic, "budget.attemptReserveAtomic");
