@@ -180,6 +180,32 @@ test("critical risk is forced even outside an adaptive sample", async () => {
   assert.ok(decision.reasonCodes.includes("critical_risk"));
 });
 
+test("adaptive review forces suggestions below the configured confidence threshold", async () => {
+  const setup = await fixture();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies SET rules_json = ?
+          WHERE workspace_id = ? AND policy_id = ? AND version = 1`,
+    args: [
+      JSON.stringify({
+        criticalRiskTiers: ["critical"],
+        requiredRiskTiers: ["high"],
+        minimumConfidenceBps: 8_000,
+      }),
+      setup.workspaceId,
+      setup.policyId,
+    ],
+  });
+
+  const decision = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: { ...opportunity(setup, "ticket-low-confidence-01"), declaredConfidenceBps: 7_999 },
+  });
+
+  assert.equal(decision.required, true);
+  assert.equal(decision.selectionProbabilityBps, 10_000);
+  assert.ok(decision.reasonCodes.includes("low_confidence"));
+});
+
 test("source-derived observations advance the persisted scope only after two stable windows", async () => {
   const setup = await fixture();
   for (let index = 0; index < 30; index += 1) {

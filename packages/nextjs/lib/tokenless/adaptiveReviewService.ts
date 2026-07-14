@@ -519,10 +519,14 @@ function decisionForMode(input: {
 }) {
   const criticalRisk =
     input.request.criticalRisk || input.policy.rules.criticalRiskTiers.includes(input.request.riskTier);
+  const confidenceBelowMinimum =
+    input.policy.rules.minimumConfidenceBps !== null &&
+    input.request.declaredConfidenceBps !== null &&
+    input.request.declaredConfidenceBps < input.policy.rules.minimumConfidenceBps;
   const metadataComplete =
     input.request.metadataComplete &&
     (input.policy.rules.minimumConfidenceBps === null || input.request.declaredConfidenceBps !== null);
-  const sampled = decideAdaptiveReview({
+  const sampledDecision = decideAdaptiveReview({
     samplerKey: input.sampler.key,
     samplerKeyVersion: input.sampler.version,
     opportunityId: input.request.externalOpportunityId,
@@ -532,6 +536,13 @@ function decisionForMode(input: {
     criticalRisk,
     metadataComplete,
   });
+  const sampled = confidenceBelowMinimum
+    ? {
+        ...sampledDecision,
+        required: true,
+        reasonCodes: ["low_confidence", ...sampledDecision.reasonCodes.filter(reason => reason !== "not_sampled")],
+      }
+    : sampledDecision;
   if (input.policy.mode === "manual") {
     return {
       ...sampled,
