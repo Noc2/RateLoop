@@ -52,7 +52,13 @@ export function sessionLabel(session: BrowserSessionResponse | null) {
   return shortAddress(session.address);
 }
 
-export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }) {
+export function ThirdwebSessionButton({
+  compact = false,
+  onSessionChange,
+}: {
+  compact?: boolean;
+  onSessionChange?: (authenticated: boolean) => void;
+}) {
   const [session, setSession] = useState<BrowserSessionResponse | null>(null);
   const [configurationError, setConfigurationError] = useState(false);
 
@@ -60,21 +66,31 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
     let active = true;
     void readBrowserSession()
       .then(value => {
-        if (active) setSession(value);
+        if (active) {
+          setSession(value);
+          onSessionChange?.(value !== null);
+        }
       })
       .catch(() => {
-        if (active) setSession(null);
+        if (active) {
+          setSession(null);
+          onSessionChange?.(false);
+        }
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [onSessionChange]);
 
-  const isLoggedIn = useCallback(async (address: string) => {
-    const current = await readBrowserSession();
-    setSession(current);
-    return current?.address.toLowerCase() === address.toLowerCase();
-  }, []);
+  const isLoggedIn = useCallback(
+    async (address: string) => {
+      const current = await readBrowserSession();
+      setSession(current);
+      onSessionChange?.(current !== null);
+      return current?.address.toLowerCase() === address.toLowerCase();
+    },
+    [onSessionChange],
+  );
 
   const theme = useMemo(
     () =>
@@ -140,10 +156,12 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
             getLoginPayload,
             doLogin: async input => {
               setSession(await loginWithThirdweb(input));
+              onSessionChange?.(true);
             },
             doLogout: async () => {
               await logoutBrowserSession();
               setSession(null);
+              onSessionChange?.(false);
             },
             isLoggedIn,
           }}

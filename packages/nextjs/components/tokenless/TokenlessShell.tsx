@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -95,12 +96,21 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function NavLinks({ mobile = false }: { mobile?: boolean }) {
+function NavLinks({
+  authenticated,
+  mobile = false,
+  onSessionChange,
+}: {
+  authenticated: boolean;
+  mobile?: boolean;
+  onSessionChange: (authenticated: boolean) => void;
+}) {
   const pathname = usePathname() ?? "";
+  const visibleLinks = authenticated ? links : links.filter(link => link.href !== "/agents");
 
   return (
     <>
-      {links.map(({ href, label, icon: Icon }) => {
+      {visibleLinks.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const showDocsNavigation = href === "/docs" && active;
 
@@ -156,7 +166,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
       })}
       {mobile ? (
         <div className="mt-2 border-t border-white/10 px-2 pt-4">
-          <ThirdwebSessionButton />
+          <ThirdwebSessionButton onSessionChange={onSessionChange} />
           <Link href="/legal" className="mt-3 block px-2 text-sm text-base-content/60">
             Legal
           </Link>
@@ -208,6 +218,8 @@ function Footer() {
 }
 
 export function TokenlessShell({ children }: { children: React.ReactNode; sandboxMode: boolean }) {
+  const [authenticated, setAuthenticated] = useState(false);
+
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl xl:hidden">
@@ -221,7 +233,7 @@ export function TokenlessShell({ children }: { children: React.ReactNode; sandbo
             </summary>
             <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
               <AnswerSearch mobile />
-              <NavLinks mobile />
+              <NavLinks authenticated={authenticated} mobile onSessionChange={setAuthenticated} />
             </nav>
           </details>
         </div>
@@ -233,10 +245,10 @@ export function TokenlessShell({ children }: { children: React.ReactNode; sandbo
         </div>
         <AnswerSearch />
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
-          <NavLinks />
+          <NavLinks authenticated={authenticated} onSessionChange={setAuthenticated} />
         </nav>
         <div className="mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t border-[color:var(--rateloop-shell-border-strong)] px-2.5 pt-4">
-          <ThirdwebSessionButton compact />
+          <ThirdwebSessionButton compact onSessionChange={setAuthenticated} />
         </div>
       </aside>
 
