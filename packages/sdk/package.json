@@ -55,6 +55,9 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"
   },
+  "dependencies": {
+    "viem": "2.39.0"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=24 <25"

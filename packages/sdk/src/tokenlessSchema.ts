@@ -12,6 +12,8 @@ import {
   type TokenlessFundAccounting,
   type TokenlessPollContinuation,
   type TokenlessPaymentInstructions,
+  TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
+  type TokenlessX402AuthorizationSpec,
   type TokenlessQuoteResponse,
   type TokenlessRefundAccounting,
   type TokenlessReviewerSource,
@@ -310,6 +312,101 @@ export function parseTokenlessPaymentInstructions(
     input.transactionHash === null
       ? null
       : bytes32(input.transactionHash, "transactionHash");
+  let authorizationSpec: TokenlessX402AuthorizationSpec | undefined;
+  if (input.authorizationSpec !== undefined) {
+    const spec = record(input.authorizationSpec, "authorizationSpec");
+    const eip3009Domain = record(
+      spec.eip3009Domain,
+      "authorizationSpec.eip3009Domain",
+    );
+    const roundAuthorizationDomain = record(
+      spec.roundAuthorizationDomain,
+      "authorizationSpec.roundAuthorizationDomain",
+    );
+    const domain = (value: JsonRecord, path: string) => ({
+      name: string(value.name, `${path}.name`),
+      version: string(value.version, `${path}.version`),
+      chainId: integer(value.chainId, `${path}.chainId`, 1),
+      verifyingContract: address(
+        value.verifyingContract,
+        `${path}.verifyingContract`,
+      ),
+    });
+    if (spec.schemaVersion !== TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION) {
+      invalid(
+        "authorizationSpec.schemaVersion",
+        TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
+      );
+    }
+    authorizationSpec = {
+      schemaVersion: TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
+      eip3009Domain: domain(
+        eip3009Domain,
+        "authorizationSpec.eip3009Domain",
+      ),
+      roundAuthorizationDomain: domain(
+        roundAuthorizationDomain,
+        "authorizationSpec.roundAuthorizationDomain",
+      ),
+      validAfter: atomic(
+        spec.validAfter,
+        "authorizationSpec.validAfter",
+      ),
+      validBefore: atomic(
+        spec.validBefore,
+        "authorizationSpec.validBefore",
+      ),
+      nonce: bytes32(spec.nonce, "authorizationSpec.nonce"),
+    };
+    if (
+      BigInt(authorizationSpec.validBefore) <=
+      BigInt(authorizationSpec.validAfter)
+    ) {
+      invalid(
+        "authorizationSpec.validBefore",
+        "greater than authorizationSpec.validAfter",
+      );
+    }
+    if (authorizationSpec.eip3009Domain.chainId !== Number(input.chainId)) {
+      invalid(
+        "authorizationSpec.eip3009Domain.chainId",
+        "the payment instruction chainId",
+      );
+    }
+    if (
+      authorizationSpec.roundAuthorizationDomain.chainId !==
+      Number(input.chainId)
+    ) {
+      invalid(
+        "authorizationSpec.roundAuthorizationDomain.chainId",
+        "the payment instruction chainId",
+      );
+    }
+    if (
+      authorizationSpec.eip3009Domain.verifyingContract.toLowerCase() !==
+      String(input.usdcAddress).toLowerCase()
+    ) {
+      invalid(
+        "authorizationSpec.eip3009Domain.verifyingContract",
+        "the payment instruction usdcAddress",
+      );
+    }
+    if (
+      authorizationSpec.roundAuthorizationDomain.verifyingContract.toLowerCase() !==
+      String(input.x402SubmitterAddress).toLowerCase()
+    ) {
+      invalid(
+        "authorizationSpec.roundAuthorizationDomain.verifyingContract",
+        "the payment instruction x402SubmitterAddress",
+      );
+    }
+  }
+  if (paymentMode === "x402" && !authorizationSpec) {
+    invalid(
+      "authorizationSpec",
+      "the versioned x402 authorization specification",
+    );
+  }
   return {
     operationKey: string(input.operationKey, "operationKey"),
     paymentMode,
@@ -367,6 +464,7 @@ export function parseTokenlessPaymentInstructions(
     },
     roundId: nullableString(input.roundId, "roundId"),
     transactionHash,
+    ...(authorizationSpec ? { authorizationSpec } : {}),
   };
 }
 

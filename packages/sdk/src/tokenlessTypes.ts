@@ -275,6 +275,40 @@ export interface TokenlessPaymentInstructions {
   roundTerms: TokenlessRoundTerms;
   roundId: string | null;
   transactionHash: `0x${string}` | null;
+  /**
+   * Canonical facts for building an x402 authorization. This is optional while
+   * older tokenless deployments are drained; x402 builders require it.
+   */
+  authorizationSpec?: TokenlessX402AuthorizationSpec;
+}
+
+export const TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION =
+  "rateloop.tokenless.payment-authorization.v1" as const;
+
+export interface TokenlessEip712Domain {
+  name: string;
+  version: string;
+  chainId: number;
+  verifyingContract: `0x${string}`;
+}
+
+export interface TokenlessX402AuthorizationSpec {
+  schemaVersion: typeof TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION;
+  /** The EIP-3009 token domain used by receiveWithAuthorization. */
+  eip3009Domain: TokenlessEip712Domain;
+  /** The X402PanelSubmitter EIP-712 domain used by roundAuthorizationSignature. */
+  roundAuthorizationDomain: TokenlessEip712Domain;
+  validAfter: TokenlessAtomicAmount;
+  validBefore: TokenlessAtomicAmount;
+  nonce: `0x${string}`;
+}
+
+export interface TokenlessDeploymentIdentity {
+  deploymentKey: string;
+  chainId: number;
+  panelAddress: `0x${string}`;
+  x402SubmitterAddress: `0x${string}`;
+  usdcAddress: `0x${string}`;
 }
 
 export type TokenlessSubmitPaymentRequest =
