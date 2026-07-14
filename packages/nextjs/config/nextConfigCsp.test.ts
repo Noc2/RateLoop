@@ -49,7 +49,7 @@ test("connect-src includes only the tokenless app, Base RPC, auth, World ID brid
   assert.doesNotMatch(connectSrc, /developer\.world|drand|blob\.vercel-storage/);
 });
 
-test("thirdweb and Base Account authentication popups retain their opener", async () => {
+test("thirdweb OAuth popups retain their opener", async () => {
   assert.equal(await getGlobalHeaderValue("Cross-Origin-Opener-Policy"), "same-origin-allow-popups");
 });
 

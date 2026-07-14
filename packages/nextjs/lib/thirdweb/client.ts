@@ -2,7 +2,7 @@
 
 import { createThirdwebClient } from "thirdweb";
 import type { LoginPayload, VerifyLoginPayloadParams } from "thirdweb/auth";
-import { createWallet, inAppWallet } from "thirdweb/wallets";
+import { inAppWallet } from "thirdweb/wallets";
 
 const clientId = process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID?.trim();
 
@@ -16,7 +16,6 @@ export const rateLoopThirdwebWallets = [
       icon: "/rateloop-logo.svg",
     },
   }),
-  createWallet("org.base.account"),
 ];
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {

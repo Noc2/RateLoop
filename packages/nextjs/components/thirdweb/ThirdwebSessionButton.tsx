@@ -14,6 +14,7 @@ import {
 } from "~~/lib/thirdweb/client";
 
 export const RATELOOP_SIGN_IN_LABEL = "Sign In";
+export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
 
 export function rateLoopConnectButtonStyle(compact: boolean) {
   return {
@@ -112,7 +113,7 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
           chain={baseSepolia}
           chains={[baseSepolia]}
           wallets={rateLoopThirdwebWallets}
-          autoConnect={{ timeout: 5_000 }}
+          autoConnect={RATELOOP_THIRDWEB_AUTO_CONNECT}
           appMetadata={{
             name: "RateLoop",
             description: "Enterprise human assurance for AI-enabled workflows",

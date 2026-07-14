@@ -1,6 +1,7 @@
 import React from "react";
 import {
   RATELOOP_SIGN_IN_LABEL,
+  RATELOOP_THIRDWEB_AUTO_CONNECT,
   ThirdwebSessionButton,
   rateLoopConnectButtonStyle,
   sessionLabel,
@@ -44,4 +45,8 @@ test("the thirdweb entry point keeps the original compact RateLoop sign-in treat
     minWidth: "100%",
     whiteSpace: "nowrap",
   });
+});
+
+test("browser authentication never restores a previously connected external wallet", () => {
+  assert.equal(RATELOOP_THIRDWEB_AUTO_CONNECT, false);
 });
