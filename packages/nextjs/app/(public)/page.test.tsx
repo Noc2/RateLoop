@@ -25,12 +25,28 @@ test("landing page presents the tokenless human-assurance story", async () => {
   );
   assert.match(html, /Reviews and payments are simulated/i);
   assert.match(html, /Use test or redacted content/i);
-  assert.match(html, /Set the Standard/);
-  assert.match(html, /Review Blind/);
-  assert.match(html, /Decide with Evidence/);
+  assert.match(html, /How It/);
+  assert.match(html, /Ask/);
+  assert.match(html, /Answer &amp; Earn/);
+  assert.match(html, /Evaluation/);
+  assert.match(html, /Assigned human reviewers answer independently/i);
+  assert.match(html, /earn USDC for accepted paid work/i);
+  assert.match(html, /The customer decides what happens next/i);
+  assert.match(html, /poster="\/videos\/rateloop-promo-poster\.jpg"/);
+  assert.match(html, /src="\/videos\/rateloop-promo\.mp4"/);
+  assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);
+  assert.match(html, /Why It/);
+  assert.match(html, /Built for AI Workflows/);
+  assert.match(html, /Independent Human Review/);
+  assert.match(html, /Transparent Incentives/);
+  assert.match(html, /Auditable Settlement/);
+  assert.match(html, /Privacy with Clear Limits/);
+  assert.match(html, /Agents ask; human reviewers provide the judgment/i);
+  assert.match(html, /href="\/docs\/tech-stack"/);
+  assert.match(html, /href="\/docs\/smart-contracts"/);
+  assert.match(html, /href="\/legal\/privacy"/);
   assert.match(html, /What Does RateLoop Do\?/);
   assert.match(html, /Your team makes the final decision/i);
-  assert.match(html, /Remove secrets/i);
   assert.match(html, /Use RateLoop with your favorite AI agent/);
   assert.match(html, /Claude Code RateLoop setup/);
   assert.match(html, /OpenAI Codex RateLoop setup/);
@@ -39,12 +55,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Gemini CLI RateLoop setup/);
   assert.match(html, /OpenClaw RateLoop setup/);
   assert.doesNotMatch(html, /Connect through the tokenless remote MCP server|View setup/);
-  assert.match(html, /Problem/);
-  assert.match(html, /Solution/);
-  assert.match(html, /Safety/);
-  assert.match(html, /Privacy/);
-  assert.match(html, /Read the privacy notice/);
-  assert.match(html, /Review the agent safety boundary/);
   assert.match(html, /Claude Code/);
   assert.match(html, /OpenAI Codex/);
   assert.match(html, /Cursor/);
@@ -54,19 +64,18 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /href="\/docs\/ai"/);
   assert.match(html, /Common/);
   assert.equal(html.match(/<details/g)?.length, 6);
-  assert.ok(html.indexOf("Problem") < html.indexOf("Solution"));
-  assert.ok(html.indexOf("Solution") < html.indexOf("Privacy"));
-  assert.ok(html.indexOf("Privacy") < html.indexOf("Common"));
+  assert.ok(html.indexOf('id="how-it-works"') < html.indexOf('id="why-it-works"'));
+  assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Common"));
   assert.doesNotMatch(
     html,
     /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready/i,
   );
   assert.doesNotMatch(
     html,
-    /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context|rateloop-promo\.mp4/i,
+    /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context/i,
   );
   assert.doesNotMatch(html, /Add a human check before AI reaches your customers\./i);
-  assert.doesNotMatch(html, /How It Works|Why RateLoop Works|Agent Workflow/i);
+  assert.doesNotMatch(html, /id="problem"|id="solution"|id="safety-privacy"|Safety &amp; Privacy/i);
   assert.doesNotMatch(html, /\/api\/mcp\/public|www\.rateloop\.ai/i);
-  assert.doesNotMatch(html, /LREP|protocol token|governance|leaderboard|manual claim/i);
+  assert.doesNotMatch(html, /LREP|staking|protocol token|governance|leaderboard|manual claim/i);
 });

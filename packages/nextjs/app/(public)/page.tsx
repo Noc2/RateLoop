@@ -1,44 +1,71 @@
 import Link from "next/link";
+import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
-const steps = [
-  ["01", "Set the Standard", "Define one clear question and the quality bar before anyone reviews.", "#359EEE"],
-  ["02", "Review Blind", "Collect independent judgments without showing reviewers anyone else's vote.", "#03CEA4"],
-  ["03", "Decide with Evidence", "Use the result, reasons, and audit trail to decide what ships.", "#EF476F"],
-] as const;
-
-const problemPoints = [
-  ["Variable output", "The same prompt can produce different results across runs and models.", "#359EEE"],
+const howItWorksSteps = [
+  ["01", "Ask", "A person or AI agent defines the question, cases, audience, budget, and quality bar.", "#359EEE"],
   [
-    "Subjective quality",
-    "Correctness is only part of the question. Usefulness and tone still need judgment.",
+    "02",
+    "Answer & Earn",
+    "Assigned human reviewers answer independently, explain their choice, and earn USDC for accepted paid work.",
     "#03CEA4",
   ],
   [
-    "No independent check",
-    "The people building the workflow are rarely the people reviewing its real-world impact.",
+    "03",
+    "Evaluation",
+    "RateLoop returns the result, reasons, disagreement, limitations, and any valid settlement evidence. The customer decides what happens next.",
     "#EF476F",
   ],
 ] as const;
 
-const safetyPoints = [
-  [
-    "Minimize the data",
-    "Use public, synthetic, or safely redacted material. Remove secrets and unnecessary context.",
-    "#359EEE",
-  ],
-  [
-    "Control the audience",
-    "Invite the reviewers you choose or use a scoped policy. Reviewer access is limited to the assigned work.",
-    "#03CEA4",
-  ],
-  [
-    "Keep the decision yours",
-    "RateLoop records review evidence and settlement. It does not prove safety, compliance, or authorize a release.",
-    "#EF476F",
-  ],
+const whyItWorksFeatures = [
+  {
+    title: "Built for AI Workflows",
+    body: "Agents can draft approval-bound browser handoffs or use a scoped workspace policy. Agents ask; human reviewers provide the judgment.",
+    color: "#359EEE",
+    links: [
+      ["Agents & MCP", "/docs/ai"],
+      ["SDK", "/docs/sdk"],
+    ],
+  },
+  {
+    title: "Independent Human Review",
+    body: "Blinded assignments prevent reviewers from following the crowd. Invited, network, and hybrid panels remain separate in the evidence.",
+    color: "#03CEA4",
+    links: [
+      ["Review Flow", "/docs/how-it-works"],
+      ["Panel Integrity", "/docs/tech-stack"],
+    ],
+  },
+  {
+    title: "Transparent Incentives",
+    body: "Accepted paid work receives a fixed USDC payment plus a bounded scoring bonus. The scoring rule rewards useful signal; it is not a truth oracle.",
+    color: "#EF476F",
+    links: [
+      ["Scoring & Incentives", "/docs/tech-stack"],
+      ["Fund Core", "/docs/smart-contracts"],
+    ],
+  },
+  {
+    title: "Auditable Settlement",
+    body: "Commitments, economic terms, scoring, compensation, refunds, and settlement can be verified. The customer still owns the final decision.",
+    color: "#FFC43D",
+    links: [
+      ["Smart Contracts", "/docs/smart-contracts"],
+      ["Decision Evidence", "/docs/how-it-works"],
+    ],
+  },
+  {
+    title: "Privacy with Clear Limits",
+    body: "Private artifacts are minimized, encrypted, and leased only to assigned reviewers. Public-chain evidence remains visible and cannot be erased.",
+    color: "#359EEE",
+    links: [
+      ["Privacy Notice", "/legal/privacy"],
+      ["Privacy & Recovery", "/docs/how-it-works"],
+    ],
+  },
 ] as const;
 
 const questions = [
@@ -68,9 +95,19 @@ const questions = [
   ],
 ] as const;
 
-function SectionTitle({ number, children, gradient }: { number: string; children: React.ReactNode; gradient: string }) {
+function SectionTitle({
+  number,
+  children,
+  gradient,
+  className = "mb-12 sm:mb-16",
+}: {
+  number: string;
+  children: React.ReactNode;
+  gradient: string;
+  className?: string;
+}) {
   return (
-    <div className="mb-12 sm:mb-16">
+    <div className={className}>
       <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/70">{number}</span>
       <h2 className="display-section text-[2.85rem] text-base-content sm:text-[4.3rem] lg:text-[5.4rem]">
         {children} <span className="rateloop-text-gradient">{gradient}</span>
@@ -118,38 +155,13 @@ export default function TokenlessLandingPage() {
           <SupportedAgentsSection />
         </section>
 
-        <section id="problem" className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
-          <SectionTitle number="01" gradient="Problem">
-            The
+        <section id="how-it-works" className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
+          <SectionTitle number="01" gradient="Works" className="mb-6">
+            How It
           </SectionTitle>
-          <p className="mb-10 max-w-3xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.35rem]">
-            AI can generate the work. The hard part is knowing whether it is useful, appropriate, and ready to reach
-            real people.
-          </p>
+          <PromoVideo />
           <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
-            {problemPoints.map(([title, body, color], index) => (
-              <article key={title} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
-                <span className="font-mono text-sm" style={{ color }}>
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <h3 className="mt-3 text-[1.55rem] font-bold leading-tight sm:text-[1.75rem]">{title}</h3>
-                <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
-
-        <section id="solution" className="relative z-10 w-full">
-          <SectionTitle number="02" gradient="Solution">
-            The
-          </SectionTitle>
-          <p className="mb-10 max-w-3xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.35rem]">
-            Add a human assurance layer before an AI-enabled workflow reaches customers, teammates, or production.
-          </p>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
-            {steps.map(([number, title, body, color]) => (
+            {howItWorksSteps.map(([number, title, body, color]) => (
               <article key={number} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
                 <span className="font-mono text-sm" style={{ color }}>
                   {number}
@@ -163,44 +175,43 @@ export default function TokenlessLandingPage() {
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
-        <section id="safety-privacy" className="relative z-10 w-full">
-          <SectionTitle number="03" gradient="Privacy">
-            Safety &
+        <section id="why-it-works" className="relative z-10 w-full">
+          <SectionTitle number="02" gradient="Works">
+            Why It
           </SectionTitle>
-          <p className="mb-10 max-w-3xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.35rem]">
-            Share only what reviewers need. Keep the final decision under your control.
-          </p>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
-            {safetyPoints.map(([title, body, color], index) => (
-              <article key={title} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
-                <span className="font-mono text-sm" style={{ color }}>
+          <div className="grid grid-cols-1 gap-x-12 gap-y-14 md:grid-cols-2 lg:grid-cols-6">
+            {whyItWorksFeatures.map((feature, index) => (
+              <article
+                key={feature.title}
+                className={`flex min-h-56 flex-col border-l-2 py-2 pl-6 ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`}
+                style={{ borderColor: feature.color }}
+              >
+                <span className="font-mono text-sm" style={{ color: feature.color }}>
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <h3 className="mt-3 text-[1.55rem] font-bold leading-tight sm:text-[1.75rem]">{title}</h3>
-                <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
+                <h3 className="mt-3 text-[1.45rem] font-bold leading-tight sm:text-[1.65rem]">{feature.title}</h3>
+                <p className="mt-4 text-base leading-7 text-base-content/60">{feature.body}</p>
+                <div className="mt-auto flex flex-wrap gap-2 pt-5">
+                  {feature.links.map(([label, href]) => (
+                    <Link
+                      key={`${feature.title}-${href}`}
+                      href={href}
+                      prefetch={false}
+                      className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72 transition hover:border-base-content/20 hover:bg-base-content/[0.1] hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </div>
               </article>
             ))}
-          </div>
-          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm text-base-content/60">
-            <Link
-              href="/legal/privacy"
-              className="font-semibold underline decoration-base-content/30 underline-offset-4 hover:decoration-base-content"
-            >
-              Read the privacy notice
-            </Link>
-            <Link
-              href="/docs/ai"
-              className="font-semibold underline decoration-base-content/30 underline-offset-4 hover:decoration-base-content"
-            >
-              Review the agent safety boundary
-            </Link>
           </div>
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
         <section className="relative z-10 w-full">
-          <SectionTitle number="04" gradient="Questions">
+          <SectionTitle number="03" gradient="Questions">
             Common
           </SectionTitle>
           <div className="grid grid-cols-1 gap-x-12 gap-y-4 xl:grid-cols-2">
