@@ -76,13 +76,13 @@ export default function TokenlessLandingPage() {
           </div>
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[40rem] lg:items-start lg:pb-8 lg:pt-24 xl:max-w-[43rem] xl:pt-28">
             <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
-              <span className="block">Human Assurance</span>
+              <span className="block">Humans In The </span>
               <span className="block">
-                <span className="rateloop-text-gradient">for AI</span>
+                <span className="rateloop-text-gradient">Loop</span>
               </span>
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Get blind human feedback before you ship.
+              Human raters guide decisions and earn USDC
             </p>
             {sandboxMode ? (
               <p className="mt-4 max-w-[40rem] rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-sm leading-6 text-amber-50 lg:text-left">

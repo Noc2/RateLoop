@@ -14,9 +14,9 @@ test("landing page uses concise buyer-facing copy and a secondary reviewer journ
   const { default: HomePage } = await import("./page");
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Human Assurance/i);
-  assert.match(html, /for AI/i);
-  assert.match(html, /Get blind human feedback before you ship/i);
+  assert.match(html, /Humans In The/);
+  assert.match(html, />Loop<\/span>/);
+  assert.match(html, /Human raters guide decisions and earn USDC/);
   assert.match(html, /Try the Sandbox/);
   assert.match(html, /View Reviewer Flow/);
   assert.ok(
