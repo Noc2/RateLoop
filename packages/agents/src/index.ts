@@ -7,6 +7,16 @@ export {
   TOKENLESS_WEBHOOK_EVENT_TYPES,
   waitUntilTokenlessReady,
 } from "./tokenless";
+export {
+  createTokenlessAgentKeystore,
+  loadTokenlessAgentAccount,
+  splitTokenlessSignature,
+} from "./tokenlessSigner";
+export { runTokenlessAutonomous } from "./tokenlessRun";
+export type {
+  TokenlessAutonomousRunInput,
+  TokenlessResumeReceipt,
+} from "./tokenlessRun";
 export type {
   TokenlessAgentsClientOptions,
   TokenlessAskRequest,

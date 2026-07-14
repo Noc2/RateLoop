@@ -3480,6 +3480,7 @@ __metadata:
     dotenv: ^16.4.5
     tsx: ^4.21.0
     typescript: ~5.8.2
+    viem: 2.39.0
     vitest: ^4.1.0
   bin:
     rateloop-agents: ./dist/esm/cli.js

@@ -9,6 +9,10 @@ const COMMAND_OPTIONS: Record<string, ReadonlySet<string>> = {
   "assurance-run": new Set(["run-id"]),
   ask: new Set(["file"]),
   quote: new Set(["file"]),
+  "wallet-create": new Set(["keystore", "overwrite", "password-env"]),
+  "wallet-address": new Set(["keystore", "password-env"]),
+  run: new Set(["file", "max-wait-ms"]),
+  resume: new Set(["operation-key", "max-wait-ms"]),
   result: new Set(["operation-key"]),
   wait: new Set([
     "cursor",

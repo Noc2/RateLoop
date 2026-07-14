@@ -46,6 +46,18 @@ describe("tokenless CLI parsing", () => {
     ).not.toThrow();
   });
 
+  it("accepts wallet and autonomous publishing commands", () => {
+    for (const args of [
+      ["wallet-create", "--keystore", "wallet.json"],
+      ["wallet-address", "--keystore", "wallet.json"],
+      ["run", "--file", "run.json", "--max-wait-ms", "300000"],
+      ["resume", "--operation-key", "op_123"],
+    ]) {
+      const parsed = parseCliArgs(args);
+      expect(() => validateCliOptions(parsed.command, parsed.options)).not.toThrow();
+    }
+  });
+
   it("does not accept positional or repeated operation identifiers", () => {
     expect(() => parseCliArgs(["result", "op_123"])).toThrow(
       /Unexpected argument/,

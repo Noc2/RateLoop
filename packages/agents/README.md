@@ -7,6 +7,11 @@ Small, versioned helpers for the tokenless RateLoop agent flow:
 3. `wait` performs a bounded long poll and returns a continuation when work is still pending.
 4. `result` returns the versioned verdict and complete fund accounting.
 
+For unattended publishing, an owner can issue a policy-bound workspace key and
+give the agent either a prepaid budget or an agent-controlled wallet for x402
+payments. Public MCP and browser handoffs remain draft-first and approval-bound;
+the autonomous API/CLI lane is authenticated, budgeted, revocable, and scoped.
+
 This package never defaults to `rateloop.ai`. Set the isolated deployment explicitly.
 
 ## Install
@@ -86,6 +91,27 @@ yarn workspace @rateloop/agents wait \
 yarn workspace @rateloop/agents result --operation-key op_...
 ```
 
+Create an encrypted local wallet (the private key never enters an environment
+variable), then run a quote → ask → x402 payment → wait → result flow:
+
+```bash
+export RATELOOP_AGENT_KEYSTORE_PASSWORD='use-a-secret-manager-in-production'
+yarn workspace @rateloop/agents wallet-create \
+  --keystore ~/.rateloop/tokenless-agent.json
+export RATELOOP_AGENT_KEYSTORE_PATH=~/.rateloop/tokenless-agent.json
+export RATELOOP_AGENT_API_KEY=rlk_policy_bound_key
+export RATELOOP_AGENT_RESUME_PATH=~/.rateloop/tokenless-agent-resume.json
+yarn workspace @rateloop/agents run \
+  --file packages/agents/examples/run.json \
+  --max-wait-ms 300000
+```
+
+`run` signs only the canonical EIP-3009 and round-authorization payloads
+returned by the isolated deployment. `resume` can poll a persisted operation
+after a process restart. The server enforces the key's scopes, wallet binding,
+audience, payment mode, panel limits, and daily/monthly budget; it does not
+accept an accountless public x402 payment.
+
 Without `--until-ready`, `wait` performs one bounded request and prints either a ready state or the server continuation (`cursor`, `retryAfterMs`, `expiresAt`, and canonical `pollUrl`). Persist the operation key and latest cursor so another process can resume without resubmitting the ask.
 
 ## Result contract
@@ -112,6 +138,9 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 | `RATELOOP_AGENT_API_KEY`      | Workspace key required by assurance commands and authenticated paid operations. It is omitted from free quotes. |
 | `RATELOOP_AGENT_API_PATH`     | Optional API prefix. Defaults to `/api/agent/v1`.                                                               |
 | `RATELOOP_REQUEST_TIMEOUT_MS` | Optional positive timeout for non-wait requests.                                                                |
+| `RATELOOP_AGENT_KEYSTORE_PATH` | Encrypted agent wallet path used by `run` and `wallet-address`.                                               |
+| `RATELOOP_AGENT_KEYSTORE_PASSWORD` | Password for the encrypted agent wallet; keep it in a secret manager.                                      |
+| `RATELOOP_AGENT_RESUME_PATH` | Optional mode-0600 path for a non-secret autonomous-run receipt.                                               |
 
 The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
 

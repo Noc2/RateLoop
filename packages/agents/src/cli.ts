@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
   HumanAssuranceProjectCreateRequest,
@@ -15,6 +16,8 @@ import {
 } from "./cliOptions";
 import { loadTokenlessAgentsRuntimeConfig } from "./config";
 import { resolveExistingInputPath } from "./inputPaths";
+import { createTokenlessAgentKeystore, loadTokenlessAgentAccount } from "./tokenlessSigner";
+import { runTokenlessAutonomous, type TokenlessAutonomousRunInput } from "./tokenlessRun";
 import {
   createTokenlessAgentsClient,
   waitUntilTokenlessReady,
@@ -66,6 +69,17 @@ function requireString(options: CliOptions, name: string) {
   return value.trim();
 }
 
+function requireEnvPassword(options: CliOptions, name: string) {
+  const envName =
+    typeof options["password-env"] === "string"
+      ? options["password-env"].trim()
+      : "RATELOOP_AGENT_KEYSTORE_PASSWORD";
+  if (!envName) throw new Error(`--${name} password environment name must not be empty`);
+  const password = process.env[envName]?.trim();
+  if (!password) throw new Error(`${envName} is required for ${name}`);
+  return password;
+}
+
 async function readJsonFile<T>(path: string): Promise<T> {
   const resolvedPath = resolveExistingInputPath(path, { label: "JSON file" });
   const value = JSON.parse(await readFile(resolvedPath, "utf8")) as unknown;
@@ -84,6 +98,10 @@ Usage:
   rateloop-agents wait --operation-key op_... [--cursor ...] [--timeout-ms 30000]
   rateloop-agents wait --operation-key op_... --until-ready --max-wait-ms 300000
   rateloop-agents result --operation-key op_...
+  rateloop-agents wallet-create --keystore ~/.rateloop/tokenless-agent.json
+  rateloop-agents wallet-address --keystore ~/.rateloop/tokenless-agent.json
+  rateloop-agents run --file run.json --max-wait-ms 300000
+  rateloop-agents resume --operation-key op_... --max-wait-ms 300000
   rateloop-agents assurance-projects
   rateloop-agents assurance-project-create --file assurance-project.json
   rateloop-agents assurance-project --project-id hap_...
@@ -94,6 +112,9 @@ Environment:
   RATELOOP_AGENT_API_KEY      Workspace key; required for assurance commands and prepaid operations
   RATELOOP_AGENT_API_PATH     Optional API prefix; defaults to /api/agent/v1
   RATELOOP_REQUEST_TIMEOUT_MS Optional positive HTTP timeout
+  RATELOOP_AGENT_KEYSTORE_PATH Agent wallet keystore for autonomous runs
+  RATELOOP_AGENT_KEYSTORE_PASSWORD Agent wallet keystore password
+  RATELOOP_AGENT_RESUME_PATH Optional non-secret autonomous-run receipt path
 
 The CLI never defaults to rateloop.ai and never signs or submits legacy contract calls.`;
 }
@@ -103,6 +124,26 @@ export async function runCli(args: string[]) {
   validateCliOptions(command, options);
   if (command === "help" || command === "--help") {
     console.log(usage());
+    return;
+  }
+
+  if (command === "wallet-create") {
+    const created = await createTokenlessAgentKeystore({
+      path: requireString(options, "keystore"),
+      password: requireEnvPassword(options, "wallet-create"),
+      overwrite: readBooleanFlag(options, "overwrite"),
+    });
+    printJson(created);
+    return;
+  }
+
+  if (command === "wallet-address") {
+    const keystorePath = requireString(options, "keystore");
+    const account = await loadTokenlessAgentAccount({
+      path: keystorePath,
+      password: requireEnvPassword(options, "wallet-address"),
+    });
+    printJson({ address: account.address, keystore: resolve(keystorePath) });
     return;
   }
 
@@ -118,6 +159,47 @@ export async function runCli(args: string[]) {
     apiPath: config.apiPath,
     timeoutMs: config.requestTimeoutMs,
   });
+
+  if (command === "run" || command === "resume") {
+    if (!config.apiKey) {
+      throw new Error("RATELOOP_AGENT_API_KEY is required for autonomous publishing.");
+    }
+    if (!config.keystorePath || !config.keystorePassword) {
+      throw new Error(
+        "RATELOOP_AGENT_KEYSTORE_PATH and RATELOOP_AGENT_KEYSTORE_PASSWORD are required for autonomous publishing.",
+      );
+    }
+    const account = await loadTokenlessAgentAccount({
+      path: config.keystorePath,
+      password: config.keystorePassword,
+    });
+    const maxWaitMs =
+      readOptionalPositiveInteger(options, "max-wait-ms") ?? 300_000;
+    if (command === "run") {
+      const request = await readJsonFile<TokenlessAutonomousRunInput>(
+        requireString(options, "file"),
+      );
+      printJson(
+        await runTokenlessAutonomous({
+          account,
+          apiBaseUrl: config.apiBaseUrl,
+          client,
+          maxWaitMs,
+          request,
+          resumePath: config.resumePath,
+        }),
+      );
+      return;
+    }
+    const operationKey = requireString(options, "operation-key");
+    printJson(
+      await waitUntilTokenlessReady(client, {
+        maxWaitMs,
+        operationKey,
+      }),
+    );
+    return;
+  }
 
   switch (command) {
     case "assurance-projects":

@@ -5,6 +5,9 @@ export type TokenlessAgentsRuntimeConfig = {
   apiBaseUrl: string;
   apiPath?: string;
   requestTimeoutMs?: number;
+  keystorePath?: string;
+  keystorePassword?: string;
+  resumePath?: string;
 };
 
 function readEnv(env: NodeJS.ProcessEnv, name: string) {
@@ -83,5 +86,8 @@ export function loadTokenlessAgentsRuntimeConfig(
       readEnv(env, "RATELOOP_REQUEST_TIMEOUT_MS"),
       "RATELOOP_REQUEST_TIMEOUT_MS",
     ),
+    keystorePath: readEnv(env, "RATELOOP_AGENT_KEYSTORE_PATH"),
+    keystorePassword: readEnv(env, "RATELOOP_AGENT_KEYSTORE_PASSWORD"),
+    resumePath: readEnv(env, "RATELOOP_AGENT_RESUME_PATH"),
   };
 }
