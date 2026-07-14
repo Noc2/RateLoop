@@ -25,7 +25,6 @@ export function AgentRegistryPanel() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +76,6 @@ export function AgentRegistryPanel() {
     setWorkspaceId(nextWorkspaceId);
     setRegistry(null);
     setEditingAgent(null);
-    setShowCreate(false);
     setError(null);
     setStatus(null);
     setLoading(true);
@@ -87,29 +85,6 @@ export function AgentRegistryPanel() {
       setError(cause instanceof Error ? cause.message : "Unable to load the agent registry.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function createAgent(input: AgentVersionInput & { externalId?: string }) {
-    setBusy(true);
-    setError(null);
-    setStatus(null);
-    try {
-      await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents`, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
-        }),
-      );
-      await loadRegistry(workspaceId);
-      setShowCreate(false);
-      setStatus("Agent registered with immutable version 1.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to register the agent.");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -191,39 +166,12 @@ export function AgentRegistryPanel() {
             </select>
           </label>
         </div>
-        {registry?.canManage ? (
-          <button
-            type="button"
-            className="rateloop-gradient-action mt-5 px-5"
-            onClick={() => {
-              setShowCreate(current => !current);
-              setEditingAgent(null);
-            }}
-          >
-            {showCreate ? "Close registration" : "Register agent"}
-          </button>
-        ) : registry ? (
+        {registry && !registry.canManage ? (
           <p className="mt-5 rounded-lg bg-white/[0.04] p-3 text-sm text-base-content/60">
             Your {registry.callerRole} role has read-only access to this registry.
           </p>
         ) : null}
       </section>
-
-      {showCreate && registry?.canManage ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="register-agent-heading">
-          <h2 id="register-agent-heading" className="text-xl font-semibold">
-            Register a durable agent
-          </h2>
-          <div className="mt-5">
-            <AgentVersionForm
-              externalIdRequired
-              busy={busy}
-              submitLabel="Create agent and version 1"
-              onSubmit={createAgent}
-            />
-          </div>
-        </section>
-      ) : null}
 
       {editingAgent && registry?.canManage ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="new-agent-version-heading">
@@ -252,12 +200,13 @@ export function AgentRegistryPanel() {
       ) : null}
       {!loading && workspaces.length === 0 ? (
         <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
-          Create a workspace in Overview before registering an agent.
+          Create a workspace in Overview before connecting an agent.
         </div>
       ) : null}
       {!loading && registry?.agents.length === 0 ? (
         <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
-          No agents are registered in this workspace yet.
+          No approved agents are registered yet. Use Connect an agent above so the agent can describe itself before you
+          approve its immutable identity and policies.
         </div>
       ) : null}
 
@@ -296,7 +245,6 @@ export function AgentRegistryPanel() {
                     disabled={busy}
                     onClick={() => {
                       setEditingAgent(agent);
-                      setShowCreate(false);
                     }}
                   >
                     New version

@@ -1,7 +1,9 @@
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { WorkspaceSettingsClient } from "~~/components/tokenless/WorkspaceSettingsClient";
+import { AgentConnectionPanel } from "~~/components/tokenless/agents/AgentConnectionPanel";
 import { AgentPublishingPolicyPanel } from "~~/components/tokenless/agents/AgentPublishingPolicyPanel";
 import { AgentRegistryPanel } from "~~/components/tokenless/agents/AgentRegistryPanel";
+import { AgentReviewPolicyPanel } from "~~/components/tokenless/agents/AgentReviewPolicyPanel";
 import { type AgentTab, AgentTabs } from "~~/components/tokenless/agents/AgentTabs";
 import { EvaluationDashboardPanel } from "~~/components/tokenless/agents/EvaluationDashboardPanel";
 import { PrivateGroupsPanel } from "~~/components/tokenless/agents/PrivateGroupsPanel";
@@ -18,7 +20,9 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
       {tab === "overview" ? <WorkspaceSettingsClient /> : null}
       {tab === "agents" ? (
         <>
+          <AgentConnectionPanel />
           <AgentRegistryPanel />
+          <AgentReviewPolicyPanel />
           <AgentPublishingPolicyPanel />
         </>
       ) : null}

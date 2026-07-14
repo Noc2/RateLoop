@@ -12,5 +12,8 @@ test("agent registry UI labels model identity as declared and versions as immuta
   assert.match(source, /setWorkspaceId\(nextWorkspaceId\);\s+setRegistry\(null\);/);
   assert.match(form, /Declared provider/);
   assert.match(form, /Saving creates an immutable version/);
+  assert.match(source, /Use Connect an agent above/);
+  assert.doesNotMatch(source, /Register agent|Register a durable agent|createAgent/);
+  assert.doesNotMatch(source, /method: "POST"[\s\S]{0,200}\/agents/);
   assert.doesNotMatch(source, /verified model|model accuracy|truth score/i);
 });
