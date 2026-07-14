@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { WorkspaceSettingsClient } from "~~/components/tokenless/WorkspaceSettingsClient";
 import { AgentConnectionPanel } from "~~/components/tokenless/agents/AgentConnectionPanel";
@@ -5,12 +6,19 @@ import { AgentPublishingPolicyPanel } from "~~/components/tokenless/agents/Agent
 import { AgentRegistryPanel } from "~~/components/tokenless/agents/AgentRegistryPanel";
 import { AgentReviewPolicyPanel } from "~~/components/tokenless/agents/AgentReviewPolicyPanel";
 import { type AgentTab, AgentTabs } from "~~/components/tokenless/agents/AgentTabs";
+import { AgentsSignInPrompt } from "~~/components/tokenless/agents/AgentsSignInPrompt";
 import { EvaluationDashboardPanel } from "~~/components/tokenless/agents/EvaluationDashboardPanel";
 import { PrivateGroupsPanel } from "~~/components/tokenless/agents/PrivateGroupsPanel";
+import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 
 const AGENT_TABS = new Set<AgentTab>(["overview", "agents", "groups", "evaluations"]);
 
 export default async function AgentsPage({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
+  const cookieStore = await cookies();
+  const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
+
+  if (!session) return <AgentsSignInPrompt />;
+
   const requestedTab = (await searchParams).tab;
   const rawTab = Array.isArray(requestedTab) ? requestedTab[0] : requestedTab;
   const tab = AGENT_TABS.has(rawTab as AgentTab) ? (rawTab as AgentTab) : "overview";
