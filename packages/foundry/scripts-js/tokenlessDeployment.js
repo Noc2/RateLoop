@@ -31,17 +31,32 @@ function normalizeBlockNumber(value, label) {
   return parsed;
 }
 
-function transactionHash(transaction) {
-  return transaction.hash ?? transaction.transactionHash ?? null;
+function transactionHash(transaction, label = "Transaction") {
+  const hash = transaction.hash ?? transaction.transactionHash ?? null;
+  if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
+    throw new Error(`${label} hash is missing or malformed.`);
+  }
+  return hash.toLowerCase();
 }
 
-function successfulReceiptByHash(receipts) {
+function receiptIndexes(receipts) {
+  const successfulByAddress = new Map();
   const byHash = new Map();
   for (const receipt of receipts ?? []) {
-    const hash = receipt.transactionHash?.toLowerCase();
-    if (hash) byHash.set(hash, receipt);
+    const hash = transactionHash(receipt, "Receipt");
+    if (byHash.has(hash)) throw new Error(`Duplicate receipt transaction hash ${hash}.`);
+    byHash.set(hash, receipt);
+    if (receipt.status !== "0x1" && receipt.status !== 1) continue;
+    if (receipt.contractAddress === null || receipt.contractAddress === undefined) continue;
+    const normalizedAddress = normalizeAddress(
+      receipt.contractAddress,
+      `Receipt ${hash} contractAddress`,
+    ).toLowerCase();
+    const matches = successfulByAddress.get(normalizedAddress) ?? [];
+    matches.push(receipt);
+    successfulByAddress.set(normalizedAddress, matches);
   }
-  return byHash;
+  return { byHash, successfulByAddress };
 }
 
 function deploymentLabel(contractName) {
@@ -53,44 +68,59 @@ function artifactName(contractName) {
 }
 
 function findCreates(broadcast) {
-  const receipts = successfulReceiptByHash(broadcast.receipts);
+  const receipts = receiptIndexes(broadcast.receipts);
+  const createTransactions = (broadcast.transactions ?? []).filter(
+    transaction => transaction.transactionType === "CREATE",
+  );
+  const createHashes = new Set();
+  for (const transaction of createTransactions) {
+    const contractName = transaction.contractName ?? "unknown";
+    const hash = transactionHash(transaction, `${contractName} CREATE transaction`);
+    if (createHashes.has(hash)) throw new Error(`Duplicate CREATE transaction hash ${hash}.`);
+    if (!receipts.byHash.has(hash)) {
+      throw new Error(`Missing receipt for ${contractName} CREATE transaction ${hash}.`);
+    }
+    createHashes.add(hash);
+  }
+
   const creates = [];
+  const usedReceiptHashes = new Set();
 
-  for (const transaction of broadcast.transactions ?? []) {
-    if (transaction.transactionType !== "CREATE") continue;
-    const receipt = receipts.get(transactionHash(transaction)?.toLowerCase());
-    if (!receipt) {
+  for (const transaction of createTransactions) {
+    const contractName = transaction.contractName ?? "unknown";
+    const address = normalizeAddress(
+      transaction.contractAddress,
+      `${contractName} address`,
+    );
+    // Forge can permute CREATE hashes in deployCode broadcasts. The receipt's
+    // deployed address is the stable identity, while the complete hash set is
+    // still checked above so an unrelated receipt cannot be substituted.
+    const matchingReceipts = receipts.successfulByAddress.get(address.toLowerCase()) ?? [];
+    if (matchingReceipts.length !== 1) {
       throw new Error(
-        `Missing receipt for ${transaction.contractName ?? "unknown"} CREATE.`
+        `Expected exactly one successful receipt for ${contractName} at ${address}; found ${matchingReceipts.length}.`,
       );
     }
-    if (receipt.status === "0x0" || receipt.status === 0) {
+    const receipt = matchingReceipts[0];
+    const receiptHash = transactionHash(receipt, `${contractName} deployment receipt`);
+    if (!createHashes.has(receiptHash)) {
       throw new Error(
-        `${transaction.contractName ?? "unknown"} CREATE transaction reverted.`
+        `Successful receipt ${receiptHash} for ${contractName} at ${address} is not referenced by a CREATE transaction.`,
       );
     }
-
-    if (
-      transaction.contractAddress &&
-      receipt.contractAddress &&
-      !sameAddress(transaction.contractAddress, receipt.contractAddress)
-    ) {
-      throw new Error(
-        `${transaction.contractName ?? "unknown"} CREATE transaction address does not match its receipt.`
-      );
+    if (usedReceiptHashes.has(receiptHash)) {
+      throw new Error(`Deployment receipt ${receiptHash} was reused by multiple CREATE transactions.`);
     }
+    usedReceiptHashes.add(receiptHash);
 
     creates.push({
-      address: normalizeAddress(
-        transaction.contractAddress ?? receipt.contractAddress,
-        `${transaction.contractName ?? "unknown"} address`
-      ),
+      address,
       arguments: Array.isArray(transaction.arguments)
         ? transaction.arguments
         : [],
       blockNumber: normalizeBlockNumber(
         receipt.blockNumber,
-        `${transaction.contractName ?? "unknown"} deployedOnBlock`
+        `${contractName} deployedOnBlock`
       ),
       contractName: transaction.contractName,
     });

@@ -105,6 +105,22 @@ test("includes X402PanelSubmitter when the optional adapter is deployed", () => 
   assert.ok(!artifact.deploymentKey.endsWith(`:${address(0)}`));
 });
 
+test("resolves Foundry CREATE hash permutations by unique successful receipt address", () => {
+  const broadcast = completeBroadcast({ includeAdapter: true });
+  const originalHashes = broadcast.transactions.map(
+    transaction => transaction.hash,
+  );
+  broadcast.transactions[0].hash = originalHashes[2];
+  broadcast.transactions[1].hash = originalHashes[0];
+  broadcast.transactions[2].hash = originalHashes[1];
+
+  const artifact = reconstructTokenlessDeploymentFromBroadcast(broadcast);
+  assert.equal(artifact.contracts.TestUSDC.deployedOnBlock, 101);
+  assert.equal(artifact.contracts.CredentialIssuer.deployedOnBlock, 102);
+  assert.equal(artifact.contracts.TokenlessPanel.deployedOnBlock, 103);
+  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 104);
+});
+
 test("rejects missing required contracts and mixed broadcasts", () => {
   const missingIssuer = completeBroadcast();
   missingIssuer.transactions = missingIssuer.transactions.filter(
@@ -130,13 +146,22 @@ test("rejects missing required contracts and mixed broadcasts", () => {
   );
 });
 
-test("rejects a CREATE whose transaction address disagrees with its matched receipt", () => {
-  const broadcast = completeBroadcast();
-  broadcast.receipts[0].contractAddress = address(99);
-
+test("fails closed when a CREATE address has no unique successful receipt", () => {
+  const missing = completeBroadcast();
+  missing.receipts[0].contractAddress = address(99);
   assert.throws(
-    () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
-    /transaction address does not match its receipt/,
+    () => reconstructTokenlessDeploymentFromBroadcast(missing),
+    /exactly one successful receipt for MockERC20.*found 0/,
+  );
+
+  const duplicate = completeBroadcast();
+  duplicate.receipts.push({
+    ...duplicate.receipts[0],
+    transactionHash: hash(99),
+  });
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(duplicate),
+    /exactly one successful receipt for MockERC20.*found 2/,
   );
 });
 
