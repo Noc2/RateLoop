@@ -14,47 +14,83 @@ const ThirdwebSessionButton = dynamic(
 
 type IconProps = { className?: string };
 
-function DiscoverIcon({ className }: IconProps) {
+function GlobeAltIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+      <path d="M3.6 9h16.8M3.6 15h16.8M12 3c2.2 2.46 3.3 5.46 3.3 9S14.2 18.54 12 21M12 3c-2.2 2.46-3.3 5.46-3.3 9S9.8 18.54 12 21" />
+    </svg>
+  );
+}
+
+function PlusCircleIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 9v6m3-3H9" />
       <circle cx="12" cy="12" r="9" />
-      <path d="m15.4 8.6-2.1 4.7-4.7 2.1 2.1-4.7 4.7-2.1Z" />
     </svg>
   );
 }
 
-function SubmitIcon({ className }: IconProps) {
+function IdentificationIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 8v8M8 12h8" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="4.5" width="19" height="15" rx="2.25" />
+      <circle cx="8" cy="9" r="2" />
+      <path d="M4.75 16c.45-2.15 1.55-3.25 3.25-3.25s2.8 1.1 3.25 3.25M14.5 8.5h4.25M14.5 12h4.25M14.5 15.5h2.75" />
     </svg>
   );
 }
 
-function AccountIcon({ className }: IconProps) {
+function BookOpenIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <circle cx="12" cy="8" r="3.25" />
-      <path d="M5.5 19c.7-3.2 3-5 6.5-5s5.8 1.8 6.5 5" />
-    </svg>
-  );
-}
-
-function DocsIcon({ className }: IconProps) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 1 5 16V4.5Z" />
-      <path d="M8.5 16H19M8 8h7M8 11h6" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 6.25v13m0-13C10.83 5.48 9.25 5 7.5 5S4.17 5.48 3 6.25v13C4.17 18.48 5.75 18 7.5 18s3.33.48 4.5 1.25m0-13C13.17 5.48 14.75 5 16.5 5s3.33.48 4.5 1.25v13C19.83 18.48 18.25 18 16.5 18s-3.33.48-4.5 1.25" />
     </svg>
   );
 }
 
 const links = [
-  { href: "/rate", label: "Answer", icon: DiscoverIcon },
-  { href: "/ask", label: "Ask", icon: SubmitIcon },
-  { href: "/settings", label: "Account", icon: AccountIcon },
-  { href: "/docs", label: "Docs", icon: DocsIcon },
+  { href: "/rate", label: "Answer", icon: GlobeAltIcon },
+  { href: "/ask", label: "Ask", icon: PlusCircleIcon },
+  { href: "/settings", label: "Account", icon: IdentificationIcon },
+  { href: "/docs", label: "Docs", icon: BookOpenIcon },
 ] as const;
 
 const footerLinks = [
@@ -92,14 +128,15 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
           <div key={href} className="w-full">
             <Link
               href={href}
-              className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors ${
+              prefetch={false}
+              className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors duration-200 ${
                 active
                   ? "text-base-content"
                   : "text-base-content/75 hover:bg-base-content/[0.04] hover:text-base-content"
               }`}
             >
-              <Icon className="h-6 w-6 shrink-0" />
-              <span className="text-base font-medium">{label}</span>
+              <Icon className="relative z-10 h-6 w-6 shrink-0 transition-colors duration-200" />
+              <span className="relative z-10 text-base font-medium transition-colors duration-200">{label}</span>
               {active ? (
                 <span className="absolute bottom-2 right-2 top-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)]" />
               ) : null}
@@ -119,7 +156,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
                           <Link
                             key={link.href}
                             href={link.href}
-                            className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                            className={`block rounded-lg px-3 py-1.5 text-base transition-colors ${
                               linkActive
                                 ? "bg-base-content font-semibold text-base-100"
                                 : "text-base-content/70 hover:bg-base-content/[0.05] hover:text-base-content"
@@ -151,7 +188,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
 
 function Footer() {
   return (
-    <footer className="shrink-0 border-t border-white/10 px-4 py-9 xl:pl-56">
+    <footer className="shrink-0 border-t border-white/10 px-4 py-9 xl:pl-52">
       <nav aria-label="Footer">
         <ul className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-base-content/70 lg:text-base">
           {footerLinks.map(([label, href], index) => (
@@ -210,15 +247,15 @@ export function TokenlessShell({ children }: { children: React.ReactNode; sandbo
         </div>
       </header>
 
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-52 flex-col border-r border-[color:var(--rateloop-shell-border-strong)] bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-[color:var(--rateloop-shell-border-strong)] bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex">
         <div className="mb-4 px-4">
           <Brand />
         </div>
         <AnswerSearch />
-        <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-4">
+        <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
           <NavLinks />
         </nav>
-        <div className="mx-2.5 border-t border-[color:var(--rateloop-shell-border-strong)] pt-4">
+        <div className="mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t border-[color:var(--rateloop-shell-border-strong)] px-2.5 pt-4">
           <ThirdwebSessionButton compact />
         </div>
       </aside>

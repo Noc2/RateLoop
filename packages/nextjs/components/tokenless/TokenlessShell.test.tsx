@@ -8,5 +8,21 @@ test("tokenless shell exposes Answer, Ask, Account, and Docs without legacy acti
   assert.match(source, /href: "\/ask", label: "Ask"/);
   assert.match(source, /href: "\/settings", label: "Account"/);
   assert.match(source, /href: "\/docs", label: "Docs"/);
+  assert.match(source, /icon: GlobeAltIcon/);
+  assert.match(source, /icon: PlusCircleIcon/);
+  assert.match(source, /icon: IdentificationIcon/);
+  assert.match(source, /icon: BookOpenIcon/);
+  assert.match(source, /Human Assurance/);
+  assert.match(source, /w-52/);
+  assert.match(source, /border-t[^\n]+px-2\.5 pt-4/);
   assert.doesNotMatch(source, /Validate|Earn|Start a validation/);
+});
+
+test("tokenless answer search restores the established navbar treatment", () => {
+  const source = readFileSync(new URL("./navigation/AnswerSearch.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /MagnifyingGlassIcon/);
+  assert.match(source, /header-search-input input input-sm input-bordered/);
+  assert.match(source, /placeholder="Search"/);
+  assert.doesNotMatch(source, /placeholder="Search answers"/);
 });

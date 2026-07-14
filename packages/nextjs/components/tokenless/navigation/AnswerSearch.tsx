@@ -3,6 +3,41 @@
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+function MagnifyingGlassIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="10.8" cy="10.8" r="6.3" />
+      <path d="m16 16 4.2 4.2" />
+    </svg>
+  );
+}
+
+function XMarkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
 export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -37,17 +72,7 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
         className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-base-content/75 hover:bg-base-content/[0.04]"
         onClick={() => setExpanded(true)}
       >
-        <svg
-          className="h-6 w-6 shrink-0"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          aria-hidden="true"
-        >
-          <circle cx="10.8" cy="10.8" r="6.3" />
-          <path d="m16 16 4.2 4.2" />
-        </svg>
+        <MagnifyingGlassIcon className="h-6 w-6 shrink-0" />
         <span className="text-base font-medium">Search</span>
       </button>
     );
@@ -63,17 +88,7 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
         Search answers
       </label>
       <div className="relative">
-        <svg
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/45"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          aria-hidden="true"
-        >
-          <circle cx="10.8" cy="10.8" r="6.3" />
-          <path d="m16 16 4.2 4.2" />
-        </svg>
+        <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />
         <input
           id={mobile ? "mobile-answer-search" : "desktop-answer-search"}
           value={query}
@@ -85,7 +100,7 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
               if (mobile) setExpanded(false);
             }
           }}
-          className="h-9 w-full rounded-md border border-base-content/10 bg-base-content/[0.09] pl-9 pr-9 text-sm text-base-content outline-none placeholder:text-base-content/45 focus:border-[var(--rateloop-blue)]"
+          className="header-search-input input input-sm input-bordered h-9 w-full rounded-lg border-base-content/10 bg-base-300/80 pl-8 pr-8 text-base text-base-content outline-none placeholder:text-base-content/60 focus:border-primary/30 focus:bg-base-300"
           placeholder="Search"
           autoFocus={mobile}
         />
@@ -94,9 +109,9 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
             type="button"
             aria-label="Clear answer search"
             onClick={clear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 px-1 text-base-content/45 hover:text-base-content"
+            className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-base-content/10 text-base-content/65 transition-colors hover:bg-base-content/20 hover:text-base-content"
           >
-            ×
+            <XMarkIcon className="h-3 w-3" />
           </button>
         ) : null}
       </div>
