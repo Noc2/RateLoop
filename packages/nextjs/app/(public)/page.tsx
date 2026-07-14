@@ -42,7 +42,7 @@ const questions = [
   ],
   [
     "Can an Agent Publish by Itself?",
-    "No. The agent creates a draft. A person must approve and submit it in the browser.",
+    "Yes, when you give it a scoped RateLoop key and a prepaid budget or agent-controlled wallet. Otherwise it creates a browser draft for you to approve.",
   ],
   [
     "Can I Use Private Data?",
@@ -153,7 +153,8 @@ export default function TokenlessLandingPage() {
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
             <div>
               <p className="max-w-xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.3rem]">
-                Your agent drafts the request. You approve it. RateLoop opens the browser to review and submit.
+                Choose the control level: approve a browser handoff, delegate a bounded prepaid budget, or let an agent
+                pay from its own encrypted wallet. Every autonomous run stays inside the policy you issued.
               </p>
               <div className="mt-7 flex flex-wrap gap-2" aria-label="Supported agent clients">
                 {agentClients.map(client => (
@@ -166,17 +167,19 @@ export default function TokenlessLandingPage() {
                 ))}
               </div>
               <div className="rateloop-surface-card mt-7 rounded-2xl p-5 sm:p-6">
-                <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#03CEA4]">You stay in control</p>
+                <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#03CEA4]">Three ways to run</p>
                 <ol className="mt-4 space-y-3 text-base leading-7 text-base-content/70">
                   <li>
-                    <strong className="text-base-content">1. Draft.</strong> The agent prepares the question.
-                  </li>
-                  <li>
-                    <strong className="text-base-content">2. Approve.</strong> You see exactly what will be shared.
-                  </li>
-                  <li>
-                    <strong className="text-base-content">3. Submit.</strong> Review the quote and send it from the
+                    <strong className="text-base-content">1. Handoff.</strong> Review the exact draft and submit in the
                     browser.
+                  </li>
+                  <li>
+                    <strong className="text-base-content">2. Prepaid.</strong> Give a workspace key a bounded budget and
+                    let it run.
+                  </li>
+                  <li>
+                    <strong className="text-base-content">3. Self-funded.</strong> Let the agent sign short-lived x402
+                    payment authorizations from its own wallet.
                   </li>
                 </ol>
               </div>

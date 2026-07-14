@@ -85,9 +85,30 @@ export default function TokenlessAgentDocsPage() {
     <article className="prose max-w-none">
       <h1>Agents and MCP</h1>
       <p className="lead">
-        RateLoop gives an agent a narrow, draft-first path to outside human judgment. The integration prepares a
-        request, a person approves exactly what may leave the workspace, and the browser remains the quote-and-submit
-        gate. It does not give an agent permission to publish a panel by itself.
+        RateLoop supports both draft-first browser handoffs and delegated autonomous runs. The public MCP remains
+        approval-bound; an authenticated workspace key can publish without a per-run click only when an owner-issued
+        policy fixes its budget, payment mode, wallet, audience, project, data, expiry, and revocation rules.
+      </p>
+
+      <h2>Choose a publishing lane</h2>
+      <ul>
+        <li>
+          <strong>Browser handoff:</strong> the agent drafts public, synthetic, or safely redacted material and a person
+          reviews, quotes, and submits it.
+        </li>
+        <li>
+          <strong>Delegated prepaid:</strong> a policy-bound workspace key spends only the prepaid balance and stays
+          inside the caps its owner approved.
+        </li>
+        <li>
+          <strong>Delegated self-funded:</strong> the tokenless CLI signs short-lived x402/EIP-3009 authorizations from
+          an encrypted agent wallet; RateLoop&apos;s relayer supplies gas but never receives the key.
+        </li>
+      </ul>
+      <p>
+        Autonomous publishing is not an unscoped public MCP permission. Requests outside policy fail closed or return a
+        browser-handoff continuation, according to the policy. A result is decision support and does not silently
+        authorize a release or regulated action.
       </p>
 
       <h2>Supported agent clients</h2>
@@ -142,6 +163,11 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
         </li>
         <li>Poll status and retrieve the result with the returned handoff ID and secret handoff token.</li>
       </ol>
+      <p>
+        The approval sequence above applies to the public MCP handoff. A delegated API/CLI run may skip the per-run
+        browser click only after the workspace owner has issued its policy-bound credential and the request stays within
+        that policy.
+      </p>
       <p>
         Use only <code>public</code>, <code>synthetic</code>, or safely <code>redacted</code> non-sensitive material.
         Never include secrets, credentials, private source code, customer records, regulated personal data, or
