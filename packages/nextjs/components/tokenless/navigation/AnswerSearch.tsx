@@ -67,8 +67,6 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
     if (humanSearch) navigate("");
   }
 
-  if (!humanSearch) return null;
-
   if (mobile && !expanded) {
     return (
       <button
