@@ -8,7 +8,7 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("landing page uses concise buyer-facing copy and a secondary reviewer journey", async () => {
+test("landing page presents the tokenless human-assurance story", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   process.env.TOKENLESS_SANDBOX_MODE = "true";
   const { default: HomePage } = await import("./page");
@@ -27,38 +27,39 @@ test("landing page uses concise buyer-facing copy and a secondary reviewer journ
   assert.match(html, /Use test or redacted content/i);
   assert.match(html, /Set the Standard/);
   assert.match(html, /Review Blind/);
-  assert.match(html, /Make the Call/);
-  assert.match(html, /Consulting/);
+  assert.match(html, /Decide with Evidence/);
   assert.match(html, /What Does RateLoop Do\?/);
   assert.match(html, /Your team makes the final decision/i);
-  assert.match(html, /Keep secrets out/i);
-  assert.match(html, /How It/);
-  assert.match(html, /Why RateLoop/);
-  assert.match(html, /Agent/);
+  assert.match(html, /Remove secrets/i);
+  assert.match(html, /Use RateLoop with your favorite AI agent/);
+  assert.match(html, /Problem/);
+  assert.match(html, /Solution/);
+  assert.match(html, /Safety/);
+  assert.match(html, /Privacy/);
+  assert.match(html, /Read the privacy notice/);
+  assert.match(html, /Review the agent safety boundary/);
   assert.match(html, /Claude Code/);
   assert.match(html, /OpenAI Codex/);
   assert.match(html, /Cursor/);
   assert.match(html, /GitHub Copilot/);
   assert.match(html, /Gemini CLI/);
   assert.match(html, /OpenClaw/);
-  assert.match(html, /rateloop_capabilities/);
-  assert.match(html, /rateloop_create_handoff/);
-  assert.match(html, /rateloop_get_handoff_status/);
-  assert.match(html, /rateloop_get_result/);
-  assert.match(html, /You see exactly what will be shared/i);
-  assert.match(html, /Review the quote and send it from the browser/i);
-  assert.match(html, /This sandbox is simulated/i);
   assert.match(html, /href="\/docs\/ai"/);
   assert.match(html, /Common/);
   assert.equal(html.match(/<details/g)?.length, 6);
+  assert.ok(html.indexOf("Problem") < html.indexOf("Solution"));
+  assert.ok(html.indexOf("Solution") < html.indexOf("Privacy"));
+  assert.ok(html.indexOf("Privacy") < html.indexOf("Common"));
   assert.doesNotMatch(
     html,
     /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready/i,
   );
   assert.doesNotMatch(
     html,
-    /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context|favorite AI agent|rateloop-promo\.mp4/i,
+    /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context|rateloop-promo\.mp4/i,
   );
-  assert.doesNotMatch(html, /LREP|tokenless|protocol token|governance|leaderboard|manual claim/i);
-  assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
+  assert.doesNotMatch(html, /Add a human check before AI reaches your customers\./i);
+  assert.doesNotMatch(html, /How It Works|Why RateLoop Works|Agent Workflow/i);
+  assert.doesNotMatch(html, /\/api\/mcp\/public|www\.rateloop\.ai/i);
+  assert.doesNotMatch(html, /LREP|protocol token|governance|leaderboard|manual claim/i);
 });

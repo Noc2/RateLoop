@@ -11,8 +11,34 @@ const steps = [
 
 const problemPoints = [
   ["Variable output", "The same prompt can produce different results across runs and models.", "#359EEE"],
-  ["Subjective quality", "Correctness is only part of the question. Usefulness and tone still need judgment.", "#03CEA4"],
-  ["No independent check", "The people building the workflow are rarely the people reviewing its real-world impact.", "#EF476F"],
+  [
+    "Subjective quality",
+    "Correctness is only part of the question. Usefulness and tone still need judgment.",
+    "#03CEA4",
+  ],
+  [
+    "No independent check",
+    "The people building the workflow are rarely the people reviewing its real-world impact.",
+    "#EF476F",
+  ],
+] as const;
+
+const safetyPoints = [
+  [
+    "Minimize the data",
+    "Use public, synthetic, or safely redacted material. Remove secrets and unnecessary context.",
+    "#359EEE",
+  ],
+  [
+    "Control the audience",
+    "Invite the reviewers you choose or use a scoped policy. Reviewer access is limited to the assigned work.",
+    "#03CEA4",
+  ],
+  [
+    "Keep the decision yours",
+    "RateLoop records review evidence and settlement. It does not prove safety, compliance, or authorize a release.",
+    "#EF476F",
+  ],
 ] as const;
 
 const questions = [
@@ -132,6 +158,42 @@ export default function TokenlessLandingPage() {
                 <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
+
+        <section id="safety-privacy" className="relative z-10 w-full">
+          <SectionTitle number="03" gradient="Privacy">
+            Safety &
+          </SectionTitle>
+          <p className="mb-10 max-w-3xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.35rem]">
+            Share only what reviewers need. Keep the final decision under your control.
+          </p>
+          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
+            {safetyPoints.map(([title, body, color], index) => (
+              <article key={title} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
+                <span className="font-mono text-sm" style={{ color }}>
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <h3 className="mt-3 text-[1.55rem] font-bold leading-tight sm:text-[1.75rem]">{title}</h3>
+                <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
+              </article>
+            ))}
+          </div>
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm text-base-content/60">
+            <Link
+              href="/legal/privacy"
+              className="font-semibold underline decoration-base-content/30 underline-offset-4 hover:decoration-base-content"
+            >
+              Read the privacy notice
+            </Link>
+            <Link
+              href="/docs/ai"
+              className="font-semibold underline decoration-base-content/30 underline-offset-4 hover:decoration-base-content"
+            >
+              Review the agent safety boundary
+            </Link>
           </div>
         </section>
 
