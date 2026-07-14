@@ -55,6 +55,26 @@ async function prepaidAsk() {
 
 test("approval unblocks funding without changing its reservation", async () => {
   const { ask, prepared } = await prepaidAsk();
+  const now = new Date("2026-07-14T12:00:00.000Z");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_public_question_media
+          (asset_id, workspace_id, owner_account_address, client_request_id, question_id, digest, storage_ref,
+           content_type, original_filename, size_bytes, width, height, technical_status, moderation_status,
+           expires_at, bound_at, created_at, updated_at)
+          VALUES (?, ?, ?, 'moderation:test:image', ?, ?, 'memory://image', 'image/webp', 'image.webp',
+                  100, 10, 10, 'ready', 'pending', ?, ?, ?, ?)`,
+    args: [
+      `pqm_${"A".repeat(32)}`,
+      prepared.workspaceId,
+      OWNER,
+      prepared.questionId,
+      `sha256:${"ab".repeat(32)}`,
+      new Date("2026-07-15T12:00:00.000Z"),
+      now,
+      now,
+      now,
+    ],
+  });
   const result = await moderateTokenlessOperation({
     operationKey: ask.operationKey,
     decision: "approved",
@@ -66,7 +86,11 @@ test("approval unblocks funding without changing its reservation", async () => {
     sql: "SELECT status FROM tokenless_prepaid_reservations WHERE reservation_id = ?",
     args: [prepared.paymentReference],
   });
+  const media = await dbClient.execute(
+    "SELECT moderation_status, moderation_reason FROM tokenless_public_question_media",
+  );
   assert.equal(content.rows[0]?.moderation_status, "approved");
+  assert.deepEqual(media.rows, [{ moderation_status: "approved", moderation_reason: "policy_clear" }]);
   assert.equal(reservation.rows[0]?.status, "reserved");
 });
 

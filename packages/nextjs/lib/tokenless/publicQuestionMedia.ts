@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import sharp from "sharp";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -306,6 +307,89 @@ export async function deleteStagedPublicQuestionImage(input: {
   if (!storageRef) throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
   await runtime().store.delete(storageRef);
   return { deleted: true as const };
+}
+
+export async function bindPublicQuestionMediaToQuestion(
+  client: PoolClient,
+  input: {
+    accountAddress: string | null;
+    items: Array<{ assetId: string; digest: string }>;
+    now: Date;
+    questionId: string;
+    workspaceId: string;
+  },
+) {
+  if (!input.accountAddress) {
+    throw new TokenlessServiceError(
+      "Image questions must be completed through an authenticated browser handoff.",
+      409,
+      "public_media_browser_handoff_required",
+    );
+  }
+  for (const item of input.items) {
+    const locked = await client.query(
+      `SELECT asset_id, digest, question_id, expires_at
+       FROM tokenless_public_question_media
+       WHERE asset_id = $1 AND workspace_id = $2 AND owner_account_address = $3
+         AND technical_status = 'ready'
+       FOR UPDATE`,
+      [item.assetId, input.workspaceId, input.accountAddress.toLowerCase()],
+    );
+    const row = locked.rows[0] as Row | undefined;
+    const existingQuestionId = rowString(row, "question_id");
+    if (
+      rowString(row, "asset_id") !== item.assetId ||
+      rowString(row, "digest") !== item.digest ||
+      (existingQuestionId && existingQuestionId !== input.questionId) ||
+      (!existingQuestionId && new Date(String(row?.expires_at)).getTime() <= input.now.getTime())
+    ) {
+      throw new TokenlessServiceError(
+        "One or more staged images are unavailable, expired, or changed.",
+        409,
+        "public_media_asset_unavailable",
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_public_question_media
+       SET question_id = $1, bound_at = COALESCE(bound_at, $2), updated_at = $2
+       WHERE asset_id = $3 AND (question_id IS NULL OR question_id = $1)`,
+      [input.questionId, input.now, item.assetId],
+    );
+  }
+}
+
+export async function readPublicQuestionImage(input: { accountAddress?: string | null; assetId: string }) {
+  if (!ASSET_ID_PATTERN.test(input.assetId)) {
+    throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
+  }
+  const result = await dbClient.execute({
+    sql: `SELECT m.storage_ref, m.content_type, m.owner_account_address,
+                 m.technical_status, m.moderation_status AS media_moderation_status,
+                 q.visibility, q.moderation_status AS question_moderation_status,
+                 c.moderation_status AS content_moderation_status
+          FROM tokenless_public_question_media m
+          LEFT JOIN tokenless_question_records q ON q.question_id = m.question_id
+          LEFT JOIN tokenless_content_records c ON c.content_id = q.content_id
+          WHERE m.asset_id = ? LIMIT 1`,
+    args: [input.assetId],
+  });
+  const row = result.rows[0] as Row | undefined;
+  const isOwner =
+    Boolean(input.accountAddress) && rowString(row, "owner_account_address") === input.accountAddress?.toLowerCase();
+  const isPublic =
+    rowString(row, "visibility") === "public" &&
+    rowString(row, "media_moderation_status") === "approved" &&
+    rowString(row, "question_moderation_status") === "approved" &&
+    rowString(row, "content_moderation_status") === "approved";
+  const storageRef = rowString(row, "storage_ref");
+  if (rowString(row, "technical_status") !== "ready" || !storageRef || (!isOwner && !isPublic)) {
+    throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
+  }
+  return {
+    bytes: await runtime().store.get(storageRef),
+    contentType: "image/webp" as const,
+    public: isPublic,
+  };
 }
 
 export const __publicQuestionMediaTestUtils = { normalizeImage };

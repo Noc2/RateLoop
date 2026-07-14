@@ -40,6 +40,21 @@ export async function moderateTokenlessOperation(input: {
     if (!row) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
     const questionId = rowString(row, "question_id")!;
     const contentId = rowString(row, "content_id")!;
+    if (input.decision === "approved") {
+      const unavailableMedia = await client.query(
+        `SELECT asset_id FROM tokenless_public_question_media
+         WHERE question_id = $1 AND technical_status <> 'ready'
+         LIMIT 1`,
+        [questionId],
+      );
+      if (unavailableMedia.rowCount) {
+        throw new TokenlessServiceError(
+          "Question media is unavailable and cannot be approved.",
+          409,
+          "public_media_unavailable",
+        );
+      }
+    }
     await client.query(
       `UPDATE tokenless_content_records
        SET moderation_status = $1, moderation_reason = $2, moderated_at = $3, updated_at = $3
@@ -49,6 +64,12 @@ export async function moderateTokenlessOperation(input: {
     await client.query(
       "UPDATE tokenless_question_records SET moderation_status = $1, updated_at = $2 WHERE question_id = $3",
       [input.decision, now, questionId],
+    );
+    await client.query(
+      `UPDATE tokenless_public_question_media
+       SET moderation_status = $1, moderation_reason = $2, moderated_at = $3, updated_at = $3
+       WHERE question_id = $4 AND technical_status = 'ready'`,
+      [input.decision, input.reasonCode, now, questionId],
     );
 
     const acceptedOnChain = rowString(row, "execution_state") === "confirmed" && rowString(row, "round_id");

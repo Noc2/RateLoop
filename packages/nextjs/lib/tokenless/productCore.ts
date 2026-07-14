@@ -5,6 +5,7 @@ import { getAddress } from "viem";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
+import { bindPublicQuestionMediaToQuestion } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const API_KEY_PATTERN = /^rlk_([a-f0-9]{16})_([A-Za-z0-9_-]{32,128})$/;
@@ -1007,6 +1008,7 @@ async function releaseAgentPolicyBudget(reservationId: string | null) {
 }
 
 async function createQuestionRecords(input: {
+  ownerAccountAddress: string | null;
   workspaceId: string;
   quoteId: string;
   idempotencyKey: string;
@@ -1032,35 +1034,56 @@ async function createQuestionRecords(input: {
   const termsHash = digest(termsJson);
   const questionId = `qst_${digest(`${input.workspaceId}:${input.idempotencyKey}`).slice(0, 32)}`;
   const now = new Date();
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_content_records
-          (content_id, workspace_id, content_hash, content_json, moderation_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'pending', ?, ?)
-          ON CONFLICT (content_id) DO NOTHING`,
-    args: [contentId, input.workspaceId, contentHash, contentJson, now, now],
-  });
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_question_records
-          (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility,
-           data_classification, redaction_summary, confirmed_no_sensitive_data, moderation_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-          ON CONFLICT (question_id) DO NOTHING`,
-    args: [
-      questionId,
-      input.workspaceId,
-      contentId,
-      input.quoteId,
-      termsHash,
-      termsJson,
-      input.quoteRequest.visibility ?? "private",
-      input.quoteRequest.dataClassification ?? "internal",
-      input.quoteRequest.redactionSummary ?? null,
-      input.quoteRequest.confirmedNoSensitiveData === true,
-      now,
-      now,
-    ],
-  });
-  return questionId;
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO tokenless_content_records
+       (content_id, workspace_id, content_hash, content_json, moderation_status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'pending', $5, $5)
+       ON CONFLICT (content_id) DO NOTHING`,
+      [contentId, input.workspaceId, contentHash, contentJson, now],
+    );
+    await client.query(
+      `INSERT INTO tokenless_question_records
+       (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility,
+        data_classification, redaction_summary, confirmed_no_sensitive_data, moderation_status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $11)
+       ON CONFLICT (question_id) DO NOTHING`,
+      [
+        questionId,
+        input.workspaceId,
+        contentId,
+        input.quoteId,
+        termsHash,
+        termsJson,
+        input.quoteRequest.visibility ?? "private",
+        input.quoteRequest.dataClassification ?? "internal",
+        input.quoteRequest.redactionSummary ?? null,
+        input.quoteRequest.confirmedNoSensitiveData === true,
+        now,
+      ],
+    );
+    const question = input.quoteRequest.question as {
+      media?: { kind?: unknown; items?: Array<{ assetId: string; digest: string }> };
+    };
+    if (question.media?.kind === "images" && Array.isArray(question.media.items)) {
+      await bindPublicQuestionMediaToQuestion(client, {
+        accountAddress: input.ownerAccountAddress,
+        items: question.media.items,
+        now,
+        questionId,
+        workspaceId: input.workspaceId,
+      });
+    }
+    await client.query("COMMIT");
+    return questionId;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function reservePrepaid(input: {
@@ -1264,6 +1287,7 @@ export async function prepareProductAsk(input: {
       });
     }
     const questionId = await createQuestionRecords({
+      ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
       workspaceId,
       quoteId: input.request.quoteId,
       idempotencyKey: input.request.idempotencyKey,

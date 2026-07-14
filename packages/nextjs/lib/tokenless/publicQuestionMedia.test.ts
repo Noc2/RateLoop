@@ -3,15 +3,16 @@ import { afterEach, beforeEach, test } from "node:test";
 import sharp from "sharp";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createWorkspace, prepareProductAsk, recordPrepaidLedgerEntry } from "~~/lib/tokenless/productCore";
 import {
   PUBLIC_QUESTION_IMAGE_MAX_BYTES,
   type PublicQuestionMediaStore,
   __setPublicQuestionMediaRuntimeForTests,
   deleteStagedPublicQuestionImage,
+  readPublicQuestionImage,
   stagePublicQuestionImage,
 } from "~~/lib/tokenless/publicQuestionMedia";
-import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { TokenlessServiceError, createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const OUTSIDER = "0x2222222222222222222222222222222222222222";
@@ -178,4 +179,70 @@ test("daily quota is atomic and deleting an unbound staged image removes its pri
     deleted: true,
   });
   assert.equal(store.objects.size, 0);
+});
+
+test("ask preparation binds exact owner assets and public reads stay closed until moderation approval", async () => {
+  const staged = await stagePublicQuestionImage({
+    accountAddress: OWNER,
+    bytes: await png(),
+    clientRequestId: "upload:test:binding",
+    filename: "binding.png",
+    now: new Date("2026-07-14T12:00:00.000Z"),
+    workspaceId,
+  });
+  const quote = await createTokenlessQuote({
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic",
+    question: {
+      kind: "binary",
+      media: {
+        kind: "images",
+        items: [{ alt: "Synthetic test image", assetId: staged.assetId, digest: staged.digest }],
+      },
+      prompt: "Should this image be published?",
+      rationale: { mode: "optional" },
+    },
+    requestedPanelSize: 15,
+    visibility: "public",
+  });
+  await recordPrepaidLedgerEntry({
+    amountAtomic: quote.economics.totalFundedAtomic,
+    source: "media-test",
+    workspaceId,
+  });
+  const prepared = await prepareProductAsk({
+    principal: { accountAddress: OWNER, kind: "session" },
+    request: {
+      idempotencyKey: "media:test:binding",
+      payment: { mode: "prepaid", workspaceId },
+      quoteId: quote.quoteId,
+    },
+  });
+
+  const bound = await dbClient.execute({
+    sql: "SELECT question_id FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [staged.assetId],
+  });
+  assert.equal(bound.rows[0]?.question_id, prepared.questionId);
+  assert.equal((await readPublicQuestionImage({ accountAddress: OWNER, assetId: staged.assetId })).public, false);
+  await assert.rejects(
+    () => readPublicQuestionImage({ assetId: staged.assetId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
+  );
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_content_records SET moderation_status = 'approved' WHERE content_id = (SELECT content_id FROM tokenless_question_records WHERE question_id = ?)",
+    args: [prepared.questionId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_question_records SET moderation_status = 'approved' WHERE question_id = ?",
+    args: [prepared.questionId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_public_question_media SET moderation_status = 'approved' WHERE asset_id = ?",
+    args: [staged.assetId],
+  });
+  assert.equal((await readPublicQuestionImage({ assetId: staged.assetId })).public, true);
 });
