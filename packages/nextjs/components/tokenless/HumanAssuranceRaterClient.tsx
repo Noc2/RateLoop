@@ -696,7 +696,7 @@ export function HumanAssuranceRaterClient({
               No capability evidence is shown for this session. This does not block a customer-invited unpaid review.
             </p>
           )}
-          <Link href="/settings" className="rateloop-gradient-action mt-5 w-full px-5">
+          <Link href="/settings/eligibility" className="rateloop-gradient-action mt-5 w-full px-5">
             Review eligibility
           </Link>
 

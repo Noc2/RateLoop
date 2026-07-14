@@ -147,7 +147,7 @@ export function PaidEligibilityClient({ networkPanelsEnabled = false }: { networ
       );
       sessionStorage.removeItem("rateloop:eligibility-provider-state");
       setProviderState(null);
-      window.history.replaceState({}, "", "/settings");
+      window.history.replaceState({}, "", "/settings/eligibility");
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to complete paid-task eligibility.");
