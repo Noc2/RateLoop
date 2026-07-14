@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import {
@@ -11,9 +12,28 @@ import { type PublicAnswerTask, PublicQuestionCard } from "~~/components/tokenle
 
 type Scope = "all" | "public" | "private" | "submitted";
 
+const ThirdwebSessionButton = dynamic(
+  () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
+  { ssr: false },
+);
+
+class AnswerRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof body.message === "string" ? body.message : "Answer queue request failed.");
+  if (!response.ok) {
+    throw new AnswerRequestError(
+      typeof body.message === "string" ? body.message : "Answer queue request failed.",
+      response.status,
+    );
+  }
   return body;
 }
 
@@ -33,11 +53,13 @@ export function AnswerPageClient({
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [signedOut, setSignedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load(nextQuery = query, nextScope = scope) {
     setLoading(true);
     setError(null);
+    setSignedOut(false);
     try {
       const encodedQuery = encodeURIComponent(nextQuery);
       const [publicBody, privateBody] = await Promise.all([
@@ -61,7 +83,8 @@ export function AnswerPageClient({
       setTasks((publicBody.tasks ?? []) as PublicAnswerTask[]);
       setAssignments((privateBody.assignments ?? []) as PrivateAnswerAssignment[]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load the Answer queue.");
+      if (cause instanceof AnswerRequestError && cause.status === 401) setSignedOut(true);
+      else setError(cause instanceof Error ? cause.message : "Unable to load the Answer queue.");
     } finally {
       setLoading(false);
     }
@@ -110,7 +133,7 @@ export function AnswerPageClient({
             Loading…
           </div>
         ) : null}
-        {!loading && scope !== "private" && scope !== "submitted"
+        {!loading && !signedOut && scope !== "private" && scope !== "submitted"
           ? tasks.map(task => (
               <PublicQuestionCard
                 key={task.roundId}
@@ -120,17 +143,30 @@ export function AnswerPageClient({
               />
             ))
           : null}
-        {!loading && scope !== "public" && scope !== "submitted"
+        {!loading && !signedOut && scope !== "public" && scope !== "submitted"
           ? assignments.map(assignment => (
               <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
             ))
           : null}
-        {!loading && scope === "submitted" ? (
+        {!loading && !signedOut && scope === "submitted" ? (
           <div className="surface-card rounded-lg p-6 text-sm leading-6 text-base-content/55">
             Submitted history will appear here once public result history is exposed by the tokenless read model.
           </div>
         ) : null}
-        {!loading && scope !== "submitted" && tasks.length === 0 && assignments.length === 0 ? (
+        {!loading && signedOut ? (
+          <section className="surface-card rounded-2xl p-6 text-center">
+            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Human access</p>
+            <h2 className="mt-2 text-xl font-semibold">Sign in to discover review work</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-base-content/60">
+              Public-network work is public to eligible RateLoop humans, not anonymous. Signing in protects assignment,
+              response, payment, and private-group access.
+            </p>
+            <div className="mx-auto mt-5 max-w-xs">
+              <ThirdwebSessionButton />
+            </div>
+          </section>
+        ) : null}
+        {!loading && !signedOut && scope !== "submitted" && tasks.length === 0 && assignments.length === 0 ? (
           <div className="surface-card flex min-h-48 items-center justify-center rounded-lg p-6 text-center text-base text-base-content/55">
             No questions are available in this view yet.
           </div>

@@ -38,5 +38,13 @@ test("Human profile keeps established surface cards without a dashboard hero", (
   const profile = source("./account/ProfileClient.tsx");
 
   assert.match(profile, /surface-card rounded-2xl/);
+  assert.doesNotMatch(profile, /NotificationSettingsPanel/);
   assert.doesNotMatch(profile, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);
+});
+
+test("Human Discover explains that public-network work still requires a RateLoop session", () => {
+  const page = source("./answer/AnswerPageClient.tsx");
+  assert.match(page, /Sign in to discover review work/);
+  assert.match(page, /public to eligible RateLoop humans, not anonymous/);
+  assert.match(page, /ThirdwebSessionButton/);
 });
