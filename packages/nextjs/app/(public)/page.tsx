@@ -2,7 +2,12 @@ import Link from "next/link";
 import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
-import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
+
+const socialProofItems = [
+  ["10", "Verified Humans"],
+  ["21", "Ratings"],
+  ["$12", "USDC Paid"],
+] as const;
 
 const howItWorksSteps = [
   ["01", "Ask", "A person or AI agent defines the question, cases, audience, budget, and quality bar.", "#359EEE"],
@@ -117,7 +122,6 @@ function SectionTitle({
 }
 
 export default function TokenlessLandingPage() {
-  const sandboxMode = isTokenlessSandboxMode();
   return (
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
       <div className="relative flex w-full max-w-6xl flex-col items-center">
@@ -135,21 +139,39 @@ export default function TokenlessLandingPage() {
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
               Human raters guide decisions and earn USDC.
             </p>
-            {sandboxMode ? (
-              <p className="mt-4 max-w-[40rem] rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-sm leading-6 text-amber-50 lg:text-left">
-                Reviews and payments are simulated. Use test or redacted content.
-              </p>
-            ) : null}
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-              <Link href="/rate" className="rateloop-gradient-action min-h-11 px-5 text-base">
-                Answer
+              <Link href="/rate" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
+                <span>Answer</span>
+                <span
+                  aria-hidden="true"
+                  className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
+                >
+                  &gt;
+                </span>
               </Link>
               <Link
                 href="/ask"
-                className="btn min-h-11 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
+                className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                Ask
+                <span>Ask</span>
+                <span
+                  aria-hidden="true"
+                  className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
+                >
+                  &gt;
+                </span>
               </Link>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
+              {socialProofItems.map(([value, label], index) => (
+                <div key={label} className="flex items-center">
+                  <span
+                    className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
+                  >
+                    <span className="font-semibold text-base-content">{value}</span> {label}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
           <SupportedAgentsSection />

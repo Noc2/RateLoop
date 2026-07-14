@@ -17,13 +17,17 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Humans In The/);
   assert.match(html, />Loop<\/span>/);
   assert.match(html, /Human raters guide decisions and earn USDC\./);
-  assert.match(html, /Reviews and payments are simulated\. Use test or redacted content\./);
-  assert.match(html, />Answer<\/a>/);
-  assert.match(html, />Ask<\/a>/);
+  assert.match(html, /<span>Answer<\/span>/);
+  assert.match(html, /<span>Ask<\/span>/);
+  assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
+  assert.doesNotMatch(html, /Sandbox only|Reviews and payments are simulated|Use test or redacted content/i);
   assert.ok(
     html.indexOf('href="/rate"') < html.indexOf('href="/ask"'),
     "the Answer CTA should appear before the Ask CTA",
   );
+  assert.match(html, /<span class="font-semibold text-base-content">10<\/span> Verified Humans/);
+  assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Ratings/);
+  assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC Paid/);
   assert.match(html, /How It/);
   assert.match(html, /Ask/);
   assert.match(html, /Answer &amp; Earn/);
