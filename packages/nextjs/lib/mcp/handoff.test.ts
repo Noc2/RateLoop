@@ -13,6 +13,8 @@ import {
 import { createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
+const imageAssetId = `pqm_${"A".repeat(24)}`;
+const imageDigest = `sha256:${"a1".repeat(32)}`;
 
 function quoteRequest(source: "customer_invited" | "sandbox" = "customer_invited") {
   return {
@@ -101,6 +103,29 @@ test("creates a 24-hour fragment-only bearer handoff without persisting raw capa
   assert.equal(Number(asks.rows[0]?.count), 0);
 });
 
+test("preserves canonical question media in the browser handoff", () => {
+  const argumentsWithMedia = {
+    ...handoffArguments(),
+    request: {
+      ...quoteRequest(),
+      question: {
+        ...quoteRequest().question,
+        media: {
+          kind: "images" as const,
+          items: [{ alt: "  Candidate landing page  ", assetId: imageAssetId, digest: imageDigest }],
+        },
+      },
+    },
+  };
+
+  const handoff = createMcpHandoff(argumentsWithMedia, "https://rateloop-tokenless.vercel.app");
+  const payload = decodePayload(handoff.handoffUrl);
+  assert.deepEqual(payload.request.question.media, {
+    kind: "images",
+    items: [{ alt: "Candidate landing page", assetId: imageAssetId, digest: imageDigest }],
+  });
+});
+
 test("enforces content confirmation, privacy limits, quote limits, and environment source", () => {
   assert.throws(
     () =>
@@ -142,6 +167,30 @@ test("enforces content confirmation, privacy limits, quote limits, and environme
         "https://rateloop-tokenless.vercel.app",
       ),
     /prompt must contain 1-4000 characters/,
+  );
+  assert.throws(
+    () =>
+      createMcpHandoff(
+        {
+          ...handoffArguments(),
+          request: {
+            ...quoteRequest(),
+            question: {
+              ...quoteRequest().question,
+              media: {
+                kind: "images",
+                items: Array.from({ length: 5 }, (_, index) => ({
+                  alt: `Image ${index + 1}`,
+                  assetId: `${imageAssetId}${index}`,
+                  digest: imageDigest,
+                })),
+              },
+            },
+          },
+        },
+        "https://rateloop-tokenless.vercel.app",
+      ),
+    /must contain 1-4 images/,
   );
   assert.throws(
     () => createMcpHandoff(handoffArguments("sandbox"), "https://rateloop-tokenless.vercel.app"),

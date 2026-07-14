@@ -40,6 +40,9 @@ function request(kind: "binary" | "head_to_head" = "binary") {
   };
 }
 
+const imageAssetId = `pqm_${"A".repeat(24)}`;
+const imageDigest = `sha256:${"a1".repeat(32)}`;
+
 function payload(overrides: Record<string, unknown> = {}) {
   const handoffId = `rhl_${"A".repeat(32)}`;
   const handoffToken = `rht_${"B".repeat(43)}_abcdef12`;
@@ -127,6 +130,21 @@ test("quote request validation preserves editable binary and head-to-head choice
     assert.deepEqual(comparison.question.optionA, { key: "baseline", label: "Current reply" });
     assert.deepEqual(comparison.question.optionB, { key: "candidate", label: "Candidate reply" });
   }
+
+  const withMedia = validateTokenlessQuoteRequest({
+    ...request(),
+    question: {
+      ...request().question,
+      media: {
+        kind: "images",
+        items: [{ alt: "  Candidate checkout  ", assetId: imageAssetId, digest: imageDigest }],
+      },
+    },
+  });
+  assert.deepEqual(withMedia.question.media, {
+    kind: "images",
+    items: [{ alt: "Candidate checkout", assetId: imageAssetId, digest: imageDigest }],
+  });
 });
 
 test("exact USDC formatting never converts atomic values through floating point", () => {

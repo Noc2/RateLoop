@@ -45,7 +45,8 @@ export const TOKENLESS_DATA_CLASSIFICATIONS = [
   "confidential",
   "restricted",
 ] as const;
-export type TokenlessDataClassification = (typeof TOKENLESS_DATA_CLASSIFICATIONS)[number];
+export type TokenlessDataClassification =
+  (typeof TOKENLESS_DATA_CLASSIFICATIONS)[number];
 
 export interface TokenlessFundAccounting {
   fundedAtomic: TokenlessAtomicAmount;
@@ -87,6 +88,16 @@ export interface TokenlessEconomics {
   totalFundedAtomic: TokenlessAtomicAmount;
 }
 
+export type TokenlessQuestionImage = {
+  assetId: string;
+  digest: `sha256:${string}`;
+  alt: string;
+};
+
+export type TokenlessQuestionMedia =
+  | { kind: "images"; items: TokenlessQuestionImage[] }
+  | { kind: "youtube"; videoId: string };
+
 export type TokenlessQuestion =
   | {
       kind: "binary";
@@ -94,6 +105,7 @@ export type TokenlessQuestion =
       negativeLabel?: string;
       positiveLabel?: string;
       rationale: TokenlessRationaleRequirement;
+      media?: TokenlessQuestionMedia;
     }
   | {
       kind: "head_to_head";
@@ -101,6 +113,7 @@ export type TokenlessQuestion =
       optionA: { key: string; label: string };
       optionB: { key: string; label: string };
       rationale: TokenlessRationaleRequirement;
+      media?: TokenlessQuestionMedia;
     };
 
 export type TokenlessRationaleRequirement =

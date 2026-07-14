@@ -55,12 +55,50 @@ const rationaleSchema = {
   ],
 } as const;
 
+const questionMediaSchema = {
+  oneOf: [
+    {
+      additionalProperties: false,
+      properties: {
+        items: {
+          items: {
+            additionalProperties: false,
+            properties: {
+              alt: { maxLength: 500, minLength: 1, type: "string" },
+              assetId: { pattern: "^pqm_[A-Za-z0-9_-]{24,80}$", type: "string" },
+              digest: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+            },
+            required: ["assetId", "digest", "alt"],
+            type: "object",
+          },
+          maxItems: 4,
+          minItems: 1,
+          type: "array",
+        },
+        kind: { const: "images", type: "string" },
+      },
+      required: ["kind", "items"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      properties: {
+        kind: { const: "youtube", type: "string" },
+        videoId: { pattern: "^[A-Za-z0-9_-]{11}$", type: "string" },
+      },
+      required: ["kind", "videoId"],
+      type: "object",
+    },
+  ],
+} as const;
+
 const questionSchema = {
   oneOf: [
     {
       additionalProperties: false,
       properties: {
         kind: { const: "binary", type: "string" },
+        media: questionMediaSchema,
         negativeLabel: { maxLength: 200, minLength: 1, type: "string" },
         positiveLabel: { maxLength: 200, minLength: 1, type: "string" },
         prompt: { maxLength: 4_000, minLength: 1, type: "string" },
@@ -73,6 +111,7 @@ const questionSchema = {
       additionalProperties: false,
       properties: {
         kind: { const: "head_to_head", type: "string" },
+        media: questionMediaSchema,
         optionA: {
           additionalProperties: false,
           properties: {

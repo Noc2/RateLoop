@@ -7,6 +7,7 @@ import {
   type TokenlessQuoteRequest,
   type TokenlessQuoteResponse,
   type TokenlessResult,
+  normalizeTokenlessQuestion,
   parseTokenlessAskResponse,
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
@@ -84,65 +85,8 @@ function atomic(value: unknown, path: string) {
   return value;
 }
 
-function optionalLabel(value: unknown, path: string) {
-  if (value === undefined) return undefined;
-  return string(value, path, 200, true);
-}
-
 function validateQuestion(value: unknown): TokenlessQuestion {
-  const question = record(value, "request.question");
-  const prompt = string(question.prompt, "request.question.prompt", MAX_PROMPT_LENGTH);
-  const rationale = record(question.rationale, "request.question.rationale");
-  const rationaleMode = rationale.mode;
-  const parsedRationale =
-    rationaleMode === "optional"
-      ? ({ mode: "optional" } as const)
-      : rationaleMode === "required"
-        ? ({
-            mode: "required" as const,
-            maxLength: integer(rationale.maxLength, "request.question.rationale.maxLength", 1, 2_000),
-            ...(rationale.minLength === undefined
-              ? {}
-              : { minLength: integer(rationale.minLength, "request.question.rationale.minLength", 0, 2_000) }),
-          } as const)
-        : null;
-  if (!parsedRationale) throw new Error("request.question.rationale.mode must be optional or required.");
-  if (
-    parsedRationale.mode === "required" &&
-    parsedRationale.minLength !== undefined &&
-    parsedRationale.minLength > parsedRationale.maxLength
-  ) {
-    throw new Error("request.question.rationale.minLength cannot exceed maxLength.");
-  }
-
-  if (question.kind === "binary") {
-    return {
-      kind: "binary",
-      prompt,
-      ...(question.negativeLabel === undefined
-        ? {}
-        : { negativeLabel: optionalLabel(question.negativeLabel, "request.question.negativeLabel") }),
-      ...(question.positiveLabel === undefined
-        ? {}
-        : { positiveLabel: optionalLabel(question.positiveLabel, "request.question.positiveLabel") }),
-      rationale: parsedRationale,
-    };
-  }
-  if (question.kind === "head_to_head") {
-    const optionA = record(question.optionA, "request.question.optionA");
-    const optionB = record(question.optionB, "request.question.optionB");
-    const parsedA = {
-      key: string(optionA.key, "request.question.optionA.key", 200),
-      label: string(optionA.label, "request.question.optionA.label", 200),
-    };
-    const parsedB = {
-      key: string(optionB.key, "request.question.optionB.key", 200),
-      label: string(optionB.label, "request.question.optionB.label", 200),
-    };
-    if (parsedA.key === parsedB.key) throw new Error("Head-to-head option keys must be different.");
-    return { kind: "head_to_head", prompt, optionA: parsedA, optionB: parsedB, rationale: parsedRationale };
-  }
-  throw new Error("request.question.kind must be binary or head_to_head.");
+  return normalizeTokenlessQuestion(value);
 }
 
 export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteRequest {

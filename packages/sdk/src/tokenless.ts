@@ -32,6 +32,7 @@ import {
   TOKENLESS_REVIEWER_SOURCES,
   TOKENLESS_WEBHOOK_EVENT_TYPES,
 } from "./tokenlessTypes";
+import { normalizeTokenlessQuestion } from "./tokenlessMedia";
 
 const DEFAULT_API_PATH = "/api/agent/v1";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -161,7 +162,9 @@ function assertIdempotencyKey(value: string) {
   }
 }
 
-function assertQuoteRequest(request: TokenlessQuoteRequest) {
+function normalizeQuoteRequest(
+  request: TokenlessQuoteRequest,
+): TokenlessQuoteRequest {
   if (!BYTES32_PATTERN.test(request.audience.admissionPolicyHash)) {
     throw new RateLoopSdkError(
       "audience.admissionPolicyHash must be a bytes32 hex value.",
@@ -211,39 +214,7 @@ function assertQuoteRequest(request: TokenlessQuoteRequest) {
       "budget.attemptReserveAtomic must fund a non-zero compensation cap for every requested rater.",
     );
   }
-  if (!request.question.prompt.trim()) {
-    throw new RateLoopSdkError("question.prompt is required.");
-  }
-  if (request.question.kind === "head_to_head") {
-    if (
-      !request.question.optionA.key.trim() ||
-      !request.question.optionA.label.trim() ||
-      !request.question.optionB.key.trim() ||
-      !request.question.optionB.label.trim()
-    ) {
-      throw new RateLoopSdkError(
-        "head_to_head questions require keys and labels for both options.",
-      );
-    }
-    if (request.question.optionA.key === request.question.optionB.key) {
-      throw new RateLoopSdkError("head_to_head option keys must be different.");
-    }
-  }
-  if (request.question.rationale.mode === "required") {
-    const { minLength = 0, maxLength } = request.question.rationale;
-    if (
-      !Number.isSafeInteger(minLength) ||
-      !Number.isSafeInteger(maxLength) ||
-      minLength < 0 ||
-      maxLength < 1 ||
-      maxLength > 2_000 ||
-      minLength > maxLength
-    ) {
-      throw new RateLoopSdkError(
-        "required rationale lengths must satisfy 0 <= minLength <= maxLength <= 2000.",
-      );
-    }
-  }
+  return { ...request, question: normalizeTokenlessQuestion(request.question) };
 }
 
 function assertEvmAddress(value: string, path: string) {
@@ -473,11 +444,11 @@ export function createTokenlessRateLoopClient(
     },
 
     quote(requestBody: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse> {
-      assertQuoteRequest(requestBody);
+      const normalized = normalizeQuoteRequest(requestBody);
       return post(
         config,
         "/quote",
-        requestBody,
+        normalized,
         parseTokenlessQuoteResponse,
         undefined,
         {

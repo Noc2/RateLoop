@@ -1,4 +1,5 @@
 import {
+  RateLoopSdkError,
   TOKENLESS_SCHEMA_VERSION,
   type TokenlessAskRequest,
   type TokenlessAskResponse,
@@ -7,6 +8,7 @@ import {
   type TokenlessQuoteResponse,
   type TokenlessResult,
   type TokenlessWaitResponse,
+  normalizeTokenlessQuestion,
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
 } from "@rateloop/sdk";
@@ -111,36 +113,14 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
     throw new TokenlessServiceError("Quote body must be an object.", 400, "invalid_quote");
   }
   const request = value as Partial<TokenlessQuoteRequest>;
-  if (!request.question || !request.question.prompt?.trim()) {
-    throw new TokenlessServiceError("question.prompt is required.", 400, "invalid_quote");
-  }
-  if (request.question.kind !== "binary" && request.question.kind !== "head_to_head") {
-    throw new TokenlessServiceError("question.kind must be binary or head_to_head.", 400, "invalid_quote");
-  }
-  if (
-    request.question.kind === "head_to_head" &&
-    (!request.question.optionA?.key?.trim() ||
-      !request.question.optionA.label?.trim() ||
-      !request.question.optionB?.key?.trim() ||
-      !request.question.optionB.label?.trim() ||
-      request.question.optionA.key === request.question.optionB.key)
-  ) {
-    throw new TokenlessServiceError("head_to_head questions require two distinct keyed options.", 400, "invalid_quote");
-  }
-  const rationale = request.question.rationale;
-  if (
-    !rationale ||
-    (rationale.mode !== "optional" && rationale.mode !== "required") ||
-    (rationale.mode === "required" &&
-      (!Number.isSafeInteger(rationale.maxLength) ||
-        rationale.maxLength < 1 ||
-        rationale.maxLength > 2_000 ||
-        (rationale.minLength !== undefined &&
-          (!Number.isSafeInteger(rationale.minLength) ||
-            rationale.minLength < 0 ||
-            rationale.minLength > rationale.maxLength))))
-  ) {
-    throw new TokenlessServiceError("question.rationale is invalid.", 400, "invalid_quote");
+  let question: TokenlessQuoteRequest["question"];
+  try {
+    question = normalizeTokenlessQuestion(request.question);
+  } catch (error) {
+    if (error instanceof RateLoopSdkError) {
+      throw new TokenlessServiceError(error.message, 400, "invalid_quote");
+    }
+    throw error;
   }
   if (!request.audience || !BYTES32_PATTERN.test(request.audience.admissionPolicyHash ?? "")) {
     throw new TokenlessServiceError("audience.admissionPolicyHash must be a bytes32 hex value.", 400, "invalid_quote");
@@ -207,6 +187,7 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
   }
   return {
     ...request,
+    question,
     visibility,
     dataClassification,
     ...(request.redactionSummary === undefined ? {} : { redactionSummary: request.redactionSummary.trim() }),

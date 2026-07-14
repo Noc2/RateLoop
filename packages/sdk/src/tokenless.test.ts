@@ -3,6 +3,10 @@ import test from "node:test";
 import { RateLoopApiError } from "./errors";
 import { createTokenlessRateLoopClient } from "./tokenless";
 import {
+  normalizeTokenlessQuestion,
+  parseTokenlessYouTubeUrl,
+} from "./tokenlessMedia";
+import {
   TOKENLESS_RESULT_JSON_SCHEMA,
   parseTokenlessResult,
   parseTokenlessWebhookEvent,
@@ -38,6 +42,9 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "HUMAN_ASSURANCE_SUITE_JSON_SCHEMA",
       "TOKENLESS_EIP3009_TYPES",
       "TOKENLESS_DATA_CLASSIFICATIONS",
+      "TOKENLESS_MAX_IMAGE_ALT_LENGTH",
+      "TOKENLESS_MAX_PROMPT_LENGTH",
+      "TOKENLESS_MAX_QUESTION_IMAGES",
       "TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION",
       "TOKENLESS_RESULT_JSON_SCHEMA",
       "TOKENLESS_REVIEWER_SOURCES",
@@ -78,9 +85,121 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "parseTokenlessResult",
       "parseTokenlessWaitResponse",
       "parseTokenlessWebhookEvent",
+      "normalizeTokenlessQuestion",
+      "normalizeTokenlessQuestionMedia",
+      "parseTokenlessYouTubeUrl",
       "serializeTokenlessX402Authorization",
       "validateTokenlessPaymentInstructions",
     ].sort(),
+  );
+});
+
+test("canonical tokenless media accepts ordered images and normalizes supported YouTube URLs", () => {
+  const firstAssetId = `pqm_${"A".repeat(24)}`;
+  const secondAssetId = `pqm_${"B".repeat(24)}`;
+  const normalized = normalizeTokenlessQuestion({
+    kind: "binary",
+    prompt: "  Which visual should ship?  ",
+    rationale: { mode: "optional" },
+    media: {
+      kind: "images",
+      items: [
+        {
+          assetId: firstAssetId,
+          digest: `sha256:${"a".repeat(64)}`,
+          alt: "  Current layout  ",
+        },
+        {
+          assetId: secondAssetId,
+          digest: `sha256:${"b".repeat(64)}`,
+          alt: "Candidate layout",
+        },
+      ],
+    },
+  });
+  assert.equal(normalized.prompt, "Which visual should ship?");
+  assert.deepEqual(normalized.media, {
+    kind: "images",
+    items: [
+      {
+        assetId: firstAssetId,
+        digest: `sha256:${"a".repeat(64)}`,
+        alt: "Current layout",
+      },
+      {
+        assetId: secondAssetId,
+        digest: `sha256:${"b".repeat(64)}`,
+        alt: "Candidate layout",
+      },
+    ],
+  });
+
+  for (const url of [
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10",
+    "https://youtu.be/dQw4w9WgXcQ?si=tracking",
+    "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+  ]) {
+    assert.deepEqual(parseTokenlessYouTubeUrl(url), {
+      canonicalUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      media: { kind: "youtube", videoId: "dQw4w9WgXcQ" },
+    });
+  }
+});
+
+test("canonical tokenless media rejects ambiguous, duplicate, and spoofed context", () => {
+  const assetId = `pqm_${"A".repeat(24)}`;
+  const image = { assetId, digest: `sha256:${"a".repeat(64)}`, alt: "Preview" };
+  assert.throws(
+    () =>
+      normalizeTokenlessQuestion({
+        kind: "binary",
+        prompt: "Which visual should ship?",
+        rationale: { mode: "optional" },
+        media: { kind: "images", items: [image, image] },
+      }),
+    /must not contain duplicates/,
+  );
+  assert.throws(
+    () =>
+      normalizeTokenlessQuestion({
+        kind: "binary",
+        prompt: "Which visual should ship?",
+        rationale: { mode: "optional" },
+        media: {
+          kind: "images",
+          items: Array.from({ length: 5 }, (_, index) => ({
+            ...image,
+            assetId: `${assetId}${index}`,
+          })),
+        },
+      }),
+    /must contain 1-4 images/,
+  );
+  assert.throws(
+    () =>
+      parseTokenlessYouTubeUrl(
+        "https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ",
+      ),
+    /supported video/,
+  );
+  assert.throws(
+    () => parseTokenlessYouTubeUrl("http://youtu.be/dQw4w9WgXcQ"),
+    /must use HTTPS/,
+  );
+  assert.throws(
+    () =>
+      normalizeTokenlessQuestion({
+        kind: "binary",
+        prompt: "Which visual should ship?",
+        rationale: { mode: "optional" },
+        media: {
+          kind: "youtube",
+          videoId: "dQw4w9WgXcQ",
+          url: "https://example.com",
+        },
+      }),
+    /url is not supported/,
   );
 });
 

@@ -4,6 +4,7 @@ export * from "./humanAssuranceApiTypes";
 export * from "./humanAssuranceSchema";
 export * from "./humanAssuranceTypes";
 export * from "./tokenless";
+export * from "./tokenlessMedia";
 export * from "./tokenlessSchema";
 export * from "./tokenlessTypes";
 export * from "./tokenlessPayment";

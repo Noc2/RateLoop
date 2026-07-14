@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   TokenlessServiceError,
@@ -33,6 +33,9 @@ function quoteRequest(source: "customer_invited" | "sandbox" = "sandbox") {
   };
 }
 
+const imageAssetId = `pqm_${"A".repeat(24)}`;
+const imageDigest = `sha256:${"a1".repeat(32)}`;
+
 test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
 
@@ -43,6 +46,35 @@ test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", 
   assert.equal(quote.economics.refund.totalAtomic, "0");
   assert.equal(quote.economics.compensation.perAcceptedRevealCapAtomic, "333333");
   assert.equal(quote.economics.totalFundedAtomic, "31875000");
+});
+
+test("quotes canonicalize supported public question media", async () => {
+  const quote = await createTokenlessQuote({
+    ...quoteRequest(),
+    question: {
+      ...quoteRequest().question,
+      media: {
+        kind: "images",
+        items: [{ alt: "  Checkout confirmation on mobile  ", assetId: imageAssetId, digest: imageDigest }],
+      },
+      prompt: "  Ship this?  ",
+    },
+  });
+
+  const stored = await dbClient.execute({
+    sql: "SELECT request_json FROM tokenless_agent_quotes WHERE quote_id = ?",
+    args: [quote.quoteId],
+  });
+  const request = JSON.parse(String(stored.rows[0]?.request_json));
+  assert.deepEqual(request.question, {
+    kind: "binary",
+    media: {
+      kind: "images",
+      items: [{ alt: "Checkout confirmation on mobile", assetId: imageAssetId, digest: imageDigest }],
+    },
+    prompt: "Ship this?",
+    rationale: { mode: "optional" },
+  });
 });
 
 test("quotes reject economics that cannot satisfy the panel contract", async () => {
@@ -158,6 +190,38 @@ test("ask and quote request validation matches the tokenless SDK contract", asyn
           optionB: { key: "same", label: "B" },
           prompt: "Choose",
           rationale: { mode: "optional" },
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_quote",
+  );
+
+  await assert.rejects(
+    () =>
+      createTokenlessQuote({
+        ...quoteRequest(),
+        question: {
+          ...quoteRequest().question,
+          media: {
+            kind: "images",
+            items: Array.from({ length: 5 }, (_, index) => ({
+              alt: `Image ${index + 1}`,
+              assetId: `${imageAssetId}${index}`,
+              digest: imageDigest,
+            })),
+          },
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_quote",
+  );
+
+  await assert.rejects(
+    () =>
+      createTokenlessQuote({
+        ...quoteRequest(),
+        question: {
+          ...quoteRequest().question,
+          media: { kind: "youtube", videoId: "not-a-video" },
+          unknownMediaUrl: "https://example.com/tracker",
         },
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_quote",

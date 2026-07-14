@@ -1,4 +1,4 @@
-import type { TokenlessQuoteRequest } from "@rateloop/sdk";
+import { RateLoopSdkError, type TokenlessQuoteRequest, normalizeTokenlessQuestion } from "@rateloop/sdk";
 import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { TokenlessMcpToolError } from "~~/lib/mcp/errors";
@@ -49,10 +49,6 @@ function string(value: unknown, path: string, minimum: number, maximum: number) 
   return value;
 }
 
-function optionalLabel(value: unknown, path: string) {
-  return value === undefined ? undefined : string(value, path, 1, 200);
-}
-
 function atomic(value: unknown, path: string) {
   if (typeof value !== "string" || !ATOMIC_PATTERN.test(value)) {
     toolError(`${path} must be an unsigned base-10 atomic amount.`, "invalid_quote");
@@ -96,65 +92,12 @@ export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
     );
   }
 
-  const question = record(input.question, "request.question");
-  const prompt = string(question.prompt, "request.question.prompt", 1, 4_000);
-  const rationale = record(question.rationale, "request.question.rationale");
-  let parsedRationale: TokenlessQuoteRequest["question"]["rationale"];
-  if (rationale.mode === "optional") {
-    exact(rationale, ["mode"], "request.question.rationale");
-    parsedRationale = { mode: "optional" };
-  } else if (
-    rationale.mode === "required" &&
-    Number.isSafeInteger(rationale.maxLength) &&
-    Number(rationale.maxLength) >= 1 &&
-    Number(rationale.maxLength) <= 2_000 &&
-    (rationale.minLength === undefined ||
-      (Number.isSafeInteger(rationale.minLength) &&
-        Number(rationale.minLength) >= 0 &&
-        Number(rationale.minLength) <= Number(rationale.maxLength)))
-  ) {
-    exact(rationale, ["mode", "maxLength", "minLength"], "request.question.rationale");
-    parsedRationale = {
-      mode: "required",
-      maxLength: Number(rationale.maxLength),
-      ...(rationale.minLength === undefined ? {} : { minLength: Number(rationale.minLength) }),
-    };
-  } else {
-    toolError("request.question.rationale is invalid.", "invalid_quote");
-  }
-
   let parsedQuestion: TokenlessQuoteRequest["question"];
-  if (question.kind === "binary") {
-    exact(question, ["kind", "prompt", "positiveLabel", "negativeLabel", "rationale"], "request.question");
-    parsedQuestion = {
-      kind: "binary",
-      prompt,
-      ...(question.negativeLabel === undefined
-        ? {}
-        : { negativeLabel: optionalLabel(question.negativeLabel, "request.question.negativeLabel") }),
-      ...(question.positiveLabel === undefined
-        ? {}
-        : { positiveLabel: optionalLabel(question.positiveLabel, "request.question.positiveLabel") }),
-      rationale: parsedRationale,
-    };
-  } else if (question.kind === "head_to_head") {
-    exact(question, ["kind", "prompt", "optionA", "optionB", "rationale"], "request.question");
-    const optionA = record(question.optionA, "request.question.optionA");
-    const optionB = record(question.optionB, "request.question.optionB");
-    exact(optionA, ["key", "label"], "request.question.optionA");
-    exact(optionB, ["key", "label"], "request.question.optionB");
-    const optionAKey = string(optionA.key, "request.question.optionA.key", 1, 200);
-    const optionBKey = string(optionB.key, "request.question.optionB.key", 1, 200);
-    if (optionAKey === optionBKey) toolError("Head-to-head option keys must be different.", "invalid_quote");
-    parsedQuestion = {
-      kind: "head_to_head",
-      prompt,
-      optionA: { key: optionAKey, label: string(optionA.label, "request.question.optionA.label", 1, 200) },
-      optionB: { key: optionBKey, label: string(optionB.label, "request.question.optionB.label", 1, 200) },
-      rationale: parsedRationale,
-    };
-  } else {
-    toolError("request.question.kind must be binary or head_to_head.", "invalid_quote");
+  try {
+    parsedQuestion = normalizeTokenlessQuestion(input.question);
+  } catch (error) {
+    if (error instanceof RateLoopSdkError) toolError(error.message, "invalid_quote");
+    throw error;
   }
 
   return {
