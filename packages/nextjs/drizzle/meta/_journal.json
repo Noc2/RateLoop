@@ -267,6 +267,13 @@
       "when": 1783990800000,
       "tag": "0037_tokenless_surprise_bounties",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1783994400000,
+      "tag": "0038_agent_pairing_integrations",
+      "breakpoints": true
     }
   ]
 }
