@@ -187,6 +187,9 @@ export const tokenlessNotifications = pgTable(
     title: text("title").notNull(),
     body: text("body").notNull(),
     href: text("href"),
+    preferenceKey: text("preference_key"),
+    sourceType: text("source_type"),
+    sourceKey: text("source_key"),
     readAt: timestamp("read_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   },
@@ -195,7 +198,52 @@ export const tokenlessNotifications = pgTable(
       table.principalAddress,
       table.createdAt,
     ),
+    principalSourceUnique: uniqueIndex("tokenless_notifications_principal_source_unique").on(
+      table.principalAddress,
+      table.sourceType,
+      table.sourceKey,
+    ),
   }),
 );
 
 export type TokenlessNotification = typeof tokenlessNotifications.$inferSelect;
+
+export const tokenlessNotificationEmailDeliveries = pgTable(
+  "tokenless_notification_email_deliveries",
+  {
+    deliveryId: text("delivery_id").primaryKey(),
+    notificationId: text("notification_id")
+      .notNull()
+      .references(() => tokenlessNotifications.notificationId, { onDelete: "cascade" }),
+    principalAddress: text("principal_address")
+      .notNull()
+      .references(() => tokenlessBrowserIdentities.principalAddress, { onDelete: "cascade" }),
+    preferenceKey: text("preference_key").notNull(),
+    state: text("state").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { mode: "date", withTimezone: true }).notNull(),
+    providerMessageId: text("provider_message_id"),
+    lastError: text("last_error"),
+    deliveredAt: timestamp("delivered_at", { mode: "date", withTimezone: true }),
+    suppressedAt: timestamp("suppressed_at", { mode: "date", withTimezone: true }),
+    deadAt: timestamp("dead_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    notificationUnique: uniqueIndex("tokenless_notification_email_deliveries_notification_unique").on(
+      table.notificationId,
+    ),
+    dueIdx: index("tokenless_notification_email_deliveries_due_idx").on(
+      table.state,
+      table.nextAttemptAt,
+      table.createdAt,
+    ),
+    principalIdx: index("tokenless_notification_email_deliveries_principal_idx").on(
+      table.principalAddress,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type TokenlessNotificationEmailDelivery = typeof tokenlessNotificationEmailDeliveries.$inferSelect;

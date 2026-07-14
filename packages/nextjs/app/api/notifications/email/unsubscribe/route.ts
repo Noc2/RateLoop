@@ -15,3 +15,10 @@ export async function GET(request: NextRequest) {
   url.hash = "notifications";
   return NextResponse.redirect(url, 303);
 }
+
+export async function POST(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get("token")?.trim();
+  if (!token) return new NextResponse(null, { status: 400 });
+  const result = await unsubscribeTokenlessEmailNotificationToken(token);
+  return new NextResponse(null, { status: result.ok ? 200 : 404 });
+}

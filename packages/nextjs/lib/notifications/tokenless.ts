@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
 import { dbClient } from "~~/lib/db";
@@ -131,6 +131,46 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+function notificationUnsubscribeSecret(secret = process.env.TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET) {
+  const normalized = secret?.trim();
+  if (!normalized || normalized.length < 32) {
+    throw new Error("TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET must contain at least 32 characters.");
+  }
+  return normalized;
+}
+
+function signUnsubscribePayload(payload: string, secret: string) {
+  return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+export function buildTokenlessSignedUnsubscribeToken(
+  input: { principalAddress: string; unsubscribeTokenHash: string },
+  secret?: string,
+) {
+  const principal = principalAddress(input.principalAddress);
+  const unsubscribeTokenHash = input.unsubscribeTokenHash.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/u.test(unsubscribeTokenHash)) throw new Error("Unsubscribe token hash is invalid.");
+  const payload = Buffer.from(JSON.stringify({ p: principal, h: unsubscribeTokenHash }), "utf8").toString("base64url");
+  return `v1.${payload}.${signUnsubscribePayload(payload, notificationUnsubscribeSecret(secret))}`;
+}
+
+function readSignedUnsubscribeToken(token: string, secret?: string) {
+  try {
+    const [version, payload, signature, extra] = token.split(".");
+    if (version !== "v1" || !payload || !signature || extra) return null;
+    const expected = Buffer.from(signUnsubscribePayload(payload, notificationUnsubscribeSecret(secret)), "base64url");
+    const supplied = Buffer.from(signature, "base64url");
+    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+    if (typeof decoded.p !== "string" || typeof decoded.h !== "string" || !/^[0-9a-f]{64}$/u.test(decoded.h)) {
+      return null;
+    }
+    return { principal: principalAddress(decoded.p), unsubscribeTokenHash: decoded.h };
+  } catch {
+    return null;
+  }
+}
+
 function emailSettingsFromRow(row: Row | undefined, deliveryConfigured: boolean): TokenlessEmailNotificationSettings {
   if (!row) return { ...DEFAULT_TOKENLESS_EMAIL_SETTINGS, deliveryConfigured };
   return {
@@ -248,13 +288,15 @@ export async function verifyTokenlessEmailNotificationToken(token: string) {
   return result.rows[0] ? { ok: true as const, email: String((result.rows[0] as Row).email) } : { ok: false as const };
 }
 
-export async function unsubscribeTokenlessEmailNotificationToken(token: string) {
+export async function unsubscribeTokenlessEmailNotificationToken(token: string, secret?: string) {
+  const signed = token.startsWith("v1.") ? readSignedUnsubscribeToken(token, secret) : null;
+  if (token.startsWith("v1.") && !signed) return { ok: false };
   const result = await dbClient.execute({
     sql: `DELETE FROM tokenless_notification_email_subscriptions
-          WHERE unsubscribe_token_hash = ? RETURNING principal_address`,
-    args: [hashToken(token)],
+          WHERE unsubscribe_token_hash = ?${signed ? " AND principal_address = ?" : ""} RETURNING principal_address`,
+    args: signed ? [signed.unsubscribeTokenHash, signed.principal] : [hashToken(token)],
   });
-  return { ok: result.rows.length > 0 };
+  return { ok: signed ? true : result.rows.length > 0 };
 }
 
 export function newTokenlessNotificationId() {

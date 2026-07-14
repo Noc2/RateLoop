@@ -168,6 +168,7 @@ test("non-sandbox production rejects public secrets, reused roles, and mixed dep
   const fixture = validFixture();
   fixture.env.NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN = "do-not-print-this";
   fixture.env.NEXT_PUBLIC_CRON_SECRET = "also-do-not-print-this";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET = "unsubscribe-do-not-print-this";
   fixture.env.NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET = "whsec_do-not-print-this";
   fixture.env.TOKENLESS_X402_RELAYER_PRIVATE_KEY = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY;
   fixture.env.TOKENLESS_DEPLOYMENT_BLOCK = "124";
@@ -175,11 +176,13 @@ test("non-sandbox production rejects public secrets, reused roles, and mixed dep
   const output = errors.join("\n");
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
   assert.match(output, /NEXT_PUBLIC_CRON_SECRET is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET is forbidden/);
   assert.match(output, /Production key roles must be distinct/);
   assert.match(output, /complete active tokenless v3 registry/);
   assert.doesNotMatch(output, /do-not-print-this/);
   assert.doesNotMatch(output, /also-do-not-print-this/);
+  assert.doesNotMatch(output, /unsubscribe-do-not-print-this/);
   assert.doesNotMatch(output, /whsec_do-not-print-this/);
   assert.doesNotMatch(output, /0x11111111/);
 });

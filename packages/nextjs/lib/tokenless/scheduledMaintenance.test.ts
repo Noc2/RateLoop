@@ -46,7 +46,10 @@ async function seedConfirmedExecution(operationKey: string) {
   });
 }
 
-function processors(publish: (operationKey: string) => Promise<void>) {
+function processors(
+  publish: (operationKey: string) => Promise<void>,
+  notifications = { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 },
+) {
   return {
     async deleteArtifact() {
       return true;
@@ -58,7 +61,7 @@ function processors(publish: (operationKey: string) => Promise<void>) {
       return [];
     },
     async processNotifications() {
-      return { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 };
+      return notifications;
     },
   };
 }
@@ -137,6 +140,18 @@ test("persistent worker failures become visible dead-letter health evidence", as
   assert.equal(item.rows[0]?.state, "dead");
   assert.equal(Number(item.rows[0]?.attempt_count), 20);
   assert.ok(item.rows[0]?.dead_at);
+});
+
+test("scheduled maintenance reports notification retries as degraded health evidence", async () => {
+  const notificationSummary = { dead: 0, delivered: 1, enqueued: 2, materialized: 2, retry: 1, suppressed: 0 };
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: processors(async () => {}, notificationSummary),
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.notifications, notificationSummary);
 });
 
 test("cron authorization fails closed when missing or incorrect", () => {

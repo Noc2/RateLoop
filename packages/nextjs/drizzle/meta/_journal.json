@@ -253,6 +253,13 @@
       "when": 1783983600000,
       "tag": "0035_tokenless_workspace_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783987200000,
+      "tag": "0036_tokenless_notification_delivery",
+      "breakpoints": true
     }
   ]
 }

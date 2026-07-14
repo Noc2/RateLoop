@@ -42,6 +42,52 @@ export async function sendTokenlessVerificationEmail(params: { email: string; ve
   }
 }
 
+export async function sendTokenlessNotificationEmail(
+  params: {
+    actionUrl: string;
+    body: string;
+    email: string;
+    idempotencyKey: string;
+    title: string;
+    unsubscribeUrl: string;
+  },
+  fetchImpl: typeof fetch = fetch,
+) {
+  const { apiKey, fromEmail: configuredFromEmail } = getResendConfig();
+  const fromEmail = normalizeResendFromEmail(configuredFromEmail);
+  if (!apiKey || !fromEmail) throw new Error("Resend is not configured");
+
+  const safeTitle = escapeHtml(params.title);
+  const safeBody = escapeHtml(params.body);
+  const safeActionUrl = escapeHtml(params.actionUrl);
+  const safeUnsubscribeUrl = escapeHtml(params.unsubscribeUrl);
+  const response = await fetchImpl("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": params.idempotencyKey,
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [params.email],
+      subject: params.title,
+      text: `${params.title}\n\n${params.body}\n\nOpen RateLoop: ${params.actionUrl}\n\nUnsubscribe: ${params.unsubscribeUrl}`,
+      html: `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui;color:#171717;line-height:1.6"><h1>${safeTitle}</h1><p>${safeBody}</p><p><a href="${safeActionUrl}" style="display:inline-block;background:#171717;color:#fff;border-radius:8px;padding:12px 18px;text-decoration:none;font-weight:600">Open RateLoop</a></p><p style="color:#666;font-size:13px">This message intentionally omits question, answer, payment, and workspace details. <a href="${safeUnsubscribeUrl}">Unsubscribe from RateLoop email notifications</a>.</p></body></html>`,
+      headers: {
+        "List-Unsubscribe": `<${params.unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Resend request failed: ${response.status} ${body}`.trim());
+  }
+  const result = (await response.json().catch(() => null)) as { id?: unknown } | null;
+  return { id: typeof result?.id === "string" ? result.id : null };
+}
+
 export function buildTokenlessVerificationUrl(token: string) {
   const appUrl = getOptionalAppUrl();
   if (!appUrl) throw new Error("APP_URL is required for email verification links");
