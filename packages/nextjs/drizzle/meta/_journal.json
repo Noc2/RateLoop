@@ -197,6 +197,13 @@
       "when": 1783954800000,
       "tag": "0027_tokenless_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783958400000,
+      "tag": "0028_tokenless_public_question_media",
+      "breakpoints": true
     }
   ]
 }
