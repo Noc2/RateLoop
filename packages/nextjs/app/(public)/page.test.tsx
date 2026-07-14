@@ -49,6 +49,11 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /href="\/docs\/tech-stack"/);
   assert.match(html, /href="\/docs\/smart-contracts"/);
   assert.match(html, /href="\/legal\/privacy"/);
+  assert.match(html, /Pricing, Kept/);
+  assert.match(html, /25 decisions \/ month/);
+  assert.match(html, /250 decisions \/ month/);
+  assert.match(html, /7\.5% execution fee/);
+  assert.match(html, /href="\/pricing"/);
   assert.match(html, /What Does RateLoop Do\?/);
   assert.match(html, /Your team makes the final decision/i);
   assert.match(html, /Use RateLoop with your favorite AI agent/);

@@ -75,6 +75,7 @@ const links = [
 ] as const;
 
 const footerLinks = [
+  ["Pricing", "/pricing"],
   ["Terms", "/legal/terms"],
   ["Privacy", "/legal/privacy"],
   ["Imprint", "/legal/imprint"],
@@ -167,9 +168,17 @@ function NavLinks({
       {mobile ? (
         <div className="mt-2 border-t border-white/10 px-2 pt-4">
           <ThirdwebSessionButton onSessionChange={onSessionChange} />
-          <Link href="/legal" className="mt-3 block px-2 text-sm text-base-content/60">
-            Legal
-          </Link>
+          <div className="mt-3 flex items-center gap-3 px-2 text-sm text-base-content/60">
+            <Link href="/pricing" className="transition-colors hover:text-base-content">
+              Pricing
+            </Link>
+            <span aria-hidden="true" className="text-base-content/30">
+              ·
+            </span>
+            <Link href="/legal" className="transition-colors hover:text-base-content">
+              Legal
+            </Link>
+          </div>
         </div>
       ) : null}
     </>

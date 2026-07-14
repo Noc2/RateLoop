@@ -38,6 +38,15 @@ export default function PrivacyPage() {
         RateLoop stores its own hashed, time-limited browser session; it does not store the thirdweb secret key or a
         social-provider token in the browser session. An email domain alone never grants workspace membership.
       </p>
+      <h2>Subscription billing</h2>
+      <p>
+        When a business purchases or manages a workspace subscription, Stripe processes payment-card details, billing
+        address, tax or VAT identifiers, invoice identity, payment status, and related fraud-prevention data under its
+        own privacy terms. RateLoop stores the workspace&apos;s Stripe customer and subscription identifiers, plan,
+        subscription status, billing period, cancellation state, webhook processing records, and decision-usage
+        allocations. RateLoop does not store full card details. Subscription records remain separate from prepaid USDC,
+        public-panel funding, participant payout, and settlement records.
+      </p>
       <h2>On-chain data</h2>
       <p>
         Public-chain interactions may publish transaction addresses, commitments, round terms, settlement data, and
@@ -58,10 +67,11 @@ export default function PrivacyPage() {
       </p>
       <h2>Retention and rights</h2>
       <p>
-        Workspace and project retention settings control private artifact deletion and access logging. Legal holds and
-        statutory retention may apply. You may request access, correction, deletion where available, restriction, or object to
-        processing by contacting the address above; public blockchain records remain outside the operator&apos;s ability
-        to erase.
+        Workspace and project retention settings control private artifact deletion and access logging. Subscription
+        cancellation does not override an agreed evidence-retention setting or erase records required for audit, dispute
+        handling, accounting, legal holds, or statutory retention. You may request access, correction, deletion where
+        available, restriction, or object to processing by contacting the address above; public blockchain records
+        remain outside the operator&apos;s ability to erase.
       </p>
     </article>
   );

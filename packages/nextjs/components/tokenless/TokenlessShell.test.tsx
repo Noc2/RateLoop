@@ -7,6 +7,8 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.match(source, /href: "\/human", label: "For Humans"/);
   assert.match(source, /href: "\/agents", label: "For Agents"/);
   assert.match(source, /href: "\/docs", label: "Docs"/);
+  assert.match(source, /\["Pricing", "\/pricing"\]/);
+  assert.match(source, /href="\/pricing"/);
   assert.match(source, /icon: GlobeAltIcon/);
   assert.match(source, /icon: PlusCircleIcon/);
   assert.match(source, /icon: BookOpenIcon/);

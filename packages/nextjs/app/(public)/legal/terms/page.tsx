@@ -32,6 +32,31 @@ export default function TermsPage() {
         commit is accepted, a funder cannot cancel the round. Accepted work must reach the disclosed paid or compensated
         terminal path even when quorum or infrastructure fails.
       </p>
+      <h2>Workspace subscriptions</h2>
+      <p>
+        RateLoop may offer a recurring business-to-business workspace subscription. The displayed price, billing period,
+        included review-decision allowance, and applicable tax are confirmed before checkout. Subscriptions renew
+        automatically until cancelled. Cancellation takes effect at the end of the paid period; already-accepted review
+        work may finish and historical evidence is not deleted merely because a plan ends.
+      </p>
+      <p>
+        The Early Access price applies for the first 12 months. RateLoop will give at least 60 days&apos; notice before
+        a later price change. After the first 12 months, founding customers receive 20% off the then-current comparable
+        monthly plan. There is no lifetime price guarantee, and a customer may cancel before a new price takes effect.
+      </p>
+      <h2>Separate subscription and panel costs</h2>
+      <p>
+        A workspace subscription pays for access to the RateLoop software and its plan limits. It does not include
+        participant bounty, attempt reserve, or the separately disclosed public-panel execution fee. Those panel costs
+        are itemized before funding and do not increase a workspace&apos;s subscription allowance.
+      </p>
+      <h2>Billing, taxes, and refunds</h2>
+      <p>
+        Subscriptions are intended for approved business customers. Customers must provide accurate legal, invoice,
+        trader, tax, and VAT details and remain responsible for taxes not collected at checkout. Stripe processes
+        subscription payment details and provides invoices and receipts. Except where law requires otherwise or RateLoop
+        agrees in writing, paid subscription periods are non-refundable.
+      </p>
       <h2>Trust and privacy limits</h2>
       <p>
         The immutable panel core has no operator withdrawal path. A separate issuer can control future admission but

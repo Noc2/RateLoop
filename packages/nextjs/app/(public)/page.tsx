@@ -99,6 +99,11 @@ const questions = [
   ],
 ] as const;
 
+const pricingPlans = [
+  ["Free", "$0", "25 decisions / month", "1 agent · 1 private group", "Start free", "/agents?tab=overview"],
+  ["Early Access", "$99", "250 decisions / month", "3 agents · 5 private groups", "View Early Access", "/pricing"],
+] as const;
+
 function SectionTitle({
   number,
   children,
@@ -221,7 +226,61 @@ export default function TokenlessLandingPage() {
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
         <section className="relative z-10 w-full">
-          <SectionTitle number="03" gradient="Questions">
+          <SectionTitle number="03" gradient="Simple">
+            Pricing, Kept
+          </SectionTitle>
+          <div className="grid gap-5 lg:grid-cols-[0.8fr_1fr_1fr]">
+            <div className="flex flex-col justify-between py-3 lg:pr-8">
+              <p className="text-lg leading-8 text-base-content/65">
+                Bring your own reviewers for free. Upgrade the workspace when you need more decisions, agents, groups,
+                or paid human supply.
+              </p>
+              <p className="mt-6 text-sm leading-6 text-base-content/45">
+                Public-panel bounty, attempt reserve, and the 7.5% execution fee are funded separately from the
+                subscription.
+              </p>
+            </div>
+            {pricingPlans.map(([name, price, allowance, limits, cta, href], index) => (
+              <article
+                key={name}
+                className={`surface-card flex min-h-72 flex-col rounded-2xl border-t-2 p-7 ${
+                  index === 0 ? "border-[var(--rateloop-blue)]" : "border-[var(--rateloop-green)]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-2xl font-semibold">{name}</h3>
+                  {index === 1 ? (
+                    <span className="rounded-full bg-[var(--rateloop-green)]/10 px-2.5 py-1 font-mono text-[0.65rem] uppercase tracking-wider text-[var(--rateloop-green)]">
+                      Early Access
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-7 display-section text-5xl">{price}</p>
+                <p className="mt-5 text-base font-semibold">{allowance}</p>
+                <p className="mt-1 text-sm text-base-content/50">{limits}</p>
+                <Link
+                  href={href}
+                  className="mt-auto pt-7 text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
+                >
+                  {cta} <span aria-hidden="true">→</span>
+                </Link>
+              </article>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <Link
+              href="/pricing"
+              className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
+            >
+              Compare plans and panel costs
+            </Link>
+          </div>
+        </section>
+
+        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
+
+        <section className="relative z-10 w-full">
+          <SectionTitle number="04" gradient="Questions">
             Common
           </SectionTitle>
           <div className="grid grid-cols-1 gap-x-12 gap-y-4 xl:grid-cols-2">
