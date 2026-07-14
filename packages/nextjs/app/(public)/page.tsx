@@ -4,27 +4,15 @@ import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
 const steps = [
-  ["01", "Set the Standard", "Ask one clear question about the work.", "#359EEE"],
-  ["02", "Review Blind", "People answer without seeing anyone else's vote.", "#03CEA4"],
-  ["03", "Make the Call", "Use the result and reasons to decide what ships.", "#EF476F"],
+  ["01", "Set the Standard", "Define one clear question and the quality bar before anyone reviews.", "#359EEE"],
+  ["02", "Review Blind", "Collect independent judgments without showing reviewers anyone else's vote.", "#03CEA4"],
+  ["03", "Decide with Evidence", "Use the result, reasons, and audit trail to decide what ships.", "#EF476F"],
 ] as const;
 
-const benefits = [
-  ["Launch Decisions", "Check one quality bar before you ship.", "#359EEE"],
-  ["Less Groupthink", "Blind reviews hide the crowd's answers.", "#03CEA4"],
-  ["Reasons Included", "See why people agreed or disagreed.", "#EF476F"],
-  ["Audit Trail", "Inspect commitments, scoring, and payments.", "#FFC43D"],
-  ["Paid Reviewers", "Reward people for accepted work.", "#359EEE"],
-  ["Privacy Has Limits", "Keep secrets out. RateLoop and assigned reviewers may read submitted content.", "#359EEE"],
-] as const;
-
-const agentClients = ["Claude Code", "OpenAI Codex", "Cursor", "GitHub Copilot", "Gemini CLI", "OpenClaw"] as const;
-
-const agentTools = [
-  ["rateloop_capabilities", "Check what the server supports."],
-  ["rateloop_create_handoff", "Create a private browser handoff."],
-  ["rateloop_get_handoff_status", "Check if the handoff is still waiting."],
-  ["rateloop_get_result", "Get the finished result."],
+const problemPoints = [
+  ["Variable output", "The same prompt can produce different results across runs and models.", "#359EEE"],
+  ["Subjective quality", "Correctness is only part of the question. Usefulness and tone still need judgment.", "#03CEA4"],
+  ["No independent check", "The people building the workflow are rarely the people reviewing its real-world impact.", "#EF476F"],
 ] as const;
 
 const questions = [
@@ -104,15 +92,19 @@ export default function TokenlessLandingPage() {
           <SupportedAgentsSection />
         </section>
 
-        <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
-          <SectionTitle number="01" gradient="Works">
-            How It
+        <section id="problem" className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
+          <SectionTitle number="01" gradient="Problem">
+            The
           </SectionTitle>
+          <p className="mb-10 max-w-3xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.35rem]">
+            AI can generate the work. The hard part is knowing whether it is useful, appropriate, and ready to reach
+            real people.
+          </p>
           <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
-            {steps.map(([number, title, body, color]) => (
-              <article key={number} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
+            {problemPoints.map(([title, body, color], index) => (
+              <article key={title} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
                 <span className="font-mono text-sm" style={{ color }}>
-                  {number}
+                  {String(index + 1).padStart(2, "0")}
                 </span>
                 <h3 className="mt-3 text-[1.55rem] font-bold leading-tight sm:text-[1.75rem]">{title}</h3>
                 <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
@@ -123,90 +115,23 @@ export default function TokenlessLandingPage() {
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
-        <section className="relative z-10 w-full">
-          <SectionTitle number="02" gradient="Works">
-            Why RateLoop
+        <section id="solution" className="relative z-10 w-full">
+          <SectionTitle number="02" gradient="Solution">
+            The
           </SectionTitle>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-14 md:grid-cols-2 lg:grid-cols-6">
-            {benefits.map(([title, body, color], index) => (
-              <article
-                key={title}
-                className="flex min-h-52 flex-col border-l-2 py-2 pl-6 lg:col-span-2"
-                style={{ borderColor: color }}
-              >
+          <p className="mb-10 max-w-3xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.35rem]">
+            Add a human assurance layer before an AI-enabled workflow reaches customers, teammates, or production.
+          </p>
+          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
+            {steps.map(([number, title, body, color]) => (
+              <article key={number} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
                 <span className="font-mono text-sm" style={{ color }}>
-                  {String(index + 1).padStart(2, "0")}
+                  {number}
                 </span>
-                <h3 className="mt-3 text-[1.45rem] font-bold leading-tight sm:text-[1.65rem]">{title}</h3>
-                <p className="mt-4 text-base leading-7 text-base-content/60">{body}</p>
+                <h3 className="mt-3 text-[1.55rem] font-bold leading-tight sm:text-[1.75rem]">{title}</h3>
+                <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
               </article>
             ))}
-          </div>
-        </section>
-
-        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
-
-        <section className="relative z-10 w-full">
-          <SectionTitle number="03" gradient="Workflow">
-            Agent
-          </SectionTitle>
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
-            <div>
-              <p className="max-w-xl text-[1.15rem] leading-8 text-base-content/70 sm:text-[1.3rem]">
-                Choose the control level: approve a browser handoff, delegate a bounded prepaid budget, or let an agent
-                pay from its own encrypted wallet. Every autonomous run stays inside the policy you issued.
-              </p>
-              <div className="mt-7 flex flex-wrap gap-2" aria-label="Supported agent clients">
-                {agentClients.map(client => (
-                  <span
-                    key={client}
-                    className="rounded-full border border-base-content/15 bg-base-content/[0.05] px-3 py-2 text-sm font-semibold text-base-content/80"
-                  >
-                    {client}
-                  </span>
-                ))}
-              </div>
-              <div className="rateloop-surface-card mt-7 rounded-2xl p-5 sm:p-6">
-                <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#03CEA4]">Three ways to run</p>
-                <ol className="mt-4 space-y-3 text-base leading-7 text-base-content/70">
-                  <li>
-                    <strong className="text-base-content">1. Handoff.</strong> Review the exact draft and submit in the
-                    browser.
-                  </li>
-                  <li>
-                    <strong className="text-base-content">2. Prepaid.</strong> Give a workspace key a bounded budget and
-                    let it run.
-                  </li>
-                  <li>
-                    <strong className="text-base-content">3. Self-funded.</strong> Let the agent sign short-lived x402
-                    payment authorizations from its own wallet.
-                  </li>
-                </ol>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {agentTools.map(([name, description], index) => (
-                <article key={name} className="rateloop-surface-card rounded-2xl p-5 sm:p-6">
-                  <span className="font-mono text-xs text-[#359EEE]">{String(index + 1).padStart(2, "0")}</span>
-                  <h3 className="mt-3 break-words font-mono text-sm font-semibold text-base-content sm:text-base">
-                    {name}
-                  </h3>
-                  <p className="mt-3 text-sm leading-6 text-base-content/60">{description}</p>
-                </article>
-              ))}
-              <div className="sm:col-span-2">
-                <p className="mt-2 text-sm leading-6 text-base-content/55">
-                  Use only public, test, or redacted content. {sandboxMode ? "This sandbox is simulated." : null}
-                </p>
-                <Link
-                  href="/docs/ai"
-                  className="mt-5 inline-flex text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
-                >
-                  Set up MCP
-                </Link>
-              </div>
-            </div>
           </div>
         </section>
 
