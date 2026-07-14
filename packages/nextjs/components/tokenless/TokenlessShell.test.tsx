@@ -22,7 +22,9 @@ test("tokenless answer search restores the established navbar treatment", () => 
   const source = readFileSync(new URL("./navigation/AnswerSearch.tsx", import.meta.url), "utf8");
 
   assert.match(source, /MagnifyingGlassIcon/);
-  assert.match(source, /header-search-input input input-sm input-bordered/);
+  assert.match(source, /border-0 bg-base-content\/\[0\.12\]/);
+  assert.match(source, /px-4 text-center/);
+  assert.doesNotMatch(source, /input-bordered|header-search-input/);
   assert.match(source, /placeholder="Search"/);
   assert.doesNotMatch(source, /placeholder="Search answers"/);
 });

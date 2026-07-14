@@ -88,7 +88,9 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
         Search answers
       </label>
       <div className="relative">
-        <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />
+        {mobile ? (
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />
+        ) : null}
         <input
           id={mobile ? "mobile-answer-search" : "desktop-answer-search"}
           value={query}
@@ -100,7 +102,9 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
               if (mobile) setExpanded(false);
             }
           }}
-          className="header-search-input input input-sm input-bordered h-9 w-full rounded-lg border-base-content/10 bg-base-300/80 pl-8 pr-8 text-base text-base-content outline-none placeholder:text-base-content/60 focus:border-primary/30 focus:bg-base-300"
+          className={`input input-sm h-9 w-full rounded-lg border-0 bg-base-content/[0.12] text-base text-base-content outline-none placeholder:text-base-content/60 focus:bg-base-content/[0.15] focus:outline-none focus:ring-0 ${
+            mobile ? "pl-8 pr-8" : "px-4 text-center"
+          }`}
           placeholder="Search"
           autoFocus={mobile}
         />

@@ -23,7 +23,7 @@ export function rateLoopConnectButtonStyle(compact: boolean) {
     borderRadius: "0.5rem",
     boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
     color: "var(--rateloop-warm-white)",
-    minWidth: compact ? "100%" : "8.5rem",
+    minWidth: compact ? "8.25rem" : "8.5rem",
     whiteSpace: "nowrap",
   } as const;
 }
@@ -85,10 +85,12 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
 
   if (!thirdwebBrowserClient) {
     return (
-      <div className={compact ? "w-full" : undefined}>
+      <div className={compact ? "flex w-full justify-start" : undefined}>
         <button
           type="button"
-          className={`rateloop-gradient-action w-full px-3 opacity-70 ${compact ? "min-h-10 text-base" : "min-h-11 text-sm"}`}
+          className={`rateloop-gradient-action px-3 opacity-70 ${
+            compact ? "min-h-10 w-auto min-w-[8.25rem] text-base" : "min-h-11 w-full text-sm"
+          }`}
           onClick={() => setConfigurationError(true)}
         >
           {RATELOOP_SIGN_IN_LABEL}
@@ -102,12 +104,14 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
     );
   }
 
-  const buttonClass = `rateloop-gradient-action px-3 ${compact ? "!min-h-10 !w-full !text-sm" : "!min-h-11 !text-sm"}`;
+  const buttonClass = `rateloop-gradient-action px-3 ${
+    compact ? "!min-h-10 !w-auto !min-w-[8.25rem] !text-sm" : "!min-h-11 !text-sm"
+  }`;
   const buttonStyle = rateLoopConnectButtonStyle(compact);
 
   return (
     <ThirdwebProvider>
-      <div className={compact ? "w-full" : undefined}>
+      <div className={compact ? "flex w-full justify-start" : undefined}>
         <ConnectButton
           client={thirdwebBrowserClient}
           chain={baseSepolia}

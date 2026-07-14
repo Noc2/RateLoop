@@ -42,7 +42,7 @@ test("the thirdweb entry point keeps the original compact RateLoop sign-in treat
     borderRadius: "0.5rem",
     boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
     color: "var(--rateloop-warm-white)",
-    minWidth: "100%",
+    minWidth: "8.25rem",
     whiteSpace: "nowrap",
   });
 });
