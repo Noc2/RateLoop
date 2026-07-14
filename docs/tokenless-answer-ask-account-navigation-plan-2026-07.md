@@ -469,3 +469,17 @@ changes out of these commits.
   governance, registry, escrow, oracle, profile, reward, confidentiality, or voting consumers.
 - Public search and history cannot expose private data across accounts or workspaces.
 - All targeted, workspace, E2E, type, lint, migration, and browser verification gates pass.
+
+## 11. Implementation handoff
+
+The navigation and workflow reimplementation is now present on `tokenless` in the commit sequence described above:
+
+- `/rate` is the Answer queue, with URL-backed search, public questions, and assigned private reviews.
+- `/ask` is split into Public, Private evaluation, and History tabs. Public submission requires an explicit visibility,
+  classification, redaction summary, and no-sensitive-data confirmation; live publishing remains disabled until the
+  server provides a production audience/admission policy.
+- `/settings` is the Account surface, with Profile first, one-time invitation redemption, paid eligibility, workspace,
+  and API/webhook controls in account tabs.
+- The shell exposes Answer, Ask, Account, and Docs; the former validation rail action is now Answer search.
+- Public question discovery and history are owner/account scoped, and private question records are not returned by the
+  public queue APIs.
