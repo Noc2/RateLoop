@@ -218,6 +218,13 @@
       "when": 1783965600000,
       "tag": "0030_durable_agent_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1783969200000,
+      "tag": "0031_adaptive_review_evidence",
+      "breakpoints": true
     }
   ]
 }
