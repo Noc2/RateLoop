@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { TOKENLESS_MCP_COMPAT_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
 import { dispatchWorkspaceMcp } from "~~/lib/mcp/workspaceProtocol";
-import { authenticateProductPrincipal } from "~~/lib/tokenless/productCore";
+import { authenticateAgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -66,14 +66,11 @@ async function readBody(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     validateHeaders(request);
-    const principal = await authenticateProductPrincipal({
-      authorization: request.headers.get("authorization"),
-      sessionToken: undefined,
+    const principal = await authenticateAgentMcpPrincipal(request.headers.get("authorization"));
+    const result = await dispatchWorkspaceMcp(await readBody(request), principal, {
+      origin: request.nextUrl.origin,
+      signal: request.signal,
     });
-    if (principal.kind !== "api_key") {
-      throw new TokenlessServiceError("A workspace API key is required.", 401, "workspace_api_key_required");
-    }
-    const result = await dispatchWorkspaceMcp(await readBody(request), principal);
     if (result === null) return new Response(null, { headers: { "Cache-Control": "no-store" }, status: 202 });
     return json(result);
   } catch (error) {
