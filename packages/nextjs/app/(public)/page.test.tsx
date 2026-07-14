@@ -16,7 +16,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
 
   assert.match(html, /Humans In The/);
   assert.match(html, />Loop<\/span>/);
-  assert.match(html, /Human raters guide decisions and earn USDC\./);
+  assert.match(html, /Human raters evaluate AI outputs, guide better decisions, and earn USDC\./);
   assert.match(html, /<span>Answer<\/span>/);
   assert.match(html, /<span>Ask<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
