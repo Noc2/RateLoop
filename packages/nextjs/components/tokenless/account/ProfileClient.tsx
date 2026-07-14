@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { InvitationRedemption } from "~~/components/tokenless/account/InvitationRedemption";
+import { NotificationSettingsPanel } from "~~/components/tokenless/account/NotificationSettingsPanel";
 
 type Profile = {
   principalAddress: string;
@@ -137,6 +138,8 @@ export function ProfileClient() {
       </section>
 
       <InvitationRedemption onRedeemed={() => void refresh()} />
+
+      <NotificationSettingsPanel />
 
       <section className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Customer cohorts</p>

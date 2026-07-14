@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveOptionalAppUrl } from "~~/lib/env/appUrl";
 
 const defaultDevDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_tokenless";
 
@@ -36,4 +37,22 @@ export function getDatabaseConfig() {
 
   if (!url) throw new Error("DATABASE_URL is required in production.");
   return { url };
+}
+
+export function getOptionalAppUrl() {
+  return resolveOptionalAppUrl({
+    rawAppUrl: readEnv("APP_URL"),
+    rawPublicAppUrl: readEnv("NEXT_PUBLIC_APP_URL"),
+    rawVercelEnv: readEnv("VERCEL_ENV"),
+    rawVercelProjectProductionUrl: readEnv("VERCEL_PROJECT_PRODUCTION_URL"),
+    rawVercelUrl: readEnv("VERCEL_URL"),
+    production: process.env.NODE_ENV === "production",
+  });
+}
+
+export function getResendConfig() {
+  return {
+    apiKey: readEnv("RESEND_API_KEY"),
+    fromEmail: readEnv("RESEND_FROM_EMAIL"),
+  };
 }

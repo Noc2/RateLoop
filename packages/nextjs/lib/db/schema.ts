@@ -122,3 +122,80 @@ export const tokenlessAccountProfiles = pgTable(
 
 export type TokenlessAccountProfile = typeof tokenlessAccountProfiles.$inferSelect;
 export type NewTokenlessAccountProfile = typeof tokenlessAccountProfiles.$inferInsert;
+
+export const tokenlessNotificationPreferences = pgTable(
+  "tokenless_notification_preferences",
+  {
+    principalAddress: text("principal_address")
+      .primaryKey()
+      .references(() => tokenlessBrowserIdentities.principalAddress, { onDelete: "cascade" }),
+    assignmentAvailable: boolean("assignment_available").notNull().default(true),
+    assignmentCompleted: boolean("assignment_completed").notNull().default(true),
+    paymentUpdates: boolean("payment_updates").notNull().default(true),
+    askResults: boolean("ask_results").notNull().default(true),
+    accountSecurity: boolean("account_security").notNull().default(true),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({ updatedAtIdx: index("tokenless_notification_preferences_updated_at_idx").on(table.updatedAt) }),
+);
+
+export type TokenlessNotificationPreferences = typeof tokenlessNotificationPreferences.$inferSelect;
+export type NewTokenlessNotificationPreferences = typeof tokenlessNotificationPreferences.$inferInsert;
+
+export const tokenlessNotificationEmailSubscriptions = pgTable(
+  "tokenless_notification_email_subscriptions",
+  {
+    principalAddress: text("principal_address")
+      .primaryKey()
+      .references(() => tokenlessBrowserIdentities.principalAddress, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    verifiedAt: timestamp("verified_at", { mode: "date", withTimezone: true }),
+    verificationTokenHash: text("verification_token_hash"),
+    verificationExpiresAt: timestamp("verification_expires_at", { mode: "date", withTimezone: true }),
+    unsubscribeTokenHash: text("unsubscribe_token_hash"),
+    assignmentAvailable: boolean("assignment_available").notNull().default(true),
+    assignmentCompleted: boolean("assignment_completed").notNull().default(true),
+    paymentUpdates: boolean("payment_updates").notNull().default(true),
+    askResults: boolean("ask_results").notNull().default(true),
+    accountSecurity: boolean("account_security").notNull().default(true),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    emailUnique: uniqueIndex("tokenless_notification_email_subscriptions_email_unique").on(table.email),
+    verificationTokenIdx: index("tokenless_notification_email_subscriptions_verification_token_idx").on(
+      table.verificationTokenHash,
+    ),
+    unsubscribeTokenIdx: index("tokenless_notification_email_subscriptions_unsubscribe_token_idx").on(
+      table.unsubscribeTokenHash,
+    ),
+  }),
+);
+
+export type TokenlessNotificationEmailSubscription = typeof tokenlessNotificationEmailSubscriptions.$inferSelect;
+export type NewTokenlessNotificationEmailSubscription = typeof tokenlessNotificationEmailSubscriptions.$inferInsert;
+
+export const tokenlessNotifications = pgTable(
+  "tokenless_notifications",
+  {
+    notificationId: text("notification_id").primaryKey(),
+    principalAddress: text("principal_address")
+      .notNull()
+      .references(() => tokenlessBrowserIdentities.principalAddress, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    href: text("href"),
+    readAt: timestamp("read_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    principalCreatedIdx: index("tokenless_notifications_principal_created_idx").on(
+      table.principalAddress,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type TokenlessNotification = typeof tokenlessNotifications.$inferSelect;
