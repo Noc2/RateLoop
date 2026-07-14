@@ -61,8 +61,21 @@ function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export async function listPaidRaterTasks(accountAddress: string, now = new Date()) {
+export async function listPaidRaterTasks(
+  accountAddress: string,
+  optionsOrNow: { query?: string; scope?: "all" | "public" } | Date = {},
+  now = new Date(),
+) {
   const address = getAddress(accountAddress).toLowerCase();
+  const options = optionsOrNow instanceof Date ? {} : optionsOrNow;
+  now = optionsOrNow instanceof Date ? optionsOrNow : now;
+  const query = options.query?.trim() ?? "";
+  if (query.length > 120) {
+    throw new TokenlessServiceError("Search query must be at most 120 characters.", 400, "invalid_search");
+  }
+  if (options.scope === "public") {
+    // Public-only is the only source served by this endpoint. Private assignments use their own account-bound read.
+  }
   const result = await dbClient.execute({
     sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id,
                  vr.admission_policy_hash, vr.voucher_deadline,
@@ -79,8 +92,9 @@ export async function listPaidRaterTasks(accountAddress: string, now = new Date(
           LEFT JOIN tokenless_paid_vouchers v ON v.rater_id = p.rater_id AND v.round_id = vr.round_id
              AND v.panel_address = vr.panel_address
           WHERE vr.status = 'open' AND vr.voucher_deadline > ? AND c.moderation_status = 'approved'
+            AND (? = '' OR c.content_json ILIKE ?)
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
-    args: [address, now],
+    args: [address, now, query, `%${query}%`],
   });
   return result.rows.map(value => {
     const row = value as Row;
@@ -102,6 +116,7 @@ export async function listPaidRaterTasks(accountAddress: string, now = new Date(
         attemptCompensationAtomic: String(terms.attemptCompensation),
       },
       beacon: { network: "quicknet-t" as const, round: Number(terms.beaconRound) },
+      visibility: "public" as const,
     };
   });
 }
