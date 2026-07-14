@@ -476,34 +476,51 @@ export async function requestProjectDeletion(input: {
   return { requestId, executeAfter: executeAfter.toISOString() };
 }
 
-export async function processDueArtifactDeletions(now = new Date()) {
+export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
   const runtime = getRuntime();
   const result = await dbClient.execute({
     sql: `SELECT object_id, artifact_id, workspace_id, project_id, storage_ref
-          FROM tokenless_assurance_artifact_objects WHERE status = 'active' AND delete_after <= ? ORDER BY created_at ASC`,
-    args: [now],
+          FROM tokenless_assurance_artifact_objects
+          WHERE object_id = ? AND status = 'active' AND delete_after <= ? LIMIT 1`,
+    args: [objectId, now],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  if (!row) return false;
+  const storageRef = rowString(row, "storage_ref")!;
+  await runtime.store.delete(storageRef);
+  const deleted = await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_artifact_objects SET status = 'deleted', deleted_at = ?
+          WHERE object_id = ? AND status = 'active'`,
+    args: [now, objectId],
+  });
+  if (deleted.rowCount !== 1) return false;
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_artifacts SET storage_ref = ?, updated_at = ? WHERE artifact_id = ?",
+    args: [`deleted://${rowString(row, "artifact_id")}`, now, rowString(row, "artifact_id")],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_deletion_requests SET status = 'completed', completed_at = ?
+          WHERE project_id = ? AND status = 'pending' AND execute_after <= ?
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_assurance_artifact_objects
+              WHERE project_id = ? AND status = 'active'
+            )`,
+    args: [now, rowString(row, "project_id"), now, rowString(row, "project_id")],
+  });
+  return true;
+}
+
+export async function processDueArtifactDeletions(now = new Date(), limit = 100) {
+  const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const result = await dbClient.execute({
+    sql: `SELECT object_id FROM tokenless_assurance_artifact_objects
+          WHERE status = 'active' AND delete_after <= ? ORDER BY created_at ASC LIMIT ?`,
+    args: [now, boundedLimit],
   });
   let deleted = 0;
   for (const value of result.rows) {
-    const row = value as QueryRow;
-    const storageRef = rowString(row, "storage_ref")!;
-    await runtime.store.delete(storageRef);
-    await dbClient.execute({
-      sql: `UPDATE tokenless_assurance_artifact_objects SET status = 'deleted', deleted_at = ?
-            WHERE object_id = ? AND status = 'active'`,
-      args: [now, rowString(row, "object_id")],
-    });
-    await dbClient.execute({
-      sql: "UPDATE tokenless_assurance_artifacts SET storage_ref = ?, updated_at = ? WHERE artifact_id = ?",
-      args: [`deleted://${rowString(row, "artifact_id")}`, now, rowString(row, "artifact_id")],
-    });
-    deleted += 1;
+    if (await processArtifactDeletionByObjectId(rowString(value as QueryRow, "object_id")!, now)) deleted += 1;
   }
-  await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_deletion_requests SET status = 'completed', completed_at = ?
-          WHERE status = 'pending' AND execute_after <= ?`,
-    args: [now, now],
-  });
   return { deleted };
 }
 
