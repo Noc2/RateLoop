@@ -1,10 +1,9 @@
 import Link from "next/link";
 
-export type AgentTab = "overview" | "integrate" | "agents" | "groups" | "evaluations";
+export type AgentTab = "overview" | "agents" | "groups" | "evaluations";
 
 const tabs: Array<{ value: AgentTab; label: string }> = [
   { value: "overview", label: "Overview" },
-  { value: "integrate", label: "Integrate" },
   { value: "agents", label: "Agents" },
   { value: "groups", label: "Groups" },
   { value: "evaluations", label: "Evaluations" },

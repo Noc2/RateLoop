@@ -23,15 +23,16 @@ test("Human Discover keeps the compact legacy feed and action-rail composition",
 
 test("Agents uses URL-backed workspace tabs", () => {
   const tabs = source("./agents/AgentTabs.tsx");
-  const integration = source("./agents/AgentIntegrationPanel.tsx");
+  const page = source("../../app/(app)/agents/page.tsx");
+  const legacyAsk = source("../../app/(app)/ask/page.tsx");
 
   assert.match(tabs, /tab-control/);
   assert.match(tabs, /pill-active/);
   assert.match(tabs, /Overview/);
-  assert.match(tabs, /Integrate/);
+  assert.doesNotMatch(tabs, /Integrate/);
   assert.match(tabs, /Evaluations/);
-  assert.match(integration, /quote → ask → payment → wait → result/);
-  assert.match(integration, /\/handoff/);
+  assert.doesNotMatch(page, /integrate/);
+  assert.match(legacyAsk, /redirect\("\/agents\?tab=overview"\)/);
 });
 
 test("Human profile keeps established surface cards without a dashboard hero", () => {

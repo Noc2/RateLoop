@@ -14,8 +14,9 @@ Reframe the website around two audiences, not around three generic actions:
 
 1. **For Humans** — discover and answer public or assigned private questions, manage notification preferences, verify
    human uniqueness, configure payout/paid eligibility, and join private groups by invitation.
-2. **For Agents** — integrate RateLoop, register and configure agents, create private groups, issue invitations, bind
-   spending and review policies, and evaluate agent performance against human judgments.
+2. **For Agents** — register and configure agents, create private groups, issue invitations, bind spending and review
+   policies, and evaluate agent performance against human judgments. Integration guidance remains in `/docs/ai` until
+   it is intentionally incorporated into the agent-management tab.
 
 Remove **Ask** from the public navigation and remove the general-purpose human-authored question builder at `/ask`.
 Agents create review requests through MCP, SDK, API, CLI, or an agent-created browser handoff. The handoff remains a
@@ -30,7 +31,6 @@ The primary route structure becomes:
 | Human profile      | `/human?tab=profile`      | Name, World ID, invitations, memberships, eligibility, payout                        |
 | Human settings     | `/human?tab=settings`     | Notification channels, availability, language, privacy preferences                   |
 | Agent workspace    | `/agents?tab=overview`    | Setup state, recent activity, alerts, and quick actions                              |
-| Integration        | `/agents?tab=integrate`   | MCP, SDK, API, CLI, webhook, and manual-handoff setup                                |
 | Agent registry     | `/agents?tab=agents`      | Agent identity, model/version metadata, review, audience, timing, and spend policies |
 | Private groups     | `/agents?tab=groups`      | Group membership and secure invitation lifecycle                                     |
 | Evaluations        | `/agents?tab=evaluations` | Human-agreement, disagreement, calibration, latency, and cost charts                 |
@@ -215,7 +215,7 @@ and an authenticated deep link, not private question text.
 ### 4.4 Agent page
 
 The Agent page is workspace-scoped. Owners and admins can mutate configuration; analysts can read evaluations; viewers
-have read-only access to permitted results. It has five URL-backed tabs.
+have read-only access to permitted results. It has four URL-backed tabs.
 
 #### Overview
 
@@ -227,31 +227,10 @@ Show setup and operational state, not marketing copy:
 - pending reviews, results ready, expiring invitations, and delivery failures;
 - current public-network eligibility and private-group counts;
 - alerts for revoked keys, exhausted caps, webhook failures, or adaptive-policy reset;
-- quick actions: integrate, register agent, create group, open evaluations.
+- quick actions: register agent, create group, and open evaluations.
 
-#### Integrate
-
-Provide environment-specific, copyable setup for:
-
-1. Hosted authenticated MCP using OAuth 2.1 for interactive clients.
-2. Policy-bound API key for servers and CI.
-3. `@rateloop/sdk` TypeScript example.
-4. `@rateloop/agents` CLI and encrypted local x402 signer.
-5. REST and signed webhook setup.
-6. **Manual handoff** for one-off or out-of-policy work.
-
-Each integration panel exposes connection test, last successful call, key prefix, scopes, policy binding, expiry, and
-revoke/rotate actions. Secrets are shown exactly once and stored only as hashes server-side. Examples use USDC decimal
-amounts in configuration and convert to atomic units in typed SDK boundaries.
-
-The page presents the three publishing lanes honestly:
-
-- reviewed browser handoff;
-- delegated prepaid publishing;
-- delegated self-funded x402 publishing.
-
-Accountless paid publishing remains disabled for production until B2B status, screening, terms, rate limits, and abuse
-controls can be established without a workspace principal.
+Integration setup remains documented at `/docs/ai`; it has no dedicated workspace tab. If setup controls are restored,
+they belong in the agent-management tab and require a separate product decision.
 
 #### Agents
 
@@ -619,7 +598,7 @@ Compatibility redirects:
 - `/settings` → `/human?tab=profile`;
 - `/settings/eligibility` → `/human?tab=profile&section=paid-work`;
 - `/settings/workspace` → `/agents?tab=overview`;
-- `/ask` → `/agents?tab=integrate&section=handoff` after a deprecation window.
+- `/ask` → `/agents?tab=overview` after a deprecation window.
 
 Do not redirect `/handoff`.
 
@@ -651,9 +630,8 @@ Do not redirect `/handoff`.
 15. **`feat(agents-ui): configure audience timing and panel rules`**
     Add public/private/hybrid policy, group selection, bounty conditionality, response windows, target count, quorum,
     reservation TTL, and timeout behavior.
-16. **`feat(integrations): ship production setup and diagnostics`**
-    MCP/API/SDK/CLI/webhook setup, connection tests, environment/deployment identity, secret-once issuance, and manual
-    handoff.
+16. **`docs(integrations): maintain production setup guidance`**
+    Keep MCP/API/SDK/CLI/webhook and manual-handoff guidance in `/docs/ai`; do not add a dedicated integration tab.
 
 ### Phase D — adaptive review and evaluation
 
