@@ -158,19 +158,17 @@ export function PrivateEvaluationClient() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-14">
-      <div className="max-w-4xl border-l-2 border-[var(--rateloop-blue)] pl-6">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Private evaluation</p>
-        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Compare an AI-enabled workflow</h1>
-        <p className="mt-4 max-w-3xl text-lg leading-8 text-base-content/60">
-          Freeze a baseline, a candidate, and the quality rule before reviewers see either result. This private,
-          reusable suite keeps artifacts encrypted and tenant-isolated; reviewer configuration and funding remain a
-          separate approval step.
+    <div className="space-y-5">
+      <div className="surface-card rounded-2xl p-6">
+        <h1 className="text-xl font-semibold">Compare an AI-enabled workflow</h1>
+        <p className="mt-2 text-sm leading-6 text-base-content/60">
+          Freeze a baseline, candidate, and quality rule before reviewers see either result. Reviewer configuration and
+          funding remain a separate approval step.
         </p>
       </div>
 
-      <div className="mt-10 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <form className="rateloop-surface-card space-y-7 p-5 sm:p-7" onSubmit={createPilot}>
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_17.25rem]">
+        <form className="surface-card space-y-7 rounded-2xl p-6" onSubmit={createPilot}>
           <fieldset>
             <legend className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
               01 · Decision context
@@ -332,7 +330,7 @@ export function PrivateEvaluationClient() {
         </form>
 
         <aside className="space-y-5 lg:sticky lg:top-24">
-          <section className="rateloop-surface-card p-6">
+          <section className="surface-card rounded-2xl p-6">
             <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Reviewer modes</p>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-base-content/60">
               <li>
@@ -352,7 +350,7 @@ export function PrivateEvaluationClient() {
               </li>
             </ul>
           </section>
-          <section className="rateloop-surface-card p-6">
+          <section className="surface-card rounded-2xl p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Recent projects</p>

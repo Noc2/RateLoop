@@ -53,8 +53,8 @@ export function AskHistoryClient() {
   }, []);
 
   return (
-    <section className="mt-8 space-y-5">
-      <div className="rateloop-surface-card p-5 sm:p-7">
+    <section className="space-y-5">
+      <div className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public questions</p>
         <h2 className="mt-2 text-xl font-semibold">Your submitted questions</h2>
         {asks.length ? (
@@ -75,7 +75,7 @@ export function AskHistoryClient() {
           <p className="mt-4 text-sm text-base-content/50">No public questions submitted from this account.</p>
         )}
       </div>
-      <div className="rateloop-surface-card p-5 sm:p-7">
+      <div className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Private evaluations</p>
         <h2 className="mt-2 text-xl font-semibold">Workspace project history</h2>
         {projects.length ? (

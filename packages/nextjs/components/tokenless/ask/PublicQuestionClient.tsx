@@ -155,208 +155,218 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
   }
 
   return (
-    <form className="rateloop-surface-card mt-8 space-y-7 p-5 sm:p-7" onSubmit={submit}>
-      <div className="border-b border-white/10 pb-5">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public question</p>
-        <h2 className="mt-2 text-2xl font-semibold">Ask for an outside judgment</h2>
-        <p className="mt-2 text-sm leading-6 text-base-content/60">
-          Public questions are discoverable by approved reviewers. Use only public, synthetic, or meaningfully redacted
-          content.
-        </p>
+    <div className="space-y-5">
+      <div className="surface-card rounded-2xl p-6">
+        <h1 className="text-xl font-semibold">Ask a public question</h1>
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-base-content/55">
+          <span className="pill-active px-3 py-1.5 font-medium">1. Question</span>
+          <span className="pill-inactive px-3 py-1.5">2. Privacy &amp; quote</span>
+          <span className="pill-inactive px-3 py-1.5">3. Submit</span>
+        </div>
       </div>
-      {!sandboxMode ? (
-        <p className="rounded-lg bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
-          Public browser publishing is currently enabled in deterministic sandbox mode only. Configure a server-provided
-          public admission policy before funding a live panel.
-        </p>
-      ) : null}
-      <label className="block text-sm text-base-content/60">
-        Funding workspace
-        <select
-          className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-          value={workspaceId}
-          onChange={event => setWorkspaceId(event.target.value)}
-        >
-          {workspaces.map(workspace => (
-            <option key={workspace.workspaceId} value={workspace.workspaceId}>
-              {workspace.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <fieldset>
-        <legend className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Question</legend>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-base-content/60">
-            Format
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={kind}
-              onChange={event => setKind(event.target.value as Kind)}
-            >
-              <option value="binary">Binary</option>
-              <option value="head_to_head">Head to head</option>
-            </select>
-          </label>
-          <label className="text-sm text-base-content/60">
-            Panel size
-            <input
-              type="number"
-              min={3}
-              max={500}
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={panelSize}
-              onChange={event => setPanelSize(Number(event.target.value))}
-            />
-          </label>
+      <form className="surface-card space-y-6 rounded-2xl p-6" onSubmit={submit}>
+        <div className="border-b border-white/10 pb-5">
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public question</p>
+          <h2 className="mt-2 text-2xl font-semibold">Ask for an outside judgment</h2>
+          <p className="mt-2 text-sm leading-6 text-base-content/60">
+            Public questions are discoverable by approved reviewers. Use only public, synthetic, or meaningfully
+            redacted content.
+          </p>
         </div>
-        <label className="mt-4 block text-sm text-base-content/60">
-          Prompt
-          <textarea
-            className="textarea mt-2 min-h-28 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={prompt}
-            onChange={event => setPrompt(event.target.value)}
-            maxLength={4000}
-            placeholder="Which response should a support team ship?"
-          />
-        </label>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {kind === "binary" ? (
-            <>
-              <label className="text-sm text-base-content/60">
-                Positive label
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={positiveLabel}
-                  onChange={event => setPositiveLabel(event.target.value)}
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Negative label
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={negativeLabel}
-                  onChange={event => setNegativeLabel(event.target.value)}
-                />
-              </label>
-            </>
-          ) : (
-            <>
-              <label className="text-sm text-base-content/60">
-                Option A
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={optionA}
-                  onChange={event => setOptionA(event.target.value)}
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Option B
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={optionB}
-                  onChange={event => setOptionB(event.target.value)}
-                />
-              </label>
-            </>
-          )}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
-          Privacy and quote
-        </legend>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-base-content/60">
-            Data classification
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={classification}
-              onChange={event => setClassification(event.target.value as Classification)}
-            >
-              <option value="public">Public</option>
-              <option value="synthetic">Synthetic</option>
-              <option value="redacted">Redacted</option>
-            </select>
-          </label>
-          <label className="text-sm text-base-content/60">
-            Bounty (USDC atomic units)
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={bounty}
-              onChange={event => setBounty(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
-        </div>
-        {classification === "redacted" ? (
-          <label className="mt-4 block text-sm text-base-content/60">
-            Redaction summary
-            <textarea
-              className="textarea mt-2 min-h-20 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={redactionSummary}
-              onChange={event => setRedactionSummary(event.target.value)}
-              maxLength={1000}
-              placeholder="Explain which sensitive fields were removed."
-            />
-          </label>
+        {!sandboxMode ? (
+          <p className="rounded-lg bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
+            Public browser publishing is currently enabled in deterministic sandbox mode only. Configure a
+            server-provided public admission policy before funding a live panel.
+          </p>
         ) : null}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-base-content/60">
-            Attempt reserve
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={reserve}
-              onChange={event => setReserve(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
-          <label className="text-sm text-base-content/60">
-            Fee (basis points)
-            <input
-              type="number"
-              min={0}
-              max={2000}
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={feeBps}
-              onChange={event => setFeeBps(Number(event.target.value))}
-            />
-          </label>
-        </div>
-        <label className="mt-4 flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/65">
-          <input
-            type="checkbox"
-            className="checkbox mt-1"
-            checked={confirmed}
-            onChange={event => setConfirmed(event.target.checked)}
-          />
-          <span>
-            I confirm this question contains no confidential or restricted material and may be shown to approved public
-            reviewers.
-          </span>
-        </label>
-      </fieldset>
-      <button type="submit" className="rateloop-gradient-action w-full px-6" disabled={!ready || busy}>
-        {busy ? "Quoting and submitting…" : "Create public question"}
-      </button>
-      {error ? (
-        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
-          {error}
-        </p>
-      ) : null}
-      {receipt ? (
-        <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-50">
-          <p className="font-semibold">Question submitted to the sandbox panel.</p>
-          <p className="mt-2">Status: {receipt.status}</p>
-          <p className="mt-1 break-all font-mono text-xs text-emerald-100/70">Operation {receipt.operationKey}</p>
-          <a
-            href={`/rate?q=${encodeURIComponent(prompt)}&scope=public`}
-            className="mt-3 inline-block underline underline-offset-4"
+        <label className="block text-sm text-base-content/60">
+          Funding workspace
+          <select
+            className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+            value={workspaceId}
+            onChange={event => setWorkspaceId(event.target.value)}
           >
-            Open Answer queue
-          </a>
-        </div>
-      ) : null}
-    </form>
+            {workspaces.map(workspace => (
+              <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <fieldset>
+          <legend className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Question</legend>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm text-base-content/60">
+              Format
+              <select
+                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={kind}
+                onChange={event => setKind(event.target.value as Kind)}
+              >
+                <option value="binary">Binary</option>
+                <option value="head_to_head">Head to head</option>
+              </select>
+            </label>
+            <label className="text-sm text-base-content/60">
+              Panel size
+              <input
+                type="number"
+                min={3}
+                max={500}
+                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={panelSize}
+                onChange={event => setPanelSize(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <label className="mt-4 block text-sm text-base-content/60">
+            Prompt
+            <textarea
+              className="textarea mt-2 min-h-28 w-full border-white/10 bg-[var(--rateloop-field)]"
+              value={prompt}
+              onChange={event => setPrompt(event.target.value)}
+              maxLength={4000}
+              placeholder="Which response should a support team ship?"
+            />
+          </label>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {kind === "binary" ? (
+              <>
+                <label className="text-sm text-base-content/60">
+                  Positive label
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={positiveLabel}
+                    onChange={event => setPositiveLabel(event.target.value)}
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Negative label
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={negativeLabel}
+                    onChange={event => setNegativeLabel(event.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="text-sm text-base-content/60">
+                  Option A
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={optionA}
+                    onChange={event => setOptionA(event.target.value)}
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Option B
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={optionB}
+                    onChange={event => setOptionB(event.target.value)}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
+            Privacy and quote
+          </legend>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm text-base-content/60">
+              Data classification
+              <select
+                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={classification}
+                onChange={event => setClassification(event.target.value as Classification)}
+              >
+                <option value="public">Public</option>
+                <option value="synthetic">Synthetic</option>
+                <option value="redacted">Redacted</option>
+              </select>
+            </label>
+            <label className="text-sm text-base-content/60">
+              Bounty (USDC atomic units)
+              <input
+                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={bounty}
+                onChange={event => setBounty(event.target.value)}
+                inputMode="numeric"
+              />
+            </label>
+          </div>
+          {classification === "redacted" ? (
+            <label className="mt-4 block text-sm text-base-content/60">
+              Redaction summary
+              <textarea
+                className="textarea mt-2 min-h-20 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={redactionSummary}
+                onChange={event => setRedactionSummary(event.target.value)}
+                maxLength={1000}
+                placeholder="Explain which sensitive fields were removed."
+              />
+            </label>
+          ) : null}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm text-base-content/60">
+              Attempt reserve
+              <input
+                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={reserve}
+                onChange={event => setReserve(event.target.value)}
+                inputMode="numeric"
+              />
+            </label>
+            <label className="text-sm text-base-content/60">
+              Fee (basis points)
+              <input
+                type="number"
+                min={0}
+                max={2000}
+                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={feeBps}
+                onChange={event => setFeeBps(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <label className="mt-4 flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/65">
+            <input
+              type="checkbox"
+              className="checkbox mt-1"
+              checked={confirmed}
+              onChange={event => setConfirmed(event.target.checked)}
+            />
+            <span>
+              I confirm this question contains no confidential or restricted material and may be shown to approved
+              public reviewers.
+            </span>
+          </label>
+        </fieldset>
+        <button type="submit" className="rateloop-gradient-action w-full px-6" disabled={!ready || busy}>
+          {busy ? "Quoting and submitting…" : "Create public question"}
+        </button>
+        {error ? (
+          <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+            {error}
+          </p>
+        ) : null}
+        {receipt ? (
+          <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-50">
+            <p className="font-semibold">Question submitted to the sandbox panel.</p>
+            <p className="mt-2">Status: {receipt.status}</p>
+            <p className="mt-1 break-all font-mono text-xs text-emerald-100/70">Operation {receipt.operationKey}</p>
+            <a
+              href={`/rate?q=${encodeURIComponent(prompt)}&scope=public`}
+              className="mt-3 inline-block underline underline-offset-4"
+            >
+              Open Answer queue
+            </a>
+          </div>
+        ) : null}
+      </form>
+    </div>
   );
 }
