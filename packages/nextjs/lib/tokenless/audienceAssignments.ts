@@ -497,6 +497,64 @@ export async function redeemReviewerInvitationWithBaseAccount(input: {
   }
 }
 
+export async function listReviewerMemberships(input: { accountAddress: string }) {
+  const reviewer = normalizeAddress(input.accountAddress, "accountAddress");
+  const memberships = await dbClient.execute({
+    sql: `SELECT p.project_id, p.name AS project_name, c.cohort_id, c.name AS cohort_name,
+                 c.source, cr.status, cr.qualification_expires_at,
+                 COUNT(a.assignment_id) AS assignment_count,
+                 SUM(CASE WHEN a.status IN ('reserved', 'accepted') THEN 1 ELSE 0 END) AS active_assignment_count
+          FROM tokenless_assurance_cohort_reviewers cr
+          JOIN tokenless_assurance_cohorts c ON c.project_id = cr.project_id AND c.cohort_id = cr.cohort_id
+          JOIN tokenless_assurance_projects p ON p.project_id = cr.project_id
+          LEFT JOIN tokenless_assurance_assignments a
+            ON a.project_id = cr.project_id AND a.cohort_id = cr.cohort_id
+            AND a.reviewer_account_address = cr.reviewer_account_address
+          WHERE cr.reviewer_account_address = ?
+          GROUP BY p.project_id, p.name, c.cohort_id, c.name, c.source, cr.status, cr.qualification_expires_at
+          ORDER BY p.name ASC, c.name ASC`,
+    args: [reviewer],
+  });
+  const invitations = await dbClient.execute({
+    sql: `SELECT i.invitation_id, i.project_id, p.name AS project_name, i.cohort_id,
+                 c.name AS cohort_name, i.redeemed_at, i.expires_at
+          FROM tokenless_assurance_reviewer_invitations i
+          JOIN tokenless_assurance_projects p ON p.project_id = i.project_id
+          JOIN tokenless_assurance_cohorts c ON c.project_id = i.project_id AND c.cohort_id = i.cohort_id
+          WHERE i.redeemed_by_account_address = ?
+          ORDER BY i.redeemed_at DESC`,
+    args: [reviewer],
+  });
+  return {
+    memberships: memberships.rows.map(row => {
+      const value = row as QueryRow;
+      return {
+        projectId: rowString(value, "project_id"),
+        projectName: rowString(value, "project_name"),
+        cohortId: rowString(value, "cohort_id"),
+        cohortName: rowString(value, "cohort_name"),
+        source: rowString(value, "source"),
+        status: rowString(value, "status"),
+        qualificationExpiresAt: rowDate(value, "qualification_expires_at")?.toISOString() ?? null,
+        assignmentCount: rowNumber(value, "assignment_count") ?? 0,
+        activeAssignmentCount: rowNumber(value, "active_assignment_count") ?? 0,
+      };
+    }),
+    invitations: invitations.rows.map(row => {
+      const value = row as QueryRow;
+      return {
+        invitationId: rowString(value, "invitation_id"),
+        projectId: rowString(value, "project_id"),
+        projectName: rowString(value, "project_name"),
+        cohortId: rowString(value, "cohort_id"),
+        cohortName: rowString(value, "cohort_name"),
+        redeemedAt: rowDate(value, "redeemed_at")?.toISOString() ?? null,
+        expiresAt: rowDate(value, "expires_at")?.toISOString() ?? null,
+      };
+    }),
+  };
+}
+
 function validatePolicySourceRules(policy: HumanAssuranceAudiencePolicy, cohorts: QueryRow[]) {
   const sources = cohorts.map(row => rowString(row, "source") as CohortSource);
   if (policy.reviewerSource === "hybrid") {
