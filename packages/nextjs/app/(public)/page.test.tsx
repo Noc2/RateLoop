@@ -32,6 +32,13 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Your team makes the final decision/i);
   assert.match(html, /Remove secrets/i);
   assert.match(html, /Use RateLoop with your favorite AI agent/);
+  assert.match(html, /Claude Code RateLoop setup/);
+  assert.match(html, /OpenAI Codex RateLoop setup/);
+  assert.match(html, /Cursor RateLoop setup/);
+  assert.match(html, /GitHub Copilot RateLoop setup/);
+  assert.match(html, /Gemini CLI RateLoop setup/);
+  assert.match(html, /OpenClaw RateLoop setup/);
+  assert.doesNotMatch(html, /Connect through the tokenless remote MCP server|View setup/);
   assert.match(html, /Problem/);
   assert.match(html, /Solution/);
   assert.match(html, /Safety/);
