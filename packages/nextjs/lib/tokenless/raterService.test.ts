@@ -94,7 +94,12 @@ async function seedTask(sandbox: boolean) {
   });
   await dbClient.execute({
     sql: "INSERT INTO tokenless_content_records (content_id, workspace_id, content_hash, content_json, moderation_status, created_at, updated_at) VALUES ('cnt_tasks', 'ws_tasks', ?, ?, 'approved', ?, ?)",
-    args: [`${"11".repeat(32)}`, JSON.stringify({ kind: "binary", prompt: "Ship it?" }), NOW, NOW],
+    args: [
+      `${"11".repeat(32)}`,
+      JSON.stringify({ kind: "binary", media: { kind: "youtube", videoId: "dQw4w9WgXcQ" }, prompt: "Ship it?" }),
+      NOW,
+      NOW,
+    ],
   });
   await dbClient.execute({
     sql: "INSERT INTO tokenless_question_records (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility, data_classification, confirmed_no_sensitive_data, moderation_status, created_at, updated_at) VALUES ('qst_tasks', 'ws_tasks', 'cnt_tasks', 'quote_tasks', ?, '{}', 'public', 'synthetic', true, 'approved', ?, ?)",
@@ -159,6 +164,7 @@ test("task discovery exposes exact compensation for explicit sandbox content", a
   const frozenPolicy = await seedTask(true);
   const tasks = await listPaidRaterTasks(ACCOUNT, NOW);
   assert.equal(tasks[0]?.question.prompt, "Ship it?");
+  assert.deepEqual(tasks[0]?.question.media, { kind: "youtube", videoId: "dQw4w9WgXcQ" });
   assert.equal(tasks[0]?.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
   assert.deepEqual(tasks[0]?.earnings, {
     guaranteedBaseAtomic: "1333333",

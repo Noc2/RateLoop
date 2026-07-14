@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { keccak256, stringToHex } from "viem";
+import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
 import {
   createIndexedDbTokenlessCommitQueue,
   createTokenlessRaterRoundSecrets,
@@ -25,6 +26,7 @@ export type PublicAnswerTask = {
     positiveLabel?: string;
     optionA?: { key: string; label: string };
     optionB?: { key: string; label: string };
+    media?: PublicQuestionMedia;
   };
   voucherDeadline: string;
   alreadyVouchered: boolean;
@@ -174,6 +176,7 @@ export function PublicQuestionCard({
           <span>Round {task.roundId}</span>
         </div>
         <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
+        {task.question.media ? <QuestionMedia media={task.question.media} /> : null}
         <p className="mt-5 text-sm leading-6 text-base-content/55">
           Choose the stronger answer, then estimate how the panel will respond. Public questions contain only public,
           synthetic, or safely redacted material.

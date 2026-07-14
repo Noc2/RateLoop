@@ -65,6 +65,17 @@ test("script-src uses the middleware nonce without unsafe-inline", async () => {
   assert.doesNotMatch(scriptSrc, /(?:^|\s)'unsafe-inline'(?:\s|$)/);
 });
 
+test("YouTube context is isolated to the privacy-enhanced frame origin", async () => {
+  const csp = await getContentSecurityPolicy();
+  const directives = csp.split(";").map(directive => directive.trim());
+  const frameSrc = directives.find(directive => directive.startsWith("frame-src "));
+
+  assert.match(frameSrc ?? "", /(?:^|\s)https:\/\/www\.youtube-nocookie\.com(?:\s|$)/);
+  for (const directive of directives.filter(value => !value.startsWith("frame-src "))) {
+    assert.doesNotMatch(directive, /youtube(?:-nocookie)?\.com/);
+  }
+});
+
 test("CSP nonce generation creates a compact random token", () => {
   const nonce = createContentSecurityPolicyNonce();
 

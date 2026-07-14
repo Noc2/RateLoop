@@ -1,10 +1,21 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { parseTokenlessYouTubeUrl } from "@rateloop/sdk";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 type Kind = "binary" | "head_to_head";
 type Classification = "public" | "synthetic" | "redacted";
+type MediaMode = "none" | "images" | "youtube";
+type StagedImage = {
+  alt: string;
+  assetId: string;
+  digest: `sha256:${string}`;
+  height: number;
+  previewUrl: string;
+  sizeBytes: number;
+  width: number;
+};
 
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
@@ -27,6 +38,10 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
   const [workspaceId, setWorkspaceId] = useState("");
   const [kind, setKind] = useState<Kind>("binary");
   const [prompt, setPrompt] = useState("");
+  const [mediaMode, setMediaMode] = useState<MediaMode>("none");
+  const [images, setImages] = useState<StagedImage[]>([]);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [positiveLabel, setPositiveLabel] = useState("Yes");
   const [negativeLabel, setNegativeLabel] = useState("No");
   const [optionA, setOptionA] = useState("Baseline");
@@ -61,12 +76,27 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
     );
   }, [loadWorkspaces]);
 
+  const youtubeMedia = useMemo(() => {
+    if (!youtubeUrl.trim()) return null;
+    try {
+      return parseTokenlessYouTubeUrl(youtubeUrl).media;
+    } catch {
+      return null;
+    }
+  }, [youtubeUrl]);
+
+  const mediaReady =
+    mediaMode === "none" ||
+    (mediaMode === "images" && images.length > 0 && images.every(image => image.alt.trim()) && !uploading) ||
+    (mediaMode === "youtube" && youtubeMedia !== null);
+
   const ready = useMemo(
     () =>
       Boolean(
         sandboxMode &&
           workspaceId &&
           prompt.trim().length >= 10 &&
+          mediaReady &&
           (kind === "binary"
             ? positiveLabel.trim() && negativeLabel.trim()
             : optionA.trim() && optionB.trim() && optionA.trim() !== optionB.trim()) &&
@@ -81,6 +111,7 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
       classification,
       confirmed,
       kind,
+      mediaReady,
       negativeLabel,
       optionA,
       optionB,
@@ -93,6 +124,70 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
       workspaceId,
     ],
   );
+
+  async function uploadImages(files: FileList | File[]) {
+    if (!workspaceId || uploading) return;
+    const selected = Array.from(files).slice(0, Math.max(0, 4 - images.length));
+    if (!selected.length) return;
+    setUploading(true);
+    setError(null);
+    const staged: StagedImage[] = [];
+    try {
+      for (const file of selected) {
+        const form = new FormData();
+        form.set("file", file);
+        form.set("clientRequestId", `upload:web:${Date.now()}:${crypto.randomUUID()}`);
+        const body = await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/public-media/images`, {
+            body: form,
+            credentials: "same-origin",
+            method: "POST",
+          }),
+        );
+        staged.push({
+          alt:
+            file.name
+              .replace(/\.[^.]+$/, "")
+              .replaceAll(/[-_]+/g, " ")
+              .trim() || "Question image",
+          assetId: String(body.assetId),
+          digest: String(body.digest) as `sha256:${string}`,
+          height: Number(body.height),
+          previewUrl: String(body.previewUrl),
+          sizeBytes: Number(body.sizeBytes),
+          width: Number(body.width),
+        });
+      }
+      setImages(current => [...current, ...staged].slice(0, 4));
+    } catch (cause) {
+      setImages(current => [...current, ...staged].slice(0, 4));
+      setError(cause instanceof Error ? cause.message : "Unable to upload the selected image.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeImage(image: StagedImage) {
+    setImages(current => current.filter(item => item.assetId !== image.assetId));
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/public-media/images/${encodeURIComponent(image.assetId)}`,
+          { credentials: "same-origin", method: "DELETE" },
+        ),
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to remove the staged image.");
+    }
+  }
+
+  function changeMediaMode(next: MediaMode) {
+    if (next !== "images" && images.length) {
+      for (const image of images) void removeImage(image);
+    }
+    setYoutubeUrl("");
+    setMediaMode(next);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,6 +212,16 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
                 positiveLabel: positiveLabel.trim(),
                 negativeLabel: negativeLabel.trim(),
                 rationale: { mode: "optional" as const },
+                ...(mediaMode === "images"
+                  ? {
+                      media: {
+                        kind: "images" as const,
+                        items: images.map(({ alt, assetId, digest }) => ({ alt: alt.trim(), assetId, digest })),
+                      },
+                    }
+                  : mediaMode === "youtube" && youtubeMedia
+                    ? { media: youtubeMedia }
+                    : {}),
               }
             : {
                 kind,
@@ -124,6 +229,16 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
                 optionA: { key: "a", label: optionA.trim() },
                 optionB: { key: "b", label: optionB.trim() },
                 rationale: { mode: "optional" as const },
+                ...(mediaMode === "images"
+                  ? {
+                      media: {
+                        kind: "images" as const,
+                        items: images.map(({ alt, assetId, digest }) => ({ alt: alt.trim(), assetId, digest })),
+                      },
+                    }
+                  : mediaMode === "youtube" && youtubeMedia
+                    ? { media: youtubeMedia }
+                    : {}),
               },
         requestedPanelSize: panelSize,
       };
@@ -184,7 +299,10 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
           <select
             className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
             value={workspaceId}
-            onChange={event => setWorkspaceId(event.target.value)}
+            onChange={event => {
+              for (const image of images) void removeImage(image);
+              setWorkspaceId(event.target.value);
+            }}
           >
             {workspaces.map(workspace => (
               <option key={workspace.workspaceId} value={workspace.workspaceId}>
@@ -229,6 +347,115 @@ export function PublicQuestionClient({ sandboxMode }: { sandboxMode: boolean }) 
               placeholder="Which response should a support team ship?"
             />
           </label>
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-base-content">Visual context</p>
+                <p className="mt-1 text-xs leading-5 text-base-content/50">
+                  Add up to four images or one YouTube video. Media is reviewed with the question.
+                </p>
+              </div>
+              <div className="flex gap-1.5" role="group" aria-label="Visual context type">
+                {(["none", "images", "youtube"] as const).map(value => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={mediaMode === value}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mediaMode === value ? "pill-active" : "pill-inactive"
+                    }`}
+                    onClick={() => changeMediaMode(value)}
+                  >
+                    {value === "none" ? "Text only" : value === "images" ? "Images" : "YouTube"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {mediaMode === "images" ? (
+              <div className="mt-4 space-y-3">
+                {images.length ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {images.map((image, index) => (
+                      <div key={image.assetId} className="surface-card-nested overflow-hidden rounded-xl">
+                        {}
+                        <img
+                          src={image.previewUrl}
+                          alt=""
+                          className="aspect-video w-full bg-black/20 object-contain"
+                          width={image.width}
+                          height={image.height}
+                        />
+                        <div className="space-y-2 p-3">
+                          <label className="block text-xs text-base-content/55">
+                            Description for image {index + 1}
+                            <input
+                              className="input input-sm mt-1.5 w-full border-white/10 bg-[var(--rateloop-field)]"
+                              value={image.alt}
+                              maxLength={500}
+                              onChange={event =>
+                                setImages(current =>
+                                  current.map(item =>
+                                    item.assetId === image.assetId ? { ...item, alt: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="text-xs text-red-200 underline underline-offset-4"
+                            onClick={() => void removeImage(image)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {images.length < 4 ? (
+                  <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/[0.02] px-4 text-center transition-colors hover:border-[var(--rateloop-blue)]/60">
+                    <span className="text-sm font-medium">
+                      {uploading ? "Processing image…" : "Choose JPG, PNG, or WEBP"}
+                    </span>
+                    <span className="mt-1 text-xs text-base-content/45">
+                      Up to 10 MB each · {4 - images.length} remaining
+                    </span>
+                    <input
+                      type="file"
+                      className="sr-only"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                      multiple
+                      disabled={!workspaceId || uploading}
+                      onChange={event => {
+                        if (event.target.files) void uploadImages(event.target.files);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+            {mediaMode === "youtube" ? (
+              <label className="mt-4 block text-sm text-base-content/60">
+                YouTube URL
+                <input
+                  type="url"
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={youtubeUrl}
+                  onChange={event => setYoutubeUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=…"
+                />
+                {youtubeUrl && !youtubeMedia ? (
+                  <span className="mt-2 block text-xs text-red-200">
+                    Enter a supported YouTube watch, share, Shorts, or embed URL.
+                  </span>
+                ) : youtubeMedia ? (
+                  <span className="mt-2 block text-xs text-emerald-200">Video recognized · {youtubeMedia.videoId}</span>
+                ) : null}
+              </label>
+            ) : null}
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {kind === "binary" ? (
               <>

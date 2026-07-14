@@ -62,7 +62,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "font-src 'self'",
     "img-src 'self' data: blob: https://*.thirdweb.com",
     `connect-src ${connectSources.join(" ")}`,
-    `frame-src 'self' https://embedded-wallet.thirdweb.com ${vercelLive.join(" ")}`.trim(),
+    `frame-src 'self' https://embedded-wallet.thirdweb.com https://www.youtube-nocookie.com ${vercelLive.join(" ")}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
