@@ -11,5 +11,5 @@ watchPatterns = [
 
 [deploy]
 startCommand = "yarn start"
-healthcheckPath = "/health"
+healthcheckPath = "/health/tokenless"
 healthcheckTimeout = 120

@@ -11,7 +11,11 @@ import {
   tokenlessRound,
 } from "ponder:schema";
 import { isAddress } from "viem";
-import { resolveTokenlessDeployment, roundKey } from "../protocol-deployment";
+import {
+  resolveTokenlessDeployment,
+  roundKey,
+  tokenlessDeploymentHealth,
+} from "../protocol-deployment";
 import { keeperAction, publicRoundStatus, verdictStatus } from "../status";
 
 const deployment = resolveTokenlessDeployment();
@@ -37,7 +41,7 @@ function parseTimestamp(value: string | undefined) {
 }
 
 function parseAddress(value: string) {
-  return isAddress(value) ? value.toLowerCase() as `0x${string}` : null;
+  return isAddress(value) ? (value.toLowerCase() as `0x${string}`) : null;
 }
 
 function keeperAuthorization(header: string | undefined) {
@@ -46,8 +50,13 @@ function keeperAuthorization(header: string | undefined) {
   return header === `Bearer ${token}` ? null : "invalid";
 }
 
-const origins = process.env.CORS_ORIGIN?.split(",").map((value) => value.trim()).filter(Boolean);
-if (process.env.NODE_ENV === "production" && (!origins || origins.length === 0)) {
+const origins = process.env.CORS_ORIGIN?.split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+if (
+  process.env.NODE_ENV === "production" &&
+  (!origins || origins.length === 0)
+) {
   throw new Error("CORS_ORIGIN is required in production.");
 }
 app.use("/*", cors({ origin: origins ?? ["http://localhost:3000"] }));
@@ -59,6 +68,16 @@ app.onError((error, c) => {
 
 app.get("/deployment", (c) => c.json(deployment));
 
+app.get("/health/tokenless", async (c) => {
+  await db
+    .select({ id: tokenlessRound.id })
+    .from(tokenlessRound)
+    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
+    .limit(1);
+  c.header("cache-control", "no-store");
+  return c.json(tokenlessDeploymentHealth(deployment));
+});
+
 app.get("/status/tokenless", async (c) => {
   const [rows, creditBalances, creditEvents] = await Promise.all([
     db
@@ -68,17 +87,19 @@ app.get("/status/tokenless", async (c) => {
     db
       .select({ remainingCredit: tokenlessCreditBalance.remainingCredit })
       .from(tokenlessCreditBalance)
-      .where(eq(tokenlessCreditBalance.deploymentKey, deployment.deploymentKey)),
+      .where(
+        eq(tokenlessCreditBalance.deploymentKey, deployment.deploymentKey),
+      ),
     db
       .select({ id: tokenlessCreditEvent.id })
       .from(tokenlessCreditEvent)
       .where(eq(tokenlessCreditEvent.deploymentKey, deployment.deploymentKey)),
   ]);
   const byState: Record<string, number> = {};
-  for (const row of rows) byState[String(row.state)] = (byState[String(row.state)] ?? 0) + 1;
+  for (const row of rows)
+    byState[String(row.state)] = (byState[String(row.state)] ?? 0) + 1;
   return c.json({
-    status: "ok",
-    deploymentKey: deployment.deploymentKey,
+    ...tokenlessDeploymentHealth(deployment),
     rounds: rows.length,
     byState,
     creditOwners: creditBalances.length,
@@ -90,7 +111,9 @@ app.get("/status/tokenless", async (c) => {
 });
 
 app.get("/rounds", async (c) => {
-  const now = parseTimestamp(c.req.query("now")) ?? BigInt(Math.floor(Date.now() / 1_000));
+  const now =
+    parseTimestamp(c.req.query("now")) ??
+    BigInt(Math.floor(Date.now() / 1_000));
   const rows = await db
     .select()
     .from(tokenlessRound)
@@ -110,7 +133,8 @@ app.get("/rounds", async (c) => {
 
 app.get("/rounds/:roundId", async (c) => {
   const roundId = parseRoundId(c.req.param("roundId"));
-  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  if (roundId === null)
+    return c.json({ error: "roundId must be an unsigned integer" }, 400);
   const row = await db.query.tokenlessRound.findFirst({
     where: and(
       eq(tokenlessRound.id, roundKey(deployment.deploymentKey, roundId)),
@@ -118,7 +142,9 @@ app.get("/rounds/:roundId", async (c) => {
     ),
   });
   if (!row) return c.json({ error: "Round not found" }, 404);
-  const now = parseTimestamp(c.req.query("now")) ?? BigInt(Math.floor(Date.now() / 1_000));
+  const now =
+    parseTimestamp(c.req.query("now")) ??
+    BigInt(Math.floor(Date.now() / 1_000));
   return c.json(
     jsonSafe({
       ...row,
@@ -130,7 +156,8 @@ app.get("/rounds/:roundId", async (c) => {
 
 app.get("/rounds/:roundId/commits", async (c) => {
   const roundId = parseRoundId(c.req.param("roundId"));
-  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  if (roundId === null)
+    return c.json({ error: "roundId must be an unsigned integer" }, 400);
   const rows = await db
     .select()
     .from(tokenlessCommit)
@@ -147,7 +174,8 @@ app.get("/rounds/:roundId/commits", async (c) => {
 
 app.get("/rounds/:roundId/claims", async (c) => {
   const roundId = parseRoundId(c.req.param("roundId"));
-  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  if (roundId === null)
+    return c.json({ error: "roundId must be an unsigned integer" }, 400);
   const rows = await db
     .select()
     .from(tokenlessClaim)
@@ -163,7 +191,8 @@ app.get("/rounds/:roundId/claims", async (c) => {
 
 app.get("/rounds/:roundId/credits", async (c) => {
   const roundId = parseRoundId(c.req.param("roundId"));
-  if (roundId === null) return c.json({ error: "roundId must be an unsigned integer" }, 400);
+  if (roundId === null)
+    return c.json({ error: "roundId must be an unsigned integer" }, 400);
   const rows = await db
     .select()
     .from(tokenlessCreditEvent)
@@ -173,7 +202,10 @@ app.get("/rounds/:roundId/credits", async (c) => {
         eq(tokenlessCreditEvent.roundId, roundId),
       ),
     )
-    .orderBy(asc(tokenlessCreditEvent.blockNumber), asc(tokenlessCreditEvent.logIndex));
+    .orderBy(
+      asc(tokenlessCreditEvent.blockNumber),
+      asc(tokenlessCreditEvent.logIndex),
+    );
   return c.json(jsonSafe(rows));
 });
 
@@ -196,17 +228,22 @@ app.get("/credits/:owner", async (c) => {
           eq(tokenlessCreditEvent.owner, owner),
         ),
       )
-      .orderBy(desc(tokenlessCreditEvent.blockNumber), desc(tokenlessCreditEvent.logIndex))
+      .orderBy(
+        desc(tokenlessCreditEvent.blockNumber),
+        desc(tokenlessCreditEvent.logIndex),
+      )
       .limit(limit(c.req.query("limit"), 100)),
   ]);
-  return c.json(jsonSafe({
-    deploymentKey: deployment.deploymentKey,
-    owner,
-    remainingCredit: balance?.remainingCredit ?? 0n,
-    totalAccrued: balance?.totalAccrued ?? 0n,
-    totalWithdrawn: balance?.totalWithdrawn ?? 0n,
-    events,
-  }));
+  return c.json(
+    jsonSafe({
+      deploymentKey: deployment.deploymentKey,
+      owner,
+      remainingCredit: balance?.remainingCredit ?? 0n,
+      totalAccrued: balance?.totalAccrued ?? 0n,
+      totalWithdrawn: balance?.totalWithdrawn ?? 0n,
+      events,
+    }),
+  );
 });
 
 app.get("/issuer/epochs", async (c) => {
@@ -221,10 +258,13 @@ app.get("/issuer/epochs", async (c) => {
 
 app.get("/keeper/work", async (c) => {
   const authorization = keeperAuthorization(c.req.header("authorization"));
-  if (authorization === "missing") return c.json({ error: "PONDER_KEEPER_WORK_TOKEN is required" }, 503);
-  if (authorization === "invalid") return c.json({ error: "Invalid keeper token" }, 401);
+  if (authorization === "missing")
+    return c.json({ error: "PONDER_KEEPER_WORK_TOKEN is required" }, 503);
+  if (authorization === "invalid")
+    return c.json({ error: "Invalid keeper token" }, 401);
   const now = parseTimestamp(c.req.query("now"));
-  if (now === null) return c.json({ error: "now must be an unsigned integer timestamp" }, 400);
+  if (now === null)
+    return c.json({ error: "now must be an unsigned integer timestamp" }, 400);
 
   const rows = await db
     .select()
@@ -235,16 +275,18 @@ app.get("/keeper/work", async (c) => {
   const work = rows.flatMap((row) => {
     const action = keeperAction(row, now);
     if (!action) return [];
-    return [{
-      action,
-      roundId: row.roundId.toString(),
-      cursor:
-        action === "process_aggregate"
-          ? row.aggregateCursor
-          : action === "process_scores"
-            ? row.scoreCursor
-            : null,
-    }];
+    return [
+      {
+        action,
+        roundId: row.roundId.toString(),
+        cursor:
+          action === "process_aggregate"
+            ? row.aggregateCursor
+            : action === "process_scores"
+              ? row.scoreCursor
+              : null,
+      },
+    ];
   });
   return c.json({
     deploymentKey: deployment.deploymentKey,
