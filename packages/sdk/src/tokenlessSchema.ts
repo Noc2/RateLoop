@@ -367,6 +367,16 @@ export function parseTokenlessPaymentInstructions(
         "greater than authorizationSpec.validAfter",
       );
     }
+    if (
+      BigInt(authorizationSpec.validBefore) -
+        BigInt(authorizationSpec.validAfter) >
+      3_600n
+    ) {
+      invalid(
+        "authorizationSpec.validBefore",
+        "an authorization lifetime no longer than one hour",
+      );
+    }
     if (authorizationSpec.eip3009Domain.chainId !== Number(input.chainId)) {
       invalid(
         "authorizationSpec.eip3009Domain.chainId",
