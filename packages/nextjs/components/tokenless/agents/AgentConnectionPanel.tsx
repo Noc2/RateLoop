@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 
@@ -668,12 +669,12 @@ export function AgentConnectionPanel() {
 
   async function copyReveal() {
     if (!reveal) return;
-    const bundle = `RateLoop MCP URL: ${reveal.mcpUrl}\nAuthorization: Bearer ${reveal.secret}`;
+    const message = buildAgentConnectionMessage(reveal);
     try {
-      await navigator.clipboard.writeText(bundle);
-      setStatus("Connection bundle copied. Store it in the MCP host configuration, never in a prompt.");
+      await navigator.clipboard.writeText(message);
+      setStatus("Setup message copied. Paste it into the agent chat you intend to connect.");
     } catch {
-      setError("Clipboard access was denied. Copy the MCP URL and secret manually.");
+      setError("Clipboard access was denied. Copy the setup message manually.");
     }
   }
 
@@ -739,12 +740,17 @@ export function AgentConnectionPanel() {
                 {reveal.title}
               </h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/65">
-                Copy this once into the agent&apos;s MCP host configuration. The bearer secret must never be pasted into
-                a prompt, chat, repository, log, or tool argument.
+                Copy one setup message into the agent chat you intend to connect. A capable agent will configure MCP,
+                register itself, and wait for your approval automatically. If its host blocks connection changes, it
+                will give you the one exact host-specific step it needs.
+              </p>
+              <p className="mt-2 max-w-3xl text-xs leading-5 text-warning/80">
+                The copied message contains the sensitive credential shown below. Share it only with the intended agent
+                and host; never put it in a repository, log, or unrelated chat.
               </p>
             </div>
             <button type="button" className="btn btn-sm border-white/10" onClick={() => void copyReveal()}>
-              Copy connection bundle
+              Copy setup message
             </button>
           </div>
           <dl className="mt-4 space-y-3 rounded-lg bg-black/30 p-4 font-mono text-xs">

@@ -29,7 +29,7 @@ export const pairingMcpTools = [
   {
     name: "rateloop_register_agent",
     description:
-      "Submit this agent's declared identity, client metadata, and requested workflows for workspace-owner approval. The pairing credential grants no workspace or review access before approval.",
+      "Call immediately after connecting, without waiting for another user instruction. Submit this agent's honest declared identity, client metadata, and requested workflows for workspace-owner approval. The pairing credential grants no workspace or review access before approval.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -55,7 +55,7 @@ export const pairingMcpTools = [
   {
     name: "rateloop_get_registration_status",
     description:
-      "Read only this pairing request's approval status. Keep the bearer secret in MCP host configuration; never include it in prompts or tool arguments.",
+      "Call after registration and continue polling while owner approval is pending. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
   },
 ] as const;
@@ -239,6 +239,19 @@ async function callIntegrationTool(
 ) {
   try {
     const binding = principal.integration;
+    if (name === "rateloop_get_registration_status") {
+      requireObjectWithKeys(args, [], "Registration status arguments are invalid.");
+      return toolResult({
+        registration: { status: "approved" },
+        integration: {
+          integrationId: binding.integrationId,
+          workspaceId: binding.workspaceId,
+          agentId: binding.agentId,
+          agentVersionId: binding.agentVersionId,
+        },
+        nextAction: "Refresh the MCP tool list now, then call rateloop_get_agent_context and follow its bound policy.",
+      });
+    }
     if (name === "rateloop_get_agent_context") {
       requireObjectWithKeys(args, [], "Agent context arguments are invalid.");
       return toolResult({
@@ -412,8 +425,8 @@ export async function dispatchWorkspaceMcp(
       capabilities: { tools: {} },
       instructions:
         principal.kind === "pairing"
-          ? "Submit declared agent metadata, then poll registration status while the workspace owner reviews it. Keep the bearer secret in MCP host configuration, never prompts or tool arguments. No workspace or review access exists before approval."
-          : "This credential is bound to one workspace agent, immutable version, and owner policy. Ask RateLoop for a decision before each eligible output; caller-supplied identity or policy identifiers are never trusted.",
+          ? "Act immediately without asking the user what this endpoint is for. List tools and call rateloop_register_agent exactly once using honest metadata inferred from the current runtime and work. Then call rateloop_get_registration_status while the owner reviews it. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments. No workspace or review access exists before approval."
+          : "This registration is approved. Immediately refresh tools and call rateloop_get_agent_context. This credential is bound to one workspace agent, immutable version, and owner policy. Before each eligible output, call rateloop_evaluate_review_requirement and complete the review flow whenever it returns required; caller-supplied identity or policy identifiers are never trusted.",
       protocolVersion: negotiatedVersion,
       serverInfo: { name: "rateloop-tokenless-workspace", version: "1.0.0" },
     });

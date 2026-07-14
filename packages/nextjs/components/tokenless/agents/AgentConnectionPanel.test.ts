@@ -30,8 +30,11 @@ test("generic MCP activation stays advisory and binds publishing plus adaptive d
 });
 
 test("connection credentials are shown once and managed integrations can rotate or revoke", () => {
-  assert.match(source, /The bearer secret must never be pasted into[\s\S]{0,30}a/);
-  assert.match(source, /MCP host configuration/);
+  assert.match(source, /Copy setup message/);
+  assert.match(source, /agent chat you intend to connect/);
+  assert.match(source, /configure MCP,[\s\S]{0,80}register itself,[\s\S]{0,80}wait for your approval automatically/);
+  assert.match(source, /one exact host-specific step/);
+  assert.match(source, /never put it in a repository, log, or unrelated chat/);
   assert.match(source, /\/agent-integrations/);
   assert.match(source, /\/rotate/);
   assert.match(source, /method: "DELETE"/);

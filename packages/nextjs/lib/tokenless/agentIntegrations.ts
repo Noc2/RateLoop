@@ -368,7 +368,12 @@ export async function submitAgentRegistration(input: {
   });
   if (!result.rowCount)
     throw new TokenlessServiceError("Pairing expired or was already resolved.", 410, "agent_pairing_expired");
-  return { registration: pairingFromRow(result.rows[0] as Row) };
+  return {
+    registration: pairingFromRow(result.rows[0] as Row),
+    nextAction:
+      "Call rateloop_get_registration_status while the workspace owner reviews this registration. After approval, refresh the MCP tool list and call rateloop_get_agent_context.",
+    pollAfterMs: 3_000,
+  };
 }
 
 export async function getAgentRegistrationStatus(pairing: Extract<AgentMcpPrincipal, { kind: "pairing" }>) {
@@ -377,7 +382,12 @@ export async function getAgentRegistrationStatus(pairing: Extract<AgentMcpPrinci
     args: [pairing.pairingId],
   });
   if (!result.rowCount) throw new TokenlessServiceError("Registration not found.", 404, "registration_not_found");
-  return { registration: pairingFromRow(result.rows[0] as Row) };
+  return {
+    registration: pairingFromRow(result.rows[0] as Row),
+    nextAction:
+      "Keep checking registration status without exposing the credential. After approval, refresh the MCP tool list and call rateloop_get_agent_context.",
+    pollAfterMs: 3_000,
+  };
 }
 
 function versionCommitment(registration: AgentRegistrationInput) {

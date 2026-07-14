@@ -95,6 +95,67 @@ async function setup() {
   return { workspaceId, approved, audiencePolicyHash, token: issued.secret };
 }
 
+test("pairing initialization tells the agent to register immediately and returns the next automatic action", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Automatic pairing", ownerAddress: OWNER });
+  const issued = await createAgentPairing({
+    accountAddress: OWNER,
+    workspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+  });
+  const initialized = await POST(
+    request(
+      {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "automatic-agent", version: "1.0.0" },
+        },
+      },
+      issued.secret,
+    ),
+  );
+  const initializedBody = await initialized.json();
+  assert.match(initializedBody.result.instructions, /Act immediately without asking the user/);
+  assert.match(initializedBody.result.instructions, /call rateloop_register_agent exactly once/);
+
+  const listed = await POST(request({ id: 2, jsonrpc: "2.0", method: "tools/list", params: {} }, issued.secret));
+  const listedBody = await listed.json();
+  assert.deepEqual(
+    listedBody.result.tools.map((tool: { name: string }) => tool.name),
+    ["rateloop_register_agent", "rateloop_get_registration_status"],
+  );
+  assert.match(listedBody.result.tools[0].description, /Call immediately after connecting/);
+
+  const registered = await POST(
+    request(
+      {
+        id: 3,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          name: "rateloop_register_agent",
+          arguments: {
+            externalId: "automatic-agent",
+            displayName: "Automatic Agent",
+            provider: "OpenAI",
+            model: "gpt-test",
+            environment: "production",
+            requestedWorkflowKeys: ["general-assistance"],
+          },
+        },
+      },
+      issued.secret,
+    ),
+  );
+  const registration = (await registered.json()).result.structuredContent;
+  assert.equal(registration.registration.status, "claimed");
+  assert.equal(registration.pollAfterMs, 3_000);
+  assert.match(registration.nextAction, /rateloop_get_registration_status/);
+});
+
 test("uses a bound authenticated workspace surface without changing the public four tools", async () => {
   const setupData = await setup();
   const unauthenticated = await POST(request({ id: 1, jsonrpc: "2.0", method: "tools/list", params: {} }));
@@ -118,6 +179,22 @@ test("uses a bound authenticated workspace surface without changing the public f
     tokenlessMcpTools.map(tool => tool.name),
     ["rateloop_capabilities", "rateloop_create_handoff", "rateloop_get_handoff_status", "rateloop_get_result"],
   );
+
+  const approvalTransition = await POST(
+    request(
+      {
+        id: 21,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_registration_status", arguments: {} },
+      },
+      setupData.token,
+    ),
+  );
+  const approval = (await approvalTransition.json()).result.structuredContent;
+  assert.equal(approval.registration.status, "approved");
+  assert.equal(approval.integration.integrationId, setupData.approved.integration.integrationId);
+  assert.match(approval.nextAction, /rateloop_get_agent_context/);
 });
 
 test("injects bound identity into review decisions and rejects caller spoofing", async () => {
