@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  AuthenticatedSessionControl,
   RATELOOP_SIGN_IN_LABEL,
   RATELOOP_THIRDWEB_AUTO_CONNECT,
   ThirdwebSessionButton,
@@ -15,16 +16,31 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
+const SESSION = {
+  authenticated: true as const,
+  address: "0x1111111111111111111111111111111111111111",
+  authProvider: "google",
+  expiresAt: "2026-07-14T00:00:00.000Z",
+  email: "buyer@example.com",
+  displayName: "Buyer Example",
+};
+
 test("enterprise session labels prefer a name and mask work email addresses", () => {
-  const base = {
-    authenticated: true as const,
-    address: "0x1111111111111111111111111111111111111111",
-    authProvider: "google",
-    expiresAt: "2026-07-14T00:00:00.000Z",
-  };
-  assert.equal(sessionLabel({ ...base, email: "buyer@example.com", displayName: "Buyer Example" }), "Buyer Example");
-  assert.equal(sessionLabel({ ...base, email: "buyer@example.com", displayName: null }), "b•••@example.com");
-  assert.equal(sessionLabel({ ...base, email: null, displayName: null }), "0x1111…1111");
+  assert.equal(sessionLabel(SESSION), "Buyer Example");
+  assert.equal(sessionLabel({ ...SESSION, displayName: null }), "b•••@example.com");
+  assert.equal(sessionLabel({ ...SESSION, email: null, displayName: null }), "0x1111…1111");
+});
+
+test("a verified RateLoop session never renders as signed out when its wallet is disconnected", () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const html = renderToStaticMarkup(
+    <AuthenticatedSessionControl compact session={SESSION} onSignOut={() => undefined} />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, />Signed in</);
+  assert.match(html, />Buyer Example</);
+  assert.match(html, /aria-label="Sign out Buyer Example"/);
+  assert.doesNotMatch(html, />Sign In</);
 });
 
 test("an unconfigured deployment fails closed with an operator-readable sign-in state", () => {

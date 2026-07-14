@@ -52,6 +52,41 @@ export function sessionLabel(session: BrowserSessionResponse | null) {
   return shortAddress(session.address);
 }
 
+export function AuthenticatedSessionControl({
+  compact = false,
+  onSignOut,
+  session,
+}: {
+  compact?: boolean;
+  onSignOut: () => Promise<void> | void;
+  session: BrowserSessionResponse;
+}) {
+  const label = sessionLabel(session) ?? "RateLoop account";
+
+  return (
+    <div
+      className={`flex w-full items-center justify-between gap-2 rounded-lg border border-base-content/15 bg-base-content/[0.06] ${
+        compact ? "px-2.5 py-2" : "px-3 py-2.5"
+      }`}
+    >
+      <div className="min-w-0">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Signed in</span>
+        <span className="block truncate text-sm font-semibold text-base-content" title={label}>
+          {label}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="btn btn-ghost btn-xs shrink-0 px-2 text-base-content/70 hover:text-base-content"
+        aria-label={`Sign out ${label}`}
+        onClick={() => void onSignOut()}
+      >
+        Sign Out
+      </button>
+    </div>
+  );
+}
+
 export function ThirdwebSessionButton({
   compact = false,
   onSessionChange,
@@ -108,6 +143,17 @@ export function ThirdwebSessionButton({
       }),
     [],
   );
+
+  async function signOutRateLoopSession() {
+    await logoutBrowserSession();
+    setSession(null);
+    onSessionChange?.(false);
+    window.location.assign("/");
+  }
+
+  if (session) {
+    return <AuthenticatedSessionControl compact={compact} session={session} onSignOut={signOutRateLoopSession} />;
+  }
 
   if (!thirdwebBrowserClient) {
     return (
