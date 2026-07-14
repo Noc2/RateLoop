@@ -12,6 +12,7 @@ import {
   createWorkspaceApiKey,
   listProductWorkspaces,
   listWorkspaceApiKeys,
+  normalizedX402Authorization,
   prepareProductAsk,
   recordPrepaidLedgerEntry,
   revokeAgentPublishingPolicy,
@@ -432,5 +433,22 @@ test("policy revocation blocks the next delegated ask", async () => {
         },
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "policy_revoked",
+  );
+});
+
+test("x402 authorizations are limited to a short-lived signing window", () => {
+  const now = Math.floor(Date.now() / 1_000);
+  assert.throws(
+    () =>
+      normalizedX402Authorization({
+        validAfter: String(now),
+        validBefore: String(now + 3_601),
+        nonce: `0x${"11".repeat(32)}`,
+        v: 27,
+        r: `0x${"22".repeat(32)}`,
+        s: `0x${"33".repeat(32)}`,
+        roundAuthorizationSignature: `0x${"44".repeat(65)}`,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_payment",
   );
 });

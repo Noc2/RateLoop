@@ -1127,6 +1127,7 @@ export function normalizedX402Authorization(value: Record<string, unknown>) {
     typeof validBefore !== "string" ||
     !ATOMIC_PATTERN.test(validBefore) ||
     BigInt(validBefore) <= BigInt(validAfter) ||
+    BigInt(validBefore) - BigInt(validAfter) > 3_600n ||
     BigInt(validBefore) <= BigInt(Math.floor(Date.now() / 1_000)) ||
     !BYTES32_PATTERN.test(String(value.nonce ?? "")) ||
     (value.v !== 27 && value.v !== 28) ||

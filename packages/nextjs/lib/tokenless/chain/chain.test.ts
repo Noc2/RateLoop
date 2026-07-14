@@ -460,8 +460,8 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
     "awaiting_authorization",
   );
   await attachX402Authorization(ask.operationKey, {
-    validAfter: "1",
-    validBefore: "2000000000",
+    validAfter: String(Math.floor(Date.now() / 1_000) - 30),
+    validBefore: String(Math.floor(Date.now() / 1_000) + 600),
     nonce: `0x${"44".repeat(32)}`,
     v: 27,
     r: `0x${"55".repeat(32)}`,
