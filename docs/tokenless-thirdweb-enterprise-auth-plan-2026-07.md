@@ -14,7 +14,10 @@ Direct integrations continue to use hash-only workspace API keys. The browser lo
 2. **Enterprise profile:** for an in-app wallet, RateLoop resolves the profile server-side with `THIRDWEB_SECRET_KEY` and stores only the verified provider, thirdweb user ID, normalized email, email domain, and display name needed for access and audit UX. Client-reported profile fields never authorize access.
 3. **Workspace authorization:** the existing RateLoop session principal and workspace membership tables remain the authorization source. A verified email improves onboarding and future email/domain-bound invitations; it does not implicitly join a workspace.
 4. **Wallet authorization:** browser identity and fund authority are separate. Funding, payout binding, and claim recovery require the exact wallet proof specified by those flows. A social login alone cannot spend, redirect, or claim escrowed funds.
-5. **Machine access:** agents and enterprise backends continue to use scoped, hash-only workspace API keys. x402 remains an optional accountless payment lane.
+5. **Machine access:** agents and enterprise backends use scoped, hash-only workspace API keys. Autonomous publishing
+   requires a separately issued, versioned policy-bound key with explicit budgets, payment modes, wallet binding,
+   audience/project/data limits, expiry, and revocation. x402 is the self-funded delegated lane first; accountless x402
+   remains deferred until the B2B and abuse controls can be enforced without a workspace principal.
 
 ## Implementation slices and commits
 

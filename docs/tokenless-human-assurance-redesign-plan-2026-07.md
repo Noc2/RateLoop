@@ -53,12 +53,12 @@ Start with AI consultancies and agencies that can reuse the workflow across clie
 
 Keep these modes separate in the data model, UI, report, and pricing:
 
-| Mode | Who reviews | Settlement | Product claim |
-|---|---|---|---|
-| Customer-invited | Named employees, users, customers, or experts | Off-chain if unpaid; on-chain if paid | Relevant customer-selected reviewers; not independent by default |
-| RateLoop network | RateLoop-recruited and qualified reviewers | On-chain paid rounds | External panel with disclosed qualifications and assurance |
-| Hybrid | Separate invited and RateLoop sub-panels | Separate results and, when paid, separate rounds | Comparison across sources; never one opaque blended score |
-| Sandbox | Simulated responses only | None | Test data, never represented as human evidence |
+| Mode             | Who reviews                                   | Settlement                                       | Product claim                                                    |
+| ---------------- | --------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| Customer-invited | Named employees, users, customers, or experts | Off-chain if unpaid; on-chain if paid            | Relevant customer-selected reviewers; not independent by default |
+| RateLoop network | RateLoop-recruited and qualified reviewers    | On-chain paid rounds                             | External panel with disclosed qualifications and assurance       |
+| Hybrid           | Separate invited and RateLoop sub-panels      | Separate results and, when paid, separate rounds | Comparison across sources; never one opaque blended score        |
+| Sandbox          | Simulated responses only                      | None                                             | Test data, never represented as human evidence                   |
 
 Customer invitations should be the default private B2B path. A one-time access code proves authorization to a project; it does not prove unique humanity, age, expertise, sanctions clearance, or paid-work eligibility. Every paid reviewer must complete the legal/payout gate before the first voucher, including customer invitees.
 
@@ -108,14 +108,14 @@ A passport does not prove legal or tax residence. Public receipts should expose 
 
 ### Provider roles
 
-| Option | Recommended role | Constraints |
-|---|---|---|
-| Access code / roster | Default for private invited cohorts | Hash one-time tokens, bind redemption to the signed-in browser principal, expire them, and prevent reuse; no uniqueness claim |
-| World ID 4 Proof of Human | Required global-uniqueness capability for RateLoop-network and hybrid-network panels | Use server verification and bind the proof to the RateLoop account/context; do not add World contracts to the Base fund core |
-| World passport / NFC | Optional document-uniqueness capability | Coverage and authentication strength vary by document and country |
-| World Selfie Check | Optional low-friction liveness signal | It is beta/low assurance and currently uses a legacy proof path while v4 support rolls out; do not market it as global uniqueness |
-| World Identity Check | Possible document-attribute capability | It is preview; procurement and production access must be confirmed before planning around it |
-| Self | Optional age/document/country-predicate adapter | Prefer backend verification and predicates; avoid name, date of birth, passport number, and direct Base contract integration |
+| Option                    | Recommended role                                                                     | Constraints                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Access code / roster      | Default for private invited cohorts                                                  | Hash one-time tokens, bind redemption to the signed-in browser principal, expire them, and prevent reuse; no uniqueness claim     |
+| World ID 4 Proof of Human | Required global-uniqueness capability for RateLoop-network and hybrid-network panels | Use server verification and bind the proof to the RateLoop account/context; do not add World contracts to the Base fund core      |
+| World passport / NFC      | Optional document-uniqueness capability                                              | Coverage and authentication strength vary by document and country                                                                 |
+| World Selfie Check        | Optional low-friction liveness signal                                                | It is beta/low assurance and currently uses a legacy proof path while v4 support rolls out; do not market it as global uniqueness |
+| World Identity Check      | Possible document-attribute capability                                               | It is preview; procurement and production access must be confirmed before planning around it                                      |
+| Self                      | Optional age/document/country-predicate adapter                                      | Prefer backend verification and predicates; avoid name, date of birth, passport number, and direct Base contract integration      |
 
 World ID 4 Proof of Human is the initial uniqueness provider for RateLoop-network supply. Production activation still requires completion-rate, coverage, pricing, rate-limit, support, data-processing, deletion, outage, and recovery verification. Self is useful later when a paid audience policy genuinely needs document-derived age or country predicates. Provider subjects are unique only within their own namespace; do not claim cross-provider deduplication, and do not treat personhood as expertise, paid eligibility, or behavioral independence.
 
@@ -191,20 +191,20 @@ Projects, artifacts, rubrics, raw rationales, cohort membership, identity attrib
 
 ## Repo-wide surface changes
 
-| Surface | Required change |
-|---|---|
-| Foundry/contracts | Fix beacon-reserve farming; replace numeric tier admission with exact policy-hash binding; preserve adminless fund custody and terminal-payment invariants |
-| Contracts package/deployment | Regenerate only after the final contract commit and a fresh isolated deployment; fail closed on stale/mixed bundles |
-| Postgres/services | Add projects, suites, runs, cases, artifacts, policies, cohorts, invites, assignments, responses, access logs, manifests, and decisions in new migrations |
-| Storage/privacy | Encrypted object storage, separate key domains, assignment leases, hiding commitments, retention/deletion/export, and access review |
-| Ponder/pipeline | Derive evidence from chain data; remove caller-supplied outcome metrics; add deployment/run correlation and reproducible exports |
-| Buyer app | Replace the three-field `/ask` demo with project setup, suite import, cohort composer, reviewer preview, run dashboard, result packet, and recurrence |
-| Rater app | Assignment-only task feed, correct A/B rendering, rationales/tags, invitations, qualification, notifications, receipts, queue recovery, and appeals |
-| SDK/agents/MCP | A thin Streamable HTTP adapter and installable agent skills over versioned run APIs, with draft-first browser approval and quote -> ask -> wait -> result retained as the internal per-round primitive |
-| Workspaces/billing | Team invitations, client isolation, partner roles, B2B/trader and VAT controls, prepaid reconciliation, invoices, usage/cost centers |
-| Public product | Reposition landing, shell, metadata, docs, static AI files, OG assets, promo video, and examples around human assurance; buyer CTA first, rater CTA second |
-| Trust/legal | Update privacy, terms, TRUST, DPA/subprocessor material, evidence limits, identity-provider disclosures, on-chain permanence, and reviewer-source labels |
-| Tests/operations | Add browser E2E, privacy/authorization tests, verifier fixtures, provider conformance, runbooks, monitoring, isolated deployment checks, and migration rehearsal |
+| Surface                      | Required change                                                                                                                                                                                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundry/contracts            | Fix beacon-reserve farming; replace numeric tier admission with exact policy-hash binding; preserve adminless fund custody and terminal-payment invariants                                                                                                                        |
+| Contracts package/deployment | Regenerate only after the final contract commit and a fresh isolated deployment; fail closed on stale/mixed bundles                                                                                                                                                               |
+| Postgres/services            | Add projects, suites, runs, cases, artifacts, policies, cohorts, invites, assignments, responses, access logs, manifests, and decisions in new migrations                                                                                                                         |
+| Storage/privacy              | Encrypted object storage, separate key domains, assignment leases, hiding commitments, retention/deletion/export, and access review                                                                                                                                               |
+| Ponder/pipeline              | Derive evidence from chain data; remove caller-supplied outcome metrics; add deployment/run correlation and reproducible exports                                                                                                                                                  |
+| Buyer app                    | Replace the three-field `/ask` demo with project setup, suite import, cohort composer, reviewer preview, run dashboard, result packet, and recurrence                                                                                                                             |
+| Rater app                    | Assignment-only task feed, correct A/B rendering, rationales/tags, invitations, qualification, notifications, receipts, queue recovery, and appeals                                                                                                                               |
+| SDK/agents/MCP               | A thin Streamable HTTP adapter and installable agent skills over versioned run APIs, with draft-first browser approval for the public MCP, plus policy-bound authenticated API/CLI publishing; quote -> ask -> payment -> wait -> result remains the internal per-round primitive |
+| Workspaces/billing           | Team invitations, client isolation, partner roles, B2B/trader and VAT controls, prepaid reconciliation, invoices, usage/cost centers                                                                                                                                              |
+| Public product               | Reposition landing, shell, metadata, docs, static AI files, OG assets, promo video, and examples around human assurance; buyer CTA first, rater CTA second                                                                                                                        |
+| Trust/legal                  | Update privacy, terms, TRUST, DPA/subprocessor material, evidence limits, identity-provider disclosures, on-chain permanence, and reviewer-source labels                                                                                                                          |
+| Tests/operations             | Add browser E2E, privacy/authorization tests, verifier fixtures, provider conformance, runbooks, monitoring, isolated deployment checks, and migration rehearsal                                                                                                                  |
 
 ## Dependency-ordered commit plan
 
@@ -242,7 +242,7 @@ Each numbered item is one intended commit. Keep contract, schema, privacy, produ
    Implement invited, network, hybrid, and sandbox sources; hashed single-use codes; account-bound redemption; quotas; capacity reservations; confidentiality acceptance; and assignment-only content access.
 
 10. **`refactor(eligibility): separate access assurance and paid compliance`**
-   Replace the single identity tier record with capability evidence, split all country meanings, isolate DAC7/provider key domains, and keep paid eligibility before vouchers.
+    Replace the single identity tier record with capability evidence, split all country meanings, isolate DAC7/provider key domains, and keep paid eligibility before vouchers.
 
 11. **`feat(runs): orchestrate blinded evaluation suites`**
     Implement CSV/JSON import, artifact variants, deterministic checks, randomization, frozen rubrics/pass rules, case-to-round orchestration, reruns, and aggregate state.
