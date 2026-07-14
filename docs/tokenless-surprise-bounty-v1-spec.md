@@ -1,0 +1,65 @@
+# Tokenless Surprisingly Popular bounty v1
+
+Status: production mechanism specification, July 14, 2026.
+
+## Purpose and boundary
+
+`tokenless-sp-bounty-v1` rewards reports on an answer that is more popular than the current panel predicted. It is a
+centralized, platform-funded USDC top-up. The raw majority remains the verdict input. The immutable fund core remains
+the source of fixed base, RBTS, compensation, fee, and refunds; this mechanism cannot change any of them.
+
+This is not the legacy cross-question surprise formula and is not a truth oracle.
+
+## Frozen policy
+
+- Binary and head-to-head rounds only.
+- Prediction grid: 1% increments from 1% through 99%.
+- Minimum valid reveal sample: 10.
+- Aggregate qualification margin: 500 basis points.
+- Full-score saturation margin: 2,500 basis points.
+- Maximum top-up per report: 12.5% of that round's guaranteed fixed base per report.
+- Maximum top-up is positive, no greater than the guaranteed base, and never redistributed from another reviewer.
+
+For each side, subtract mean predicted share from actual share. If the absolute aggregate margin is below 500 basis
+points there is no qualifying outcome. Otherwise the sign selects the Surprisingly Popular side. The majority result
+is neither replaced nor modified.
+
+For a report on the selected side, recompute actual and predicted side shares after removing that report. The report
+qualifies only when this leave-one-out margin is at least 500 basis points. Its score is:
+
+`min(10,000, floor(leaveOneOutMarginBps * 10,000 / 2,500))`
+
+The top-up is:
+
+`floor(maximumTopUpAtomic * scoreBps / 10,000)`
+
+Canonical commit-key sorting, integer arithmetic, allocation hashing, and evidence hashing make the result independent
+of input order and recomputable from the validated finalized reveal set.
+
+## Funding and payment
+
+Before preparing the customer-funded chain round, RateLoop freezes the policy and reserves:
+
+`maximumTopUpPerReport * maximumCommits`
+
+against the on-chain USDC balance of a dedicated bonus funder. Outstanding reservations are serialized by deployment.
+Insufficient capacity prevents round preparation; a reviewer cannot first earn a top-up and then discover that no pool
+was reserved.
+
+After finalization, positive allocations become durable entitlements. The payout worker waits until Ponder indexes the
+reviewer's immutable base claim, verifies the deployment, round, commit key, payout address, amount, and transaction
+hash, then transfers the central top-up to that same payout address.
+
+The dedicated bonus funder is distinct from the credential signer, gas relayer, and prepaid funder. Its transfer nonce
+is allocated transactionally. An exact USDC `Transfer` event is required before an entitlement becomes paid. Normal
+failures retry with a bounded backoff; a persisted nonce without a safely recorded transaction hash enters
+`reconciliation_required` and is never blindly replayed.
+
+## Evidence and limitations
+
+Persisted evidence includes the version, frozen policy, sample, actual and predicted shares, selected outcome,
+leave-one-out allocations, total top-up, allocation hash, evidence hash, transfer transaction hash, and paid total.
+
+Required limitation codes include centralized platform liability, binary-panel-only, and not-a-truth-oracle. Future
+changes to sample size, thresholds, saturation, cap, funding, or formula require a new mechanism version and cannot
+alter an already reserved or finalized round.

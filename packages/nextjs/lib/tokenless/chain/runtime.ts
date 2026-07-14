@@ -31,6 +31,8 @@ export type TokenlessChainRuntime = {
   prepaidWallet?: TokenlessWalletClient;
   relayerAccount?: Account;
   relayerWallet?: TokenlessWalletClient;
+  surpriseBonusAccount?: Account;
+  surpriseBonusWallet?: TokenlessWalletClient;
 };
 
 let runtimeCache: { rpcUrl: string; runtime: TokenlessChainRuntime } | null = null;
@@ -49,10 +51,16 @@ export function getTokenlessChainRuntime(config: TokenlessChainConfig): Tokenles
   if (runtimeCache?.rpcUrl === config.rpcUrl) return runtimeCache.runtime;
   const prepaid = config.prepaidFunderPrivateKey ? wallet(config.prepaidFunderPrivateKey, config.rpcUrl) : null;
   const relayer = config.relayerPrivateKey ? wallet(config.relayerPrivateKey, config.rpcUrl) : null;
+  const surpriseBonus = config.surpriseBonusFunderPrivateKey
+    ? wallet(config.surpriseBonusFunderPrivateKey, config.rpcUrl)
+    : null;
   const runtime: TokenlessChainRuntime = {
     publicClient: createBasePublicClient(config.rpcUrl),
     ...(prepaid ? { prepaidAccount: prepaid.account, prepaidWallet: prepaid.client } : {}),
     ...(relayer ? { relayerAccount: relayer.account, relayerWallet: relayer.client } : {}),
+    ...(surpriseBonus
+      ? { surpriseBonusAccount: surpriseBonus.account, surpriseBonusWallet: surpriseBonus.client }
+      : {}),
   };
   runtimeCache = { rpcUrl: config.rpcUrl, runtime };
   return runtime;

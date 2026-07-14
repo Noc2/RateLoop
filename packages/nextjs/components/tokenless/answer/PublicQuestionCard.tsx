@@ -33,6 +33,7 @@ export type PublicAnswerTask = {
   earnings: {
     guaranteedBaseAtomic: string;
     possibleBonusAtomic: string;
+    possibleSurpriseBonusAtomic: string;
     attemptCompensationAtomic: string;
   };
   beacon: { network: "quicknet-t"; round: number };
@@ -183,7 +184,8 @@ export function PublicQuestionCard({
         </p>
         <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
           <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
-          <span>Bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
+          <span>RBTS up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
+          <span>Surprise up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
           <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
         </div>
       </section>

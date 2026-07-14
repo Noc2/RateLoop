@@ -16,6 +16,7 @@ import {
 } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { maximumSurpriseBonusForBase } from "~~/lib/tokenless/surpriseBounties";
 
 type Row = Record<string, unknown>;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
@@ -101,6 +102,7 @@ export async function listPaidRaterTasks(
     const row = value as Row;
     const terms = JSON.parse(rowString(row, "round_terms_json")!) as Record<string, string | number>;
     const maximumCommits = Number(terms.maximumCommits);
+    const guaranteedBaseAtomic = (BigInt(String(terms.bountyAmount)) * 8n) / 10n / BigInt(maximumCommits);
     return {
       operationKey: rowString(row, "operation_key"),
       chainId: Number(row.chain_id),
@@ -112,8 +114,9 @@ export async function listPaidRaterTasks(
       voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
       alreadyVouchered: Boolean(row.already_vouchered),
       earnings: {
-        guaranteedBaseAtomic: ((BigInt(String(terms.bountyAmount)) * 8n) / 10n / BigInt(maximumCommits)).toString(),
+        guaranteedBaseAtomic: guaranteedBaseAtomic.toString(),
         possibleBonusAtomic: ((BigInt(String(terms.bountyAmount)) * 2n) / 10n / BigInt(maximumCommits)).toString(),
+        possibleSurpriseBonusAtomic: maximumSurpriseBonusForBase(guaranteedBaseAtomic).toString(),
         attemptCompensationAtomic: String(terms.attemptCompensation),
       },
       beacon: { network: "quicknet-t" as const, round: Number(terms.beaconRound) },

@@ -12,6 +12,7 @@ import {
   evaluatePostRoundIntegrity,
 } from "~~/lib/tokenless/postRoundIntegrity";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { finalizeSurpriseBountyRound } from "~~/lib/tokenless/surpriseBountyService";
 
 const WEBHOOK_EVENTS = new Set(["result.ready", "result.updated"]);
 const MAX_DELIVERY_ATTEMPTS = 8;
@@ -1258,7 +1259,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
   };
   validateFinalizedEvidence(evidence);
-  return { evidence, integrityInput: assurance.integrityInput };
+  return { evidence, integrityInput: assurance.integrityInput, surpriseReports: normativeReveals };
 }
 
 export async function deriveFinalizedRoundEvidence(input: {
@@ -1287,7 +1288,13 @@ export async function appendFinalizedRoundEvidence(input: {
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
 }) {
-  const { evidence, integrityInput } = await deriveFinalizedRoundEvidenceBundle(input);
+  const { evidence, integrityInput, surpriseReports } = await deriveFinalizedRoundEvidenceBundle(input);
+  await finalizeSurpriseBountyRound({
+    operationKey: input.operationKey,
+    deploymentKey: evidence.deploymentKey,
+    roundId: evidence.roundId,
+    reports: surpriseReports,
+  });
   const ownership = await dbClient.execute({
     sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
     args: [input.operationKey],
@@ -1826,9 +1833,17 @@ export async function inspectWorkspaceTransparency(input: {
     args: [input.operationKey, input.workspaceId],
   });
   if (ownership.rows.length === 0) throw new TokenlessServiceError("Result not found.", 404, "result_not_found");
-  const [events, reviews, records, publications, deliveries] = await Promise.all([
+  const [events, surpriseBounties, reviews, records, publications, deliveries] = await Promise.all([
     dbClient.execute({
       sql: "SELECT event_id, sequence, event_type, deployment_key, round_id, evidence_hash, evidence_json, occurred_at, recorded_at FROM tokenless_transparency_events WHERE operation_key = ? ORDER BY sequence ASC",
+      args: [input.operationKey],
+    }),
+    dbClient.execute({
+      sql: `SELECT version, state, round_id, policy_json, guaranteed_base_per_report_atomic,
+                   maximum_bonus_per_report_atomic, maximum_liability_atomic, sample_size, actual_up_bps,
+                   mean_predicted_up_bps, surprisingly_popular_outcome, allocation_hash, evidence_hash,
+                   total_bonus_atomic, paid_bonus_atomic, finalized_at, completed_at
+            FROM tokenless_surprise_bounty_rounds WHERE operation_key = ? LIMIT 1`,
       args: [input.operationKey],
     }),
     dbClient.execute({
@@ -1883,6 +1898,7 @@ export async function inspectWorkspaceTransparency(input: {
     integrityReviewRecords: parseJsonColumns(records.rows as Row[], ["details_json"]),
     publications: parseJsonColumns(publications.rows as Row[], ["result_json"]),
     webhookDeliveries: parseJsonColumns(deliveries.rows as Row[], []),
+    surpriseBounties: parseJsonColumns(surpriseBounties.rows as Row[], ["policy_json"]),
   };
 }
 

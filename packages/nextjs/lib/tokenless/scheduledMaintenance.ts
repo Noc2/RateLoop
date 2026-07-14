@@ -4,6 +4,7 @@ import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
 import {
   appendFinalizedRoundEvidence,
   deliverPendingWebhooks,
@@ -87,6 +88,7 @@ type MaintenanceProcessors = {
   publishFinalizedRound: (input: { operationKey: string; appOrigin: string; now: Date }) => Promise<void>;
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
+  processSurpriseBounties: typeof processSurpriseBountyPayments;
 };
 
 const defaultProcessors: MaintenanceProcessors = {
@@ -97,6 +99,7 @@ const defaultProcessors: MaintenanceProcessors = {
   },
   deliverWebhooks: deliverPendingWebhooks,
   processNotifications: runTokenlessNotificationCycle,
+  processSurpriseBounties: processSurpriseBountyPayments,
 };
 
 async function claimDueWork(now: Date, limit: number) {
@@ -220,6 +223,10 @@ export async function runTokenlessScheduledMaintenance(input: {
       now,
       processors: input.processors ?? defaultProcessors,
     });
+    const surpriseBounties = await (input.processors ?? defaultProcessors).processSurpriseBounties({
+      now,
+      limit: workLimit,
+    });
     const webhookOutcomes = await (input.processors ?? defaultProcessors).deliverWebhooks({
       now,
       limit: webhookLimit,
@@ -240,7 +247,9 @@ export async function runTokenlessScheduledMaintenance(input: {
       webhooks.dead > 0 ||
       webhooks.retry > 0 ||
       notifications.dead > 0 ||
-      notifications.retry > 0
+      notifications.retry > 0 ||
+      surpriseBounties.retry > 0 ||
+      surpriseBounties.reconciliationRequired > 0
         ? "degraded"
         : "healthy";
     const summary = {
@@ -248,6 +257,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       work,
       webhooks,
       notifications,
+      surpriseBounties,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({

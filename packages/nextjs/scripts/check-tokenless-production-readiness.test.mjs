@@ -48,6 +48,7 @@ function validFixture() {
     TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY: `0x${"11".repeat(32)}`,
     TOKENLESS_X402_RELAYER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
     TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY: `0x${"33".repeat(32)}`,
+    TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY: `0x${"55".repeat(32)}`,
     WORLD_ID_RP_SIGNING_KEY: `0x${"44".repeat(32)}`,
     WORLD_ID_APP_ID: "app_production123",
     WORLD_ID_RP_ID: "rp_production123",

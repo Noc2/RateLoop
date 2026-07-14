@@ -169,6 +169,7 @@ test("task discovery exposes exact compensation for explicit sandbox content", a
   assert.deepEqual(tasks[0]?.earnings, {
     guaranteedBaseAtomic: "1333333",
     possibleBonusAtomic: "333333",
+    possibleSurpriseBonusAtomic: "166666",
     attemptCompensationAtomic: "333333",
   });
   assert.equal("votePrivateKey" in tasks[0]!, false);

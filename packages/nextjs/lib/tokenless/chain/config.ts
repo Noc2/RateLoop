@@ -17,6 +17,7 @@ export type TokenlessChainConfig = {
   issuerAddress: Address;
   panelAddress: Address;
   prepaidFunderPrivateKey?: `0x${string}`;
+  surpriseBonusFunderPrivateKey?: `0x${string}`;
   revealWindowSeconds: number;
   beaconFailureGraceSeconds: number;
   relayerPrivateKey?: `0x${string}`;
@@ -114,6 +115,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   }
   const prepaidFunderPrivateKey = privateKey(env, "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY");
   const relayerPrivateKey = privateKey(env, "TOKENLESS_X402_RELAYER_PRIVATE_KEY");
+  const surpriseBonusFunderPrivateKey = privateKey(env, "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY");
   const credentialSignerPrivateKey = privateKey(env, "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY");
   if (
     (relayerPrivateKey && relayerPrivateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()) ||
@@ -123,6 +125,18 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   }
   if (prepaidFunderPrivateKey && prepaidFunderPrivateKey.toLowerCase() === relayerPrivateKey?.toLowerCase()) {
     throw new Error("The prepaid funder and gas-only relayer must use distinct keys.");
+  }
+  const paymentKeys = [prepaidFunderPrivateKey, relayerPrivateKey, surpriseBonusFunderPrivateKey].filter(
+    (value): value is `0x${string}` => Boolean(value),
+  );
+  if (new Set(paymentKeys.map(value => value.toLowerCase())).size !== paymentKeys.length) {
+    throw new Error("The prepaid funder, gas-only relayer, and surprise-bonus funder must use distinct keys.");
+  }
+  if (
+    surpriseBonusFunderPrivateKey &&
+    surpriseBonusFunderPrivateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()
+  ) {
+    throw new Error("The surprise-bonus funder must never reuse the credential issuer signer.");
   }
   return {
     chainId: TOKENLESS_BASE_SEPOLIA_CHAIN_ID,
@@ -138,6 +152,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     relayerPrivateKey,
     rpcUrl: parsedRpcUrl.toString(),
     schemaVersion: TOKENLESS_DEPLOYMENT_SCHEMA,
+    surpriseBonusFunderPrivateKey,
     usdcAddress,
     usdcEip712Name,
     usdcEip712Version,

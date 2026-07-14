@@ -63,6 +63,9 @@ function processors(
     async processNotifications() {
       return notifications;
     },
+    async processSurpriseBounties() {
+      return { paid: 0, pendingClaim: 0, retry: 0, reconciliationRequired: 0 };
+    },
   };
 }
 

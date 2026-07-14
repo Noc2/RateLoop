@@ -14,6 +14,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountyService";
 
 const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296;
 const QUICKNET_T_PERIOD_SECONDS = 3;
@@ -306,7 +307,18 @@ export async function prepareChainPayment(
         "stale_deployment",
       );
     }
-    return instructions(existing);
+    const existingInstructions = instructions(existing);
+    const maximumSeatPay =
+      BigInt(existingInstructions.roundTerms.bountyAmount) / BigInt(existingInstructions.roundTerms.maximumCommits);
+    await reserveSurpriseBountyCapacity({
+      operationKey,
+      guaranteedBasePerReportAtomic: (maximumSeatPay * 8_000n) / 10_000n,
+      maximumReports: existingInstructions.roundTerms.maximumCommits,
+      config,
+      runtime,
+      now: options.now,
+    });
+    return existingInstructions;
   }
   const source = await operationSource(operationKey);
   const paymentMode = rowString(source, "payment_mode") as ChainPaymentInstructions["paymentMode"];
@@ -381,7 +393,18 @@ export async function prepareChainPayment(
   const persisted = await executionRow(operationKey);
   if (!persisted)
     throw new TokenlessServiceError("Chain execution could not be stored.", 500, "chain_persistence_failed");
-  return instructions(persisted);
+  const persistedInstructions = instructions(persisted);
+  const maximumSeatPay =
+    BigInt(persistedInstructions.roundTerms.bountyAmount) / BigInt(persistedInstructions.roundTerms.maximumCommits);
+  await reserveSurpriseBountyCapacity({
+    operationKey,
+    guaranteedBasePerReportAtomic: (maximumSeatPay * 8_000n) / 10_000n,
+    maximumReports: persistedInstructions.roundTerms.maximumCommits,
+    config,
+    runtime,
+    now: options.now,
+  });
+  return persistedInstructions;
 }
 
 function exactRoundCreated(input: {

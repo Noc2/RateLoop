@@ -260,6 +260,13 @@
       "when": 1783987200000,
       "tag": "0036_tokenless_notification_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1783990800000,
+      "tag": "0037_tokenless_surprise_bounties",
+      "breakpoints": true
     }
   ]
 }

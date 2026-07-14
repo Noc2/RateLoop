@@ -23,9 +23,10 @@ The next paid tokenless deployment should implement this narrower integrity stac
 3. **Reintroduce correlation epochs as prospective admission and evidence inputs, not payout oracles.** A point-in-time
    integrity manifest diversifies assignments before a round and a post-round check controls whether the verdict is
    publishable, inconclusive, or must be rerun. Neither check changes deterministic pay for accepted work.
-4. **Do not restore the legacy surprise-weighted bounty formula.** First compute a per-round Surprisingly Popular
-   diagnostic from the panel's own predictions. Publish it beside, not instead of, the raw preference share. Promote it
-   into a small fixed bonus only if a preregistered benchmark demonstrates value beyond the RBTS bonus.
+4. **Do not restore the legacy surprise-weighted bounty formula.** The July 14 production decision promotes a new
+   per-round Surprisingly Popular mechanism as a centralized, platform-funded top-up. It uses the current panel's own
+   predictions, leave-one-out rater scoring, a frozen minimum sample and threshold, and a fixed cap. It is published
+   beside—not instead of—the raw preference share and cannot affect the verdict, contract settlement, base, or RBTS.
 5. **Keep Self optional and later.** Self can add selective document predicates such as minimum age and country rules
    after provider-composition, privacy, conversion, and procurement gates pass. It does not replace World ID's initial
    open-network uniqueness role and does not add a Self/Celo dependency to `TokenlessPanel`.
@@ -94,15 +95,15 @@ The old implementation is a source of tested math, failure cases, and fixtures�
 
 ## Security properties must stay separate
 
-| Property | Question | Primary control | Explicit limitation |
-|---|---|---|---|
-| Sealed independence | Can a rater copy visible momentum? | tlock commit/reveal and hidden assignment | Does not stop off-platform coordination |
-| Unique admission | Is one provider subject admitted once? | World ID 4 plus RateLoop nullifiers and voucher caps | A unique human can still collude or answer badly |
-| Relevant qualification | Is the reviewer suitable for this task? | Cohort policy, practice, gold items, customer criteria | Identity assurance is not expertise |
-| Truthful-report incentive | Does own payoff depend on an honestly reported private signal? | Binary RBTS fixed bonus | Guarantees depend on model assumptions and do not remove bad equilibria |
-| Group independence | Are many reports controlled or coordinated together? | Prospective integrity epochs, diversified assignment, post-round analytics | New or off-platform collusion can evade detection |
-| Fund integrity | Can RateLoop redirect or claw back earned money? | Immutable USDC core and deterministic non-negative settlement | Admission remains an operator trust point for future commits |
-| Verdict integrity | Is this panel result safe to show as evidence? | Pending-integrity state, risk reasons, rerun/remediation | A publishable panel is evidence, not objective truth |
+| Property                  | Question                                                       | Primary control                                                            | Explicit limitation                                                     |
+| ------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Sealed independence       | Can a rater copy visible momentum?                             | tlock commit/reveal and hidden assignment                                  | Does not stop off-platform coordination                                 |
+| Unique admission          | Is one provider subject admitted once?                         | World ID 4 plus RateLoop nullifiers and voucher caps                       | A unique human can still collude or answer badly                        |
+| Relevant qualification    | Is the reviewer suitable for this task?                        | Cohort policy, practice, gold items, customer criteria                     | Identity assurance is not expertise                                     |
+| Truthful-report incentive | Does own payoff depend on an honestly reported private signal? | Binary RBTS fixed bonus                                                    | Guarantees depend on model assumptions and do not remove bad equilibria |
+| Group independence        | Are many reports controlled or coordinated together?           | Prospective integrity epochs, diversified assignment, post-round analytics | New or off-platform collusion can evade detection                       |
+| Fund integrity            | Can RateLoop redirect or claw back earned money?               | Immutable USDC core and deterministic non-negative settlement              | Admission remains an operator trust point for future commits            |
+| Verdict integrity         | Is this panel result safe to show as evidence?                 | Pending-integrity state, risk reasons, rerun/remediation                   | A publishable panel is evidence, not objective truth                    |
 
 World ID addresses unique admission. RBTS addresses individual reporting incentives under assumptions. Correlation
 controls address connected behavior. None is a substitute for the other two.
@@ -198,24 +199,30 @@ not the vote weight, in the first production version. The decision packet report
 
 Do not call the majority, RBTS score, or client decision “truth.”
 
-## Surprise: restore the signal, not the legacy bounty formula
+## Surprise: centralized v1, not the legacy bounty formula
 
-The current report already collects the data needed for a per-round Surprisingly Popular diagnostic. For each side,
+The current report collects the data needed for a per-round Surprisingly Popular calculation. For each side,
 compare its actual panel share with the panel's mean predicted share for that side. Use leave-one-out values only for
 per-rater diagnostics where self-influence matters. Report the answer whose actual share exceeds its predicted share by
 the larger preregistered margin, subject to minimum sample and numerical guards.
 
-Phase 1 is shadow-only:
+The July 14 production decision promotes this signal into `tokenless-sp-bounty-v1` with these frozen boundaries:
 
 - compute it from the current panel's predictions, never from a trailing cross-question base rate;
-- show raw share, predicted share, surprise ratio, sample size, and whether the threshold was met;
+- show raw share, predicted share, margin, sample size, threshold, allocation hash, and evidence hash;
 - do not silently replace the majority result;
-- do not alter pay; and
-- evaluate whether it preserves expert/minority signals or merely amplifies noise.
+- add only a non-negative central top-up capped at 12.5% of the guaranteed base per qualifying report;
+- reserve the maximum platform liability before the paid round is prepared;
+- pay only after the base claim, to the same reviewer-selected address;
+- never source one reviewer's top-up from another reviewer, the customer bounty, the attempt reserve, or unused RBTS;
+  and
+- keep the central bonus funder technically separate from the immutable fund core, credential signer, prepaid funder,
+  and gas relayer.
 
-Only create `scoring-v2` with a separate surprise bonus if the shadow evaluation improves preregistered external or gold
-outcomes beyond RBTS alone. If promoted, fund it as another small fixed maximum per rater or case; never as a variable
-share of other raters' earnings, and never above the guaranteed base.
+The previous shadow-only benchmark gate is superseded by that explicit product decision. Benchmarking remains an
+operational monitoring requirement and can disable new reservations in a later mechanism version, but cannot alter a
+funded round or an earned entitlement. The on-chain scoring version remains RBTS v2 because the central top-up is not a
+contract settlement input.
 
 ## Correlation integrity epochs without a payout oracle
 
@@ -398,16 +405,16 @@ fund core. A Self document subject and a World PoH subject cannot be assumed to 
 
 ## Threat model after reintegration
 
-| Attack | Control after this plan | Residual risk |
-|---|---|---|
-| Random clicking | Fixed RBTS bonus, gold/practice history, rationale checks | Base pay still compensates accepted work; sophisticated random strategies can pass some checks |
-| Copying visible votes | Sealed commit/reveal and hidden assignment | Off-platform communication remains possible |
-| One person, many accounts | World ID for network supply, provider-subject uniqueness, per-round nullifier | Provider compromise, account rental, and multiple real colluders remain |
-| Coordinated real-human ring | Diversified epoch assignment, co-behavior/rationale analysis, pending verdict, rerun | A new low-and-slow ring may evade detection |
-| RBTS uninformative equilibrium | Random peer selection, gold anchors, cohort separation, empirical monitoring | Peer prediction has multiple equilibria; no formula removes all collusion |
-| Funder self-dealing | External/network cohort provenance, frozen manifest, conflict disclosure, client sign-off | A buyer can still choose biased cases or invited reviewers |
-| Malicious issuer | Public issuance counts, policy-bound vouchers, alarms, epoch rotation | Issuer can censor or mint future voters; it cannot alter accepted commits or funds |
-| Malicious correlation scorer | Deterministic manifest, recompute, appeals, no payout influence | It can affect future access or publication until detected |
+| Attack                         | Control after this plan                                                                   | Residual risk                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Random clicking                | Fixed RBTS bonus, gold/practice history, rationale checks                                 | Base pay still compensates accepted work; sophisticated random strategies can pass some checks |
+| Copying visible votes          | Sealed commit/reveal and hidden assignment                                                | Off-platform communication remains possible                                                    |
+| One person, many accounts      | World ID for network supply, provider-subject uniqueness, per-round nullifier             | Provider compromise, account rental, and multiple real colluders remain                        |
+| Coordinated real-human ring    | Diversified epoch assignment, co-behavior/rationale analysis, pending verdict, rerun      | A new low-and-slow ring may evade detection                                                    |
+| RBTS uninformative equilibrium | Random peer selection, gold anchors, cohort separation, empirical monitoring              | Peer prediction has multiple equilibria; no formula removes all collusion                      |
+| Funder self-dealing            | External/network cohort provenance, frozen manifest, conflict disclosure, client sign-off | A buyer can still choose biased cases or invited reviewers                                     |
+| Malicious issuer               | Public issuance counts, policy-bound vouchers, alarms, epoch rotation                     | Issuer can censor or mint future voters; it cannot alter accepted commits or funds             |
+| Malicious correlation scorer   | Deterministic manifest, recompute, appeals, no payout influence                           | It can affect future access or publication until detected                                      |
 
 ## Dependency-ordered implementation plan
 
@@ -471,17 +478,18 @@ deployment boundaries.
     Regenerate ABIs and the deployment schema only after the final contract commit; deploy all isolated services against
     one fresh complete key. Never repoint tokenless code to the v2 artifact or legacy projects.
 
-### Phase 4 — surprise shadow and optional Self
+### Phase 4 — centralized surprise bounty and optional Self
 
-17. **`feat(analytics): shadow per-round surprisingly-popular results`**
-    Add versioned per-round predicted-versus-actual diagnostics, minimum sample guards, evidence output, and benchmark
-    reports with no payout or primary-verdict effect.
+17. **`feat(incentives): central per-round surprisingly-popular bounties`**
+    Add versioned per-round predicted-versus-actual scoring, minimum sample guards, leave-one-out allocations,
+    pre-reserved platform liability, claim-following USDC payout, and public evidence with no primary-verdict or contract
+    settlement effect.
 18. **`feat(identity): prepare optional Self document predicates`**
     Add a disabled provider adapter contract, configuration-equality checks, and test vectors, but do not enable Self or
     claim production support until provider access, procurement, privacy, conversion, and error-handling gates pass.
-19. **`docs(mechanism): decide scoring-v2 from evidence`**
-    Either keep RBTS-only, promote a bounded fixed surprise bonus in a fresh deployment, or remove the prediction input
-    if it does not beat equal-pay panels. Never change the rule for an already funded round.
+19. **`docs(mechanism): monitor centralized v1 without mutating funded rounds`**
+    Compare RBTS-only and RBTS-plus-surprise outcomes, publish limitations, and version any later threshold or cap
+    change. Never change the rule for an already funded round.
 
 ## Verification and release gates
 

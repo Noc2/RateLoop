@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { type Address, type Hash, type Hex, encodeAbiParameters, encodeEventTopics, getAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
@@ -26,6 +27,7 @@ const ADAPTER = getAddress("0x3333333333333333333333333333333333333333");
 const USDC = getAddress("0x4444444444444444444444444444444444444444");
 const FUNDER = getAddress("0x5555555555555555555555555555555555555555");
 const FEE_RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
+const SURPRISE_BONUS_ACCOUNT = privateKeyToAccount(`0x${"77".repeat(32)}`);
 const TX_HASH = `0x${"aa".repeat(32)}` as Hash;
 const BLOCK_HASH = `0x${"bb".repeat(32)}` as Hash;
 const originalSandbox = process.env.TOKENLESS_SANDBOX_MODE;
@@ -72,6 +74,7 @@ function mockRuntime(
       if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
       if (address === ADAPTER && functionName === "panel") return PANEL;
       if (address === ADAPTER && (functionName === "usdc" || functionName === "authorizationToken")) return USDC;
+      if (address === USDC && functionName === "balanceOf") return 1_000_000_000n;
       if (address === PANEL && functionName === "getRound" && expectedRound) {
         const terms = __chainPaymentTestUtils.toOnchainTerms(expectedRound.roundTerms);
         return {
@@ -102,7 +105,10 @@ function mockRuntime(
     },
     ...overrides,
   };
-  return { publicClient: publicClient as unknown as TokenlessChainRuntime["publicClient"] };
+  return {
+    publicClient: publicClient as unknown as TokenlessChainRuntime["publicClient"],
+    surpriseBonusAccount: SURPRISE_BONUS_ACCOUNT,
+  };
 }
 
 beforeEach(() => {
@@ -133,6 +139,16 @@ test("deployment config binds the complete bundle and forbids credential key reu
     TOKENLESS_X402_RELAYER_PRIVATE_KEY: key,
   } as unknown as NodeJS.ProcessEnv;
   assert.throws(() => loadTokenlessChainConfig(env), /must never reuse the credential issuer signer/);
+  assert.throws(
+    () =>
+      loadTokenlessChainConfig({
+        ...env,
+        TOKENLESS_X402_RELAYER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
+        TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY: `0x${"33".repeat(32)}`,
+        TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY: `0x${"33".repeat(32)}`,
+      }),
+    /must use distinct keys/,
+  );
   assert.throws(
     () =>
       loadTokenlessChainConfig({
