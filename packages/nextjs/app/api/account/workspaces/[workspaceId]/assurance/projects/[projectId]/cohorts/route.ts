@@ -32,6 +32,7 @@ export async function POST(request: NextRequest, context: Context) {
     const body = (await request.json()) as {
       capacity?: number;
       name?: string;
+      privateGroupId?: string;
       qualificationRules?: QualificationRule[];
       selection?: AudienceSelection;
       source?: CohortSource;
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest, context: Context) {
       selection: body.selection as AudienceSelection,
       capacity: body.capacity ?? 0,
       qualificationRules: body.qualificationRules,
+      privateGroupId: body.privateGroupId,
     });
     return NextResponse.json(cohort, { status: 201 });
   } catch (error) {

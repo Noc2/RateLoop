@@ -20,7 +20,14 @@ import {
   reserveAudienceAssignment,
   reserveDiversifiedNetworkSubpanel,
 } from "~~/lib/tokenless/audienceAssignments";
+import {
+  createPrivateGroup,
+  createPrivateGroupInvitation,
+  redeemPrivateGroupInvitation,
+  removePrivateGroupMember,
+} from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { listReviewerAssignments } from "~~/lib/tokenless/reviewerAssignments";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -192,6 +199,17 @@ async function seedProject(owner = OWNER, label = "primary") {
     args: [projectId, workspaceId, `${label} assurance`, owner.toLowerCase(), now, now],
   });
   return { workspaceId, projectId };
+}
+
+async function seedBrowserIdentity(address: string, label: string) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_browser_identities
+          (principal_address, thirdweb_user_id, auth_provider, primary_email, email_verified,
+           email_domain, display_name, created_at, updated_at, last_login_at)
+          VALUES (?, ?, 'email', ?, true, 'example.test', ?, ?, ?, ?)`,
+    args: [address.toLowerCase(), `thirdweb-${label}`, `${label}@example.test`, label, now, now, now],
+  });
 }
 
 async function seedRun(project: { workspaceId: string; projectId: string }, policy: HumanAssuranceAudiencePolicy) {
@@ -868,5 +886,134 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
       ).rows[0]?.count,
     ),
     leaseAudit.rows.length,
+  );
+});
+
+test("durable private-group membership gates reservation discovery and acceptance without erasing accepted work", async () => {
+  const project = await seedProject(OWNER, "private_group");
+  await Promise.all([
+    seedBrowserIdentity(REVIEWER, "private-reviewer"),
+    seedBrowserIdentity(SECOND_REVIEWER, "private-second"),
+  ]);
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    name: "Release council",
+    purpose: "Confidential employee review.",
+    policy: {
+      defaultCompensation: "unpaid",
+      allowedProjectIds: [project.projectId],
+      dataClassifications: ["confidential"],
+    },
+  });
+  const invitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    groupId: group.groupId,
+    maximumRedemptions: 2,
+  });
+  await redeemPrivateGroupInvitation({ accountAddress: REVIEWER, token: invitation.token });
+  await redeemPrivateGroupInvitation({ accountAddress: SECOND_REVIEWER, token: invitation.token });
+  const cohort = await createProjectCohort({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    name: "Release council",
+    source: "customer_invited",
+    selection: "customer_named",
+    capacity: 3,
+    privateGroupId: group.groupId,
+  });
+  const policy = audiencePolicy([{ ...cohort, source: "customer_invited" }], {
+    reviewerSource: "customer_invited",
+    selection: "customer_named",
+    compensation: "unpaid",
+  });
+  const seeded = await seedRun(project, policy);
+  const [subpanel] = await prepareRunAudience({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    runId: seeded.runId,
+  });
+  assert.deepEqual(subpanel?.privateGroup, {
+    groupId: group.groupId,
+    policyVersion: 1,
+    policyHash: group.policyHash,
+  });
+
+  const reserved = await reserveAudienceAssignment({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    runId: seeded.runId,
+    subpanelId: subpanel!.subpanelId!,
+    reviewerAccountAddress: REVIEWER,
+    confidentialityTermsHash: TERMS_HASH,
+  });
+  const visible = await listReviewerAssignments({ accountAddress: REVIEWER });
+  assert.equal(visible[0]?.assignmentId, reserved.assignmentId);
+  assert.equal(visible[0]?.privateGroup?.groupId, group.groupId);
+
+  await removePrivateGroupMember({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    groupId: group.groupId,
+    principalAddress: REVIEWER,
+  });
+  const released = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_assurance_assignments WHERE assignment_id = ?",
+    args: [reserved.assignmentId],
+  });
+  assert.equal(released.rows[0]?.status, "released");
+  assert.equal((await listReviewerAssignments({ accountAddress: REVIEWER })).length, 0);
+  await assert.rejects(
+    () =>
+      acceptAudienceAssignment({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsHash: TERMS_HASH,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "private_group_membership_required",
+  );
+
+  const acceptedReservation = await reserveAudienceAssignment({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    runId: seeded.runId,
+    subpanelId: subpanel!.subpanelId!,
+    reviewerAccountAddress: SECOND_REVIEWER,
+    confidentialityTermsHash: TERMS_HASH,
+  });
+  await acceptAudienceAssignment({
+    baseAccountAddress: SECOND_REVIEWER,
+    assignmentId: acceptedReservation.assignmentId,
+    confidentialityTermsHash: TERMS_HASH,
+  });
+  await removePrivateGroupMember({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    groupId: group.groupId,
+    principalAddress: SECOND_REVIEWER,
+  });
+  const accepted = await dbClient.execute({
+    sql: "SELECT status, private_group_policy_hash FROM tokenless_assurance_assignments WHERE assignment_id = ?",
+    args: [acceptedReservation.assignmentId],
+  });
+  assert.equal(accepted.rows[0]?.status, "accepted");
+  assert.equal(accepted.rows[0]?.private_group_policy_hash, group.policyHash);
+  assert.equal(
+    (await listReviewerAssignments({ accountAddress: SECOND_REVIEWER }))[0]?.assignmentId,
+    acceptedReservation.assignmentId,
+  );
+  assert.equal(
+    (
+      await getAssignmentOnlyTask({
+        baseAccountAddress: SECOND_REVIEWER,
+        assignmentId: acceptedReservation.assignmentId,
+      })
+    ).privateGroup?.policyHash,
+    group.policyHash,
   );
 });

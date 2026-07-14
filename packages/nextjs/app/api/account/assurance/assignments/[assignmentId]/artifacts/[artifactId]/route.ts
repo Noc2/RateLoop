@@ -3,7 +3,10 @@ import type { HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { dbClient } from "~~/lib/db";
 import { readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
-import { assertAssuranceAssignmentSettlementAvailable } from "~~/lib/tokenless/audienceAssignments";
+import {
+  assertAssuranceAssignmentSettlementAvailable,
+  assertMatchingPrivateGroupSnapshot,
+} from "~~/lib/tokenless/audienceAssignments";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +25,15 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request);
     const { artifactId, assignmentId } = await context.params;
     const result = await dbClient.execute({
-      sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment, ap.policy_json
+      sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment,
+                   a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
+                   sp.private_group_id AS subpanel_private_group_id,
+                   sp.private_group_policy_version AS subpanel_private_group_policy_version,
+                   sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
+                   ap.policy_json
             FROM tokenless_assurance_assignments a
             JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
+            JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
             JOIN tokenless_assurance_audience_policies ap
               ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
             WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
@@ -37,6 +46,7 @@ export async function GET(request: NextRequest, context: Context) {
     if (!workspaceId || !projectId) {
       throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
     }
+    assertMatchingPrivateGroupSnapshot(assignment!);
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: assignment?.paid_assignment === true,
       policy: JSON.parse(String(assignment?.policy_json)) as HumanAssuranceAudiencePolicy,

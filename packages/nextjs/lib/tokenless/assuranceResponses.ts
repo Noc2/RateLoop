@@ -4,7 +4,11 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { dbPool } from "~~/lib/db";
-import { type CohortSource, assertAssuranceAssignmentSettlementAvailable } from "~~/lib/tokenless/audienceAssignments";
+import {
+  type CohortSource,
+  assertAssuranceAssignmentSettlementAvailable,
+  assertMatchingPrivateGroupSnapshot,
+} from "~~/lib/tokenless/audienceAssignments";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -366,6 +370,9 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       `SELECT a.*, r.status AS run_status, r.policy_hash, r.manifest_hash, r.manifest_json,
               s.manifest_hash AS suite_manifest_hash, s.manifest_json AS suite_manifest_json,
               sp.policy_hash AS subpanel_policy_hash, sp.run_manifest_hash AS subpanel_manifest_hash,
+              sp.private_group_id AS subpanel_private_group_id,
+              sp.private_group_policy_version AS subpanel_private_group_policy_version,
+              sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
               ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
@@ -383,6 +390,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy"),
       source: rowString(assignment, "source") as CohortSource,
     });
+    assertMatchingPrivateGroupSnapshot(assignment);
     const assignmentStatus = rowString(assignment, "status");
     const completedReplay = assignmentStatus === "completed";
     if (!completedReplay && !ACTIVE_RUN_STATUSES.has(rowString(assignment, "run_status") ?? "")) {

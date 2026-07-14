@@ -978,13 +978,39 @@ async function endMembership(input: {
     if (result.rowCount !== 1) {
       throw new TokenlessServiceError("Private-group membership not found.", 404, "private_group_membership_not_found");
     }
+    const released = await client.query(
+      `UPDATE tokenless_assurance_assignments
+       SET status = 'released', lease_state = 'expired', updated_at = $1
+       WHERE private_group_id = $2 AND reviewer_account_address = $3 AND status = 'reserved'
+       RETURNING subpanel_id, project_id, cohort_id`,
+      [now, input.groupId, input.principalAddress],
+    );
+    for (const value of released.rows) {
+      const assignment = value as Row;
+      await client.query(
+        `UPDATE tokenless_assurance_run_subpanels SET active_reservations = active_reservations - 1
+         WHERE subpanel_id = $1 AND active_reservations > 0`,
+        [rowString(assignment, "subpanel_id")],
+      );
+      await client.query(
+        `UPDATE tokenless_assurance_cohorts SET active_reservations = active_reservations - 1
+         WHERE project_id = $1 AND cohort_id = $2 AND active_reservations > 0`,
+        [rowString(assignment, "project_id"), rowString(assignment, "cohort_id")],
+      );
+      await client.query(
+        `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations = active_reservations - 1
+         WHERE project_id = $1 AND cohort_id = $2 AND reviewer_account_address = $3
+           AND active_reservations > 0`,
+        [rowString(assignment, "project_id"), rowString(assignment, "cohort_id"), input.principalAddress],
+      );
+    }
     await appendEvent(client, {
       workspaceId: input.workspaceId,
       groupId: input.groupId,
       principalAddress: input.principalAddress,
       eventType: input.status === "removed" ? "membership_removed" : "membership_left",
       actorReference: input.actorAddress,
-      details: { reason: input.reason },
+      details: { reason: input.reason, releasedReservationCount: released.rowCount },
       now,
     });
     await client.query("COMMIT");

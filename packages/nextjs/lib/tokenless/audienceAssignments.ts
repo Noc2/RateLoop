@@ -247,6 +247,7 @@ export async function createProjectCohort(input: {
   selection: AudienceSelection;
   capacity: number;
   qualificationRules?: QualificationRule[];
+  privateGroupId?: string;
 }) {
   const manager = await requireProjectManager(input);
   if (!COHORT_SOURCE_SET.has(input.source)) {
@@ -262,13 +263,54 @@ export async function createProjectCohort(input: {
   if (input.selection !== "customer_named" && input.selection !== "randomized") {
     throw new TokenlessServiceError("Audience selection is unsupported.", 400, "invalid_audience_selection");
   }
+  const privateGroupId = input.privateGroupId ? requiredText(input.privateGroupId, "privateGroupId", 160) : null;
+  if (privateGroupId && input.source !== "customer_invited") {
+    throw new TokenlessServiceError(
+      "Private groups can back only customer-invited cohorts.",
+      400,
+      "invalid_private_group_audience",
+    );
+  }
+  if (privateGroupId) {
+    const group = await dbClient.execute({
+      sql: `SELECT g.group_id, gp.allowed_project_ids_json, gp.data_classifications_json
+            FROM tokenless_private_groups g
+            JOIN tokenless_private_group_policy_versions gp
+              ON gp.group_id = g.group_id AND gp.version = g.current_policy_version
+            JOIN tokenless_assurance_projects p ON p.project_id = ? AND p.workspace_id = g.workspace_id
+            WHERE g.group_id = ? AND g.workspace_id = ? AND g.status = 'active'
+              AND p.status = 'active' LIMIT 1`,
+      args: [input.projectId, privateGroupId, input.workspaceId],
+    });
+    const row = group.rows[0] as QueryRow | undefined;
+    const allowedProjects = parseJson<string[]>(row?.allowed_project_ids_json ?? "[]", "allowed project ids");
+    const classifications = parseJson<string[]>(
+      row?.data_classifications_json ?? "[]",
+      "private-group data classifications",
+    );
+    const project = await dbClient.execute({
+      sql: "SELECT data_classification FROM tokenless_assurance_projects WHERE project_id = ? LIMIT 1",
+      args: [input.projectId],
+    });
+    if (
+      !row ||
+      (allowedProjects.length > 0 && !allowedProjects.includes(input.projectId)) ||
+      !classifications.includes(rowString(project.rows[0] as QueryRow | undefined, "data_classification") ?? "")
+    ) {
+      throw new TokenlessServiceError(
+        "Private group does not allow this assurance project.",
+        409,
+        "private_group_project_not_allowed",
+      );
+    }
+  }
   const cohortId = `hacoh_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_cohorts
-          (cohort_id, project_id, name, source, selection, capacity, active_reservations,
+          (cohort_id, project_id, name, source, selection, capacity, active_reservations, private_group_id,
            qualification_rules_json, status, created_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'active', ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 'active', ?, ?, ?)`,
     args: [
       cohortId,
       input.projectId,
@@ -276,19 +318,26 @@ export async function createProjectCohort(input: {
       input.source,
       input.selection,
       integer(input.capacity, "capacity", 1, 10_000),
+      privateGroupId,
       JSON.stringify(validateQualificationRules(input.qualificationRules ?? [])),
       manager,
       now,
       now,
     ],
   });
-  return { cohortId, projectId: input.projectId, source: input.source, selection: input.selection };
+  return {
+    cohortId,
+    projectId: input.projectId,
+    source: input.source,
+    selection: input.selection,
+    privateGroupId,
+  };
 }
 
 export async function listProjectCohorts(input: { accountAddress: string; workspaceId: string; projectId: string }) {
   await requireProjectManager(input);
   const result = await dbClient.execute({
-    sql: `SELECT cohort_id, name, source, selection, capacity, active_reservations,
+    sql: `SELECT cohort_id, name, source, selection, capacity, active_reservations, private_group_id,
                  qualification_rules_json, status
           FROM tokenless_assurance_cohorts WHERE project_id = ? ORDER BY created_at ASC`,
     args: [input.projectId],
@@ -302,6 +351,7 @@ export async function listProjectCohorts(input: { accountAddress: string; worksp
       selection: rowString(row, "selection"),
       capacity: rowNumber(row, "capacity"),
       activeReservations: rowNumber(row, "active_reservations"),
+      privateGroupId: rowString(row, "private_group_id"),
       qualificationRules: parseJson(row.qualification_rules_json, "qualification rules"),
       status: rowString(row, "status"),
     };
@@ -366,7 +416,14 @@ export async function createReviewerInvitation(input: {
   expiresAt?: Date;
 }) {
   const manager = await requireProjectManager(input);
-  await requireCohort({ ...input, source: "customer_invited" });
+  const cohort = await requireCohort({ ...input, source: "customer_invited" });
+  if (rowString(cohort, "private_group_id")) {
+    throw new TokenlessServiceError(
+      "This cohort uses durable private-group invitations.",
+      409,
+      "private_group_invitation_required",
+    );
+  }
   const intended = input.intendedAccountAddress
     ? normalizeAddress(input.intendedAccountAddress, "intendedAccountAddress")
     : null;
@@ -616,6 +673,17 @@ export async function prepareRunAudience(input: {
       throw new TokenlessServiceError("Frozen run not found.", 404, "run_not_found");
     }
     const policy = parseJson<HumanAssuranceAudiencePolicy>(run.policy_json, "audience policy");
+    const cohortBindings = await client.query(
+      `SELECT cohort_id, private_group_id FROM tokenless_assurance_cohorts
+       WHERE project_id = $1 AND cohort_id = ANY($2::text[])`,
+      [input.projectId, policy.cohorts.map(cohort => cohort.cohortId)],
+    );
+    const privateGroupByCohort = new Map(
+      cohortBindings.rows.map(value => {
+        const row = value as QueryRow;
+        return [rowString(row, "cohort_id")!, rowString(row, "private_group_id")] as const;
+      }),
+    );
     const existing = await client.query(
       "SELECT * FROM tokenless_assurance_run_subpanels WHERE run_id = $1 ORDER BY source, cohort_id",
       [input.runId],
@@ -634,6 +702,10 @@ export async function prepareRunAudience(input: {
             rowString(row, "policy_hash") !== policyHash ||
             rowString(row, "run_manifest_hash") !== rowString(run, "manifest_hash") ||
             rowString(row, "selection") !== policy.selection ||
+            rowString(row, "private_group_id") !==
+              (privateGroupByCohort.get(rowString(row, "cohort_id") ?? "") ?? null) ||
+            (rowString(row, "private_group_id") !== null &&
+              (!rowNumber(row, "private_group_policy_version") || !rowString(row, "private_group_policy_hash"))) ||
             (rowString(row, "source") === "rateloop_network" &&
               (rowString(row, "integrity_epoch_id") !== policy.integrity?.epochId ||
                 rowString(row, "integrity_manifest_hash") !== policy.integrity?.epochManifestHash ||
@@ -656,6 +728,15 @@ export async function prepareRunAudience(input: {
         cohortId: rowString(value as QueryRow, "cohort_id"),
         source: rowString(value as QueryRow, "source"),
         targetCount: rowNumber(value as QueryRow, "target_count"),
+        ...(rowString(value as QueryRow, "private_group_id")
+          ? {
+              privateGroup: {
+                groupId: rowString(value as QueryRow, "private_group_id"),
+                policyVersion: rowNumber(value as QueryRow, "private_group_policy_version"),
+                policyHash: rowString(value as QueryRow, "private_group_policy_hash"),
+              },
+            }
+          : {}),
         ...(rowString(value as QueryRow, "source") === "rateloop_network"
           ? {
               integrity: {
@@ -669,8 +750,16 @@ export async function prepareRunAudience(input: {
     const cohorts: QueryRow[] = [];
     for (const requested of policy.cohorts) {
       const cohortResult = await client.query(
-        `SELECT * FROM tokenless_assurance_cohorts
-         WHERE project_id = $1 AND cohort_id = $2 AND status = 'active' LIMIT 1 FOR UPDATE`,
+        `SELECT c.*, g.workspace_id AS private_group_workspace_id, g.status AS private_group_status,
+                g.current_policy_version AS private_group_current_policy_version,
+                gp.policy_hash AS private_group_policy_hash, gp.policy_json AS private_group_policy_json,
+                pr.data_classification AS project_data_classification
+         FROM tokenless_assurance_cohorts c
+         JOIN tokenless_assurance_projects pr ON pr.project_id = c.project_id
+         LEFT JOIN tokenless_private_groups g ON g.group_id = c.private_group_id
+         LEFT JOIN tokenless_private_group_policy_versions gp
+           ON gp.group_id = g.group_id AND gp.version = g.current_policy_version
+         WHERE c.project_id = $1 AND c.cohort_id = $2 AND c.status = 'active' LIMIT 1 FOR UPDATE`,
         [input.projectId, requested.cohortId],
       );
       const cohort = cohortResult.rows[0] as QueryRow | undefined;
@@ -687,6 +776,31 @@ export async function prepareRunAudience(input: {
           409,
           "audience_selection_mismatch",
         );
+      }
+      const privateGroupId = rowString(cohort, "private_group_id");
+      if (privateGroupId) {
+        const privateGroupPolicy = parseJson<{
+          allowedProjectIds: string[];
+          dataClassifications: string[];
+          defaultCompensation: "paid" | "unpaid";
+        }>(cohort.private_group_policy_json, "private-group policy");
+        const source = rowString(cohort, "source") as CohortSource;
+        const paid = assignmentIsPaid(policy.compensation, source);
+        if (
+          source !== "customer_invited" ||
+          rowString(cohort, "private_group_workspace_id") !== input.workspaceId ||
+          rowString(cohort, "private_group_status") !== "active" ||
+          (privateGroupPolicy.allowedProjectIds.length > 0 &&
+            !privateGroupPolicy.allowedProjectIds.includes(input.projectId)) ||
+          !privateGroupPolicy.dataClassifications.includes(rowString(cohort, "project_data_classification") ?? "") ||
+          privateGroupPolicy.defaultCompensation !== (paid ? "paid" : "unpaid")
+        ) {
+          throw new TokenlessServiceError(
+            "Private-group policy does not permit this frozen audience.",
+            409,
+            "private_group_policy_mismatch",
+          );
+        }
       }
       cohorts.push(cohort);
     }
@@ -716,9 +830,10 @@ export async function prepareRunAudience(input: {
         `INSERT INTO tokenless_assurance_run_subpanels
          (subpanel_id, workspace_id, project_id, run_id, cohort_id, source, selection,
           target_count, active_reservations, policy_id, policy_version, policy_hash,
-          run_manifest_hash, integrity_epoch_id, integrity_manifest_hash,
+          run_manifest_hash, private_group_id, private_group_policy_version, private_group_policy_hash,
+          integrity_epoch_id, integrity_manifest_hash,
           integrity_constraints_json, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14, $15, $16)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
         [
           subpanelId,
           input.workspaceId,
@@ -732,6 +847,9 @@ export async function prepareRunAudience(input: {
           rowNumber(run, "audience_policy_version"),
           policyHash,
           rowString(run, "manifest_hash"),
+          rowString(cohort, "private_group_id"),
+          rowString(cohort, "private_group_id") ? rowNumber(cohort, "private_group_current_policy_version") : null,
+          rowString(cohort, "private_group_policy_hash"),
           rowString(cohort, "source") === "rateloop_network" ? policy.integrity?.epochId : null,
           rowString(cohort, "source") === "rateloop_network" ? policy.integrity?.epochManifestHash : null,
           rowString(cohort, "source") === "rateloop_network" ? canonicalJson(policy.integrity) : null,
@@ -743,6 +861,15 @@ export async function prepareRunAudience(input: {
         cohortId: requested.cohortId,
         source: rowString(cohort, "source"),
         targetCount: requested.maximumReviewers,
+        ...(rowString(cohort, "private_group_id")
+          ? {
+              privateGroup: {
+                groupId: rowString(cohort, "private_group_id"),
+                policyVersion: rowNumber(cohort, "private_group_current_policy_version"),
+                policyHash: rowString(cohort, "private_group_policy_hash"),
+              },
+            }
+          : {}),
         ...(rowString(cohort, "source") === "rateloop_network"
           ? {
               integrity: {
@@ -878,6 +1005,150 @@ export async function expireAudienceAssignments(now = new Date()) {
 
 function assignmentIsPaid(compensation: HumanAssuranceAudiencePolicy["compensation"], source: CohortSource) {
   return compensation === "paid" || (compensation === "mixed" && source === "rateloop_network");
+}
+
+type PrivateGroupCandidate = {
+  joinedAt: Date;
+  membershipExpiresAt: Date | null;
+  provenance: QualificationProvenance[];
+};
+
+async function activePrivateGroupCandidates(
+  client: PoolClient,
+  input: { projectId: string; subpanel: QueryRow; now: Date },
+) {
+  const groupId = rowString(input.subpanel, "private_group_id");
+  if (!groupId) return null;
+  const policyVersion = rowNumber(input.subpanel, "private_group_policy_version");
+  const policyHash = rowString(input.subpanel, "private_group_policy_hash");
+  const groupResult = await client.query(
+    `SELECT g.status, gp.policy_hash, gp.policy_json
+     FROM tokenless_private_groups g
+     JOIN tokenless_private_group_policy_versions gp ON gp.group_id = g.group_id AND gp.version = $2
+     WHERE g.group_id = $1 LIMIT 1 FOR SHARE`,
+    [groupId, policyVersion],
+  );
+  const group = groupResult.rows[0] as QueryRow | undefined;
+  if (!group || rowString(group, "status") !== "active" || rowString(group, "policy_hash") !== policyHash) {
+    throw new TokenlessServiceError("Private group is unavailable.", 409, "private_group_unavailable");
+  }
+  const policy = parseJson<{ worldIdRequired: boolean }>(group.policy_json, "private-group policy");
+  const memberships = await client.query(
+    `SELECT principal_address, allowed_project_ids_json, membership_expires_at, joined_at, created_by
+     FROM tokenless_private_group_memberships
+     WHERE group_id = $1 AND status = 'active'
+       AND (membership_expires_at IS NULL OR membership_expires_at > $2)
+     FOR SHARE`,
+    [groupId, input.now],
+  );
+  const candidates = new Map<string, PrivateGroupCandidate>();
+  for (const value of memberships.rows) {
+    const membership = value as QueryRow;
+    const address = rowString(membership, "principal_address")!;
+    const allowedProjects = parseJson<string[]>(membership.allowed_project_ids_json, "membership project ids");
+    if (allowedProjects.length > 0 && !allowedProjects.includes(input.projectId)) continue;
+    if (policy.worldIdRequired) {
+      const worldId = await client.query(
+        `SELECT a.assertion_id FROM tokenless_rater_profiles p
+         JOIN tokenless_provider_subject_bindings b ON b.rater_id = p.rater_id
+         JOIN tokenless_assurance_assertions a ON a.binding_id = b.binding_id
+         WHERE p.account_address = $1 AND b.provider_id = 'world:poh' AND b.status = 'active'
+           AND a.status = 'active' AND a.assurance_validity_model = 'durable_enrollment'
+           AND a.capabilities_json LIKE '%"unique_human"%' LIMIT 1`,
+        [address],
+      );
+      if (worldId.rowCount !== 1) continue;
+    }
+    const joinedAt = rowDate(membership, "joined_at")!;
+    const membershipExpiresAt = rowDate(membership, "membership_expires_at");
+    const provenance: QualificationProvenance[] = [
+      {
+        key: "customer_invitation",
+        value: true,
+        source: "private_group_membership",
+        assertedBy: rowString(membership, "created_by")!,
+        verifiedAt: joinedAt.toISOString(),
+        ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
+      },
+      {
+        key: "private_group_membership",
+        value: groupId,
+        source: "private_group_membership",
+        assertedBy: rowString(membership, "created_by")!,
+        verifiedAt: joinedAt.toISOString(),
+        ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
+      },
+    ];
+    await client.query(
+      `INSERT INTO tokenless_assurance_cohort_reviewers
+       (project_id, cohort_id, reviewer_account_address, qualification_provenance_json,
+        qualification_expires_at, maximum_active_assignments, active_reservations,
+        status, created_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,1,0,'active',$6,$7,$8)
+       ON CONFLICT (project_id, cohort_id, reviewer_account_address) DO UPDATE SET
+         qualification_provenance_json = EXCLUDED.qualification_provenance_json,
+         qualification_expires_at = EXCLUDED.qualification_expires_at,
+         status = 'active', updated_at = EXCLUDED.updated_at`,
+      [
+        input.projectId,
+        rowString(input.subpanel, "cohort_id"),
+        address,
+        JSON.stringify(provenance),
+        membershipExpiresAt,
+        rowString(membership, "created_by"),
+        joinedAt,
+        input.now,
+      ],
+    );
+    candidates.set(address, { joinedAt, membershipExpiresAt, provenance });
+  }
+  return candidates;
+}
+
+async function requireCurrentPrivateGroupAssignmentMembership(
+  client: PoolClient,
+  assignment: QueryRow,
+  reviewer: string,
+  now: Date,
+) {
+  const groupId = rowString(assignment, "private_group_id");
+  if (!groupId || (rowString(assignment, "status") === "accepted" && rowDate(assignment, "accepted_at"))) return;
+  const membership = await client.query(
+    `SELECT m.joined_at FROM tokenless_private_group_memberships m
+     JOIN tokenless_private_groups g ON g.group_id = m.group_id AND g.status = 'active'
+     WHERE m.group_id = $1 AND m.principal_address = $2 AND m.status = 'active'
+       AND (m.membership_expires_at IS NULL OR m.membership_expires_at > $3)
+     LIMIT 1 FOR SHARE`,
+    [groupId, reviewer, now],
+  );
+  if (
+    membership.rowCount !== 1 ||
+    rowDate(membership.rows[0] as QueryRow | undefined, "joined_at")?.getTime() !==
+      rowDate(assignment, "private_group_membership_joined_at")?.getTime()
+  ) {
+    throw new TokenlessServiceError(
+      "Private-group membership is no longer active.",
+      403,
+      "private_group_membership_required",
+    );
+  }
+}
+
+export function assertMatchingPrivateGroupSnapshot(row: QueryRow) {
+  const assignmentGroupId = rowString(row, "private_group_id");
+  const subpanelGroupId = rowString(row, "subpanel_private_group_id");
+  if (
+    assignmentGroupId !== subpanelGroupId ||
+    (assignmentGroupId !== null &&
+      (rowNumber(row, "private_group_policy_version") !== rowNumber(row, "subpanel_private_group_policy_version") ||
+        rowString(row, "private_group_policy_hash") !== rowString(row, "subpanel_private_group_policy_hash")))
+  ) {
+    throw new TokenlessServiceError(
+      "Assignment private-group binding is invalid.",
+      409,
+      "private_group_binding_mismatch",
+    );
+  }
 }
 
 function integrityLookupRuntime() {
@@ -1319,16 +1590,27 @@ export async function reserveAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Audience capacity is exhausted.", 409, "audience_capacity_exhausted");
     }
+    const privateGroupCandidates = await activePrivateGroupCandidates(client, {
+      projectId: input.projectId,
+      subpanel,
+      now,
+    });
+    const privateGroupAddresses = privateGroupCandidates ? [...privateGroupCandidates.keys()] : null;
     const reviewerResult = await client.query(
       `SELECT cr.* FROM tokenless_assurance_cohort_reviewers cr
        WHERE cr.project_id = $1 AND cr.cohort_id = $2 AND cr.status = 'active'
          AND cr.active_reservations < cr.maximum_active_assignments
          AND (cr.qualification_expires_at IS NULL OR cr.qualification_expires_at > $3)
-         ${namedReviewer ? "AND cr.reviewer_account_address = $4" : ""}
+         ${privateGroupAddresses ? "AND cr.reviewer_account_address = ANY($4::text[])" : ""}
+         ${namedReviewer ? `AND cr.reviewer_account_address = $${privateGroupAddresses ? 5 : 4}` : ""}
        FOR UPDATE`,
-      namedReviewer
-        ? [input.projectId, rowString(subpanel, "cohort_id"), now, namedReviewer]
-        : [input.projectId, rowString(subpanel, "cohort_id"), now],
+      [
+        input.projectId,
+        rowString(subpanel, "cohort_id"),
+        now,
+        ...(privateGroupAddresses ? [privateGroupAddresses] : []),
+        ...(namedReviewer ? [namedReviewer] : []),
+      ],
     );
     const reviewerAddresses = reviewerResult.rows.map(value =>
       rowString(value as QueryRow, "reviewer_account_address"),
@@ -1406,6 +1688,16 @@ export async function reserveAudienceAssignment(input: {
             ]
           : []),
       qualifications: chosen.provenance,
+      ...(rowString(subpanel, "private_group_id")
+        ? {
+            privateGroup: {
+              groupId: rowString(subpanel, "private_group_id"),
+              policyVersion: rowNumber(subpanel, "private_group_policy_version"),
+              policyHash: rowString(subpanel, "private_group_policy_hash"),
+              membershipJoinedAt: privateGroupCandidates?.get(reviewerAccountAddress)?.joinedAt.toISOString(),
+            },
+          }
+        : {}),
       capturedAt: now.toISOString(),
     };
     const assuranceSnapshotJson = canonicalJson(assuranceSnapshot);
@@ -1415,11 +1707,12 @@ export async function reserveAudienceAssignment(input: {
        (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
         reviewer_account_address, source, selection, status, confidentiality_terms_hash,
         qualification_provenance_json, assurance_snapshot_json, assurance_snapshot_hash,
-        blinding_json, paid_assignment,
+        blinding_json, paid_assignment, private_group_id, private_group_policy_version,
+        private_group_policy_hash, private_group_membership_joined_at,
         paid_eligibility_checked_at, voucher_marker, reservation_expires_at,
         lease_issuer_account_address, lease_state, recovery_count, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'reserved', $10, $11, $12, $13, $14,
-               $15, $16, NULL, $17, $18, 'pending', 0, $19, $19)`,
+               $15, $16, $17, $18, $19, $20, NULL, $21, $22, 'pending', 0, $23, $23)`,
       [
         assignmentId,
         input.workspaceId,
@@ -1436,6 +1729,10 @@ export async function reserveAudienceAssignment(input: {
         assuranceSnapshotHash,
         JSON.stringify({ swap: randomInt(2) === 1 }),
         isPaid,
+        rowString(subpanel, "private_group_id"),
+        rowString(subpanel, "private_group_id") ? rowNumber(subpanel, "private_group_policy_version") : null,
+        rowString(subpanel, "private_group_policy_hash"),
+        privateGroupCandidates?.get(reviewerAccountAddress)?.joinedAt ?? null,
         isPaid ? now : null,
         reservationExpiresAt,
         manager,
@@ -1512,6 +1809,9 @@ export async function recoverExpiredAudienceAssignment(input: {
     const result = await client.query(
       `SELECT a.*, sp.target_count, sp.active_reservations AS subpanel_reservations,
               sp.run_manifest_hash, sp.policy_hash,
+              sp.private_group_id AS subpanel_private_group_id,
+              sp.private_group_policy_version AS subpanel_private_group_policy_version,
+              sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
               c.capacity, c.active_reservations AS cohort_reservations,
               cr.maximum_active_assignments, cr.active_reservations AS reviewer_reservations,
               r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
@@ -1544,6 +1844,8 @@ export async function recoverExpiredAudienceAssignment(input: {
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
       source: rowString(row, "source") as CohortSource,
     });
+    assertMatchingPrivateGroupSnapshot(row);
+    await requireCurrentPrivateGroupAssignmentMembership(client, row, reviewer, now);
     if (
       (rowNumber(row, "subpanel_reservations") ?? 0) >= (rowNumber(row, "target_count") ?? 0) ||
       (rowNumber(row, "cohort_reservations") ?? 0) >= (rowNumber(row, "capacity") ?? 0) ||
@@ -1618,8 +1920,12 @@ async function issueAssignmentArtifactLeases(
                  a.lease_issuer_account_address, a.confidentiality_terms_hash,
                  a.confidentiality_accepted_at, a.assignment_expires_at,
                  a.source, a.paid_assignment,
+                 a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
                  r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
                  r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
+                 sp.private_group_id AS subpanel_private_group_id,
+                 sp.private_group_policy_version AS subpanel_private_group_policy_version,
+                 sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
                  ap.policy_json
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
@@ -1636,6 +1942,7 @@ async function issueAssignmentArtifactLeases(
     policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
     source: rowString(row, "source") as CohortSource,
   });
+  assertMatchingPrivateGroupSnapshot(row);
   if ((rowDate(row, "assignment_expires_at")?.getTime() ?? 0) <= now.getTime()) {
     throw new TokenlessServiceError("Assignment expired.", 410, "assignment_expired");
   }
@@ -1723,6 +2030,9 @@ export async function acceptAudienceAssignment(input: {
     const result = await client.query(
       `SELECT a.*, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
               r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
+              sp.private_group_id AS subpanel_private_group_id,
+              sp.private_group_policy_version AS subpanel_private_group_policy_version,
+              sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
               ap.policy_json
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
@@ -1746,6 +2056,8 @@ export async function acceptAudienceAssignment(input: {
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
       source: rowString(row, "source") as CohortSource,
     });
+    assertMatchingPrivateGroupSnapshot(row);
+    await requireCurrentPrivateGroupAssignmentMembership(client, row, reviewer, now);
     if (rowString(row, "confidentiality_terms_hash") !== input.confidentialityTermsHash) {
       throw new TokenlessServiceError("Confidentiality terms changed.", 409, "confidentiality_terms_mismatch");
     }
@@ -1788,6 +2100,9 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
   const assignmentResult = await dbClient.execute({
     sql: `SELECT a.*, r.suite_id, r.suite_version, r.manifest_hash AS current_run_manifest_hash,
                  r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
+                 sp.private_group_id AS subpanel_private_group_id,
+                 sp.private_group_policy_version AS subpanel_private_group_policy_version,
+                 sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
                  s.manifest_json AS suite_manifest_json, ap.policy_json
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
@@ -1813,6 +2128,7 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
     policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.policy_json, "audience policy"),
     source: rowString(assignment, "source") as CohortSource,
   });
+  assertMatchingPrivateGroupSnapshot(assignment);
   const caseResult = await dbClient.execute({
     sql: `SELECT rc.case_id, rc.position, rc.variant_a_artifact_id, rc.variant_b_artifact_id,
                  c.title, c.instructions, c.context_artifact_ids_json, c.objective_reference
@@ -1854,6 +2170,14 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
     source: rowString(assignment, "source") as CohortSource,
     runManifestHash: rowString(assignment, "run_manifest_hash"),
     policyHash: rowString(assignment, "policy_hash"),
+    privateGroup:
+      rowString(assignment, "private_group_id") === null
+        ? null
+        : {
+            groupId: rowString(assignment, "private_group_id"),
+            policyVersion: rowNumber(assignment, "private_group_policy_version"),
+            policyHash: rowString(assignment, "private_group_policy_hash"),
+          },
     qualificationProvenance: parseJson<QualificationProvenance[]>(
       assignment.qualification_provenance_json,
       "qualification provenance",

@@ -232,6 +232,13 @@
       "when": 1783972800000,
       "tag": "0032_adaptive_review_source_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783976400000,
+      "tag": "0033_private_group_assignment_bindings",
+      "breakpoints": true
     }
   ]
 }

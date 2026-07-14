@@ -44,19 +44,27 @@ export async function listReviewerAssignments(input: {
   const result = await dbClient.execute({
     sql: `SELECT a.assignment_id, a.project_id, p.name AS project_name, p.data_classification,
                  a.source, a.status, a.paid_assignment, a.confidentiality_terms_hash,
+                 a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
                  a.reservation_expires_at, a.assignment_expires_at, a.created_at,
                  COUNT(c.case_id) AS case_count
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_projects p ON p.project_id = a.project_id
           LEFT JOIN tokenless_assurance_cases c ON c.project_id = a.project_id AND c.status = 'ready'
+          LEFT JOIN tokenless_private_group_memberships gm
+            ON gm.group_id = a.private_group_id AND gm.principal_address = a.reviewer_account_address
+           AND gm.status = 'active'
+           AND (gm.membership_expires_at IS NULL OR gm.membership_expires_at > ?)
+          LEFT JOIN tokenless_private_groups g ON g.group_id = gm.group_id AND g.status = 'active'
           WHERE a.reviewer_account_address = ?
+            AND (a.private_group_id IS NULL OR a.status IN ('accepted', 'completed') OR g.group_id IS NOT NULL)
             AND (? = '' OR a.status = ?)
             AND (? = '' OR a.assignment_id ILIKE ? OR p.name ILIKE ?)
           GROUP BY a.assignment_id, a.project_id, p.name, p.data_classification, a.source, a.status,
                    a.paid_assignment, a.confidentiality_terms_hash, a.reservation_expires_at,
-                   a.assignment_expires_at, a.created_at
+                   a.assignment_expires_at, a.created_at, a.private_group_id,
+                   a.private_group_policy_version, a.private_group_policy_hash
           ORDER BY a.created_at DESC, a.assignment_id DESC LIMIT ?`,
-    args: [reviewer, state, state, query, `%${query}%`, `%${query}%`, limit],
+    args: [new Date(), reviewer, state, state, query, `%${query}%`, `%${query}%`, limit],
   });
   return result.rows.map(row => {
     const value = row as Row;
@@ -69,6 +77,14 @@ export async function listReviewerAssignments(input: {
       status: stringValue(value, "status"),
       paidAssignment: value.paid_assignment === true,
       confidentialityTermsHash: stringValue(value, "confidentiality_terms_hash"),
+      privateGroup:
+        stringValue(value, "private_group_id") === null
+          ? null
+          : {
+              groupId: stringValue(value, "private_group_id"),
+              policyVersion: Number(value.private_group_policy_version),
+              policyHash: stringValue(value, "private_group_policy_hash"),
+            },
       reservationExpiresAt: dateValue(value, "reservation_expires_at"),
       assignmentExpiresAt: dateValue(value, "assignment_expires_at"),
       createdAt: dateValue(value, "created_at"),
