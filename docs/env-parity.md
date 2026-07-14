@@ -46,8 +46,9 @@ Next.js:
 The thirdweb project must allow only local development origins and `rateloop-tokenless.vercel.app`; never add
 `rateloop.ai`. Run `yarn workspace @rateloop/nextjs auth:check` before a hosted authentication rollout.
 
-Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` (currently `0000` through `0016`) in
-order before smoke testing the human-assurance APIs or enabling live mode. The app must fail closed when moderation,
+Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
+human-assurance APIs or enabling live mode. Isolated Vercel production builds apply and verify pending journal entries
+before compiling; preview and local builds never mutate a database. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 
 Ponder:
