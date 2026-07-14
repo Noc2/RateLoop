@@ -48,7 +48,7 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
           <circle cx="10.8" cy="10.8" r="6.3" />
           <path d="m16 16 4.2 4.2" />
         </svg>
-        <span className="text-base font-medium">Search answers</span>
+        <span className="text-base font-medium">Search</span>
       </button>
     );
   }
@@ -86,7 +86,7 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
             }
           }}
           className="h-9 w-full rounded-md border border-base-content/10 bg-base-content/[0.09] pl-9 pr-9 text-sm text-base-content outline-none placeholder:text-base-content/45 focus:border-[var(--rateloop-blue)]"
-          placeholder="Search answers"
+          placeholder="Search"
           autoFocus={mobile}
         />
         {query ? (

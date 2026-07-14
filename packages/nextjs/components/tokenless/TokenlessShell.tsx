@@ -149,29 +149,6 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-function Notice({ sandboxMode }: { sandboxMode: boolean }) {
-  return (
-    <div className="border-b border-white/10 bg-black px-4 py-2 text-base-content xl:pl-52">
-      <p className="mx-auto flex max-w-6xl items-center justify-center gap-2 text-center text-[11px] font-medium leading-5 text-base-content/72 sm:text-xs">
-        <svg
-          className="h-4 w-4 shrink-0 text-error"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          aria-hidden="true"
-        >
-          <path d="M12 3 2.5 20h19L12 3Z" />
-          <path d="M12 9v5m0 3h.01" />
-        </svg>
-        {sandboxMode
-          ? "Sandbox only: simulated reviews and test funds. Do not use private data."
-          : "Early access: check the network and panel terms before funding."}
-      </p>
-    </div>
-  );
-}
-
 function Footer() {
   return (
     <footer className="shrink-0 border-t border-white/10 px-4 py-9 xl:pl-56">
@@ -213,11 +190,9 @@ function Footer() {
   );
 }
 
-export function TokenlessShell({ children, sandboxMode }: { children: React.ReactNode; sandboxMode: boolean }) {
+export function TokenlessShell({ children }: { children: React.ReactNode; sandboxMode: boolean }) {
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
-      <Notice sandboxMode={sandboxMode} />
-
       <header className="sticky top-0 z-30 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl xl:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <Brand compact />

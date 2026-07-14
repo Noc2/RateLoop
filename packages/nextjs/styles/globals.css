@@ -73,8 +73,13 @@
   --rateloop-steel: #a3a3a3;
   --rateloop-surface: #000;
   --rateloop-surface-elevated: #121212;
+  --rateloop-surface-elevated-hover: #1a1a1a;
   --rateloop-surface-nested: #1a1a1a;
   --rateloop-field: #1d1d1d;
+  --rateloop-control-idle: rgb(245 245 245 / 0.11);
+  --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
+  --rateloop-radius-control: 0.5rem;
+  --rateloop-card-radius: 0.5rem;
   --rateloop-shell-border: rgb(245 245 245 / 0.1);
   --rateloop-shell-border-strong: rgb(245 245 245 / 0.14);
   --rateloop-spectrum-gradient: linear-gradient(
@@ -114,6 +119,57 @@
   border: 1px solid var(--rateloop-shell-border);
   border-radius: 0.5rem;
   background: rgb(245 245 245 / 0.035);
+}
+
+/* Preserve the compact app surfaces and controls used by the original RateLoop pages. */
+.surface-card {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--rateloop-card-radius);
+  background: var(--rateloop-surface-elevated);
+  box-shadow: none;
+}
+
+.surface-card-nested,
+.surface-card .surface-card {
+  border: 0;
+  border-radius: var(--rateloop-card-radius);
+  background: var(--rateloop-surface-nested);
+  box-shadow: none;
+}
+
+.pill-active {
+  border-color: transparent;
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-warm-white);
+  color: #050505;
+  box-shadow: none;
+}
+
+.pill-inactive {
+  border-color: transparent;
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-control-idle);
+  color: var(--color-base-content);
+  box-shadow: none;
+}
+
+.pill-inactive:hover {
+  border-color: transparent;
+  background: var(--rateloop-control-idle-hover);
+}
+
+.tab-control {
+  border-radius: var(--rateloop-radius-control);
+}
+
+.tab-control.pill-inactive {
+  background: rgb(18 18 18 / 0.96);
+}
+
+.tab-control.pill-inactive:hover {
+  background: var(--rateloop-surface-elevated-hover);
 }
 
 .rateloop-gradient-action {
