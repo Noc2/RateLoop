@@ -7,13 +7,14 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 - Network: Base Sepolia
 - Chain ID: `84532`
 - RPC variable: `BASE_SEPOLIA_RPC_URL`, `PONDER_RPC_URL_84532`, or `RPC_URL`, depending on the package
-- Deployment schema: `rateloop-tokenless-deployment-v2`
-- Deployment key: `tokenless-v2:<chainId>:<panel>:<issuer>:<adapter-or-zero>`
-- Canonical disposable test artifact: `packages/foundry/deployments/tokenless-v2/84532.json`
+- Deployment schema: `rateloop-tokenless-deployment-v3`
+- Deployment key: `tokenless-v3:<chainId>:<panel>:<issuer>:<adapter-or-zero>`
+- Canonical disposable test artifact: `packages/foundry/deployments/tokenless-v3/84532.json`
 
-The checked-in v1 artifact is historical and must not be used by a live service. The current v2 bundle was deployed at
-block `44090502`; the isolated Vercel app, Ponder, and keeper are pinned to its complete deployment key. The web app
-remains in explicit sandbox mode until the non-sandbox secret/provider bundle and paid end-to-end path are verified.
+Historical v1 and v2 artifacts must not be used by a live service. The current v3 bundle was deployed at block
+`44132668`; the isolated Vercel app, Ponder, and keeper must be pinned to its complete deployment key. This is a
+Base Sepolia test-profile bundle with unrestricted test currency. The web app remains in explicit sandbox mode until
+the non-sandbox secret/provider bundle, managed signer roles, workers, and paid end-to-end path are verified.
 
 Services must fail closed if their chain, addresses, start block, or deployment key disagree. Do not fall back to Base mainnet, an unversioned deployment JSON, or the former production services.
 
