@@ -167,88 +167,99 @@ export function PublicQuestionCard({
       : [task.question.positiveLabel ?? "Yes", task.question.negativeLabel ?? "No"];
 
   return (
-    <article className="rateloop-surface-card p-5 sm:p-7">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4 text-xs text-base-content/45">
-        <span>{sandboxMode ? "Preview panel" : "Public panel"}</span>
-        <span>
-          Guaranteed base ${usdc(task.earnings.guaranteedBaseAtomic)} · possible bonus $
-          {usdc(task.earnings.possibleBonusAtomic)} · attempt ${usdc(task.earnings.attemptCompensationAtomic)}
-        </span>
-      </div>
-      <h2 className="mt-6 text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        {(["yes", "no"] as const).map((value, index) => (
-          <button
-            key={value}
-            type="button"
-            className={`rounded-lg border p-4 font-semibold transition-colors ${answer === value ? "border-base-content/55 bg-base-content/[0.1]" : "border-white/10 bg-black/20 hover:border-white/25 hover:bg-white/[0.04]"}`}
-            onClick={() => setAnswer(value)}
-          >
-            {options[index]}
-          </button>
-        ))}
-      </div>
-      <p className="mt-8 font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
-        Predict the panel · What share will choose the first option?
-      </p>
-      <div className="mt-3 grid grid-cols-5 gap-2">
-        {[10, 30, 50, 70, 90].map(value => (
-          <button
-            key={value}
-            type="button"
-            className={`rounded-lg border px-2 py-3 text-sm transition-colors ${prediction === value ? "border-[var(--rateloop-green)] bg-emerald-300/10" : "border-white/10 hover:border-white/25 hover:bg-white/[0.04]"}`}
-            onClick={() => setPrediction(value)}
-          >
-            {value}%
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        className="rateloop-gradient-action mt-6 w-full px-6 disabled:cursor-not-allowed disabled:opacity-45"
-        disabled={busy || !answer || prediction === null || task.alreadyVouchered}
-        onClick={() => void submitResponse()}
-      >
-        {busy ? "Sealing answer…" : task.alreadyVouchered ? "Answer already submitted" : "Submit sealed answer"}
-      </button>
-      <label className="mt-6 block border-t border-white/10 pt-5 text-sm text-base-content/60">
-        Recovery secret
-        <input
-          type="password"
-          className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-          value={recoverySecret}
-          onChange={event => setRecoverySecret(event.target.value)}
-          minLength={12}
-          maxLength={1024}
-          autoComplete="new-password"
-          placeholder="12+ characters; RateLoop never receives this"
-        />
-      </label>
-      {recoveryUrl ? (
-        <a
-          href={recoveryUrl}
-          download={`rateloop-round-${task.roundId}-recovery.json`}
-          className="mt-3 inline-block text-sm underline underline-offset-4"
+    <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
+      <section className="surface-card min-h-72 rounded-lg p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/45">
+          <span>{sandboxMode ? "Preview panel" : "Public panel"}</span>
+          <span>Round {task.roundId}</span>
+        </div>
+        <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
+        <p className="mt-5 text-sm leading-6 text-base-content/55">
+          Choose the stronger answer, then estimate how the panel will respond. Public questions contain only public,
+          synthetic, or safely redacted material.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
+          <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
+          <span>Bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
+          <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
+        </div>
+      </section>
+
+      <aside className="surface-card rounded-lg p-4 sm:p-5">
+        <p className="text-sm font-semibold">Your answer</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(["yes", "no"] as const).map((value, index) => (
+            <button
+              key={value}
+              type="button"
+              className={`tab-control px-3 py-3 text-sm font-semibold transition-colors ${
+                answer === value ? "pill-active" : "pill-inactive"
+              }`}
+              onClick={() => setAnswer(value)}
+            >
+              {options[index]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-5 text-xs leading-5 text-base-content/50">Predict the share choosing the first option</p>
+        <div className="mt-2 grid grid-cols-5 gap-1.5">
+          {[10, 30, 50, 70, 90].map(value => (
+            <button
+              key={value}
+              type="button"
+              className={`rounded-md px-1 py-2 text-xs transition-colors ${
+                prediction === value ? "pill-active" : "pill-inactive"
+              }`}
+              onClick={() => setPrediction(value)}
+            >
+              {value}%
+            </button>
+          ))}
+        </div>
+        <label className="mt-5 block border-t border-white/10 pt-4 text-xs text-base-content/55">
+          Recovery secret
+          <input
+            type="password"
+            className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+            value={recoverySecret}
+            onChange={event => setRecoverySecret(event.target.value)}
+            minLength={12}
+            maxLength={1024}
+            autoComplete="new-password"
+            placeholder="12+ characters"
+          />
+        </label>
+        <button
+          type="button"
+          className="rateloop-gradient-action mt-4 w-full px-4 text-sm disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={busy || !answer || prediction === null || task.alreadyVouchered}
+          onClick={() => void submitResponse()}
         >
-          Save encrypted recovery package
-        </a>
-      ) : null}
-      {status ? (
-        <p role="status" className="mt-4 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
-          {status}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
-          {error}
-        </p>
-      ) : null}
-      <p className="mt-5 text-xs leading-5 text-base-content/45">
-        The prompt is public and safely redacted. Never include confidential customer data in a public question.
-      </p>
-      <Link href="/settings/eligibility" className="mt-4 inline-block text-xs underline underline-offset-4">
-        Check paid-work eligibility
-      </Link>
+          {busy ? "Sealing…" : task.alreadyVouchered ? "Submitted" : "Submit answer"}
+        </button>
+        {recoveryUrl ? (
+          <a
+            href={recoveryUrl}
+            download={`rateloop-round-${task.roundId}-recovery.json`}
+            className="mt-3 block text-center text-xs underline underline-offset-4"
+          >
+            Save recovery package
+          </a>
+        ) : null}
+        {status ? (
+          <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
+            {status}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
+            {error}
+          </p>
+        ) : null}
+        <Link href="/settings/eligibility" className="mt-4 block text-center text-xs underline underline-offset-4">
+          Paid-work eligibility
+        </Link>
+      </aside>
     </article>
   );
 }

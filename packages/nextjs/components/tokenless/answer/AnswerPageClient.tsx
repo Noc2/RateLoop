@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { AppPageShell } from "~~/components/shared/AppPageShell";
 import {
   type PrivateAnswerAssignment,
   PrivateAssignmentCard,
@@ -27,7 +28,7 @@ export function AnswerPageClient({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [query, setQuery] = useState(initialQuery);
+  const [query] = useState(initialQuery);
   const [scope, setScope] = useState<Scope>(initialScope);
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
@@ -72,12 +73,6 @@ export function AnswerPageClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, initialScope]);
 
-  function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    router.push(`${pathname}?q=${encodeURIComponent(query)}&scope=${scope}`);
-    void load(query, scope);
-  }
-
   function changeScope(nextScope: Scope) {
     setScope(nextScope);
     router.push(`${pathname}?q=${encodeURIComponent(query)}&scope=${nextScope}`);
@@ -85,31 +80,8 @@ export function AnswerPageClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-14">
-      <div className="border-l-2 border-[var(--rateloop-green)] pl-6">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Answer queue</p>
-        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Make the call. Explain the difference.</h1>
-        <p className="mt-4 max-w-3xl text-lg leading-8 text-base-content/60">
-          Answer public questions or open private reviews assigned to this account. Paid eligibility is checked before
-          paid voucher issuance.
-        </p>
-      </div>
-      <form onSubmit={submitSearch} className="mt-8 flex gap-2">
-        <label className="sr-only" htmlFor="answer-query">
-          Search Answer
-        </label>
-        <input
-          id="answer-query"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          className="input grow border-white/10 bg-[var(--rateloop-field)]"
-          placeholder="Search public questions or assigned project names"
-        />
-        <button type="submit" className="rateloop-gradient-action px-5">
-          Search
-        </button>
-      </form>
-      <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Answer scopes">
+    <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
+      <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Answer scopes">
         {(["all", "public", "private", "submitted"] as const).map(value => (
           <button
             key={value}
@@ -117,64 +89,58 @@ export function AnswerPageClient({
             role="tab"
             aria-selected={scope === value}
             onClick={() => changeScope(value)}
-            className={`rounded-full border px-4 py-2 text-sm capitalize transition-colors ${scope === value ? "border-base-content bg-base-content font-semibold text-base-100" : "border-white/10 text-base-content/60 hover:border-white/25"}`}
+            className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
+              scope === value ? "pill-active" : "pill-inactive"
+            }`}
           >
             {value}
           </button>
         ))}
+        {query ? (
+          <span className="surface-card-nested ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
+            Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
+          </span>
+        ) : null}
       </div>
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <main className="space-y-5">
-          {loading ? (
-            <div className="rateloop-surface-card p-6 text-sm text-base-content/55">Loading Answer queue…</div>
-          ) : null}
-          {!loading && scope !== "private" && scope !== "submitted"
-            ? tasks.map(task => (
-                <PublicQuestionCard
-                  key={task.roundId}
-                  task={task}
-                  sandboxMode={sandboxMode}
-                  onSubmitted={() => void load()}
-                />
-              ))
-            : null}
-          {!loading && scope !== "public" && scope !== "submitted"
-            ? assignments.map(assignment => (
-                <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
-              ))
-            : null}
-          {!loading && scope === "submitted" ? (
-            <div className="rateloop-surface-card p-6 text-sm leading-6 text-base-content/55">
-              Submitted history will appear here once public result history is exposed by the tokenless read model.
-            </div>
-          ) : null}
-          {!loading && scope !== "submitted" && tasks.length === 0 && assignments.length === 0 ? (
-            <div className="rateloop-surface-card p-6 text-sm leading-6 text-base-content/55">
-              No answers match this view. Public questions appear after moderation and funding; private work appears
-              only after a customer assigns it to this account.
-            </div>
-          ) : null}
-          {error ? (
-            <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm text-red-100">
-              {error}
-            </p>
-          ) : null}
-        </main>
-        <aside className="rateloop-surface-card sticky top-24 h-fit p-6">
-          <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Answer safely</p>
-          <h2 className="mt-2 text-xl font-semibold">Two queues, two boundaries</h2>
-          <ul className="mt-4 space-y-3 text-sm leading-6 text-base-content/60">
-            <li>Public prompts never include confidential customer material.</li>
-            <li>Private artifacts are released only after assignment terms and a short lease.</li>
-            <li>Recovery packages are encrypted locally; RateLoop never receives your recovery secret.</li>
-          </ul>
-          <p className="mt-5 border-t border-white/10 pt-5 text-xs leading-5 text-base-content/45">
-            {sandboxMode
-              ? "Sandbox environment: simulated panels and test funds."
-              : "Early access: review panel and network terms before answering."}
+
+      <main className="space-y-4">
+        {loading ? (
+          <div className="surface-card rounded-lg p-6 text-sm text-base-content/55">
+            <span className="loading loading-spinner loading-sm mr-2 text-primary" />
+            Loading…
+          </div>
+        ) : null}
+        {!loading && scope !== "private" && scope !== "submitted"
+          ? tasks.map(task => (
+              <PublicQuestionCard
+                key={task.roundId}
+                task={task}
+                sandboxMode={sandboxMode}
+                onSubmitted={() => void load()}
+              />
+            ))
+          : null}
+        {!loading && scope !== "public" && scope !== "submitted"
+          ? assignments.map(assignment => (
+              <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
+            ))
+          : null}
+        {!loading && scope === "submitted" ? (
+          <div className="surface-card rounded-lg p-6 text-sm leading-6 text-base-content/55">
+            Submitted history will appear here once public result history is exposed by the tokenless read model.
+          </div>
+        ) : null}
+        {!loading && scope !== "submitted" && tasks.length === 0 && assignments.length === 0 ? (
+          <div className="surface-card flex min-h-48 items-center justify-center rounded-lg p-6 text-center text-base text-base-content/55">
+            No questions are available in this view yet.
+          </div>
+        ) : null}
+        {error ? (
+          <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm text-red-100">
+            {error}
           </p>
-        </aside>
-      </div>
-    </div>
+        ) : null}
+      </main>
+    </AppPageShell>
   );
 }

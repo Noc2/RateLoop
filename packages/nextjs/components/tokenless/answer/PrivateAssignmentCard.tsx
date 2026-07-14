@@ -14,7 +14,7 @@ export type PrivateAnswerAssignment = {
 
 export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswerAssignment }) {
   return (
-    <article className="rateloop-surface-card p-5 sm:p-7">
+    <article className="surface-card rounded-lg p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Private assignment</p>
