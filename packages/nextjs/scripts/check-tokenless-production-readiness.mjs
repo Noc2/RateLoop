@@ -11,6 +11,16 @@ const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v3";
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
+export const DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES = Object.freeze({
+  managedSigning: false,
+  paidAssignmentSettlement: false,
+});
+
+const NON_SANDBOX_RELEASE_CAPABILITY_LABELS = Object.freeze({
+  managedSigning: "managed signing for credential issuance and chain transactions",
+  paidAssignmentSettlement: "paid assignment reservation, voucher, commit, and settlement orchestration",
+});
+
 export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "APP_URL",
   "NEXT_PUBLIC_APP_URL",
@@ -174,6 +184,7 @@ export function validateTokenlessProductionReadiness({
   env,
   activeRegistry,
   deploymentSchema = tokenlessDeploymentSchema,
+  releaseCapabilities = DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES,
   production = env.VERCEL_ENV === "production",
 }) {
   const errors = [];
@@ -184,6 +195,12 @@ export function validateTokenlessProductionReadiness({
     return ["TOKENLESS_SANDBOX_MODE must be explicitly true or false in production."];
   }
   if (sandboxMode === "true") return errors;
+
+  for (const [capability, label] of Object.entries(NON_SANDBOX_RELEASE_CAPABILITY_LABELS)) {
+    if (releaseCapabilities[capability] !== true) {
+      errors.push(`Non-sandbox release is blocked until ${label} is implemented and reviewed.`);
+    }
+  }
 
   let missingConfiguration = false;
   for (const name of REQUIRED_TOKENLESS_PRODUCTION_VARIABLES) {

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES,
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
@@ -85,6 +86,9 @@ function validFixture() {
   }
   return {
     env,
+    releaseCapabilities: Object.fromEntries(
+      Object.keys(DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES).map(capability => [capability, true]),
+    ),
     activeRegistry: {
       84532: {
         schemaVersion: "rateloop-tokenless-deployment-v3",
@@ -123,6 +127,14 @@ test("the production preflight runs before hosted migrations", () => {
 test("non-sandbox production accepts only a complete matching v3 bundle", () => {
   const fixture = validFixture();
   assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
+});
+
+test("non-sandbox production remains blocked while required product capabilities are incomplete", () => {
+  const fixture = validFixture();
+  delete fixture.releaseCapabilities;
+  const errors = validateTokenlessProductionReadiness(fixture);
+  assert.match(errors.join("\n"), /managed signing/i);
+  assert.match(errors.join("\n"), /paid assignment reservation/i);
 });
 
 test("non-sandbox production rejects an empty active v3 registry", () => {
