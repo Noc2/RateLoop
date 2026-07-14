@@ -43,7 +43,11 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION",
   "TOKENLESS_MCP_RATE_LIMIT_SECRET",
+  "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY",
+  "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION",
   "TOKENLESS_PIPELINE_TOKEN",
+  "CRON_SECRET",
+  "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
   "TOKENLESS_PONDER_URL",
   "TOKENLESS_WEBHOOK_ENCRYPTION_KEY",
   "TOKENLESS_DEPLOYMENT_SCHEMA",
@@ -78,6 +82,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_VOTE_MAPPING_VAULT_KEYS",
   "TOKENLESS_DAC7_POLICY",
   "TOKENLESS_NETWORK_PANELS_ENABLED",
+  "TOKENLESS_SUBSCRIPTIONS_ENABLED",
   "WORLD_ID_APP_ID",
   "WORLD_ID_RP_ID",
   "WORLD_ID_RP_SIGNING_KEY",
@@ -102,6 +107,7 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY",
   "NEXT_PUBLIC_TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
   "NEXT_PUBLIC_TOKENLESS_MCP_RATE_LIMIT_SECRET",
+  "NEXT_PUBLIC_TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY",
   "NEXT_PUBLIC_TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_X402_RELAYER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
@@ -110,7 +116,12 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_TAX_VAULT_KEYS",
   "NEXT_PUBLIC_TOKENLESS_VOTE_MAPPING_VAULT_KEYS",
   "NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN",
+  "NEXT_PUBLIC_CRON_SECRET",
+  "NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
   "NEXT_PUBLIC_TOKENLESS_WEBHOOK_ENCRYPTION_KEY",
+  "NEXT_PUBLIC_STRIPE_SECRET_KEY",
+  "NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET",
+  "NEXT_PUBLIC_STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID",
   "NEXT_PUBLIC_WORLD_ID_RP_SIGNING_KEY",
   "NEXT_PUBLIC_TOKENLESS_PROVIDER_SUBJECT_HMAC_KEYS",
   "NEXT_PUBLIC_TOKENLESS_WORLD_ID_EVIDENCE_KEYS",
@@ -211,6 +222,27 @@ export function validateTokenlessProductionReadiness({
   }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because production secrets must remain server-only.`);
+  }
+  const subscriptionsEnabled = value(env, "TOKENLESS_SUBSCRIPTIONS_ENABLED");
+  if (subscriptionsEnabled !== "true" && subscriptionsEnabled !== "false") {
+    errors.push("TOKENLESS_SUBSCRIPTIONS_ENABLED must be explicitly true or false in production.");
+  }
+  if (subscriptionsEnabled === "true") {
+    for (const name of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID"]) {
+      if (!value(env, name)) errors.push(`${name} is required when tokenless subscriptions are enabled.`);
+    }
+    if (value(env, "STRIPE_SECRET_KEY") && !/^sk_live_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_SECRET_KEY"))) {
+      errors.push("STRIPE_SECRET_KEY must be a live-mode secret in production when subscriptions are enabled.");
+    }
+    if (value(env, "STRIPE_WEBHOOK_SECRET") && !/^whsec_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_WEBHOOK_SECRET"))) {
+      errors.push("STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret.");
+    }
+    if (
+      value(env, "STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID") &&
+      !/^price_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID"))
+    ) {
+      errors.push("STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID must be a Stripe Price ID.");
+    }
   }
   if (missingConfiguration) return errors;
 
@@ -354,9 +386,21 @@ export function validateTokenlessProductionReadiness({
     errors.push("TOKENLESS_ELIGIBILITY_HANDOFF_SECRET must contain at least 32 bytes.");
   }
   addSecretRole(secretRoles, "TOKENLESS_ELIGIBILITY_HANDOFF_SECRET", eligibilityHandoffSecret);
-  for (const name of ["TOKENLESS_MCP_RATE_LIMIT_SECRET", "TOKENLESS_PIPELINE_TOKEN", "THIRDWEB_SECRET_KEY"]) {
+  const adaptiveSamplerKey = decode32(value(env, "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY"));
+  if (!adaptiveSamplerKey) errors.push("TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY must encode exactly 32 bytes.");
+  addSecretRole(secretRoles, "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY", adaptiveSamplerKey);
+  for (const name of [
+    "TOKENLESS_MCP_RATE_LIMIT_SECRET",
+    "TOKENLESS_PIPELINE_TOKEN",
+    "CRON_SECRET",
+    "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
+    "THIRDWEB_SECRET_KEY",
+  ]) {
     if (value(env, name).length < 32) errors.push(`${name} must contain at least 32 characters.`);
     addSecretRole(secretRoles, name, Buffer.from(value(env, name), "utf8"));
+  }
+  if (value(env, "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION").length > 80) {
+    errors.push("TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION must not exceed 80 characters.");
   }
   for (const names of secretRoles.values()) {
     const message = `Production key roles must be distinct: ${names.join(", ")}.`;

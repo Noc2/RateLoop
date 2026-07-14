@@ -40,8 +40,14 @@ Next.js:
 - `TOKENLESS_FEE_RECIPIENT`, round timing variables, and optional `NEXT_PUBLIC_BASE_PAYMASTER_URL`
 - distinct `TOKENLESS_X402_RELAYER_PRIVATE_KEY` and `TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY`
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
-- `TOKENLESS_PIPELINE_TOKEN`, `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`
+- `TOKENLESS_PIPELINE_TOKEN`, `CRON_SECRET`, `TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET`,
+  `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`; use a distinct server-only secret of at least 32 random characters for signed
+  email unsubscribe links
 - `TOKENLESS_MCP_RATE_LIMIT_SECRET` with at least 32 random characters and no public variant
+- explicit `TOKENLESS_SUBSCRIPTIONS_ENABLED`; when true, server-only `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, and `STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID`
+- dedicated `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY` (32-byte base64url or hex) and
+  `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION`, with no public key variant
 - explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
 The thirdweb project must allow only local development origins and `rateloop-tokenless.vercel.app`; never add

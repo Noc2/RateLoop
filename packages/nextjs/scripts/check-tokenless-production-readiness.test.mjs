@@ -53,6 +53,7 @@ function validFixture() {
     WORLD_ID_RP_ID: "rp_production123",
     WORLD_ID_ENVIRONMENT: "production",
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_SUBSCRIPTIONS_ENABLED: "false",
     TOKENLESS_DAC7_POLICY: "eu",
     TOKENLESS_ARTIFACT_MASTER_KEY: encodedKey(1),
     TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY: encodedKey(9),
@@ -68,7 +69,11 @@ function validFixture() {
       .slice(0, 24)}`,
     TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY: provider.publicKey.export({ format: "pem", type: "spki" }),
     TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
+    TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY: encodedKey(13),
+    TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION: "sampler-v1",
     TOKENLESS_PIPELINE_TOKEN: "p".repeat(32),
+    CRON_SECRET: "c".repeat(32),
+    TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET: "n".repeat(32),
     THIRDWEB_SECRET_KEY: "t".repeat(32),
   });
   const keyrings = [
@@ -162,13 +167,43 @@ test("non-sandbox production fails closed before migrations without required con
 test("non-sandbox production rejects public secrets, reused roles, and mixed deployment identity without leaking values", () => {
   const fixture = validFixture();
   fixture.env.NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN = "do-not-print-this";
+  fixture.env.NEXT_PUBLIC_CRON_SECRET = "also-do-not-print-this";
+  fixture.env.NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET = "whsec_do-not-print-this";
   fixture.env.TOKENLESS_X402_RELAYER_PRIVATE_KEY = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY;
   fixture.env.TOKENLESS_DEPLOYMENT_BLOCK = "124";
   const errors = validateTokenlessProductionReadiness(fixture);
   const output = errors.join("\n");
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_CRON_SECRET is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET is forbidden/);
   assert.match(output, /Production key roles must be distinct/);
   assert.match(output, /complete active tokenless v3 registry/);
   assert.doesNotMatch(output, /do-not-print-this/);
+  assert.doesNotMatch(output, /also-do-not-print-this/);
+  assert.doesNotMatch(output, /whsec_do-not-print-this/);
   assert.doesNotMatch(output, /0x11111111/);
+});
+
+test("non-sandbox production requires valid server-only Stripe configuration only when subscriptions are enabled", () => {
+  const disabled = validFixture();
+  assert.deepEqual(validateTokenlessProductionReadiness(disabled), []);
+
+  const missing = validFixture();
+  missing.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
+  const missingOutput = validateTokenlessProductionReadiness(missing).join("\n");
+  assert.match(missingOutput, /STRIPE_SECRET_KEY is required/);
+  assert.match(missingOutput, /STRIPE_WEBHOOK_SECRET is required/);
+  assert.match(missingOutput, /STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID is required/);
+
+  const valid = validFixture();
+  Object.assign(valid.env, {
+    TOKENLESS_SUBSCRIPTIONS_ENABLED: "true",
+    STRIPE_SECRET_KEY: `sk_live_${"a".repeat(32)}`,
+    STRIPE_WEBHOOK_SECRET: `whsec_${"b".repeat(32)}`,
+    STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID: `price_${"c".repeat(24)}`,
+  });
+  assert.deepEqual(validateTokenlessProductionReadiness(valid), []);
+
+  valid.env.STRIPE_SECRET_KEY = `sk_test_${"d".repeat(32)}`;
+  assert.match(validateTokenlessProductionReadiness(valid).join("\n"), /live-mode secret/);
 });
