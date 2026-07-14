@@ -41,6 +41,7 @@ function createTransaction(contractName, contractAddress, args, index) {
     },
     receipt: {
       transactionHash,
+      contractAddress,
       blockNumber: `0x${(100 + index).toString(16)}`,
       status: "0x1",
     },
@@ -126,6 +127,16 @@ test("rejects missing required contracts and mixed broadcasts", () => {
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(mixed),
     /mixed or unknown tokenless deployment broadcast/,
+  );
+});
+
+test("rejects a CREATE whose transaction address disagrees with its matched receipt", () => {
+  const broadcast = completeBroadcast();
+  broadcast.receipts[0].contractAddress = address(99);
+
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
+    /transaction address does not match its receipt/,
   );
 });
 

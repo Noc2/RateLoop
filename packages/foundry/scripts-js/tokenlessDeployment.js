@@ -70,6 +70,16 @@ function findCreates(broadcast) {
       );
     }
 
+    if (
+      transaction.contractAddress &&
+      receipt.contractAddress &&
+      !sameAddress(transaction.contractAddress, receipt.contractAddress)
+    ) {
+      throw new Error(
+        `${transaction.contractName ?? "unknown"} CREATE transaction address does not match its receipt.`
+      );
+    }
+
     creates.push({
       address: normalizeAddress(
         transaction.contractAddress ?? receipt.contractAddress,
