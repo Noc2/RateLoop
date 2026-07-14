@@ -13,8 +13,62 @@ const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const SIGNATURE_PATTERN = /^0x[0-9a-fA-F]{130}$/;
 const ASK_ROLES = new Set<TokenlessWorkspaceRole>(["owner", "admin", "member"]);
 
+export const TOKENLESS_AGENT_SCOPES = [
+  "quote:read",
+  "panel:publish",
+  "payment:submit",
+  "result:read",
+  "webhook:use",
+] as const;
+export type TokenlessAgentScope = (typeof TOKENLESS_AGENT_SCOPES)[number];
+const TOKENLESS_AGENT_SCOPE_SET = new Set<string>(TOKENLESS_AGENT_SCOPES);
+const TOKENLESS_AGENT_PAYMENT_MODES = ["prepaid", "x402"] as const;
+export type TokenlessAgentPaymentMode = (typeof TOKENLESS_AGENT_PAYMENT_MODES)[number];
+
+export type AgentPublishingPolicyInput = {
+  name: string;
+  version?: number;
+  effectiveAt?: Date;
+  expiresAt?: Date | null;
+  allowedPaymentModes: TokenlessAgentPaymentMode[];
+  payerAddress?: string | null;
+  maxPanelAtomic: string;
+  maxDailyAtomic: string;
+  maxMonthlyAtomic: string;
+  maxPanelSize: number;
+  maxBountyAtomic: string;
+  maxFeeBps: number;
+  maxAttemptReserveAtomic: string;
+  allowedProjectIds?: string[];
+  allowedReviewerSources: string[];
+  allowedAdmissionPolicyHashes: string[];
+  allowedDataClassifications?: string[];
+  maxRetentionDays?: number | null;
+  allowPublicUrls?: boolean;
+  allowedWebhookEndpointIds?: string[];
+  allowedPromptTemplates?: string[];
+  onPolicyMiss?: "handoff" | "deny";
+};
+
+export type AgentPublishingPolicy = AgentPublishingPolicyInput & {
+  policyId: string;
+  workspaceId: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProductPrincipal =
-  | { kind: "api_key"; apiKeyId: string; workspaceId: string; role: TokenlessWorkspaceRole }
+  | {
+      kind: "api_key";
+      apiKeyId: string;
+      workspaceId: string;
+      role: TokenlessWorkspaceRole;
+      scopes?: TokenlessAgentScope[];
+      policyId?: string | null;
+      walletAddress?: string | null;
+      expiresAt?: string | null;
+    }
   | { kind: "session"; accountAddress: `0x${string}` };
 
 export type PreparedProductAsk = {
@@ -26,6 +80,12 @@ export type PreparedProductAsk = {
   paymentMode: TokenlessAskRequest["payment"]["mode"];
   paymentReference: string;
   paymentState: string;
+  policyId: string | null;
+  policyVersion: number | null;
+  policyReservationId: string | null;
+  createdPolicyReservation: boolean;
+  quoteId: string;
+  requestHash: string;
   questionId: string;
   workspaceId: string;
 };
@@ -63,6 +123,39 @@ function rowString(row: QueryRow | undefined, key: string) {
   return typeof value === "string" ? value : value === null || value === undefined ? null : String(value);
 }
 
+function rowBoolean(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  return value === true || value === "t" || value === 1;
+}
+
+function parseJsonArray(value: unknown, field: string): string[] {
+  if (typeof value !== "string") throw new TokenlessServiceError(`Stored ${field} is invalid.`, 500, "policy_invalid");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new TokenlessServiceError(`Stored ${field} is invalid.`, 500, "policy_invalid");
+  }
+  if (!Array.isArray(parsed) || parsed.some(item => typeof item !== "string")) {
+    throw new TokenlessServiceError(`Stored ${field} is invalid.`, 500, "policy_invalid");
+  }
+  return parsed;
+}
+
+function normalizedScopes(value: unknown): TokenlessAgentScope[] {
+  const scopes = parseJsonArray(value, "API key scopes");
+  if (scopes.some(scope => !TOKENLESS_AGENT_SCOPE_SET.has(scope))) {
+    throw new TokenlessServiceError("API key scopes are invalid.", 500, "invalid_api_key");
+  }
+  return scopes as TokenlessAgentScope[];
+}
+
+function assertScope(principal: ProductPrincipal, scope: TokenlessAgentScope) {
+  if (principal.kind === "api_key" && !(principal.scopes ?? [...TOKENLESS_AGENT_SCOPES]).includes(scope)) {
+    throw new TokenlessServiceError(`This credential lacks ${scope}.`, 403, "insufficient_scope");
+  }
+}
+
 function assertAskRole(role: TokenlessWorkspaceRole) {
   if (!ASK_ROLES.has(role)) {
     throw new TokenlessServiceError("This credential cannot create or read asks.", 403, "insufficient_role");
@@ -80,7 +173,7 @@ export async function authenticateProductPrincipal(input: {
     }
     const keyHash = digest(match[1]);
     const result = await dbClient.execute({
-      sql: `SELECT k.key_id, k.workspace_id, k.role
+      sql: `SELECT k.key_id, k.workspace_id, k.role, k.scopes_json, k.policy_id, k.wallet_address, k.expires_at
             FROM tokenless_workspace_api_keys k
             JOIN tokenless_workspaces w ON w.workspace_id = k.workspace_id
             WHERE k.key_hash = ? AND k.revoked_at IS NULL AND w.status = 'active'
@@ -94,12 +187,26 @@ export async function authenticateProductPrincipal(input: {
     if (!keyId || !workspaceId || !role) {
       throw new TokenlessServiceError("Invalid API key.", 401, "invalid_api_key");
     }
+    const expiresAt = row?.expires_at ? new Date(String(row.expires_at)) : null;
+    if (expiresAt && expiresAt.getTime() <= Date.now()) {
+      throw new TokenlessServiceError("This API key has expired.", 401, "api_key_expired");
+    }
+    const scopes = normalizedScopes(row?.scopes_json ?? JSON.stringify(TOKENLESS_AGENT_SCOPES));
     assertAskRole(role);
     await dbClient.execute({
       sql: "UPDATE tokenless_workspace_api_keys SET last_used_at = ? WHERE key_id = ?",
       args: [new Date(), keyId],
     });
-    return { kind: "api_key", apiKeyId: keyId, workspaceId, role };
+    return {
+      kind: "api_key",
+      apiKeyId: keyId,
+      workspaceId,
+      role,
+      scopes,
+      policyId: rowString(row, "policy_id"),
+      walletAddress: rowString(row, "wallet_address"),
+      expiresAt: expiresAt?.toISOString() ?? null,
+    };
   }
 
   const session = await findAuthSession(input.sessionToken);
@@ -144,17 +251,73 @@ export async function createWorkspaceApiKey(input: {
   workspaceId: string;
   name: string;
   role?: Extract<TokenlessWorkspaceRole, "admin" | "member">;
+  scopes?: TokenlessAgentScope[];
+  policyId?: string | null;
+  walletAddress?: string | null;
+  expiresAt?: Date | null;
 }) {
   const keyId = randomBytes(8).toString("hex");
   const secret = randomBytes(32).toString("base64url");
   const token = `rlk_${keyId}_${secret}`;
   const name = input.name.trim();
   if (!name || name.length > 120) throw new Error("API key name must be 1-120 characters.");
+  const scopes = input.scopes ?? [...TOKENLESS_AGENT_SCOPES];
+  if (scopes.length === 0 || scopes.some(scope => !TOKENLESS_AGENT_SCOPE_SET.has(scope))) {
+    throw new TokenlessServiceError("API key scopes are invalid.", 400, "invalid_api_key_scopes");
+  }
+  const walletAddress = input.walletAddress ? getAddress(input.walletAddress).toLowerCase() : null;
+  if (input.expiresAt && (!Number.isFinite(input.expiresAt.getTime()) || input.expiresAt.getTime() <= Date.now())) {
+    throw new TokenlessServiceError("API key expiry must be in the future.", 400, "invalid_api_key_expiry");
+  }
+  if (input.policyId) {
+    const policy = await dbClient.execute({
+      sql: `SELECT workspace_id, enabled, revoked_at, expires_at, payer_address
+            FROM tokenless_agent_publishing_policies WHERE policy_id = ? LIMIT 1`,
+      args: [input.policyId],
+    });
+    const row = policy.rows[0] as QueryRow | undefined;
+    if (rowString(row, "workspace_id") !== input.workspaceId) {
+      throw new TokenlessServiceError("Publishing policy not found.", 404, "policy_not_found");
+    }
+    if (!rowBoolean(row, "enabled") || row?.revoked_at) {
+      throw new TokenlessServiceError("Publishing policy is not active.", 409, "policy_revoked");
+    }
+    if (row?.expires_at && new Date(String(row.expires_at)).getTime() <= Date.now()) {
+      throw new TokenlessServiceError("Publishing policy has expired.", 409, "policy_expired");
+    }
+    if (!scopes.includes("panel:publish") || !scopes.includes("payment:submit")) {
+      throw new TokenlessServiceError(
+        "Policy-bound keys require panel:publish and payment:submit scopes.",
+        400,
+        "invalid_api_key_scopes",
+      );
+    }
+    const policyPayer = rowString(row, "payer_address");
+    if (policyPayer && walletAddress !== policyPayer.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The API key wallet must match the publishing policy payer.",
+        400,
+        "wallet_binding_mismatch",
+      );
+    }
+  }
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_api_keys
-          (key_id, workspace_id, key_hash, key_prefix, name, role, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [keyId, input.workspaceId, digest(token), token.slice(0, 20), name, input.role ?? "member", new Date()],
+          (key_id, workspace_id, key_hash, key_prefix, name, role, scopes_json, policy_id, wallet_address, expires_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      keyId,
+      input.workspaceId,
+      digest(token),
+      token.slice(0, 20),
+      name,
+      input.role ?? "member",
+      JSON.stringify(scopes),
+      input.policyId ?? null,
+      walletAddress,
+      input.expiresAt ?? null,
+      new Date(),
+    ],
   });
   return { apiKeyId: keyId, token };
 }
@@ -233,7 +396,7 @@ async function requireWorkspaceManagement(accountAddress: string, workspaceId: s
 export async function listWorkspaceApiKeys(input: { accountAddress: string; workspaceId: string }) {
   await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
   const result = await dbClient.execute({
-    sql: `SELECT key_id, key_prefix, name, role, last_used_at, revoked_at, created_at
+    sql: `SELECT key_id, key_prefix, name, role, scopes_json, policy_id, wallet_address, expires_at, last_used_at, revoked_at, created_at
           FROM tokenless_workspace_api_keys WHERE workspace_id = ? ORDER BY created_at DESC`,
     args: [input.workspaceId],
   });
@@ -244,6 +407,10 @@ export async function listWorkspaceApiKeys(input: { accountAddress: string; work
       prefix: rowString(row, "key_prefix"),
       name: rowString(row, "name"),
       role: rowString(row, "role"),
+      scopes: normalizedScopes(row?.scopes_json ?? JSON.stringify(TOKENLESS_AGENT_SCOPES)),
+      policyId: rowString(row, "policy_id"),
+      walletAddress: rowString(row, "wallet_address"),
+      expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : null,
       lastUsedAt: row.last_used_at ? new Date(String(row.last_used_at)).toISOString() : null,
       revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null,
       createdAt: new Date(String(row.created_at)).toISOString(),
@@ -256,9 +423,224 @@ export async function createManagedWorkspaceApiKey(input: {
   workspaceId: string;
   name: string;
   role?: Extract<TokenlessWorkspaceRole, "admin" | "member">;
+  scopes?: TokenlessAgentScope[];
+  policyId?: string | null;
+  walletAddress?: string | null;
+  expiresAt?: Date | null;
 }) {
   await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
   return createWorkspaceApiKey(input);
+}
+
+function normalizePolicyInput(input: AgentPublishingPolicyInput) {
+  const name = input.name.trim();
+  if (!name || name.length > 120)
+    throw new TokenlessServiceError("Policy name must be 1-120 characters.", 400, "invalid_policy");
+  const modes = [...new Set(input.allowedPaymentModes)];
+  if (modes.length === 0 || modes.some(mode => !TOKENLESS_AGENT_PAYMENT_MODES.includes(mode))) {
+    throw new TokenlessServiceError("A policy must allow prepaid and/or x402 payment.", 400, "invalid_policy");
+  }
+  const version = input.version ?? 1;
+  if (!Number.isSafeInteger(version) || version < 1)
+    throw new TokenlessServiceError("Policy version is invalid.", 400, "invalid_policy");
+  const maxPanelAtomic = atomic(input.maxPanelAtomic, "maxPanelAtomic");
+  const maxDailyAtomic = atomic(input.maxDailyAtomic, "maxDailyAtomic");
+  const maxMonthlyAtomic = atomic(input.maxMonthlyAtomic, "maxMonthlyAtomic");
+  const maxBountyAtomic = atomic(input.maxBountyAtomic, "maxBountyAtomic");
+  const maxAttemptReserveAtomic = atomic(input.maxAttemptReserveAtomic, "maxAttemptReserveAtomic");
+  if (
+    [maxPanelAtomic, maxDailyAtomic, maxMonthlyAtomic, maxBountyAtomic, maxAttemptReserveAtomic].some(
+      value => value <= 0n,
+    )
+  ) {
+    throw new TokenlessServiceError("Policy spending caps must be greater than zero.", 400, "invalid_policy");
+  }
+  if (!Number.isSafeInteger(input.maxPanelSize) || input.maxPanelSize < 3 || input.maxPanelSize > 500) {
+    throw new TokenlessServiceError("maxPanelSize must be between 3 and 500.", 400, "invalid_policy");
+  }
+  if (!Number.isSafeInteger(input.maxFeeBps) || input.maxFeeBps < 0 || input.maxFeeBps > 2_000) {
+    throw new TokenlessServiceError("maxFeeBps must be between 0 and 2000.", 400, "invalid_policy");
+  }
+  const effectiveAt = input.effectiveAt ?? new Date();
+  if (!Number.isFinite(effectiveAt.getTime()))
+    throw new TokenlessServiceError("effectiveAt is invalid.", 400, "invalid_policy");
+  if (input.expiresAt && input.expiresAt.getTime() <= effectiveAt.getTime()) {
+    throw new TokenlessServiceError("expiresAt must be after effectiveAt.", 400, "invalid_policy");
+  }
+  const payerAddress = input.payerAddress ? getAddress(input.payerAddress).toLowerCase() : null;
+  if (modes.includes("x402") && !payerAddress) {
+    throw new TokenlessServiceError("x402 policies require a bound payer address.", 400, "invalid_policy");
+  }
+  const admissionHashes = [...new Set(input.allowedAdmissionPolicyHashes.map(value => value.toLowerCase()))];
+  if (admissionHashes.length === 0 || admissionHashes.some(value => !BYTES32_PATTERN.test(value))) {
+    throw new TokenlessServiceError("Policies require exact admission-policy hashes.", 400, "invalid_policy");
+  }
+  const arrayField = (values: string[] | undefined, field: string) => {
+    const normalized = [...new Set((values ?? []).map(value => value.trim()).filter(Boolean))];
+    if (normalized.some(value => value.length > 256)) {
+      throw new TokenlessServiceError(`${field} contains an oversized value.`, 400, "invalid_policy");
+    }
+    return normalized;
+  };
+  if (
+    input.maxRetentionDays !== undefined &&
+    input.maxRetentionDays !== null &&
+    (!Number.isSafeInteger(input.maxRetentionDays) || input.maxRetentionDays < 1 || input.maxRetentionDays > 3650)
+  ) {
+    throw new TokenlessServiceError("maxRetentionDays must be between 1 and 3650.", 400, "invalid_policy");
+  }
+  return {
+    name,
+    version,
+    effectiveAt,
+    expiresAt: input.expiresAt ?? null,
+    modes,
+    payerAddress,
+    maxPanelAtomic: maxPanelAtomic.toString(),
+    maxDailyAtomic: maxDailyAtomic.toString(),
+    maxMonthlyAtomic: maxMonthlyAtomic.toString(),
+    maxPanelSize: input.maxPanelSize,
+    maxBountyAtomic: maxBountyAtomic.toString(),
+    maxFeeBps: input.maxFeeBps,
+    maxAttemptReserveAtomic: maxAttemptReserveAtomic.toString(),
+    allowedProjectIds: arrayField(input.allowedProjectIds, "allowedProjectIds"),
+    allowedReviewerSources: arrayField(input.allowedReviewerSources, "allowedReviewerSources"),
+    allowedAdmissionPolicyHashes: admissionHashes,
+    allowedDataClassifications: arrayField(input.allowedDataClassifications, "allowedDataClassifications"),
+    maxRetentionDays: input.maxRetentionDays ?? null,
+    allowPublicUrls: input.allowPublicUrls ?? false,
+    allowedWebhookEndpointIds: arrayField(input.allowedWebhookEndpointIds, "allowedWebhookEndpointIds"),
+    allowedPromptTemplates: arrayField(input.allowedPromptTemplates, "allowedPromptTemplates"),
+    onPolicyMiss: input.onPolicyMiss ?? "deny",
+  };
+}
+
+export async function createAgentPublishingPolicy(input: {
+  accountAddress: string;
+  workspaceId: string;
+  policy: AgentPublishingPolicyInput;
+}): Promise<AgentPublishingPolicy> {
+  const createdBy = getAddress(input.accountAddress).toLowerCase();
+  await requireWorkspaceManagement(createdBy, input.workspaceId);
+  const policy = normalizePolicyInput(input.policy);
+  const policyId = `agpol_${randomUUID().replaceAll("-", "")}`;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_publishing_policies
+          (policy_id, workspace_id, name, version, enabled, effective_at, expires_at,
+           allowed_payment_modes_json, payer_address, max_panel_atomic, max_daily_atomic,
+           max_monthly_atomic, max_panel_size, max_bounty_atomic, max_fee_bps,
+           max_attempt_reserve_atomic, allowed_project_ids_json, allowed_reviewer_sources_json,
+           allowed_admission_policy_hashes_json, allowed_data_classifications_json, max_retention_days,
+           allow_public_urls, allowed_webhook_endpoint_ids_json, allowed_prompt_templates_json,
+           on_policy_miss, created_by, created_at, updated_at)
+          VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      policyId,
+      input.workspaceId,
+      policy.name,
+      policy.version,
+      policy.effectiveAt,
+      policy.expiresAt,
+      JSON.stringify(policy.modes),
+      policy.payerAddress,
+      policy.maxPanelAtomic,
+      policy.maxDailyAtomic,
+      policy.maxMonthlyAtomic,
+      policy.maxPanelSize,
+      policy.maxBountyAtomic,
+      policy.maxFeeBps,
+      policy.maxAttemptReserveAtomic,
+      JSON.stringify(policy.allowedProjectIds),
+      JSON.stringify(policy.allowedReviewerSources),
+      JSON.stringify(policy.allowedAdmissionPolicyHashes),
+      JSON.stringify(policy.allowedDataClassifications),
+      policy.maxRetentionDays,
+      policy.allowPublicUrls,
+      JSON.stringify(policy.allowedWebhookEndpointIds),
+      JSON.stringify(policy.allowedPromptTemplates),
+      policy.onPolicyMiss,
+      createdBy,
+      now,
+      now,
+    ],
+  });
+  return {
+    policyId,
+    workspaceId: input.workspaceId,
+    createdBy,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    ...policy,
+    allowedPaymentModes: policy.modes,
+  };
+}
+
+export async function listAgentPublishingPolicies(input: { accountAddress: string; workspaceId: string }) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `SELECT policy_id, workspace_id, name, version, enabled, effective_at, expires_at, revoked_at,
+                 allowed_payment_modes_json, payer_address, max_panel_atomic, max_daily_atomic,
+                 max_monthly_atomic, max_panel_size, max_bounty_atomic, max_fee_bps,
+                 max_attempt_reserve_atomic, allowed_project_ids_json, allowed_reviewer_sources_json,
+                 allowed_admission_policy_hashes_json, allowed_data_classifications_json, max_retention_days,
+                 allow_public_urls, allowed_webhook_endpoint_ids_json, allowed_prompt_templates_json,
+                 on_policy_miss, created_by, created_at, updated_at
+          FROM tokenless_agent_publishing_policies WHERE workspace_id = ? ORDER BY created_at DESC`,
+    args: [input.workspaceId],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    return {
+      policyId: rowString(row, "policy_id"),
+      workspaceId: rowString(row, "workspace_id"),
+      name: rowString(row, "name"),
+      version: Number(row.version),
+      enabled: rowBoolean(row, "enabled"),
+      effectiveAt: new Date(String(row.effective_at)).toISOString(),
+      expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : null,
+      revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null,
+      allowedPaymentModes: parseJsonArray(row.allowed_payment_modes_json, "allowed payment modes"),
+      payerAddress: rowString(row, "payer_address"),
+      maxPanelAtomic: rowString(row, "max_panel_atomic"),
+      maxDailyAtomic: rowString(row, "max_daily_atomic"),
+      maxMonthlyAtomic: rowString(row, "max_monthly_atomic"),
+      maxPanelSize: Number(row.max_panel_size),
+      maxBountyAtomic: rowString(row, "max_bounty_atomic"),
+      maxFeeBps: Number(row.max_fee_bps),
+      maxAttemptReserveAtomic: rowString(row, "max_attempt_reserve_atomic"),
+      allowedProjectIds: parseJsonArray(row.allowed_project_ids_json, "allowed project IDs"),
+      allowedReviewerSources: parseJsonArray(row.allowed_reviewer_sources_json, "allowed reviewer sources"),
+      allowedAdmissionPolicyHashes: parseJsonArray(
+        row.allowed_admission_policy_hashes_json,
+        "allowed admission hashes",
+      ),
+      allowedDataClassifications: parseJsonArray(row.allowed_data_classifications_json, "allowed data classifications"),
+      maxRetentionDays:
+        row.max_retention_days === null || row.max_retention_days === undefined ? null : Number(row.max_retention_days),
+      allowPublicUrls: rowBoolean(row, "allow_public_urls"),
+      allowedWebhookEndpointIds: parseJsonArray(row.allowed_webhook_endpoint_ids_json, "allowed webhook endpoint IDs"),
+      allowedPromptTemplates: parseJsonArray(row.allowed_prompt_templates_json, "allowed prompt templates"),
+      onPolicyMiss: rowString(row, "on_policy_miss"),
+      createdBy: rowString(row, "created_by"),
+      createdAt: new Date(String(row.created_at)).toISOString(),
+      updatedAt: new Date(String(row.updated_at)).toISOString(),
+    };
+  });
+}
+
+export async function revokeAgentPublishingPolicy(input: {
+  accountAddress: string;
+  workspaceId: string;
+  policyId: string;
+}) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_agent_publishing_policies SET enabled = false, revoked_at = ?, updated_at = ?
+          WHERE policy_id = ? AND workspace_id = ? AND revoked_at IS NULL`,
+    args: [new Date(), new Date(), input.policyId, input.workspaceId],
+  });
+  if (result.rowCount !== 1) throw new TokenlessServiceError("Publishing policy not found.", 404, "policy_not_found");
 }
 
 export async function revokeWorkspaceApiKey(input: { accountAddress: string; workspaceId: string; apiKeyId: string }) {
@@ -353,6 +735,275 @@ async function loadQuote(quoteId: string) {
     quoteRequest: JSON.parse(requestJson) as Record<string, unknown>,
     quote: JSON.parse(responseJson) as TokenlessQuoteResponse,
   };
+}
+
+async function loadAgentPublishingPolicy(
+  principal: ProductPrincipal,
+  workspaceId: string,
+): Promise<AgentPublishingPolicy | null> {
+  if (principal.kind === "session" || !principal.policyId) return null;
+  const result = await dbClient.execute({
+    sql: `SELECT * FROM tokenless_agent_publishing_policies
+          WHERE policy_id = ? AND workspace_id = ? LIMIT 1`,
+    args: [principal.policyId, workspaceId],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  if (!row) throw new TokenlessServiceError("Publishing policy not found.", 403, "policy_not_found");
+  if (!rowBoolean(row, "enabled") || row.revoked_at) {
+    throw new TokenlessServiceError("Publishing policy has been revoked.", 403, "policy_revoked");
+  }
+  const now = Date.now();
+  if (new Date(String(row.effective_at)).getTime() > now) {
+    throw new TokenlessServiceError("Publishing policy is not active yet.", 403, "policy_not_active");
+  }
+  if (row.expires_at && new Date(String(row.expires_at)).getTime() <= now) {
+    throw new TokenlessServiceError("Publishing policy has expired.", 403, "policy_expired");
+  }
+  const modes = parseJsonArray(row.allowed_payment_modes_json, "allowed payment modes");
+  if (
+    modes.length === 0 ||
+    modes.some(mode => !TOKENLESS_AGENT_PAYMENT_MODES.includes(mode as TokenlessAgentPaymentMode))
+  ) {
+    throw new TokenlessServiceError("Publishing policy is invalid.", 500, "policy_invalid");
+  }
+  return {
+    policyId: String(row.policy_id),
+    workspaceId: String(row.workspace_id),
+    name: String(row.name),
+    version: Number(row.version),
+    effectiveAt: new Date(String(row.effective_at)),
+    expiresAt: row.expires_at ? new Date(String(row.expires_at)) : null,
+    allowedPaymentModes: modes as TokenlessAgentPaymentMode[],
+    payerAddress: rowString(row, "payer_address"),
+    maxPanelAtomic: rowString(row, "max_panel_atomic")!,
+    maxDailyAtomic: rowString(row, "max_daily_atomic")!,
+    maxMonthlyAtomic: rowString(row, "max_monthly_atomic")!,
+    maxPanelSize: Number(row.max_panel_size),
+    maxBountyAtomic: rowString(row, "max_bounty_atomic")!,
+    maxFeeBps: Number(row.max_fee_bps),
+    maxAttemptReserveAtomic: rowString(row, "max_attempt_reserve_atomic")!,
+    allowedProjectIds: parseJsonArray(row.allowed_project_ids_json, "allowed project IDs"),
+    allowedReviewerSources: parseJsonArray(row.allowed_reviewer_sources_json, "allowed reviewer sources"),
+    allowedAdmissionPolicyHashes: parseJsonArray(row.allowed_admission_policy_hashes_json, "allowed admission hashes"),
+    allowedDataClassifications: parseJsonArray(row.allowed_data_classifications_json, "allowed data classifications"),
+    maxRetentionDays:
+      row.max_retention_days === null || row.max_retention_days === undefined ? null : Number(row.max_retention_days),
+    allowPublicUrls: rowBoolean(row, "allow_public_urls"),
+    allowedWebhookEndpointIds: parseJsonArray(row.allowed_webhook_endpoint_ids_json, "allowed webhook endpoint IDs"),
+    allowedPromptTemplates: parseJsonArray(row.allowed_prompt_templates_json, "allowed prompt templates"),
+    onPolicyMiss: rowString(row, "on_policy_miss") as "handoff" | "deny",
+    createdBy: String(row.created_by),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+  };
+}
+
+function policyMiss(policy: AgentPublishingPolicy, message: string): never {
+  throw new TokenlessServiceError(message, policy.onPolicyMiss === "handoff" ? 409 : 403, "approval_required");
+}
+
+async function enforcePublishingPolicy(input: {
+  principal: ProductPrincipal;
+  workspaceId: string;
+  quoteRequest: Record<string, unknown>;
+  quote: TokenlessQuoteResponse;
+  request: TokenlessAskRequest;
+}) {
+  const policy = await loadAgentPublishingPolicy(input.principal, input.workspaceId);
+  assertScope(input.principal, "panel:publish");
+  if (input.request.payment.mode !== "wallet") assertScope(input.principal, "payment:submit");
+  if (input.request.webhook) assertScope(input.principal, "webhook:use");
+  if (!policy) return null;
+  if (!policy.allowedPaymentModes.includes(input.request.payment.mode as TokenlessAgentPaymentMode)) {
+    policyMiss(policy, "This payment mode is outside the delegated publishing policy.");
+  }
+  if (input.request.payment.mode === "x402") {
+    const payer = getAddress(input.request.payment.payerAddress).toLowerCase();
+    const boundWallet = input.principal.kind === "api_key" ? input.principal.walletAddress?.toLowerCase() : undefined;
+    if (policy.payerAddress !== payer || boundWallet !== payer) {
+      throw new TokenlessServiceError(
+        "The payer is not the wallet bound to this policy.",
+        403,
+        "wallet_binding_mismatch",
+      );
+    }
+  }
+  const quoteRequest = input.quoteRequest as {
+    audience?: { admissionPolicyHash?: string; source?: string };
+    budget?: { bountyAtomic?: string; attemptReserveAtomic?: string; feeBps?: number };
+    requestedPanelSize?: number;
+  };
+  if (
+    !quoteRequest.audience ||
+    !policy.allowedAdmissionPolicyHashes.includes(quoteRequest.audience.admissionPolicyHash?.toLowerCase() ?? "")
+  ) {
+    policyMiss(policy, "The audience admission policy is outside the delegated publishing policy.");
+  }
+  if (
+    quoteRequest.audience.source &&
+    policy.allowedReviewerSources.length > 0 &&
+    !policy.allowedReviewerSources.includes(quoteRequest.audience.source)
+  ) {
+    policyMiss(policy, "The reviewer source is outside the delegated publishing policy.");
+  }
+  const bounty = atomic(quoteRequest.budget?.bountyAtomic, "budget.bountyAtomic");
+  const attemptReserve = atomic(quoteRequest.budget?.attemptReserveAtomic, "budget.attemptReserveAtomic");
+  const total = quoteTotal(input.quote);
+  if (
+    total > BigInt(policy.maxPanelAtomic) ||
+    total > BigInt(policy.maxDailyAtomic) ||
+    total > BigInt(policy.maxMonthlyAtomic)
+  ) {
+    policyMiss(policy, "The quoted panel exceeds the delegated spending cap.");
+  }
+  if (bounty > BigInt(policy.maxBountyAtomic) || attemptReserve > BigInt(policy.maxAttemptReserveAtomic)) {
+    policyMiss(policy, "The quoted bounty or attempt reserve exceeds the delegated cap.");
+  }
+  if (
+    (quoteRequest.budget?.feeBps ?? 0) > policy.maxFeeBps ||
+    (quoteRequest.requestedPanelSize ?? 0) > policy.maxPanelSize
+  ) {
+    policyMiss(policy, "The panel size or fee exceeds the delegated publishing policy.");
+  }
+  return policy;
+}
+
+async function reserveAgentPolicyBudget(input: {
+  policy: AgentPublishingPolicy;
+  principal: Extract<ProductPrincipal, { kind: "api_key" }>;
+  idempotencyKey: string;
+  quoteId: string;
+  amountAtomic: bigint;
+  paymentMode: TokenlessAgentPaymentMode;
+}) {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const policyResult = await client.query(
+      `SELECT enabled, effective_at, expires_at, revoked_at, version, max_daily_atomic, max_monthly_atomic
+       FROM tokenless_agent_publishing_policies WHERE policy_id = $1 AND workspace_id = $2 FOR UPDATE`,
+      [input.policy.policyId, input.principal.workspaceId],
+    );
+    const policyRow = policyResult.rows[0] as QueryRow | undefined;
+    if (!policyRow || !rowBoolean(policyRow, "enabled") || policyRow.revoked_at) {
+      throw new TokenlessServiceError("Publishing policy has been revoked.", 403, "policy_revoked");
+    }
+    if (new Date(String(policyRow.effective_at)).getTime() > Date.now()) {
+      throw new TokenlessServiceError("Publishing policy is not active yet.", 403, "policy_not_active");
+    }
+    if (policyRow.expires_at && new Date(String(policyRow.expires_at)).getTime() <= Date.now()) {
+      throw new TokenlessServiceError("Publishing policy has expired.", 403, "policy_expired");
+    }
+    const existing = await client.query(
+      `SELECT reservation_id, amount_atomic, payment_mode, status FROM tokenless_agent_policy_budget_reservations
+       WHERE policy_id = $1 AND idempotency_key = $2 LIMIT 1`,
+      [input.policy.policyId, input.idempotencyKey],
+    );
+    const existingRow = existing.rows[0] as QueryRow | undefined;
+    if (existingRow && rowString(existingRow, "status") !== "released") {
+      if (
+        rowString(existingRow, "amount_atomic") !== input.amountAtomic.toString() ||
+        rowString(existingRow, "payment_mode") !== input.paymentMode
+      ) {
+        throw new TokenlessServiceError("The policy budget conflicts with this ask.", 409, "policy_budget_conflict");
+      }
+      await client.query("COMMIT");
+      return {
+        reservationId: rowString(existingRow, "reservation_id")!,
+        created: false,
+        policyVersion: Number(policyRow.version),
+      };
+    }
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const startOfMonth = new Date(Date.UTC(startOfDay.getUTCFullYear(), startOfDay.getUTCMonth(), 1));
+    const dayResult = await client.query(
+      `SELECT COALESCE(SUM(amount_atomic), 0) AS amount FROM tokenless_agent_policy_budget_reservations
+       WHERE policy_id = $1 AND status IN ('reserved', 'spent') AND created_at >= $2`,
+      [input.policy.policyId, startOfDay],
+    );
+    const monthResult = await client.query(
+      `SELECT COALESCE(SUM(amount_atomic), 0) AS amount FROM tokenless_agent_policy_budget_reservations
+       WHERE policy_id = $1 AND status IN ('reserved', 'spent') AND created_at >= $2`,
+      [input.policy.policyId, startOfMonth],
+    );
+    if (
+      BigInt(rowString(dayResult.rows[0] as QueryRow | undefined, "amount") ?? "0") + input.amountAtomic >
+      BigInt(rowString(policyRow, "max_daily_atomic")!)
+    ) {
+      throw new TokenlessServiceError(
+        "The delegated daily spending cap is exhausted.",
+        403,
+        "policy_daily_cap_exceeded",
+      );
+    }
+    if (
+      BigInt(rowString(monthResult.rows[0] as QueryRow | undefined, "amount") ?? "0") + input.amountAtomic >
+      BigInt(rowString(policyRow, "max_monthly_atomic")!)
+    ) {
+      throw new TokenlessServiceError(
+        "The delegated monthly spending cap is exhausted.",
+        403,
+        "policy_monthly_cap_exceeded",
+      );
+    }
+    const reservationId = `agres_${randomUUID().replaceAll("-", "")}`;
+    const now = new Date();
+    if (existingRow) {
+      await client.query(
+        `UPDATE tokenless_agent_policy_budget_reservations
+         SET amount_atomic = $1, quote_id = $2, payment_mode = $3, policy_version = $4, operation_key = NULL, status = 'reserved', updated_at = $5
+         WHERE reservation_id = $6`,
+        [
+          input.amountAtomic.toString(),
+          input.quoteId,
+          input.paymentMode,
+          Number(policyRow.version),
+          now,
+          rowString(existingRow, "reservation_id"),
+        ],
+      );
+      await client.query("COMMIT");
+      return {
+        reservationId: rowString(existingRow, "reservation_id")!,
+        created: true,
+        policyVersion: Number(policyRow.version),
+      };
+    }
+    await client.query(
+      `INSERT INTO tokenless_agent_policy_budget_reservations
+       (reservation_id, policy_id, workspace_id, api_key_id, idempotency_key, quote_id, amount_atomic, payment_mode, policy_version, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'reserved', $10, $10)`,
+      [
+        reservationId,
+        input.policy.policyId,
+        input.principal.workspaceId,
+        input.principal.apiKeyId,
+        input.idempotencyKey,
+        input.quoteId,
+        input.amountAtomic.toString(),
+        input.paymentMode,
+        Number(policyRow.version),
+        now,
+      ],
+    );
+    await client.query("COMMIT");
+    return { reservationId, created: true, policyVersion: Number(policyRow.version) };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function releaseAgentPolicyBudget(reservationId: string | null) {
+  if (!reservationId) return;
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_policy_budget_reservations SET status = 'released', updated_at = ?
+          WHERE reservation_id = ? AND status = 'reserved' AND operation_key IS NULL`,
+    args: [new Date(), reservationId],
+  });
 }
 
 async function createQuestionRecords(input: {
@@ -566,40 +1217,76 @@ export async function prepareProductAsk(input: {
   const requestedWorkspace = input.request.payment.mode === "prepaid" ? input.request.payment.workspaceId : undefined;
   const workspaceId = await resolveWorkspace(input.principal, requestedWorkspace);
   const { quoteRequest, quote } = await loadQuote(input.request.quoteId);
-  const amountAtomic = quoteTotal(quote);
-  const questionId = await createQuestionRecords({
+  const policy = await enforcePublishingPolicy({
+    principal: input.principal,
     workspaceId,
-    quoteId: input.request.quoteId,
-    idempotencyKey: input.request.idempotencyKey,
     quoteRequest,
     quote,
+    request: input.request,
   });
-  const paymentMode = input.request.payment.mode;
-  const payment =
-    paymentMode === "prepaid"
-      ? {
-          ...(await reservePrepaid({ workspaceId, idempotencyKey: input.request.idempotencyKey, amountAtomic })),
-          state: "reserved",
-        }
-      : await persistPaymentIntent({
-          workspaceId,
-          idempotencyKey: input.request.idempotencyKey,
-          payment: input.request.payment,
-          amountAtomic,
-          principal: input.principal,
-        });
-  return {
-    amountAtomic: amountAtomic.toString(),
-    createdPayment: payment.created,
-    idempotencyKey: input.request.idempotencyKey,
-    ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
-    apiKeyId: input.principal.kind === "api_key" ? input.principal.apiKeyId : null,
-    paymentMode,
-    paymentReference: payment.reference,
-    paymentState: payment.state,
-    questionId,
-    workspaceId,
-  };
+  const amountAtomic = quoteTotal(quote);
+  let policyReservation: { reservationId: string; created: boolean; policyVersion: number } | null = null;
+  try {
+    if (policy) {
+      if (input.principal.kind !== "api_key") {
+        throw new TokenlessServiceError(
+          "Publishing policies require an API-key principal.",
+          403,
+          "policy_principal_required",
+        );
+      }
+      policyReservation = await reserveAgentPolicyBudget({
+        policy,
+        principal: input.principal,
+        idempotencyKey: input.request.idempotencyKey,
+        quoteId: input.request.quoteId,
+        amountAtomic,
+        paymentMode: input.request.payment.mode as TokenlessAgentPaymentMode,
+      });
+    }
+    const questionId = await createQuestionRecords({
+      workspaceId,
+      quoteId: input.request.quoteId,
+      idempotencyKey: input.request.idempotencyKey,
+      quoteRequest,
+      quote,
+    });
+    const paymentMode = input.request.payment.mode;
+    const payment =
+      paymentMode === "prepaid"
+        ? {
+            ...(await reservePrepaid({ workspaceId, idempotencyKey: input.request.idempotencyKey, amountAtomic })),
+            state: "reserved",
+          }
+        : await persistPaymentIntent({
+            workspaceId,
+            idempotencyKey: input.request.idempotencyKey,
+            payment: input.request.payment,
+            amountAtomic,
+            principal: input.principal,
+          });
+    return {
+      amountAtomic: amountAtomic.toString(),
+      createdPayment: payment.created,
+      idempotencyKey: input.request.idempotencyKey,
+      ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
+      apiKeyId: input.principal.kind === "api_key" ? input.principal.apiKeyId : null,
+      paymentMode,
+      paymentReference: payment.reference,
+      paymentState: payment.state,
+      policyId: policy?.policyId ?? null,
+      policyVersion: policyReservation?.policyVersion ?? policy?.version ?? null,
+      policyReservationId: policyReservation?.reservationId ?? null,
+      createdPolicyReservation: policyReservation?.created ?? false,
+      quoteId: input.request.quoteId,
+      requestHash: hashJson(input.request),
+      questionId,
+      workspaceId,
+    };
+  } catch (error) {
+    if (policyReservation?.created) await releaseAgentPolicyBudget(policyReservation.reservationId);
+    throw error;
+  }
 }
 
 export async function attachProductAsk(prepared: PreparedProductAsk, ask: TokenlessAskResponse) {
@@ -648,6 +1335,52 @@ export async function attachProductAsk(prepared: PreparedProductAsk, ask: Tokenl
       throw new TokenlessServiceError("Ask ownership conflicts with this request.", 409, "ask_ownership_conflict");
     }
 
+    if (prepared.policyReservationId) {
+      await client.query(
+        `UPDATE tokenless_agent_policy_budget_reservations
+         SET operation_key = $1, updated_at = $2
+         WHERE reservation_id = $3 AND policy_id = $4 AND api_key_id = $5
+           AND idempotency_key = $6 AND (operation_key IS NULL OR operation_key = $1)`,
+        [
+          ask.operationKey,
+          now,
+          prepared.policyReservationId,
+          prepared.policyId,
+          prepared.apiKeyId,
+          prepared.idempotencyKey,
+        ],
+      );
+      const policyReservationResult = await client.query(
+        `SELECT operation_key FROM tokenless_agent_policy_budget_reservations WHERE reservation_id = $1 LIMIT 1`,
+        [prepared.policyReservationId],
+      );
+      if (rowString(policyReservationResult.rows[0] as QueryRow | undefined, "operation_key") !== ask.operationKey) {
+        throw new TokenlessServiceError("Policy budget conflicts with this request.", 409, "policy_budget_conflict");
+      }
+      await client.query(
+        `INSERT INTO tokenless_agent_policy_audit_events
+         (event_id, policy_id, workspace_id, api_key_id, policy_version, event_type, quote_id,
+          operation_key, idempotency_key, amount_atomic, payment_mode, request_hash, details_json, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'ask_prepared', $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (policy_id, idempotency_key, event_type) DO NOTHING`,
+        [
+          `agev_${randomUUID().replaceAll("-", "")}`,
+          prepared.policyId,
+          prepared.workspaceId,
+          prepared.apiKeyId,
+          prepared.policyVersion,
+          prepared.quoteId ?? null,
+          ask.operationKey,
+          prepared.idempotencyKey,
+          prepared.amountAtomic,
+          prepared.paymentMode,
+          prepared.requestHash,
+          JSON.stringify({ policyReservationId: prepared.policyReservationId }),
+          now,
+        ],
+      );
+    }
+
     if (simulatedTerminal) {
       await client.query(
         `UPDATE tokenless_ask_ownership SET payment_state = 'simulated', updated_at = $1
@@ -668,6 +1401,13 @@ export async function attachProductAsk(prepared: PreparedProductAsk, ask: Tokenl
              AND state IN ('pending_user_signature', 'pending_chain_authorization', 'pending_chain_execution', 'simulated')
              AND (operation_key IS NULL OR operation_key = $1)`,
           [ask.operationKey, now, prepared.paymentReference, prepared.workspaceId, prepared.idempotencyKey],
+        );
+      }
+      if (prepared.policyReservationId) {
+        await client.query(
+          `UPDATE tokenless_agent_policy_budget_reservations SET status = 'released', updated_at = $1
+           WHERE reservation_id = $2 AND operation_key = $3 AND status = 'reserved'`,
+          [now, prepared.policyReservationId, ask.operationKey],
         );
       }
     } else {
@@ -708,6 +1448,7 @@ export async function attachProductAsk(prepared: PreparedProductAsk, ask: Tokenl
 }
 
 export async function releasePreparedProductAsk(prepared: PreparedProductAsk) {
+  if (prepared.createdPolicyReservation) await releaseAgentPolicyBudget(prepared.policyReservationId);
   if (!prepared.createdPayment) return;
   if (prepared.paymentMode === "prepaid") {
     await dbClient.execute({
@@ -726,7 +1467,7 @@ export async function releasePreparedProductAsk(prepared: PreparedProductAsk) {
 
 export async function authorizeAskAccess(principal: ProductPrincipal, operationKey: string) {
   const result = await dbClient.execute({
-    sql: `SELECT o.workspace_id, o.owner_account_address, m.role
+    sql: `SELECT o.workspace_id, o.owner_account_address, o.api_key_id, m.role
           FROM tokenless_ask_ownership o
           LEFT JOIN tokenless_workspace_members m
             ON m.workspace_id = o.workspace_id AND m.account_address = ?
@@ -738,6 +1479,10 @@ export async function authorizeAskAccess(principal: ProductPrincipal, operationK
   if (!workspaceId) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
   if (principal.kind === "api_key") {
     if (workspaceId !== principal.workspaceId) {
+      throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+    }
+    assertScope(principal, "result:read");
+    if (principal.policyId && rowString(row, "api_key_id") !== principal.apiKeyId) {
       throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
     }
     assertAskRole(principal.role);

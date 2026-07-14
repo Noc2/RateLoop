@@ -6,6 +6,7 @@ import {
   attachProductAsk,
   authenticateProductPrincipal,
   authorizeAskAccess,
+  createAgentPublishingPolicy,
   createManagedWorkspaceApiKey,
   createWorkspace,
   createWorkspaceApiKey,
@@ -13,6 +14,7 @@ import {
   listWorkspaceApiKeys,
   prepareProductAsk,
   recordPrepaidLedgerEntry,
+  revokeAgentPublishingPolicy,
   revokeWorkspaceApiKey,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
@@ -300,5 +302,135 @@ test("workspace API-key management is hidden from non-members", async () => {
   await assert.rejects(
     () => listWorkspaceApiKeys({ accountAddress: ADDRESS_B, workspaceId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
+  );
+});
+
+test("policy-bound agent keys enforce exact audience and panel caps and reserve a budget", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Delegated", ownerAddress: ADDRESS_A });
+  const policy = await createAgentPublishingPolicy({
+    accountAddress: ADDRESS_A,
+    workspaceId,
+    policy: {
+      name: "Small sandbox agent",
+      allowedPaymentModes: ["prepaid"],
+      maxPanelAtomic: "50000000",
+      maxDailyAtomic: "40000000",
+      maxMonthlyAtomic: "100000000",
+      maxPanelSize: 20,
+      maxBountyAtomic: "30000000",
+      maxFeeBps: 1000,
+      maxAttemptReserveAtomic: "10000000",
+      allowedReviewerSources: ["sandbox"],
+      allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+    },
+  });
+  const key = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Sandbox agent",
+    policyId: policy.policyId,
+    scopes: ["quote:read", "panel:publish", "payment:submit", "result:read"],
+  });
+  await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
+  const first = await quoteAndRequest(workspaceId, "delegated:first:12345678");
+  const principal = await authenticateProductPrincipal({
+    authorization: `Bearer ${key.token}`,
+    sessionToken: undefined,
+  });
+  assert.equal(principal.kind, "api_key");
+  const prepared = await prepareProductAsk({ principal, request: first.request });
+  assert.equal(prepared.policyId, policy.policyId);
+  assert.equal(prepared.createdPolicyReservation, true);
+  const reservations = await dbClient.execute(
+    "SELECT status, policy_version FROM tokenless_agent_policy_budget_reservations",
+  );
+  assert.deepEqual(reservations.rows[0], { status: "reserved", policy_version: 1 });
+  await assert.rejects(
+    () => prepareProductAsk({ principal, request: { ...first.request, idempotencyKey: "delegated:second:12345678" } }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "policy_daily_cap_exceeded",
+  );
+});
+
+test("policy-bound x402 keys require the configured wallet binding", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Wallet delegated", ownerAddress: ADDRESS_A });
+  const policy = await createAgentPublishingPolicy({
+    accountAddress: ADDRESS_A,
+    workspaceId,
+    policy: {
+      name: "Wallet agent",
+      allowedPaymentModes: ["x402"],
+      payerAddress: ADDRESS_A,
+      maxPanelAtomic: "50000000",
+      maxDailyAtomic: "50000000",
+      maxMonthlyAtomic: "100000000",
+      maxPanelSize: 20,
+      maxBountyAtomic: "30000000",
+      maxFeeBps: 1000,
+      maxAttemptReserveAtomic: "10000000",
+      allowedReviewerSources: ["sandbox"],
+      allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+    },
+  });
+  const key = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Wallet agent",
+    policyId: policy.policyId,
+    walletAddress: ADDRESS_A,
+  });
+  const quote = await createTokenlessQuote(quoteRequest());
+  const principal = await authenticateProductPrincipal({
+    authorization: `Bearer ${key.token}`,
+    sessionToken: undefined,
+  });
+  await assert.rejects(
+    () =>
+      prepareProductAsk({
+        principal,
+        request: {
+          idempotencyKey: "wallet:policy:12345678",
+          quoteId: quote.quoteId,
+          payment: { mode: "x402", payerAddress: ADDRESS_B },
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "wallet_binding_mismatch",
+  );
+});
+
+test("policy revocation blocks the next delegated ask", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Revocable", ownerAddress: ADDRESS_A });
+  const policy = await createAgentPublishingPolicy({
+    accountAddress: ADDRESS_A,
+    workspaceId,
+    policy: {
+      name: "Revocable agent",
+      allowedPaymentModes: ["prepaid"],
+      maxPanelAtomic: "50000000",
+      maxDailyAtomic: "50000000",
+      maxMonthlyAtomic: "100000000",
+      maxPanelSize: 20,
+      maxBountyAtomic: "30000000",
+      maxFeeBps: 1000,
+      maxAttemptReserveAtomic: "10000000",
+      allowedReviewerSources: ["sandbox"],
+      allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+    },
+  });
+  const key = await createWorkspaceApiKey({ workspaceId, name: "Revocable agent", policyId: policy.policyId });
+  await revokeAgentPublishingPolicy({ accountAddress: ADDRESS_A, workspaceId, policyId: policy.policyId });
+  const quote = await createTokenlessQuote(quoteRequest());
+  const principal = await authenticateProductPrincipal({
+    authorization: `Bearer ${key.token}`,
+    sessionToken: undefined,
+  });
+  await assert.rejects(
+    () =>
+      prepareProductAsk({
+        principal,
+        request: {
+          idempotencyKey: "revoked:policy:12345678",
+          quoteId: quote.quoteId,
+          payment: { mode: "prepaid", workspaceId },
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "policy_revoked",
   );
 });

@@ -162,6 +162,20 @@
       "when": 1783936800000,
       "tag": "0022_post_round_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783940400000,
+      "tag": "0023_agent_publishing_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783944000000,
+      "tag": "0024_tokenless_payment_authorizations",
+      "breakpoints": true
     }
   ]
 }
