@@ -23,6 +23,7 @@ test("tokenless answer search restores the established navbar treatment", () => 
 
   assert.match(source, /MagnifyingGlassIcon/);
   assert.match(source, /border-0 bg-base-content\/\[0\.12\]/);
+  assert.match(source, /!shadow-none/);
   assert.match(source, /px-4 text-center/);
   assert.doesNotMatch(source, /input-bordered|header-search-input/);
   assert.match(source, /placeholder="Search"/);

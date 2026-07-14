@@ -102,7 +102,7 @@ export function AnswerSearch({ mobile = false }: { mobile?: boolean }) {
               if (mobile) setExpanded(false);
             }
           }}
-          className={`input input-sm h-9 w-full rounded-lg border-0 bg-base-content/[0.12] text-base text-base-content outline-none placeholder:text-base-content/60 focus:bg-base-content/[0.15] focus:outline-none focus:ring-0 ${
+          className={`input input-sm h-9 w-full rounded-lg border-0 bg-base-content/[0.12] text-base text-base-content !shadow-none outline-none placeholder:text-base-content/60 focus:bg-base-content/[0.15] focus:outline-none focus:ring-0 ${
             mobile ? "pl-8 pr-8" : "px-4 text-center"
           }`}
           placeholder="Search"
