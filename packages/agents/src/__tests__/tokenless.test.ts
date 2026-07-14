@@ -108,7 +108,6 @@ describe("tokenless agents client", () => {
             roundId: null,
             schemaVersion: "rateloop.tokenless.v2",
             status: "awaiting_payment",
-            webhookAccepted: false,
           }),
           { headers: { "content-type": "application/json" }, status: 200 },
         ),

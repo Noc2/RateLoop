@@ -3,7 +3,6 @@ import type {
   TokenlessAskRequest,
   TokenlessQuoteRequest,
   TokenlessRateLoopClient,
-  TokenlessWebhookRegistration,
 } from "@rateloop/sdk";
 import {
   buildTokenlessX402Authorization,
@@ -17,7 +16,6 @@ import { waitUntilTokenlessReady } from "./tokenless";
 export type TokenlessAutonomousRunInput = {
   quote: TokenlessQuoteRequest;
   idempotencyKey: string;
-  webhook?: TokenlessWebhookRegistration;
 };
 
 export type TokenlessResumeReceipt = {
@@ -49,7 +47,6 @@ export async function runTokenlessAutonomous(input: {
     idempotencyKey: input.request.idempotencyKey,
     payment: { mode: "x402", payerAddress: input.account.address },
     quoteId: quote.quoteId,
-    ...(input.request.webhook ? { webhook: input.request.webhook } : {}),
   } satisfies TokenlessAskRequest);
   const instructions = await input.client.paymentInstructions({ operationKey: ask.operationKey });
   if (instructions.funderAddress.toLowerCase() !== input.account.address.toLowerCase()) {

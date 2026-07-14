@@ -109,10 +109,6 @@ export function AgentPublishingPolicyPanel() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [policies, setPolicies] = useState<PublishingPolicy[]>([]);
   const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
-  const [keyPolicyId, setKeyPolicyId] = useState<string | null>(null);
-  const [keyName, setKeyName] = useState("");
-  const [keyExpiresAt, setKeyExpiresAt] = useState("");
-  const [newToken, setNewToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,8 +163,6 @@ export function AgentPublishingPolicyPanel() {
   async function selectWorkspace(nextWorkspaceId: string) {
     setWorkspaceId(nextWorkspaceId);
     setPolicies([]);
-    setNewToken(null);
-    setKeyPolicyId(null);
     setError(null);
     setStatus(null);
     setLoading(true);
@@ -200,7 +194,6 @@ export function AgentPublishingPolicyPanel() {
     setBusy(true);
     setError(null);
     setStatus(null);
-    setNewToken(null);
     try {
       if (draft.allowedDataClassifications.length === 0) {
         throw new Error("Select at least one permitted data classification.");
@@ -236,7 +229,7 @@ export function AgentPublishingPolicyPanel() {
       );
       await loadPolicies(workspaceId);
       setDraft(INITIAL_DRAFT);
-      setStatus("Publishing policy created. Issue a bound credential before the agent can use it.");
+      setStatus("Publishing policy created. Select it when approving an agent connection.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create the publishing policy.");
     } finally {
@@ -257,44 +250,9 @@ export function AgentPublishingPolicyPanel() {
         ),
       );
       await loadPolicies(workspaceId);
-      setKeyPolicyId(null);
       setStatus("Publishing policy revoked. Existing audit records remain available.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to revoke the publishing policy.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function issueCredential(event: FormEvent<HTMLFormElement>, policy: PublishingPolicy) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    setStatus(null);
-    setNewToken(null);
-    try {
-      const body = await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/api-keys`, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: keyName,
-            role: "member",
-            scopes: ["quote:read", "panel:publish", "payment:submit", "result:read"],
-            policyId: policy.policyId,
-            walletAddress: policy.payerAddress,
-            expiresAt: keyExpiresAt ? new Date(`${keyExpiresAt}T23:59:59.999Z`).toISOString() : null,
-          }),
-        }),
-      );
-      setNewToken(String(body.token));
-      setKeyName("");
-      setKeyExpiresAt("");
-      setKeyPolicyId(null);
-      setStatus("Credential issued. Copy it now; RateLoop stores only its hash.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to issue the credential.");
     } finally {
       setBusy(false);
     }
@@ -310,8 +268,9 @@ export function AgentPublishingPolicyPanel() {
             </p>
             <h2 className="mt-2 text-2xl font-semibold">Put a hard boundary around autonomous agent spend</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              Policies are server-enforced and bound to hash-only API credentials. Audience hashes, reviewer supply,
-              classifications, payment rail, panel size, and USDC caps must all match before an ask is accepted.
+              Policies are server-enforced and bound automatically when you approve an agent connection. Audience
+              hashes, reviewer supply, classifications, payment rail, panel size, and USDC caps must all match before an
+              ask is accepted.
             </p>
           </div>
           <label className="min-w-56 text-sm text-base-content/60">
@@ -512,18 +471,6 @@ export function AgentPublishingPolicyPanel() {
           {status}
         </p>
       ) : null}
-      {newToken ? (
-        <section className="rounded-2xl border border-warning/35 bg-warning/10 p-5" aria-labelledby="new-agent-token">
-          <h3 id="new-agent-token" className="font-semibold">
-            Copy this credential now
-          </h3>
-          <p className="mt-2 text-sm text-base-content/65">
-            It is shown once. RateLoop retained only a cryptographic hash.
-          </p>
-          <code className="mt-4 block overflow-x-auto rounded-lg bg-black/35 p-4 text-xs">{newToken}</code>
-        </section>
-      ) : null}
-
       {workspaceId ? (
         <section className="surface-card rounded-2xl p-6">
           <h3 className="text-xl font-semibold">Active and historical policies</h3>
@@ -555,27 +502,14 @@ export function AgentPublishingPolicyPanel() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {active ? (
-                        <>
-                          <button
-                            type="button"
-                            className="btn btn-sm border-white/10"
-                            onClick={() => {
-                              setKeyPolicyId(current => (current === policy.policyId ? null : policy.policyId));
-                              setNewToken(null);
-                            }}
-                            disabled={busy}
-                          >
-                            Issue bound credential
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-ghost text-error"
-                            onClick={() => void revokePolicy(policy)}
-                            disabled={busy}
-                          >
-                            Revoke
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost text-error"
+                          onClick={() => void revokePolicy(policy)}
+                          disabled={busy}
+                        >
+                          Revoke
+                        </button>
                       ) : null}
                     </div>
                   </div>
@@ -601,37 +535,6 @@ export function AgentPublishingPolicyPanel() {
                     Classifications: {policy.allowedDataClassifications.join(", ") || "legacy unrestricted"}. Admission:{" "}
                     {policy.allowedAdmissionPolicyHashes[0]}
                   </p>
-                  {keyPolicyId === policy.policyId ? (
-                    <form
-                      className="mt-5 grid gap-4 rounded-xl bg-white/[0.035] p-4 md:grid-cols-3"
-                      onSubmit={event => void issueCredential(event, policy)}
-                    >
-                      <label className="text-sm text-base-content/70">
-                        Credential name
-                        <input
-                          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                          value={keyName}
-                          onChange={event => setKeyName(event.target.value)}
-                          maxLength={120}
-                          required
-                        />
-                      </label>
-                      <label className="text-sm text-base-content/70">
-                        Expiry date (optional)
-                        <input
-                          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                          type="date"
-                          value={keyExpiresAt}
-                          onChange={event => setKeyExpiresAt(event.target.value)}
-                        />
-                      </label>
-                      <div className="flex items-end">
-                        <button type="submit" className="rateloop-gradient-action w-full px-5" disabled={busy}>
-                          {busy ? "Issuing…" : "Issue credential"}
-                        </button>
-                      </div>
-                    </form>
-                  ) : null}
                 </article>
               );
             })}

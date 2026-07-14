@@ -185,23 +185,10 @@ export type TokenlessPayment =
       payerAddress: `0x${string}`;
     };
 
-export const TOKENLESS_WEBHOOK_EVENT_TYPES = [
-  "result.ready",
-  "result.updated",
-] as const;
-export type TokenlessWebhookEventType =
-  (typeof TOKENLESS_WEBHOOK_EVENT_TYPES)[number];
-
-export interface TokenlessWebhookRegistration {
-  eventTypes: TokenlessWebhookEventType[];
-  url: string;
-}
-
 export interface TokenlessAskRequest {
   idempotencyKey: string;
   payment: TokenlessPayment;
   quoteId: string;
-  webhook?: TokenlessWebhookRegistration;
 }
 
 export interface TokenlessPollContinuation {
@@ -218,7 +205,6 @@ export interface TokenlessAskResponse {
   roundId: string | null;
   status: "awaiting_payment" | "submitted" | "open";
   continuation: TokenlessPollContinuation;
-  webhookAccepted: boolean;
 }
 
 export interface TokenlessWaitRequest {
@@ -269,20 +255,10 @@ export interface TokenlessResult {
   updatedAt: string;
 }
 
-export interface TokenlessWebhookEvent {
-  schemaVersion: typeof TOKENLESS_SCHEMA_VERSION;
-  eventId: string;
-  eventType: TokenlessWebhookEventType;
-  occurredAt: string;
-  operationKey: string;
-  verdictStatus: TokenlessVerdictStatus;
-  resultUrl: string;
-}
-
 export interface TokenlessClientOptions {
   apiBaseUrl: string;
   apiPath?: string;
-  /** Server-side workspace API key. Browser clients must use the HttpOnly Base Account session instead. */
+  /** Server-side credential created by an approved agent connection. Browser clients use the HttpOnly session. */
   apiKey?: string;
   credentials?: RequestCredentials;
   defaultHeaders?: HeadersInit;

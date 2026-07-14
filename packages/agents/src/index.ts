@@ -4,7 +4,6 @@ export {
   TOKENLESS_SCHEMA_VERSION,
   TOKENLESS_TERMINAL_VERDICT_STATUSES,
   TOKENLESS_VERDICT_STATUSES,
-  TOKENLESS_WEBHOOK_EVENT_TYPES,
   waitUntilTokenlessReady,
 } from "./tokenless";
 export {
@@ -42,7 +41,4 @@ export type {
   TokenlessWaitRequest,
   TokenlessWaitResponse,
   TokenlessWaitUntilReadyOptions,
-  TokenlessWebhookEvent,
-  TokenlessWebhookEventType,
-  TokenlessWebhookRegistration,
 } from "./tokenless";

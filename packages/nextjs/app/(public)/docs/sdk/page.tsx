@@ -20,12 +20,13 @@ const state = await client.wait({ operationKey: ask.operationKey });
 const result = state.status === "ready" ? await client.result({ operationKey: ask.operationKey }) : null;`}</code>
       </pre>
       <p>
-        Ask idempotency keys are required. Autonomous publishing requires a policy-bound workspace API key; the SDK
-        remains wallet-agnostic and never stores private keys. Payment instructions include the versioned x402
-        authorization facts needed by a separate signer. Pending waits return a cursor, retry delay, expiry, and
-        canonical poll URL. Results use schema <code>rateloop.tokenless.v1</code>. Browser clients authenticate with the
-        HttpOnly RateLoop browser session. The result is decision support and must not silently trigger a release or be
-        presented as a compliance approval.
+        Ask idempotency keys are required. Autonomous publishing uses the credential and policy created by the approved
+        agent connection flow; RateLoop does not expose separate manual credential setup. The SDK remains
+        wallet-agnostic and never stores private keys. Payment instructions include the versioned x402 authorization
+        facts needed by a separate signer. Pending waits return a cursor, retry delay, expiry, and canonical poll URL.
+        Results use schema
+        <code>rateloop.tokenless.v1</code>. Browser clients authenticate with the HttpOnly RateLoop browser session. The
+        result is decision support and must not silently trigger a release or be presented as a compliance approval.
       </p>
     </article>
   );

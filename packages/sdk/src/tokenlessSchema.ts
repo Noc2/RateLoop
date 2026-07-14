@@ -3,7 +3,6 @@ import {
   TOKENLESS_SCHEMA_VERSION,
   TOKENLESS_REVIEWER_SOURCES,
   TOKENLESS_VERDICT_STATUSES,
-  TOKENLESS_WEBHOOK_EVENT_TYPES,
   type TokenlessAskResponse,
   type TokenlessAttemptReserveAccounting,
   type TokenlessCompensationAccounting,
@@ -20,13 +19,11 @@ import {
   type TokenlessResult,
   type TokenlessVerdictStatus,
   type TokenlessWaitResponse,
-  type TokenlessWebhookEvent,
 } from "./tokenlessTypes";
 
 type JsonRecord = Record<string, unknown>;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const verdictStatuses = new Set<string>(TOKENLESS_VERDICT_STATUSES);
-const webhookEventTypes = new Set<string>(TOKENLESS_WEBHOOK_EVENT_TYPES);
 const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
 
 function invalid(path: string, expectation: string): never {
@@ -286,7 +283,6 @@ export function parseTokenlessAskResponse(
     roundId: nullableString(input.roundId, "roundId"),
     status,
     continuation: continuation(input.continuation, "continuation"),
-    webhookAccepted: boolean(input.webhookAccepted, "webhookAccepted"),
   };
 }
 
@@ -601,25 +597,6 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
     verdict: parsedVerdict,
     methodologyUrl: httpUrl(input.methodologyUrl, "methodologyUrl"),
     updatedAt: isoDate(input.updatedAt, "updatedAt"),
-  };
-}
-
-export function parseTokenlessWebhookEvent(
-  value: unknown,
-): TokenlessWebhookEvent {
-  const input = record(value, "event");
-  const eventType = string(input.eventType, "eventType");
-  if (!webhookEventTypes.has(eventType))
-    invalid("eventType", TOKENLESS_WEBHOOK_EVENT_TYPES.join(" or "));
-
-  return {
-    schemaVersion: schemaVersion(input.schemaVersion),
-    eventId: string(input.eventId, "eventId"),
-    eventType: eventType as TokenlessWebhookEvent["eventType"],
-    occurredAt: isoDate(input.occurredAt, "occurredAt"),
-    operationKey: string(input.operationKey, "operationKey"),
-    verdictStatus: verdictStatus(input.verdictStatus, "verdictStatus"),
-    resultUrl: httpUrl(input.resultUrl, "resultUrl"),
   };
 }
 

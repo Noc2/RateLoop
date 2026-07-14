@@ -5,12 +5,17 @@
 is accepted there. It restores a narrowly delegated machine-publishing path; it does not restore the legacy contract,
 governance, local-signer, category, or rating-tool graph.
 
+**14 July product-boundary update:** the architecture plan now supersedes the manual credential and webhook portions of
+this proposal. Owners approve an agent connection, RateLoop creates the bound credential automatically, and connected
+agents use wait/result reads; separate agent-key issuance and result-webhook registration are not exposed.
+
 ## Decision
 
 Restore autonomous paid panel creation as an explicit, bounded workspace capability.
 
 - The default public MCP and browser handoff remain draft-first and human-approved.
-- A workspace owner or admin may separately issue an agent credential with a frozen publishing policy.
+- A workspace owner or admin approves a connection and selects a frozen publishing policy; RateLoop creates the bound
+  credential automatically.
 - A delegated agent may then quote, submit, pay, wait, and read the result without a person approving each run, but only
   inside that policy.
 - The preferred self-funded lane is an agent-controlled encrypted wallet signing short-lived x402/EIP-3009

@@ -70,7 +70,6 @@ export {
   TOKENLESS_SCHEMA_VERSION,
   TOKENLESS_TERMINAL_VERDICT_STATUSES,
   TOKENLESS_VERDICT_STATUSES,
-  TOKENLESS_WEBHOOK_EVENT_TYPES,
 } from "@rateloop/sdk";
 export type {
   TokenlessAskRequest,
@@ -97,7 +96,4 @@ export type {
   TokenlessVerdictStatus,
   TokenlessWaitRequest,
   TokenlessWaitResponse,
-  TokenlessWebhookEvent,
-  TokenlessWebhookEventType,
-  TokenlessWebhookRegistration,
 } from "@rateloop/sdk";

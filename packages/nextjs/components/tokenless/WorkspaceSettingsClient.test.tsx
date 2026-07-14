@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
+const apiKeyRoute = new URL("../../app/api/account/workspaces/[workspaceId]/api-keys/route.ts", import.meta.url);
+const webhookRoute = new URL("../../app/api/account/workspaces/[workspaceId]/webhooks/route.ts", import.meta.url);
 
 test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /Workspace subscription/);
@@ -41,4 +43,13 @@ test("workspace billing profile collects self-declared business invoice details"
   assert.match(source, /Provide both VAT country and VAT ID/);
   assert.match(source, /not an external\s+identity or company verification/);
   assert.match(source, /Save billing details/);
+});
+
+test("workspace setup does not expose manual agent credentials or result webhooks", () => {
+  assert.doesNotMatch(source, /Agent API keys|Result webhooks|\/api-keys|\/webhooks/);
+  assert.match(source, /Connect an agent once/);
+  assert.match(source, /RateLoop creates its bound access automatically/);
+  assert.match(source, /\/agents\?tab=agents/);
+  assert.equal(existsSync(apiKeyRoute), false);
+  assert.equal(existsSync(webhookRoute), false);
 });

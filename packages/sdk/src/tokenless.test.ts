@@ -9,7 +9,6 @@ import {
 import {
   TOKENLESS_RESULT_JSON_SCHEMA,
   parseTokenlessResult,
-  parseTokenlessWebhookEvent,
 } from "./tokenlessSchema";
 import {
   TOKENLESS_SCHEMA_VERSION,
@@ -54,7 +53,6 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_TERMINAL_VERDICT_STATUSES",
       "TOKENLESS_VERDICT_STATUSES",
       "TOKENLESS_VISIBILITIES",
-      "TOKENLESS_WEBHOOK_EVENT_TYPES",
       "TOKENLESS_X402_DOMAIN",
       "buildTokenlessEip3009TypedData",
       "buildTokenlessRoundAuthorizationTypedData",
@@ -84,7 +82,6 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "parseTokenlessQuoteResponse",
       "parseTokenlessResult",
       "parseTokenlessWaitResponse",
-      "parseTokenlessWebhookEvent",
       "normalizeTokenlessQuestion",
       "normalizeTokenlessQuestionMedia",
       "parseTokenlessYouTubeUrl",
@@ -433,7 +430,6 @@ test("tokenless client performs quote and ask with a required idempotency header
             "https://tokenless.example/api/agent/v1/asks/op_12345678/wait",
           retryAfterMs: 1000,
         },
-        webhookAccepted: true,
       });
     },
   });
@@ -459,10 +455,6 @@ test("tokenless client performs quote and ask with a required idempotency header
     idempotencyKey: "ask:test:12345678",
     payment: { mode: "prepaid", workspaceId: "workspace_1" },
     quoteId: quote.quoteId,
-    webhook: {
-      eventTypes: ["result.ready", "result.updated"],
-      url: "https://agent.example/webhook",
-    },
   });
 
   assert.equal(
@@ -524,19 +516,6 @@ test("tokenless client performs quote and ask with a required idempotency header
     /payment\.payerAddress must be an EVM address/,
   );
 
-  assert.throws(
-    () =>
-      client.ask({
-        idempotencyKey: "webhook:test:12345678",
-        payment: { mode: "prepaid", workspaceId: "workspace_1" },
-        quoteId: quote.quoteId,
-        webhook: {
-          eventTypes: ["result.ready"],
-          url: "http://public.example/webhook",
-        },
-      }),
-    /webhook\.url must use HTTPS/,
-  );
   assert.equal(requests.length, 2);
 });
 
@@ -788,19 +767,4 @@ test("tokenless result uses the versioned result route and reports structured AP
       error.code === "result_not_ready" &&
       error.retryable === true,
   );
-});
-
-test("tokenless webhook parser carries result URL and verdict continuation state", () => {
-  const event = parseTokenlessWebhookEvent({
-    schemaVersion: TOKENLESS_SCHEMA_VERSION,
-    eventId: "evt_12345678",
-    eventType: "result.updated",
-    occurredAt: "2026-07-12T12:00:00.000Z",
-    operationKey: "op_12345678",
-    verdictStatus: "pending",
-    resultUrl: "https://tokenless.example/api/agent/v1/results/op_12345678",
-  });
-
-  assert.equal(event.eventType, "result.updated");
-  assert.equal(event.verdictStatus, "pending");
 });

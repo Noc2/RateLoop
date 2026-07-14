@@ -241,6 +241,13 @@ export function parseTokenlessAskRequest(value: unknown, idempotencyHeader: stri
   if (!request.quoteId?.trim() || !request.payment) {
     throw new TokenlessServiceError("quoteId and payment are required.", 400, "invalid_ask");
   }
+  if ("webhook" in value) {
+    throw new TokenlessServiceError(
+      "Result webhooks are not supported. Use wait and result instead.",
+      400,
+      "webhook_unsupported",
+    );
+  }
   assertPayment(request.payment);
   return request as TokenlessAskRequest;
 }
@@ -453,7 +460,6 @@ export async function createTokenlessAsk(
       roundId: existing.roundId,
       status: existing.status as TokenlessAskResponse["status"],
       continuation: continuation(existing.operationKey, appOrigin, existing.updatedAt),
-      webhookAccepted: false,
     };
   }
 
@@ -500,7 +506,6 @@ export async function createTokenlessAsk(
     roundId: persisted.roundId,
     status: persisted.status as TokenlessAskResponse["status"],
     continuation: continuation(persisted.operationKey, appOrigin, persisted.updatedAt),
-    webhookAccepted: false,
   };
 }
 

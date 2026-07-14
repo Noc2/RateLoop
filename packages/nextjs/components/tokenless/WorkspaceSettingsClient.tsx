@@ -10,18 +10,6 @@ type Workspace = {
   prepaid: { settledAtomic: string; reservedAtomic: string; availableAtomic: string };
 };
 
-type ApiKey = {
-  apiKeyId: string;
-  prefix: string;
-  name: string;
-  role: string;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-};
-
-type Webhook = { endpointId: string; url: string; eventTypes: string[]; active: boolean };
-
 type BillingSummary = {
   plan: "free" | "early_access";
   priceVersion: string;
@@ -87,13 +75,7 @@ function billingStatusLabel(status: string) {
 export function WorkspaceSettingsClient() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [workspaceName, setWorkspaceName] = useState("");
-  const [keyName, setKeyName] = useState("");
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [newToken, setNewToken] = useState<string | null>(null);
-  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null);
   const [billing, setBilling] = useState<BillingSummary | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
@@ -120,30 +102,6 @@ export function WorkspaceSettingsClient() {
     setSelectedId(current =>
       current && next.some(workspace => workspace.workspaceId === current) ? current : (next[0]?.workspaceId ?? ""),
     );
-  }, []);
-
-  const loadKeys = useCallback(async (workspaceId: string) => {
-    if (!workspaceId) {
-      setApiKeys([]);
-      setWebhooks([]);
-      return;
-    }
-    const [keysBody, webhooksBody] = await Promise.all([
-      readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/api-keys`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ),
-      readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/webhooks`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ),
-    ]);
-    setApiKeys(keysBody.apiKeys as ApiKey[]);
-    setWebhooks(webhooksBody.webhooks as Webhook[]);
   }, []);
 
   const loadBilling = useCallback(async (workspaceId: string) => {
@@ -186,12 +144,6 @@ export function WorkspaceSettingsClient() {
       setError(cause instanceof Error ? cause.message : "Unable to load workspaces."),
     );
   }, [loadWorkspaces]);
-
-  useEffect(() => {
-    void loadKeys(selectedId).catch(cause =>
-      setError(cause instanceof Error ? cause.message : "Unable to load API keys."),
-    );
-  }, [loadKeys, selectedId]);
 
   useEffect(() => {
     void loadBilling(selectedId).catch(cause => {
@@ -336,93 +288,6 @@ export function WorkspaceSettingsClient() {
     }
   }
 
-  async function createKey(event: FormEvent) {
-    event.preventDefault();
-    if (!selectedId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const body = await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(selectedId)}/api-keys`, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: keyName, role: "member" }),
-        }),
-      );
-      setNewToken(String(body.token));
-      setKeyName("");
-      await loadKeys(selectedId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create API key.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function revokeKey(apiKeyId: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await readJson(
-        await fetch(
-          `/api/account/workspaces/${encodeURIComponent(selectedId)}/api-keys/${encodeURIComponent(apiKeyId)}`,
-          { method: "DELETE", credentials: "same-origin" },
-        ),
-      );
-      await loadKeys(selectedId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to revoke API key.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createWebhook(event: FormEvent) {
-    event.preventDefault();
-    if (!selectedId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const body = await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(selectedId)}/webhooks`, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: webhookUrl, eventTypes: ["result.ready"] }),
-        }),
-      );
-      setNewWebhookSecret(String(body.signingSecret));
-      setWebhookUrl("");
-      await loadKeys(selectedId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create webhook.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deactivateWebhook(endpointId: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await readJson(
-        await fetch(
-          `/api/account/workspaces/${encodeURIComponent(selectedId)}/webhooks/${encodeURIComponent(endpointId)}`,
-          {
-            method: "DELETE",
-            credentials: "same-origin",
-          },
-        ),
-      );
-      await loadKeys(selectedId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to deactivate webhook.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
   const usageTotal = billing ? billing.usage.completed + billing.usage.reserved : 0;
   const usagePercent = billing?.usage.limit ? Math.min(100, Math.round((usageTotal / billing.usage.limit) * 100)) : 0;
@@ -441,7 +306,6 @@ export function WorkspaceSettingsClient() {
                 value={selectedId}
                 onChange={event => {
                   setSelectedId(event.target.value);
-                  setNewToken(null);
                   setShowBillingProfile(false);
                   setBillingProfileSaved(false);
                 }}
@@ -730,125 +594,21 @@ export function WorkspaceSettingsClient() {
                 </div>
               </section>
             ) : null}
-            <h2 className="mt-7 text-xl font-semibold">Agent API keys</h2>
-            <p className="mt-2 text-sm leading-6 text-base-content/50">
-              Keys are shown once. RateLoop stores only a cryptographic hash.
-            </p>
-            <form className="mt-4 flex gap-2" onSubmit={createKey}>
-              <input
-                className="input min-w-0 flex-1 rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                value={keyName}
-                onChange={event => setKeyName(event.target.value)}
-                placeholder="Production agent"
-                maxLength={120}
-                required
-              />
-              <button className="rateloop-gradient-action px-4" disabled={busy}>
-                Create
-              </button>
-            </form>
-            {newToken ? (
-              <div className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.07] p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Copy now — shown once</p>
-                <code className="mt-2 block break-all text-xs text-base-content/75">{newToken}</code>
-                <button
-                  type="button"
-                  className="mt-3 text-xs underline"
-                  onClick={() => void navigator.clipboard.writeText(newToken)}
-                >
-                  Copy key
-                </button>
-              </div>
-            ) : null}
-            <div className="mt-5 space-y-2">
-              {apiKeys.map(key => (
-                <div
-                  key={key.apiKeyId}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-white/10 p-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <span className="block truncate font-medium">{key.name}</span>
-                    <code className="text-xs text-base-content/45">{key.prefix}…</code>
-                  </div>
-                  {key.revokedAt ? (
-                    <span className="text-xs text-base-content/40">Revoked</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-xs text-red-200 underline"
-                      disabled={busy}
-                      onClick={() => void revokeKey(key.apiKeyId)}
-                    >
-                      Revoke
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="mt-8 border-t border-white/10 pt-7">
-              <h2 className="text-xl font-semibold">Result webhooks</h2>
-              <p className="mt-2 text-sm leading-6 text-base-content/50">
-                Register HTTPS destinations before attaching them to an ask. Delivery secrets are shown once.
+            <section className="mt-5 rounded-xl border border-white/10 p-5" aria-labelledby="agent-setup-heading">
+              <h2 id="agent-setup-heading" className="text-xl font-semibold">
+                Agent setup
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/50">
+                Connect an agent once. RateLoop creates its bound access automatically, and the agent uses MCP to
+                register, follow the approved policy, wait for reviews, and read results.
               </p>
-              <form className="mt-4 flex gap-2" onSubmit={createWebhook}>
-                <input
-                  type="url"
-                  className="input min-w-0 flex-1 rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={webhookUrl}
-                  onChange={event => setWebhookUrl(event.target.value)}
-                  placeholder="https://agent.example/webhooks/rateloop"
-                  required
-                />
-                <button className="rateloop-gradient-action px-4" disabled={busy}>
-                  Add
-                </button>
-              </form>
-              {newWebhookSecret ? (
-                <div className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.07] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">
-                    Signing secret · shown once
-                  </p>
-                  <code className="mt-2 block break-all text-xs text-base-content/75">{newWebhookSecret}</code>
-                  <button
-                    type="button"
-                    className="mt-3 text-xs underline"
-                    onClick={() => void navigator.clipboard.writeText(newWebhookSecret)}
-                  >
-                    Copy secret
-                  </button>
-                </div>
-              ) : null}
-              <div className="mt-4 space-y-2">
-                {webhooks.map(webhook => (
-                  <div
-                    key={webhook.endpointId}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 p-3 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <span className="block truncate font-medium">{webhook.url}</span>
-                      <span className="text-xs text-base-content/45">{webhook.eventTypes.join(" · ")}</span>
-                    </div>
-                    {webhook.active ? (
-                      <button
-                        type="button"
-                        className="text-xs text-red-200 underline"
-                        disabled={busy}
-                        onClick={() => void deactivateWebhook(webhook.endpointId)}
-                      >
-                        Deactivate
-                      </button>
-                    ) : (
-                      <span className="text-xs text-base-content/40">Inactive</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+              <Link href="/agents?tab=agents" className="rateloop-gradient-action mt-4 inline-flex px-5">
+                Connect an agent
+              </Link>
+            </section>
           </>
         ) : (
-          <p className="mt-4 text-sm leading-6 text-base-content/50">
-            Create a workspace to fund panels and issue agent API keys.
-          </p>
+          <p className="mt-4 text-sm leading-6 text-base-content/50">Create a workspace to fund panels.</p>
         )}
       </section>
 

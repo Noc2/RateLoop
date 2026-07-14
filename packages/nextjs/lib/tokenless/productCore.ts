@@ -20,7 +20,6 @@ export const TOKENLESS_AGENT_SCOPES = [
   "panel:publish",
   "payment:submit",
   "result:read",
-  "webhook:use",
   "evaluation:read",
   "review:decide",
 ] as const;
@@ -415,45 +414,6 @@ async function requireWorkspaceManagement(accountAddress: string, workspaceId: s
   return role;
 }
 
-export async function listWorkspaceApiKeys(input: { accountAddress: string; workspaceId: string }) {
-  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
-  const result = await dbClient.execute({
-    sql: `SELECT key_id, key_prefix, name, role, scopes_json, policy_id, wallet_address, expires_at, last_used_at, revoked_at, created_at
-          FROM tokenless_workspace_api_keys WHERE workspace_id = ? ORDER BY created_at DESC`,
-    args: [input.workspaceId],
-  });
-  return result.rows.map(value => {
-    const row = value as QueryRow;
-    return {
-      apiKeyId: rowString(row, "key_id"),
-      prefix: rowString(row, "key_prefix"),
-      name: rowString(row, "name"),
-      role: rowString(row, "role"),
-      scopes: normalizedScopes(row?.scopes_json ?? JSON.stringify(TOKENLESS_AGENT_SCOPES)),
-      policyId: rowString(row, "policy_id"),
-      walletAddress: rowString(row, "wallet_address"),
-      expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : null,
-      lastUsedAt: row.last_used_at ? new Date(String(row.last_used_at)).toISOString() : null,
-      revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null,
-      createdAt: new Date(String(row.created_at)).toISOString(),
-    };
-  });
-}
-
-export async function createManagedWorkspaceApiKey(input: {
-  accountAddress: string;
-  workspaceId: string;
-  name: string;
-  role?: Extract<TokenlessWorkspaceRole, "admin" | "member">;
-  scopes?: TokenlessAgentScope[];
-  policyId?: string | null;
-  walletAddress?: string | null;
-  expiresAt?: Date | null;
-}) {
-  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
-  return createWorkspaceApiKey(input);
-}
-
 function normalizePolicyInput(input: AgentPublishingPolicyInput) {
   const name = input.name.trim();
   if (!name || name.length > 120)
@@ -673,16 +633,6 @@ export async function revokeAgentPublishingPolicy(input: {
   if (result.rowCount !== 1) throw new TokenlessServiceError("Publishing policy not found.", 404, "policy_not_found");
 }
 
-export async function revokeWorkspaceApiKey(input: { accountAddress: string; workspaceId: string; apiKeyId: string }) {
-  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
-  const result = await dbClient.execute({
-    sql: `UPDATE tokenless_workspace_api_keys SET revoked_at = ?
-          WHERE key_id = ? AND workspace_id = ? AND revoked_at IS NULL`,
-    args: [new Date(), input.apiKeyId, input.workspaceId],
-  });
-  if (result.rowCount !== 1) throw new TokenlessServiceError("API key not found.", 404, "api_key_not_found");
-}
-
 export async function recordPrepaidLedgerEntry(input: {
   workspaceId: string;
   amountAtomic: string;
@@ -842,7 +792,6 @@ async function enforcePublishingPolicy(input: {
   const policy = await loadAgentPublishingPolicy(input.principal, input.workspaceId);
   assertScope(input.principal, "panel:publish");
   if (input.request.payment.mode !== "wallet") assertScope(input.principal, "payment:submit");
-  if (input.request.webhook) assertScope(input.principal, "webhook:use");
   if (!policy) return null;
   if (!policy.allowedPaymentModes.includes(input.request.payment.mode as TokenlessAgentPaymentMode)) {
     policyMiss(policy, "This payment mode is outside the delegated publishing policy.");

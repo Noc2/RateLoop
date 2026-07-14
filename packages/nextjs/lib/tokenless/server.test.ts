@@ -111,6 +111,25 @@ test("sandbox asks are durable, idempotent, and expose exact result accounting",
   assert.equal(result.methodologyUrl, "https://tokenless.example/docs/how-it-works#sandbox-limitations");
 });
 
+test("asks reject the removed result-webhook option", async () => {
+  const quote = await createTokenlessQuote(quoteRequest());
+  const idempotencyKey = "test:ask:no-webhook";
+  await assert.rejects(
+    () =>
+      createTokenlessAsk(
+        {
+          idempotencyKey,
+          payment: { mode: "prepaid", workspaceId: "sandbox" },
+          quoteId: quote.quoteId,
+          webhook: { eventTypes: ["result.ready"], url: "https://example.test/hook" },
+        },
+        idempotencyKey,
+        "https://tokenless.example",
+      ),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "webhook_unsupported",
+  );
+});
+
 test("live asks remain pending payment and never synthesize a result", async () => {
   process.env.TOKENLESS_SANDBOX_MODE = "false";
   const quote = await createTokenlessQuote(quoteRequest("customer_invited"));

@@ -11,10 +11,12 @@ network uniqueness, a fixed non-negative binary RBTS bonus, and off-chain prospe
 change earned pay. Paid network and hybrid work remain fail-closed until that plan is implemented and verified.
 
 **Autonomous-agent publishing amendment — 14 July 2026:** delegated machine publishing is an authenticated,
-workspace-scoped capability, not a public MCP permission. An owner/admin-issued agent key may run the existing
+workspace-scoped capability, not a public MCP permission. Approving an agent connection automatically creates its
+hash-only, policy-bound credential; owners do not issue separate agent API keys. The connection may run the existing
 `quote -> ask -> payment -> wait -> result` primitive without a per-run browser click only when a versioned policy binds
-its payment mode, wallet, budget, audience-policy hashes, project, data classification, retention, webhook, expiry, and
-revocation state. The preferred self-funded lane is a local encrypted signer producing short-lived x402/EIP-3009
+its payment mode, wallet, budget, audience-policy hashes, project, data classification, retention, expiry, and revocation
+state. Result-webhook registration is not part of the current product or SDK; connected agents use bounded wait and
+result reads. The preferred self-funded lane is a local encrypted signer producing short-lived x402/EIP-3009
 authorizations; the gas-only relayer never receives the key. The public MCP remains draft-first and browser-approved.
 The [autonomous publishing reintegration plan](tokenless-autonomous-agent-publishing-reintegration-plan-2026-07.md)
 defines the implementation and release gates. Accountless x402 publishing remains deferred until B2B, screening,
