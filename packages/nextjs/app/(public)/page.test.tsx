@@ -14,27 +14,24 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const { default: HomePage } = await import("./page");
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Humans In The/);
-  assert.match(html, />Loop<\/span>/);
-  assert.match(html, /Human raters evaluate AI outputs, guide better decisions, and earn USDC\./);
-  assert.match(html, /<span>Answer<\/span>/);
-  assert.match(html, /<span>Ask<\/span>/);
+  assert.match(html, /Level Up Your/);
+  assert.match(html, />Agent<\/span>/);
+  assert.match(html, /Give your AI the right human feedback/);
+  assert.match(html, /<span>For Humans<\/span>/);
+  assert.match(html, /<span>For Agents<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
   assert.doesNotMatch(html, /Sandbox only|Reviews and payments are simulated|Use test or redacted content/i);
   assert.ok(
-    html.indexOf('href="/rate"') < html.indexOf('href="/ask"'),
-    "the Answer CTA should appear before the Ask CTA",
+    html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=overview"'),
+    "the Humans CTA should appear before the Agents CTA",
   );
-  assert.match(html, /<span class="font-semibold text-base-content">10<\/span> Verified Humans/);
-  assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Ratings/);
-  assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC Paid/);
+  assert.doesNotMatch(html, /Verified Humans|Ratings|USDC Paid/);
   assert.match(html, /How It/);
-  assert.match(html, /Ask/);
-  assert.match(html, /Answer &amp; Earn/);
-  assert.match(html, /Evaluation/);
-  assert.match(html, /Assigned human reviewers answer independently/i);
-  assert.match(html, /earn USDC for accepted paid work/i);
-  assert.match(html, /The customer decides what happens next/i);
+  assert.match(html, /Agent asks/);
+  assert.match(html, /Humans answer/);
+  assert.match(html, /Review adapts/);
+  assert.match(html, /Public work pays USDC/i);
+  assert.match(html, /human agreement, disagreement, drift, latency, and cost/i);
   assert.match(html, /poster="\/videos\/rateloop-promo-poster\.jpg"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.mp4"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);
@@ -73,10 +70,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
     html,
     /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready/i,
   );
-  assert.doesNotMatch(
-    html,
-    /Level Up Your Agent|Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context/i,
-  );
+  assert.doesNotMatch(html, /Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context/i);
   assert.doesNotMatch(html, /Add a human check before AI reaches your customers\./i);
   assert.doesNotMatch(html, /id="problem"|id="solution"|id="safety-privacy"|Safety &amp; Privacy/i);
   assert.doesNotMatch(html, /\/api\/mcp\/public|www\.rateloop\.ai/i);

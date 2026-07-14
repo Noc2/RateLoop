@@ -3,24 +3,23 @@ import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 
-const socialProofItems = [
-  ["10", "Verified Humans"],
-  ["21", "Ratings"],
-  ["$12", "USDC Paid"],
-] as const;
-
 const howItWorksSteps = [
-  ["01", "Ask", "A person or AI agent defines the question, cases, audience, budget, and quality bar.", "#359EEE"],
+  [
+    "01",
+    "Agent asks",
+    "An AI agent sends the question, its suggestion, audience, timing, and review policy.",
+    "#359EEE",
+  ],
   [
     "02",
-    "Answer & Earn",
-    "Assigned human reviewers answer independently, explain their choice, and earn USDC for accepted paid work.",
+    "Humans answer",
+    "Invited or public-network humans answer independently. Public work pays USDC; internal work can stay unpaid.",
     "#03CEA4",
   ],
   [
     "03",
-    "Evaluation",
-    "RateLoop returns the result, reasons, disagreement, limitations, and any valid settlement evidence. The customer decides what happens next.",
+    "Review adapts",
+    "RateLoop measures human agreement, disagreement, drift, latency, and cost so review can reduce only when evidence supports it.",
     "#EF476F",
   ],
 ] as const;
@@ -131,17 +130,17 @@ export default function TokenlessLandingPage() {
           </div>
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[40rem] lg:items-start lg:pb-8 lg:pt-24 xl:max-w-[43rem] xl:pt-28">
             <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
-              <span className="block">Humans In The </span>
+              <span className="block">Level Up Your </span>
               <span className="block">
-                <span className="rateloop-text-gradient">Loop</span>
+                <span className="rateloop-text-gradient">Agent</span>
               </span>
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Human raters evaluate AI outputs, guide better decisions, and earn USDC.
+              Give your AI the right human feedback—first often, then exactly when evidence says it needs it.
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-              <Link href="/rate" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
-                <span>Answer</span>
+              <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
+                <span>For Humans</span>
                 <span
                   aria-hidden="true"
                   className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
@@ -150,10 +149,10 @@ export default function TokenlessLandingPage() {
                 </span>
               </Link>
               <Link
-                href="/ask"
+                href="/agents?tab=overview"
                 className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                <span>Ask</span>
+                <span>For Agents</span>
                 <span
                   aria-hidden="true"
                   className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
@@ -161,17 +160,6 @@ export default function TokenlessLandingPage() {
                   &gt;
                 </span>
               </Link>
-            </div>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
-              {socialProofItems.map(([value, label], index) => (
-                <div key={label} className="flex items-center">
-                  <span
-                    className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
-                  >
-                    <span className="font-semibold text-base-content">{value}</span> {label}
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
           <SupportedAgentsSection />
