@@ -210,8 +210,8 @@ export function WorkspaceSettingsClient() {
   const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
 
   return (
-    <div className="mt-10 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="rateloop-surface-card p-5 sm:p-7">
+    <div className="space-y-5">
+      <section className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Workspaces</p>
         {workspaces.length ? (
           <>
@@ -370,7 +370,7 @@ export function WorkspaceSettingsClient() {
         )}
       </section>
 
-      <aside className="rateloop-surface-card h-fit p-6">
+      <aside className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">New workspace</p>
         <form className="mt-4" onSubmit={createWorkspace}>
           <input

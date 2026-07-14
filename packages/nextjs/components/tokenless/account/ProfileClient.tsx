@@ -95,75 +95,31 @@ export function ProfileClient() {
   }
 
   return (
-    <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <main className="space-y-5">
-        <section className="rateloop-surface-card p-5 sm:p-7">
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Private profile</p>
-          <h2 className="mt-2 text-xl font-semibold">How RateLoop addresses you</h2>
-          <p className="mt-3 text-sm leading-6 text-base-content/60">
-            This preference is private to your account. It does not replace verified sign-in information or change
-            eligibility, payout, or workspace permissions.
-          </p>
-          <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
-            <label className="grow text-sm text-base-content/60">
-              Display name
-              <input
-                value={displayName}
-                onChange={event => setDisplayName(event.target.value)}
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                maxLength={80}
-                placeholder={profile?.providerDisplayName ?? "Your private name"}
-              />
-            </label>
-            <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
-              {busy ? "Saving…" : "Save profile"}
-            </button>
-          </form>
-          {saved ? <p className="mt-3 text-sm text-emerald-100">Profile saved.</p> : null}
-        </section>
-
-        <InvitationRedemption onRedeemed={() => void refresh()} />
-
-        <section className="rateloop-surface-card p-5 sm:p-7">
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Customer cohorts</p>
-          <h2 className="mt-2 text-xl font-semibold">Your reviewer memberships</h2>
-          {memberships.length ? (
-            <div className="mt-5 space-y-3">
-              {memberships.map((membership, index) => (
-                <article
-                  key={`${membership.projectName}-${membership.cohortName}-${index}`}
-                  className="rounded-lg border border-white/10 bg-black/20 p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{membership.cohortName ?? "Customer cohort"}</h3>
-                      <p className="mt-1 text-xs text-base-content/50">{membership.projectName ?? "Private project"}</p>
-                    </div>
-                    <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-base-content/60">
-                      {membership.status ?? "active"}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-base-content/55">
-                    {membership.activeAssignmentCount} active assignment
-                    {membership.activeAssignmentCount === 1 ? "" : "s"} · {membership.assignmentCount} total ·{" "}
-                    {membership.source?.replaceAll("_", " ")}
-                  </p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 rounded-lg bg-white/[0.04] p-4 text-sm leading-6 text-base-content/50">
-              No customer cohort memberships yet. Redeemed invitations appear here after the customer accepts the
-              membership.
-            </p>
-          )}
-        </section>
-      </main>
-
-      <aside className="rateloop-surface-card h-fit p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Verified account</p>
-        <h2 className="mt-2 text-xl font-semibold">{profile?.displayName ?? session?.displayName ?? "Your account"}</h2>
-        <dl className="mt-5 space-y-3 text-sm">
+    <div className="space-y-5">
+      <section className="surface-card rounded-2xl p-6">
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Private profile</p>
+        <h2 className="mt-2 text-xl font-semibold">How RateLoop addresses you</h2>
+        <p className="mt-3 text-sm leading-6 text-base-content/60">
+          This preference is private to your account. It does not replace verified sign-in information or change
+          eligibility, payout, or workspace permissions.
+        </p>
+        <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
+          <label className="grow text-sm text-base-content/60">
+            Display name
+            <input
+              value={displayName}
+              onChange={event => setDisplayName(event.target.value)}
+              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+              maxLength={80}
+              placeholder={profile?.providerDisplayName ?? "Your private name"}
+            />
+          </label>
+          <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
+            {busy ? "Saving…" : "Save profile"}
+          </button>
+        </form>
+        {saved ? <p className="mt-3 text-sm text-emerald-100">Profile saved.</p> : null}
+        <dl className="mt-6 grid gap-4 border-t border-white/10 pt-5 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-xs text-base-content/45">Sign-in provider</dt>
             <dd className="mt-1 text-base-content/80">{session?.authProvider ?? "Checking…"}</dd>
@@ -177,12 +133,45 @@ export function ProfileClient() {
             <dd className="mt-1 break-all font-mono text-xs text-base-content/65">{session?.address ?? "Checking…"}</dd>
           </div>
         </dl>
-        <p className="mt-6 border-t border-white/10 pt-5 text-xs leading-5 text-base-content/50">
-          An invitation authorizes cohort membership. It does not guarantee assignments, prove unique humanity, or
-          complete paid-work eligibility.
-        </p>
         {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
-      </aside>
+      </section>
+
+      <InvitationRedemption onRedeemed={() => void refresh()} />
+
+      <section className="surface-card rounded-2xl p-6">
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Customer cohorts</p>
+        <h2 className="mt-2 text-xl font-semibold">Your reviewer memberships</h2>
+        {memberships.length ? (
+          <div className="mt-5 space-y-3">
+            {memberships.map((membership, index) => (
+              <article
+                key={`${membership.projectName}-${membership.cohortName}-${index}`}
+                className="rounded-lg border border-white/10 bg-black/20 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">{membership.cohortName ?? "Customer cohort"}</h3>
+                    <p className="mt-1 text-xs text-base-content/50">{membership.projectName ?? "Private project"}</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-base-content/60">
+                    {membership.status ?? "active"}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-base-content/55">
+                  {membership.activeAssignmentCount} active assignment
+                  {membership.activeAssignmentCount === 1 ? "" : "s"} · {membership.assignmentCount} total ·{" "}
+                  {membership.source?.replaceAll("_", " ")}
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-lg bg-white/[0.04] p-4 text-sm leading-6 text-base-content/50">
+            No customer cohort memberships yet. Redeemed invitations appear here after the customer accepts the
+            membership.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

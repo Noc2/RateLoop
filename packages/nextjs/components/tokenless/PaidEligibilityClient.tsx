@@ -159,8 +159,8 @@ export function PaidEligibilityClient({ networkPanelsEnabled = false }: { networ
   const eligible = state?.status === "eligible";
 
   return (
-    <div className="mt-10 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="rateloop-surface-card p-5 sm:p-7">
+    <div className="space-y-5">
+      <section className="surface-card rounded-2xl p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
           <div>
             <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Paid-task access</p>
@@ -347,7 +347,7 @@ export function PaidEligibilityClient({ networkPanelsEnabled = false }: { networ
         {error ? <p className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
       </section>
 
-      <aside className="rateloop-surface-card p-6">
+      <aside className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Why this happens now</p>
         <h2 className="mt-2 text-xl font-semibold">No blocked earnings later</h2>
         <p className="mt-4 text-sm leading-6 text-base-content/60">

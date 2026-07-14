@@ -43,7 +43,7 @@ export function InvitationRedemption({ onRedeemed }: { onRedeemed: () => void })
   }
 
   return (
-    <section className="rateloop-surface-card p-5 sm:p-7">
+    <section className="surface-card rounded-2xl p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
         <div>
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Invitations</p>
