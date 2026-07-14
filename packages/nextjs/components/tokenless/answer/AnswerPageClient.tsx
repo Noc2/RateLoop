@@ -9,33 +9,12 @@ import {
   PrivateAssignmentCard,
 } from "~~/components/tokenless/answer/PrivateAssignmentCard";
 import { type PublicAnswerTask, PublicQuestionCard } from "~~/components/tokenless/answer/PublicQuestionCard";
-
-type Scope = "all" | "public" | "private" | "submitted";
+import { AnswerRequestError, type AnswerScope as Scope, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
   { ssr: false },
 );
-
-class AnswerRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
-async function readJson(response: Response) {
-  const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new AnswerRequestError(
-      typeof body.message === "string" ? body.message : "Answer queue request failed.",
-      response.status,
-    );
-  }
-  return body;
-}
 
 export function AnswerPageClient({
   initialQuery = "",
@@ -61,25 +40,7 @@ export function AnswerPageClient({
     setError(null);
     setSignedOut(false);
     try {
-      const encodedQuery = encodeURIComponent(nextQuery);
-      const [publicBody, privateBody] = await Promise.all([
-        nextScope === "private" || nextScope === "submitted"
-          ? Promise.resolve({ tasks: [] })
-          : readJson(
-              await fetch(`/api/rater/tasks?q=${encodedQuery}&scope=public`, {
-                cache: "no-store",
-                credentials: "same-origin",
-              }),
-            ),
-        nextScope === "public" || nextScope === "submitted"
-          ? Promise.resolve({ assignments: [] })
-          : readJson(
-              await fetch(`/api/account/assurance/assignments?q=${encodedQuery}`, {
-                cache: "no-store",
-                credentials: "same-origin",
-              }),
-            ),
-      ]);
+      const [publicBody, privateBody] = await loadAnswerQueues(nextQuery, nextScope);
       setTasks((publicBody.tasks ?? []) as PublicAnswerTask[]);
       setAssignments((privateBody.assignments ?? []) as PrivateAnswerAssignment[]);
     } catch (cause) {
