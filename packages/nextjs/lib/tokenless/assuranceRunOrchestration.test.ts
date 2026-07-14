@@ -78,6 +78,14 @@ function policy() {
 
 async function principalFixture() {
   const { workspaceId } = await createWorkspace({ name: "Run orchestration", ownerAddress: OWNER });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
   const { apiKeyId } = await createWorkspaceApiKey({ workspaceId, name: "orchestration test" });
   const principal: ProductPrincipal = { kind: "api_key", apiKeyId, workspaceId, role: "member" };
   const { projectId } = await createAssuranceProject({
@@ -375,6 +383,11 @@ test("run orchestration freezes rubric, blinded cases, policy hash, rounds, aggr
   assert.equal(frozen.manifest.rubric.passRule.minimumValidResponses, 2);
   assert.equal(frozen.manifest.rerun.ordinal, 1);
   assert.equal(frozen.manifest.aggregate.totalCases, 1);
+  const reservedUsage = await dbClient.execute({
+    sql: "SELECT state, plan_key FROM tokenless_workspace_usage_allocations WHERE run_id = ? AND case_id = ?",
+    args: [run.runId, suite.caseId],
+  });
+  assert.deepEqual(reservedUsage.rows[0], { plan_key: "early_access", state: "reserved" });
   await seedCompletedPaidPanel({
     manifestHash: frozen.manifestHash,
     policyHash: audience.policyHash,
@@ -481,6 +494,13 @@ test("run orchestration freezes rubric, blinded cases, policy hash, rounds, aggr
     args: [`https://sepolia.basescan.org/tx/0x${"9".repeat(64)}`],
   });
   await transitionAssuranceRun({ principal, runId: run.runId, status: "completed" });
+  const consumedUsage = await dbClient.execute({
+    sql: "SELECT state, consumed_at, released_at FROM tokenless_workspace_usage_allocations WHERE run_id = ?",
+    args: [run.runId],
+  });
+  assert.equal(consumedUsage.rows[0]?.state, "consumed");
+  assert.ok(consumedUsage.rows[0]?.consumed_at);
+  assert.equal(consumedUsage.rows[0]?.released_at, null);
   const rerun = await createAssuranceRun({
     principal,
     suiteId: suite.suiteId,
@@ -521,4 +541,62 @@ test("orchestration refuses to freeze definitions after a response exists", asyn
     () => freezeAssuranceRunOrchestration({ principal, runId: run.runId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_responses_already_exist",
   );
+});
+
+test("cancelling a frozen run releases its reserved review-decision capacity", async () => {
+  const { principal, projectId } = await principalFixture();
+  const suite = await frozenSuiteFixture(principal, projectId);
+  const audience = await createAssuranceAudiencePolicy({
+    principal,
+    projectId,
+    policy: { ...policy(), compensation: "unpaid", legalEligibilityRequired: false },
+  });
+  const run = await createAssuranceRun({
+    principal,
+    suiteId: suite.suiteId,
+    suiteVersion: suite.version,
+    audiencePolicyId: audience.policy.policyId,
+    audiencePolicyVersion: audience.policy.version,
+  });
+  await freezeAssuranceRunOrchestration({ principal, runId: run.runId });
+  await transitionAssuranceRun({ principal, runId: run.runId, status: "cancelled" });
+  const allocation = await dbClient.execute({
+    sql: "SELECT state, consumed_at, released_at FROM tokenless_workspace_usage_allocations WHERE run_id = ?",
+    args: [run.runId],
+  });
+  assert.equal(allocation.rows[0]?.state, "released");
+  assert.equal(allocation.rows[0]?.consumed_at, null);
+  assert.ok(allocation.rows[0]?.released_at);
+});
+
+test("a run with accepted human work cannot cancel and reuse its review-decision capacity", async () => {
+  const { principal, projectId, workspaceId } = await principalFixture();
+  const suite = await frozenSuiteFixture(principal, projectId);
+  const audience = await createAssuranceAudiencePolicy({ principal, projectId, policy: policy() });
+  const run = await createAssuranceRun({
+    principal,
+    suiteId: suite.suiteId,
+    suiteVersion: suite.version,
+    audiencePolicyId: audience.policy.policyId,
+    audiencePolicyVersion: audience.policy.version,
+  });
+  const frozen = await freezeAssuranceRunOrchestration({ principal, runId: run.runId });
+  await seedCompletedPaidPanel({
+    manifestHash: frozen.manifestHash,
+    policyHash: audience.policyHash,
+    policyId: audience.policy.policyId,
+    projectId,
+    runId: run.runId,
+    workspaceId,
+  });
+  await transitionAssuranceRun({ principal, runId: run.runId, status: "recruiting" });
+  await assert.rejects(
+    () => transitionAssuranceRun({ principal, runId: run.runId, status: "cancelled" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_cancellation_blocked",
+  );
+  const allocation = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_workspace_usage_allocations WHERE run_id = ?",
+    args: [run.runId],
+  });
+  assert.equal(allocation.rows[0]?.state, "reserved");
 });

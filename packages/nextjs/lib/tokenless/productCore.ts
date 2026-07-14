@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { requireWorkspacePaidPanels } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { bindPublicQuestionMediaToQuestion } from "~~/lib/tokenless/publicQuestionMedia";
@@ -251,6 +252,12 @@ export async function createWorkspace(input: { name: string; ownerAddress: strin
       `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
        VALUES ($1, $2, 'owner', $3)`,
       [workspaceId, ownerAddress, now],
+    );
+    await client.query(
+      `INSERT INTO tokenless_workspace_subscriptions
+       (workspace_id, plan_key, price_version, provider_status, cancel_at_period_end, created_at, updated_at)
+       VALUES ($1, 'free', 'free_2026_07', 'free', false, $2, $2)`,
+      [workspaceId, now],
     );
     await client.query("COMMIT");
     return { workspaceId };
@@ -1290,6 +1297,7 @@ export async function prepareProductAsk(input: {
 }): Promise<PreparedProductAsk> {
   const requestedWorkspace = input.request.payment.mode === "prepaid" ? input.request.payment.workspaceId : undefined;
   const workspaceId = await resolveWorkspace(input.principal, requestedWorkspace);
+  await requireWorkspacePaidPanels(workspaceId);
   const { quoteRequest, quote } = await loadQuote(input.request.quoteId);
   const policy = await enforcePublishingPolicy({
     principal: input.principal,

@@ -50,8 +50,20 @@ function quoteRequest() {
 
 async function workspaceWithKey(ownerAddress = ADDRESS_A) {
   const { workspaceId } = await createWorkspace({ name: "Acme", ownerAddress });
+  await activateEarlyAccess(workspaceId);
   const key = await createWorkspaceApiKey({ workspaceId, name: "CI" });
   return { workspaceId, ...key };
+}
+
+async function activateEarlyAccess(workspaceId: string) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
 }
 
 async function quoteAndRequest(workspaceId: string, idempotencyKey = "product:test:12345678") {
@@ -129,6 +141,24 @@ test("prepaid asks fail closed when only pending or insufficient funds exist", a
     () => prepareProductAsk({ principal, request }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "insufficient_prepaid_balance",
   );
+});
+
+test("Free workspaces cannot prepare production paid-panel asks", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Free asks", ownerAddress: ADDRESS_A });
+  const { request } = await quoteAndRequest(workspaceId, "free:paid-panel:12345678");
+  await assert.rejects(
+    () => prepareProductAsk({ principal: { kind: "session", accountAddress: ADDRESS_A }, request }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.code === "plan_limit_reached" &&
+      "limitType" in error &&
+      error.limitType === "paid_panels",
+  );
+  const mutations = await dbClient.execute(
+    "SELECT (SELECT COUNT(*) FROM tokenless_question_records) AS questions, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",
+  );
+  assert.equal(Number(mutations.rows[0]?.questions), 0);
+  assert.equal(Number(mutations.rows[0]?.reservations), 0);
 });
 
 test("settled prepaid funds reserve idempotently and conflicting economics fail", async () => {
@@ -233,6 +263,7 @@ test("terminal sandbox asks release prepaid reservations idempotently", async ()
 
 test("terminal sandbox asks mark wallet payment intents as simulated without holding value", async () => {
   const { workspaceId } = await createWorkspace({ name: "Sandbox wallet", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   const quote = await createTokenlessQuote(quoteRequest());
   const request = {
     idempotencyKey: "sandbox:wallet:12345678",
@@ -275,6 +306,7 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
 
 test("wallet payment intents require the signed-in browser principal to be the payer", async () => {
   const { workspaceId } = await createWorkspace({ name: "Personal", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   const quote = await createTokenlessQuote(quoteRequest());
   await assert.rejects(
     () =>
@@ -303,6 +335,7 @@ test("wallet payment intents require the signed-in browser principal to be the p
 
 test("workspace management returns exact available prepaid balance and never exposes API key secrets", async () => {
   const { workspaceId } = await createWorkspace({ name: "Product team", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "50000000", source: "invoice" });
   const quote = await createTokenlessQuote(quoteRequest());
   await prepareProductAsk({
@@ -343,6 +376,7 @@ test("workspace API-key management is hidden from non-members", async () => {
 
 test("policy-bound agent keys enforce exact audience and panel caps and reserve a budget", async () => {
   const { workspaceId } = await createWorkspace({ name: "Delegated", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   const policy = await createAgentPublishingPolicy({
     accountAddress: ADDRESS_A,
     workspaceId,
@@ -388,6 +422,7 @@ test("policy-bound agent keys enforce exact audience and panel caps and reserve 
 
 test("publishing policies fail closed on unsupported reviewer sources and data classifications", async () => {
   const { workspaceId } = await createWorkspace({ name: "Classified", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   const basePolicy = {
     name: "Internal-only agent",
     allowedPaymentModes: ["prepaid" as const],
@@ -435,6 +470,7 @@ test("publishing policies fail closed on unsupported reviewer sources and data c
 
 test("policy-bound x402 keys require the configured wallet binding", async () => {
   const { workspaceId } = await createWorkspace({ name: "Wallet delegated", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   const policy = await createAgentPublishingPolicy({
     accountAddress: ADDRESS_A,
     workspaceId,
@@ -480,6 +516,7 @@ test("policy-bound x402 keys require the configured wallet binding", async () =>
 
 test("policy revocation blocks the next delegated ask", async () => {
   const { workspaceId } = await createWorkspace({ name: "Revocable", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(workspaceId);
   const policy = await createAgentPublishingPolicy({
     accountAddress: ADDRESS_A,
     workspaceId,

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
+import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -278,6 +279,7 @@ export async function createWorkspaceAgent(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await assertCanCreateWorkspaceAgent(client, input.workspaceId, now);
     await client.query(
       `INSERT INTO tokenless_agents
        (agent_id, workspace_id, external_id, owner_account_address, status, created_by, created_at, updated_at)

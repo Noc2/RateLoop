@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { GET } from "~~/app/api/agent/v1/asks/[operationKey]/wait/route";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   attachProductAsk,
@@ -29,6 +29,14 @@ afterEach(() => {
 
 async function pendingAsk() {
   const { workspaceId } = await createWorkspace({ name: "Wait route", ownerAddress: OWNER });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
   const { apiKeyId, token } = await createWorkspaceApiKey({ workspaceId, name: "Wait route key" });
   await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
   const quote = await createTokenlessQuote({

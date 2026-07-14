@@ -57,6 +57,16 @@ async function seedArtifact(projectId: string, artifactId: string, role: "baseli
 
 async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
   const { workspaceId } = await createWorkspace({ name: "Response test", ownerAddress: OWNER });
+  if (input.paid) {
+    const now = new Date();
+    await dbClient.execute({
+      sql: `UPDATE tokenless_workspace_subscriptions
+            SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+                provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+            WHERE workspace_id = ?`,
+      args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+    });
+  }
   const { apiKeyId } = await createWorkspaceApiKey({ workspaceId, name: "response fixture" });
   const principal: ProductPrincipal = { kind: "api_key", apiKeyId, workspaceId, role: "member" };
   const { projectId } = await createAssuranceProject({

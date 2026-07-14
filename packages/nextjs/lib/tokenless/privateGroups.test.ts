@@ -90,6 +90,25 @@ test("private groups have immutable policy versions scoped to workspace managers
   );
 });
 
+test("Free workspaces cannot create a second active private group", async () => {
+  const { workspaceId } = await fixture();
+  await assert.rejects(
+    () =>
+      createPrivateGroup({
+        accountAddress: OWNER,
+        workspaceId,
+        name: "Second active group",
+        purpose: "This group would exceed the Free plan limit.",
+      }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "plan_limit_reached" &&
+      "limitType" in error &&
+      error.limitType === "active_private_groups",
+  );
+});
+
 test("invitations persist only a hash, enforce verified bindings, and grant membership independent of invite expiry", async () => {
   const { workspaceId, group } = await fixture();
   const now = Date.now();

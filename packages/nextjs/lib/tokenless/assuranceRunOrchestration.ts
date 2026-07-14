@@ -2,6 +2,7 @@ import { type HumanAssuranceRubric, parseHumanAssuranceRubric } from "@rateloop/
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { reserveWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
@@ -739,7 +740,8 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
     const rubric = parseHumanAssuranceRubric(suiteManifest.rubric);
     const audiencePolicyJson = rowString(run, "audience_policy_json");
     if (!audiencePolicyJson) throw new Error("Audience policy JSON is missing.");
-    const admissionPolicy = freezeAdmissionPolicy(JSON.parse(audiencePolicyJson));
+    const audiencePolicy = JSON.parse(audiencePolicyJson) as Record<string, unknown>;
+    const admissionPolicy = freezeAdmissionPolicy(audiencePolicy);
     if (!BYTES32_PATTERN.test(admissionPolicy.admissionPolicyHash))
       throw new Error("Admission policy hash is invalid.");
     const rerun = await resolveRerunLineage(client, run);
@@ -802,6 +804,13 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
         contentId: caseContentId,
       });
     }
+    await reserveWorkspaceUsageAllocations(client, {
+      workspaceId: rowString(run, "workspace_id")!,
+      runId: input.runId,
+      caseIds: casePlans.map(plan => plan.caseId),
+      requiresPaidPanels: audiencePolicy.compensation === "paid",
+      now,
+    });
     const passRule = rubric.passRule;
     const manifest: AssuranceRunOrchestrationManifest = {
       schemaVersion: ASSURANCE_RUN_ORCHESTRATION_VERSION,

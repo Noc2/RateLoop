@@ -252,7 +252,15 @@ async function freezeAskAdmissionPolicy(operationKey: string) {
 }
 
 async function walletAsk(options: { attemptReserveAtomic?: string; includeAdmissionPolicy?: boolean } = {}) {
-  await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
+  const { workspaceId } = await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
   const quote = await createTokenlessQuote({
     audience: {
       admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
@@ -425,7 +433,15 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
 });
 
 test("x402 authorization attaches after exact terms without breaking ask idempotency", async () => {
-  await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
+  const { workspaceId } = await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
   const quote = await createTokenlessQuote({
     audience: {
       admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,

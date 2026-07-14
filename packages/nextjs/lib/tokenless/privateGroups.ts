@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
+import { assertCanCreatePrivateGroup } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -299,6 +300,7 @@ export async function createPrivateGroup(input: CreatePrivateGroupInput) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await assertCanCreatePrivateGroup(client, input.workspaceId, now);
     await validateProjects(client, input.workspaceId, policy.allowedProjectIds);
     await client.query(
       `INSERT INTO tokenless_private_groups

@@ -9,6 +9,7 @@ import {
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
@@ -1030,6 +1031,7 @@ async function completeAssuranceRun(principal: AssurancePrincipal, runId: string
     if (result.rowCount !== 1) {
       completionError("The run changed while it was being completed.", "assurance_run_conflict");
     }
+    await consumeWorkspaceUsageAllocations(client, runId, now);
     await client.query("COMMIT");
     return { runId, status: "completed" as const };
   } catch (error) {
@@ -1114,17 +1116,53 @@ export async function transitionAssuranceRun(input: {
       "invalid_assurance_run_transition",
     );
   }
-  const now = new Date();
-  const result = await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_runs
-          SET status = ?, updated_at = ?
-          WHERE run_id = ? AND status = ?`,
-    args: [input.status, now, input.runId, current],
-  });
-  if (result.rowCount !== 1) {
-    throw new TokenlessServiceError("The run changed while it was being advanced.", 409, "assurance_run_conflict");
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const now = new Date();
+    if (input.status === "cancelled") {
+      const protectedWork = await client.query(
+        `SELECT
+           (SELECT COUNT(*) FROM tokenless_assurance_assignments
+            WHERE run_id = $1 AND status IN ('reserved', 'accepted', 'completed')) AS assignment_count,
+           (SELECT COUNT(*) FROM tokenless_assurance_responses WHERE run_id = $1) AS response_count,
+           (SELECT COUNT(*) FROM tokenless_assurance_run_cases
+            WHERE run_id = $1 AND (round_id IS NOT NULL OR round_status <> 'planned')) AS started_case_count`,
+        [input.runId],
+      );
+      const state = protectedWork.rows[0] as QueryRow | undefined;
+      if (
+        (rowNumber(state, "assignment_count") ?? 0) > 0 ||
+        (rowNumber(state, "response_count") ?? 0) > 0 ||
+        (rowNumber(state, "started_case_count") ?? 0) > 0
+      ) {
+        throw new TokenlessServiceError(
+          "A run with reserved or accepted human work must continue to an authorized terminal path.",
+          409,
+          "assurance_run_cancellation_blocked",
+        );
+      }
+    }
+    const result = await client.query(
+      `UPDATE tokenless_assurance_runs
+       SET status = $1, updated_at = $2
+       WHERE run_id = $3 AND status = $4`,
+      [input.status, now, input.runId, current],
+    );
+    if (result.rowCount !== 1) {
+      throw new TokenlessServiceError("The run changed while it was being advanced.", 409, "assurance_run_conflict");
+    }
+    if (input.status === "cancelled") {
+      await releaseWorkspaceUsageAllocations(client, input.runId, now);
+    }
+    await client.query("COMMIT");
+    return { runId: input.runId, status: input.status };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  return { runId: input.runId, status: input.status };
 }
 
 export async function archiveAssuranceProject(input: { principal: AssurancePrincipal; projectId: string }) {

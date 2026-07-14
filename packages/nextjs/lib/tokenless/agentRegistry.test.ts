@@ -84,6 +84,14 @@ test("agent updates append immutable declared-model versions and preserve earlie
 
 test("workspace roles permit authorized reads while restricting registry mutations to owners and admins", async () => {
   const { workspaceId } = await createWorkspace({ name: "Scoped registry", ownerAddress: OWNER });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
           VALUES (?, ?, 'member', ?), (?, ?, 'admin', ?)`,
@@ -121,6 +129,63 @@ test("workspace roles permit authorized reads while restricting registry mutatio
     /Workspace not found/,
   );
   await assert.rejects(() => listWorkspaceAgents({ accountAddress: OUTSIDER, workspaceId }), /Workspace not found/);
+});
+
+test("Free and Early Access plans enforce active-agent limits in the creation transaction", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Agent limits", ownerAddress: OWNER });
+  await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "free-agent",
+    version: version("2026-07-14"),
+  });
+  await assert.rejects(
+    () =>
+      createWorkspaceAgent({
+        accountAddress: OWNER,
+        workspaceId,
+        externalId: "over-free-limit",
+        version: version("2026-07-15"),
+      }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "plan_limit_reached" &&
+      "limitType" in error &&
+      error.limitType === "active_agents",
+  );
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
+  const second = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "paid-agent-two",
+    version: version("2026-07-15"),
+  });
+  const third = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "paid-agent-three",
+    version: version("2026-07-16"),
+  });
+  assert.equal(second.status, "active");
+  assert.equal(third.status, "active");
+  await assert.rejects(
+    () =>
+      createWorkspaceAgent({
+        accountAddress: OWNER,
+        workspaceId,
+        externalId: "over-paid-limit",
+        version: version("2026-07-17"),
+      }),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "plan_limit_reached",
+  );
 });
 
 test("deactivation is durable and blocks later versions without deleting audit history", async () => {
