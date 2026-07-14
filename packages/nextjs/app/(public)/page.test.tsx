@@ -15,7 +15,8 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
   assert.match(html, /The Human/);
-  assert.match(html, /Assurance Loop/);
+  assert.match(html, /<span class="block">Assurance <span class="rateloop-text-gradient">Loop<\/span><\/span>/);
+  assert.doesNotMatch(html, /class="rateloop-text-gradient[^\"]*">Assurance/);
   assert.match(html, /Give your agent frequent human feedback at first/);
   assert.match(html, /then review only when the evidence calls for it/);
   assert.match(html, /<span>For Humans<\/span>/);
