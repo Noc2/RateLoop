@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HumanAssuranceUseCasesStrip } from "~~/components/home/HumanAssuranceUseCasesStrip";
+import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
@@ -101,7 +101,7 @@ export default function TokenlessLandingPage() {
               </Link>
             </div>
           </div>
-          <HumanAssuranceUseCasesStrip />
+          <SupportedAgentsSection />
         </section>
 
         <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
