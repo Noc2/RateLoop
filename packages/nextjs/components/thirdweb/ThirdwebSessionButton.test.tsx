@@ -38,11 +38,17 @@ test("the thirdweb entry point keeps the original compact RateLoop sign-in treat
   assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
   assert.deepEqual(rateLoopConnectButtonStyle(true), {
     background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",
-    border: "1px solid transparent",
+    border: "1.25px solid transparent",
     borderRadius: "0.5rem",
     boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
     color: "var(--rateloop-warm-white)",
-    minWidth: "8.25rem",
+    fontSize: "1rem",
+    fontWeight: 700,
+    height: "2.5rem",
+    lineHeight: 1,
+    minHeight: "2.5rem",
+    minWidth: "max-content",
+    padding: "0.56rem 0.9rem",
     whiteSpace: "nowrap",
   });
 });

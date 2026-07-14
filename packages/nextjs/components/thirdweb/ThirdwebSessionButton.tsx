@@ -19,11 +19,21 @@ export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
 export function rateLoopConnectButtonStyle(compact: boolean) {
   return {
     background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",
-    border: "1px solid transparent",
+    border: compact ? "1.25px solid transparent" : "1px solid transparent",
     borderRadius: "0.5rem",
     boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
     color: "var(--rateloop-warm-white)",
-    minWidth: compact ? "8.25rem" : "8.5rem",
+    ...(compact
+      ? {
+          fontSize: "1rem",
+          fontWeight: 700,
+          height: "2.5rem",
+          lineHeight: 1,
+          minHeight: "2.5rem",
+          minWidth: "max-content",
+          padding: "0.56rem 0.9rem",
+        }
+      : { minWidth: "8.5rem" }),
     whiteSpace: "nowrap",
   } as const;
 }
@@ -89,8 +99,11 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
         <button
           type="button"
           className={`rateloop-gradient-action px-3 opacity-70 ${
-            compact ? "min-h-10 w-auto min-w-[8.25rem] text-base" : "min-h-11 w-full text-sm"
+            compact
+              ? "h-10 min-h-10 w-auto min-w-0 px-[0.9rem] text-base font-bold leading-none"
+              : "min-h-11 w-full text-sm"
           }`}
+          style={rateLoopConnectButtonStyle(compact)}
           onClick={() => setConfigurationError(true)}
         >
           {RATELOOP_SIGN_IN_LABEL}
@@ -105,7 +118,7 @@ export function ThirdwebSessionButton({ compact = false }: { compact?: boolean }
   }
 
   const buttonClass = `rateloop-gradient-action px-3 ${
-    compact ? "!min-h-10 !w-auto !min-w-[8.25rem] !text-sm" : "!min-h-11 !text-sm"
+    compact ? "!h-10 !min-h-10 !w-auto !min-w-0 !px-[0.9rem] !text-base !font-bold !leading-none" : "!min-h-11 !text-sm"
   }`;
   const buttonStyle = rateLoopConnectButtonStyle(compact);
 
