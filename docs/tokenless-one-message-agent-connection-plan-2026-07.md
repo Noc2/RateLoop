@@ -68,26 +68,37 @@ A second production-shaped attempt exposed three additional release blockers aft
 
 1. the installed Git marketplace still pointed at `main` and served the older `0.1.1` plugin, which did not include the
    private `rateloop-workspace` server shipped by the tokenless `0.2.0` package;
-2. Codex completed OAuth but the active task kept its pre-authorization MCP client until a native server reload; the agent
-   then attempted shell login, self-messages, and nested runtimes instead of using the host reload boundary;
+2. Codex completed OAuth, but this app build exposed no reload or restart control on the plugin or MCP screens. The agent
+   invented several settings paths, then attempted shell login, self-messages, and nested runtimes instead of waiting for
+   a host-presented continuation and checking the next active turn's actual tool inventory;
 3. the workspace MCP tools omitted standard safety annotations, so hosts had to assume every call was destructive,
    non-idempotent, and open-world. That made the already-authorized safe claim look like a second approval-worthy action.
 
 The corrective release gate is:
 
 - the installed plugin must contain `rateloop-workspace` before a connection message is accepted as runnable;
-- OAuth completion may be followed by at most one host-native MCP reload in the same task, never a second login or a
-  nested agent process;
+- the connection message must use Codex's structured RateLoop plugin mention so an unavailable plugin produces the
+  native install/connect flow and its **Continue** action can resume the original task;
+- after install or OAuth, the agent checks whether `rateloop-workspace` tools are actually available on the next active
+  turn. It uses a reload, restart, or new-task transition only when the host itself presents that action, and never
+  invents a settings path, second login, or nested agent process;
 - `rateloop_claim_connection_intent` and `rateloop_verify_connection` must be truthfully annotated as closed-domain,
   non-destructive, and idempotent, while context reads are read-only and publishing/spending tools remain destructive;
 - repeated verification must return the original terminal result without new events or timestamp churn;
-- after OAuth success, no user-facing message may claim that another prompt is pending unless the host or server actually
-  supplies a new authorization request.
+- after OAuth success, no user-facing message may claim that another prompt is pending or that the workspace is connected
+  unless the host/server supplies that state or claim -> context -> verification has completed.
 
-These annotations follow the MCP tool contract, whose omitted defaults are deliberately pessimistic. Codex's native app
-server provides a dedicated MCP configuration reload that applies refreshed tools to the next active turn. See the
-[MCP tool specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and the
-[Codex app-server MCP lifecycle](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md).
+These annotations follow the MCP tool contract, whose omitted defaults are deliberately pessimistic. Codex documents a
+structured plugin mention that can present install/connect setup and then let the owner select **Continue** to resume the
+same task; it does not document the reload control previously asserted here. See the
+[MCP tool specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and
+[Codex plugins](https://learn.chatgpt.com/docs/plugins).
+
+The tokenless Git marketplace must be added with the `tokenless` ref. An unpinned `Noc2/RateLoop` marketplace resolves
+`main`, which remains the separate legacy product and currently packages the public-only `0.1.1` plugin. A tokenless
+release is not runnable for first-time Codex users until its advertised install source is pinned to `tokenless` or the
+plugin is published from a dedicated tokenless marketplace/default branch. A tokenless-only release must not move
+`main` to hide this distribution boundary.
 
 ## 3. Product principles
 
@@ -129,8 +140,9 @@ RateLoop learns the host and client version from OAuth and `initialize.clientInf
 select or guess them. The copied message is concise but operational:
 
 ```text
-Use RateLoop to connect yourself to my workspace and finish automatically. Only interrupt me for a host-native install,
-trust, or authorization prompt: https://rateloop-tokenless.vercel.app/connect/aci_display...#claim=acn_...
+[@RateLoop](plugin://rateloop@rateloop) Use RateLoop to connect yourself to my workspace and finish automatically. Only
+interrupt me for an install, trust, or authorization action the host actually presents:
+https://rateloop-tokenless.vercel.app/connect/aci_display...#claim=acn_...
 ```
 
 The path contains only a display-safe intent ID. The high-entropy claim nonce is carried in the URL fragment so browsers
@@ -416,7 +428,7 @@ optional declared metadata and default to `unknown` when the host does not attes
 
 | Host                           | Preferred RateLoop path                                                                                                                | First-use fallback                                                                                                                  | Returning-user target                                                                           |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Codex app/CLI/IDE              | Published RateLoop plugin bundling the existing public MCP plus a separate stable OAuth-protected workspace MCP and connection skill   | Install/enable plugin and authenticate in the native MCP UI; a required reload/new task receives the persisted intent automatically | Paste one connection link; native OAuth opens if the stored provisional grant cannot satisfy it |
+| Codex app/CLI/IDE              | Structured `[@RateLoop](plugin://rateloop@rateloop)` mention backed by a tokenless-pinned marketplace plugin that bundles the public and OAuth-protected workspace MCP servers | Complete only the install/connect action Codex presents, then select **Continue** when offered; if Codex requires another transition, preserve the intent without another paste | Paste one connection link; check workspace-tool availability, then claim -> context -> verify |
 | Claude Code                    | RateLoop Claude plugin with the public and workspace HTTP MCP entries, or one `claude mcp add --transport http` workspace installation | `/mcp` browser OAuth and trust                                                                                                      | Paste one connection link; no manual secret; use `list_changed` only as an optimization         |
 | Cursor                         | Official **Add to Cursor** MCP install link plus OAuth                                                                                 | One-click install and native OAuth                                                                                                  | Paste one connection link; credentials remain in Cursor's auth storage                          |
 | VS Code / Copilot              | MCP gallery/manifest or user-profile install, with OAuth client metadata                                                               | Trust prompt plus browser OAuth; `code --add-mcp` as a CLI option                                                                   | Paste one connection link; autostart/authorization handles the server                           |
