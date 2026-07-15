@@ -5,10 +5,16 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import {
+  type AgentOAuthAccessPrincipal,
+  AgentOAuthError,
+  authenticateAgentOAuthAccessToken,
+} from "~~/lib/tokenless/agentOAuth";
 import type { AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
 import {
   type ProductPrincipal,
   TOKENLESS_AGENT_SCOPES,
+  type TokenlessAgentScope,
   authenticateProductPrincipal,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -44,8 +50,8 @@ export type AgentIntegrationBinding = {
   agentVersionId: string;
   reviewPolicyId: string;
   reviewPolicyVersion: number;
-  publishingPolicyId: string;
-  publishingPolicyVersion: number;
+  publishingPolicyId: string | null;
+  publishingPolicyVersion: number | null;
   status: "active";
   enforcementMode: "advisory" | "host_enforced";
   allowedWorkflowKeys: string[];
@@ -54,7 +60,14 @@ export type AgentIntegrationBinding = {
 
 export type AgentMcpPrincipal =
   | { kind: "pairing"; pairingId: string; workspaceId: string; apiKeyId: string }
-  | { kind: "integration"; principal: ApiPrincipal; integration: AgentIntegrationBinding };
+  | { kind: "integration"; principal: ApiPrincipal; integration: AgentIntegrationBinding }
+  | {
+      kind: "oauth";
+      oauth: AgentOAuthAccessPrincipal;
+      principal: ApiPrincipal | null;
+      integration: AgentIntegrationBinding | null;
+      connectionStatus: string | null;
+    };
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -200,8 +213,11 @@ function bindingFromRow(row: Row): AgentIntegrationBinding {
     agentVersionId: text(row, "agent_version_id")!,
     reviewPolicyId: text(row, "review_policy_id")!,
     reviewPolicyVersion: integer(row, "review_policy_version"),
-    publishingPolicyId: text(row, "publishing_policy_id")!,
-    publishingPolicyVersion: integer(row, "publishing_policy_version"),
+    publishingPolicyId: text(row, "publishing_policy_id"),
+    publishingPolicyVersion:
+      row.publishing_policy_version === null || row.publishing_policy_version === undefined
+        ? null
+        : integer(row, "publishing_policy_version"),
     status: "active",
     enforcementMode: text(row, "enforcement_mode") as "advisory" | "host_enforced",
     allowedWorkflowKeys: jsonArray(row.allowed_workflow_keys_json, "allowed workflows"),
@@ -280,9 +296,13 @@ export async function listAgentConnections(input: { accountAddress: string; work
       args: [input.workspaceId],
     }),
     dbClient.execute({
-      sql: `SELECT i.*, k.key_prefix AS credential_prefix, k.expires_at, a.external_id, v.display_name
+      sql: `SELECT i.*, k.key_prefix AS credential_prefix,
+                             COALESCE(k.expires_at, f.absolute_expires_at) AS expires_at,
+                             a.external_id, v.display_name, c.status AS connection_status
                              FROM tokenless_agent_integrations i
-                             JOIN tokenless_workspace_api_keys k ON k.key_id = i.api_key_id
+                             LEFT JOIN tokenless_workspace_api_keys k ON k.key_id = i.api_key_id
+                             LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
+                             LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
                              JOIN tokenless_agents a ON a.agent_id = i.agent_id
                              JOIN tokenless_agent_versions v ON v.version_id = i.agent_version_id
                              WHERE i.workspace_id = ? ORDER BY i.created_at DESC`,
@@ -302,12 +322,60 @@ export async function listAgentConnections(input: { accountAddress: string; work
         expiresAt: iso(row.expires_at),
         createdAt: iso(row.created_at),
         revokedAt: iso(row.revoked_at),
+        activationMode: text(row, "activation_mode"),
+        connectionStatus: text(row, "connection_status"),
+        oauthClientId: text(row, "oauth_client_id"),
       };
     }),
   };
 }
 
 export async function authenticateAgentMcpPrincipal(authorization: string | null): Promise<AgentMcpPrincipal> {
+  if (/^Bearer\s+rlo_at_/i.test(authorization ?? "")) {
+    let oauth: AgentOAuthAccessPrincipal;
+    try {
+      oauth = await authenticateAgentOAuthAccessToken(authorization);
+    } catch (error) {
+      if (error instanceof AgentOAuthError) {
+        throw new TokenlessServiceError(error.message, error.status, error.code);
+      }
+      throw error;
+    }
+    const integrationResult = await dbClient.execute({
+      sql: `SELECT i.*, c.status AS connection_status
+            FROM tokenless_agent_integrations i
+            JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+            WHERE i.token_family_id = ? AND i.status = 'active' LIMIT 1`,
+      args: [oauth.tokenFamilyId],
+    });
+    const row = integrationResult.rows[0] as Row | undefined;
+    if (!row) {
+      return { kind: "oauth", oauth, principal: null, integration: null, connectionStatus: null };
+    }
+    const now = new Date();
+    await dbClient.execute({
+      sql: "UPDATE tokenless_agent_integrations SET last_seen_at = ?, updated_at = ? WHERE integration_id = ?",
+      args: [now, now, text(row, "integration_id")],
+    });
+    const principal: ApiPrincipal = {
+      kind: "api_key",
+      apiKeyId: oauth.tokenFamilyId,
+      workspaceId: text(row, "workspace_id")!,
+      role: "member",
+      scopes: oauth.scopes.filter(scope =>
+        (TOKENLESS_AGENT_SCOPES as readonly string[]).includes(scope),
+      ) as TokenlessAgentScope[],
+      policyId: null,
+      expiresAt: oauth.expiresAt.toISOString(),
+    };
+    return {
+      kind: "oauth",
+      oauth,
+      principal,
+      integration: { ...bindingFromRow(row), lastSeenAt: now.toISOString() },
+      connectionStatus: text(row, "connection_status"),
+    };
+  }
   const match = authorization ? /^Bearer\s+(.+)$/i.exec(authorization) : null;
   if (!match || !TOKEN_PATTERN.test(match[1]))
     throw new TokenlessServiceError("Invalid agent credential.", 401, "invalid_agent_credential");
@@ -376,6 +444,50 @@ export async function recordPairingClientMetadata(
   metadata: { clientName?: string | null; clientVersion?: string | null; clientCapabilities?: string[] },
 ) {
   return recordPairingClientInfo({ pairing, ...metadata });
+}
+
+export async function recordOAuthMcpClientMetadata(
+  principal: Extract<AgentMcpPrincipal, { kind: "oauth" }>,
+  metadata: { clientName: string; clientVersion: string; clientCapabilities: string[] },
+) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_oauth_clients
+          SET software_version = COALESCE(software_version, ?), updated_at = ?
+          WHERE client_id = ? AND status = 'active'`,
+    args: [metadata.clientVersion, now, principal.oauth.clientId],
+  });
+  if (!principal.integration) return;
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_integrations
+          SET client_name = ?, client_version = ?, client_capabilities_json = ?,
+              last_initialize_at = ?, updated_at = ?
+          WHERE integration_id = ? AND token_family_id = ? AND status = 'active'`,
+    args: [
+      metadata.clientName,
+      metadata.clientVersion,
+      JSON.stringify(metadata.clientCapabilities),
+      now,
+      now,
+      principal.integration.integrationId,
+      principal.oauth.tokenFamilyId,
+    ],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_connection_intents
+          SET client_name = ?, client_version = ? WHERE claimed_token_family_id = ?`,
+    args: [metadata.clientName, metadata.clientVersion, principal.oauth.tokenFamilyId],
+  });
+}
+
+export async function recordOAuthAgentContextRead(principal: Extract<AgentMcpPrincipal, { kind: "oauth" }>) {
+  if (!principal.integration) return;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_integrations SET last_context_at = ?, last_seen_at = ?, updated_at = ?
+          WHERE integration_id = ? AND token_family_id = ? AND status = 'active'`,
+    args: [now, now, now, principal.integration.integrationId, principal.oauth.tokenFamilyId],
+  });
 }
 
 export async function submitAgentRegistration(input: {
@@ -714,7 +826,8 @@ export async function revokeAgentIntegration(input: {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      "SELECT api_key_id FROM tokenless_agent_integrations WHERE workspace_id = $1 AND integration_id = $2 AND status = 'active' FOR UPDATE",
+      `SELECT api_key_id,token_family_id FROM tokenless_agent_integrations
+       WHERE workspace_id = $1 AND integration_id = $2 AND status = 'active' FOR UPDATE`,
       [input.workspaceId, input.integrationId],
     );
     if (!result.rowCount) throw new TokenlessServiceError("Integration not found.", 404, "agent_integration_not_found");
@@ -722,6 +835,27 @@ export async function revokeAgentIntegration(input: {
       now,
       result.rows[0]?.api_key_id,
     ]);
+    const tokenFamilyId = text(result.rows[0] as Row, "token_family_id");
+    if (tokenFamilyId) {
+      await client.query(
+        `UPDATE tokenless_agent_oauth_token_families
+         SET status='revoked',revoked_at=$1,revoked_by=$2,revocation_reason='workspace_administrator_revocation'
+         WHERE token_family_id=$3 AND status='active'`,
+        [now, actor, tokenFamilyId],
+      );
+      await client.query(
+        `UPDATE tokenless_agent_oauth_refresh_tokens
+         SET revoked_at=COALESCE(revoked_at,$1),revocation_reason=COALESCE(revocation_reason,'workspace_administrator_revocation')
+         WHERE token_family_id=$2`,
+        [now, tokenFamilyId],
+      );
+      await client.query(
+        `UPDATE tokenless_agent_oauth_access_tokens
+         SET revoked_at=COALESCE(revoked_at,$1),revocation_reason=COALESCE(revocation_reason,'workspace_administrator_revocation')
+         WHERE token_family_id=$2`,
+        [now, tokenFamilyId],
+      );
+    }
     await client.query(
       "UPDATE tokenless_agent_integrations SET status = 'revoked', revoked_at = $1, updated_at = $1 WHERE integration_id = $2",
       [now, input.integrationId],
@@ -765,11 +899,19 @@ export async function rotateAgentIntegration(input: {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      "SELECT api_key_id FROM tokenless_agent_integrations WHERE workspace_id = $1 AND integration_id = $2 AND status = 'active' FOR UPDATE",
+      `SELECT api_key_id FROM tokenless_agent_integrations
+       WHERE workspace_id = $1 AND integration_id = $2 AND status = 'active' FOR UPDATE`,
       [input.workspaceId, input.integrationId],
     );
     if (!result.rowCount) throw new TokenlessServiceError("Integration not found.", 404, "agent_integration_not_found");
-    const oldKeyId = String(result.rows[0]?.api_key_id);
+    const oldKeyId = text(result.rows[0] as Row, "api_key_id");
+    if (!oldKeyId) {
+      throw new TokenlessServiceError(
+        "OAuth connections rotate credentials in the agent host and cannot be rotated from RateLoop.",
+        409,
+        "credential_rotation_unavailable",
+      );
+    }
     const token = `rlk_${oldKeyId}_${randomBytes(32).toString("base64url")}`;
     await client.query(
       "UPDATE tokenless_workspace_api_keys SET key_hash = $1, key_prefix = $2, expires_at = $3, last_used_at = NULL WHERE key_id = $4",

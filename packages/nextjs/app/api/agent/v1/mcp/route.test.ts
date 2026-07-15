@@ -1,26 +1,42 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { POST } from "~~/app/api/agent/v1/mcp/route";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
+import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import {
   approveAgentPairing,
   authenticateAgentMcpPrincipal,
   createAgentPairing,
+  listAgentConnections,
+  revokeAgentIntegration,
+  rotateAgentIntegration,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
+import {
+  exchangeAgentOAuthToken,
+  getCanonicalAgentMcpResource,
+  issueAgentOAuthAuthorizationCode,
+  registerAgentOAuthClient,
+  validateAgentOAuthAuthorizationRequest,
+} from "~~/lib/tokenless/agentOAuth";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+const originalRateLimitSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
+const originalAppUrl = process.env.APP_URL;
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "99".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "sampler-route-v1";
+  process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = "workspace-mcp-test-rate-limit-secret-with-32-characters";
+  process.env.APP_URL = "https://rateloop-tokenless.vercel.app";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
@@ -30,6 +46,10 @@ afterEach(() => {
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
+  if (originalRateLimitSecret === undefined) delete process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
+  else process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = originalRateLimitSecret;
+  if (originalAppUrl === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = originalAppUrl;
 });
 
 function request(value: unknown, token?: string) {
@@ -40,6 +60,7 @@ function request(value: unknown, token?: string) {
       accept: "application/json, text/event-stream",
       "content-type": "application/json",
       "mcp-protocol-version": "2025-11-25",
+      "x-real-ip": "203.0.113.90",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
   });
@@ -156,10 +177,158 @@ test("pairing initialization tells the agent to register immediately and returns
   assert.match(registration.nextAction, /rateloop_get_registration_status/);
 });
 
+test("OAuth keeps one stable tool list while one message claims, loads, and verifies the connection", async () => {
+  const principalId = `rlp_${"b".repeat(24)}`;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [principalId, now, now],
+  });
+  const { workspaceId } = await createWorkspace({ name: "One-message OAuth", ownerAddress: principalId });
+  const intent = await createAgentConnectionIntent({
+    accountAddress: principalId,
+    workspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+  });
+  const redirectUri = "http://127.0.0.1:43219/oauth/callback";
+  const verifier = "v".repeat(64);
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const oauthClient = await registerAgentOAuthClient({
+    client_name: "Cross-host MCP client",
+    redirect_uris: [redirectUri],
+  });
+  const authorization = await validateAgentOAuthAuthorizationRequest(
+    new URLSearchParams({
+      client_id: oauthClient.client_id,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      resource: getCanonicalAgentMcpResource(),
+      scope: oauthClient.scope,
+    }),
+  );
+  const codeRedirect = await issueAgentOAuthAuthorizationCode({
+    request: authorization,
+    subjectPrincipalId: principalId,
+    consented: true,
+  });
+  const code = new URL(codeRedirect.redirectUri).searchParams.get("code");
+  assert.ok(code);
+  const tokens = await exchangeAgentOAuthToken({
+    grantType: "authorization_code",
+    clientId: oauthClient.client_id,
+    code,
+    redirectUri,
+    codeVerifier: verifier,
+    resource: getCanonicalAgentMcpResource(),
+  });
+
+  const names = [
+    "rateloop_claim_connection_intent",
+    "rateloop_get_agent_context",
+    "rateloop_verify_connection",
+    "rateloop_get_assurance_state",
+    "rateloop_evaluate_review_requirement",
+    "rateloop_request_review",
+    "rateloop_wait_for_review",
+    "rateloop_get_review_result",
+  ];
+  const before = await POST(request({ id: 10, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token));
+  assert.deepEqual(
+    (await before.json()).result.tools.map((tool: { name: string }) => tool.name),
+    names,
+  );
+  const notReady = await POST(
+    request(
+      {
+        id: 11,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  assert.equal((await notReady.json()).result.structuredContent.code, "connection_not_ready");
+  const claimed = await POST(
+    request(
+      {
+        id: 12,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_claim_connection_intent", arguments: { connectionUrl: intent.connectionUrl } },
+      },
+      tokens.access_token,
+    ),
+  );
+  const claim = (await claimed.json()).result.structuredContent;
+  assert.equal(claim.connection.status, "testing");
+  const context = await POST(
+    request(
+      {
+        id: 13,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  const agentContext = (await context.json()).result.structuredContent;
+  assert.equal(agentContext.workspaceId, workspaceId);
+  assert.equal(agentContext.publishingPolicy, null);
+  assert.equal(agentContext.safeAccess.canSpend, false);
+  const verified = await POST(
+    request(
+      {
+        id: 14,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_verify_connection", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  assert.equal((await verified.json()).result.structuredContent.connection.status, "connected");
+  const after = await POST(request({ id: 15, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token));
+  assert.deepEqual(
+    (await after.json()).result.tools.map((tool: { name: string }) => tool.name),
+    names,
+  );
+  const connections = await listAgentConnections({ accountAddress: principalId, workspaceId });
+  const oauthIntegration = connections.integrations.find(
+    integration => integration.integrationId === claim.connection.integrationId,
+  );
+  assert.equal(oauthIntegration?.activationMode, "preauthorized_safe");
+  assert.equal(oauthIntegration?.credentialPrefix, null);
+  await assert.rejects(
+    () =>
+      rotateAgentIntegration({
+        accountAddress: principalId,
+        workspaceId,
+        integrationId: claim.connection.integrationId,
+        origin: "https://rateloop-tokenless.vercel.app",
+      }),
+    /rotate credentials in the agent host/,
+  );
+  await revokeAgentIntegration({
+    accountAddress: principalId,
+    workspaceId,
+    integrationId: claim.connection.integrationId,
+  });
+  const revoked = await POST(
+    request({ id: 16, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
+  );
+  assert.equal(revoked.status, 401);
+});
+
 test("uses a bound authenticated workspace surface without changing the public four tools", async () => {
   const setupData = await setup();
   const unauthenticated = await POST(request({ id: 1, jsonrpc: "2.0", method: "tools/list", params: {} }));
   assert.equal(unauthenticated.status, 401);
+  assert.match(unauthenticated.headers.get("www-authenticate") ?? "", /oauth-protected-resource/);
   assert.equal((await unauthenticated.json()).error.data.code, "invalid_agent_credential");
 
   const listed = await POST(request({ id: 2, jsonrpc: "2.0", method: "tools/list", params: {} }, setupData.token));

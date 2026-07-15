@@ -10,9 +10,12 @@ import {
   evaluateAdaptiveReviewRequirement,
   getAdaptiveAssuranceState,
 } from "~~/lib/tokenless/adaptiveReviewService";
+import { claimAgentConnectionIntent, verifyAgentConnection } from "~~/lib/tokenless/agentConnectionIntents";
 import {
-  authenticateAgentMcpPrincipal,
+  type AgentMcpPrincipal,
   getAgentRegistrationStatus,
+  recordOAuthAgentContextRead,
+  recordOAuthMcpClientMetadata,
   recordPairingClientMetadata,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
@@ -20,7 +23,6 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type JsonRecord = Record<string, unknown>;
 type JsonRpcId = string | number | null;
-type AgentMcpPrincipal = Awaited<ReturnType<typeof authenticateAgentMcpPrincipal>>;
 
 const hashSchema = { pattern: "^sha256:[0-9a-f]{64}$", type: "string" } as const;
 const identifierSchema = { maxLength: 160, minLength: 1, type: "string" } as const;
@@ -167,6 +169,33 @@ export const workspaceMcpTools = [
   },
 ] as const;
 
+const connectionIntentMcpTools = [
+  {
+    name: "rateloop_claim_connection_intent",
+    description:
+      "Claim the one-time RateLoop workspace connection URL supplied by the user. Pass the complete URL exactly once in this protected tool argument; never quote, log, fetch, or reproduce it elsewhere.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" } },
+      required: ["connectionUrl"],
+      type: "object",
+    },
+  },
+  {
+    name: "rateloop_verify_connection",
+    description:
+      "Complete the safe connection test after loading agent context. This is non-evaluative and never creates review evidence.",
+    inputSchema: { additionalProperties: false, properties: {}, type: "object" },
+  },
+] as const;
+
+export const oauthWorkspaceMcpTools = [
+  connectionIntentMcpTools[0],
+  workspaceMcpTools[0],
+  connectionIntentMcpTools[1],
+  ...workspaceMcpTools.slice(1),
+] as const;
+
 function object(value: unknown): JsonRecord | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : null;
 }
@@ -264,7 +293,17 @@ async function callIntegrationTool(
         enforcementMode: binding.enforcementMode,
         allowedWorkflowKeys: binding.allowedWorkflowKeys,
         reviewPolicy: { policyId: binding.reviewPolicyId, version: binding.reviewPolicyVersion },
-        publishingPolicy: { policyId: binding.publishingPolicyId, version: binding.publishingPolicyVersion },
+        publishingPolicy:
+          binding.publishingPolicyId && binding.publishingPolicyVersion
+            ? { policyId: binding.publishingPolicyId, version: binding.publishingPolicyVersion }
+            : null,
+        safeAccess: {
+          canCheckReviewRequirement: true,
+          canSpend: binding.publishingPolicyId !== null,
+          canPublish: binding.publishingPolicyId !== null,
+          canReadPrivateArtifacts: false,
+          canAdministerWorkspace: false,
+        },
       });
     }
     if (name === "rateloop_get_assurance_state") {
@@ -372,6 +411,69 @@ async function callIntegrationTool(
   }
 }
 
+function connectionNotReady(message = "Claim the RateLoop connection URL before using workspace tools.") {
+  return toolError(new TokenlessServiceError(message, 409, "connection_not_ready", true));
+}
+
+async function callOAuthTool(
+  principal: Extract<AgentMcpPrincipal, { kind: "oauth" }>,
+  name: string,
+  args: unknown,
+  context: { origin: string; signal?: AbortSignal },
+) {
+  try {
+    if (name === "rateloop_claim_connection_intent") {
+      const input = requireObjectWithKeys(args, ["connectionUrl"], "connectionUrl is required.");
+      if (typeof input.connectionUrl !== "string") {
+        throw new TokenlessServiceError("connectionUrl is required.", 400, "invalid_tool_arguments");
+      }
+      return toolResult(
+        await claimAgentConnectionIntent({
+          connectionUrl: input.connectionUrl,
+          origin: context.origin,
+          principal: principal.oauth,
+        }),
+      );
+    }
+    if (!principal.integration || !principal.principal) return connectionNotReady();
+    const integrationPrincipal: Extract<AgentMcpPrincipal, { kind: "integration" }> = {
+      kind: "integration",
+      principal: principal.principal,
+      integration: principal.integration,
+    };
+    if (name === "rateloop_get_agent_context") {
+      const result = await callIntegrationTool(integrationPrincipal, name, args, context);
+      await recordOAuthAgentContextRead(principal);
+      return result;
+    }
+    if (name === "rateloop_verify_connection") {
+      requireObjectWithKeys(args, [], "Connection verification arguments are invalid.");
+      return toolResult(
+        await verifyAgentConnection({
+          principal: principal.oauth,
+          integrationId: principal.integration.integrationId,
+        }),
+      );
+    }
+    if (principal.connectionStatus !== "connected") {
+      return connectionNotReady("Load agent context and verify this connection before using review tools.");
+    }
+    if (name === "rateloop_request_review" && principal.integration.publishingPolicyId === null) {
+      return toolError(
+        new TokenlessServiceError(
+          "This safe connection cannot publish or spend. A workspace administrator must grant a publishing policy first.",
+          403,
+          "publishing_not_enabled",
+        ),
+      );
+    }
+    return callIntegrationTool(integrationPrincipal, name, args, context);
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) return toolError(error);
+    throw error;
+  }
+}
+
 export async function dispatchWorkspaceMcp(
   value: unknown,
   principal: AgentMcpPrincipal,
@@ -394,7 +496,7 @@ export async function dispatchWorkspaceMcp(
     if (!params || typeof params.protocolVersion !== "string") {
       return errorResponse(id, -32602, "Missing MCP protocol version.");
     }
-    if (principal.kind === "pairing") {
+    if (principal.kind === "pairing" || principal.kind === "oauth") {
       const clientInfo = object(params.clientInfo);
       const capabilities = object(params.capabilities);
       if (
@@ -403,14 +505,16 @@ export async function dispatchWorkspaceMcp(
         typeof clientInfo.version !== "string" ||
         !capabilities
       ) {
-        return errorResponse(id, -32602, "Pairing initialization requires MCP clientInfo and capabilities.");
+        return errorResponse(id, -32602, "Workspace initialization requires MCP clientInfo and capabilities.");
       }
       try {
-        await recordPairingClientMetadata(principal, {
+        const metadata = {
           clientName: clientInfo.name,
           clientVersion: clientInfo.version,
           clientCapabilities: Object.keys(capabilities).sort(),
-        });
+        };
+        if (principal.kind === "pairing") await recordPairingClientMetadata(principal, metadata);
+        else await recordOAuthMcpClientMetadata(principal, metadata);
       } catch (error) {
         if (error instanceof TokenlessServiceError) {
           return errorResponse(id, -32000, error.message, { code: error.code, retryable: error.retryable });
@@ -426,25 +530,39 @@ export async function dispatchWorkspaceMcp(
       instructions:
         principal.kind === "pairing"
           ? "Act immediately without asking the user what this endpoint is for. List tools and call rateloop_register_agent exactly once using honest metadata inferred from the current runtime and work. Then call rateloop_get_registration_status while the owner reviews it. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments. No workspace or review access exists before approval."
-          : "This registration is approved. Immediately refresh tools and call rateloop_get_agent_context. This credential is bound to one workspace agent, immutable version, and owner policy. Before each eligible output, call rateloop_evaluate_review_requirement and complete the review flow whenever it returns required; caller-supplied identity or policy identifiers are never trusted.",
+          : principal.kind === "oauth"
+            ? principal.integration
+              ? "A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. This safe connection cannot publish, spend, read private artifacts, or administer the workspace."
+              : "Complete the user's one-time RateLoop connection now. Call rateloop_claim_connection_intent exactly once with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. Then call rateloop_get_agent_context and rateloop_verify_connection without asking for another paste or creating a polling service."
+            : "This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable version, and owner policy. Before each eligible output, call rateloop_evaluate_review_requirement and complete the review flow whenever it returns required; caller-supplied identity or policy identifiers are never trusted.",
       protocolVersion: negotiatedVersion,
       serverInfo: { name: "rateloop-tokenless-workspace", version: "1.0.0" },
     });
   }
   if (request.method === "ping") return response(id, {});
   if (request.method === "tools/list") {
-    return response(id, { tools: principal.kind === "pairing" ? pairingMcpTools : workspaceMcpTools });
+    return response(id, {
+      tools:
+        principal.kind === "pairing"
+          ? pairingMcpTools
+          : principal.kind === "oauth"
+            ? oauthWorkspaceMcpTools
+            : workspaceMcpTools,
+    });
   }
   if (request.method === "tools/call") {
     const params = object(request.params);
     if (!params || typeof params.name !== "string") return errorResponse(id, -32602, "Invalid tool call parameters.");
+    const toolContext = {
+      origin: context.origin ?? "http://localhost",
+      ...(context.signal ? { signal: context.signal } : {}),
+    };
     const result =
       principal.kind === "pairing"
         ? await callPairingTool(principal, params.name, params.arguments ?? {})
-        : await callIntegrationTool(principal, params.name, params.arguments ?? {}, {
-            origin: context.origin ?? "http://localhost",
-            ...(context.signal ? { signal: context.signal } : {}),
-          });
+        : principal.kind === "oauth"
+          ? await callOAuthTool(principal, params.name, params.arguments ?? {}, toolContext)
+          : await callIntegrationTool(principal, params.name, params.arguments ?? {}, toolContext);
     return result ? response(id, result) : errorResponse(id, -32602, "Unknown RateLoop workspace tool.");
   }
   return errorResponse(id, -32601, "Method not found");
