@@ -4,6 +4,16 @@
 - Commit independent fixes separately. Before pushing, review the changed files and group commits by concern instead of bundling unrelated fixes together.
 - When the user asks to publish finished work, commit the intended fixes and push the current branch after verification passes.
 
+## Product design and UX standard
+
+- The product must be immediately understandable, task-focused, and economical with words. Every visible sentence, label, control, option, and section must justify itself by helping the user decide, act, understand essential state, recover from an error, or meet a real legal or safety requirement. Remove anything that does not pass that test.
+- Design each screen around the user's single most likely next action. Use progressive disclosure: do not show downstream configuration, empty management surfaces, implementation terminology, or future workflow stages before the prerequisite action is complete.
+- In a new workspace, the Agents tab must initially focus on connecting an agent. Connection progress should appear only while a connection is in progress; connected-agent management, registry details, and publishing policies should appear only after an agent exists and the feature is relevant.
+- Prefer a clear default and a short primary path over exposing the full internal data model. Advanced controls belong behind an explicit advanced action, disclosure, or later workflow step.
+- Add a feature, field, option, or taxonomy only when there is a demonstrated user need or an enforced product, security, legal, or operational distinction. Do not expose backend distinctions merely because the schema supports them. For example, retain multiple permitted data classifications only if each classification changes real system behavior or is required for policy enforcement; otherwise collapse or remove them.
+- Keep essential instructions and consequences visible and concise. Put useful secondary explanations, definitions, and technical detail in accessible info icons with tooltips or popovers instead of permanent small helper text. Tooltips must be keyboard accessible, work on touch devices, and never hide information required to complete the task safely.
+- Treat excessive copy, repeated empty states, low-contrast helper text, and long forms as product defects. During implementation and review, justify each retained word and control against the current user journey, and delete obsolete UI and its underlying capability together when no real need remains.
+
 ## Tokenless branch and deployment isolation guard
 
 - Treat `tokenless` and `main` as separate products and deployment lines. A generic request to push, publish, deploy, or continue while checked out on `tokenless` authorizes only `origin/tokenless` and the isolated tokenless services. It never authorizes updating `main`, the legacy `rate-loop-nextjs` Vercel project, or `rateloop.ai`.
