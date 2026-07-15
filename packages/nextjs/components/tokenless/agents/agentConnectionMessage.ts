@@ -8,5 +8,5 @@ export type AgentConnectionMessageInput = {
  * host through OAuth and never enter the model transcript.
  */
 export function buildAgentConnectionMessage({ connectionUrl }: AgentConnectionMessageInput) {
-  return `Use RateLoop to connect yourself to my workspace and finish automatically. Open and preserve this connection link through any installation or authorization; do not ask me to paste it again. Only interrupt me for a host-native install, trust, or authorization prompt: ${connectionUrl}`;
+  return `Use RateLoop to connect this agent to my workspace and finish automatically in this task. Preserve this link privately. Only interrupt me when the host actually presents an install, trust, or OAuth action. After I approve it, refresh RateLoop once and continue; never ask me to paste the link or approve the same action again: ${connectionUrl}`;
 }

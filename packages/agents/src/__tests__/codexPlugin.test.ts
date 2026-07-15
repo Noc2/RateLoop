@@ -170,6 +170,12 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain('{ "connectionUrl": "<complete URL>" }');
     expect(skill).toContain("rateloop_get_agent_context");
     expect(skill).toContain("rateloop_verify_connection");
+    expect(skill).toContain("treat the installed plugin as outdated");
+    expect(skill).toContain("native MCP reload or refresh action exactly once");
+    expect(skill).toContain("Do not run a second login");
+    expect(skill).toContain(
+      "If no prompt is visible, do not claim that one is pending",
+    );
     expect(skill).toContain("Never create a heartbeat");
     expect(skill).toContain("Never poll registration status");
     expect(skill).toContain("host's native authentication action");

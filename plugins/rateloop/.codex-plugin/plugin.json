@@ -1,6 +1,6 @@
 {
   "name": "rateloop",
-  "version": "0.2.0+codex.20260715100944",
+  "version": "0.2.0+codex.20260715144259",
   "description": "Use RateLoop for privacy-bounded human assurance and OAuth-protected workspace review policies.",
   "author": {
     "name": "RateLoop",

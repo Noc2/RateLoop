@@ -62,6 +62,33 @@ The continuous Codex heartbeat created during the failed attempt was a workaroun
 annoying because it made a model task responsible for connection lifecycle. The replacement design explicitly prohibits
 that dependency.
 
+### 2.1 Live Codex validation failure on 2026-07-15
+
+A second production-shaped attempt exposed three additional release blockers after the OAuth design was implemented:
+
+1. the installed Git marketplace still pointed at `main` and served the older `0.1.1` plugin, which did not include the
+   private `rateloop-workspace` server shipped by the tokenless `0.2.0` package;
+2. Codex completed OAuth but the active task kept its pre-authorization MCP client until a native server reload; the agent
+   then attempted shell login, self-messages, and nested runtimes instead of using the host reload boundary;
+3. the workspace MCP tools omitted standard safety annotations, so hosts had to assume every call was destructive,
+   non-idempotent, and open-world. That made the already-authorized safe claim look like a second approval-worthy action.
+
+The corrective release gate is:
+
+- the installed plugin must contain `rateloop-workspace` before a connection message is accepted as runnable;
+- OAuth completion may be followed by at most one host-native MCP reload in the same task, never a second login or a
+  nested agent process;
+- `rateloop_claim_connection_intent` and `rateloop_verify_connection` must be truthfully annotated as closed-domain,
+  non-destructive, and idempotent, while context reads are read-only and publishing/spending tools remain destructive;
+- repeated verification must return the original terminal result without new events or timestamp churn;
+- after OAuth success, no user-facing message may claim that another prompt is pending unless the host or server actually
+  supplies a new authorization request.
+
+These annotations follow the MCP tool contract, whose omitted defaults are deliberately pessimistic. Codex's native app
+server provides a dedicated MCP configuration reload that applies refreshed tools to the next active turn. See the
+[MCP tool specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and the
+[Codex app-server MCP lifecycle](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md).
+
 ## 3. Product principles
 
 1. **Install once, authorize each workspace separately.** Host installation and workspace authorization are different
