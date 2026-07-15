@@ -5,6 +5,10 @@
 **Branch:** `tokenless`
 
 **Status:** implementation plan and claim gate, not a certification or legal opinion
+
+**Recheck:** current code, live deployment, and provider documentation re-audited on 15 July 2026; this revision makes
+the first production data plane EU-first and marks what can actually be implemented without an outside dependency.
+
 **Design relationship:** this plan extends the
 [tokenless implementation plan](tokenless-immutable-implementation-plan-2026-07.md). It does not reopen the immutable
 fund-core, admission, settlement, or deployment-isolation decisions in that design of record.
@@ -18,7 +22,7 @@ to copy Humanloop's badges. It is to make a smaller set of valuable claims prova
 2. private evaluation data is encrypted, access-controlled, logged, retained, and deleted under an explicit policy;
 3. customers can manage people and agents through real role- and project-scoped access;
 4. a DPA, subprocessor list, transfer terms, and data-subject workflow support enterprise GDPR reviews;
-5. US and EU data planes have documented, testable boundaries; and
+5. the first production data plane is EU-hosted with documented, testable boundaries; and
 6. independent security testing and, later, a SOC 2 Type II report substantiate the operating program.
 
 RateLoop should **not** claim SOC 2 Type II, GDPR compliance, HIPAA support, customer-VPC deployment, EU-only data
@@ -27,13 +31,103 @@ residency, SAML SSO, or third-party penetration testing today. Each requires evi
 The recommended order is:
 
 1. **No-training contract and privacy operations**
-2. **Complete encryption, centralized authorization, audit, deletion, and key management**
-3. **Enterprise RBAC, SAML/OIDC, SCIM, MFA policy, and regional data planes**
-4. **Independent penetration test and public trust center**
-5. **SOC 2 Type II**
-6. **Customer VPC/BYOC and HIPAA only after contracted design-partner demand**
+2. **EU deployment guardrails, data classification, project authorization, and CI hardening**
+3. **Complete encryption, audit, deletion, recovery, and key management**
+4. **Enterprise RBAC, provider-neutral identity, SAML/OIDC, SCIM, and MFA policy**
+5. **Independent penetration test and public trust center**
+6. **SOC 2 Type II**
+7. **US data plane, customer VPC/BYOC, and HIPAA only after contracted demand**
 
 This order can unlock useful homepage language within weeks without making claims that depend on a multi-month audit.
+
+## 0. Recheck: what is realistically implementable now
+
+The labels below distinguish engineering work from claims that depend on external evidence:
+
+- **`EASY_NOW`** — I can implement and test this as a focused repository change in roughly half a day to two working
+  days, without choosing a paid vendor or presenting a legal claim as approved.
+- **`NEAR_TERM`** — implementable in this codebase, but it changes data or security boundaries and needs several
+  focused changes, migrations, or deployment exercises.
+- **`EXTERNAL_GATE`** — code can be prepared, but completion requires infrastructure provisioning, a commercial
+  contract, counsel, a customer IdP, or an independent assessor.
+- **`DEFER`** — deliberately not worth building before customer demand justifies the operating burden.
+
+| Outcome | Mark | What can be done immediately | What remains before a public claim |
+|---|---|---|---|
+| Versioned trust-claim registry | **`EASY_NOW`** | Add typed claim entries, expiry checks, evidence links, and landing-page tests | Security/legal approval for claims outside current technical facts |
+| `/trust` page with current limits | **`EASY_NOW`** | Publish current encryption, short-lease, agent-scope, and public-chain facts from one source | Controlled external reports can be added only when they exist |
+| EU deployment manifest and fail-closed readiness checks | **`EASY_NOW`** | Require `eu`, Vercel `fra1`, Railway `europe-west4-drams3a`, EU object storage, and matching service identifiers in production configuration | Real EU resources and secrets must be provisioned and inspected |
+| EU-pinned application/service configuration | **`EASY_NOW`** | Add Vercel and Railway region configuration and tests | A deployment is still an external mutation; the stateful Postgres and Blob resources must be newly provisioned or migrated |
+| Data-use classification and EU home-region fields | **`EASY_NOW`** for schema/contracts; **`NEAR_TERM`** for full enforcement | Add canonical types, migrations, ingestion validation, and credential policy hooks | Backfill every route, worker, export, and existing record |
+| Fix artifact client/project authorization | **`EASY_NOW`** | Enforce the existing assignment tables in artifact and evidence queries; add cross-client denial tests | Full route-wide centralized authorization remains broader work |
+| TypeScript and container supply-chain checks | **`EASY_NOW`** | Add CodeQL or equivalent, image scanning, dependency-update configuration, SBOM generation, and CI assertions | GitHub branch/ruleset and push-protection settings require repository administration |
+| First canonical audit envelope | **`NEAR_TERM`** | Unify the existing event writers and cover authentication, membership, role, credential, export, and deletion events | External write-once sink, complete route coverage, customer export, and operating evidence |
+| Structured-data encryption and managed KMS | **`NEAR_TERM`** | Build the vault abstraction and migrations in code | KMS provisioning, key ceremony, backfill, rollback, recovery, and production verification |
+| Full retention, deletion, DSAR, and legal hold | **`NEAR_TERM`** | Implement the relational graph, workflow, and tests | Policy decisions, statutory exceptions, processor deletion, and backup-expiry evidence |
+| Provider-neutral human principal | **`NEAR_TERM`** | Introduce stable principal IDs plus separate identity and wallet bindings | Migrate the address-keyed application safely; current assumptions span 131 Next.js files |
+| SAML/OIDC and SCIM | **`EXTERNAL_GATE`** | A test adapter can be built with a mock IdP | Provider/contract selection, customer IdPs, enterprise configuration, security testing, and lifecycle operations |
+| DPA, ROPA, DPIA, privacy notice, and no-training contract | **`EXTERNAL_GATE`** | Technical drafts, inventories, and enforcement tests can be prepared | Counsel and company approval are required before the legal promise is published |
+| Live EU data plane | **`EXTERNAL_GATE`** | All code/configuration can be made ready | New database, Blob store, keys, services, backups, DNS/routing, migration, restore test, and acceptance are external state changes |
+| Independent penetration-test claim | **`EXTERNAL_GATE`** | Scope, test accounts, and remediation workflow can be prepared | An independent tester must perform and retest the engagement |
+| SOC 2 Type II | **`EXTERNAL_GATE`** | Controls and evidence collection can start | Auditor, operating period, tests, and issued report |
+| Customer VPC/BYOC and HIPAA mode | **`DEFER`** | Architecture spikes only | Contracted design partners, operational ownership, counsel, vendor terms, and independent assessment |
+
+The first implementation batch should therefore be: claim registry and `/trust`; EU manifest and region guards;
+artifact assignment authorization; data-classification primitives; and supply-chain CI. Those are real foundations, not
+marketing-only work, and they do not require RateLoop to pretend an external gate has been completed.
+
+### EU-first deployment sequence
+
+The first production target should be one EU data plane. Do not build US/EU routing before the EU stack itself is
+sound.
+
+1. Add a machine-readable manifest that fixes the application region to Vercel Frankfurt (`fra1`) and the Railway
+   services to EU West Amsterdam (`europe-west4-drams3a`). Reject the current US-East identifiers in EU production.
+2. Provision a **new** EU Postgres/volume, object store, secrets/KMS boundary, Ponder, and keeper. Do not move the current
+   US volume in place: Railway documents downtime for cross-region volume migration, while a new disposable tokenless
+   stack provides a cleaner rollback and evidence trail.
+3. Keep logs, backups, cron/queues, support access, email/auth flows, and webhook processing in the regional inventory.
+   Pin Vercel Functions explicitly because Vercel's default remains US `iad1`.
+4. Run migrations, private-data E2E, mixed-region rejection, backup/restore, deletion, and key-recovery tests against the
+   EU stack before it receives production customer data.
+5. Record actual runtime regions and resource IDs in the deployment manifest. Retire the current US sandbox only after
+   EU acceptance and a separately approved data-disposition step.
+
+The attainable first claim is **`EU-hosted RateLoop data plane`**, with exact exceptions for public-chain records and
+any global or transferred processor data. It is not `EU-only`, `EU sovereign`, or `data never leaves the EU`: Vercel
+states that it may transfer data globally, and its control plane/failover behavior remains outside the application
+region setting.
+
+### Identity and thirdweb decision after the recheck
+
+Do **not** rip out thirdweb as a same-day cleanup. It is directly referenced by 32 Next.js files, while the generated
+wallet/address principal is assumed by 131 files. A rushed replacement would break workspace membership, reviewer
+assignment, paid eligibility, notification, artifact lease, and audit joins.
+
+The long-term EU-first boundary should nevertheless stop treating a wallet address as the universal human identity:
+
+1. RateLoop owns a stable, opaque `principal_id` in the EU database.
+2. Email/passkey/social/enterprise IdP subjects bind to that principal through purpose-limited identity records.
+3. External or embedded wallets bind separately and authorize only the funding, payout, vote, or recovery operation
+   that actually requires a wallet proof.
+4. RateLoop continues to issue its own hashed, HttpOnly browser session.
+5. thirdweb, if retained, becomes an optional wallet adapter behind RateLoop authentication. thirdweb officially
+   supports attaching a wallet to an existing OIDC/JWT or custom-auth subject, so this transition does not require an
+   immediate wallet-provider migration.
+
+| Option | EU-first fit | Recommendation |
+|---|---|---|
+| Current thirdweb primary login | Weak until contract diligence proves identity-data, backup, support-access, deletion, and subprocessor regions; public docs describe AWS private VPCs but do not provide a selectable EU region | Keep temporarily; stop expanding it as the enterprise identity source; request DPA/residency evidence |
+| Self-hosted Better Auth | Strongest data-control option: the framework is open source and supports email OTP, passkeys, social/OIDC, SAML, and SCIM plugins | **Preferred technical spike** in the EU stack; use only after an auth threat model, pinned versions, security tests, and an operating owner are in place |
+| Descope EU | Fastest managed feature path; its current product documentation says EU data can be stored and processed in its EU region and includes passkeys, SAML, SCIM, and MFA | **Preferred managed fallback**, conditional on signed DPA, exact EU scope, subprocessors, support access, export/deletion, and pricing |
+| Auth0 EU tenant | Mature managed fallback with EU tenant localities and broad enterprise identity support | Viable, but validate plan cost, subprocessor/transfers, SCIM shape, and tenant portability |
+| WorkOS | Excellent SSO/Directory Sync product, but its current DPA authorizes continuous transfers from the EEA to the US | Do not make it the default for an EU-first privacy story without improved contractual scope |
+
+Recommendation: keep the existing thirdweb implementation working while building the provider-neutral principal
+layer. Time-box a Better Auth EU spike and a Descope EU commercial/diligence check. Choose between them before adding
+SAML/SCIM. If neither passes, thirdweb can remain only for users who need an embedded wallet, while enterprise staff use
+the selected regional identity path. This is an explicit evaluation gate, not yet a change to the tokenless design of
+record.
 
 ## 1. What Humanloop's claims actually mean
 
@@ -214,8 +308,8 @@ Use the wording below as the maximum public claim at each gate. Legal review can
 | Scoped agent access | Substantially implemented | Finish credential admin UX and complete activity log | **Agents use scoped, revocable credentials with project, data, workflow, and spend limits.** |
 | SSO/SAML | Not implemented | Enterprise IdP adapter, verified domains, SAML/OIDC, JIT, MFA policy, session revocation, IdP tests | **SAML SSO with customer-managed identity policy is available on Enterprise.** |
 | SCIM | Not implemented | Provision/deprovision/groups API, idempotency, reconciliation, audit, removal tests | **SCIM provisioning and deprovisioning are available on Enterprise.** |
-| US hosted | Partial and not contract-pinned | Pin every data-plane service/store/key/log/backup; publish data map and exceptions; verify continuously | **Choose a US-hosted RateLoop data plane.** |
-| EU hosted | Not implemented | Independent EU stack, regional keys/data, transfer analysis, processor terms, no cross-region application writes | **Choose an EU-hosted RateLoop data plane.** |
+| EU hosted | Not implemented; first production target | Independent EU stack, regional keys/data, transfer analysis, processor terms, no cross-region application writes | **Use an EU-hosted RateLoop data plane.** |
+| US hosted | Current sandbox is partial and not contract-pinned; later product target | Build and verify only after the EU production boundary is stable and customer demand exists | **Choose a US-hosted RateLoop data plane.** only after that separate gate |
 | EU-only residency | Not supportable on current evidence | Contractual residency for control plane, support, logs, and backups, or BYOC; document emergency/failover behavior | Do not claim until counsel and architecture approve exact scope |
 | VPC deployment | Not implemented | Portable data plane, KMS/object-store adapters, Terraform/Helm, private connectivity, upgrade/backup/support model | **Deploy the RateLoop data plane in your cloud account and region.** |
 | Independent pen test | Not performed | External scoped test, fix/retest critical and high findings, dated attestation | **Independently penetration tested — report available under NDA.** |
@@ -311,7 +405,13 @@ explicit cross-tenant denial. Client/project assignments must be enforced on the
 
 Keep public/individual reviewer onboarding separate from enterprise workforce identity.
 
-- Continue thirdweb/passkey/wallet identity for individuals and public reviewers.
+- Keep the current thirdweb path working during migration, but stop treating its wallet address as the durable human
+  identity in new schema or APIs.
+- Introduce a RateLoop-owned opaque principal plus separate provider-subject and wallet-binding tables.
+- Prefer a self-hosted EU identity layer if the Better Auth spike passes; otherwise use a contractually EU-scoped
+  managed provider such as Descope or Auth0.
+- Use thirdweb only as an optional embedded-wallet adapter after primary authentication when a workflow actually needs
+  a wallet. Its custom OIDC/JWT and auth-endpoint modes support this split.
 - Add a provider-neutral enterprise identity adapter for SAML 2.0 or OIDC.
 - Bind a verified IdP subject to a RateLoop principal; do not make a wallet or email domain the authorization source.
 - Add verified domain ownership, organization discovery, IdP-enforced login, JIT rules, group-to-role mappings, session
@@ -321,9 +421,10 @@ Keep public/individual reviewer onboarding separate from enterprise workforce id
 
 ### 4.5 Regional SaaS
 
-Build US and EU as separate deployable stacks, not a region column over one shared database.
+Ship one EU stack first, not a region column over the current US database. Add a separately deployable US stack only
+after EU production is stable and demand requires it.
 
-Each stack needs regional:
+The EU stack needs regional:
 
 - application functions;
 - Postgres and backups;
@@ -334,12 +435,11 @@ Each stack needs regional:
 - logs, metrics, traces, and alert storage; and
 - support-access controls.
 
-Provisioning assigns the region once. Cross-region support access, failover, export, and disaster recovery must be
-documented rather than hidden. Region parity should be checked from machine-readable deployment manifests during build
-and at runtime.
+Provisioning assigns `eu` once. Cross-region support access, failover, export, and disaster recovery must be documented
+rather than hidden. The machine-readable deployment manifest must be checked during build and at runtime.
 
 Railway supports US East and EU West deployment regions, and Vercel Blob supports region selection. That makes a
-regional data plane feasible on the current vendors. It does **not** by itself prove strict residency: Vercel's current
+first EU-hosted data plane feasible on the current vendors. It does **not** by itself prove strict residency: Vercel's current
 [DPA](https://vercel.com/legal/dpa) states that primary processing is in the US and its security documentation describes
 globally replicated backups. Strict EU residency therefore requires explicit enterprise terms or a different/BYOC data
 plane, not optimistic copy.
@@ -441,8 +541,8 @@ pass.
 
 **Outcome:** a customer controls workforce authentication and removal.
 
-1. Select an enterprise identity broker or direct SAML/OIDC implementation after DPA, region, security, pricing, and
-   outage-mode review.
+1. Complete the provider-neutral principal migration, Better Auth EU spike, and Descope EU diligence gate. Select the
+   self-hosted or managed path only after DPA, region, security, pricing, portability, and outage-mode review.
 2. Add organization identity policy, verified domains, IdP metadata/certificate rotation, SAML/OIDC login, JIT rules,
    group mappings, session duration, IdP-only enforcement, and break-glass procedure.
 3. Add customer MFA policy and assurance-level recording.
@@ -452,21 +552,25 @@ pass.
 
 **Homepage gate:** name only the protocols and lifecycle features that passed with at least two real IdPs.
 
-### Workstream E — Regional US/EU data planes (weeks 5–14)
+### Workstream E — EU-first data plane (weeks 1–14)
 
 **Outcome:** deployment location becomes a contract-backed product choice.
 
-1. Define a signed regional deployment manifest covering compute, database, object store, KMS, workers, logs, backups,
+1. Define a signed EU deployment manifest covering compute, database, object store, KMS, workers, logs, backups,
    auth, email, billing, analytics, RPC, support access, and public-chain exceptions.
-2. Pin the US stack and create an independent EU stack. Prefer new stacks over moving the current stateful Railway volume.
-3. Add build and runtime checks that reject a mixed-region bundle.
-4. Add workspace home-region routing and prevent cross-region job consumption, support queries, exports, and webhooks.
-5. Exercise backup/restore, regional outage, provider outage, key loss, and deletion in both stacks.
-6. Contract and publish the distinction among hosting region, storage region, support access, subprocessors, backup
+2. Pin Vercel application compute to `fra1` and Railway services to `europe-west4-drams3a`; reject the current US
+   identifiers in EU production readiness checks.
+3. Create a new EU Postgres/volume, private Blob store, and key boundary. Prefer new resources over moving the current
+   stateful Railway volume.
+4. Add build and runtime checks that reject a mixed-region bundle.
+5. Prevent non-EU job consumption, support queries, exports, and webhooks for the EU deployment.
+6. Exercise backup/restore, regional outage, provider outage, key loss, and deletion in the EU stack.
+7. Contract and publish the distinction among hosting region, storage region, support access, subprocessors, backup
    region, transfer mechanism, and public/global metadata.
+8. Add a US stack and region chooser later only if customer demand justifies the additional operational surface.
 
-**Homepage gate:** `EU-hosted data plane` and `US-hosted data plane`; never abbreviate this to strict residency unless
-the contracts cover the full boundary.
+**Homepage gate:** `EU-hosted data plane`; never abbreviate this to strict EU residency unless the contracts cover the
+full boundary. Add a US claim only after its own stack passes the same gates.
 
 ### Workstream F — Operational security and independent testing (weeks 0–16)
 
@@ -611,7 +715,7 @@ reports, or unremediated penetration findings. Provide controlled documents unde
 **After Workstreams D–F**
 
 - `SAML SSO and SCIM provisioning.`
-- `EU- or US-hosted data plane.`
+- `EU-hosted data plane.`
 - `Independently penetration tested.`
 
 **Only after external completion**
@@ -624,8 +728,8 @@ Suggested mature section heading:
 
 > **Human assurance for sensitive AI workflows**
 >
-> Keep private evaluation data encrypted and access-controlled, choose the region and identity policy that fits your
-> organization, and verify RateLoop's controls through documented evidence.
+> Keep private evaluation data encrypted and access-controlled in RateLoop's EU-hosted data plane, apply your
+> organization's identity policy, and verify RateLoop's controls through documented evidence.
 
 Avoid `Accelerate safely` as an unsupported umbrella claim. The RateLoop-specific mechanism is more concrete:
 
@@ -661,14 +765,17 @@ Tests should ensure:
 
 | Phase | Indicative window | Exit criteria | New public value |
 |---|---:|---|---|
-| 0. Claim freeze and data map | 0–3 weeks | Claim registry, data-use policy, vendor inventory, ROPA/DPIA drafts, privacy/DPA legal review started | Honest trust center foundation |
-| 1. Privacy baseline | 3–10 weeks | KMS plan, structured-data encryption migration, mapping-vault design, retention/DSAR/hold engine, backup restore | No-training and scoped retention claims |
-| 2. Enterprise access | 3–10 weeks | Central authorization, member/project admin, tenant tests, canonical audit stream/export | RBAC and audit-log claims |
-| 3. Regional and identity | 7–16 weeks | Pinned US/EU stacks, deployment manifests, SAML/OIDC, MFA policy, SCIM, DR tests | EU/US hosting and SSO claims |
-| 4. Independent assurance | 10–20 weeks | External pen test remediated/retested; security operations exercised | Pen-test claim and stronger procurement response |
-| 5. SOC 2 Type II | readiness now; report after auditor-defined operating period | Final report issued for accurate scope | SOC 2 Type II claim |
-| 6. BYOC/VPC | demand-gated | Portable data plane, IaC, shared-responsibility and support model, design-partner acceptance | Customer-cloud claim |
-| 7. HIPAA | demand-gated | HIPAA mode, upstream BAAs, risk program, RateLoop BAA, independent assessment | HIPAA-ready/BAA claim |
+| 0. Easy foundations | 0–2 weeks | Claim registry/trust page, EU manifest/guards, artifact assignment authorization, data-classification primitives, CI hardening | Honest trust center and deployment guardrails |
+| 1. Claim freeze and data map | 0–3 weeks | Data-use policy, vendor inventory, ROPA/DPIA drafts, privacy/DPA legal review started | No-training claim after external approval |
+| 2. EU data plane | 1–10 weeks | New EU resources, pinned manifest, migration, mixed-region rejection, backup/restore and private-data E2E | EU-hosted data-plane claim |
+| 3. Privacy baseline | 3–10 weeks | KMS plan, structured-data encryption migration, mapping-vault design, retention/DSAR/hold engine, backup restore | Scoped retention and deletion claims |
+| 4. Enterprise access | 3–10 weeks | Central authorization, member/project admin, tenant tests, canonical audit stream/export | RBAC and audit-log claims |
+| 5. Regional identity | 7–16 weeks | Provider-neutral principal, selected EU identity path, SAML/OIDC, MFA policy, SCIM, DR tests | SSO and lifecycle claims |
+| 6. Independent assurance | 10–20 weeks | External pen test remediated/retested; security operations exercised | Pen-test claim and stronger procurement response |
+| 7. SOC 2 Type II | readiness now; report after auditor-defined operating period | Final report issued for accurate scope | SOC 2 Type II claim |
+| 8. US data plane | demand-gated | Independent US stack passes the EU-equivalent gates | US-hosted data-plane claim |
+| 9. BYOC/VPC | demand-gated | Portable data plane, IaC, shared-responsibility and support model, design-partner acceptance | Customer-cloud claim |
+| 10. HIPAA | demand-gated | HIPAA mode, upstream BAAs, risk program, RateLoop BAA, independent assessment | HIPAA-ready/BAA claim |
 
 Windows are planning ranges, not commitments. Staffing, vendor contract tier, auditor availability, data migration size,
 and the desired control scope can change them substantially.
@@ -677,23 +784,26 @@ and the desired control scope can change them substantially.
 
 This is the highest-leverage sequence.
 
-1. **Adopt the no-training/no-secondary-use decision** for private customer content and remove the conflicting future
-   default licensing idea.
-2. **Inventory every data field, processor, region, retention rule, and public-chain field** from migrations and live
-   infrastructure. Assign controller/processor role and lawful purpose.
-3. **Fix the authorization boundary first:** centralize project access and enforce client/project membership on artifact
-   and assurance queries.
-4. **Select KMS and regional architecture:** decide whether Vercel/Railway contract tiers are sufficient or whether the
-   sensitive data plane should move to a single cloud provider.
-5. **Design the encrypted structured-record migration** and restricted rater-vote mapping vault.
-6. **Draft DPA, subprocessor list, privacy notice, retention schedule, ROPA, DPIA, and TOM schedule** with German/EU
-   privacy counsel.
-7. **Protect the software supply chain:** tokenless branch PR/check policy, secret push protection, SAST, container scan,
-   dependency updates, SBOM/provenance.
-8. **Stand up incident, monitoring, backup, and restore evidence**; perform one tabletop and one restore test.
-9. **Create the `/trust` information architecture and claim registry**, but publish only current narrow claims.
-10. **Interview enterprise design partners** in consulting/internal-AI teams about DPA, EU region, SSO, retention, and
-    VPC procurement blockers. Ask healthcare-specific questions separately; do not infer HIPAA demand.
+1. **Implement the claim registry and `/trust` page** with only current narrow facts and build-time expiry/evidence
+   checks. Mark: **`EASY_NOW`**.
+2. **Add the EU deployment manifest and region guards** for Vercel `fra1`, Railway EU West, object storage, services,
+   and runtime identity. Mark: **`EASY_NOW`** for code, **`EXTERNAL_GATE`** for provisioning.
+3. **Fix artifact and evidence authorization:** enforce client/project assignment and add explicit cross-client denial
+   tests. Mark: **`EASY_NOW`**.
+4. **Add data classification and EU home-region primitives** to schema, credentials, and the first ingestion paths.
+   Mark: **`EASY_NOW`** for primitives, **`NEAR_TERM`** for complete coverage.
+5. **Harden the software supply chain:** TypeScript SAST, container scan, dependency updates, SBOM/provenance, and CI
+   assertions; separately enable repository push protection and branch rules. Mark: **`EASY_NOW`** for repo work.
+6. **Create the new EU sandbox data plane** rather than moving the current US volume; migrate, restore, and run private
+   E2E before production use. Mark: **`EXTERNAL_GATE`**.
+7. **Build the provider-neutral principal migration plan and two spikes:** self-hosted Better Auth in the EU stack and
+   Descope EU diligence/integration. Do not remove thirdweb yet. Mark: **`NEAR_TERM`** plus vendor gate.
+8. **Adopt the no-training/no-secondary-use decision** for private customer content; remove the conflicting future
+   default licensing idea and start counsel review. Mark: **`EXTERNAL_GATE`** for the public promise.
+9. **Inventory every data field, processor, region, retention rule, and public-chain field**; draft DPA, subprocessor
+   list, retention schedule, ROPA, DPIA, TOMs, and privacy-notice amendments with German/EU privacy counsel.
+10. **Design KMS, structured-record encryption, restricted identity/vote mapping, monitoring, backup, and restore**;
+    perform one incident tabletop and one restore exercise in the EU sandbox.
 
 At day 30, RateLoop should be able to say what it processes, why, where, for how long, who can access it, which vendors
 touch it, what leaves the regional/private plane, and which exact homepage claims are approved. That is a more valuable
@@ -744,8 +854,20 @@ Homepage work should be the final task in each compliance milestone, not the fir
 ### Current hosting feasibility and limits
 
 - [Railway regions](https://docs.railway.com/deployments/regions)
+- [Railway volume backups](https://docs.railway.com/volumes/backups)
 - [Railway compliance and DPA](https://docs.railway.com/enterprise/compliance)
+- [Vercel global network and function regions](https://vercel.com/docs/regions)
 - [Vercel Blob regions and private storage](https://vercel.com/docs/vercel-blob)
 - [Vercel security and compliance](https://vercel.com/docs/security/compliance)
 - [Vercel DPA](https://vercel.com/legal/dpa)
 - [Vercel Secure Compute](https://vercel.com/changelog/secure-compute-is-now-self-serve)
+
+### Identity and lifecycle options
+
+- [thirdweb wallet security and architecture](https://portal.thirdweb.com/wallets/security)
+- [thirdweb custom OIDC/JWT and auth-endpoint authentication](https://portal.thirdweb.com/wallets/custom-auth)
+- [Better Auth plugin catalog](https://better-auth.com/docs/plugins)
+- [Better Auth self-hosted/managed-infrastructure pricing boundary](https://better-auth.com/pricing)
+- [Descope EU-region and enterprise identity capabilities](https://www.descope.com/product)
+- [Auth0 regional tenant localities](https://auth0.com/docs/get-started/auth0-overview/create-tenants)
+- [WorkOS DPA and transfer terms](https://workos.com/legal/data-processing-addendum)
