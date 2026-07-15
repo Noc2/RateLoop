@@ -16,3 +16,12 @@ test("assignment search is account-bound and returns no private rows for an empt
     [],
   );
 });
+
+test("assignment search accepts an opaque Better Auth principal", async () => {
+  assert.deepEqual(
+    await listReviewerAssignments({
+      accountAddress: "rlp_reviewer_assignments_test_0001",
+    }),
+    [],
+  );
+});
