@@ -5,6 +5,7 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
   AGENT_OAUTH_SAFE_SCOPES,
   type AgentOAuthAccessPrincipal,
@@ -19,7 +20,6 @@ import {
   authenticateProductPrincipal,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
-import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 
 type Row = Record<string, unknown>;
 type ApiPrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
@@ -850,11 +850,7 @@ export async function rejectAgentPairing(input: { accountAddress: string; worksp
 
 function publishingActivationBody(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TokenlessServiceError(
-      "Publishing activation body is invalid.",
-      400,
-      "invalid_publishing_activation",
-    );
+    throw new TokenlessServiceError("Publishing activation body is invalid.", 400, "invalid_publishing_activation");
   }
   const body = value as Record<string, unknown>;
   if (Object.keys(body).some(key => key !== "publishingPolicyId" && key !== "allowedWorkflowKeys")) {
@@ -864,31 +860,22 @@ function publishingActivationBody(value: unknown) {
       "invalid_publishing_activation",
     );
   }
-  const publishingPolicyId =
-    typeof body.publishingPolicyId === "string" ? body.publishingPolicyId.trim() : "";
+  const publishingPolicyId = typeof body.publishingPolicyId === "string" ? body.publishingPolicyId.trim() : "";
   if (!/^agpol_[a-f0-9]{32}$/.test(publishingPolicyId)) {
-    throw new TokenlessServiceError(
-      "Publishing policy is invalid.",
-      400,
-      "invalid_publishing_activation",
-    );
+    throw new TokenlessServiceError("Publishing policy is invalid.", 400, "invalid_publishing_activation");
   }
-  if (!Array.isArray(body.allowedWorkflowKeys) || body.allowedWorkflowKeys.length === 0 || body.allowedWorkflowKeys.length > 32) {
-    throw new TokenlessServiceError(
-      "At least one allowed workflow is required.",
-      400,
-      "invalid_publishing_activation",
-    );
+  if (
+    !Array.isArray(body.allowedWorkflowKeys) ||
+    body.allowedWorkflowKeys.length === 0 ||
+    body.allowedWorkflowKeys.length > 32
+  ) {
+    throw new TokenlessServiceError("At least one allowed workflow is required.", 400, "invalid_publishing_activation");
   }
   const allowedWorkflowKeys = [
     ...new Set(body.allowedWorkflowKeys.map(value => (typeof value === "string" ? value.trim() : ""))),
   ];
   if (allowedWorkflowKeys.some(value => !WORKFLOW_PATTERN.test(value))) {
-    throw new TokenlessServiceError(
-      "Allowed workflows are invalid.",
-      400,
-      "invalid_publishing_activation",
-    );
+    throw new TokenlessServiceError("Allowed workflows are invalid.", 400, "invalid_publishing_activation");
   }
   return { publishingPolicyId, allowedWorkflowKeys };
 }

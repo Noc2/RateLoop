@@ -223,8 +223,7 @@ function normalizePublicationDeclaration(value: unknown): AdaptiveReviewPublicat
     !["public", "synthetic", "redacted"].includes(String(classification)) ||
     declaration.confirmedNoSensitiveData !== true ||
     (redactionSummary !== undefined && typeof redactionSummary !== "string") ||
-    (classification === "redacted" &&
-      (typeof redactionSummary !== "string" || redactionSummary.trim().length < 10))
+    (classification === "redacted" && (typeof redactionSummary !== "string" || redactionSummary.trim().length < 10))
   ) {
     throw new TokenlessServiceError(
       "RateLoop-network review publication requires visibility 'public', dataClassification 'public', 'synthetic', or 'redacted', and confirmedNoSensitiveData true. Redacted work also requires a redactionSummary of at least 10 characters.",

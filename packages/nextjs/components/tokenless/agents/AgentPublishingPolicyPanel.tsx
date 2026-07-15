@@ -126,7 +126,14 @@ export function classificationsForContentBoundary(boundary: ContentBoundary) {
 }
 
 export function workflowKeysFromInput(value: string) {
-  return [...new Set(value.split(",").map(entry => entry.trim()).filter(Boolean))];
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map(entry => entry.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function audienceSources(audience: Audience) {
