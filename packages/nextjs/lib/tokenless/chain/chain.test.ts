@@ -295,7 +295,10 @@ async function walletAsk(options: { attemptReserveAtomic?: string; includeAdmiss
     payment: { mode: "wallet" as const, payerAddress: FUNDER },
     quoteId: quote.quoteId,
   };
-  const prepared = await prepareProductAsk({ principal: { kind: "session", accountAddress: FUNDER }, request });
+  const prepared = await prepareProductAsk({
+    principal: { kind: "session", accountAddress: FUNDER, walletAddress: FUNDER },
+    request,
+  });
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
   await attachProductAsk(prepared, ask);
   if (options.includeAdmissionPolicy !== false) await freezeAskAdmissionPolicy(ask.operationKey);
@@ -472,7 +475,7 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
     payment: { mode: "x402" as const, payerAddress: FUNDER },
     quoteId: quote.quoteId,
   };
-  const principal = { kind: "session" as const, accountAddress: FUNDER };
+  const principal = { kind: "session" as const, accountAddress: FUNDER, walletAddress: FUNDER };
   const product = await prepareProductAsk({ principal, request });
   assert.equal(product.paymentState, "pending_chain_authorization");
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
