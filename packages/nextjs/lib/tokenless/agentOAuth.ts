@@ -23,6 +23,8 @@ export const AGENT_OAUTH_SAFE_SCOPES = [
   "review:decide",
 ] as const;
 
+export const AGENT_OAUTH_DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code" as const;
+
 export type AgentOAuthScope = (typeof AGENT_OAUTH_SAFE_SCOPES)[number];
 
 export type AgentOAuthAuthorizationRequest = {
@@ -64,12 +66,16 @@ export class AgentOAuthError extends Error {
     readonly code:
       | "invalid_request"
       | "invalid_client"
+      | "unauthorized_client"
       | "invalid_grant"
       | "invalid_scope"
       | "invalid_token"
       | "unsupported_grant_type"
       | "unsupported_response_type"
       | "access_denied"
+      | "authorization_pending"
+      | "slow_down"
+      | "expired_token"
       | "server_error",
     message: string,
     readonly status = 400,
@@ -205,9 +211,10 @@ export function getAgentOAuthAuthorizationServerMetadata(origin = getAgentOAuthO
     token_endpoint: `${issuer}/api/agent/oauth/token`,
     revocation_endpoint: `${issuer}/api/agent/oauth/revoke`,
     registration_endpoint: `${issuer}/api/agent/oauth/register`,
+    device_authorization_endpoint: `${issuer}/api/agent/oauth/device`,
     response_types_supported: ["code"],
     response_modes_supported: ["query"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
+    grant_types_supported: ["authorization_code", "refresh_token", AGENT_OAUTH_DEVICE_GRANT_TYPE],
     token_endpoint_auth_methods_supported: ["none"],
     code_challenge_methods_supported: ["S256"],
     scopes_supported: [...AGENT_OAUTH_SAFE_SCOPES],
@@ -223,25 +230,46 @@ export async function registerAgentOAuthClient(value: unknown, now = new Date())
   if (input.token_endpoint_auth_method !== undefined && input.token_endpoint_auth_method !== "none") {
     throw new AgentOAuthError("invalid_client", "Dynamic registration is available only to public PKCE clients.");
   }
-  const redirectInput = input.redirect_uris;
-  if (!Array.isArray(redirectInput) || redirectInput.length === 0 || redirectInput.length > MAX_REDIRECT_URIS) {
-    throw new AgentOAuthError("invalid_request", "redirect_uris must contain between 1 and 16 exact URLs.");
+  const grantTypes = input.grant_types ?? ["authorization_code", "refresh_token"];
+  if (
+    !Array.isArray(grantTypes) ||
+    grantTypes.length === 0 ||
+    new Set(grantTypes.map(String)).size !== grantTypes.length ||
+    grantTypes.some(
+      value => !["authorization_code", "refresh_token", AGENT_OAUTH_DEVICE_GRANT_TYPE].includes(String(value)),
+    ) ||
+    (!grantTypes.includes("authorization_code") && !grantTypes.includes(AGENT_OAUTH_DEVICE_GRANT_TYPE))
+  ) {
+    throw new AgentOAuthError(
+      "invalid_request",
+      "A public client must use authorization_code, the device-code grant, or both; refresh_token is optional.",
+    );
+  }
+  const usesAuthorizationCode = grantTypes.includes("authorization_code");
+  const redirectInput = input.redirect_uris ?? [];
+  if (
+    !Array.isArray(redirectInput) ||
+    redirectInput.length > MAX_REDIRECT_URIS ||
+    (usesAuthorizationCode && redirectInput.length === 0)
+  ) {
+    throw new AgentOAuthError(
+      "invalid_request",
+      "redirect_uris must contain between 1 and 16 exact URLs when authorization_code is enabled.",
+    );
   }
   const redirectUris = [...new Set(redirectInput.map(validateAgentOAuthRedirectUri))];
   if (redirectUris.length !== redirectInput.length) {
     throw new AgentOAuthError("invalid_request", "redirect_uris cannot contain duplicates.");
   }
-  const grantTypes = input.grant_types ?? ["authorization_code", "refresh_token"];
-  const responseTypes = input.response_types ?? ["code"];
+  const responseTypes = input.response_types ?? (usesAuthorizationCode ? ["code"] : []);
   if (
-    !Array.isArray(grantTypes) ||
-    grantTypes.some(value => !["authorization_code", "refresh_token"].includes(String(value))) ||
-    !grantTypes.includes("authorization_code") ||
     !Array.isArray(responseTypes) ||
-    responseTypes.length !== 1 ||
-    responseTypes[0] !== "code"
+    (usesAuthorizationCode ? responseTypes.length !== 1 || responseTypes[0] !== "code" : responseTypes.length !== 0)
   ) {
-    throw new AgentOAuthError("invalid_request", "Only authorization_code with optional refresh_token is supported.");
+    throw new AgentOAuthError(
+      "invalid_request",
+      "response_types must be [code] for authorization_code clients and empty for device-only clients.",
+    );
   }
   const scopes = canonicalScopes(input.scope, { defaultSafe: true });
   const clientName = requiredString(input.client_name, "client_name", 160);
@@ -260,7 +288,7 @@ export async function registerAgentOAuthClient(value: unknown, now = new Date())
            redirect_uris_digest, token_endpoint_auth_method, grant_types_json, response_types_json,
            allowed_scopes_json, registration_source, software_id, software_version, status, created_at, updated_at,
            expires_at)
-          VALUES (?, NULL, ?, ?, ?, ?, ?, 'none', ?, '["code"]', ?, 'dynamic', ?, ?, 'active', ?, ?, ?)`,
+          VALUES (?, NULL, ?, ?, ?, ?, ?, 'none', ?, ?, ?, 'dynamic', ?, ?, 'active', ?, ?, ?)`,
     args: [
       clientId,
       clientName,
@@ -269,6 +297,7 @@ export async function registerAgentOAuthClient(value: unknown, now = new Date())
       redirectJson,
       digest(redirectJson),
       stableJson(grantTypes.map(String)),
+      stableJson(responseTypes.map(String)),
       stableJson(scopes),
       softwareId,
       softwareVersion,
@@ -285,7 +314,7 @@ export async function registerAgentOAuthClient(value: unknown, now = new Date())
     redirect_uris: redirectUris,
     token_endpoint_auth_method: "none" as const,
     grant_types: grantTypes.map(String),
-    response_types: ["code"],
+    response_types: responseTypes.map(String),
     scope: scopes.join(" "),
     client_id_issued_at: Math.floor(now.getTime() / 1_000),
     client_id_expires_at: Math.floor(expiresAt.getTime() / 1_000),
@@ -510,6 +539,63 @@ async function issueTokenPair(input: {
     },
     refreshTokenId,
   };
+}
+
+export async function issueAgentOAuthDeviceTokenFamily(input: {
+  client: PoolClient;
+  clientId: string;
+  subjectPrincipalId: string;
+  resource: string;
+  scopes: AgentOAuthScope[];
+  now: Date;
+}) {
+  if (input.resource !== getCanonicalAgentMcpResource()) {
+    throw new AgentOAuthError("invalid_grant", "The exact RateLoop workspace MCP resource is required.");
+  }
+  const scopes = canonicalScopes(input.scopes);
+  if (!scopes.includes("connection:claim")) {
+    throw new AgentOAuthError("invalid_scope", "connection:claim is required for an unbound agent grant.");
+  }
+  const active = await input.client.query(
+    `SELECT c.client_id, p.principal_id
+     FROM tokenless_agent_oauth_clients c
+     JOIN tokenless_principals p ON p.principal_id = $2 AND p.status = 'active'
+     WHERE c.client_id = $1 AND c.status = 'active' AND (c.expires_at IS NULL OR c.expires_at > $3)
+     LIMIT 1`,
+    [input.clientId, input.subjectPrincipalId, input.now],
+  );
+  if (active.rowCount !== 1) {
+    throw new AgentOAuthError("access_denied", "The OAuth client or RateLoop principal is inactive.", 403);
+  }
+  const tokenFamilyId = `atf_${randomUUID().replaceAll("-", "")}`;
+  const familyExpiresAt = new Date(input.now.getTime() + TOKEN_FAMILY_TTL_MS);
+  await input.client.query(
+    `INSERT INTO tokenless_agent_oauth_token_families
+     (token_family_id, client_id, subject_principal_id, audience, resource, granted_scopes_json,
+      status, created_at, absolute_expires_at, last_rotated_at)
+     VALUES ($1, $2, $3, $4, $4, $5, 'active', $6, $7, $6)`,
+    [
+      tokenFamilyId,
+      input.clientId,
+      input.subjectPrincipalId,
+      input.resource,
+      stableJson(scopes),
+      input.now,
+      familyExpiresAt,
+    ],
+  );
+  const issued = await issueTokenPair({
+    client: input.client,
+    tokenFamilyId,
+    clientId: input.clientId,
+    subjectPrincipalId: input.subjectPrincipalId,
+    resource: input.resource,
+    scopes,
+    generation: 1,
+    familyExpiresAt,
+    now: input.now,
+  });
+  return { tokenFamilyId, response: issued.response };
 }
 
 async function revokeTokenFamily(client: PoolClient, tokenFamilyId: string, now: Date, reason: string) {

@@ -330,6 +330,13 @@
       "when": 1784023200000,
       "tag": "0046_agent_connection_intents_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1784026800000,
+      "tag": "0047_agent_oauth_device_authorization",
+      "breakpoints": true
     }
   ]
 }

@@ -618,6 +618,52 @@ export const tokenlessAgentOauthAccessTokens = pgTable(
   }),
 );
 
+export const tokenlessAgentOauthDeviceAuthorizations = pgTable(
+  "tokenless_agent_oauth_device_authorizations",
+  {
+    deviceAuthorizationId: text("device_authorization_id").primaryKey(),
+    deviceCodeHash: text("device_code_hash").notNull(),
+    userCodeHash: text("user_code_hash").notNull(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthClients.clientId, { onDelete: "restrict" }),
+    audience: text("audience").notNull(),
+    resource: text("resource").notNull(),
+    requestedScopesJson: text("requested_scopes_json").notNull(),
+    status: text("status").notNull().default("pending"),
+    intervalSeconds: integer("interval_seconds").notNull().default(5),
+    pollCount: integer("poll_count").notNull().default(0),
+    lastPolledAt: timestamp("last_polled_at", { mode: "date", withTimezone: true }),
+    approvedByPrincipalId: text("approved_by_principal_id").references(() => tokenlessPrincipals.principalId, {
+      onDelete: "restrict",
+    }),
+    approvedAt: timestamp("approved_at", { mode: "date", withTimezone: true }),
+    deniedAt: timestamp("denied_at", { mode: "date", withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    tokenFamilyId: text("token_family_id").references(() => tokenlessAgentOauthTokenFamilies.tokenFamilyId, {
+      onDelete: "restrict",
+    }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    clientCreatedIdx: index("tokenless_agent_oauth_device_authorizations_client_created_idx").on(
+      table.clientId,
+      table.createdAt,
+    ),
+    deviceHashUnique: uniqueIndex("tokenless_agent_oauth_device_authorizations_device_hash_unique").on(
+      table.deviceCodeHash,
+    ),
+    familyUnique: uniqueIndex("tokenless_agent_oauth_device_authorizations_family_unique").on(table.tokenFamilyId),
+    statusExpiryIdx: index("tokenless_agent_oauth_device_authorizations_status_expiry_idx").on(
+      table.status,
+      table.expiresAt,
+    ),
+    userHashUnique: uniqueIndex("tokenless_agent_oauth_device_authorizations_user_hash_unique").on(table.userCodeHash),
+  }),
+);
+
 export const tokenlessAgentConnectionIntents = pgTable(
   "tokenless_agent_connection_intents",
   {
@@ -709,5 +755,6 @@ export const tokenlessAgentConnectionIntentEvents = pgTable(
 
 export type TokenlessAgentOauthClient = typeof tokenlessAgentOauthClients.$inferSelect;
 export type TokenlessAgentOauthTokenFamily = typeof tokenlessAgentOauthTokenFamilies.$inferSelect;
+export type TokenlessAgentOauthDeviceAuthorization = typeof tokenlessAgentOauthDeviceAuthorizations.$inferSelect;
 export type TokenlessAgentConnectionIntent = typeof tokenlessAgentConnectionIntents.$inferSelect;
 export type TokenlessAgentConnectionIntentEvent = typeof tokenlessAgentConnectionIntentEvents.$inferSelect;

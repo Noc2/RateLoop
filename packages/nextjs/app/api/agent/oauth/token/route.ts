@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AgentOAuthError, exchangeAgentOAuthToken } from "~~/lib/tokenless/agentOAuth";
+import { AGENT_OAUTH_DEVICE_GRANT_TYPE, AgentOAuthError, exchangeAgentOAuthToken } from "~~/lib/tokenless/agentOAuth";
+import { exchangeAgentOAuthDeviceCode } from "~~/lib/tokenless/agentOAuthDevice";
 
 export const runtime = "nodejs";
 
@@ -56,9 +57,15 @@ export async function POST(request: NextRequest) {
               refreshToken: field(form, "refresh_token"),
               scope: optionalField(form, "scope"),
             })
-          : (() => {
-              throw new AgentOAuthError("unsupported_grant_type", "The requested grant_type is unsupported.");
-            })();
+          : grantType === AGENT_OAUTH_DEVICE_GRANT_TYPE
+            ? await exchangeAgentOAuthDeviceCode({
+                clientId,
+                resource,
+                deviceCode: field(form, "device_code"),
+              })
+            : (() => {
+                throw new AgentOAuthError("unsupported_grant_type", "The requested grant_type is unsupported.");
+              })();
     return NextResponse.json(response, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
   } catch (error) {
     const oauth =
