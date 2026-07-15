@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { db } from "~~/lib/db";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
+import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 
 const QUOTE_TTL_MS = 15 * 60_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -143,23 +144,11 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
   if (visibility !== "public" && visibility !== "private") {
     throw new TokenlessServiceError("visibility must be public or private.", 400, "invalid_quote");
   }
-  if (!["public", "synthetic", "redacted", "internal", "confidential", "restricted"].includes(dataClassification)) {
-    throw new TokenlessServiceError("dataClassification is unsupported.", 400, "invalid_quote");
-  }
-  if (visibility === "public" && !["public", "synthetic", "redacted"].includes(dataClassification)) {
-    throw new TokenlessServiceError(
-      "Public questions cannot carry confidential or restricted data.",
-      400,
-      "invalid_public_privacy",
-    );
-  }
-  if (visibility === "public" && request.confirmedNoSensitiveData !== true) {
-    throw new TokenlessServiceError(
-      "Public questions require a no-sensitive-data confirmation.",
-      400,
-      "sensitive_data_confirmation_required",
-    );
-  }
+  assertDataIngressPolicy({
+    classification: dataClassification,
+    confirmedNoSensitiveData: request.confirmedNoSensitiveData,
+    visibility,
+  });
   if (
     dataClassification === "redacted" &&
     (typeof request.redactionSummary !== "string" || request.redactionSummary.trim().length < 10)

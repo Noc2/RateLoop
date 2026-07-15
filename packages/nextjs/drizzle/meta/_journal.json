@@ -288,6 +288,13 @@
       "when": 1784001600000,
       "tag": "0040_project_access_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1784005200000,
+      "tag": "0041_eu_data_policy",
+      "breakpoints": true
     }
   ]
 }
