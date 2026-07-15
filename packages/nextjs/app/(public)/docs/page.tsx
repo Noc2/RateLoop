@@ -6,6 +6,10 @@ export default function DocsPage() {
         RateLoop helps teams test whether AI-enabled work meets a declared quality bar before rollout. A funded, blinded
         human panel returns a signal, written reasons, and inspectable settlement evidence.
       </p>
+      <p>
+        The public tokenless deployment is an explicit simulated sandbox. Its reviewers, results, settlement, and
+        payments are test data, not live human evidence or payment receipts.
+      </p>
       <h2>Good first use cases</h2>
       <ul>
         <li>Review AI-drafted customer-support replies before they reach customers.</li>
@@ -21,9 +25,15 @@ export default function DocsPage() {
       </p>
       <h2>Privacy and identity</h2>
       <p>
-        Question and rater text stays off-chain, but RateLoop and participating raters may be able to read it.
+        Browser access starts with Better Auth and resolves to an opaque RateLoop principal; an account does not require
+        or automatically create a wallet. A signed-in user adds a self-custodial or optional thirdweb app wallet only
+        when an explicit funding, payout, or recovery flow needs one. Wallet bindings are purpose-scoped and never grant
+        workspace access by themselves.
+      </p>
+      <p>
+        Question and rater text stays off-chain, but RateLoop and assigned reviewers may be able to read it. Private
+        artifacts are encrypted before storage and limited by explicit project assignment and short reviewer leases.
         Settlement evidence may be public. Do not submit secrets or material you are not authorized to disclose.
-        Credentials support panel-specific eligibility; no single identity provider is required for every use case.
       </p>
       <h2>Fund custody and settlement</h2>
       <p>
@@ -42,6 +52,18 @@ export default function DocsPage() {
         Workspaces define who may publish, which reviewer sources are permitted, how much an agent may spend, and which
         evidence must be present before a result is released. Reviewer source, compensation, limitations, and settlement
         terms remain visible throughout the workflow.
+      </p>
+      <h2>EU-first controls and current limits</h2>
+      <p>
+        Repository controls bind private data to an EU home region, classification, permitted use, retention, and
+        legal-hold policy. Structured subject-request workflows and integrity-chained exportable application audit
+        records are implemented. The audit chain is not an immutable or WORM log.
+      </p>
+      <p>
+        These controls do not prove that the current sandbox is EU-hosted, contractually no-training, certified, or
+        independently penetration tested. Live EU resources, regional KMS, processors, backups, and external approvals
+        remain separate release gates. See <a href="/trust">Trust</a> for the versioned status and unavailable
+        capabilities.
       </p>
     </article>
   );

@@ -6,6 +6,10 @@ export default function TokenlessTechStackPage() {
         RateLoop is tokenless: reviewers never buy, stake, or receive LREP. Quality and attack resistance instead come
         from several independent, disclosed controls. None of them proves that an individual answer is true.
       </p>
+      <p>
+        The public tokenless deployment is an explicit simulated sandbox. The production architecture below is not a
+        claim that the sandbox uses live reviewers, money, or verified EU resources.
+      </p>
       <h2>Settlement and reporting incentives</h2>
       <ul>
         <li>Base for low-cost, USDC-denominated settlement and publicly recomputable contract evidence.</li>
@@ -57,7 +61,19 @@ export default function TokenlessTechStackPage() {
       </p>
       <h2>Application and evidence</h2>
       <ul>
+        <li>
+          Better Auth account-first sign-in resolves to an opaque RateLoop principal. Self-custodial and optional
+          thirdweb wallets are separately bound only for funding, payout, or recovery.
+        </li>
         <li>Postgres-backed agent quote and ask state.</li>
+        <li>
+          EU-first classification, permitted-use, retention, legal-hold, project-assignment, and subject-request
+          controls. Live EU resource verification remains a separate release gate.
+        </li>
+        <li>
+          Integrity-chained, tenant-exportable application audit records. They are not represented as an immutable or
+          WORM external audit log.
+        </li>
         <li>
           Durable surprise-bounty reservations and entitlements, indexed base-claim matching, dedicated signer nonce
           allocation, exact USDC receipt verification, bounded retry, and fail-closed reconciliation.

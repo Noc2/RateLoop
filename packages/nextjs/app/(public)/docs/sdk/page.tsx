@@ -6,6 +6,10 @@ export default function SdkPage() {
         Add a paid human-assurance panel to a workflow when an AI-enabled output needs a defined quality gate before
         rollout.
       </p>
+      <p>
+        The public tokenless deployment is an explicit simulated sandbox. Use only public, synthetic, or safely redacted
+        test material and do not treat its responses as live human evidence.
+      </p>
       <pre>
         <code>{`import { createTokenlessRateLoopClient } from "@rateloop/sdk";
 
@@ -25,8 +29,18 @@ const result = state.status === "ready" ? await client.result({ operationKey: as
         wallet-agnostic and never stores private keys. Payment instructions include the versioned x402 authorization
         facts needed by a separate signer. Pending waits return a cursor, retry delay, expiry, and canonical poll URL.
         Results use schema
-        <code>rateloop.tokenless.v1</code>. Browser clients authenticate with the HttpOnly RateLoop browser session. The
+        <code>rateloop.tokenless.v2</code>. Browser clients authenticate with the HttpOnly RateLoop browser session. The
         result is decision support and must not silently trigger a release or be presented as a compliance approval.
+      </p>
+      <h2>Identity and authorization boundary</h2>
+      <p>
+        Browser identity is separate from the SDK: Better Auth resolves an opaque RateLoop principal and a wallet is
+        optional. Server integrations use scoped, revocable API keys. RateLoop derives their workspace and authorized
+        client/project assignment; a caller-supplied tenant ID or wallet address is not an authorization signal.
+      </p>
+      <p>
+        EU-first repository checks do not establish verified EU hosting or certification. Use{" "}
+        <a href="/trust">the trust registry</a> for current claim status and external gates.
       </p>
     </article>
   );

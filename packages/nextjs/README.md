@@ -17,18 +17,36 @@ results.
 
 ## Browser authentication
 
-The tokenless browser uses only thirdweb in-app wallets for email OTP, Google, Apple, and passkey onboarding. It does not
-offer or automatically reconnect Base Account as a browser-authentication method. Base Account remains isolated to
-explicit funding and payout-proof flows. Every sign-in method signs a domain-bound login payload; RateLoop verifies it
-server-side and creates its own opaque, hashed, HttpOnly session. The thirdweb browser token and client-reported profiles
-are never workspace authorization.
+Better Auth is the primary browser-authentication layer. Email OTP and passkeys are the initial methods; Google and
+Apple appear only when their complete server-only credential pairs are configured. After Better Auth verifies the
+login, RateLoop resolves an opaque `principal_id` and issues its own random, hashed, HttpOnly application session.
+Provider subjects, email addresses, and wallet addresses are identity bindings, not workspace authorization keys.
 
-The application shell does not mount Wagmi or any external wallet connector. Thirdweb is the only browser identity
-provider, and automatic wallet reconnection is disabled.
+An authenticated user needs no wallet for enterprise workspace access, invited unpaid review, or API-key agent use.
+When a funding, payout, or recovery flow needs an onchain destination, the user explicitly chooses either an existing
+self-custodial wallet or an app-scoped thirdweb wallet. RateLoop then verifies a domain-, chain-, principal-, purpose-,
+nonce-, and expiry-bound wallet signature and stores a revocable binding for exactly `funding`, `payout`, or `recovery`.
+Creating or binding a wallet never grants general account access.
 
-Configure `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`, `NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN`, and the server-only
-`THIRDWEB_SECRET_KEY`. Apply migration `0016_thirdweb_enterprise_auth.sql`, then run
-`yarn workspace @rateloop/nextjs auth:check` before a hosted rollout.
+Configure `BETTER_AUTH_SECRET`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and at least one available sign-in delivery path.
+Email OTP additionally requires the Resend variables; Google and Apple each require both Better Auth provider
+credentials. thirdweb remains disabled unless `TOKENLESS_THIRDWEB_WALLET_ENABLED=true` and its public client ID,
+one-time JWT audience/key, and server-side signing key are configured. Keep every secret and private JWK server-only.
+Apply every migration in `drizzle/meta/_journal.json` before enabling non-sandbox mode.
+
+## Privacy and trust controls
+
+Private artifacts are encrypted before storage and access is constrained by workspace membership, explicit project
+assignment, and short reviewer leases where applicable. Workspaces and projects carry an EU home region, data
+classification, permitted-use, retention, and legal-hold policy. The application also supports structured subject
+requests and integrity-chained, tenant-exportable audit records. The audit chain is not an immutable or WORM log.
+
+The checked EU manifest and regional configuration make non-sandbox deployment fail closed unless the proposed resource
+bundle is complete and approved. They do not prove that the current sandbox is EU-hosted. Do not claim EU residency,
+contractual no-training, SOC 2, blanket GDPR compliance, HIPAA via BAA, customer VPC, SAML/SCIM, penetration testing, or
+certification from these controls. Use the trust-claim registry and `/trust` page for current public wording.
+Operational intake, legal-hold, deletion-evidence, audit-integrity, and trust-claim withdrawal procedures are in the
+[privacy operations runbook](../../docs/tokenless-privacy-operations-runbook-2026-07.md).
 
 ## API
 
@@ -55,3 +73,8 @@ maximum attempt reserve, total authorized funding, refunds, and accepted-work co
 Use a separate Vercel project/domain and a separate Postgres database for this branch. Do not attach the existing
 RateLoop production domain or database. The current Base Sepolia contracts and all branch services remain disposable
 until Phase 5 hardening.
+
+For a non-sandbox release, follow the
+[EU deployment runbook](../../docs/tokenless-eu-deployment-runbook.md): provision new EU Postgres, private object
+storage, managed KMS, workers, logs, and backups; attach processor evidence; sign the canonical manifest; and verify the
+live runtime identities. Region pins alone do not activate an EU-hosting claim.

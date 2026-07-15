@@ -21,5 +21,11 @@ test("how-it-works explains the production integrity stack and its limits", asyn
   assert.match(html, /prospective integrity epochs/);
   assert.match(html, /cannot reduce accepted-work payment/i);
   assert.match(html, /None of these controls proves.*objective truth/i);
-  assert.doesNotMatch(html, /sandbox|simulated|test deployment|Base Sepolia/i);
+  assert.match(html, /explicit simulated sandbox/i);
+  assert.match(html, /Better Auth.*opaque RateLoop principal/i);
+  assert.match(html, /purpose-scoped binding never grants workspace access/i);
+  assert.match(html, /explicit project assignment.*short reviewer leases/i);
+  assert.match(html, /not an immutable or WORM log/i);
+  assert.match(html, /do not prove that the current sandbox is EU-hosted/i);
+  assert.doesNotMatch(html, /Base Sepolia/i);
 });

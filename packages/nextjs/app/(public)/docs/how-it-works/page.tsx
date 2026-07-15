@@ -6,6 +6,10 @@ export default function HowTokenlessWorksPage() {
         RateLoop turns a defined quality question into blinded human judgment, recomputable incentive evidence, and a
         decision packet that keeps the final action with the customer.
       </p>
+      <p>
+        The public tokenless deployment is an explicit simulated sandbox. It previews these journeys with test
+        reviewers, results, settlement, and payments; it does not produce live human evidence.
+      </p>
       <ol>
         <li>
           The customer creates a client-isolated project, freezes a baseline, a candidate, representative cases, a
@@ -66,14 +70,30 @@ export default function HowTokenlessWorksPage() {
       </p>
       <h2>Privacy, identity, and recovery</h2>
       <p>
-        RateLoop can process encrypted private artifacts and participating reviewers see only their assigned material,
-        but customers must still minimize sensitive data and keep regulated or safety-critical decisions under
-        accountable human control. Invitations are the default private B2B access path. External identity assurance is
-        used only when a frozen audience policy requires a specific capability.
+        Browser access starts with Better Auth and resolves to an opaque RateLoop principal. Creating an account does
+        not create or require a wallet. A signed-in user explicitly adds a self-custodial or optional thirdweb app
+        wallet only for funding, payout, or recovery; the purpose-scoped binding never grants workspace access.
+      </p>
+      <p>
+        RateLoop encrypts private artifacts before storage. Workspace membership, explicit project assignment, and short
+        reviewer leases limit access, but customers must still minimize sensitive data and keep regulated or
+        safety-critical decisions under accountable human control. Invitations are the default private B2B access path.
+        External identity assurance is used only when a frozen audience policy requires a specific capability.
       </p>
       <p>
         One-time vote and payout keys are created in the browser and exported in an encrypted recovery package. The
         operator never receives those keys. Claiming publicly links the vote key to its per-round payout address.
+      </p>
+      <h2>Lifecycle, audit, and EU release boundary</h2>
+      <p>
+        Workspaces and projects carry an EU home region, classification, permitted-use, retention, and legal-hold
+        policy. Structured subject-request workflows and integrity-chained exportable application audit records are
+        implemented; the audit chain is not an immutable or WORM log.
+      </p>
+      <p>
+        EU-first configuration and release checks do not prove that the current sandbox is EU-hosted. Live EU data
+        resources, managed regional KMS, processor evidence, backup/restore proof, and external approvals remain gates.
+        The <a href="/trust">trust registry</a> records the current claims and unavailable capabilities.
       </p>
     </article>
   );

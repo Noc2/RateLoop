@@ -37,7 +37,7 @@ its completion into a repository gate and, where needed, an external claim gate.
 | Classification and home region (`EASY_NOW` + `NEAR_TERM`) | Canonical classes/uses, immutable `eu` home region, retention and hold fields, policy enforcement on core ingestion/export paths | `Workspace data is policy-bound by classification, region, retention, and permitted use.` | Migration/restore evidence for a live stack |
 | Artifact/evidence authorization (`EASY_NOW`) | Explicit project assignments, deny-by-default authorization, cross-tenant tests | `Private artifacts are encrypted and limited to assigned access.` | Route inventory must remain green |
 | Supply-chain checks (`EASY_NOW`) | CodeQL, dependency audit, container build/scan, SBOM, provenance artifact, dependency updates | Listed as engineering controls, not certification | GitHub rules/push protection administration |
-| Canonical audit envelope (`NEAR_TERM`) | One event schema/writer, integrity chain, required event coverage, tenant export | `Security-relevant actions produce exportable audit records.` | Write-once external sink before `immutable audit log` |
+| Canonical audit envelope (`NEAR_TERM`) | Integrity-chained workspace and pre-workspace schemas, safe metadata boundary, covered-action instrumentation, tenant export | `Covered identity, wallet, authorization, agent credential, artifact, lifecycle, and export actions produce integrity-chained application records.` | Transactional outbox and write-once external sink before complete or `immutable audit log` claims |
 | Structured encryption/KMS boundary (`NEAR_TERM`) | Provider-neutral envelope-vault API, per-record data keys, tenant/region AAD, rotation/rewrap tests, production fail-closed KMS rule | Exact encrypted categories only | Live EU KMS/key ceremony/backfill/recovery |
 | Retention, deletion, DSAR, legal hold (`NEAR_TERM`) | Policy graph, hold workflow, subject request/export/deletion records, completion evidence, public-chain exceptions | Exact covered categories only | Counsel schedule, processors, backup-expiry evidence |
 | Provider-neutral principal (`NEAR_TERM`) | Better Auth, opaque principal, provider bindings, purpose-scoped wallet bindings, compatibility migration | `Sign in without a wallet; add one only for onchain payments or payouts.` | SAML/SCIM remains a later external gate |
@@ -112,8 +112,10 @@ earlier commits but must not be folded into the same commit.
 - Add one append API containing tenant, region, actor, assurance method, action, target, purpose/reason, request
   correlation, result, and timestamp.
 - Chain canonical event digests per workspace and support JSON export.
-- Cover login/logout/failure, session and wallet binding, membership/role/project access, agent credentials, reads,
-  exports, retention/holds/deletion, keys, billing, and operator access.
+- Cover the actions implemented in this release: login/logout/failure, session and wallet binding, project access,
+  agent pairing/approval/rotation/revocation, private-artifact reads, tenant export, and lifecycle/hold/deletion actions.
+- Keep unsupported operator access unavailable. Treat complete membership, billing, KMS-operation, and operator-action
+  coverage as a later transactional-outbox inventory, not as an implemented claim.
 - Describe the result as integrity-chained application audit records, not an immutable/WORM audit log.
 
 ### 9. Better Auth primary identity

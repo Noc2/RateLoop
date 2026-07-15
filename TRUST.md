@@ -4,7 +4,20 @@ This document describes the implemented `tokenless` system and its current limit
 addresses are historical and do not match the current fund core. Publish new addresses only after the planned contract
 changes, a fresh deployment, source verification, and complete deployment-key parity checks. The
 [human-assurance redesign plan](docs/tokenless-human-assurance-redesign-plan-2026-07.md) defines the remaining product,
-pilot, real-money, identity-provider, and deployment gates.
+pilot, real-money, identity-provider, and deployment gates. The
+[EU trust and identity plan](docs/tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md) defines the
+account-first identity model, repository controls, and external claim gates.
+
+## Browser identity and wallets
+
+Better Auth verifies the configured email OTP, passkey, Google, or Apple sign-in. RateLoop then maps that provider
+subject to an opaque principal and issues its own random, hashed, HttpOnly application session. The provider session,
+email address, client profile, and wallet address are not workspace authorization by themselves.
+
+Enterprise workspace access, invited unpaid review, and prepaid API-key agent use require no wallet. An authenticated
+user explicitly connects a self-custodial wallet or creates an optional thirdweb app wallet only for a funding, payout,
+or recovery purpose. RateLoop verifies a domain-, chain-, principal-, purpose-, nonce-, and expiry-bound signature and
+stores a revocable purpose-scoped binding. A wallet binding never grants general browser or workspace access.
 
 ## Funds
 
@@ -29,8 +42,9 @@ assignments until the frozen assignment policy is carried through voucher issuan
 The strictly unpaid customer-invited path and simulated sandbox remain available; the generic paid settlement primitive
 is not presented as a completed assurance workflow.
 
-Customer invitations are one-time, hashed, Base-Account-bound access credentials. They do not prove unique humanity,
-age, expertise, residence, sanctions clearance, or paid eligibility. World ID and Self are not production adapters.
+Customer invitations are one-time, hashed credentials bound to the signed-in RateLoop principal and any verified invite
+constraints. They do not prove unique humanity, age, expertise, residence, sanctions clearance, or paid eligibility.
+World ID and Self are not production adapters.
 The current provider boundary is capability-based so a provider can be added later without changing fund custody, but
 no provider is a default until pilot conversion, coverage, procurement, privacy, and reliability gates are met.
 
@@ -49,10 +63,13 @@ but the voucher/commit rows are not a per-rater encrypted mapping. Do not descri
 unlinkable, or protected from a database-level deanonymization breach.
 
 Customer artifacts are AES-256-GCM encrypted before private object storage. Database rows keep opaque object references,
-tenant-scoped commitments, and metadata. Access is assignment-bound through short leases; previews, reads, exports, and
-administrative access are logged. Workspace/project retention and deletion controls apply off-chain, subject to legal
-hold and statutory retention. Reviewer rationales use a separate encryption domain, and run-scoped reviewer pseudonyms
-use a separate keyed-hash domain.
+tenant-scoped commitments, and metadata. Workspace membership, explicit project assignment, and short reviewer leases
+limit access; previews, reads, exports, and administrative access are logged. Workspace/project classification,
+permitted-use, retention, subject-request, deletion, and legal-hold controls apply off-chain, subject to statutory
+retention. Covered identity, wallet, project-authorization, agent-credential, artifact, lifecycle, and audit-export
+events use an integrity chain and can be exported per workspace, but this is not a complete, immutable, or WORM
+external audit log. Reviewer rationales use a separate encryption domain, and run-scoped reviewer pseudonyms use a
+separate keyed-hash domain.
 
 These controls do not make paid reviewers anonymous to RateLoop. Voucher and commit operations still retain joinable
 rater, vote-key, and nullifier records needed for eligibility, abuse control, and payment operations. A database-level
@@ -87,3 +104,13 @@ no storage, selector, proxy, or address compatibility is promised. App, Ponder, 
 block, and the complete `tokenless-v2:<chain>:<panel>:<issuer>:<adapter>` key must change together. Historical v1 keys
 are rejected by every active service. The `tokenless`
 branch must never be attached to `rateloop.ai` or the legacy production Railway/Vercel projects.
+
+The repository pins the proposed application and worker configuration to approved EU regions and validates a canonical
+EU deployment manifest. Non-sandbox production must identify and verify new EU Postgres, private object storage,
+managed KMS, workers, logs, and backups; attach processor evidence; and pass signed manifest and runtime-identity checks.
+These controls do not prove that the current sandbox is EU-hosted, and global provider control planes and public-chain
+records remain explicit exceptions.
+
+RateLoop does not currently publish a contractual no-training commitment or claim SOC 2, blanket GDPR compliance,
+HIPAA via BAA, customer-VPC deployment, SAML/SCIM, independent penetration-test coverage, or immutable/WORM logs. The
+versioned public trust-claim registry and `/trust` page are the source of truth for marketable statements.

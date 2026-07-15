@@ -13,3 +13,13 @@ The public tokenless deployment is currently a simulated sandbox: it previews se
 7. A private decision packet separates reviewer coverage from case judgments and reports per-case descriptive results, disagreement, limitations, and any valid settlement evidence. The customer records the final go, revise, or stop decision separately.
 
 There is no funder cancellation after the first accepted paid commit. A normal claim links the one-time vote key to its payout address. Assigned reviewers can read their leased material and public-chain settlement evidence remains public. A decision packet is evidence, not an automatic release, safety, legal, or compliance approval.
+
+Browser access starts with Better Auth and resolves to an opaque RateLoop principal; creating an account does not create
+or require a wallet. A signed-in user explicitly adds a self-custodial or optional thirdweb app wallet only for a
+funding, payout, or recovery purpose. That wallet binding is revocable and never grants workspace access by itself.
+
+Private project access is limited by workspace membership, explicit project assignment, and reviewer lease where
+applicable. Repository controls also bind data to classification, permitted use, EU home region, retention and legal-hold
+policy; provide structured subject-request workflows; and create integrity-chained exportable application audit records.
+The audit chain is not an immutable/WORM log. The current public sandbox is not represented as EU-hosted or certified;
+live EU resources, KMS, processors, backups, and external approvals remain separate gates described at `/trust`.

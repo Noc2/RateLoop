@@ -379,7 +379,7 @@ Add separate server-only roles and fail-closed guards for:
 - `WORLD_ID_RP_SIGNING_KEY`;
 - the provider-evidence HMAC/encryption key domain;
 - the tokenless credential signer; and
-- thirdweb browser authentication.
+- Better Auth session signing, with a separate Ed25519 JWT role only when optional thirdweb wallet creation is enabled.
 
 `WORLD_ID_APP_ID` and `WORLD_ID_RP_ID` may be delivered as public configuration; the RP signing key never has a
 `NEXT_PUBLIC_` form. A World outage blocks new or freshness-required admission but never affects an accepted commit,

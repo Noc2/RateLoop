@@ -31,12 +31,23 @@ export default function PrivacyPage() {
       </p>
       <h2>Browser sign-in</h2>
       <p>
-        Browser users may sign in through thirdweb using email, Google, Apple, a passkey, or a supported external
-        wallet. thirdweb and the selected sign-in provider process authentication data under their own terms. RateLoop
-        receives the resulting wallet address and, for an in-app wallet, may store the verified provider, thirdweb user
-        identifier, normalized email address and domain, and display name needed for account access and audit UX.
-        RateLoop stores its own hashed, time-limited browser session; it does not store the thirdweb secret key or a
-        social-provider token in the browser session. An email domain alone never grants workspace membership.
+        Browser users sign in through RateLoop&apos;s self-hosted Better Auth service using an email one-time code or a
+        registered passkey. Google and Apple are offered only when their credentials are configured. Better Auth and the
+        selected email or social provider process the authentication data needed for that sign-in. RateLoop maps the
+        provider subject to an opaque RateLoop principal that is independent of any wallet, then exchanges the short
+        Better Auth session for its own hashed, time-limited, HttpOnly application session. Ordinary account, workspace,
+        invited unpaid review, and API-key agent use do not create or require a wallet. An email address or domain alone
+        never grants workspace membership or project access.
+      </p>
+      <h2>Optional wallets</h2>
+      <p>
+        A signed-in user may explicitly connect a self-custodial wallet or ask thirdweb to create an app-scoped wallet
+        for public USDC funding, payout, or recovery. RateLoop sends thirdweb a five-minute, audience-bound JWT whose
+        subject is only the opaque principal identifier; the token does not include an email address or display name.
+        The wallet must then sign a one-time proof bound to the RateLoop domain, principal, Base Sepolia chain, wallet
+        address, selected purpose, nonce, and expiry. Each binding is revocable and never authorizes general account or
+        workspace access. thirdweb processes wallet creation and recovery under its own terms. Users of a self-custodial
+        wallet remain responsible for their keys and recovery method.
       </p>
       <h2>Subscription billing</h2>
       <p>
@@ -51,7 +62,8 @@ export default function PrivacyPage() {
       <p>
         Public-chain interactions may publish transaction addresses, commitments, round terms, settlement data, and
         claims. These records are visible to third parties and generally cannot be erased by the interface operator. A
-        normal claim links a vote key to its payout destination.
+        normal claim links a vote key to its payout destination. Reusing a funding or payout address can link paid
+        activity across rounds even though the RateLoop account principal itself is opaque.
       </p>
       <h2>Paid eligibility</h2>
       <p>

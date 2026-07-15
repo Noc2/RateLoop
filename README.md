@@ -34,6 +34,26 @@ x402 execution, paid eligibility and vouchers, sponsored sealed commits, permiss
 evidence, analytics publication, and signed webhooks. The Vercel deployment remains explicitly sandboxed until the
 complete live secret/provider bundle is provisioned; configuring the contract identity alone does not enable paid mode.
 
+## Identity, privacy, and EU-first controls
+
+Browser accounts are wallet-independent. Better Auth verifies email OTP, passkey, and configured social-provider
+sign-ins; RateLoop exchanges that identity for an opaque principal and a RateLoop-owned, hashed, HttpOnly application
+session. A user adds a self-custodial or thirdweb in-app wallet only when a funding, payout, or recovery flow requires
+one. Wallet bindings are explicit, purpose-scoped, revocable, and never grant workspace access by themselves.
+
+The repository now includes an EU-first deployment contract, canonical data classifications and permitted uses,
+project-assignment authorization for private artifacts, an envelope-vault boundary, retention/subject-request/legal-hold
+workflows, and integrity-chained exportable application audit records. These are implemented controls, not evidence that
+the current sandbox is EU-hosted or certified. The live EU resource bundle, managed regional KMS, processor evidence,
+backup/restore proof, and external security/legal approvals remain release gates.
+
+The versioned trust-claim registry and public `/trust` page are the source of truth for marketable statements. RateLoop
+does not currently claim verified EU hosting, a contractual no-training commitment, SOC 2, blanket GDPR compliance,
+HIPAA via BAA, customer-VPC deployment, SAML/SCIM, independent penetration-test coverage, or immutable/WORM audit logs.
+See the [EU deployment runbook](docs/tokenless-eu-deployment-runbook.md) and
+[privacy operations runbook](docs/tokenless-privacy-operations-runbook-2026-07.md), plus the
+[implementation plan](docs/tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md), for the exact gates.
+
 ## Architecture
 
 - `packages/foundry` — immutable panel, credential issuer, stateless x402 adapter, tests, and Base Sepolia deployment tooling.
@@ -42,7 +62,8 @@ complete live secret/provider bundle is provisioned; configuring the contract id
 - `packages/keeper` — permissionless reveal, settlement, claim, compensation, and stale-return automation.
 - `packages/sdk` — versioned quote → ask → wait → result and assurance project/run clients and JSON schemas.
 - `packages/agents` — tokenless agent CLI, including API-key-scoped assurance project/run reads.
-- `packages/nextjs` — buyer/rater foundations, private evidence packets, and durable agent APIs.
+- `packages/nextjs` — wallet-independent browser identity, buyer/rater foundations, private evidence packets, lifecycle
+  and audit controls, and durable agent APIs.
 
 See [`TRUST.md`](TRUST.md) for the exact operator, issuer, USDC, drand, privacy, and deployment trust boundaries.
 

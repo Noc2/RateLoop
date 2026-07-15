@@ -89,6 +89,10 @@ export default function TokenlessAgentDocsPage() {
         approval-bound; an authenticated workspace key can publish without a per-run click only when an owner-issued
         policy fixes its budget, payment mode, wallet, audience, project, data, expiry, and revocation rules.
       </p>
+      <p>
+        The public tokenless deployment is an explicit simulated sandbox. Its reviewer activity, results, settlement,
+        and payments are test data rather than live human evidence.
+      </p>
 
       <h2>Choose a publishing lane</h2>
       <ul>
@@ -109,6 +113,11 @@ export default function TokenlessAgentDocsPage() {
         Autonomous publishing is not an unscoped public MCP permission. Requests outside policy fail closed or return a
         browser-handoff continuation, according to the policy. A result is decision support and does not silently
         authorize a release or regulated action.
+      </p>
+      <p>
+        Workspace API keys are scoped, revocable server credentials. The server derives their workspace and authorized
+        client/project boundary; neither a caller-supplied tenant ID nor a wallet address grants access. Prepaid agents
+        need no wallet, while a self-funded wallet is limited to its policy-bound payment path.
       </p>
 
       <h2>Supported agent clients</h2>
@@ -213,6 +222,11 @@ yarn workspace @rateloop/agents media-upload \\
         RateLoop supplies human-review evidence and disclosed limitations; it does not issue an automatic production,
         safety, legal, or compliance approval. Use only authorized, minimized material and keep an accountable person
         responsible for every rollout decision.
+      </p>
+      <p>
+        EU-first repository controls do not prove that the sandbox is EU-hosted or certified. Read{" "}
+        <a href="/trust">the trust registry</a> before repeating a hosting, no-training, security, privacy, or
+        compliance statement.
       </p>
     </article>
   );

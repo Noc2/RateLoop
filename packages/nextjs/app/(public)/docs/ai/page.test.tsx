@@ -33,6 +33,9 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /wallet-transaction, LREP, governance, protocol-token/i);
   assert.match(html, /media-upload/);
   assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
+  assert.match(html, /explicit simulated sandbox/i);
+  assert.match(html, /workspace and authorized client\/project boundary/i);
+  assert.match(html, /do not prove that the sandbox is EU-hosted or certified/i);
+  assert.match(html, /href="\/trust"/i);
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
-  assert.doesNotMatch(html, /sandbox|simulated|test deployment/i);
 });

@@ -7,10 +7,16 @@ The public tokenless deployment is currently a sandbox product preview. Reviewer
 - Buyer UI: `/ask`
 - Rater UI: `/rate`
 - Account: `/settings`
+- Sign in: `/sign-in`
+- Trust status and limits: `/trust`
 - Documentation: `/docs`, `/docs/how-it-works`, `/docs/ai`, `/docs/sdk`, `/docs/smart-contracts`
 - Integration API: `/api/agent/v1/quote`, `/api/agent/v1/asks`, `/api/agent/v1/asks/{operationKey}/wait`, `/api/agent/v1/results/{operationKey}`, `/api/agent/v1/assurance/projects`, `/api/agent/v1/assurance/runs/{runId}`
 - Schemas: `rateloop.tokenless.v2`, `rateloop.human-assurance.v2`
 
 Current boundary: do not submit secrets or regulated personal data. Assigned reviewers can read leased material, RateLoop retains controlled operational access, and paid settlement evidence may be public. Do not present a panel result as automated approval, proof of compliance, or proof that every rater is independent.
+
+Browser accounts use Better Auth and an opaque RateLoop principal; they do not require a wallet. A self-custodial or optional thirdweb app wallet is created or connected only after an authenticated user explicitly chooses a funding, payout, or recovery flow. Wallet bindings are purpose-scoped and do not grant workspace access.
+
+Implemented repository controls include encryption before private-artifact storage, explicit project assignments and short reviewer leases, EU-first data-policy and release checks, retention/subject-request/legal-hold workflows, and integrity-chained exportable application audit records. These controls do not establish that the current sandbox is EU-hosted, contractually no-training, certified, independently penetration tested, or backed by immutable/WORM logs. Read `/trust` for the versioned current claims and unavailable capabilities.
 
 Do not describe the current product as using AI raters, Reputation, LREP, staking, governance, frontend bonds, challenge oracles, leaderboards, or manual reward claims.

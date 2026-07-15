@@ -12,6 +12,10 @@ give the agent either a prepaid budget or an agent-controlled wallet for x402
 payments. Public MCP and browser handoffs remain draft-first and approval-bound;
 the autonomous API/CLI lane is authenticated, budgeted, revocable, and scoped.
 
+Workspace credentials resolve to an opaque RateLoop principal and explicit workspace/client/project policy; they do
+not inherit browser identity from a wallet address. A prepaid agent needs no wallet. A self-funded agent may use its own
+encrypted wallet only for the authorized payment path, and that wallet does not grant browser or workspace access.
+
 This package never defaults to `rateloop.ai`. Set the isolated deployment explicitly.
 
 Image context uses authenticated staging rather than embedding bytes or storage URLs in a quote. The server returns an
@@ -74,6 +78,10 @@ const result =
 ```
 
 Wallet and x402 callers pass the corresponding `TokenlessPayment` variant to `ask`. The SDK does not hold private keys, execute contract calls, or possess a universal rater decryption key.
+
+Human browser accounts use Better Auth first and can work without a wallet. If a person later needs a funding, payout,
+or recovery destination, they explicitly bind either a self-custodial wallet or an optional thirdweb app wallet for that
+single purpose. This browser wallet flow is separate from the agent keystore described below.
 
 ## CLI
 
@@ -140,17 +148,21 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 
 ## Environment
 
-| Variable                      | Purpose                                                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `RATELOOP_API_BASE_URL`       | Required isolated tokenless deployment origin. HTTPS is required except on loopback.                            |
-| `RATELOOP_AGENT_API_KEY`      | Workspace key required by assurance commands and authenticated paid operations. It is omitted from free quotes. |
-| `RATELOOP_AGENT_API_PATH`     | Optional API prefix. Defaults to `/api/agent/v1`.                                                               |
-| `RATELOOP_REQUEST_TIMEOUT_MS` | Optional positive timeout for non-wait requests.                                                                |
-| `RATELOOP_AGENT_KEYSTORE_PATH` | Encrypted agent wallet path used by `run` and `wallet-address`.                                               |
-| `RATELOOP_AGENT_KEYSTORE_PASSWORD` | Password for the encrypted agent wallet; keep it in a secret manager.                                      |
-| `RATELOOP_AGENT_RESUME_PATH` | Optional mode-0600 path for a non-secret autonomous-run receipt.                                               |
+| Variable                           | Purpose                                                                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `RATELOOP_API_BASE_URL`            | Required isolated tokenless deployment origin. HTTPS is required except on loopback.                            |
+| `RATELOOP_AGENT_API_KEY`           | Workspace key required by assurance commands and authenticated paid operations. It is omitted from free quotes. |
+| `RATELOOP_AGENT_API_PATH`          | Optional API prefix. Defaults to `/api/agent/v1`.                                                               |
+| `RATELOOP_REQUEST_TIMEOUT_MS`      | Optional positive timeout for non-wait requests.                                                                |
+| `RATELOOP_AGENT_KEYSTORE_PATH`     | Encrypted agent wallet path used by `run` and `wallet-address`.                                                 |
+| `RATELOOP_AGENT_KEYSTORE_PASSWORD` | Password for the encrypted agent wallet; keep it in a secret manager.                                           |
+| `RATELOOP_AGENT_RESUME_PATH`       | Optional mode-0600 path for a non-secret autonomous-run receipt.                                                |
 
 The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
+
+The public tokenless deployment is an explicit sandbox: its reviewers, results, settlement, and payments are simulated.
+Use only public, synthetic, or safely redacted test material and do not use sandbox output as live human evidence. The
+repository enforces an EU-first release contract, but this does not prove that the current sandbox is EU-hosted.
 
 `media-upload` accepts JPG, PNG, or WEBP input up to 10 MB. It sends file bytes as multipart data directly from disk,
 requires `RATELOOP_AGENT_API_KEY`, and prints only the staged descriptor. The public MCP surface remains four tools and

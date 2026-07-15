@@ -8,6 +8,11 @@ quote -> ask -> wait -> result
 
 The SDK is HTTP-only and wallet-agnostic. It does not build transactions, manage keys, import contract deployment state, or expose the removed protocol generation.
 
+Browser identity is outside the SDK: Better Auth sign-in resolves to an opaque RateLoop principal and a RateLoop-owned
+HttpOnly application session. A wallet is optional and is bound separately for an explicit funding, payout, or recovery
+purpose. Server-to-server SDK callers use scoped, revocable workspace API keys; neither an API key nor a wallet address
+is a substitute for the server's workspace and project authorization checks.
+
 ## Human-assurance projects and runs
 
 Server-side B2B callers can use the same client with a workspace API key. Project creation requires an explicit data classification and retention period; the server derives the workspace from the key rather than accepting a caller-supplied workspace ID.
@@ -32,7 +37,16 @@ const status = await client.assurance.getRunStatus({
 });
 ```
 
-The integration API creates and lists projects, returns project resource metadata, and reads aggregate run state. It does not return artifacts, reviewer identities, rationales, blinding secrets, or signing keys. Artifact upload and run creation are intentionally not exposed to API keys yet: uploads need a non-account actor audit model, while a runnable suite also needs explicit reviewer, funding, and frozen-manifest setup. Use the authenticated buyer workflow for those steps. The lower-level paid primitive remains `quote -> ask -> wait -> result`.
+The integration API creates and lists projects, returns project resource metadata, and reads aggregate run state. The
+server derives the workspace and client/project scope and denies access when the credential lacks the matching
+assignment. It does not return artifacts, reviewer identities, rationales, blinding secrets, or signing keys. Artifact
+upload and run creation are intentionally not exposed to API keys yet: uploads need a non-account actor audit model,
+while a runnable suite also needs explicit reviewer, funding, and frozen-manifest setup. Use the authenticated buyer
+workflow for those steps. The lower-level paid primitive remains `quote -> ask -> wait -> result`.
+
+The public deployment is an explicit simulated sandbox. Use only public, synthetic, or safely redacted test material,
+and never treat sandbox responses as live human evidence or payment receipts. The repository's EU-first policy and
+regional release checks do not establish that the current deployment is EU-hosted or certified.
 
 ## Example
 
