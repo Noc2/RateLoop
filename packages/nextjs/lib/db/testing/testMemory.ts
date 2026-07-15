@@ -65,6 +65,34 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     returns: DataType.bool,
     implementation: () => true,
   });
+  memoryDb.public.registerFunction({
+    name: "jsonb_typeof",
+    args: [DataType.jsonb],
+    returns: DataType.text,
+    implementation: value => (Array.isArray(value) ? "array" : value === null ? "null" : typeof value),
+  });
+  memoryDb.public.registerFunction({
+    name: "jsonb_array_length",
+    args: [DataType.jsonb],
+    returns: DataType.integer,
+    implementation: value => (Array.isArray(value) ? value.length : 0),
+  });
+  memoryDb.public.registerOperator({
+    operator: "<@",
+    left: DataType.jsonb,
+    right: DataType.jsonb,
+    returns: DataType.bool,
+    implementation: (left, right) =>
+      Array.isArray(left) && Array.isArray(right) && left.every(value => right.includes(value)),
+  });
+  memoryDb.public.registerOperator({
+    operator: "@>",
+    left: DataType.jsonb,
+    right: DataType.jsonb,
+    returns: DataType.bool,
+    implementation: (left, right) =>
+      Array.isArray(left) && Array.isArray(right) && right.every(value => left.includes(value)),
+  });
 
   if (fs.existsSync(migrationDirectory)) {
     const files = fs

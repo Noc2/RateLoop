@@ -20,6 +20,9 @@ export const tokenlessAssuranceProjects = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     dataClassification: text("data_classification").notNull(),
+    visibility: text("visibility").notNull().default("private"),
+    materialKind: text("material_kind"),
+    privateSensitivity: text("private_sensitivity"),
     homeRegion: text("home_region").notNull().default("eu"),
     retentionPolicyId: text("retention_policy_id").notNull().default("retention-default-v1"),
     legalHoldState: text("legal_hold_state").notNull().default("none"),
@@ -35,6 +38,12 @@ export const tokenlessAssuranceProjects = pgTable(
       table.workspaceId,
       table.status,
       table.updatedAt,
+    ),
+    dimensionsIdx: index("tokenless_assurance_projects_dimensions_idx").on(
+      table.workspaceId,
+      table.visibility,
+      table.privateSensitivity,
+      table.status,
     ),
   }),
 );
