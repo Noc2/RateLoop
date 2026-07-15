@@ -8,7 +8,10 @@ on:
 
 permissions:
   actions: read
+  artifact-metadata: write
+  attestations: write
   contents: read
+  id-token: write
   security-events: write
 
 jobs:
@@ -29,6 +32,54 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Build tokenless keeper image
         run: docker build -f packages/keeper/Dockerfile -t rateloop-tokenless-keeper:test .
+      - name: Save keeper image artifact
+        run: docker save rateloop-tokenless-keeper:test --output rateloop-tokenless-keeper.tar
+      - name: Generate keeper CycloneDX SBOM
+        run: >-
+          docker run --rm
+          --volume /var/run/docker.sock:/var/run/docker.sock
+          --volume "$PWD:/work"
+          anchore/syft@sha256:473a60e3a58e29aca3aedb3e99e787bb4ef273917e44d10fcbea4330a07320bb
+          rateloop-tokenless-keeper:test
+          --output cyclonedx-json=/work/rateloop-tokenless-keeper.cdx.json
+      - name: Attest keeper build provenance
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/tokenless' }}
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: rateloop-tokenless-keeper.tar
+      - name: Attest keeper SBOM
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/tokenless' }}
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: rateloop-tokenless-keeper.tar
+          sbom-path: rateloop-tokenless-keeper.cdx.json
+      - name: Upload keeper SBOM
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: rateloop-tokenless-keeper-sbom
+          path: rateloop-tokenless-keeper.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Scan keeper image for high and critical vulnerabilities
+        id: keeper-scan
+        continue-on-error: true
+        run: >-
+          docker run --rm
+          --volume /var/run/docker.sock:/var/run/docker.sock
+          --volume "$PWD:/work"
+          aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+          image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed
+          --format sarif --output /work/rateloop-tokenless-keeper.sarif --exit-code 1
+          rateloop-tokenless-keeper:test
+      - name: Upload keeper vulnerability results
+        if: ${{ always() && hashFiles('rateloop-tokenless-keeper.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        with:
+          sarif_file: rateloop-tokenless-keeper.sarif
+          category: tokenless-keeper-container
+      - name: Enforce keeper vulnerability gate
+        if: ${{ steps.keeper-scan.outcome == 'failure' }}
+        run: exit 1
 
   ponder-image:
     runs-on: ubuntu-latest
@@ -36,6 +87,54 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Build tokenless indexer image
         run: docker build -f packages/ponder/Dockerfile -t rateloop-tokenless-ponder:test .
+      - name: Save indexer image artifact
+        run: docker save rateloop-tokenless-ponder:test --output rateloop-tokenless-ponder.tar
+      - name: Generate indexer CycloneDX SBOM
+        run: >-
+          docker run --rm
+          --volume /var/run/docker.sock:/var/run/docker.sock
+          --volume "$PWD:/work"
+          anchore/syft@sha256:473a60e3a58e29aca3aedb3e99e787bb4ef273917e44d10fcbea4330a07320bb
+          rateloop-tokenless-ponder:test
+          --output cyclonedx-json=/work/rateloop-tokenless-ponder.cdx.json
+      - name: Attest indexer build provenance
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/tokenless' }}
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: rateloop-tokenless-ponder.tar
+      - name: Attest indexer SBOM
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/tokenless' }}
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: rateloop-tokenless-ponder.tar
+          sbom-path: rateloop-tokenless-ponder.cdx.json
+      - name: Upload indexer SBOM
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: rateloop-tokenless-ponder-sbom
+          path: rateloop-tokenless-ponder.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Scan indexer image for high and critical vulnerabilities
+        id: ponder-scan
+        continue-on-error: true
+        run: >-
+          docker run --rm
+          --volume /var/run/docker.sock:/var/run/docker.sock
+          --volume "$PWD:/work"
+          aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+          image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed
+          --format sarif --output /work/rateloop-tokenless-ponder.sarif --exit-code 1
+          rateloop-tokenless-ponder:test
+      - name: Upload indexer vulnerability results
+        if: ${{ always() && hashFiles('rateloop-tokenless-ponder.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        with:
+          sarif_file: rateloop-tokenless-ponder.sarif
+          category: tokenless-ponder-container
+      - name: Enforce indexer vulnerability gate
+        if: ${{ steps.ponder-scan.outcome == 'failure' }}
+        run: exit 1
 
   slither:
     runs-on: ubuntu-latest
@@ -57,7 +156,7 @@ jobs:
           fail-on: high
           ignore-compile: true
       - name: Upload Slither SARIF
-        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
         if: ${{ always() && hashFiles('results.sarif') != '' }}
         with:
           sarif_file: results.sarif
