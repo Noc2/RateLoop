@@ -7,26 +7,20 @@ import {
   createTokenlessAsk,
   createTokenlessQuote,
   getTokenlessResult,
-  isTokenlessSandboxMode,
   waitForTokenlessAsk,
 } from "~~/lib/tokenless/server";
 
-const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
-
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "true";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
 });
 
-function quoteRequest(source: "customer_invited" | "sandbox" = "sandbox") {
+function quoteRequest() {
   return {
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source },
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" as const },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary", prompt: "Ship this?", rationale: { mode: "optional" } },
     requestedPanelSize: 15,
@@ -88,29 +82,6 @@ test("quotes reject economics that cannot satisfy the panel contract", async () 
   );
 });
 
-test("sandbox asks are durable, idempotent, and expose exact result accounting", async () => {
-  const quote = await createTokenlessQuote(quoteRequest());
-  const request = {
-    idempotencyKey: "test:ask:12345678",
-    payment: { mode: "prepaid" as const, workspaceId: "sandbox" },
-    quoteId: quote.quoteId,
-  };
-  const first = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
-  const replay = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
-
-  assert.equal(replay.operationKey, first.operationKey);
-  assert.equal(first.status, "open");
-  const wait = await waitForTokenlessAsk(first.operationKey, "https://tokenless.example");
-  assert.equal(wait.status, "ready");
-  assert.equal(wait.verdictStatus, "published");
-  const result = await getTokenlessResult(first.operationKey);
-  assert.equal(result.verdictStatus, "published");
-  assert.equal(result.economics.attemptReserve.refundedAtomic, "5000000");
-  assert.equal(result.economics.refund.totalAtomic, "5000000");
-  assert.equal(result.economics.compensation.totalAtomic, "0");
-  assert.equal(result.methodologyUrl, "https://tokenless.example/docs/how-it-works#sandbox-limitations");
-});
-
 test("asks reject the removed result-webhook option", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
   const idempotencyKey = "test:ask:no-webhook";
@@ -119,7 +90,7 @@ test("asks reject the removed result-webhook option", async () => {
       createTokenlessAsk(
         {
           idempotencyKey,
-          payment: { mode: "prepaid", workspaceId: "sandbox" },
+          payment: { mode: "prepaid", workspaceId: "workspace_test" },
           quoteId: quote.quoteId,
           webhook: { eventTypes: ["result.ready"], url: "https://example.test/hook" },
         },
@@ -130,16 +101,17 @@ test("asks reject the removed result-webhook option", async () => {
   );
 });
 
-test("live asks remain pending payment and never synthesize a result", async () => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
-  const quote = await createTokenlessQuote(quoteRequest("customer_invited"));
+test("asks are durable and idempotent, remain pending payment, and never synthesize a result", async () => {
+  const quote = await createTokenlessQuote(quoteRequest());
   const request = {
     idempotencyKey: "test:ask:live0001",
     payment: { mode: "prepaid" as const, workspaceId: "live" },
     quoteId: quote.quoteId,
   };
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  const replay = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
 
+  assert.equal(replay.operationKey, ask.operationKey);
   assert.equal(ask.status, "awaiting_payment");
   assert.equal(ask.roundId, null);
   const staleCursorStartedAt = Date.now();
@@ -176,7 +148,7 @@ test("live asks remain pending payment and never synthesize a result", async () 
   );
 });
 
-test("idempotency conflicts and sandbox configuration fail closed", async () => {
+test("idempotency conflicts fail closed", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
   const idempotencyKey = "test:ask:conflict1";
   await createTokenlessAsk(
@@ -193,9 +165,6 @@ test("idempotency conflicts and sandbox configuration fail closed", async () => 
       ),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "idempotency_conflict",
   );
-
-  process.env.TOKENLESS_SANDBOX_MODE = "yes";
-  assert.throws(() => isTokenlessSandboxMode(), /must be exactly true or false/);
 });
 
 test("ask and quote request validation matches the tokenless SDK contract", async () => {

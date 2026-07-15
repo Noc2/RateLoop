@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { TokenlessHandoffClient } from "~~/components/tokenless/TokenlessHandoffClient";
-import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
 export const metadata: Metadata = {
   title: "Review agent handoff | RateLoop",
@@ -8,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function TokenlessHandoffPage() {
-  return <TokenlessHandoffClient sandboxMode={isTokenlessSandboxMode()} />;
+  return <TokenlessHandoffClient />;
 }

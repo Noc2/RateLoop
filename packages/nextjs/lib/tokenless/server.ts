@@ -30,7 +30,6 @@ const AUDIENCE_LABELS = {
   customer_invited: "Customer-invited reviewers",
   rateloop_network: "RateLoop-network reviewers",
   hybrid: "Separate invited and RateLoop-network subpanels",
-  sandbox: "Simulated sandbox responses",
 };
 
 type StoredQuote = {
@@ -53,14 +52,9 @@ type StoredAsk = {
   verdictStatus: string | null;
   roundId: string | null;
   resultJson: string | null;
-  sandbox: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
-
-const sandboxQuotes = new Map<string, StoredQuote>();
-const sandboxAsksByOperation = new Map<string, StoredAsk>();
-const sandboxOperationByIdempotency = new Map<string, string>();
 
 export class TokenlessServiceError extends Error {
   readonly code: string;
@@ -74,17 +68,6 @@ export class TokenlessServiceError extends Error {
     this.retryable = retryable;
     this.status = status;
   }
-}
-
-export function isTokenlessSandboxMode(env: NodeJS.ProcessEnv = process.env) {
-  const rawValue = env.TOKENLESS_SANDBOX_MODE?.trim().toLowerCase();
-  if (!rawValue || rawValue === "false") return false;
-  if (rawValue === "true") return true;
-  throw new TokenlessServiceError(
-    "TOKENLESS_SANDBOX_MODE must be exactly true or false.",
-    500,
-    "invalid_sandbox_configuration",
-  );
 }
 
 function stableJson(value: unknown): string {
@@ -261,87 +244,45 @@ function buildEconomics(request: TokenlessQuoteRequest): TokenlessEconomics {
   };
 }
 
-async function persistQuote(row: StoredQuote, sandboxMode: boolean) {
-  try {
-    await db
-      .insert(tokenlessAgentQuotes)
-      .values(row)
-      .onConflictDoUpdate({
-        target: tokenlessAgentQuotes.quoteId,
-        set: { responseJson: row.responseJson, expiresAt: row.expiresAt },
-      });
-  } catch (error) {
-    if (!sandboxMode) throw error;
-    sandboxQuotes.set(row.quoteId, row);
-  }
+async function persistQuote(row: StoredQuote) {
+  await db
+    .insert(tokenlessAgentQuotes)
+    .values(row)
+    .onConflictDoUpdate({
+      target: tokenlessAgentQuotes.quoteId,
+      set: { responseJson: row.responseJson, expiresAt: row.expiresAt },
+    });
 }
 
-async function readQuote(quoteId: string, sandboxMode: boolean): Promise<StoredQuote | null> {
-  try {
-    const [row] = await db
-      .select()
-      .from(tokenlessAgentQuotes)
-      .where(eq(tokenlessAgentQuotes.quoteId, quoteId))
-      .limit(1);
-    return row ?? null;
-  } catch (error) {
-    if (!sandboxMode) throw error;
-    return sandboxQuotes.get(quoteId) ?? null;
-  }
+async function readQuote(quoteId: string): Promise<StoredQuote | null> {
+  const [row] = await db.select().from(tokenlessAgentQuotes).where(eq(tokenlessAgentQuotes.quoteId, quoteId)).limit(1);
+  return row ?? null;
 }
 
-async function readAskByOperation(operationKey: string, sandboxMode: boolean): Promise<StoredAsk | null> {
-  try {
-    const [row] = await db
-      .select()
-      .from(tokenlessAgentAsks)
-      .where(eq(tokenlessAgentAsks.operationKey, operationKey))
-      .limit(1);
-    return row ?? null;
-  } catch (error) {
-    if (!sandboxMode) throw error;
-    return sandboxAsksByOperation.get(operationKey) ?? null;
-  }
+async function readAskByOperation(operationKey: string): Promise<StoredAsk | null> {
+  const [row] = await db
+    .select()
+    .from(tokenlessAgentAsks)
+    .where(eq(tokenlessAgentAsks.operationKey, operationKey))
+    .limit(1);
+  return row ?? null;
 }
 
-async function readAskByIdempotency(idempotencyKey: string, sandboxMode: boolean): Promise<StoredAsk | null> {
-  try {
-    const [row] = await db
-      .select()
-      .from(tokenlessAgentAsks)
-      .where(eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey))
-      .limit(1);
-    return row ?? null;
-  } catch (error) {
-    if (!sandboxMode) throw error;
-    const operationKey = sandboxOperationByIdempotency.get(idempotencyKey);
-    return operationKey ? (sandboxAsksByOperation.get(operationKey) ?? null) : null;
-  }
+async function readAskByIdempotency(idempotencyKey: string): Promise<StoredAsk | null> {
+  const [row] = await db
+    .select()
+    .from(tokenlessAgentAsks)
+    .where(eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey))
+    .limit(1);
+  return row ?? null;
 }
 
-async function persistAsk(row: StoredAsk, sandboxMode: boolean) {
-  try {
-    await db.insert(tokenlessAgentAsks).values(row).onConflictDoNothing({ target: tokenlessAgentAsks.idempotencyKey });
-  } catch (error) {
-    if (!sandboxMode) throw error;
-    const existingOperationKey = sandboxOperationByIdempotency.get(row.idempotencyKey);
-    if (!existingOperationKey) {
-      sandboxAsksByOperation.set(row.operationKey, row);
-      sandboxOperationByIdempotency.set(row.idempotencyKey, row.operationKey);
-    }
-  }
+async function persistAsk(row: StoredAsk) {
+  await db.insert(tokenlessAgentAsks).values(row).onConflictDoNothing({ target: tokenlessAgentAsks.idempotencyKey });
 }
 
 export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
   const request = assertQuoteRequest(value);
-  const sandboxMode = isTokenlessSandboxMode();
-  if ((request.audience.source === "sandbox") !== sandboxMode) {
-    throw new TokenlessServiceError(
-      "Sandbox audience policies are available only in sandbox mode.",
-      409,
-      "audience_environment_mismatch",
-    );
-  }
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + QUOTE_TTL_MS);
   const requestHash = hash(request);
@@ -365,17 +306,14 @@ export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuo
         request.audience.source === "rateloop_network" || request.audience.source === "hybrid" ? 3600 : 1800,
     },
   });
-  await persistQuote(
-    {
-      quoteId,
-      requestHash,
-      requestJson: stableJson(request),
-      responseJson: JSON.stringify(response),
-      expiresAt,
-      createdAt,
-    },
-    sandboxMode,
-  );
+  await persistQuote({
+    quoteId,
+    requestHash,
+    requestJson: stableJson(request),
+    responseJson: JSON.stringify(response),
+    expiresAt,
+    createdAt,
+  });
   return response;
 }
 
@@ -388,42 +326,6 @@ function continuation(operationKey: string, appOrigin: string, updatedAt: Date) 
   };
 }
 
-function buildSandboxResult(
-  row: Omit<StoredAsk, "resultJson">,
-  quote: TokenlessQuoteResponse,
-  appOrigin: string,
-): TokenlessResult {
-  const reserve = BigInt(quote.economics.attemptReserve.fundedAtomic);
-  const economics: TokenlessEconomics = {
-    ...quote.economics,
-    bounty: { ...quote.economics.bounty, paidAtomic: quote.economics.bounty.fundedAtomic },
-    fee: { ...quote.economics.fee, paidAtomic: quote.economics.fee.fundedAtomic },
-    attemptReserve: { ...quote.economics.attemptReserve, refundedAtomic: reserve.toString() },
-    refund: {
-      attemptReserveAtomic: reserve.toString(),
-      bountyAtomic: "0",
-      feeAtomic: "0",
-      totalAtomic: reserve.toString(),
-    },
-  };
-  return parseTokenlessResult({
-    schemaVersion: TOKENLESS_SCHEMA_VERSION,
-    operationKey: row.operationKey,
-    roundId: row.roundId,
-    verdictStatus: "published",
-    terminal: true,
-    economics,
-    audience: { ...quote.audience, participantCount: quote.panel.minimumReveals },
-    verdict: {
-      intervalBps: { lower: 3921, upper: 8149 },
-      preferenceShareBps: 6400,
-      selected: "yes",
-    },
-    methodologyUrl: `${appOrigin}/docs/how-it-works#sandbox-limitations`,
-    updatedAt: row.updatedAt.toISOString(),
-  });
-}
-
 export async function createTokenlessAsk(
   value: unknown,
   idempotencyHeader: string | null,
@@ -431,9 +333,8 @@ export async function createTokenlessAsk(
 ): Promise<TokenlessAskResponse> {
   const request = parseTokenlessAskRequest(value, idempotencyHeader);
 
-  const sandboxMode = isTokenlessSandboxMode();
   const requestHash = hash(request);
-  const existing = await readAskByIdempotency(request.idempotencyKey, sandboxMode);
+  const existing = await readAskByIdempotency(request.idempotencyKey);
   if (existing) {
     if (existing.requestHash !== requestHash) {
       throw new TokenlessServiceError(
@@ -452,14 +353,13 @@ export async function createTokenlessAsk(
     };
   }
 
-  const storedQuote = await readQuote(request.quoteId, sandboxMode);
+  const storedQuote = await readQuote(request.quoteId);
   if (!storedQuote || storedQuote.expiresAt.getTime() <= Date.now()) {
     throw new TokenlessServiceError("Quote is missing or expired.", 410, "quote_expired");
   }
   const quote = parseTokenlessQuoteResponse(JSON.parse(storedQuote.responseJson));
   const now = new Date();
   const operationKey = `op_${randomUUID().replaceAll("-", "")}`;
-  const roundId = sandboxMode ? `sandbox_${operationKey.slice(3, 15)}` : null;
   const baseRow = {
     operationKey,
     idempotencyKey: request.idempotencyKey,
@@ -467,16 +367,15 @@ export async function createTokenlessAsk(
     quoteId: request.quoteId,
     requestJson: stableJson(request),
     economicsJson: JSON.stringify(quote.economics),
-    status: sandboxMode ? "open" : "awaiting_payment",
-    verdictStatus: sandboxMode ? "published" : null,
-    roundId,
-    sandbox: sandboxMode,
+    status: "awaiting_payment",
+    verdictStatus: null,
+    roundId: null,
+    resultJson: null,
     createdAt: now,
     updatedAt: now,
-  } satisfies Omit<StoredAsk, "resultJson">;
-  const result = sandboxMode ? buildSandboxResult(baseRow, quote, appOrigin) : null;
-  await persistAsk({ ...baseRow, resultJson: result ? JSON.stringify(result) : null }, sandboxMode);
-  const persisted = await readAskByIdempotency(request.idempotencyKey, sandboxMode);
+  } satisfies StoredAsk;
+  await persistAsk(baseRow);
+  const persisted = await readAskByIdempotency(request.idempotencyKey);
   if (!persisted) {
     throw new TokenlessServiceError("Ask could not be stored.", 500, "ask_persistence_failed");
   }
@@ -508,7 +407,6 @@ export async function waitForTokenlessAsk(
     timeoutMs?: number;
   } = {},
 ): Promise<TokenlessWaitResponse> {
-  const sandboxMode = isTokenlessSandboxMode();
   const timeoutMs = options.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_WAIT_POLL_INTERVAL_MS;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_WAIT_TIMEOUT_MS) {
@@ -526,7 +424,7 @@ export async function waitForTokenlessAsk(
   let ask: StoredAsk;
 
   while (true) {
-    const current = await readAskByOperation(operationKey, sandboxMode);
+    const current = await readAskByOperation(operationKey);
     if (!current) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
     ask = current;
     if (ask.status === "rejected") {
@@ -580,7 +478,7 @@ export async function getTokenlessAskByIdempotencyKey(idempotencyKey: string) {
   if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
     throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
   }
-  const ask = await readAskByIdempotency(idempotencyKey, isTokenlessSandboxMode());
+  const ask = await readAskByIdempotency(idempotencyKey);
   if (!ask) return null;
   return {
     operationKey: ask.operationKey,
@@ -593,7 +491,7 @@ export async function getTokenlessAskByIdempotencyKey(idempotencyKey: string) {
 }
 
 export async function getTokenlessResult(operationKey: string): Promise<TokenlessResult> {
-  const ask = await readAskByOperation(operationKey, isTokenlessSandboxMode());
+  const ask = await readAskByOperation(operationKey);
   if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
   if (!ask.resultJson) {
     throw new TokenlessServiceError("Result is not ready.", 409, "result_not_ready", true);

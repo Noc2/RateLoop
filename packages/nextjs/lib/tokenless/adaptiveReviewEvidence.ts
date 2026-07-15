@@ -75,7 +75,6 @@ function observationFromResult(input: {
   row: QueryRow;
   result: TokenlessResult;
   operationKey: string;
-  sandbox: boolean;
 }): AdaptiveReviewObservation {
   const workspaceId = rowString(input.row, "workspace_id")!;
   const opportunityId = rowString(input.row, "opportunity_id")!;
@@ -94,13 +93,8 @@ function observationFromResult(input: {
 
   const selected = input.result.verdict?.selected?.toLowerCase() ?? null;
   const comparable =
-    input.result.terminal &&
-    input.result.verdictStatus === "publishable" &&
-    !input.sandbox &&
-    input.result.audience.source !== "sandbox" &&
-    (selected === "yes" || selected === "no");
-  const respondingHumanCount =
-    input.sandbox || input.result.audience.source === "sandbox" ? 0 : input.result.audience.participantCount;
+    input.result.terminal && input.result.verdictStatus === "publishable" && (selected === "yes" || selected === "no");
+  const respondingHumanCount = input.result.audience.participantCount;
   const preferenceShareBps = comparable ? input.result.verdict?.preferenceShareBps : null;
   const humanHumanAgreementBps =
     comparable && respondingHumanCount > 1 && preferenceShareBps !== null && preferenceShareBps !== undefined
@@ -145,7 +139,7 @@ export async function finalizeAdaptiveReviewEvidence(input: {
     const result = await client.query(
       `SELECT o.workspace_id, o.scope_id, o.opportunity_id, o.decision, o.status, o.operation_key,
               o.source_evidence_hash, o.suggestion_commitment, o.created_at,
-              a.sandbox, a.result_json
+              a.result_json
        FROM tokenless_agent_review_opportunities o
        JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
        WHERE o.operation_key = $1
@@ -175,7 +169,6 @@ export async function finalizeAdaptiveReviewEvidence(input: {
       row,
       result: storedResult,
       operationKey,
-      sandbox: row.sandbox === true || row.sandbox === "t" || row.sandbox === 1,
     });
     const now = new Date();
     await client.query(

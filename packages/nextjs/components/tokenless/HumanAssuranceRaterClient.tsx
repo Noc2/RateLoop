@@ -34,7 +34,7 @@ type ReviewCase = {
 export type AssignmentTask = {
   assignmentId: string;
   runId: string;
-  source: "customer_invited" | "rateloop_network" | "sandbox";
+  source: "customer_invited" | "rateloop_network";
   runManifestHash: string;
   policyHash: string;
   qualificationProvenance: QualificationProvenance[];
@@ -126,13 +126,11 @@ export function HumanAssuranceRaterClient({
   initialServerAcceptance = null,
   initialTask = null,
   initialTermsHash = "",
-  sandboxMode,
 }: {
   initialAssignmentId?: string | string[];
   initialServerAcceptance?: AssuranceServerAcceptance | null;
   initialTask?: AssignmentTask | null;
   initialTermsHash?: string | string[];
-  sandboxMode: boolean;
 }) {
   const [assignmentId, setAssignmentId] = useState(firstValue(initialAssignmentId));
   const [termsHash, setTermsHash] = useState(firstValue(initialTermsHash));
@@ -647,7 +645,7 @@ export function HumanAssuranceRaterClient({
               Server acceptance acknowledges the response batch. Payment receipts and payment-related appeal references
               appear only after settlement, when applicable.
             </p>
-            <p className="mt-2 font-mono">{sandboxMode ? "Sandbox environment" : "Tokenless review environment"}</p>
+            <p className="mt-2 font-mono">RateLoop review environment</p>
           </div>
         </aside>
       </div>

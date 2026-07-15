@@ -86,11 +86,7 @@ export function evaluateFrozenAdmissionPolicy(input: {
   if (input.policy.compensation === "unpaid" || !input.policy.legalEligibilityRequired) {
     failures.push("paid_eligibility_not_required");
   }
-  if (
-    input.policy.reviewerSource === "sandbox" ||
-    input.evidence.reviewerSource === "sandbox" ||
-    !sourceAllowed(input.policy, input.evidence.reviewerSource)
-  ) {
+  if (!sourceAllowed(input.policy, input.evidence.reviewerSource)) {
     failures.push("reviewer_source");
   }
   if (input.evidence.reviewerSource === "rateloop_network") {

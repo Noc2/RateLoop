@@ -51,15 +51,7 @@ function usdc(value: string) {
   );
 }
 
-export function PublicQuestionCard({
-  task,
-  sandboxMode,
-  onSubmitted,
-}: {
-  task: PublicAnswerTask;
-  sandboxMode: boolean;
-  onSubmitted: () => void;
-}) {
+export function PublicQuestionCard({ task, onSubmitted }: { task: PublicAnswerTask; onSubmitted: () => void }) {
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -173,7 +165,7 @@ export function PublicQuestionCard({
     <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
       <section className="surface-card min-h-72 rounded-lg p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/45">
-          <span>{sandboxMode ? "Preview panel" : "Public panel"}</span>
+          <span>Public panel</span>
           <span>Round {task.roundId}</span>
         </div>
         <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>

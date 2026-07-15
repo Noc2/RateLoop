@@ -6,7 +6,6 @@ import {
   getMcpHandoffResult,
   getMcpHandoffStatus,
 } from "~~/lib/mcp/handoff";
-import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_MCP_PROTOCOL_VERSION = "2025-11-25" as const;
 export const TOKENLESS_MCP_STABLE_PROTOCOL_VERSION = "2025-06-18" as const;
@@ -168,7 +167,7 @@ export const tokenlessMcpTools = [
               properties: {
                 admissionPolicyHash: { pattern: "^0x[0-9a-fA-F]{64}$", type: "string" },
                 source: {
-                  enum: ["customer_invited", "rateloop_network", "hybrid", "sandbox"],
+                  enum: ["customer_invited", "rateloop_network", "hybrid"],
                   type: "string",
                 },
               },
@@ -240,18 +239,14 @@ function toolErrorResult(error: TokenlessMcpToolError) {
 }
 
 export function tokenlessMcpCapabilities() {
-  const sandboxMode = isTokenlessSandboxMode();
   return {
-    allowedAudienceSources: sandboxMode
-      ? (["sandbox"] as const)
-      : (["customer_invited", "rateloop_network", "hybrid"] as const),
+    allowedAudienceSources: ["customer_invited", "rateloop_network", "hybrid"] as const,
     bodyLimitBytes: 64 * 1_024,
     handoffFragmentLimitBytes: 16 * 1_024,
     handoffTtlSeconds: 24 * 60 * 60,
     handoffVersion: TOKENLESS_HANDOFF_VERSION,
     note: "Only browser handoffs are exposed. Quote, ask, upload, payment, and legacy protocol tools are not available here.",
     protocolVersion: TOKENLESS_MCP_PROTOCOL_VERSION,
-    sandboxMode,
   };
 }
 

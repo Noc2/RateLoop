@@ -25,12 +25,10 @@ const ADMISSION_HASH = `0x${"ab".repeat(32)}` as const;
 const APP_ORIGIN = "https://rateloop-tokenless.example";
 const SOURCE_PAYLOAD = "Customer requested a refund for a duplicated charge.";
 const SUGGESTION_PAYLOAD = "Approve the refund after verifying the duplicate transaction IDs.";
-const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "77".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "orchestration-test-v1";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -38,8 +36,6 @@ beforeEach(() => {
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
   if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;

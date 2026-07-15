@@ -261,9 +261,9 @@ test("API-key ask results fan out only to active workspace owners and admins", a
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_asks
           (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
-           status, sandbox, created_at, updated_at)
+           status, created_at, updated_at)
           VALUES ('operation-api-result', 'api-result-idempotency', 'ask-hash', 'quote-api-result',
-                  '{}', '{}', 'complete', false, ?, ?)`,
+                  '{}', '{}', 'complete', ?, ?)`,
     args: [NOW, NOW],
   });
   await dbClient.execute({

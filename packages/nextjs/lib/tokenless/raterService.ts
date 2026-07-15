@@ -85,7 +85,7 @@ export async function listPaidRaterTasks(
           FROM tokenless_voucher_rounds vr
           JOIN tokenless_chain_executions e ON e.chain_id = vr.chain_id AND e.panel_address = vr.panel_address
              AND e.round_id = vr.round_id AND e.state = 'confirmed'
-          JOIN tokenless_agent_asks a ON a.operation_key = e.operation_key AND a.sandbox = true
+          JOIN tokenless_agent_asks a ON a.operation_key = e.operation_key
           JOIN tokenless_ask_ownership o ON o.operation_key = e.operation_key
           JOIN tokenless_question_records q ON q.question_id = o.question_id
           JOIN tokenless_content_records c ON c.content_id = q.content_id

@@ -236,53 +236,6 @@ test("hybrid policies apply only the requirements for the actual subpanel source
   assert.deepEqual(result.usedAssertionIds, ["invite_1"]);
 });
 
-test("paid hybrid policies never admit the sandbox source", () => {
-  const now = new Date("2026-07-13T12:00:00.000Z");
-  const hybrid = freezeAdmissionPolicy({
-    ...policy(),
-    reviewerSource: "hybrid",
-    requiredQualifications: [],
-    assurance: {
-      requirements: [
-        {
-          capability: "live_human",
-          reviewerSources: ["sandbox"],
-          allowedProviders: ["rateloop-development"],
-        },
-        {
-          capability: "unique_human",
-          reviewerSources: ["rateloop_network"],
-          allowedProviders: ["world:poh"],
-        },
-      ],
-    },
-  });
-  const result = evaluateFrozenAdmissionPolicy({
-    policy: hybrid.policy,
-    evidence: {
-      assertions: [
-        {
-          assertionId: "sandbox_1",
-          bindingId: "sandbox_binding",
-          providerId: "rateloop-development",
-          providerNamespace: "test:v1",
-          subjectReferenceHash: `sha256:${"3".repeat(64)}`,
-          capabilities: ["live_human"],
-          verifiedAt: now,
-          expiresAt: new Date(now.getTime() + 60_000),
-        },
-      ],
-      reviewerSource: "sandbox",
-      cohortIds: [],
-      qualifications: [],
-    },
-    maximumCommits: 15,
-    now,
-  });
-  assert.equal(result.eligible, false);
-  assert.deepEqual(result.failures, ["reviewer_source"]);
-});
-
 test("source-mistagged requirements cannot create a network policy", () => {
   assert.throws(
     () =>

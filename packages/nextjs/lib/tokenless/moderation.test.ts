@@ -17,17 +17,13 @@ import {
 } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
-const originalSandbox = process.env.TOKENLESS_SANDBOX_MODE;
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandbox === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandbox;
 });
 
 async function prepaidAsk() {

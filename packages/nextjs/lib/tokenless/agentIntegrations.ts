@@ -10,7 +10,7 @@ import {
   AgentOAuthError,
   authenticateAgentOAuthAccessToken,
 } from "~~/lib/tokenless/agentOAuth";
-import type { AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
+import { AGENT_ENVIRONMENTS, type AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
 import {
   type ProductPrincipal,
   TOKENLESS_AGENT_SCOPES,
@@ -138,7 +138,7 @@ function normalizeRegistration(value: unknown): AgentRegistrationInput {
   }
   const input = value as Record<string, unknown>;
   const environment = input.environment as AgentEnvironment;
-  if (!["sandbox", "staging", "production"].includes(environment)) {
+  if (!AGENT_ENVIRONMENTS.includes(environment)) {
     throw new TokenlessServiceError("Agent environment is invalid.", 400, "invalid_agent_registration");
   }
   const externalId = bounded(input.externalId, "External agent ID", 160);

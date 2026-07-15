@@ -12,13 +12,12 @@ import {
 } from "~~/lib/mcp/handoff";
 import { createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
-const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
 const imageAssetId = `pqm_${"A".repeat(24)}`;
 const imageDigest = `sha256:${"a1".repeat(32)}`;
 
-function quoteRequest(source: "customer_invited" | "sandbox" = "customer_invited") {
+function quoteRequest() {
   return {
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source },
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" as const },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: {
       kind: "binary" as const,
@@ -29,12 +28,12 @@ function quoteRequest(source: "customer_invited" | "sandbox" = "customer_invited
   };
 }
 
-function handoffArguments(source: "customer_invited" | "sandbox" = "customer_invited") {
+function handoffArguments() {
   return {
     confirmedNoSensitiveData: true,
     dataClassification: "redacted",
     redactionSummary: "Customer identifiers and confidential inputs were removed.",
-    request: quoteRequest(source),
+    request: quoteRequest(),
   };
 }
 
@@ -46,14 +45,11 @@ function decodePayload(handoffUrl: string) {
 }
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
 });
 
 test("creates a 24-hour fragment-only bearer handoff without persisting raw capability data", async () => {
@@ -126,7 +122,7 @@ test("preserves canonical question media in the browser handoff", () => {
   });
 });
 
-test("enforces content confirmation, privacy limits, quote limits, and environment source", () => {
+test("enforces content confirmation, privacy limits, and quote limits", () => {
   assert.throws(
     () =>
       createMcpHandoff(
@@ -192,15 +188,10 @@ test("enforces content confirmation, privacy limits, quote limits, and environme
       ),
     /must contain 1-4 images/,
   );
-  assert.throws(
-    () => createMcpHandoff(handoffArguments("sandbox"), "https://rateloop-tokenless.vercel.app"),
-    (error: unknown) => error instanceof TokenlessMcpToolError && error.code === "audience_environment_mismatch",
-  );
 });
 
 test("status and result reads map the capability to ask idempotency without reconciling", async () => {
-  process.env.TOKENLESS_SANDBOX_MODE = "true";
-  const handoff = createMcpHandoff(handoffArguments("sandbox"), "https://rateloop-tokenless.vercel.app");
+  const handoff = createMcpHandoff(handoffArguments(), "https://rateloop-tokenless.vercel.app");
   const access = { handoffId: handoff.handoffId, handoffToken: handoff.handoffToken };
   const payload = decodePayload(handoff.handoffUrl);
 
@@ -222,7 +213,7 @@ test("status and result reads map the capability to ask idempotency without reco
   const ask = await createTokenlessAsk(
     {
       idempotencyKey: payload.idempotencyKey,
-      payment: { mode: "prepaid", workspaceId: "sandbox" },
+      payment: { mode: "prepaid", workspaceId: "workspace_test" },
       quoteId: quote.quoteId,
     },
     payload.idempotencyKey,
@@ -232,17 +223,17 @@ test("status and result reads map the capability to ask idempotency without reco
     sql: "SELECT status, updated_at FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [ask.operationKey],
   });
-  const readyStatus = await getMcpHandoffStatus(access);
+  const pendingStatus = await getMcpHandoffStatus(access);
   const result = await getMcpHandoffResult(access);
   const afterRead = await dbClient.execute({
     sql: "SELECT status, updated_at FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [ask.operationKey],
   });
-  assert.equal(readyStatus.operationKey, ask.operationKey);
-  assert.equal(readyStatus.status, "ready");
-  assert.equal(readyStatus.verdictStatus, "published");
-  assert.equal(result.status, "ready");
-  assert.equal(result.result?.verdictStatus, "published");
+  assert.equal(pendingStatus.operationKey, ask.operationKey);
+  assert.equal(pendingStatus.status, "awaiting_payment");
+  assert.equal(pendingStatus.verdictStatus, null);
+  assert.equal(result.status, "awaiting_payment");
+  assert.equal(result.result, null);
   assert.deepEqual(afterRead.rows, beforeRead.rows);
 });
 

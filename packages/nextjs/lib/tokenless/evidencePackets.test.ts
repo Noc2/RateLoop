@@ -33,7 +33,7 @@ const TENANT_KEY = Buffer.alloc(32, 7);
 const NOW = new Date("2026-07-13T12:00:00.000Z");
 
 type SourceFixture = {
-  source: "customer_invited" | "rateloop_network" | "sandbox";
+  source: "customer_invited" | "rateloop_network";
   targetCount: number;
   paid?: boolean;
   responses: { choice: "baseline" | "candidate" | "tie"; validity: "valid" | "invalid" | "pending" }[];
@@ -398,8 +398,8 @@ async function seedEvidenceFixture(input: {
     await insert(
       `INSERT INTO tokenless_agent_asks
        (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
-        status, sandbox, created_at, updated_at)
-       VALUES ('operation_evidence', 'idem_evidence', 'hash', 'quote_evidence', '{}', '{}', 'completed', false, ?, ?)`,
+        status, created_at, updated_at)
+       VALUES ('operation_evidence', 'idem_evidence', 'hash', 'quote_evidence', '{}', '{}', 'completed', ?, ?)`,
       [NOW, NOW],
     );
     await insert(

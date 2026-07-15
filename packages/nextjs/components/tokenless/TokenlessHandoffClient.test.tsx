@@ -18,7 +18,7 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 function request(kind: "binary" | "head_to_head" = "binary") {
   return {
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "sandbox" },
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "rateloop_network" },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question:
       kind === "binary"
@@ -145,6 +145,14 @@ test("quote request validation preserves editable binary and head-to-head choice
     kind: "images",
     items: [{ alt: "Candidate checkout", assetId: imageAssetId, digest: imageDigest }],
   });
+  assert.throws(
+    () =>
+      validateTokenlessQuoteRequest({
+        ...request(),
+        audience: { ...request().audience, source: "sandbox" },
+      }),
+    /audience.source is unsupported/i,
+  );
 });
 
 test("exact USDC formatting never converts atomic values through floating point", () => {
@@ -154,7 +162,7 @@ test("exact USDC formatting never converts atomic values through floating point"
 
 test("handoff client renders a fragment-local loading state without server payload access", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const html = renderToStaticMarkup(<TokenlessHandoffClient sandboxMode />).replace(/\s+/g, " ");
+  const html = renderToStaticMarkup(<TokenlessHandoffClient />).replace(/\s+/g, " ");
 
   assert.match(html, /Reading the private handoff fragment in this browser/i);
   assert.match(html, /aria-busy="true"/);

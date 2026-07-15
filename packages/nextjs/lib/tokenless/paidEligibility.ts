@@ -92,7 +92,7 @@ export type VoucherRequest = {
   roundId: string;
   contentId: Hex;
   voteKey: Address;
-  reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid" | "sandbox">;
+  reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid">;
 };
 
 type VaultConfig = { currentVersion: string; keys: Map<string, Buffer> };

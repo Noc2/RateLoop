@@ -5,7 +5,6 @@ import { GET, OPTIONS, POST } from "~~/app/api/mcp/route";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
-const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
 const originalRateLimitSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
 
 function request(
@@ -29,15 +28,12 @@ async function body(response: Response) {
 }
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
   process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = "test-only-rate-limit-secret-with-at-least-32-characters";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
   if (originalRateLimitSecret === undefined) delete process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
   else process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = originalRateLimitSecret;
 });
@@ -110,7 +106,7 @@ test("lists exactly the four browser handoff tools and reports live capabilities
     ),
   );
   const capabilitiesBody = await body(capabilities);
-  assert.equal(capabilitiesBody.result.structuredContent.sandboxMode, false);
+  assert.equal("sandboxMode" in capabilitiesBody.result.structuredContent, false);
   assert.deepEqual(capabilitiesBody.result.structuredContent.allowedAudienceSources, [
     "customer_invited",
     "rateloop_network",

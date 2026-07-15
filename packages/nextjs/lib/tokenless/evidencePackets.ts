@@ -16,7 +16,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 type QueryRow = Record<string, unknown>;
-type ReviewerSource = "customer_invited" | "rateloop_network" | "sandbox";
+type ReviewerSource = "customer_invited" | "rateloop_network";
 type ClientDecision = "go" | "revise" | "stop";
 type EvidenceSigner = { keyId?: string; privateKey: KeyObject };
 
@@ -48,7 +48,7 @@ type EvidenceExport = {
 };
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const SOURCES = new Set<ReviewerSource>(["customer_invited", "rateloop_network", "sandbox"]);
+const SOURCES = new Set<ReviewerSource>(["customer_invited", "rateloop_network"]);
 const WRITE_ROLES = new Set(["owner", "admin", "member"]);
 
 function rowString(row: QueryRow | undefined, key: string) {

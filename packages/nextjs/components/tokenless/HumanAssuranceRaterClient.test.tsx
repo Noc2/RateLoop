@@ -15,7 +15,6 @@ test("private rater queue is assignment-scoped and makes no unsupported payment 
     <HumanAssuranceRaterClient
       initialAssignmentId="haas_private_assignment"
       initialTermsHash={`sha256:${"a".repeat(64)}`}
-      sandboxMode
     />,
   ).replace(/\s+/g, " ");
 
@@ -78,7 +77,6 @@ test("assigned review renders blinded choices, failure tags, rationale, lease de
           },
         ],
       }}
-      sandboxMode
     />,
   ).replace(/\s+/g, " ");
 

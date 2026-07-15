@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { InfoPopover } from "../InfoPopover";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
@@ -17,7 +18,7 @@ type AgentPairing = {
   declaredModel: string;
   declaredModelVersion: string;
   declaredDeploymentName: string;
-  environment: "sandbox" | "staging" | "production";
+  environment: "staging" | "production";
   clientName: string;
   clientVersion: string;
   requestedWorkflowKeys: string[];
@@ -92,7 +93,7 @@ type ApprovalPayload = {
   model: string;
   modelVersion: string | null;
   deploymentName: string | null;
-  environment: "sandbox" | "staging" | "production";
+  environment: "staging" | "production";
   publishingPolicyId: string;
   allowedWorkflowKeys: string[];
 };
@@ -157,7 +158,7 @@ export function normalizeAgentPairing(value: unknown): AgentPairing {
     declaredModel: stringField(row, "declaredModel", "model"),
     declaredModelVersion: stringField(row, "declaredModelVersion", "modelVersion"),
     declaredDeploymentName: stringField(row, "declaredDeploymentName", "deploymentName"),
-    environment: ["sandbox", "staging", "production"].includes(environment) ? environment : "production",
+    environment: environment === "staging" ? "staging" : "production",
     clientName: stringField(row, "clientName"),
     clientVersion: stringField(row, "clientVersion"),
     requestedWorkflowKeys: stringArray(row.requestedWorkflowKeys),
@@ -494,7 +495,6 @@ function PairingApprovalCard({
               value={environment}
               onChange={event => setEnvironment(event.target.value as AgentPairing["environment"])}
             >
-              <option value="sandbox">Sandbox</option>
               <option value="staging">Staging</option>
               <option value="production">Production</option>
             </select>
@@ -587,10 +587,12 @@ export function AgentConnectionPanel({
   workspaceId,
   publishingRevision = 0,
   onAgentApproved,
+  onConnectionStateChange,
 }: {
   workspaceId: string;
   publishingRevision?: number;
   onAgentApproved?: () => void;
+  onConnectionStateChange?: (connected: boolean) => void;
 }) {
   const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
@@ -605,32 +607,38 @@ export function AgentConnectionPanel({
   const [manualConnectionMessage, setManualConnectionMessage] = useState<string | null>(null);
   const manualMessageRef = useRef<HTMLTextAreaElement>(null);
 
-  const loadConnectionState = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
-    if (!selectedWorkspaceId) {
-      setConnectionIntents([]);
-      setPairings([]);
-      setIntegrations([]);
-      setPublishingPolicies([]);
-      return;
-    }
-    const base = `/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}`;
-    const [intentBody, pairingBody, integrationBody, policyBody] = await Promise.all([
-      readJson(await fetch(`${base}/agent-connections`, { cache: "no-store", credentials: "same-origin", signal })),
-      readJson(await fetch(`${base}/agent-pairings`, { cache: "no-store", credentials: "same-origin", signal })),
-      readJson(await fetch(`${base}/agent-integrations`, { cache: "no-store", credentials: "same-origin", signal })),
-      readJson(
-        await fetch(`${base}/agent-publishing-policies`, { cache: "no-store", credentials: "same-origin", signal }),
-      ),
-    ]);
-    setConnectionIntents(responseList(intentBody, "intents").map(normalizeAgentConnectionIntent));
-    setPairings(responseList(pairingBody, "pairings", "sessions").map(normalizeAgentPairing));
-    setIntegrations(responseList(integrationBody, "integrations").map(normalizeAgentIntegration));
-    setPublishingPolicies(
-      responseList(policyBody, "policies")
-        .map(normalizePublishingPolicy)
-        .filter(policy => policy.enabled && !policy.revokedAt),
-    );
-  }, []);
+  const loadConnectionState = useCallback(
+    async (selectedWorkspaceId: string, signal?: AbortSignal) => {
+      if (!selectedWorkspaceId) {
+        setConnectionIntents([]);
+        setPairings([]);
+        setIntegrations([]);
+        setPublishingPolicies([]);
+        onConnectionStateChange?.(false);
+        return;
+      }
+      const base = `/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}`;
+      const [intentBody, pairingBody, integrationBody, policyBody] = await Promise.all([
+        readJson(await fetch(`${base}/agent-connections`, { cache: "no-store", credentials: "same-origin", signal })),
+        readJson(await fetch(`${base}/agent-pairings`, { cache: "no-store", credentials: "same-origin", signal })),
+        readJson(await fetch(`${base}/agent-integrations`, { cache: "no-store", credentials: "same-origin", signal })),
+        readJson(
+          await fetch(`${base}/agent-publishing-policies`, { cache: "no-store", credentials: "same-origin", signal }),
+        ),
+      ]);
+      setConnectionIntents(responseList(intentBody, "intents").map(normalizeAgentConnectionIntent));
+      setPairings(responseList(pairingBody, "pairings", "sessions").map(normalizeAgentPairing));
+      const nextIntegrations = responseList(integrationBody, "integrations").map(normalizeAgentIntegration);
+      setIntegrations(nextIntegrations);
+      onConnectionStateChange?.(nextIntegrations.some(integration => integration.status === "active"));
+      setPublishingPolicies(
+        responseList(policyBody, "policies")
+          .map(normalizePublishingPolicy)
+          .filter(policy => policy.enabled && !policy.revokedAt),
+      );
+    },
+    [onConnectionStateChange],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -888,20 +896,18 @@ export function AgentConnectionPanel({
   );
   const activePairings = pairings.filter(pairing => isPendingAgentPairing(pairing, connectionClock));
   const pairingHistory = pairings.filter(pairing => !isPendingAgentPairing(pairing, connectionClock));
+  const activeIntegrations = integrations.filter(integration => integration.status === "active");
+  const isFreshWorkspace =
+    !loading && activeConnectionIntents.length === 0 && activePairings.length === 0 && activeIntegrations.length === 0;
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
+      {isFreshWorkspace ? (
+        <section className="surface-card rounded-2xl p-6">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent connection</p>
-          <h2 className="mt-2 text-2xl font-semibold">Connect an agent to RateLoop</h2>
+          <h2 className="text-2xl font-semibold">Connect your agent</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Copy one short message and paste it once into your agent chat. The agent and its host handle installation,
-            authorization, and verification; you only respond to a host-native install, trust, or authorization prompt.
-          </p>
-          <p className="mt-3 max-w-3xl text-sm font-medium text-base-content/75">
-            Can check when human review is needed. Cannot spend, publish, read private files, or administer this
-            workspace.
+            Copy one message into the agent chat you want to connect.
           </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -913,18 +919,30 @@ export function AgentConnectionPanel({
           >
             {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
           </button>
-          {activeConnectionIntents.length > 0 ? (
-            <span className="text-xs text-base-content/50">Cancel the current attempt before creating another.</span>
-          ) : null}
+          <InfoPopover label="About safe agent access">
+            This creates safe access. The agent cannot spend, publish, read private workspace content, or change
+            workspace settings.
+          </InfoPopover>
         </div>
+        {status ? (
+          <p role="status" aria-live="polite" className="mt-4 text-sm text-emerald-100">
+            {status}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+            {error}
+          </p>
+        ) : null}
       </section>
+      ) : null}
 
-      {status ? (
+      {!isFreshWorkspace && status ? (
         <p role="status" aria-live="polite" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
           {status}
         </p>
       ) : null}
-      {error ? (
+      {!isFreshWorkspace && error ? (
         <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
           {error}
         </p>
@@ -1019,43 +1037,26 @@ export function AgentConnectionPanel({
         </div>
       ) : null}
 
-      {!loading && workspaceId ? (
+      {!loading && workspaceId && activeConnectionIntents.length > 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="pending-agent-connections-heading">
-          <div>
-            <h3 id="pending-agent-connections-heading" className="text-xl font-semibold">
-              Connection progress
-            </h3>
-            <p className="mt-2 text-sm text-base-content/55">
-              RateLoop refreshes status only while this page is visible. You can close it; the agent and host continue
-              independently.
-            </p>
-          </div>
-          {activeConnectionIntents.length === 0 && !connectionIntents.some(intent => intent.status === "connected") ? (
-            <p className="mt-5 text-sm text-base-content/55">No connection is currently in progress.</p>
-          ) : null}
-          <div className="mt-5 space-y-4">
+          <div className="space-y-4">
             {connectionIntents
-              .filter(intent => isActiveAgentConnectionIntent(intent, connectionClock) || intent.status === "connected")
+              .filter(intent => isActiveAgentConnectionIntent(intent, connectionClock))
               .slice(0, 1)
               .map(intent => {
                 const copy = connectionIntentCopy(intent.status);
-                const connected = intent.status === "connected";
                 return (
-                  <article
-                    key={intent.intentId}
-                    className={`rounded-xl border p-5 ${
-                      connected
-                        ? "border-emerald-300/20 bg-emerald-300/[0.045]"
-                        : "border-[var(--rateloop-blue)]/20 bg-[var(--rateloop-blue)]/[0.035]"
-                    }`}
-                  >
+                  <article key={intent.intentId}>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="font-semibold">{copy.heading}</h4>
+                          <h2 id="pending-agent-connections-heading" className="text-xl font-semibold">
+                            {copy.heading}
+                          </h2>
                           <span className="badge badge-ghost font-mono text-xs">{intent.status}</span>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-base-content/55">{copy.detail}</p>
+                        <p className="mt-2 text-sm text-base-content/55">You can close this page.</p>
                         {intent.recoveryAction ? (
                           <p className="mt-2 text-xs leading-5 text-base-content/45">{intent.recoveryAction}</p>
                         ) : null}
@@ -1067,32 +1068,26 @@ export function AgentConnectionPanel({
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                        {!connected ? (
-                          <time className="text-xs text-base-content/45" dateTime={intent.hardExpiresAt ?? undefined}>
-                            Finishes by {formatTimestamp(intent.hardExpiresAt, "soon")}
-                          </time>
-                        ) : null}
+                        <time className="text-xs text-base-content/45" dateTime={intent.hardExpiresAt ?? undefined}>
+                          Finishes by {formatTimestamp(intent.hardExpiresAt, "soon")}
+                        </time>
                         <div className="flex flex-wrap gap-2">
-                          {!connected ? (
-                            <button
-                              type="button"
-                              className="btn btn-sm border-white/10"
-                              disabled={Boolean(busyAction)}
-                              onClick={() => void retryConnectionStatus()}
-                            >
-                              {busyAction === "refresh-intents" ? "Checking…" : "Check status"}
-                            </button>
-                          ) : null}
-                          {!connected ? (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-ghost text-base-content/60"
-                              disabled={Boolean(busyAction)}
-                              onClick={() => void cancelConnectionIntent(intent.intentId)}
-                            >
-                              {busyAction === `cancel-intent:${intent.intentId}` ? "Cancelling…" : "Cancel attempt"}
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            className="btn btn-sm border-white/10"
+                            disabled={Boolean(busyAction)}
+                            onClick={() => void retryConnectionStatus()}
+                          >
+                            {busyAction === "refresh-intents" ? "Checking…" : "Check status"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost text-base-content/60"
+                            disabled={Boolean(busyAction)}
+                            onClick={() => void cancelConnectionIntent(intent.intentId)}
+                          >
+                            {busyAction === `cancel-intent:${intent.intentId}` ? "Cancelling…" : "Cancel attempt"}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1146,7 +1141,7 @@ export function AgentConnectionPanel({
         </details>
       ) : null}
 
-      {!loading && workspaceId && connectionIntentHistory.length + pairingHistory.length > 0 ? (
+      {!loading && workspaceId && activeIntegrations.length > 0 && connectionIntentHistory.length + pairingHistory.length > 0 ? (
         <details className="surface-card rounded-2xl p-6">
           <summary className="cursor-pointer text-sm font-semibold">
             Connection history ({connectionIntentHistory.length + pairingHistory.length})
@@ -1197,20 +1192,20 @@ export function AgentConnectionPanel({
         </details>
       ) : null}
 
-      {!loading && workspaceId ? (
+      {!loading && workspaceId && activeIntegrations.length > 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="connected-agents-heading">
-          <h3 id="connected-agents-heading" className="text-xl font-semibold">
-            Connected agents
-          </h3>
+          <h2 id="connected-agents-heading" className="text-xl font-semibold">
+            {activeIntegrations.length === 1
+              ? `${activeIntegrations[0].agentDisplayName || "Agent"} connected`
+              : `${activeIntegrations.length} agents connected`}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-base-content/55">
-            Each connection is bound to one workspace, agent, immutable version, and review policy. Safe OAuth
-            connections have no publishing or spending permission.
+            Safe access · No spending or private workspace content
           </p>
-          {integrations.length === 0 ? (
-            <p className="mt-5 text-sm text-base-content/55">No approved agent integration exists yet.</p>
-          ) : null}
-          <div className="mt-5 space-y-4">
-            {integrations.map(integration => {
+          <details className="mt-5">
+            <summary className="cursor-pointer text-sm font-semibold">Manage</summary>
+            <div className="mt-4 space-y-4">
+            {activeIntegrations.map(integration => {
               const active = integration.status === "active";
               const legacyCredential = Boolean(integration.apiKeyId);
               return (
@@ -1298,7 +1293,8 @@ export function AgentConnectionPanel({
                 </article>
               );
             })}
-          </div>
+            </div>
+          </details>
         </section>
       ) : null}
     </div>

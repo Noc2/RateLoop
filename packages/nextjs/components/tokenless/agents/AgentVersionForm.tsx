@@ -11,6 +11,8 @@ type AgentVersionFormProps = {
   onSubmit: (input: AgentVersionInput & { externalId?: string }) => Promise<void>;
 };
 
+type HostedAgentEnvironment = Extract<AgentEnvironment, "staging" | "production">;
+
 export function AgentVersionForm({
   current,
   externalIdRequired = false,
@@ -25,7 +27,9 @@ export function AgentVersionForm({
   const [model, setModel] = useState(current?.declaredModel ?? "");
   const [modelVersion, setModelVersion] = useState(current?.declaredModelVersion ?? "");
   const [deploymentName, setDeploymentName] = useState(current?.declaredDeploymentName ?? "");
-  const [environment, setEnvironment] = useState<AgentEnvironment>(current?.environment ?? "production");
+  const [environment, setEnvironment] = useState<HostedAgentEnvironment>(
+    current?.environment === "staging" ? "staging" : "production",
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,11 +120,10 @@ export function AgentVersionForm({
           <select
             className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
             value={environment}
-            onChange={event => setEnvironment(event.target.value as AgentEnvironment)}
+            onChange={event => setEnvironment(event.target.value as HostedAgentEnvironment)}
           >
             <option value="production">Production</option>
             <option value="staging">Staging</option>
-            <option value="sandbox">Sandbox</option>
           </select>
         </label>
       </div>

@@ -6,7 +6,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const AGENT_ENVIRONMENTS = ["sandbox", "staging", "production"] as const;
+export const AGENT_ENVIRONMENTS = ["staging", "production"] as const;
 export type AgentEnvironment = (typeof AGENT_ENVIRONMENTS)[number];
 
 export type AgentVersionInput = {

@@ -23,8 +23,8 @@ async function seedConfirmedExecution(operationKey: string) {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_asks
           (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
-           status, sandbox, created_at, updated_at)
-          VALUES (?, ?, 'request-hash', 'quote-test', '{}', '{}', 'open', false, ?, ?)`,
+           status, created_at, updated_at)
+          VALUES (?, ?, 'request-hash', 'quote-test', '{}', '{}', 'open', ?, ?)`,
     args: [operationKey, `idem:${operationKey}`, NOW, NOW],
   });
   await dbClient.execute({

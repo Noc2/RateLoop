@@ -42,7 +42,7 @@ export const pairingMcpTools = [
         model: { maxLength: 160, minLength: 1, type: "string" },
         modelVersion: { maxLength: 160, type: ["string", "null"] },
         deploymentName: { maxLength: 160, type: ["string", "null"] },
-        environment: { enum: ["sandbox", "staging", "production"], type: "string" },
+        environment: { enum: ["staging", "production"], type: "string" },
         requestedWorkflowKeys: {
           items: identifierSchema,
           maxItems: 32,

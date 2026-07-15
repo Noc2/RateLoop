@@ -191,8 +191,8 @@ async function seedRoundCreationEvidence(input: { contentId: string; runId: stri
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_asks
           (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
-           status, sandbox, created_at, updated_at)
-          VALUES (?, ?, 'request_hash', ?, '{}', '{}', 'completed', false, ?, ?)`,
+           status, created_at, updated_at)
+          VALUES (?, ?, 'request_hash', ?, '{}', '{}', 'completed', ?, ?)`,
     args: [operationKey, `${input.runId}_idempotency`, quoteId, now, now],
   });
   await dbClient.execute({
@@ -533,7 +533,7 @@ test("orchestration refuses to freeze definitions after a response exists", asyn
           (response_id, run_id, case_id, reviewer_key, reviewer_source, choice,
            failure_tag_keys_json, qualification_keys_json, assurance_capabilities_json,
            response_digest, validity, submitted_at, updated_at)
-          VALUES ('response_early', ?, ?, 'reviewer_early', 'sandbox', 'candidate',
+          VALUES ('response_early', ?, ?, 'reviewer_early', 'customer_invited', 'candidate',
                   '[]', '[]', '[]', 'digest_early', 'valid', ?, ?)`,
     args: [run.runId, suite.caseId, now, now],
   });

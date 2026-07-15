@@ -2,7 +2,7 @@ import { RateLoopSdkError, type TokenlessQuoteRequest, normalizeTokenlessQuestio
 import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { TokenlessMcpToolError } from "~~/lib/mcp/errors";
-import { getTokenlessAskByIdempotencyKey, isTokenlessSandboxMode } from "~~/lib/tokenless/server";
+import { getTokenlessAskByIdempotencyKey } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const HANDOFF_TTL_MS = 24 * 60 * 60_000;
@@ -11,7 +11,7 @@ const HANDOFF_ID_PATTERN = /^rhl_[A-Za-z0-9_-]{32}$/;
 const HANDOFF_TOKEN_PATTERN = /^rht_[A-Za-z0-9_-]{43}_([0-9a-z]{6,12})$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const ATOMIC_PATTERN = /^(0|[1-9]\d*)$/;
-const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid", "sandbox"] as const;
+const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid"] as const;
 const DATA_CLASSIFICATIONS = ["public", "synthetic", "redacted"] as const;
 
 type JsonRecord = Record<string, unknown>;
@@ -162,16 +162,6 @@ export function createMcpHandoff(
     redactionSummary,
     confirmedNoSensitiveData: true as const,
   };
-  const sandboxMode = isTokenlessSandboxMode();
-  if ((request.audience.source === "sandbox") !== sandboxMode) {
-    toolError(
-      sandboxMode
-        ? "Sandbox mode accepts only the sandbox audience source."
-        : "The sandbox audience source is available only in sandbox mode.",
-      "audience_environment_mismatch",
-    );
-  }
-
   const now = options.now ?? new Date();
   const random = options.random ?? randomBytes;
   const expiresAt = new Date(Math.floor((now.getTime() + HANDOFF_TTL_MS) / 1_000) * 1_000);

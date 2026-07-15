@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, context: Context) {
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: assignment?.paid_assignment === true,
       policy: JSON.parse(String(assignment?.policy_json)) as HumanAssuranceAudiencePolicy,
-      source: rowString(assignment, "source") as "customer_invited" | "rateloop_network" | "sandbox",
+      source: rowString(assignment, "source") as "customer_invited" | "rateloop_network",
     });
     const artifact = await readEncryptedArtifact({
       accountAddress: session.principalId,

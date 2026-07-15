@@ -14,7 +14,7 @@ import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssig
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid", "sandbox"] as const;
+export const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid"] as const;
 export type AudienceSource = (typeof AUDIENCE_SOURCES)[number];
 export type CohortSource = Exclude<AudienceSource, "hybrid">;
 export type AudienceSelection = "customer_named" | "randomized";
@@ -30,7 +30,7 @@ export type QualificationProvenance = {
   expiresAt?: string;
 };
 
-const COHORT_SOURCE_SET = new Set<CohortSource>(["customer_invited", "rateloop_network", "sandbox"]);
+const COHORT_SOURCE_SET = new Set<CohortSource>(["customer_invited", "rateloop_network"]);
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const INVITE_TOKEN_PATTERN = /^rli_[a-f0-9]{16}_[A-Za-z0-9_-]{40,64}$/;
 const DEFAULT_INVITE_TTL_MS = 7 * 86_400_000;
@@ -52,12 +52,7 @@ export function assertAssuranceAssignmentSettlementAvailable(input: {
     input.policy.compensation === "unpaid" &&
     (!input.source || input.source === "customer_invited") &&
     input.paidAssignment !== true;
-  const sandboxSimulation =
-    input.policy.reviewerSource === "sandbox" &&
-    input.policy.compensation === "unpaid" &&
-    (!input.source || input.source === "sandbox") &&
-    input.paidAssignment !== true;
-  if (invitedUnpaid || sandboxSimulation) return;
+  if (invitedUnpaid) return;
   throw new TokenlessServiceError(
     "Paid, hybrid, and network assurance assignments are unavailable until assignment policy snapshots are bound through settlement and receipts.",
     409,
@@ -636,13 +631,6 @@ function validatePolicySourceRules(policy: HumanAssuranceAudiencePolicy, cohorts
       "customer_named selection is restricted to customer-invited panels.",
       409,
       "invalid_audience_selection",
-    );
-  }
-  if (policy.reviewerSource === "sandbox" && policy.compensation !== "unpaid") {
-    throw new TokenlessServiceError(
-      "Sandbox panels cannot create paid assignments.",
-      409,
-      "invalid_sandbox_compensation",
     );
   }
 }

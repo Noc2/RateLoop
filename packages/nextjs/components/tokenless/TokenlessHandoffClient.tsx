@@ -21,8 +21,7 @@ const IDEMPOTENCY_PATTERN = /^mcp:[A-Za-z0-9_-]{43}$/;
 const TOKEN_PATTERN = /^rht_[A-Za-z0-9_-]{43}_([0-9a-z]{6,12})$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const ATOMIC_PATTERN = /^(0|[1-9]\d*)$/;
-const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
-const REVIEWER_SOURCES = new Set(["customer_invited", "rateloop_network", "hybrid", "sandbox"]);
+const REVIEWER_SOURCES = new Set(["customer_invited", "rateloop_network", "hybrid"]);
 const CLASSIFICATIONS = new Set(["public", "synthetic", "redacted"]);
 
 export type TokenlessHandoffPayload = {
@@ -46,7 +45,7 @@ type Workspace = {
 type SessionState =
   | { status: "loading" }
   | { status: "anonymous" }
-  | { status: "authenticated"; principalId: string; fundingAddress: `0x${string}` | null; expiresAt: string }
+  | { status: "authenticated"; principalId: string; expiresAt: string }
   | { status: "error"; message: string };
 
 type HandoffState =
@@ -225,7 +224,6 @@ function sourceLabel(source: TokenlessQuoteRequest["audience"]["source"]) {
     customer_invited: "Customer-invited reviewers",
     rateloop_network: "RateLoop reviewer network",
     hybrid: "Invited and network reviewers, reported separately",
-    sandbox: "Deterministic sandbox panel",
   }[source];
 }
 
@@ -260,7 +258,7 @@ function SummaryItem({ label, value, mono = false }: { label: string; value: Rea
   );
 }
 
-export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }) {
+export function TokenlessHandoffClient() {
   const [handoff, setHandoff] = useState<HandoffState>({ status: "loading" });
   const [request, setRequest] = useState<TokenlessQuoteRequest | null>(null);
   const [session, setSession] = useState<SessionState>({ status: "loading" });
@@ -328,21 +326,14 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
           setSession({ status: "anonymous" });
           return;
         }
-        const wallets = record(sessionBody.wallets, "session.wallets");
-        const fundingAddress = wallets.funding;
-        if (
-          (fundingAddress !== null && (typeof fundingAddress !== "string" || !ADDRESS_PATTERN.test(fundingAddress))) ||
-          typeof sessionBody.expiresAt !== "string"
-        ) {
+        if (typeof sessionBody.expiresAt !== "string") {
           throw new Error("RateLoop returned an invalid signed-in session.");
         }
         setSession({
           status: "authenticated",
           principalId: sessionBody.principalId,
-          fundingAddress: fundingAddress as `0x${string}` | null,
           expiresAt: sessionBody.expiresAt,
         });
-        if (sandboxMode) return;
         setWorkspaceLoading(true);
         try {
           const workspaceBody = record(
@@ -380,12 +371,11 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
       }
     })();
     return () => controller.abort();
-  }, [sandboxMode]);
+  }, []);
 
   const payload = handoff.status === "ready" || handoff.status === "expired" ? handoff.payload : null;
   const selectedWorkspace = workspaces.find(workspace => workspace.workspaceId === selectedWorkspaceId) ?? null;
   const insufficientPrepaid =
-    !sandboxMode &&
     quote !== null &&
     selectedWorkspace !== null &&
     BigInt(selectedWorkspace.prepaid.availableAtomic) < BigInt(quote.economics.totalFundedAtomic);
@@ -446,13 +436,6 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
       const active = ensureActiveHandoff();
       if (!privacyConfirmed) throw new Error("Confirm the non-sensitive data statement before requesting a quote.");
       const validated = validateTokenlessQuoteRequest(request);
-      if ((validated.audience.source === "sandbox") !== sandboxMode) {
-        throw new Error(
-          sandboxMode
-            ? "This sandbox deployment accepts only sandbox audiences."
-            : "Sandbox audiences cannot be submitted to this live environment.",
-        );
-      }
       setBusy("quote");
       const parsed = parseTokenlessQuoteResponse(
         await readApiJson(
@@ -509,17 +492,12 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
         throw new Error("The quote expired. Request a new quote before submitting.");
       }
       if (session.status !== "authenticated") throw new Error("Sign in to RateLoop before submitting.");
-      if (sandboxMode && !session.fundingAddress) {
-        throw new Error("Add a funding wallet in account settings before submitting a wallet-funded ask.");
-      }
-      if (!sandboxMode && !selectedWorkspace) throw new Error("Select a prepaid workspace before submitting.");
+      if (!selectedWorkspace) throw new Error("Select a prepaid workspace before submitting.");
       if (insufficientPrepaid) throw new Error("The selected workspace does not have enough available prepaid USDC.");
       const body = {
         idempotencyKey: active.idempotencyKey,
         quoteId: quote.quoteId,
-        payment: sandboxMode
-          ? { mode: "wallet" as const, payerAddress: session.fundingAddress! }
-          : { mode: "prepaid" as const, workspaceId: selectedWorkspace!.workspaceId },
+        payment: { mode: "prepaid" as const, workspaceId: selectedWorkspace.workspaceId },
       };
       setBusy("submit");
       const parsed = parseTokenlessAskResponse(
@@ -582,16 +560,6 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
           action.
         </p>
       </header>
-
-      {sandboxMode ? (
-        <div
-          className="mt-7 rounded-xl border border-amber-300/25 bg-amber-300/10 px-5 py-4 text-sm leading-6 text-amber-50"
-          role="note"
-        >
-          <strong>Simulation:</strong> reviewers, outcome, and payment are deterministic sandbox data. Your signed-in
-          address identifies the simulated wallet payment; the backend releases it without moving value.
-        </div>
-      ) : null}
 
       {handoff.status === "expired" ? (
         <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm leading-6" role="alert">
@@ -820,14 +788,11 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
           ) : (
             <p className="text-sm text-base-content/70">
               Signed in as <span className="font-mono text-base-content">{session.principalId}</span>
-              {sandboxMode && !session.fundingAddress ? (
-                <span className="mt-1 block text-warning">Add a funding wallet before submitting this ask.</span>
-              ) : null}
             </p>
           )}
         </div>
 
-        {!sandboxMode && session.status === "authenticated" ? (
+        {session.status === "authenticated" ? (
           <div className="mt-5">
             <label className="block text-sm font-medium" htmlFor="handoff-workspace">
               Prepaid workspace
@@ -884,12 +849,12 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
               !quote ||
               !privacyConfirmed ||
               session.status !== "authenticated" ||
-              (!sandboxMode && !selectedWorkspace) ||
+              !selectedWorkspace ||
               insufficientPrepaid
             }
             onClick={() => void submitAsk()}
           >
-            {busy === "submit" ? "Submitting…" : sandboxMode ? "Submit simulated ask" : "Submit and reserve USDC"}
+            {busy === "submit" ? "Submitting…" : "Submit and reserve USDC"}
           </button>
         </div>
       </section>
@@ -968,12 +933,6 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
                   This panel is decision support, not an automatic release, safety, legal, or compliance approval. The
                   accountable person remains responsible for the final action.
                 </p>
-                {sandboxMode ? (
-                  <p className="mt-2">
-                    This outcome is a deterministic simulation. It is not evidence of outside human review or a real
-                    payment.
-                  </p>
-                ) : null}
                 <a
                   className="mt-3 inline-block text-[var(--rateloop-blue)] underline underline-offset-4"
                   href={result.methodologyUrl}

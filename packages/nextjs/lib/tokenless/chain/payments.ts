@@ -127,7 +127,7 @@ async function operationSource(operationKey: string) {
     sql: `SELECT o.operation_key, o.payment_mode, o.payment_reference, o.payment_state,
                  o.question_id, q.terms_hash, q.terms_json, q.moderation_status AS question_moderation_status,
                  c.content_hash, c.moderation_status AS content_moderation_status,
-                 a.quote_id, a.economics_json, a.sandbox, aq.response_json,
+                 a.quote_id, a.economics_json, aq.response_json,
                  pi.payer_address, pi.payload_json, pi.amount_atomic AS intent_amount_atomic,
                  pr.amount_atomic AS reservation_amount_atomic
           FROM tokenless_ask_ownership o
@@ -142,7 +142,6 @@ async function operationSource(operationKey: string) {
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
-  if (row.sandbox === true) throw new TokenlessServiceError("Sandbox asks never execute on-chain.", 409, "sandbox_ask");
   if (
     rowString(row, "content_moderation_status") !== "approved" ||
     rowString(row, "question_moderation_status") !== "approved"

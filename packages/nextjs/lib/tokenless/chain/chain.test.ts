@@ -30,7 +30,6 @@ const FEE_RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
 const SURPRISE_BONUS_ACCOUNT = privateKeyToAccount(`0x${"77".repeat(32)}`);
 const TX_HASH = `0x${"aa".repeat(32)}` as Hash;
 const BLOCK_HASH = `0x${"bb".repeat(32)}` as Hash;
-const originalSandbox = process.env.TOKENLESS_SANDBOX_MODE;
 
 function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainConfig {
   return {
@@ -112,14 +111,11 @@ function mockRuntime(
 }
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandbox === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandbox;
 });
 
 test("deployment config binds the complete bundle and forbids credential key reuse", () => {

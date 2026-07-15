@@ -78,7 +78,7 @@ test("commit authorization rejects a sealed payload whose signed hash differs", 
   );
 });
 
-async function seedTask(sandbox: boolean) {
+async function seedTask(executionState: "confirmed" | "submitted" = "confirmed") {
   const frozenPolicy = freezeAdmissionPolicy(paidAdmissionPolicy());
   await dbClient.execute({
     sql: "INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at) VALUES ('ws_tasks', 'Tasks', 'active', ?, ?)",
@@ -89,8 +89,8 @@ async function seedTask(sandbox: boolean) {
     args: [new Date(NOW.getTime() + 60_000), NOW],
   });
   await dbClient.execute({
-    sql: "INSERT INTO tokenless_agent_asks (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json, status, sandbox, created_at, updated_at) VALUES ('op_tasks', 'task:test:1234', 'hash', 'quote_tasks', '{}', '{}', 'open', ?, ?, ?)",
-    args: [sandbox, NOW, NOW],
+    sql: "INSERT INTO tokenless_agent_asks (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json, status, created_at, updated_at) VALUES ('op_tasks', 'task:test:1234', 'hash', 'quote_tasks', '{}', '{}', 'open', ?, ?)",
+    args: [NOW, NOW],
   });
   await dbClient.execute({
     sql: "INSERT INTO tokenless_content_records (content_id, workspace_id, content_hash, content_json, moderation_status, created_at, updated_at) VALUES ('cnt_tasks', 'ws_tasks', ?, ?, 'approved', ?, ?)",
@@ -115,7 +115,7 @@ async function seedTask(sandbox: boolean) {
           (execution_id, operation_key, payment_mode, payment_reference, deployment_key, chain_id, deployment_block,
            panel_address, issuer_address, x402_submitter_address, usdc_address, funder_address, content_id, terms_hash,
            round_terms_json, total_funded_atomic, state, round_id, created_at, updated_at)
-          VALUES ('exec_tasks', 'op_tasks', 'prepaid', 'payment', 'deployment', 84532, 1, ?, ?, ?, ?, ?, ?, ?, ?, 31875000, 'confirmed', 42, ?, ?)`,
+          VALUES ('exec_tasks', 'op_tasks', 'prepaid', 'payment', 'deployment', 84532, 1, ?, ?, ?, ?, ?, ?, ?, ?, 31875000, ?, 42, ?, ?)`,
     args: [
       panel,
       "0x3333333333333333333333333333333333333333",
@@ -132,6 +132,7 @@ async function seedTask(sandbox: boolean) {
         beaconRound: "123",
         beaconNetworkHash: `0x${"66".repeat(32)}`,
       }),
+      executionState,
       NOW,
       NOW,
     ],
@@ -155,13 +156,13 @@ async function seedTask(sandbox: boolean) {
   return frozenPolicy;
 }
 
-test("task discovery fails closed for live content without an assignment", async () => {
-  await seedTask(false);
+test("task discovery fails closed until the real chain execution is confirmed", async () => {
+  await seedTask("submitted");
   assert.deepEqual(await listPaidRaterTasks(ACCOUNT, NOW), []);
 });
 
-test("task discovery exposes exact compensation for explicit sandbox content", async () => {
-  const frozenPolicy = await seedTask(true);
+test("task discovery exposes exact compensation for confirmed public work", async () => {
+  const frozenPolicy = await seedTask();
   const tasks = await listPaidRaterTasks(ACCOUNT, NOW);
   assert.equal(tasks[0]?.question.prompt, "Ship it?");
   assert.deepEqual(tasks[0]?.question.media, { kind: "youtube", videoId: "dQw4w9WgXcQ" });

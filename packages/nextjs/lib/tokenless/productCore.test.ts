@@ -20,24 +20,20 @@ import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from 
 
 const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B: `0x${string}` = "0x2222222222222222222222222222222222222222";
-const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "true";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
 });
 
 function quoteRequest() {
   return {
     audience: {
       admissionPolicyHash: `0x${"ab".repeat(32)}`,
-      source: "sandbox",
+      source: "customer_invited",
     },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
@@ -212,10 +208,10 @@ test("ask ownership is bound to its workspace for wait and result authorization"
   );
 });
 
-test("terminal sandbox asks release prepaid reservations idempotently", async () => {
+test("production prepaid asks keep reservations payment-gated and attach idempotently", async () => {
   const workspace = await workspaceWithKey(ADDRESS_A);
   await recordPrepaidLedgerEntry({ workspaceId: workspace.workspaceId, amountAtomic: "100000000", source: "invoice" });
-  const { quote, request } = await quoteAndRequest(workspace.workspaceId, "sandbox:prepaid:12345678");
+  const { quote, request } = await quoteAndRequest(workspace.workspaceId, "prepaid:pending:12345678");
   const principal = {
     kind: "api_key" as const,
     apiKeyId: workspace.apiKeyId,
@@ -237,13 +233,13 @@ test("terminal sandbox asks release prepaid reservations idempotently", async ()
   });
   assert.deepEqual(firstState.rows[0], {
     operation_key: ask.operationKey,
-    payment_state: "simulated",
-    status: "released",
+    payment_state: "reserved",
+    status: "reserved",
   });
   assert.deepEqual((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid, {
     settledAtomic: "100000000",
-    reservedAtomic: "0",
-    availableAtomic: "100000000",
+    reservedAtomic: quote.economics.totalFundedAtomic,
+    availableAtomic: (100_000_000n - BigInt(quote.economics.totalFundedAtomic)).toString(),
   });
 
   const replayPrepared = await prepareProductAsk({ principal, request });
@@ -254,17 +250,17 @@ test("terminal sandbox asks release prepaid reservations idempotently", async ()
     sql: `SELECT status, operation_key FROM tokenless_prepaid_reservations WHERE reservation_id = ?`,
     args: [prepared.paymentReference],
   });
-  assert.deepEqual(replayState.rows[0], { operation_key: ask.operationKey, status: "released" });
-  assert.equal((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid.reservedAtomic, "0");
+  assert.deepEqual(replayState.rows[0], { operation_key: ask.operationKey, status: "reserved" });
+  assert.equal((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid.reservedAtomic, quote.economics.totalFundedAtomic);
 });
 
-test("terminal sandbox asks mark wallet payment intents as simulated without holding value", async () => {
-  const principalId = "rlp_sandbox_wallet_principal";
-  const { workspaceId } = await createWorkspace({ name: "Sandbox wallet", ownerAddress: principalId });
+test("production wallet asks remain pending until the purpose-bound payment is confirmed", async () => {
+  const principalId = "rlp_pending_wallet_principal";
+  const { workspaceId } = await createWorkspace({ name: "Pending wallet", ownerAddress: principalId });
   await activateEarlyAccess(workspaceId);
   const quote = await createTokenlessQuote(quoteRequest());
   const request = {
-    idempotencyKey: "sandbox:wallet:12345678",
+    idempotencyKey: "wallet:pending:12345678",
     payment: { mode: "wallet" as const, payerAddress: ADDRESS_A },
     quoteId: quote.quoteId,
   };
@@ -287,8 +283,8 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
   });
   assert.deepEqual(state.rows[0], {
     operation_key: ask.operationKey,
-    payment_state: "simulated",
-    state: "simulated",
+    payment_state: "pending_user_signature",
+    state: "pending_user_signature",
   });
   assert.deepEqual((await listProductWorkspaces(principalId))[0]?.prepaid, {
     settledAtomic: "0",
@@ -302,7 +298,7 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
     sql: `SELECT state, operation_key FROM tokenless_payment_intents WHERE payment_intent_id = ?`,
     args: [prepared.paymentReference],
   });
-  assert.deepEqual(replay.rows[0], { operation_key: ask.operationKey, state: "simulated" });
+  assert.deepEqual(replay.rows[0], { operation_key: ask.operationKey, state: "pending_user_signature" });
   assert.equal(workspaceId, prepared.workspaceId);
 });
 
@@ -364,7 +360,7 @@ test("policy-bound agent keys enforce exact audience and panel caps and reserve 
     accountAddress: ADDRESS_A,
     workspaceId,
     policy: {
-      name: "Small sandbox agent",
+      name: "Small invited-panel agent",
       allowedPaymentModes: ["prepaid"],
       maxPanelAtomic: "50000000",
       maxDailyAtomic: "40000000",
@@ -373,13 +369,13 @@ test("policy-bound agent keys enforce exact audience and panel caps and reserve 
       maxBountyAtomic: "30000000",
       maxFeeBps: 1000,
       maxAttemptReserveAtomic: "10000000",
-      allowedReviewerSources: ["sandbox"],
+      allowedReviewerSources: ["customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
     },
   });
   const key = await createWorkspaceApiKey({
     workspaceId,
-    name: "Sandbox agent",
+    name: "Invited-panel agent",
     policyId: policy.policyId,
     scopes: ["quote:read", "panel:publish", "payment:submit", "result:read"],
   });
@@ -433,7 +429,7 @@ test("publishing policies fail closed on unsupported reviewer sources and data c
     workspaceId,
     policy: {
       ...basePolicy,
-      allowedReviewerSources: ["sandbox"],
+      allowedReviewerSources: ["rateloop_network"],
       allowedDataClassifications: ["public"],
       onPolicyMiss: "handoff",
     },
@@ -468,7 +464,7 @@ test("policy-bound x402 keys require the configured wallet binding", async () =>
       maxBountyAtomic: "30000000",
       maxFeeBps: 1000,
       maxAttemptReserveAtomic: "10000000",
-      allowedReviewerSources: ["sandbox"],
+      allowedReviewerSources: ["customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
     },
   });
@@ -513,7 +509,7 @@ test("policy revocation blocks the next delegated ask", async () => {
       maxBountyAtomic: "30000000",
       maxFeeBps: 1000,
       maxAttemptReserveAtomic: "10000000",
-      allowedReviewerSources: ["sandbox"],
+      allowedReviewerSources: ["customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
     },
   });

@@ -25,12 +25,10 @@ const OWNER = "0x1111111111111111111111111111111111111111";
 const ADMISSION_HASH = `0x${"ab".repeat(32)}` as const;
 const SOURCE_PAYLOAD = "The customer was charged twice for invoice 42.";
 const SUGGESTION_PAYLOAD = "Refund the confirmed duplicate charge.";
-const originalSandboxMode = process.env.TOKENLESS_SANDBOX_MODE;
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 
 beforeEach(() => {
-  process.env.TOKENLESS_SANDBOX_MODE = "false";
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "88".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "evidence-test-v1";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -38,8 +36,6 @@ beforeEach(() => {
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalSandboxMode === undefined) delete process.env.TOKENLESS_SANDBOX_MODE;
-  else process.env.TOKENLESS_SANDBOX_MODE = originalSandboxMode;
   if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
@@ -179,7 +175,6 @@ async function storedResult(
     selected?: string | null;
     preferenceShareBps?: number | null;
     participantCount?: number;
-    sandbox?: boolean;
     updatedAt?: string;
   } = {},
 ) {
@@ -188,7 +183,7 @@ async function storedResult(
     args: [operationKey],
   });
   const status = input.status ?? "publishable";
-  const publishable = status === "publishable" || status === "published";
+  const publishable = status === "publishable";
   const result: TokenlessResult = {
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     operationKey,
@@ -198,9 +193,9 @@ async function storedResult(
     economics: JSON.parse(String(ask.rows[0]?.economics_json)) as TokenlessResult["economics"],
     audience: {
       admissionPolicyHash: ADMISSION_HASH,
-      label: input.sandbox ? "Simulated sandbox responses" : "Customer-invited reviewers",
+      label: "Customer-invited reviewers",
       participantCount: input.participantCount ?? 5,
-      source: input.sandbox ? "sandbox" : "customer_invited",
+      source: "customer_invited",
     },
     verdict: publishable
       ? {
@@ -214,9 +209,9 @@ async function storedResult(
   };
   await dbClient.execute({
     sql: `UPDATE tokenless_agent_asks
-          SET result_json = ?, verdict_status = ?, sandbox = ?, updated_at = ?
+          SET result_json = ?, verdict_status = ?, updated_at = ?
           WHERE operation_key = ?`,
-    args: [JSON.stringify(result), status, input.sandbox ?? false, new Date(result.updatedAt), operationKey],
+    args: [JSON.stringify(result), status, new Date(result.updatedAt), operationKey],
   });
   return result;
 }
@@ -286,18 +281,11 @@ test("maps no to disagreement and invalidates comparability after a terminal del
   assert.equal(stored?.agreement, "inconclusive");
 });
 
-test("fails before terminal evidence and records sandbox output only as non-comparable", async () => {
+test("fails before terminal evidence", async () => {
   const setup = await fixture();
   await assert.rejects(
     () => finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "result_not_ready" && error.retryable,
   );
   assert.equal(await observationRow(setup.decision.opportunityId), undefined);
-
-  await storedResult(setup.operationKey, { status: "published", sandbox: true, participantCount: 5 });
-  const sandbox = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
-  assert.equal(sandbox.comparable, false);
-  assert.equal(sandbox.agreement, "inconclusive");
-  assert.equal(sandbox.respondingHumanCount, 0);
-  assert.equal(sandbox.humanHumanAgreementBps, null);
 });

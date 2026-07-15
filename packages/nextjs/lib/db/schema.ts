@@ -34,7 +34,6 @@ export const tokenlessAgentAsks = pgTable(
     verdictStatus: text("verdict_status"),
     roundId: text("round_id"),
     resultJson: text("result_json"),
-    sandbox: boolean("sandbox").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
   },

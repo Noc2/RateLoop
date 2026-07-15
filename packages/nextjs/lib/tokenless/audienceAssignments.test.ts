@@ -502,25 +502,6 @@ test("hybrid audiences freeze separate epoch-bound network and invited subpanels
     () => createCohort(project, { source: "rateloop_network", selection: "customer_named" }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_audience_selection",
   );
-
-  const sandboxProject = await seedProject(OWNER, "sandbox");
-  const sandbox = await createCohort(sandboxProject, { source: "sandbox" });
-  const sandboxPolicy = audiencePolicy([{ ...sandbox, source: "sandbox" }], {
-    reviewerSource: "sandbox",
-    compensation: "unpaid",
-  });
-  const sandboxRun = await seedRun(sandboxProject, sandboxPolicy);
-  assert.equal(
-    (
-      await prepareRunAudience({
-        accountAddress: OWNER,
-        workspaceId: sandboxProject.workspaceId,
-        projectId: sandboxProject.projectId,
-        runId: sandboxRun.runId,
-      })
-    )[0]?.source,
-    "sandbox",
-  );
 });
 
 test("paid network audiences require an exact epoch and stay closed before voucher/receipt-bound assignment", async () => {

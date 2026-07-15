@@ -379,8 +379,8 @@ beforeEach(async () => {
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_asks
-          (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json, status, verdict_status, round_id, sandbox, created_at, updated_at)
-          VALUES (?, 'transparency:test:1', 'ask_hash', 'quote_transparency', '{}', ?, 'submitted', NULL, '42', false, ?, ?)`,
+          (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json, status, verdict_status, round_id, created_at, updated_at)
+          VALUES (?, 'transparency:test:1', 'ask_hash', 'quote_transparency', '{}', ?, 'submitted', NULL, '42', ?, ?)`,
     args: [OPERATION, JSON.stringify(economics), NOW, NOW],
   });
   await dbClient.execute({

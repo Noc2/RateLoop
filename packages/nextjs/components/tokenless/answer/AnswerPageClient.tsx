@@ -19,11 +19,9 @@ const ThirdwebSessionButton = dynamic(
 export function AnswerPageClient({
   initialQuery = "",
   initialScope = "all",
-  sandboxMode,
 }: {
   initialQuery?: string;
   initialScope?: Scope;
-  sandboxMode: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -95,14 +93,7 @@ export function AnswerPageClient({
           </div>
         ) : null}
         {!loading && !signedOut && scope !== "private" && scope !== "submitted"
-          ? tasks.map(task => (
-              <PublicQuestionCard
-                key={task.roundId}
-                task={task}
-                sandboxMode={sandboxMode}
-                onSubmitted={() => void load()}
-              />
-            ))
+          ? tasks.map(task => <PublicQuestionCard key={task.roundId} task={task} onSubmitted={() => void load()} />)
           : null}
         {!loading && !signedOut && scope !== "public" && scope !== "submitted"
           ? assignments.map(assignment => (

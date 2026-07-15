@@ -7,7 +7,6 @@ import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClien
 import { type HumanTab, HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { PrivateGroupMembershipsPanel } from "~~/components/tokenless/human/PrivateGroupMembershipsPanel";
 import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
-import { isTokenlessSandboxMode } from "~~/lib/tokenless/server";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
 const HUMAN_TABS = new Set<HumanTab>(["discover", "profile", "settings"]);
@@ -27,17 +26,12 @@ export default async function HumanPage({
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const tab = HUMAN_TABS.has(requestedTab as HumanTab) ? (requestedTab as HumanTab) : "discover";
   const assignmentId = Array.isArray(params.assignment) ? params.assignment[0] : params.assignment;
-  const sandboxMode = isTokenlessSandboxMode();
 
   if (assignmentId) {
     return (
       <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
         <HumanTabs active="discover" />
-        <HumanAssuranceRaterClient
-          initialAssignmentId={params.assignment}
-          initialTermsHash={params.terms}
-          sandboxMode={sandboxMode}
-        />
+        <HumanAssuranceRaterClient initialAssignmentId={params.assignment} initialTermsHash={params.terms} />
       </AppPageShell>
     );
   }
@@ -53,7 +47,7 @@ export default async function HumanPage({
         <AppPageShell contentClassName="mb-4">
           <HumanTabs active={tab} />
         </AppPageShell>
-        <AnswerPageClient initialQuery={query} initialScope={scope} sandboxMode={sandboxMode} />
+        <AnswerPageClient initialQuery={query} initialScope={scope} />
       </>
     );
   }
