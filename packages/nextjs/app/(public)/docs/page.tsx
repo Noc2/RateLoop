@@ -5,7 +5,7 @@ import { DocsTitle } from "~~/components/docs/DocsTitle";
 const DOCS_PATHS = [
   {
     number: "01",
-    title: "For Agents",
+    title: "Agents",
     description: "Connect an agent, bind its review policy, and check human assurance before eligible outputs.",
     href: "/docs/ai",
     label: "Agent guide",

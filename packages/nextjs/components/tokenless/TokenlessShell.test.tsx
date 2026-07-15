@@ -4,8 +4,9 @@ import test from "node:test";
 
 test("tokenless shell exposes Humans, Agents, and Docs without the legacy product navigation", async () => {
   const source = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
-  assert.match(source, /href: "\/human", label: "For Humans"/);
-  assert.match(source, /href: "\/agents", label: "For Agents"/);
+  assert.match(source, /href: "\/human", label: "Humans"/);
+  assert.match(source, /href: "\/agents", label: "Agents"/);
+  assert.doesNotMatch(source, /For Humans|For Agents/);
   assert.match(source, /href: "\/docs", label: "Docs"/);
   assert.match(source, /\["Pricing", "\/pricing"\]/);
   assert.match(source, /href="\/pricing"/);

@@ -109,7 +109,7 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
-                <span>For Humans</span>
+                <span>Humans</span>
                 <span
                   aria-hidden="true"
                   className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
@@ -121,7 +121,7 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
                 href="/agents?tab=overview"
                 className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                <span>For Agents</span>
+                <span>Agents</span>
                 <span
                   aria-hidden="true"
                   className="text-lg leading-none transition-transform group-hover:translate-x-0.5"

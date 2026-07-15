@@ -67,8 +67,8 @@ function BookOpenIcon({ className }: IconProps) {
 }
 
 const links = [
-  { href: "/human", label: "For Humans", icon: GlobeAltIcon },
-  { href: "/agents", label: "For Agents", icon: PlusCircleIcon },
+  { href: "/human", label: "Humans", icon: GlobeAltIcon },
+  { href: "/agents", label: "Agents", icon: PlusCircleIcon },
   { href: "/docs", label: "Docs", icon: BookOpenIcon },
 ] as const;
 

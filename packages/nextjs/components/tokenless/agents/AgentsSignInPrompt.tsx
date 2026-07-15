@@ -19,7 +19,7 @@ export function AgentsSignInPrompt() {
         aria-labelledby="agents-sign-in-title"
       >
         <h1 id="agents-sign-in-title" className="font-display text-2xl font-semibold text-base-content">
-          For Agents
+          Agents
         </h1>
         <p className="mx-auto mb-6 mt-3 max-w-sm text-base leading-6 text-base-content/70">
           Sign in to connect an agent, configure human review, manage private groups, and evaluate performance.
