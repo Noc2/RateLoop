@@ -10,6 +10,7 @@ import { account, passkey, session, user, verification } from "~~/lib/db/schema"
 import { isResendConfigured, sendTokenlessLoginOtpEmail } from "~~/lib/notifications/resend";
 
 type SocialProviders = NonNullable<Parameters<typeof betterAuth>[0]["socialProviders"]>;
+const APPLE_AUTH_ORIGIN = "https://appleid.apple.com";
 
 function requiredSecret() {
   const secret = process.env.BETTER_AUTH_SECRET?.trim();
@@ -50,6 +51,11 @@ export function getBetterAuthConfiguration() {
   };
 }
 
+export function getBetterAuthTrustedOrigins() {
+  const configuration = getBetterAuthConfiguration();
+  return configuration.appleEnabled ? [configuration.origin, APPLE_AUTH_ORIGIN] : [configuration.origin];
+}
+
 function createRateLoopAuth() {
   const configuration = getBetterAuthConfiguration();
   return betterAuth({
@@ -57,7 +63,7 @@ function createRateLoopAuth() {
     basePath: "/api/auth/better",
     baseURL: configuration.origin,
     secret: requiredSecret(),
-    trustedOrigins: [configuration.origin],
+    trustedOrigins: getBetterAuthTrustedOrigins(),
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: { account, passkey, session, user, verification },

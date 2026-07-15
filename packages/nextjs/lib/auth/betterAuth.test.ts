@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { __resetBetterAuthForTests, getBetterAuth, getBetterAuthConfiguration } from "~~/lib/auth/betterAuth";
+import {
+  __resetBetterAuthForTests,
+  getBetterAuth,
+  getBetterAuthConfiguration,
+  getBetterAuthTrustedOrigins,
+} from "~~/lib/auth/betterAuth";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
@@ -16,6 +21,8 @@ afterEach(() => {
   delete process.env.APP_URL;
   delete process.env.BETTER_AUTH_SECRET;
   delete process.env.BETTER_AUTH_PASSKEY_RP_ID;
+  delete process.env.BETTER_AUTH_APPLE_CLIENT_ID;
+  delete process.env.BETTER_AUTH_APPLE_CLIENT_SECRET;
   __resetBetterAuthForTests();
   __setDatabaseResourcesForTests(null);
 });
@@ -33,6 +40,18 @@ test("Better Auth is self-hosted at the isolated origin with email providers dis
   );
   assert.equal(response.status, 200);
   assert.equal(await response.json(), null);
+});
+
+test("Apple OAuth trusts Apple's form-post origin only when its credential pair is configured", () => {
+  assert.deepEqual(getBetterAuthTrustedOrigins(), ["https://rateloop-tokenless.vercel.app"]);
+
+  process.env.BETTER_AUTH_APPLE_CLIENT_ID = "ai.rateloop.tokenless.web";
+  process.env.BETTER_AUTH_APPLE_CLIENT_SECRET = "apple-client-secret";
+
+  assert.deepEqual(getBetterAuthTrustedOrigins(), [
+    "https://rateloop-tokenless.vercel.app",
+    "https://appleid.apple.com",
+  ]);
 });
 
 test("email OTP writes a generated verification ID before delivery", async () => {
