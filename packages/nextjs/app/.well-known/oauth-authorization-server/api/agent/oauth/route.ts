@@ -1,1 +1,3 @@
-export { GET, runtime } from "~~/app/.well-known/oauth-authorization-server/route";
+export { GET } from "~~/app/.well-known/oauth-authorization-server/route";
+
+export const runtime = "nodejs";
