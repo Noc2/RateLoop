@@ -536,12 +536,9 @@ export function TokenlessHandoffClient() {
     return (
       <main className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
         <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
-          <p className="font-mono text-xs uppercase tracking-widest text-error">Invalid handoff</p>
-          <h1 className="mt-4 text-3xl font-semibold">This review link cannot be opened.</h1>
+          <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
+          <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
           <p className="mt-4 leading-7 text-base-content/65">{handoff.message}</p>
-          <p className="mt-4 text-sm leading-6 text-base-content/50">
-            Nothing from the fragment was sent to RateLoop. Ask the originating agent to create a new handoff link.
-          </p>
         </section>
       </main>
     );
@@ -549,24 +546,32 @@ export function TokenlessHandoffClient() {
 
   if (!payload || !request) return null;
 
+  if (handoff.status === "expired") {
+    return (
+      <main className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
+        <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
+          <p className="font-mono text-xs uppercase tracking-widest text-error">Review link expired</p>
+          <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
+          <p className="mt-4 text-sm leading-6 text-base-content/65">
+            This link expired <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-6xl grow px-4 py-10 sm:py-14">
       <header className="max-w-4xl">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
-        <h1 className="mt-4 text-4xl font-semibold leading-tight sm:text-5xl">Review the ask before it is sent.</h1>
+        <h1 className="mt-4 text-4xl font-semibold leading-tight sm:text-5xl">Review this ask.</h1>
         <p className="mt-4 max-w-3xl text-base leading-7 text-base-content/65 sm:text-lg">
-          After the approved draft was processed into this link, it remained only in the URL fragment and was not
-          persisted. RateLoop stores the reviewed question when you request a quote, and submission remains a separate
-          action.
+          Check the question, confirm it is safe to share, then get the exact price.
+        </p>
+        <p className="mt-3 text-sm text-base-content/50">
+          Link expires <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>
         </p>
       </header>
-
-      {handoff.status === "expired" ? (
-        <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm leading-6" role="alert">
-          This handoff expired at {formatDate(payload.expiresAt)}. Nothing can be quoted or submitted from this link.
-          Ask the originating agent for a new handoff.
-        </div>
-      ) : null}
 
       {error ? (
         <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm leading-6" role="alert">
@@ -574,13 +579,13 @@ export function TokenlessHandoffClient() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="mt-8 max-w-4xl">
         <section className="rateloop-surface-card p-5 sm:p-7" aria-labelledby="review-heading">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">01 · Review</p>
+              <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Review</p>
               <h2 id="review-heading" className="mt-2 text-2xl font-semibold">
-                Question and choices
+                Question
               </h2>
             </div>
             <span className="rounded-full border border-white/15 px-3 py-1 text-xs text-base-content/65">
@@ -660,6 +665,9 @@ export function TokenlessHandoffClient() {
           )}
 
           <div className="mt-7 border-t border-white/10 pt-6">
+            <p className="mb-5 text-sm leading-6 text-base-content/65">
+              {sourceLabel(request.audience.source)} · {request.requestedPanelSize} reviewers
+            </p>
             <label className="flex items-start gap-3 text-sm leading-6 text-base-content/80">
               <input
                 type="checkbox"
@@ -674,47 +682,31 @@ export function TokenlessHandoffClient() {
               </span>
             </label>
           </div>
-        </section>
 
-        <aside className="rateloop-surface-card h-fit p-5 sm:p-6" aria-labelledby="summary-heading">
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Draft summary</p>
-          <h2 id="summary-heading" className="mt-2 text-xl font-semibold">
-            Scope and privacy
-          </h2>
-          <dl className="mt-5 grid gap-5">
-            <SummaryItem label="Audience" value={sourceLabel(request.audience.source)} />
-            <SummaryItem label="Admission policy" value={request.audience.admissionPolicyHash} mono />
-            <SummaryItem label="Classification" value={classificationLabel(payload.dataClassification)} />
-            <SummaryItem
-              label="Redaction summary"
-              value={payload.redactionSummary.trim() || "No redaction summary supplied"}
-            />
-            <SummaryItem label="Requested panel" value={`${request.requestedPanelSize} reviewers`} />
-            <SummaryItem
-              label="Bounty"
-              value={`${formatUsdcAtomic(request.budget.bountyAtomic)} (${request.budget.bountyAtomic} atomic)`}
-            />
-            <SummaryItem
-              label="Attempt reserve"
-              value={`${formatUsdcAtomic(request.budget.attemptReserveAtomic)} (${request.budget.attemptReserveAtomic} atomic)`}
-            />
-            <SummaryItem label="Platform fee" value={`${request.budget.feeBps} bps`} />
-            <SummaryItem label="Handoff expires" value={formatDate(payload.expiresAt)} />
-            <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
-          </dl>
-        </aside>
+          <details className="mt-6 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
+            <summary className="cursor-pointer font-medium">Request details</summary>
+            <dl className="mt-5 grid gap-5 sm:grid-cols-2">
+              <SummaryItem label="Classification" value={classificationLabel(payload.dataClassification)} />
+              <SummaryItem
+                label="Redaction summary"
+                value={payload.redactionSummary.trim() || "No redaction summary supplied"}
+              />
+              <SummaryItem label="Admission policy" value={request.audience.admissionPolicyHash} mono />
+              <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
+            </dl>
+          </details>
+        </section>
       </div>
 
-      <section className="rateloop-surface-card mt-6 p-5 sm:p-7" aria-labelledby="quote-heading">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">02 · Quote</p>
+      <section className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="quote-heading">
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Price</p>
         <div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <h2 id="quote-heading" className="text-2xl font-semibold">
-              Lock the exact economics
+              Get the exact price
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
-              This sends the reviewed question and panel terms to the quote endpoint. Editing the question or choices
-              clears the quote and requires a fresh confirmation.
+              No funds are reserved until you submit the ask.
             </p>
           </div>
           <button
@@ -723,7 +715,7 @@ export function TokenlessHandoffClient() {
             disabled={busy !== null || submitted || handoff.status !== "ready" || !privacyConfirmed}
             onClick={() => void createQuote()}
           >
-            {busy === "quote" ? "Requesting quote…" : quote ? "Refresh quote" : "Request exact quote"}
+            {busy === "quote" ? "Getting price…" : quote ? "Refresh price" : "Get price"}
           </button>
         </div>
 
@@ -732,136 +724,145 @@ export function TokenlessHandoffClient() {
             className="mt-6 rounded-xl border border-[var(--rateloop-green)]/25 bg-[var(--rateloop-green)]/5 p-5"
             aria-live="polite"
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="font-semibold">Exact USDC quote</p>
-              <p className="font-mono text-xs text-base-content/55">Expires {formatDate(quote.expiresAt)}</p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-sm text-base-content/55">Total</p>
+                <p className="mt-1 text-2xl font-semibold">{formatUsdcAtomic(quote.economics.totalFundedAtomic)}</p>
+                <p className="mt-2 text-sm text-base-content/60">
+                  Includes {formatUsdcAtomic(quote.economics.attemptReserve.fundedAtomic)} accepted-work reserve.
+                </p>
+              </div>
+              <p className="text-sm text-base-content/55">
+                {quote.panel.requestedSize} reviewers · expires {formatDate(quote.expiresAt)}
+              </p>
             </div>
-            <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <SummaryItem
-                label="Reviewer bounty"
-                value={`${formatUsdcAtomic(quote.economics.bounty.fundedAtomic)} (${quote.economics.bounty.fundedAtomic} atomic)`}
-              />
-              <SummaryItem
-                label={`Platform fee · ${quote.economics.fee.bps} bps`}
-                value={`${formatUsdcAtomic(quote.economics.fee.fundedAtomic)} (${quote.economics.fee.fundedAtomic} atomic)`}
-              />
-              <SummaryItem
-                label="Accepted-work reserve"
-                value={`${formatUsdcAtomic(quote.economics.attemptReserve.fundedAtomic)} (${quote.economics.attemptReserve.fundedAtomic} atomic)`}
-              />
-              <SummaryItem
-                label="Total funded"
-                value={`${formatUsdcAtomic(quote.economics.totalFundedAtomic)} (${quote.economics.totalFundedAtomic} atomic)`}
-              />
-              <SummaryItem
-                label="Minimum reveals"
-                value={`${quote.panel.minimumReveals} of ${quote.panel.requestedSize}`}
-              />
-              <SummaryItem label="Audience" value={quote.audience.label} />
-              <SummaryItem label="Estimated panel time" value={`${quote.slo.estimatedSeconds} seconds`} />
-              <SummaryItem label="Quote ID" value={quote.quoteId} mono />
-            </dl>
+            <details className="mt-5 border-t border-white/10 pt-4 text-sm">
+              <summary className="cursor-pointer font-medium">Price details</summary>
+              <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+                <SummaryItem label="Reviewer bounty" value={formatUsdcAtomic(quote.economics.bounty.fundedAtomic)} />
+                <SummaryItem
+                  label={`Platform fee · ${quote.economics.fee.bps} bps`}
+                  value={formatUsdcAtomic(quote.economics.fee.fundedAtomic)}
+                />
+                <SummaryItem
+                  label="Accepted-work reserve"
+                  value={formatUsdcAtomic(quote.economics.attemptReserve.fundedAtomic)}
+                />
+                <SummaryItem
+                  label="Minimum reveals"
+                  value={`${quote.panel.minimumReveals} of ${quote.panel.requestedSize}`}
+                />
+                <SummaryItem label="Audience" value={quote.audience.label} />
+                <SummaryItem label="Estimated time" value={`${quote.slo.estimatedSeconds} seconds`} />
+                <SummaryItem label="Quote ID" value={quote.quoteId} mono />
+              </dl>
+            </details>
           </div>
         ) : null}
       </section>
 
-      <section className="rateloop-surface-card mt-6 p-5 sm:p-7" aria-labelledby="submit-heading">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">03 · Submit</p>
-        <h2 id="submit-heading" className="mt-2 text-2xl font-semibold">
-          Approve the reviewed ask
-        </h2>
+      {quote ? (
+        <section className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="submit-heading">
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Submit</p>
+          <h2 id="submit-heading" className="mt-2 text-2xl font-semibold">
+            Send this ask
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-base-content/60">
+            Submitting reserves {formatUsdcAtomic(quote.economics.totalFundedAtomic)} from the selected workspace.
+          </p>
 
-        <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4">
-          {session.status === "loading" ? (
-            <p className="text-sm text-base-content/60" role="status">
-              Checking your RateLoop session…
-            </p>
-          ) : session.status === "anonymous" ? (
-            <p className="text-sm leading-6 text-base-content/70">
-              <strong className="text-base-content">Sign in required.</strong> Use the work account button in the
-              header, then reload this handoff link. The fragment remains local to the browser during sign-in.
-            </p>
-          ) : session.status === "error" ? (
-            <p className="text-sm leading-6 text-error" role="alert">
-              {session.message}
-            </p>
-          ) : (
-            <p className="text-sm text-base-content/70">
-              Signed in as <span className="font-mono text-base-content">{session.principalId}</span>
-            </p>
-          )}
-        </div>
-
-        {session.status === "authenticated" ? (
-          <div className="mt-5">
-            <label className="block text-sm font-medium" htmlFor="handoff-workspace">
-              Prepaid workspace
-            </label>
-            {workspaceLoading ? (
-              <p className="mt-2 text-sm text-base-content/55" role="status">
-                Loading workspaces…
+          <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4">
+            {session.status === "loading" ? (
+              <p className="text-sm text-base-content/60" role="status">
+                Checking your RateLoop session…
               </p>
-            ) : workspaceError ? (
-              <p className="mt-2 text-sm leading-6 text-error" role="alert">
-                {workspaceError}
+            ) : session.status === "anonymous" ? (
+              <p className="text-sm leading-6 text-base-content/70">
+                <strong className="text-base-content">Sign in required.</strong> Use the work account button in the
+                header, then reload this handoff link. The fragment remains local to the browser during sign-in.
               </p>
-            ) : workspaces.length ? (
-              <>
-                <select
-                  id="handoff-workspace"
-                  className="select mt-2 w-full max-w-xl rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  disabled={busy !== null || submitted}
-                  value={selectedWorkspaceId}
-                  onChange={event => setSelectedWorkspaceId(event.target.value)}
-                >
-                  {workspaces.map(workspace => (
-                    <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                      {workspace.name} · {formatUsdcAtomic(workspace.prepaid.availableAtomic)} available
-                    </option>
-                  ))}
-                </select>
-                {insufficientPrepaid ? (
-                  <p className="mt-2 text-sm text-error" role="alert">
-                    This workspace has less available prepaid USDC than the quoted total.
-                  </p>
-                ) : null}
-              </>
+            ) : session.status === "error" ? (
+              <p className="text-sm leading-6 text-error" role="alert">
+                {session.message}
+              </p>
             ) : (
-              <p className="mt-2 text-sm leading-6 text-base-content/60">
-                No prepaid workspace is available. Create and fund one in Account before submitting this handoff.
-              </p>
+              <p className="text-sm text-base-content/70">Choose the workspace that will fund this ask.</p>
             )}
           </div>
-        ) : null}
 
-        <div className="mt-6 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
-          <p className="max-w-3xl text-sm leading-6 text-base-content/55">
-            Submission uses the handoff&apos;s fixed idempotency key. Reloading or retrying cannot create a different
-            ask with that key.
-          </p>
-          <button
-            type="button"
-            className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={
-              busy !== null ||
-              submitted ||
-              handoff.status !== "ready" ||
-              !quote ||
-              !privacyConfirmed ||
-              session.status !== "authenticated" ||
-              !selectedWorkspace ||
-              insufficientPrepaid
-            }
-            onClick={() => void submitAsk()}
-          >
-            {busy === "submit" ? "Submitting…" : "Submit and reserve USDC"}
-          </button>
-        </div>
-      </section>
+          {session.status === "authenticated" ? (
+            <div className="mt-5">
+              <label className="block text-sm font-medium" htmlFor="handoff-workspace">
+                Prepaid workspace
+              </label>
+              {workspaceLoading ? (
+                <p className="mt-2 text-sm text-base-content/55" role="status">
+                  Loading workspaces…
+                </p>
+              ) : workspaceError ? (
+                <p className="mt-2 text-sm leading-6 text-error" role="alert">
+                  {workspaceError}
+                </p>
+              ) : workspaces.length ? (
+                <>
+                  <select
+                    id="handoff-workspace"
+                    className="select mt-2 w-full max-w-xl rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                    disabled={busy !== null || submitted}
+                    value={selectedWorkspaceId}
+                    onChange={event => setSelectedWorkspaceId(event.target.value)}
+                  >
+                    {workspaces.map(workspace => (
+                      <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                        {workspace.name} · {formatUsdcAtomic(workspace.prepaid.availableAtomic)} available
+                      </option>
+                    ))}
+                  </select>
+                  {insufficientPrepaid ? (
+                    <p className="mt-2 text-sm text-error" role="alert">
+                      This workspace has less available prepaid USDC than the quoted total.
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-sm leading-6 text-base-content/60">
+                  No prepaid workspace is available. Create and fund one in Account before submitting this handoff.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex justify-end border-t border-white/10 pt-6">
+            <button
+              type="button"
+              className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={
+                busy !== null ||
+                submitted ||
+                handoff.status !== "ready" ||
+                !quote ||
+                !privacyConfirmed ||
+                session.status !== "authenticated" ||
+                !selectedWorkspace ||
+                insufficientPrepaid
+              }
+              onClick={() => void submitAsk()}
+            >
+              {busy === "submit"
+                ? "Submitting…"
+                : `Submit and reserve ${formatUsdcAtomic(quote.economics.totalFundedAtomic)}`}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {ask ? (
-        <section className="rateloop-surface-card mt-6 p-5 sm:p-7" aria-labelledby="result-heading" aria-live="polite">
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">04 · Result</p>
+        <section
+          className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7"
+          aria-labelledby="result-heading"
+          aria-live="polite"
+        >
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Result</p>
           <div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
               <h2 id="result-heading" className="text-2xl font-semibold">

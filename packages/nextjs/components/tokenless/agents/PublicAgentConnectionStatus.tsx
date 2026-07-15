@@ -26,8 +26,7 @@ export function PublicAgentConnectionStatus() {
         role="status"
         aria-live="polite"
       >
-        This preview has no local activation claim. Return to the original agent message or create a new connection
-        message in RateLoop. Do not reconstruct or add a claim manually.
+        Open the original connection link. If it is unavailable, create a new connection in RateLoop.
       </p>
     );
   }
@@ -38,8 +37,7 @@ export function PublicAgentConnectionStatus() {
       role="status"
       aria-live="polite"
     >
-      The activation claim is present only in this browser URL. Return to your agent; its host can finish installation
-      and authorization without another copy or paste.
+      Connection link verified. Return to your agent to continue.
     </p>
   );
 }

@@ -24,11 +24,10 @@ function CodeEntry({ message }: { message?: string }) {
     <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="device-code-title">
       <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Agent connection</p>
       <h1 id="device-code-title" className="mt-4 text-4xl font-semibold tracking-tight">
-        Enter the code shown by your agent host
+        Enter your connection code
       </h1>
       <p className="mt-4 text-sm leading-6 text-base-content/65">
-        This fallback is used when the host cannot return from a normal browser authorization. You do not need to paste
-        another message into the agent.
+        Find the code in your agent host. It expires after ten minutes.
       </p>
       <form method="get" className="mt-7 space-y-4">
         <label className="block text-sm font-medium" htmlFor="user_code">
@@ -44,18 +43,14 @@ function CodeEntry({ message }: { message?: string }) {
           inputMode="text"
           maxLength={9}
           placeholder="ABCD-EFGH"
-          aria-describedby={message ? "device-code-error" : "device-code-help"}
+          aria-describedby={message ? "device-code-error" : undefined}
           className="input input-bordered w-full bg-black/20 font-mono text-lg uppercase tracking-[0.16em]"
         />
         {message ? (
           <p id="device-code-error" role="alert" className="text-sm text-error">
             {message}
           </p>
-        ) : (
-          <p id="device-code-help" className="text-xs leading-5 text-base-content/45">
-            Codes expire after ten minutes. RateLoop never asks you to paste an access token into chat.
-          </p>
-        )}
+        ) : null}
         <button type="submit" className="btn btn-primary w-full">
           Continue
         </button>
@@ -96,24 +91,23 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   const terminalCopy = {
     approved: {
       eyebrow: "Approved",
-      title: "The agent host is finishing the connection",
-      message: "You can close this page. The host will receive its credentials directly and continue automatically.",
+      title: "Connection approved",
+      message: "You can close this page. The agent host will finish automatically.",
     },
     denied: {
       eyebrow: "Denied",
-      title: "This connection was not approved",
-      message: "No credentials were issued. You can close this page.",
+      title: "Connection denied",
+      message: "You can close this page.",
     },
     consumed: {
       eyebrow: "Connected",
-      title: "The agent host received its connection",
-      message: "You can close this page. No credential needs to be copied back into the agent chat.",
+      title: "Agent connected",
+      message: "You can close this page.",
     },
     expired: {
       eyebrow: "Expired",
-      title: "This verification code has expired",
-      message:
-        "Return to the existing agent task. The host can restart authorization without another connection message.",
+      title: "Connection code expired",
+      message: "Return to your agent and restart authorization.",
     },
   } as const;
   const terminal = approval.status === "pending" ? null : terminalCopy[approval.status];
@@ -125,7 +119,7 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
           {terminal?.eyebrow ?? "Agent connection"}
         </p>
         <h1 id="device-approval-title" className="mt-4 text-4xl font-semibold tracking-tight">
-          {terminal?.title ?? "Allow this agent host to connect?"}
+          {terminal?.title ?? `Allow ${approval.clientName}?`}
         </h1>
         {terminal ? (
           <p className="mt-4 text-base leading-7 text-base-content/65" role="status">
@@ -134,23 +128,18 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
         ) : (
           <>
             <p className="mt-4 text-base leading-7 text-base-content/65">
-              <strong className="text-base-content">{approval.clientName}</strong> requested a safe RateLoop agent
-              connection using code <span className="font-mono text-base-content">{approval.userCode}</span>. This grant
-              cannot publish, spend funds, administer a workspace, or read private artifacts.
+              It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage
+              the workspace, or read private files.
             </p>
-            <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
-              <h2 className="text-sm font-semibold">Allowed actions</h2>
-              <ul className="mt-3 space-y-2 text-sm text-base-content/65">
+            <details className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
+              <summary className="cursor-pointer font-medium">Connection details</summary>
+              <p className="mt-3 font-mono text-base-content/65">Code {approval.userCode}</p>
+              <ul className="mt-3 space-y-2 text-base-content/65">
                 {approval.scopes.map(scope => (
-                  <li key={scope} className="flex gap-2">
-                    <span aria-hidden="true" className="text-[var(--rateloop-green)]">
-                      ✓
-                    </span>
-                    <span>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</span>
-                  </li>
+                  <li key={scope}>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</li>
                 ))}
               </ul>
-            </div>
+            </details>
             <form
               action="/api/agent/oauth/device/authorize"
               method="post"
@@ -164,9 +153,6 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
                 Deny
               </button>
             </form>
-            <p className="mt-5 text-xs leading-5 text-base-content/45">
-              Access and refresh tokens go directly to the requesting host. They are never shown on this page.
-            </p>
           </>
         )}
       </section>

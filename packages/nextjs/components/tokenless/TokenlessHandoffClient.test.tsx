@@ -8,6 +8,7 @@ import {
 } from "./TokenlessHandoffClient";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 
@@ -15,6 +16,7 @@ const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
+const handoffSource = readFileSync(new URL("./TokenlessHandoffClient.tsx", import.meta.url), "utf8");
 
 function request(kind: "binary" | "head_to_head" = "binary") {
   return {
@@ -167,4 +169,21 @@ test("handoff client renders a fragment-local loading state without server paylo
   assert.match(html, /Reading the private handoff fragment in this browser/i);
   assert.match(html, /aria-busy="true"/);
   assert.doesNotMatch(html, /api\/agent\/v1\/quote|handoffToken/);
+});
+
+test("browser handoff reveals price and submission progressively while retaining technical detail", () => {
+  assert.match(handoffSource, /Review this ask\./);
+  assert.match(handoffSource, /Request details/);
+  assert.match(handoffSource, /Price details/);
+  assert.match(handoffSource, /sourceLabel\(request\.audience\.source\)[\s\S]{0,100}request\.requestedPanelSize/);
+  assert.match(handoffSource, /accepted-work reserve/);
+  assert.match(handoffSource, /\{quote \? \([\s\S]*aria-labelledby="submit-heading"/);
+  assert.match(handoffSource, /Admission policy/);
+  assert.match(handoffSource, /Quote ID/);
+  assert.doesNotMatch(handoffSource, /Draft summary|Lock the exact economics|01 · Review|02 · Quote|03 · Submit/);
+});
+
+test("expired browser handoffs stop at one recovery action", () => {
+  assert.match(handoffSource, /if \(handoff\.status === "expired"\)/);
+  assert.match(handoffSource, /Ask the agent for a new link\./);
 });

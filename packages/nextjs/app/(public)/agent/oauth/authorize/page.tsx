@@ -32,15 +32,15 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
     return (
       <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-error">Connection blocked</p>
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-error">Cannot connect</p>
           <h1 id="oauth-error-title" className="mt-4 text-3xl font-semibold tracking-tight">
-            This authorization request is not valid
+            This connection request is invalid
           </h1>
           <p className="mt-4 text-sm leading-6 text-base-content/65" role="alert">
             {oauth.message}
           </p>
-          <p className="mt-6 text-xs leading-5 text-base-content/45">
-            Return to the agent that opened this page. Do not copy credentials or authorization codes into chat.
+          <p className="mt-6 text-sm leading-6 text-base-content/55">
+            Return to the agent that opened this page and restart the connection.
           </p>
         </section>
       </main>
@@ -73,29 +73,26 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
       <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-consent-title">
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Agent connection</p>
         <h1 id="oauth-consent-title" className="mt-4 text-4xl font-semibold tracking-tight">
-          {authorization.autoAuthorize ? "Connecting your verified agent" : "Allow this agent to connect?"}
+          {authorization.autoAuthorize
+            ? `Connecting ${authorization.clientName}`
+            : `Allow ${authorization.clientName}?`}
         </h1>
         <p className="mt-4 text-base leading-7 text-base-content/65">
-          <strong className="text-base-content">{authorization.clientName}</strong> is requesting a safe RateLoop agent
-          connection. This grant cannot publish, spend funds, administer the workspace, or read private artifacts.
+          {authorization.autoAuthorize
+            ? "No action is needed unless the connection does not continue automatically."
+            : "It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage the workspace, or read private files."}
         </p>
-        <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
-          <h2 className="text-sm font-semibold">Allowed actions</h2>
-          <ul className="mt-3 space-y-2 text-sm text-base-content/65">
-            {authorization.scopes.map(scope => (
-              <li key={scope} className="flex gap-2">
-                <span aria-hidden="true" className="text-[var(--rateloop-green)]">
-                  ✓
-                </span>
-                <span>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {!authorization.autoAuthorize ? (
+          <details className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
+            <summary className="cursor-pointer font-medium">Connection details</summary>
+            <ul className="mt-3 space-y-2 text-base-content/65">
+              {authorization.scopes.map(scope => (
+                <li key={scope}>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         <AgentOAuthConsentForm autoAuthorize={authorization.autoAuthorize} values={values} />
-        <p className="mt-5 text-xs leading-5 text-base-content/45">
-          Access and refresh tokens are delivered directly to the agent host and never displayed on this page.
-        </p>
       </section>
     </main>
   );

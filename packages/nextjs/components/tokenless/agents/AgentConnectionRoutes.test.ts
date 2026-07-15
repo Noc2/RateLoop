@@ -43,8 +43,10 @@ test("public intent handoff is versioned, non-consuming, and never echoes a frag
 test("public connection page exposes safe human and machine handoff state", () => {
   assert.match(publicPage, /data-rateloop-agent-connection="2026-07-15"/);
   assert.match(publicPage, /rateloop_claim_connection_intent/);
-  assert.match(publicPage, /Connected with safe access/);
-  assert.match(publicPage, /never need[\s\S]{0,30}paste the connection message a second time/i);
+  assert.match(publicPage, /Agent connected/);
+  assert.match(publicPage, /Complete by/);
+  assert.doesNotMatch(publicPage, /For the workspace owner|For agents and hosts|generic connection guide/);
+  assert.doesNotMatch(publicPage, /<span className="badge[\s\S]{0,100}\{intent\.status\}/);
   assert.match(publicPage, /referrer: "no-referrer"/);
   assert.match(publicPage, /robots: \{ follow: false, index: false \}/);
 });
@@ -55,4 +57,6 @@ test("claim fragment is inspected only in the browser and never stored or sent",
   assert.doesNotMatch(publicPage, /location\.hash|searchParams/);
   assert.doesNotMatch(publicClient, /fetch\(|sendBeacon|localStorage|sessionStorage/);
   assert.doesNotMatch(publicClient, /setFragmentState\(claim/);
+  assert.match(publicClient, /Connection link verified\. Return to your agent to continue\./);
+  assert.doesNotMatch(publicClient, /activation claim is present|reconstruct or add a claim/);
 });

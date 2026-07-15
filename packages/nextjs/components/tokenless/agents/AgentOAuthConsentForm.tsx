@@ -26,16 +26,16 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
             Completing the secure connection…
           </p>
           <button className="rateloop-gradient-action min-h-11 w-full px-4" type="submit">
-            Continue connection
+            Continue
           </button>
         </>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
+          <button className="rateloop-gradient-action min-h-11 px-4" type="submit" name="decision" value="approve">
+            Allow connection
+          </button>
           <button className="btn btn-outline min-h-11" type="submit" name="decision" value="deny">
             Cancel
-          </button>
-          <button className="rateloop-gradient-action min-h-11 px-4" type="submit" name="decision" value="approve">
-            Allow safe connection
           </button>
         </div>
       )}
