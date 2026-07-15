@@ -6,7 +6,7 @@ import {
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { evaluateFrozenAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
@@ -85,7 +85,7 @@ function rowDate(row: QueryRow | undefined, key: string) {
 
 function normalizeAddress(value: string, field = "accountAddress") {
   try {
-    return getAddress(value).toLowerCase();
+    return normalizeAccountSubject(value);
   } catch {
     throw new TokenlessServiceError(`${field} must be a valid account address.`, 400, "invalid_account");
   }

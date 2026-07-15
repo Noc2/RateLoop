@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
@@ -150,7 +150,7 @@ function normalizeRegistration(value: unknown): AgentRegistrationInput {
 async function management(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
-    address = getAddress(accountAddress).toLowerCase();
+    address = normalizeAccountSubject(accountAddress);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }

@@ -10,7 +10,7 @@ import {
 } from "../../scripts/assurance-evidence-core.mjs";
 import { type KeyObject, createHmac, createPrivateKey, createPublicKey, randomUUID, sign } from "node:crypto";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -73,7 +73,7 @@ function parseJson<T>(value: unknown, name: string): T {
 
 function normalizeAddress(value: string) {
   try {
-    return getAddress(value).toLowerCase();
+    return normalizeAccountSubject(value);
   } catch {
     throw new TokenlessServiceError("A valid signed-in account is required.", 400, "invalid_account");
   }

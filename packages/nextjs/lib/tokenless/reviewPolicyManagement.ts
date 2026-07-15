@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
@@ -233,7 +233,7 @@ function normalizeInput(value: unknown): ManagedReviewPolicyInput {
 async function requireManagement(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
-    address = getAddress(accountAddress).toLowerCase();
+    address = normalizeAccountSubject(accountAddress);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }

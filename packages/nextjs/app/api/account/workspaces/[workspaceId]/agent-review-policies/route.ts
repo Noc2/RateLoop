@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
-    return NextResponse.json(await listManagedReviewPolicies({ accountAddress: session.address, workspaceId }), {
+    return NextResponse.json(await listManagedReviewPolicies({ accountAddress: session.principalId, workspaceId }), {
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   } catch (error) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
     const policy = await createManagedReviewPolicy({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       policy: await request.json(),
     });

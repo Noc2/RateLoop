@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json(
       await recoverExpiredAudienceAssignment({
         assignmentId,
-        baseAccountAddress: session.address,
+        baseAccountAddress: session.principalId,
         confidentialityTermsHash:
           typeof body.confidentialityTermsHash === "string" ? body.confidentialityTermsHash : undefined,
       }),

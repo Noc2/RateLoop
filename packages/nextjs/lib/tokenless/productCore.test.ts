@@ -259,7 +259,8 @@ test("terminal sandbox asks release prepaid reservations idempotently", async ()
 });
 
 test("terminal sandbox asks mark wallet payment intents as simulated without holding value", async () => {
-  const { workspaceId } = await createWorkspace({ name: "Sandbox wallet", ownerAddress: ADDRESS_A });
+  const principalId = "rlp_sandbox_wallet_principal";
+  const { workspaceId } = await createWorkspace({ name: "Sandbox wallet", ownerAddress: principalId });
   await activateEarlyAccess(workspaceId);
   const quote = await createTokenlessQuote(quoteRequest());
   const request = {
@@ -267,7 +268,11 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
     payment: { mode: "wallet" as const, payerAddress: ADDRESS_A },
     quoteId: quote.quoteId,
   };
-  const principal = { kind: "session" as const, accountAddress: ADDRESS_A };
+  const principal = {
+    kind: "session" as const,
+    accountAddress: principalId,
+    walletAddress: ADDRESS_A,
+  };
   const prepared = await prepareProductAsk({ principal, request });
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
 
@@ -285,7 +290,7 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
     payment_state: "simulated",
     state: "simulated",
   });
-  assert.deepEqual((await listProductWorkspaces(ADDRESS_A))[0]?.prepaid, {
+  assert.deepEqual((await listProductWorkspaces(principalId))[0]?.prepaid, {
     settledAtomic: "0",
     reservedAtomic: "0",
     availableAtomic: "0",
@@ -301,14 +306,15 @@ test("terminal sandbox asks mark wallet payment intents as simulated without hol
   assert.equal(workspaceId, prepared.workspaceId);
 });
 
-test("wallet payment intents require the signed-in browser principal to be the payer", async () => {
-  const { workspaceId } = await createWorkspace({ name: "Personal", ownerAddress: ADDRESS_A });
+test("wallet payment intents require the purpose-bound funding wallet to be the payer", async () => {
+  const principalId = "rlp_wallet_test_principal_0001";
+  const { workspaceId } = await createWorkspace({ name: "Personal", ownerAddress: principalId });
   await activateEarlyAccess(workspaceId);
   const quote = await createTokenlessQuote(quoteRequest());
   await assert.rejects(
     () =>
       prepareProductAsk({
-        principal: { kind: "session", accountAddress: ADDRESS_A },
+        principal: { kind: "session", accountAddress: principalId, walletAddress: ADDRESS_A },
         request: {
           idempotencyKey: "wallet:test:12345678",
           payment: { mode: "wallet", payerAddress: ADDRESS_B },
@@ -319,7 +325,7 @@ test("wallet payment intents require the signed-in browser principal to be the p
   );
 
   const prepared = await prepareProductAsk({
-    principal: { kind: "session", accountAddress: ADDRESS_A },
+    principal: { kind: "session", accountAddress: principalId, walletAddress: ADDRESS_A },
     request: {
       idempotencyKey: "wallet:test:abcdefgh",
       payment: { mode: "wallet", payerAddress: ADDRESS_A },

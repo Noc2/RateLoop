@@ -9,7 +9,7 @@ import {
   subscriptionsEnabled,
 } from "./stripe";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -29,7 +29,7 @@ function rowBoolean(row: QueryRow, key: string) {
 async function requireWorkspaceAccess(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
-    address = getAddress(accountAddress).toLowerCase();
+    address = normalizeAccountSubject(accountAddress);
   } catch {
     throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
   }
@@ -162,7 +162,7 @@ export async function updateWorkspaceBillingProfile(input: {
       registeredAddress,
       vatCountryCode,
       vatId,
-      getAddress(input.accountAddress).toLowerCase(),
+      normalizeAccountSubject(input.accountAddress),
       now,
       now,
     ],

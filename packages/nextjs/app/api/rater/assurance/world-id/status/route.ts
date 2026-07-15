@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const session = await requireRaterSession(request, false);
-    return NextResponse.json(await getWorldIdAssuranceStatus(session.address), {
+    return NextResponse.json(await getWorldIdAssuranceStatus(session.payoutAddress), {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

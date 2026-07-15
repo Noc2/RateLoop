@@ -13,7 +13,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { assetId, workspaceId } = await context.params;
     return NextResponse.json(
-      await deleteStagedPublicQuestionImage({ accountAddress: session.address, assetId, workspaceId }),
+      await deleteStagedPublicQuestionImage({ accountAddress: session.principalId, assetId, workspaceId }),
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

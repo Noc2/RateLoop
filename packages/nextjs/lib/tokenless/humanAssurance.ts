@@ -9,9 +9,11 @@ import {
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
+import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import {
   type ProjectAccessSubjectKind,
@@ -39,7 +41,7 @@ export type AssurancePrincipal =
   | ProductPrincipal
   | {
       kind: "workspace_session";
-      accountAddress: `0x${string}`;
+      accountAddress: string;
       workspaceId: string;
       role: TokenlessWorkspaceRole;
     };
@@ -104,8 +106,9 @@ function projectAccessSubject(principal: AssurancePrincipal): {
   subjectKind: ProjectAccessSubjectKind;
   subjectReference: string;
 } {
-  return principal.kind === "api_key"
-    ? { subjectKind: "api_key", subjectReference: principal.apiKeyId }
+  if (principal.kind === "api_key") return { subjectKind: "api_key", subjectReference: principal.apiKeyId };
+  return isRateLoopPrincipalId(principal.accountAddress)
+    ? { subjectKind: "principal", subjectReference: principal.accountAddress }
     : { subjectKind: "account", subjectReference: principal.accountAddress.toLowerCase() };
 }
 
@@ -116,7 +119,7 @@ function assertWriteRole(role: TokenlessWorkspaceRole) {
 }
 
 export async function scopeAssuranceSessionToWorkspace(input: {
-  accountAddress: `0x${string}`;
+  accountAddress: string;
   workspaceId: string;
 }): Promise<AssurancePrincipal> {
   const result = await dbClient.execute({
@@ -247,13 +250,15 @@ export async function createAssuranceProject(input: {
       "invalid_human_assurance_input",
     );
   }
+  assertDataIngressPolicy({ classification: input.dataClassification, visibility: "private" });
   const projectId = `hap_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_projects
-          (project_id, workspace_id, name, description, data_classification,
+          (project_id, workspace_id, name, description, data_classification, home_region,
+           retention_policy_id, legal_hold_state, data_use_policy_version,
            status, retention_days, created_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, 'eu', 'retention-default-v1', 'none', 'data-use-v1', 'active', ?, ?, ?, ?)`,
     args: [
       projectId,
       workspaceId,

@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
-    const memberships = await listPrivateGroupMemberships({ accountAddress: session.address });
+    const memberships = await listPrivateGroupMemberships({ accountAddress: session.principalId });
     return NextResponse.json({ memberships }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

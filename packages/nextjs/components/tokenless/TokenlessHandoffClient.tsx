@@ -46,7 +46,7 @@ type Workspace = {
 type SessionState =
   | { status: "loading" }
   | { status: "anonymous" }
-  | { status: "authenticated"; address: `0x${string}`; expiresAt: string }
+  | { status: "authenticated"; principalId: string; fundingAddress: `0x${string}` | null; expiresAt: string }
   | { status: "error"; message: string };
 
 type HandoffState =
@@ -324,16 +324,22 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
           ),
           "session",
         );
-        if (sessionBody.authenticated !== true || typeof sessionBody.address !== "string") {
+        if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
           setSession({ status: "anonymous" });
           return;
         }
-        if (!ADDRESS_PATTERN.test(sessionBody.address) || typeof sessionBody.expiresAt !== "string") {
+        const wallets = record(sessionBody.wallets, "session.wallets");
+        const fundingAddress = wallets.funding;
+        if (
+          (fundingAddress !== null && (typeof fundingAddress !== "string" || !ADDRESS_PATTERN.test(fundingAddress))) ||
+          typeof sessionBody.expiresAt !== "string"
+        ) {
           throw new Error("RateLoop returned an invalid signed-in session.");
         }
         setSession({
           status: "authenticated",
-          address: sessionBody.address as `0x${string}`,
+          principalId: sessionBody.principalId,
+          fundingAddress: fundingAddress as `0x${string}` | null,
           expiresAt: sessionBody.expiresAt,
         });
         if (sandboxMode) return;
@@ -503,13 +509,16 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
         throw new Error("The quote expired. Request a new quote before submitting.");
       }
       if (session.status !== "authenticated") throw new Error("Sign in to RateLoop before submitting.");
+      if (sandboxMode && !session.fundingAddress) {
+        throw new Error("Add a funding wallet in account settings before submitting a wallet-funded ask.");
+      }
       if (!sandboxMode && !selectedWorkspace) throw new Error("Select a prepaid workspace before submitting.");
       if (insufficientPrepaid) throw new Error("The selected workspace does not have enough available prepaid USDC.");
       const body = {
         idempotencyKey: active.idempotencyKey,
         quoteId: quote.quoteId,
         payment: sandboxMode
-          ? { mode: "wallet" as const, payerAddress: session.address }
+          ? { mode: "wallet" as const, payerAddress: session.fundingAddress! }
           : { mode: "prepaid" as const, workspaceId: selectedWorkspace!.workspaceId },
       };
       setBusy("submit");
@@ -810,7 +819,10 @@ export function TokenlessHandoffClient({ sandboxMode }: { sandboxMode: boolean }
             </p>
           ) : (
             <p className="text-sm text-base-content/70">
-              Signed in as <span className="font-mono text-base-content">{session.address}</span>
+              Signed in as <span className="font-mono text-base-content">{session.principalId}</span>
+              {sandboxMode && !session.fundingAddress ? (
+                <span className="mt-1 block text-warning">Add a funding wallet before submitting this ask.</span>
+              ) : null}
             </p>
           )}
         </div>

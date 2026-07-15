@@ -1,5 +1,5 @@
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
@@ -105,7 +105,7 @@ function minimumAggregationSize(value: unknown) {
 async function requireWorkspaceAccess(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
-    address = getAddress(accountAddress).toLowerCase();
+    address = normalizeAccountSubject(accountAddress);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }

@@ -2,7 +2,7 @@ import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@r
 import { createCipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import {
   type CohortSource,
@@ -356,7 +356,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   }
   let accountAddress: string;
   try {
-    accountAddress = getAddress(input.baseAccountAddress).toLowerCase();
+    accountAddress = normalizeAccountSubject(input.baseAccountAddress);
   } catch {
     serviceError("A valid signed-in account is required.", "invalid_account", 401);
   }

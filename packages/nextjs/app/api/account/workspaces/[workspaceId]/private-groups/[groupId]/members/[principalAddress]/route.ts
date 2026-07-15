@@ -14,7 +14,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const { workspaceId, groupId, principalAddress } = await context.params;
     const body = (await request.json().catch(() => ({}))) as { reason?: string };
     const membership = await removePrivateGroupMember({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       groupId,
       principalAddress,

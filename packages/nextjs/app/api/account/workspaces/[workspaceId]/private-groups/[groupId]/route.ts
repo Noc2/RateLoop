@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId, groupId } = await context.params;
-    const group = await getPrivateGroup({ accountAddress: session.address, workspaceId, groupId });
+    const group = await getPrivateGroup({ accountAddress: session.principalId, workspaceId, groupId });
     return NextResponse.json({ group }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId, groupId } = await context.params;
     const body = (await request.json()) as { policy: PrivateGroupPolicyInput };
     const version = await createPrivateGroupPolicyVersion({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       groupId,
       policy: body.policy,

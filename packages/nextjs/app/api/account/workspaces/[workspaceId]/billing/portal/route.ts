@@ -12,7 +12,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    return NextResponse.json(await startWorkspaceBillingPortal({ accountAddress: session.address, workspaceId }), {
+    return NextResponse.json(await startWorkspaceBillingPortal({ accountAddress: session.principalId, workspaceId }), {
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   } catch (error) {

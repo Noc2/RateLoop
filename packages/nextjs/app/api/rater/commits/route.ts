@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(
       await relayPaidRaterCommit({
-        accountAddress: session.address,
+        accountAddress: session.payoutAddress,
         request: { idempotencyKey, voucherId: body.voucherId, authorization: body.authorization },
       }),
       { status: 202 },

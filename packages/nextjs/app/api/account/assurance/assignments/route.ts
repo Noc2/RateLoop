@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         assignments: await listReviewerAssignments({
-          accountAddress: session.address,
+          accountAddress: session.principalId,
           query: params.get("q") ?? "",
           state: params.get("state") ?? "",
           limit: Number(params.get("limit") ?? 50),

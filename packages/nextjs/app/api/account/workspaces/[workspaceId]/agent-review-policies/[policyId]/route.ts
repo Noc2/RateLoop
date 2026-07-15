@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { policyId, workspaceId } = await context.params;
     const policy = await updateManagedReviewPolicy({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       policyId,
       policy: await request.json(),
@@ -29,7 +29,7 @@ export async function DELETE(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { policyId, workspaceId } = await context.params;
-    await disableManagedReviewPolicy({ accountAddress: session.address, workspaceId, policyId });
+    await disableManagedReviewPolicy({ accountAddress: session.principalId, workspaceId, policyId });
     return NextResponse.json({ disabled: true });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

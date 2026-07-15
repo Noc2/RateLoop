@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const body = (await request.json()) as { token: string };
-    const invitation = await previewPrivateGroupInvitation({ accountAddress: session.address, token: body.token });
+    const invitation = await previewPrivateGroupInvitation({ accountAddress: session.principalId, token: body.token });
     return NextResponse.json({ invitation }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

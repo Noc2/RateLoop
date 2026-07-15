@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("Agent version body must be an object.", 400, "invalid_agent");
     }
     const agent = await createWorkspaceAgentVersion({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       agentId,
       version,

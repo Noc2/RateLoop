@@ -75,7 +75,8 @@ export const tokenlessAuthSessions = pgTable(
   "tokenless_auth_sessions",
   {
     sessionHash: text("session_hash").primaryKey(),
-    accountAddress: text("account_address").notNull(),
+    accountAddress: text("account_address"),
+    principalId: text("principal_id").references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
     authProvider: text("auth_provider").notNull().default("base_account"),
     expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
@@ -84,7 +85,191 @@ export const tokenlessAuthSessions = pgTable(
   table => ({
     accountAddressIdx: index("tokenless_auth_sessions_account_address_idx").on(table.accountAddress),
     expiresAtIdx: index("tokenless_auth_sessions_expires_at_idx").on(table.expiresAt),
+    principalIdx: index("tokenless_auth_sessions_principal_idx").on(table.principalId, table.expiresAt),
   }),
+);
+
+export const tokenlessPrincipals = pgTable(
+  "tokenless_principals",
+  {
+    principalId: text("principal_id").primaryKey(),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+    disabledAt: timestamp("disabled_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({ statusIdx: index("tokenless_principals_status_idx").on(table.status, table.updatedAt) }),
+);
+
+export const tokenlessIdentityBindings = pgTable(
+  "tokenless_identity_bindings",
+  {
+    bindingId: text("binding_id").primaryKey(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    providerSubject: text("provider_subject").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { mode: "date", withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    principalIdx: index("tokenless_identity_bindings_principal_idx").on(table.principalId, table.status),
+    providerSubjectUnique: uniqueIndex("tokenless_identity_bindings_provider_subject_unique").on(
+      table.provider,
+      table.providerSubject,
+    ),
+  }),
+);
+
+export const user = pgTable("tokenless_better_auth_users", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+});
+
+export const session = pgTable(
+  "tokenless_better_auth_sessions",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  table => ({ userIdx: index("tokenless_better_auth_sessions_user_idx").on(table.userId, table.expiresAt) }),
+);
+
+export const account = pgTable(
+  "tokenless_better_auth_accounts",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", { mode: "date", withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { mode: "date", withTimezone: true }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    providerUnique: uniqueIndex("tokenless_better_auth_accounts_provider_unique").on(table.providerId, table.accountId),
+    userIdx: index("tokenless_better_auth_accounts_user_idx").on(table.userId),
+  }),
+);
+
+export const verification = pgTable(
+  "tokenless_better_auth_verifications",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    identifierIdx: index("tokenless_better_auth_verifications_identifier_idx").on(table.identifier, table.expiresAt),
+  }),
+);
+
+export const passkey = pgTable(
+  "tokenless_better_auth_passkeys",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull().unique(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }),
+    aaguid: text("aaguid"),
+  },
+  table => ({ userIdx: index("tokenless_better_auth_passkeys_user_idx").on(table.userId) }),
+);
+
+export const tokenlessThirdwebWalletJtis = pgTable(
+  "tokenless_thirdweb_wallet_jtis",
+  {
+    jtiHash: text("jti_hash").primaryKey(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
+    audience: text("audience").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    principalIdx: index("tokenless_thirdweb_wallet_jtis_principal_idx").on(table.principalId, table.expiresAt),
+  }),
+);
+
+export const tokenlessWalletBindingChallenges = pgTable(
+  "tokenless_wallet_binding_challenges",
+  {
+    challengeId: text("challenge_id").primaryKey(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    walletAddress: text("wallet_address").notNull(),
+    walletSource: text("wallet_source").notNull(),
+    chainId: integer("chain_id").notNull(),
+    nonceHash: text("nonce_hash").notNull(),
+    messageHash: text("message_hash").notNull(),
+    thirdwebJtiHash: text("thirdweb_jti_hash").references(() => tokenlessThirdwebWalletJtis.jtiHash, {
+      onDelete: "restrict",
+    }),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    principalIdx: index("tokenless_wallet_binding_challenges_principal_idx").on(table.principalId, table.expiresAt),
+  }),
+);
+
+export const tokenlessWalletBindings = pgTable(
+  "tokenless_wallet_bindings",
+  {
+    bindingId: text("binding_id").primaryKey(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    walletAddress: text("wallet_address").notNull(),
+    walletSource: text("wallet_source").notNull(),
+    chainId: integer("chain_id").notNull(),
+    proofMessageHash: text("proof_message_hash").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { mode: "date", withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({ principalIdx: index("tokenless_wallet_bindings_principal_idx").on(table.principalId, table.purpose) }),
 );
 
 export const tokenlessBrowserIdentities = pgTable(

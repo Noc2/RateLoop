@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
-    return NextResponse.json(await listReviewerMemberships({ accountAddress: session.address }), {
+    return NextResponse.json(await listReviewerMemberships({ accountAddress: session.principalId }), {
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   } catch (error) {

@@ -23,7 +23,7 @@ const noStore = { "Cache-Control": "no-store" };
 export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
-    return NextResponse.json(await getTokenlessEmailNotificationSettings(session.address, isResendConfigured()), {
+    return NextResponse.json(await getTokenlessEmailNotificationSettings(session.principalId, isResendConfigured()), {
       headers: noStore,
     });
   } catch (error) {
@@ -38,7 +38,7 @@ export async function PUT(request: NextRequest) {
     const body = (await request.json()) as { email?: unknown; preferences?: unknown };
     const email = normalizeNotificationEmail(body.email);
     const preferences = normalizeNotificationPreferences(body.preferences ?? body);
-    const existing = await getTokenlessEmailNotificationSubscription(session.address);
+    const existing = await getTokenlessEmailNotificationSubscription(session.principalId);
     const requiresVerification =
       Boolean(email) && (!existing || String(existing.email) !== email || !existing.verified_at);
 
@@ -49,7 +49,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const result = await upsertTokenlessEmailNotificationSettings(session.address, email, preferences);
+    const result = await upsertTokenlessEmailNotificationSettings(session.principalId, email, preferences);
     if (result.verificationToken && email) {
       try {
         await sendTokenlessVerificationEmail({

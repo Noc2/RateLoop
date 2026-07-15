@@ -28,7 +28,11 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId, groupId } = await context.params;
-    const invitations = await listPrivateGroupInvitations({ accountAddress: session.address, workspaceId, groupId });
+    const invitations = await listPrivateGroupInvitations({
+      accountAddress: session.principalId,
+      workspaceId,
+      groupId,
+    });
     return NextResponse.json({ invitations }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);
@@ -43,7 +47,7 @@ export async function POST(request: NextRequest, context: Context) {
     const body = (await request.json()) as InvitationBody;
     const invitation = await createPrivateGroupInvitation({
       ...body,
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       groupId,
       expiresAt: optionalDate(body.expiresAt) ?? undefined,

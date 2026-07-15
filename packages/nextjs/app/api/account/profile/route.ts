@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
     return NextResponse.json(
-      await getAccountProfile({ principalAddress: session.address, providerDisplayName: session.displayName }),
+      await getAccountProfile({ principalAddress: session.principalId, providerDisplayName: session.displayName }),
       { headers: noStore },
     );
   } catch (error) {
@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest) {
     const body = (await request.json()) as { displayName?: unknown };
     return NextResponse.json(
       await updateAccountProfile({
-        principalAddress: session.address,
+        principalAddress: session.principalId,
         providerDisplayName: session.displayName,
         displayName: body.displayName,
       }),

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { projectId, workspaceId } = await context.params;
-    const principal = await scopeAssuranceSessionToWorkspace({ accountAddress: session.address, workspaceId });
+    const principal = await scopeAssuranceSessionToWorkspace({ accountAddress: session.principalId, workspaceId });
     return NextResponse.json(await getAssuranceProjectResources({ principal, projectId }));
   } catch (error) {
     const response = tokenlessErrorResponse(error);

@@ -1,4 +1,4 @@
-import { TOKENLESS_VERCEL_PROJECT } from "./check-thirdweb-deployment.mjs";
+import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

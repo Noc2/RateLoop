@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
     return NextResponse.json(
-      { groups: await listPrivateGroups({ accountAddress: session.address, workspaceId }) },
+      { groups: await listPrivateGroups({ accountAddress: session.principalId, workspaceId }) },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );
   } catch (error) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId } = await context.params;
     const body = (await request.json()) as CreateGroupBody;
     const group = await createPrivateGroup({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       name: body.name,
       purpose: body.purpose,

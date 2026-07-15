@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
-    return NextResponse.json(await listWorkspaceAgents({ accountAddress: session.address, workspaceId }), {
+    return NextResponse.json(await listWorkspaceAgents({ accountAddress: session.principalId, workspaceId }), {
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   } catch (error) {
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("Agent request body must be an object.", 400, "invalid_agent");
     }
     const agent = await createWorkspaceAgent({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       externalId: body.externalId,
       version: body,

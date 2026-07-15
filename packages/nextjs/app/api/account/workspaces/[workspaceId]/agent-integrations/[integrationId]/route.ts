@@ -10,7 +10,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, integrationId } = await context.params;
     return NextResponse.json(
-      await revokeAgentIntegration({ accountAddress: session.address, workspaceId, integrationId }),
+      await revokeAgentIntegration({ accountAddress: session.principalId, workspaceId, integrationId }),
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request);
     const { projectId, workspaceId } = await context.params;
     return NextResponse.json({
-      events: await listArtifactAccessLog({ accountAddress: session.address, projectId, workspaceId }),
+      events: await listArtifactAccessLog({ accountAddress: session.principalId, projectId, workspaceId }),
     });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

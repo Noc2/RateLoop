@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("Checkout request body must be an object.", 400, "invalid_billing_plan");
     }
     return NextResponse.json(
-      await startWorkspaceCheckout({ accountAddress: session.address, plan: body.plan, workspaceId }),
+      await startWorkspaceCheckout({ accountAddress: session.principalId, plan: body.plan, workspaceId }),
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );
   } catch (error) {

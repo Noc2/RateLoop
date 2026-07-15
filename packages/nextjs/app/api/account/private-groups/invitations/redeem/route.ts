@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const body = (await request.json()) as { token: string };
-    const membership = await redeemPrivateGroupInvitation({ accountAddress: session.address, token: body.token });
+    const membership = await redeemPrivateGroupInvitation({ accountAddress: session.principalId, token: body.token });
     return NextResponse.json({ membership });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

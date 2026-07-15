@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, context: Context) {
     const { artifactId, projectId, workspaceId } = await context.params;
     const shouldExport = request.nextUrl.searchParams.get("download") === "true";
     const artifact = await readEncryptedArtifact({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       artifactId,
       leaseId: request.nextUrl.searchParams.get("leaseId") ?? undefined,
       projectId,

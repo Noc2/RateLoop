@@ -13,6 +13,7 @@ import {
   createProjectCohort,
   createReviewerInvitation,
   getAssignmentOnlyTask,
+  listReviewerMemberships,
   prepareRunAudience,
   recoverExpiredAudienceAssignment,
   redeemReviewerInvitationWithBaseAccount,
@@ -27,6 +28,7 @@ import {
   removePrivateGroupMember,
 } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { listReviewerAssignments } from "~~/lib/tokenless/reviewerAssignments";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -34,6 +36,7 @@ const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
 const SECOND_REVIEWER = "0x3333333333333333333333333333333333333333";
 const OTHER_OWNER = "0x4444444444444444444444444444444444444444";
+const OPAQUE_REVIEWER = "rlp_audience_reviewer_principal_0001";
 const TERMS_HASH = `sha256:${"c".repeat(64)}`;
 const POLICY_HASH = `sha256:${"d".repeat(64)}`;
 const RUN_HASH = `sha256:${"e".repeat(64)}`;
@@ -197,6 +200,11 @@ async function seedProject(owner = OWNER, label = "primary") {
           (project_id, workspace_id, name, data_classification, status, retention_days, created_by, created_at, updated_at)
           VALUES (?, ?, ?, 'confidential', 'active', 30, ?, ?, ?)`,
     args: [projectId, workspaceId, `${label} assurance`, owner.toLowerCase(), now, now],
+  });
+  await createProjectOwnerAssignment({
+    accountAddress: owner,
+    projectId,
+    workspaceId,
   });
   return { workspaceId, projectId };
 }
@@ -437,6 +445,31 @@ test("one-time invitations store only token hashes and bind redemption to the in
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "project_not_found",
   );
+});
+
+test("reviewer invitations and membership lookup support Better Auth principals without a wallet", async () => {
+  const project = await seedProject(OWNER, "opaque_reviewer");
+  const cohort = await createCohort(project, { source: "customer_invited", selection: "customer_named" });
+  await seedBrowserIdentity(OPAQUE_REVIEWER, "opaque-reviewer");
+  const invitation = await createReviewerInvitation({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    cohortId: cohort.cohortId,
+    intendedAccountAddress: OPAQUE_REVIEWER,
+  });
+
+  const redeemed = await redeemReviewerInvitationWithBaseAccount({
+    token: invitation.token,
+    baseAccountAddress: OPAQUE_REVIEWER,
+  });
+  assert.equal(redeemed.reviewerAccountAddress, OPAQUE_REVIEWER);
+
+  const result = await listReviewerMemberships({ accountAddress: OPAQUE_REVIEWER });
+  assert.equal(result.memberships.length, 1);
+  assert.equal(result.memberships[0]?.projectId, project.projectId);
+  assert.equal(result.memberships[0]?.cohortId, cohort.cohortId);
+  assert.equal(result.invitations[0]?.invitationId, invitation.invitationId);
 });
 
 test("hybrid audiences freeze separate epoch-bound network and invited subpanels", async () => {

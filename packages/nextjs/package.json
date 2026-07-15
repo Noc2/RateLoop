@@ -5,7 +5,7 @@
   "description": "Isolated tokenless RateLoop web app and v1 agent API",
   "scripts": {
     "analyze": "ANALYZE=true yarn build",
-    "build": "node scripts/check-thirdweb-deployment.mjs && node scripts/check-tokenless-production-readiness.mjs && node scripts/migrate-hosted-database.mjs && node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && rm -rf .next && rm -f node_modules/@rateloop/nextjs ../agents/node_modules/@rateloop/agents ../contracts/node_modules/@rateloop/contracts ../foundry/node_modules/@rateloop/foundry ../keeper/node_modules/@rateloop/keeper ../node-utils/node_modules/@rateloop/node-utils ../ponder/node_modules/@rateloop/ponder ../sdk/node_modules/@rateloop/sdk && next build --turbopack\"",
+    "build": "node scripts/check-identity-deployment.mjs && node scripts/check-tokenless-production-readiness.mjs && node scripts/migrate-hosted-database.mjs && node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && rm -rf .next && rm -f node_modules/@rateloop/nextjs ../agents/node_modules/@rateloop/agents ../contracts/node_modules/@rateloop/contracts ../foundry/node_modules/@rateloop/foundry ../keeper/node_modules/@rateloop/keeper ../node-utils/node_modules/@rateloop/node-utils ../ponder/node_modules/@rateloop/ponder ../sdk/node_modules/@rateloop/sdk && next build --turbopack\"",
     "build:workspace-deps": "yarn workspace @rateloop/contracts build && yarn workspace @rateloop/sdk build",
     "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && rm -rf .next && next typegen && tsc --noEmit --incremental\"",
     "dev": "yarn build:workspace-deps && node scripts/dev-preflight.mjs",
@@ -21,16 +21,18 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
-    "auth:check": "node scripts/check-thirdweb-deployment.mjs --production",
+    "auth:check": "node scripts/check-identity-deployment.mjs --production",
     "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs app config lib utils scripts\""
   },
   "dependencies": {
+    "@better-auth/passkey": "1.6.23",
     "@rateloop/contracts": "workspace:*",
     "@rateloop/sdk": "workspace:*",
     "@tanstack/react-query": "~5.59.15",
     "@vercel/blob": "2.4.0",
     "@worldcoin/idkit": "4.2.0",
     "@worldcoin/idkit-core": "4.2.1",
+    "better-auth": "1.6.23",
     "daisyui": "5.0.9",
     "drizzle-orm": "~0.45.2",
     "gsap": "^3.14.2",

@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request);
     const { runId, workspaceId } = await context.params;
     return NextResponse.json(
-      await getAssuranceEvidencePacket({ accountAddress: session.address, workspaceId, runId }),
+      await getAssuranceEvidencePacket({ accountAddress: session.principalId, workspaceId, runId }),
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, context: Context) {
     assertEvidenceGenerationRequest(body);
     const { runId, workspaceId } = await context.params;
     return NextResponse.json(
-      await generateAssuranceEvidencePacket({ accountAddress: session.address, workspaceId, runId }),
+      await generateAssuranceEvidencePacket({ accountAddress: session.principalId, workspaceId, runId }),
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

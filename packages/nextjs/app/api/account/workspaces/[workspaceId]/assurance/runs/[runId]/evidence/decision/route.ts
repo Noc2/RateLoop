@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request);
     const { runId, workspaceId } = await context.params;
     return NextResponse.json(
-      { decision: await getAssuranceClientDecision({ accountAddress: session.address, workspaceId, runId }) },
+      { decision: await getAssuranceClientDecision({ accountAddress: session.principalId, workspaceId, runId }) },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { runId, workspaceId } = await context.params;
     return NextResponse.json(
       await recordAssuranceClientDecision({
-        accountAddress: session.address,
+        accountAddress: session.principalId,
         workspaceId,
         runId,
         decision: body.decision as "go" | "revise" | "stop",

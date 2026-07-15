@@ -18,20 +18,19 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 const SESSION = {
   authenticated: true as const,
-  address: "0x1111111111111111111111111111111111111111",
-  authProvider: "google",
+  principalId: "rlp_123456789012345678901234",
+  authProvider: "better_auth:google",
   expiresAt: "2026-07-14T00:00:00.000Z",
-  email: "buyer@example.com",
   displayName: "Buyer Example",
+  wallets: { funding: null, payout: null, recovery: null },
 };
 
-test("enterprise session labels prefer a name and mask work email addresses", () => {
+test("enterprise session labels prefer a name and otherwise identify the opaque principal", () => {
   assert.equal(sessionLabel(SESSION), "Buyer Example");
-  assert.equal(sessionLabel({ ...SESSION, displayName: null }), "b•••@example.com");
-  assert.equal(sessionLabel({ ...SESSION, email: null, displayName: null }), "0x1111…1111");
+  assert.equal(sessionLabel({ ...SESSION, displayName: null }), "Account 901234");
 });
 
-test("a verified RateLoop session never renders as signed out when its wallet is disconnected", () => {
+test("a verified RateLoop session renders independently of optional wallet state", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(
     <AuthenticatedSessionControl compact session={SESSION} onSignOut={() => undefined} />,
@@ -43,14 +42,14 @@ test("a verified RateLoop session never renders as signed out when its wallet is
   assert.doesNotMatch(html, />Sign In</);
 });
 
-test("an unconfigured deployment fails closed with an operator-readable sign-in state", () => {
+test("the signed-out control links to provider-neutral sign-in", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(<ThirdwebSessionButton compact />).replace(/\s+/g, " ");
   assert.match(html, />Sign In</);
   assert.doesNotMatch(html, /Google|Apple|email OTP/);
 });
 
-test("the thirdweb entry point keeps the original compact RateLoop sign-in treatment", () => {
+test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {
   assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
   assert.deepEqual(rateLoopConnectButtonStyle(true), {
     background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",

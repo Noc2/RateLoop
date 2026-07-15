@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, context: Context) {
         ? new Date(body.executeAfter)
         : undefined;
     const deletion = await requestProjectDeletion({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       executeAfter,
       projectId,
       reason: body.reason?.trim() || "customer_request",

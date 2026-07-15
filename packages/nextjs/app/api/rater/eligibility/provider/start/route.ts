@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const session = await requireRaterSession(request, true);
-    return NextResponse.json(await createEligibilityProviderHandoff(session.address), {
+    return NextResponse.json(await createEligibilityProviderHandoff(session.payoutAddress), {
       status: 201,
       headers: { "Cache-Control": "no-store" },
     });

@@ -12,7 +12,7 @@ export async function DELETE(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { policyId, workspaceId } = await context.params;
-    await revokeAgentPublishingPolicy({ accountAddress: session.address, workspaceId, policyId });
+    await revokeAgentPublishingPolicy({ accountAddress: session.principalId, workspaceId, policyId });
     return NextResponse.json({ revoked: true });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

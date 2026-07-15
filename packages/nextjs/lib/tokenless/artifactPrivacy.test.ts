@@ -20,6 +20,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
+const OPAQUE_OWNER = "rlp_artifact_owner_principal_0001";
 
 class MemoryPrivateStore implements PrivateArtifactStore {
   readonly objects = new Map<string, Uint8Array>();
@@ -107,6 +108,30 @@ test("artifact plaintext stays out of Postgres and private object storage", asyn
     workspaceId: project.workspaceId,
   });
   assert.equal(new TextDecoder().decode(read.bytes), "private customer prompt");
+});
+
+test("opaque Better Auth principals retain assigned artifact access without a wallet", async () => {
+  const project = await seedProject(OPAQUE_OWNER, "Opaque principal");
+  const artifact = await storeEncryptedArtifact({
+    accountAddress: OPAQUE_OWNER,
+    bytes: new TextEncoder().encode("wallet-independent artifact"),
+    contentType: "text/plain",
+    label: "Opaque owner artifact",
+    projectId: project.projectId,
+    redactionStatus: "approved",
+    rendererPolicy: "plain_text",
+    role: "candidate",
+    workspaceId: project.workspaceId,
+  });
+  const read = await readEncryptedArtifact({
+    accountAddress: OPAQUE_OWNER,
+    artifactId: artifact.artifactId,
+    projectId: project.projectId,
+    workspaceId: project.workspaceId,
+  });
+  assert.equal(new TextDecoder().decode(read.bytes), "wallet-independent artifact");
+  const logs = await listArtifactAccessLog({ accountAddress: OPAQUE_OWNER, ...project });
+  assert.ok(logs.every(row => String(row.actor_kind) === "principal"));
 });
 
 test("cross-tenant reads fail closed while a short account-bound lease grants minimum access", async () => {

@@ -15,7 +15,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ tasks: [], query: params.get("q") ?? "", scope });
     }
     const query = params.get("q") ?? "";
-    return NextResponse.json({ tasks: await listPaidRaterTasks(session.address, { query, scope }), query, scope });
+    return NextResponse.json({
+      tasks: await listPaidRaterTasks(session.payoutAddress, { query, scope }),
+      query,
+      scope,
+    });
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status });

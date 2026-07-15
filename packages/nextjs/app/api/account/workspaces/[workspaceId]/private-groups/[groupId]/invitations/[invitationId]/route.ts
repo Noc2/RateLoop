@@ -13,7 +13,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, groupId, invitationId } = await context.params;
     const invitation = await revokePrivateGroupInvitation({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       groupId,
       invitationId,

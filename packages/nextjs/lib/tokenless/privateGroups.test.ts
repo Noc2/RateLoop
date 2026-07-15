@@ -19,6 +19,7 @@ const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
 const SECOND_REVIEWER = "0x3333333333333333333333333333333333333333";
 const OUTSIDER = "0x4444444444444444444444444444444444444444";
+const OPAQUE_REVIEWER = "rlp_private_group_reviewer_0001";
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
@@ -162,6 +163,35 @@ test("invitations persist only a hash, enforce verified bindings, and grant memb
     args: [invitation.invitationId],
   });
   assert.equal(Number(count.rows[0]?.redemption_count), 2);
+});
+
+test("account-bound invitations support Better Auth principals without a wallet", async () => {
+  const { workspaceId, group } = await fixture();
+  await identity(OPAQUE_REVIEWER, "principal@example.com");
+  const invitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+    intendedAccountAddress: OPAQUE_REVIEWER,
+  });
+
+  const preview = await previewPrivateGroupInvitation({
+    accountAddress: OPAQUE_REVIEWER,
+    token: invitation.token,
+  });
+  assert.equal(preview.groupId, group.groupId);
+
+  const redemption = await redeemPrivateGroupInvitation({
+    accountAddress: OPAQUE_REVIEWER,
+    token: invitation.token,
+  });
+  assert.equal(redemption.principalAddress, OPAQUE_REVIEWER);
+
+  const membership = await requireActivePrivateGroupMembership({
+    accountAddress: OPAQUE_REVIEWER,
+    groupId: group.groupId,
+  });
+  assert.equal(membership.groupId, group.groupId);
 });
 
 test("revocation and member removal are server-enforced and auditable", async () => {

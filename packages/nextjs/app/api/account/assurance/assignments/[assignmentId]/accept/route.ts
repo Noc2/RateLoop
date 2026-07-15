@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json(
       await acceptAudienceAssignment({
         assignmentId,
-        baseAccountAddress: session.address,
+        baseAccountAddress: session.principalId,
         confidentialityTermsHash: body.confidentialityTermsHash ?? "",
       }),
     );

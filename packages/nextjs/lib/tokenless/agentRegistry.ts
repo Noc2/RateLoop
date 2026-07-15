@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
@@ -124,7 +124,7 @@ function normalizeExternalId(value: unknown) {
 async function requireWorkspaceAccess(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
-    address = getAddress(accountAddress).toLowerCase();
+    address = normalizeAccountSubject(accountAddress);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }

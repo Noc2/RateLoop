@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: Context) {
     }
     const result = await submitAssuranceResponses({
       assignmentId,
-      baseAccountAddress: session.address,
+      baseAccountAddress: session.principalId,
       idempotencyKey: body.idempotencyKey ?? "",
       responses: body.responses ?? [],
     });

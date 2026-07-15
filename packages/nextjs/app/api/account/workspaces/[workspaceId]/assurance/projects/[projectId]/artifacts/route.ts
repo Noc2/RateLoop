@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("The artifact upload is invalid.", 400, "invalid_artifact_upload");
     }
     const artifact = await storeEncryptedArtifact({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       bytes: new Uint8Array(await file.arrayBuffer()),
       contentType: file.type || "application/octet-stream",
       label: label || file.name,

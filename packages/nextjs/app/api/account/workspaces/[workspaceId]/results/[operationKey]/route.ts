@@ -14,7 +14,7 @@ export async function GET(
     const session = await requireBrowserSession(request);
     const { workspaceId, operationKey } = await context.params;
     return NextResponse.json(
-      await inspectWorkspaceTransparency({ accountAddress: session.address, workspaceId, operationKey }),
+      await inspectWorkspaceTransparency({ accountAddress: session.principalId, workspaceId, operationKey }),
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);

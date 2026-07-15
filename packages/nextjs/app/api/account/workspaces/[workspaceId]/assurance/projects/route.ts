@@ -15,7 +15,7 @@ type Context = { params: Promise<{ workspaceId: string }> };
 async function principal(request: NextRequest, context: Context, mutation = false) {
   const session = await requireBrowserSession(request, mutation ? { mutation: true } : undefined);
   const { workspaceId } = await context.params;
-  return scopeAssuranceSessionToWorkspace({ accountAddress: session.address, workspaceId });
+  return scopeAssuranceSessionToWorkspace({ accountAddress: session.principalId, workspaceId });
 }
 
 export async function GET(request: NextRequest, context: Context) {

@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
     return NextResponse.json(
-      { asks: await listAccountAskHistory({ accountAddress: session.address }) },
+      { asks: await listAccountAskHistory({ accountAddress: session.principalId }) },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );
   } catch (error) {

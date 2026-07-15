@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { assignmentId } = await context.params;
-    return NextResponse.json(await getAssignmentOnlyTask({ assignmentId, baseAccountAddress: session.address }), {
+    return NextResponse.json(await getAssignmentOnlyTask({ assignmentId, baseAccountAddress: session.principalId }), {
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   } catch (error) {

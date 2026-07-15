@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { projectId, workspaceId } = await context.params;
-    return NextResponse.json(await listProjectCohorts({ accountAddress: session.address, projectId, workspaceId }));
+    return NextResponse.json(await listProjectCohorts({ accountAddress: session.principalId, projectId, workspaceId }));
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status });
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, context: Context) {
       source?: CohortSource;
     };
     const cohort = await createProjectCohort({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       projectId,
       name: body.name ?? "",

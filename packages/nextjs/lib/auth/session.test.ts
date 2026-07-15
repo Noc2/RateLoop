@@ -10,19 +10,13 @@ import {
 } from "./session";
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
-import type { Address } from "viem";
 
-const address = "0x1111111111111111111111111111111111111111" as Address;
 const now = new Date("2026-07-13T12:00:00.000Z");
 
 function identity(): BrowserIdentity {
   return {
-    address,
-    authProvider: "google",
-    thirdwebUserId: "thirdweb-user-1",
-    email: "buyer@example.com",
-    emailVerified: true,
-    emailDomain: "example.com",
+    principalId: "rlp_123456789012345678901234",
+    authProvider: "better_auth:google",
     displayName: "Enterprise Buyer",
   };
 }
@@ -69,7 +63,7 @@ test("authentication nonces are one-time and expire", async () => {
   assert.equal(await consumeAuthNonce("not-a-valid-nonce", now), false);
 });
 
-test("RateLoop sessions are opaque, expiring, revocable, and retain verified identity metadata", async () => {
+test("RateLoop sessions are hash-only, expiring, revocable, and bound to an opaque principal", async () => {
   const created = await createAuthSession(identity(), now);
   assert.equal(created.token.length > 32, true);
   assert.deepEqual(await findAuthSession(created.token, now), { ...identity(), expiresAt: created.expiresAt });

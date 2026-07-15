@@ -109,7 +109,7 @@ export async function GET(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
     return NextResponse.json(
-      { policies: await listAgentPublishingPolicies({ accountAddress: session.address, workspaceId }) },
+      { policies: await listAgentPublishingPolicies({ accountAddress: session.principalId, workspaceId }) },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );
   } catch (error) {
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
     const policy = await createAgentPublishingPolicy({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       policy: policyBody(await request.json()),
     });

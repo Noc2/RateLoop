@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { readBrowserSession } from "~~/lib/thirdweb/client";
+import { readBrowserSession } from "~~/lib/auth/client";
 
 type EligibilityState = {
   status: "not_started" | "eligible" | "review" | "blocked" | "expired";
@@ -80,7 +80,7 @@ export function PaidEligibilityClient() {
       readBrowserSession(),
       readJson(await fetch("/api/rater/eligibility", { cache: "no-store", credentials: "same-origin" })),
     ]);
-    setAccountAddress(session?.address ?? null);
+    setAccountAddress(session?.wallets.payout ?? null);
     setState(eligibility as EligibilityState);
   }
 

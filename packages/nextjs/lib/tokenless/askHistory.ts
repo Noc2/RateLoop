@@ -1,5 +1,5 @@
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -8,7 +8,7 @@ type Row = Record<string, unknown>;
 export async function listAccountAskHistory(input: { accountAddress: string }) {
   let address: string;
   try {
-    address = getAddress(input.accountAddress).toLowerCase();
+    address = normalizeAccountSubject(input.accountAddress);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }

@@ -1,5 +1,5 @@
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -7,7 +7,7 @@ type Row = Record<string, unknown>;
 
 function normalizeAddress(value: string) {
   try {
-    return getAddress(value).toLowerCase();
+    return normalizeAccountSubject(value);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }
@@ -56,7 +56,7 @@ export async function getAccountProfile(input: { principalAddress: string; provi
     args: [address],
   });
   return {
-    principalAddress: getAddress(address),
+    principalAddress: address,
     ...profileResult(result.rows[0] as Row | undefined, input.providerDisplayName),
   };
 }

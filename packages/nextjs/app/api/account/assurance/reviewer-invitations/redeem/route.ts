@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       await redeemReviewerInvitationWithBaseAccount({
         token: body.token ?? "",
-        baseAccountAddress: session.address,
+        baseAccountAddress: session.principalId,
       }),
     );
   } catch (error) {

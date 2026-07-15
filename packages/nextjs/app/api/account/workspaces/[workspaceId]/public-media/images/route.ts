@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    await authorizePublicQuestionMediaOwner({ accountAddress: session.address, workspaceId });
+    await authorizePublicQuestionMediaOwner({ accountAddress: session.principalId, workspaceId });
     await sweepExpiredPublicQuestionMedia({ limit: 20 });
     const form = await request.formData();
     const file = form.get("file");
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("file and clientRequestId are required.", 400, "invalid_public_media_request");
     }
     const staged = await stagePublicQuestionImage({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       bytes: new Uint8Array(await file.arrayBuffer()),
       clientRequestId,
       filename: file.name,

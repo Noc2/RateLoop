@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, context: Context) {
               ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
             WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
               AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ? LIMIT 1`,
-      args: [assignmentId, session.address.toLowerCase(), new Date()],
+      args: [assignmentId, session.principalId.toLowerCase(), new Date()],
     });
     const assignment = result.rows[0] as QueryRow | undefined;
     const workspaceId = rowString(assignment, "workspace_id");
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest, context: Context) {
       source: rowString(assignment, "source") as "customer_invited" | "rateloop_network" | "sandbox",
     });
     const artifact = await readEncryptedArtifact({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       artifactId,
       leaseId: request.nextUrl.searchParams.get("leaseId") ?? undefined,
       projectId,

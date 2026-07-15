@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
+import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { assertProjectDeletionAllowed } from "~~/lib/privacy/lifecycle";
@@ -214,17 +215,20 @@ async function appendAccessLog(input: {
   workspaceId: string;
   runtime: ArtifactPrivacyRuntime;
 }) {
+  const normalizedActor = actorAddress(input.accountAddress);
+  const actorKind = isRateLoopPrincipalId(normalizedActor) ? "principal" : "base_account";
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_access_logs
           (log_id, workspace_id, project_id, artifact_id, lease_id, actor_kind, actor_reference, action, purpose, request_reference, occurred_at)
-          VALUES (?, ?, ?, ?, ?, 'base_account', ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       `log_${randomUUID().replaceAll("-", "")}`,
       input.workspaceId,
       input.projectId,
       input.artifactId,
       input.leaseId ?? null,
-      actorReference(input.runtime.commitmentKey!, actorAddress(input.accountAddress)),
+      actorKind,
+      actorReference(input.runtime.commitmentKey!, normalizedActor),
       input.action,
       input.purpose,
       input.requestReference ?? null,
@@ -233,8 +237,8 @@ async function appendAccessLog(input: {
   });
   await appendAuditEvent({
     action: `artifact.${input.action}`,
-    actorKind: "account",
-    actorReference: actorReference(input.runtime.commitmentKey!, actorAddress(input.accountAddress)),
+    actorKind: actorKind === "principal" ? "principal" : "account",
+    actorReference: actorReference(input.runtime.commitmentKey!, normalizedActor),
     assuranceMethod: "rateloop_session",
     metadata: { artifactId: input.artifactId, leaseId: input.leaseId ?? null },
     purpose: input.purpose,
@@ -413,6 +417,7 @@ export async function readEncryptedArtifact(input: {
   now?: Date;
 }) {
   const address = actorAddress(input.accountAddress);
+  const subjectKind = isRateLoopPrincipalId(address) ? "principal" : "account";
   const action = input.purpose === "export" ? "export" : "read";
   const assigned = await authorizeProjectAccount({
     accountAddress: input.accountAddress,
@@ -458,7 +463,7 @@ export async function readEncryptedArtifact(input: {
           JOIN tokenless_assurance_artifact_objects o ON o.artifact_id = a.artifact_id
           LEFT JOIN tokenless_project_access_assignments pa
             ON pa.workspace_id = o.workspace_id AND pa.project_id = o.project_id
-            AND pa.subject_kind = 'account' AND pa.subject_reference = ? AND pa.status = 'active'
+            AND pa.subject_kind = ? AND pa.subject_reference = ? AND pa.status = 'active'
             AND (pa.expires_at IS NULL OR pa.expires_at > ?) AND pa.role = ANY(?::text[])
           LEFT JOIN tokenless_assurance_artifact_leases l
             ON l.lease_id = ? AND l.artifact_id = a.artifact_id AND l.workspace_id = o.workspace_id
@@ -468,6 +473,7 @@ export async function readEncryptedArtifact(input: {
             AND (pa.assignment_id IS NOT NULL OR l.lease_id IS NOT NULL)
           LIMIT 1`,
     args: [
+      subjectKind,
       address,
       input.now ?? new Date(),
       action === "export" ? ["admin", "auditor"] : ["admin", "contributor", "auditor"],

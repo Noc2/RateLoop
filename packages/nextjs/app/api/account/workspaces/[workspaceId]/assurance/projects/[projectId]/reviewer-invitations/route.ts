@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: Context) {
       qualificationProvenance?: QualificationProvenance[];
     };
     const invitation = await createReviewerInvitation({
-      accountAddress: session.address,
+      accountAddress: session.principalId,
       workspaceId,
       projectId,
       cohortId: body.cohortId ?? "",

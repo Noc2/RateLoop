@@ -2,10 +2,20 @@ import type { TokenlessAskRequest, TokenlessAskResponse, TokenlessQuoteResponse 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { getWalletBindingAddresses } from "~~/lib/auth/walletBindings";
 import { requireWorkspacePaidPanels } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
+import {
+  type TokenlessDataClassification,
+  type TokenlessDataUse,
+  assertCredentialDataPolicy,
+  assertDataIngressPolicy,
+  parseDataClassification,
+  parseDataUses,
+} from "~~/lib/privacy/dataPolicy";
 import { bindPublicQuestionMediaToQuestion } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -81,8 +91,12 @@ export type ProductPrincipal =
       policyId?: string | null;
       walletAddress?: string | null;
       expiresAt?: string | null;
+      credentialHomeRegion?: string;
+      workspaceHomeRegion?: string;
+      maxDataClassification?: TokenlessDataClassification;
+      permittedDataUses?: TokenlessDataUse[];
     }
-  | { kind: "session"; accountAddress: `0x${string}` };
+  | { kind: "session"; accountAddress: string; walletAddress?: string | null };
 
 export type PreparedProductAsk = {
   amountAtomic: string;
@@ -188,7 +202,9 @@ export async function authenticateProductPrincipal(input: {
     }
     const keyHash = digest(match[1]);
     const result = await dbClient.execute({
-      sql: `SELECT k.key_id, k.workspace_id, k.role, k.scopes_json, k.policy_id, k.wallet_address, k.expires_at
+      sql: `SELECT k.key_id, k.workspace_id, k.role, k.scopes_json, k.policy_id, k.wallet_address, k.expires_at,
+                   k.home_region AS credential_home_region, k.max_data_classification,
+                   k.permitted_data_uses_json, w.home_region AS workspace_home_region
             FROM tokenless_workspace_api_keys k
             JOIN tokenless_workspaces w ON w.workspace_id = k.workspace_id
             WHERE k.key_hash = ? AND k.revoked_at IS NULL AND w.status = 'active'
@@ -221,12 +237,17 @@ export async function authenticateProductPrincipal(input: {
       policyId: rowString(row, "policy_id"),
       walletAddress: rowString(row, "wallet_address"),
       expiresAt: expiresAt?.toISOString() ?? null,
+      credentialHomeRegion: rowString(row, "credential_home_region") ?? "eu",
+      workspaceHomeRegion: rowString(row, "workspace_home_region") ?? "eu",
+      maxDataClassification: parseDataClassification(rowString(row, "max_data_classification") ?? "confidential"),
+      permittedDataUses: parseDataUses(rowString(row, "permitted_data_uses_json") ?? '["service_delivery"]'),
     };
   }
 
   const session = await findAuthSession(input.sessionToken);
   if (!session) throw new TokenlessServiceError("Authentication is required.", 401, "authentication_required");
-  return { kind: "session", accountAddress: session.address };
+  const wallets = await getWalletBindingAddresses(session.principalId);
+  return { kind: "session", accountAddress: session.principalId, walletAddress: wallets.funding };
 }
 
 export function getProductSessionToken(request: { cookies: { get(name: string): { value: string } | undefined } }) {
@@ -236,7 +257,7 @@ export function getProductSessionToken(request: { cookies: { get(name: string): 
 export async function createWorkspace(input: { name: string; ownerAddress: string }) {
   const name = input.name.trim();
   if (!name || name.length > 120) throw new Error("Workspace name must be 1-120 characters.");
-  const ownerAddress = getAddress(input.ownerAddress).toLowerCase();
+  const ownerAddress = normalizeAccountSubject(input.ownerAddress);
   const workspaceId = `ws_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   const client = await dbPool.connect();
@@ -276,6 +297,9 @@ export async function createWorkspaceApiKey(input: {
   policyId?: string | null;
   walletAddress?: string | null;
   expiresAt?: Date | null;
+  homeRegion?: "eu";
+  maxDataClassification?: TokenlessDataClassification;
+  permittedDataUses?: TokenlessDataUse[];
 }) {
   const keyId = randomBytes(8).toString("hex");
   const secret = randomBytes(32).toString("base64url");
@@ -283,6 +307,8 @@ export async function createWorkspaceApiKey(input: {
   const name = input.name.trim();
   if (!name || name.length > 120) throw new Error("API key name must be 1-120 characters.");
   const scopes = input.scopes ?? [...TOKENLESS_AGENT_SCOPES];
+  const maxDataClassification = parseDataClassification(input.maxDataClassification ?? "confidential");
+  const permittedDataUses = parseDataUses(input.permittedDataUses ?? ["service_delivery"]);
   if (scopes.length === 0 || scopes.some(scope => !TOKENLESS_AGENT_SCOPE_SET.has(scope))) {
     throw new TokenlessServiceError("API key scopes are invalid.", 400, "invalid_api_key_scopes");
   }
@@ -324,8 +350,9 @@ export async function createWorkspaceApiKey(input: {
   }
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_api_keys
-          (key_id, workspace_id, key_hash, key_prefix, name, role, scopes_json, policy_id, wallet_address, expires_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (key_id, workspace_id, key_hash, key_prefix, name, role, scopes_json, policy_id, wallet_address, expires_at,
+           home_region, max_data_classification, permitted_data_uses_json, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       keyId,
       input.workspaceId,
@@ -337,6 +364,9 @@ export async function createWorkspaceApiKey(input: {
       input.policyId ?? null,
       walletAddress,
       input.expiresAt ?? null,
+      input.homeRegion ?? "eu",
+      maxDataClassification,
+      JSON.stringify(permittedDataUses),
       new Date(),
     ],
   });
@@ -355,7 +385,7 @@ export type ProductWorkspaceSummary = {
 };
 
 export async function listProductWorkspaces(accountAddress: string): Promise<ProductWorkspaceSummary[]> {
-  const address = getAddress(accountAddress).toLowerCase();
+  const address = normalizeAccountSubject(accountAddress);
   const result = await dbClient.execute({
     sql: `SELECT w.workspace_id, w.name, m.role
           FROM tokenless_workspace_members m
@@ -400,7 +430,7 @@ export async function listProductWorkspaces(accountAddress: string): Promise<Pro
 }
 
 async function requireWorkspaceManagement(accountAddress: string, workspaceId: string) {
-  const address = getAddress(accountAddress).toLowerCase();
+  const address = normalizeAccountSubject(accountAddress);
   const result = await dbClient.execute({
     sql: `SELECT m.role FROM tokenless_workspace_members m
           JOIN tokenless_workspaces w ON w.workspace_id = m.workspace_id
@@ -510,7 +540,7 @@ export async function createAgentPublishingPolicy(input: {
   workspaceId: string;
   policy: AgentPublishingPolicyInput;
 }): Promise<AgentPublishingPolicy> {
-  const createdBy = getAddress(input.accountAddress).toLowerCase();
+  const createdBy = normalizeAccountSubject(input.accountAddress);
   await requireWorkspaceManagement(createdBy, input.workspaceId);
   const policy = normalizePolicyInput(input.policy);
   const policyId = `agpol_${randomUUID().replaceAll("-", "")}`;
@@ -789,6 +819,22 @@ async function enforcePublishingPolicy(input: {
   quote: TokenlessQuoteResponse;
   request: TokenlessAskRequest;
 }) {
+  const classification = input.quoteRequest.dataClassification ?? "internal";
+  const visibility = input.quoteRequest.visibility === "public" ? "public" : "private";
+  assertDataIngressPolicy({
+    classification,
+    confirmedNoSensitiveData: input.quoteRequest.confirmedNoSensitiveData === true,
+    visibility,
+  });
+  if (input.principal.kind === "api_key") {
+    assertCredentialDataPolicy({
+      classification,
+      credentialHomeRegion: input.principal.credentialHomeRegion ?? "eu",
+      homeRegion: input.principal.workspaceHomeRegion ?? "eu",
+      maxClassification: input.principal.maxDataClassification ?? "confidential",
+      permittedDataUses: input.principal.permittedDataUses ?? ["service_delivery"],
+    });
+  }
   const policy = await loadAgentPublishingPolicy(input.principal, input.workspaceId);
   assertScope(input.principal, "panel:publish");
   if (input.request.payment.mode !== "wallet") assertScope(input.principal, "payment:submit");
@@ -1026,16 +1072,25 @@ async function createQuestionRecords(input: {
     await client.query("BEGIN");
     await client.query(
       `INSERT INTO tokenless_content_records
-       (content_id, workspace_id, content_hash, content_json, moderation_status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $5)
+       (content_id, workspace_id, content_hash, content_json, home_region, data_classification,
+        data_use_policy_version, moderation_status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'eu', $5, 'data-use-v1', 'pending', $6, $6)
        ON CONFLICT (content_id) DO NOTHING`,
-      [contentId, input.workspaceId, contentHash, contentJson, now],
+      [
+        contentId,
+        input.workspaceId,
+        contentHash,
+        contentJson,
+        input.quoteRequest.dataClassification ?? "internal",
+        now,
+      ],
     );
     await client.query(
       `INSERT INTO tokenless_question_records
        (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility,
-        data_classification, redaction_summary, confirmed_no_sensitive_data, moderation_status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $11)
+        data_classification, home_region, data_use_policy_version, redaction_summary,
+        confirmed_no_sensitive_data, moderation_status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'eu', 'data-use-v1', $9, $10, 'pending', $11, $11)
        ON CONFLICT (question_id) DO NOTHING`,
       [
         questionId,
@@ -1185,8 +1240,8 @@ async function persistPaymentIntent(input: {
   principal: ProductPrincipal;
 }) {
   const payerAddress = getAddress(input.payment.payerAddress).toLowerCase();
-  if (input.principal.kind === "session" && input.principal.accountAddress.toLowerCase() !== payerAddress) {
-    throw new TokenlessServiceError("The payer must match the signed-in wallet.", 403, "payer_mismatch");
+  if (input.principal.kind === "session" && input.principal.walletAddress?.toLowerCase() !== payerAddress) {
+    throw new TokenlessServiceError("The payer must match the purpose-bound funding wallet.", 403, "payer_mismatch");
   }
   const payload =
     input.payment.mode === "x402" && input.payment.authorization

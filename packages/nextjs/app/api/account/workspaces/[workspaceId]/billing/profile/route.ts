@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
-    return NextResponse.json(await getWorkspaceBillingProfile({ accountAddress: session.address, workspaceId }), {
+    return NextResponse.json(await getWorkspaceBillingProfile({ accountAddress: session.principalId, workspaceId }), {
       headers: noStore,
     });
   } catch (error) {
@@ -38,7 +38,7 @@ export async function PATCH(request: NextRequest, context: Context) {
     }
     return NextResponse.json(
       await updateWorkspaceBillingProfile({
-        accountAddress: session.address,
+        accountAddress: session.principalId,
         legalName: body.legalName,
         registeredAddress: body.registeredAddress,
         registrationNumber: body.registrationNumber,

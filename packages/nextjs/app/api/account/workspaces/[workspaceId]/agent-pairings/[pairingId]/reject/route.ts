@@ -9,7 +9,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, pairingId } = await context.params;
-    return NextResponse.json(await rejectAgentPairing({ accountAddress: session.address, workspaceId, pairingId }));
+    return NextResponse.json(await rejectAgentPairing({ accountAddress: session.principalId, workspaceId, pairingId }));
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status });

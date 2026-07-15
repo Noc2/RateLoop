@@ -13,7 +13,9 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const session = await requireRaterSession(request, false);
-    return NextResponse.json(await getPaidEligibility(session.address), { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(await getPaidEligibility(session.payoutAddress), {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status, headers: { "Cache-Control": "no-store" } });
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
     } catch {
       throw new TokenlessServiceError("Eligibility request must be valid JSON.", 400, "invalid_eligibility_request");
     }
-    const result = await submitPaidEligibility({ accountAddress: session.address, submission });
+    const result = await submitPaidEligibility({ accountAddress: session.payoutAddress, submission });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

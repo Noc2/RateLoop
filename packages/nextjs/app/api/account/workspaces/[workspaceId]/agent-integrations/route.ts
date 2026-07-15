@@ -9,7 +9,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
-    const { integrations } = await listAgentConnections({ accountAddress: session.address, workspaceId });
+    const { integrations } = await listAgentConnections({ accountAddress: session.principalId, workspaceId });
     return NextResponse.json({ integrations }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

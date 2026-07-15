@@ -28,7 +28,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const principal = await scopeAssuranceSessionToWorkspace({ accountAddress: session.address, workspaceId });
+    const principal = await scopeAssuranceSessionToWorkspace({ accountAddress: session.principalId, workspaceId });
     const body = (await request.json()) as Record<string, unknown>;
     if (body.confirmedRedacted !== true) {
       throw new TokenlessServiceError(
@@ -52,10 +52,10 @@ export async function POST(request: NextRequest, context: Context) {
       dataClassification: body.dataClassification === "confidential" ? "confidential" : "internal",
       retentionDays: typeof body.retentionDays === "number" ? body.retentionDays : 30,
     });
-    cleanup = { accountAddress: session.address, projectId: project.projectId, workspaceId };
+    cleanup = { accountAddress: session.principalId, projectId: project.projectId, workspaceId };
     const [baselineArtifact, candidateArtifact] = await Promise.all([
       storeEncryptedArtifact({
-        accountAddress: session.address,
+        accountAddress: session.principalId,
         bytes: new TextEncoder().encode(baseline),
         contentType: "text/plain",
         label: "Baseline",
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, context: Context) {
         workspaceId,
       }),
       storeEncryptedArtifact({
-        accountAddress: session.address,
+        accountAddress: session.principalId,
         bytes: new TextEncoder().encode(candidate),
         contentType: "text/plain",
         label: "Candidate",

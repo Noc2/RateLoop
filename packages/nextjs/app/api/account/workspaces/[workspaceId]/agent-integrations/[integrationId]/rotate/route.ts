@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId, integrationId } = await context.params;
     return NextResponse.json(
       await rotateAgentIntegration({
-        accountAddress: session.address,
+        accountAddress: session.principalId,
         workspaceId,
         integrationId,
         origin: request.nextUrl.origin,

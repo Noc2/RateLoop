@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId, pairingId } = await context.params;
     return NextResponse.json(
       await approveAgentPairing({
-        accountAddress: session.address,
+        accountAddress: session.principalId,
         workspaceId,
         pairingId,
         body: await request.json(),

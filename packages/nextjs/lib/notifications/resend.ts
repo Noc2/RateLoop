@@ -42,6 +42,28 @@ export async function sendTokenlessVerificationEmail(params: { email: string; ve
   }
 }
 
+export async function sendTokenlessLoginOtpEmail(params: { email: string; otp: string }) {
+  const { apiKey, fromEmail: configuredFromEmail } = getResendConfig();
+  const fromEmail = normalizeResendFromEmail(configuredFromEmail);
+  if (!apiKey || !fromEmail) throw new Error("Resend is not configured");
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [params.email],
+      subject: "Your RateLoop sign-in code",
+      text: `Your RateLoop sign-in code is ${params.otp}. It expires in five minutes.`,
+      html: `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui;color:#171717;line-height:1.6"><h1>Sign in to RateLoop</h1><p>Use this one-time code:</p><p style="font-size:28px;font-weight:700;letter-spacing:0.2em">${escapeHtml(params.otp)}</p><p style="color:#666;font-size:13px">The code expires in five minutes. If you did not request it, you can ignore this email.</p></body></html>`,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Resend request failed: ${response.status} ${body}`.trim());
+  }
+}
+
 export async function sendTokenlessNotificationEmail(
   params: {
     actionUrl: string;

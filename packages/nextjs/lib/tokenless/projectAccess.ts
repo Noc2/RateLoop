@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import "server-only";
-import { getAddress } from "viem";
+import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -26,7 +26,7 @@ function rowString(row: QueryRow | undefined, key: string) {
 
 export function projectAccountReference(accountAddress: string) {
   try {
-    return getAddress(accountAddress).toLowerCase();
+    return normalizeAccountSubject(accountAddress);
   } catch {
     throw new TokenlessServiceError("A valid signed-in account is required.", 401, "invalid_account");
   }
@@ -94,7 +94,7 @@ export async function authorizeProjectAccount(input: {
     action: input.action,
     now: input.now,
     projectId: input.projectId,
-    subjectKind: "account",
+    subjectKind: isRateLoopPrincipalId(input.accountAddress) ? "principal" : "account",
     subjectReference: input.accountAddress,
     workspaceId: input.workspaceId,
   });
@@ -118,6 +118,7 @@ export async function grantProjectAccountAccess(input: {
     workspaceId: input.workspaceId,
   });
   const subjectReference = projectAccountReference(input.accountAddress);
+  const subjectKind = isRateLoopPrincipalId(subjectReference) ? "principal" : "account";
   const now = new Date();
   if (input.expiresAt && input.expiresAt <= now) {
     throw new TokenlessServiceError("Project access expiry must be in the future.", 400, "invalid_project_expiry");
@@ -127,11 +128,12 @@ export async function grantProjectAccountAccess(input: {
     sql: `INSERT INTO tokenless_project_access_assignments
           (assignment_id, workspace_id, project_id, subject_kind, subject_reference, role, status,
            expires_at, granted_by, reason, created_at)
-          VALUES (?, ?, ?, 'account', ?, ?, 'active', ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
     args: [
       assignmentId,
       input.workspaceId,
       input.projectId,
+      subjectKind,
       subjectReference,
       input.role,
       input.expiresAt ?? null,
@@ -176,7 +178,7 @@ export async function createProjectOwnerAssignment(input: {
   return createInitialProjectAssignment({
     now: input.now,
     projectId: input.projectId,
-    subjectKind: "account",
+    subjectKind: isRateLoopPrincipalId(subjectReference) ? "principal" : "account",
     subjectReference,
     workspaceId: input.workspaceId,
   });
