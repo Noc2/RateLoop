@@ -223,12 +223,13 @@ test("expired unbound previews fail closed and the bounded sweep deletes their p
 });
 
 test("ask preparation binds exact owner assets and public reads stay closed until moderation approval", async () => {
+  const now = new Date();
   const staged = await stagePublicQuestionImage({
     accountAddress: OWNER,
     bytes: await png(),
     clientRequestId: "upload:test:binding",
     filename: "binding.png",
-    now: new Date("2026-07-14T12:00:00.000Z"),
+    now,
     workspaceId,
   });
   const quote = await createTokenlessQuote({
@@ -272,7 +273,7 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
       await readPublicQuestionImage({
         accountAddress: OWNER,
         assetId: staged.assetId,
-        now: new Date("2026-07-14T12:00:01.000Z"),
+        now: new Date(now.getTime() + 1_000),
       })
     ).public,
     false,
