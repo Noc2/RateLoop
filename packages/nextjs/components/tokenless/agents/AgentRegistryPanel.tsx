@@ -25,6 +25,7 @@ export function AgentRegistryPanel() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,7 @@ export function AgentRegistryPanel() {
     setWorkspaceId(nextWorkspaceId);
     setRegistry(null);
     setEditingAgent(null);
+    setShowArchived(false);
     setError(null);
     setStatus(null);
     setLoading(true);
@@ -137,6 +139,10 @@ export function AgentRegistryPanel() {
       setBusy(false);
     }
   }
+
+  const agents = registry?.agents ?? [];
+  const archivedAgentCount = agents.filter(agent => agent.status === "inactive").length;
+  const visibleAgents = showArchived ? agents : agents.filter(agent => agent.status === "active");
 
   return (
     <div className="space-y-5">
@@ -209,9 +215,26 @@ export function AgentRegistryPanel() {
           approve its immutable identity and policies.
         </div>
       ) : null}
+      {!loading && registry && registry.agents.length > 0 && visibleAgents.length === 0 ? (
+        <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
+          No active agents are registered. Archived identities remain available for audit.
+        </div>
+      ) : null}
+      {!loading && archivedAgentCount > 0 ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn border border-white/10 bg-white/[0.04] text-base-content/70"
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived(current => !current)}
+          >
+            {showArchived ? "Hide archived agents" : `Show archived agents (${archivedAgentCount})`}
+          </button>
+        </div>
+      ) : null}
 
       <div className="space-y-4">
-        {registry?.agents.map(agent => (
+        {visibleAgents.map(agent => (
           <article key={agent.agentId} className="surface-card rounded-2xl p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -237,7 +260,7 @@ export function AgentRegistryPanel() {
                   </p>
                 ) : null}
               </div>
-              {registry.canManage && agent.status === "active" ? (
+              {registry?.canManage && agent.status === "active" ? (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
