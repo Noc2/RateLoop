@@ -1,5 +1,6 @@
 import "server-only";
 import { getOptionalAppUrl, getResendConfig } from "~~/lib/env/server";
+import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
@@ -54,8 +55,18 @@ export async function sendTokenlessLoginOtpEmail(params: { email: string; otp: s
       from: fromEmail,
       to: [params.email],
       subject: "Your RateLoop sign-in code",
-      text: `Your RateLoop sign-in code is ${params.otp}. It expires in five minutes.`,
-      html: `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui;color:#171717;line-height:1.6"><h1>Sign in to RateLoop</h1><p>Use this one-time code:</p><p style="font-size:28px;font-weight:700;letter-spacing:0.2em">${escapeHtml(params.otp)}</p><p style="color:#666;font-size:13px">The code expires in five minutes. If you did not request it, you can ignore this email.</p></body></html>`,
+      text: `Sign in to RateLoop\n\nYour one-time code: ${params.otp}\n\nThe code expires in five minutes. If you did not request it, you can ignore this email.`,
+      html: buildRateLoopEmailHtml({
+        kind: "code",
+        eyebrow: "Secure sign-in",
+        title: "Sign in to RateLoop",
+        body: "Enter this code in the RateLoop sign-in screen.",
+        code: params.otp,
+        codeLabel: "One-time code",
+        codeNote: "This code expires in five minutes.",
+        preheader: "Use this one-time code to finish signing in. It expires in five minutes.",
+        footerNote: "If you did not request this code, you can ignore this email.",
+      }),
     }),
   });
   if (!response.ok) {

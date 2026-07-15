@@ -1,4 +1,4 @@
-import { normalizeResendFromEmail, sendTokenlessNotificationEmail } from "./resend";
+import { normalizeResendFromEmail, sendTokenlessLoginOtpEmail, sendTokenlessNotificationEmail } from "./resend";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -9,6 +9,45 @@ test("Resend sender accepts verified addresses and display names", () => {
   );
   assert.equal(normalizeResendFromEmail("notifications@example.com"), "notifications@example.com");
   assert.equal(normalizeResendFromEmail("not-an-email"), null);
+});
+
+test("sign-in email uses the branded RateLoop code design", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFrom = process.env.RESEND_FROM_EMAIL;
+  process.env.RESEND_API_KEY = "resend-test-key";
+  process.env.RESEND_FROM_EMAIL = "RateLoop <login@example.test>";
+  try {
+    let request: RequestInit | undefined;
+    globalThis.fetch = async (_url, init) => {
+      request = init;
+      return new Response(JSON.stringify({ id: "resend-id" }), { status: 200 });
+    };
+
+    await sendTokenlessLoginOtpEmail({ email: "reviewer@example.test", otp: "123456" });
+
+    const body = JSON.parse(String(request?.body)) as {
+      html: string;
+      subject: string;
+      text: string;
+      to: string[];
+    };
+    assert.equal(body.subject, "Your RateLoop sign-in code");
+    assert.equal(body.to[0], "reviewer@example.test");
+    assert.match(body.text, /Your one-time code: 123456/u);
+    assert.match(body.text, /If you did not request it/u);
+    assert.match(body.html, /The Human Assurance Loop/u);
+    assert.match(body.html, /Secure sign-in/u);
+    assert.match(body.html, />\s*123456\s*</u);
+    assert.match(body.html, /Use this one-time code to finish signing in/u);
+    assert.doesNotMatch(body.html, /<a\b/iu);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+    if (previousFrom === undefined) delete process.env.RESEND_FROM_EMAIL;
+    else process.env.RESEND_FROM_EMAIL = previousFrom;
+  }
 });
 
 test("notification email transport sets provider idempotency and unsubscribe headers", async () => {
