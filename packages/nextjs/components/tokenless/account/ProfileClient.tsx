@@ -98,8 +98,8 @@ export function ProfileClient() {
           </button>
         </form>
         {saved ? <p className="mt-3 text-sm text-emerald-100">Profile saved.</p> : null}
-        <details className="mt-6 border-t border-white/10 pt-5 text-sm">
-          <summary className="cursor-pointer font-medium text-base-content/70">Sign-in details</summary>
+        <div className="mt-6 border-t border-white/10 pt-5 text-sm">
+          <h3 className="font-medium text-base-content/70">Sign-in details</h3>
           <dl className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
               <dt className="text-xs text-base-content/45">Provider</dt>
@@ -116,7 +116,7 @@ export function ProfileClient() {
               </dd>
             </div>
           </dl>
-        </details>
+        </div>
         {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
       </section>
     </div>

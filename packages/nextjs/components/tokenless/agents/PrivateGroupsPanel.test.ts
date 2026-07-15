@@ -30,14 +30,16 @@ test("workspace managers can issue secret-once invitations and revoke access", (
 
 test("humans preview an invitation before redemption and can leave memberships", () => {
   const panel = source("../human/PrivateGroupMembershipsPanel.tsx");
-  const humanPage = source("../../../app/(app)/human/page.tsx");
+  const invitations = source("../account/InvitationRouterPanel.tsx");
+  const profile = source("../human/HumanProfileContent.tsx");
 
-  assert.match(panel, /private-groups\/invitations\/preview/);
-  assert.match(panel, /Confirm membership/);
-  assert.match(panel, /Accept and join group/);
-  assert.match(panel, /private-groups\/invitations\/redeem/);
+  assert.match(invitations, /private-groups\/invitations\/preview/);
+  assert.match(invitations, /Accept invitation/);
+  assert.match(invitations, /private-groups\/invitations\/redeem/);
+  assert.match(invitations, /Invitation expires/);
+  assert.match(invitations, /Membership expires/);
   assert.match(panel, /method: "DELETE"/);
-  assert.match(panel, /Tokens are\s+never\s+read from a URL/);
-  assert.doesNotMatch(panel, /searchParams|location\.search|localStorage|sessionStorage/);
-  assert.match(humanPage, /<PrivateGroupMembershipsPanel \/>/);
+  assert.doesNotMatch(invitations, /searchParams|location\.search|localStorage|sessionStorage/);
+  assert.match(profile, /<InvitationRouterPanel/);
+  assert.match(profile, /<PrivateGroupMembershipsPanel/);
 });

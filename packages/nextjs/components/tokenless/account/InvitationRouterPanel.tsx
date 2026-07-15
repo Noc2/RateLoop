@@ -1,14 +1,20 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import Link from "next/link";
 
 type PrivateInvitationPreview = {
   groupId: string;
   groupName: string;
   groupPurpose: string;
   workspaceName: string;
+  role: string;
+  expiresAt: string | null;
+  membershipExpiresAt: string | null;
 };
+
+function formatDate(value: string | null) {
+  return value ? new Date(value).toLocaleString() : "No expiry";
+}
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -20,7 +26,7 @@ async function readJson(response: Response) {
   return body;
 }
 
-export function InvitationRouterPanel() {
+export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGroupAccepted?: () => void }) {
   const [token, setToken] = useState("");
   const [preview, setPreview] = useState<PrivateInvitationPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,7 +90,8 @@ export function InvitationRouterPanel() {
       );
       setPreview(null);
       setToken("");
-      setStatus("Group invitation accepted.");
+      setStatus("Group invitation accepted. Access is listed below.");
+      onPrivateGroupAccepted?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to accept the invitation.");
     } finally {
@@ -123,6 +130,20 @@ export function InvitationRouterPanel() {
           <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
           <h2 className="mt-1 text-lg font-semibold">{preview.groupName}</h2>
           {preview.groupPurpose ? <p className="mt-2 text-sm text-base-content/60">{preview.groupPurpose}</p> : null}
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-base-content/45">Role</dt>
+              <dd className="mt-1 capitalize">{preview.role}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Invitation expires</dt>
+              <dd className="mt-1">{formatDate(preview.expiresAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Membership expires</dt>
+              <dd className="mt-1">{formatDate(preview.membershipExpiresAt)}</dd>
+            </div>
+          </dl>
           <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
@@ -141,10 +162,7 @@ export function InvitationRouterPanel() {
 
       {status ? (
         <p role="status" className="mt-5 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
-          {status}{" "}
-          <Link href="/human?tab=profile&section=private-group" className="underline">
-            Manage access
-          </Link>
+          {status}
         </p>
       ) : null}
       {error ? (

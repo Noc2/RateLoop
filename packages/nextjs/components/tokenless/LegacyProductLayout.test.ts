@@ -64,19 +64,27 @@ test("Human Discover discloses source filters only when both queues have work", 
   assert.match(card, /\/settings\/wallets/);
 });
 
-test("Human profile and settings disclose one task at a time", () => {
+test("Human profile and settings render their controls directly", () => {
   const page = source("../../app/(app)/human/page.tsx");
+  const profileContent = source("./human/HumanProfileContent.tsx");
   const profile = source("./account/ProfileClient.tsx");
   const invitations = source("./account/InvitationRouterPanel.tsx");
   const paidEligibility = source("./PaidEligibilityClient.tsx");
 
-  assert.match(page, /ProfileOverview/);
-  assert.match(page, /InvitationRouterPanel/);
-  assert.match(page, /section === "proof-of-human"/);
-  assert.match(page, /section === "paid-work"/);
-  assert.match(page, /SettingsOverview/);
-  assert.match(page, /Account and security notifications are always required/);
-  assert.match(page, /section === "notifications"/);
+  assert.match(page, /<HumanProfileContent worldIdEnabled=\{isWorldIdAssuranceEnabled\(\)\} \/>/);
+  assert.match(page, /<NotificationSettingsPanel \/>/);
+  assert.match(page, /<HumanAccountSignInPrompt tab=\{tab\} \/>/);
+  assert.match(page, /findAuthSession/);
+  assert.match(profileContent, /InvitationRouterPanel/);
+  assert.match(profileContent, /PrivateGroupMembershipsPanel/);
+  assert.match(profileContent, /worldIdEnabled \? <WorldIdProfilePanel \/>/);
+  assert.match(profileContent, /<PaidEligibilityClient \/>/);
+  assert.ok(profileContent.indexOf("<ProfileClient />") < profileContent.indexOf("<InvitationRouterPanel"));
+  assert.ok(profileContent.indexOf("<InvitationRouterPanel") < profileContent.indexOf("<PrivateGroupMembershipsPanel"));
+  assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
+  assert.doesNotMatch(page, /section ===/);
+  assert.doesNotMatch(profile, /<details|<summary/);
+  assert.match(profile, /Sign-in details/);
   assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);
   assert.match(invitations, /startsWith\("rli_"\)/);
   assert.match(invitations, /startsWith\("rlgi_"\)/);
