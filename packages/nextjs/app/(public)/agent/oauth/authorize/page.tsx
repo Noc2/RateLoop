@@ -1,0 +1,102 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { AgentOAuthConsentForm } from "~~/components/tokenless/agents/AgentOAuthConsentForm";
+import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { AgentOAuthError, validateAgentOAuthAuthorizationRequest } from "~~/lib/tokenless/agentOAuth";
+
+export const metadata: Metadata = {
+  title: "Authorize agent | RateLoop",
+  description: "Authorize a least-privilege RateLoop workspace connection.",
+};
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const scopeLabels: Record<string, string> = {
+  "connection:claim": "Finish this one-time workspace connection",
+  "context:read": "Read its RateLoop connection policy and agent context",
+  "evaluation:read": "Read the assurance state for this connected agent",
+  "review:decide": "Check whether a piece of work needs human review",
+};
+
+export default async function AgentOAuthAuthorizePage({ searchParams }: { searchParams: SearchParams }) {
+  const raw = await searchParams;
+  let authorization;
+  try {
+    authorization = await validateAgentOAuthAuthorizationRequest(raw);
+  } catch (error) {
+    const oauth =
+      error instanceof AgentOAuthError
+        ? error
+        : new AgentOAuthError("invalid_request", "The authorization request is invalid.");
+    return (
+      <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+        <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-error">Connection blocked</p>
+          <h1 id="oauth-error-title" className="mt-4 text-3xl font-semibold tracking-tight">
+            This authorization request is not valid
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-base-content/65" role="alert">
+            {oauth.message}
+          </p>
+          <p className="mt-6 text-xs leading-5 text-base-content/45">
+            Return to the agent that opened this page. Do not copy credentials or authorization codes into chat.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  const session = await findAuthSession((await cookies()).get(AUTH_SESSION_COOKIE)?.value);
+  if (!session) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === "string") query.set(key, value);
+    }
+    const returnTo = `/agent/oauth/authorize?${query.toString()}`;
+    redirect(`/sign-in?returnTo=${encodeURIComponent(returnTo)}`);
+  }
+
+  const values: Record<string, string> = {
+    client_id: authorization.clientId,
+    redirect_uri: authorization.redirectUri,
+    response_type: authorization.responseType,
+    code_challenge: authorization.codeChallenge,
+    code_challenge_method: authorization.codeChallengeMethod,
+    resource: authorization.resource,
+    scope: authorization.scopes.join(" "),
+    ...(authorization.state ? { state: authorization.state } : {}),
+  };
+
+  return (
+    <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+      <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-consent-title">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Agent connection</p>
+        <h1 id="oauth-consent-title" className="mt-4 text-4xl font-semibold tracking-tight">
+          {authorization.autoAuthorize ? "Connecting your verified agent" : "Allow this agent to connect?"}
+        </h1>
+        <p className="mt-4 text-base leading-7 text-base-content/65">
+          <strong className="text-base-content">{authorization.clientName}</strong> is requesting a safe RateLoop agent
+          connection. This grant cannot publish, spend funds, administer the workspace, or read private artifacts.
+        </p>
+        <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
+          <h2 className="text-sm font-semibold">Allowed actions</h2>
+          <ul className="mt-3 space-y-2 text-sm text-base-content/65">
+            {authorization.scopes.map(scope => (
+              <li key={scope} className="flex gap-2">
+                <span aria-hidden="true" className="text-[var(--rateloop-green)]">
+                  ✓
+                </span>
+                <span>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <AgentOAuthConsentForm autoAuthorize={authorization.autoAuthorize} values={values} />
+        <p className="mt-5 text-xs leading-5 text-base-content/45">
+          Access and refresh tokens are delivered directly to the agent host and never displayed on this page.
+        </p>
+      </section>
+    </main>
+  );
+}
