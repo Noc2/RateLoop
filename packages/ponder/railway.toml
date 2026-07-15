@@ -13,3 +13,6 @@ watchPatterns = [
 startCommand = "yarn start"
 healthcheckPath = "/health/tokenless"
 healthcheckTimeout = 120
+
+[deploy.multiRegionConfig]
+"europe-west4-drams3a" = { numReplicas = 1 }

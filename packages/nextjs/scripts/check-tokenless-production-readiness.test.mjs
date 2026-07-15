@@ -1,10 +1,11 @@
+import { manifestDigest, tokenlessEuDeploymentManifest } from "../../../scripts/validate-tokenless-eu-deployment.mjs";
 import {
   DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES,
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
 import assert from "node:assert/strict";
-import { createHash, generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -19,12 +20,28 @@ function validFixture() {
   const deploymentKey = `tokenless-v3:84532:${panel}:${issuer}:${adapter}`;
   const evidence = generateKeyPairSync("ed25519");
   const provider = generateKeyPairSync("ed25519");
+  const deploymentManifestSigner = generateKeyPairSync("ed25519");
+  const euManifestDigest = manifestDigest();
   const env = Object.fromEntries(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.map(name => [name, `configured-${name}`]));
   Object.assign(env, {
     VERCEL_ENV: "production",
     TOKENLESS_SANDBOX_MODE: "false",
+    TOKENLESS_DATA_PLANE_MODE: "verified-eu",
+    TOKENLESS_HOME_REGION: "eu",
+    TOKENLESS_EU_MANIFEST_SHA256: euManifestDigest,
+    TOKENLESS_EU_MANIFEST_SIGNING_PUBLIC_KEY: deploymentManifestSigner.publicKey
+      .export({ format: "der", type: "spki" })
+      .toString("base64url"),
+    TOKENLESS_EU_MANIFEST_SIGNATURE: sign(
+      null,
+      Buffer.from(euManifestDigest, "hex"),
+      deploymentManifestSigner.privateKey,
+    ).toString("base64url"),
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    BETTER_AUTH_SECRET: "b".repeat(48),
+    BETTER_AUTH_PASSKEY_RP_ID: "rateloop-tokenless.vercel.app",
+    TOKENLESS_THIRDWEB_WALLET_ENABLED: "false",
     BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
     NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
     TOKENLESS_ELIGIBILITY_PROVIDER_START_URL: "https://eligibility.example/start",
@@ -56,8 +73,8 @@ function validFixture() {
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     TOKENLESS_SUBSCRIPTIONS_ENABLED: "false",
     TOKENLESS_DAC7_POLICY: "eu",
-    TOKENLESS_ARTIFACT_MASTER_KEY: encodedKey(1),
     TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY: encodedKey(9),
+    TOKENLESS_PSEUDONYM_KEY: encodedKey(14),
     TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: encodedKey(10),
     TOKENLESS_WEBHOOK_ENCRYPTION_KEY: encodedKey(11),
     TOKENLESS_ELIGIBILITY_HANDOFF_SECRET: Buffer.alloc(32, 12).toString("base64"),
@@ -75,8 +92,16 @@ function validFixture() {
     TOKENLESS_PIPELINE_TOKEN: "p".repeat(32),
     CRON_SECRET: "c".repeat(32),
     TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET: "n".repeat(32),
-    THIRDWEB_SECRET_KEY: "t".repeat(32),
   });
+  for (const [name, resource] of Object.entries(tokenlessEuDeploymentManifest.resources)) {
+    env[resource.resourceIdEnv] = resource.expectedResourceId ?? `eu-${name}-resource`;
+    env[resource.regionEnv] = resource.region;
+    if (resource.accessEnv) env[resource.accessEnv] = resource.expectedAccess;
+    if (resource.providerEnv) env[resource.providerEnv] = resource.allowedProviders[0];
+  }
+  for (const [name, processor] of Object.entries(tokenlessEuDeploymentManifest.externalProcessors)) {
+    env[processor.evidenceEnv] = `approved-${name}-evidence`;
+  }
   const keyrings = [
     ["TOKENLESS_ASSURANCE_RATIONALE_VAULT", 2, "base64url"],
     ["TOKENLESS_ASSURANCE_REVIEWER_MAPPING", 3, "base64url"],
@@ -170,6 +195,7 @@ test("non-sandbox production rejects public secrets, reused roles, and mixed dep
   fixture.env.NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN = "do-not-print-this";
   fixture.env.NEXT_PUBLIC_CRON_SECRET = "also-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET = "unsubscribe-do-not-print-this";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY = "pseudonym-do-not-print-this";
   fixture.env.NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET = "whsec_do-not-print-this";
   fixture.env.TOKENLESS_X402_RELAYER_PRIVATE_KEY = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY;
   fixture.env.TOKENLESS_DEPLOYMENT_BLOCK = "124";
@@ -178,14 +204,51 @@ test("non-sandbox production rejects public secrets, reused roles, and mixed dep
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
   assert.match(output, /NEXT_PUBLIC_CRON_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY is forbidden/);
   assert.match(output, /NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET is forbidden/);
   assert.match(output, /Production key roles must be distinct/);
   assert.match(output, /complete active tokenless v3 registry/);
   assert.doesNotMatch(output, /do-not-print-this/);
   assert.doesNotMatch(output, /also-do-not-print-this/);
   assert.doesNotMatch(output, /unsubscribe-do-not-print-this/);
+  assert.doesNotMatch(output, /pseudonym-do-not-print-this/);
   assert.doesNotMatch(output, /whsec_do-not-print-this/);
   assert.doesNotMatch(output, /0x11111111/);
+});
+
+test("non-sandbox production rejects local artifact keys and non-managed vault providers", () => {
+  const fixture = validFixture();
+  fixture.env.TOKENLESS_ARTIFACT_MASTER_KEY = encodedKey(1);
+  fixture.env.TOKENLESS_KMS_PROVIDER = "local";
+  const output = validateTokenlessProductionReadiness(fixture).join("\n");
+  assert.match(output, /TOKENLESS_ARTIFACT_MASTER_KEY is sandbox-only/);
+  assert.match(output, /TOKENLESS_KMS_PROVIDER must select an approved managed provider/);
+});
+
+test("non-sandbox production requires a dedicated pseudonym key at the managed-vault boundary", () => {
+  const fixture = validFixture();
+  fixture.env.TOKENLESS_PSEUDONYM_KEY = "too-short";
+  assert.match(validateTokenlessProductionReadiness(fixture).join("\n"), /PSEUDONYM_KEY must encode exactly 32 bytes/);
+});
+
+test("optional thirdweb wallet issuance is gated separately from Better Auth", () => {
+  const missing = validFixture();
+  missing.env.TOKENLESS_THIRDWEB_WALLET_ENABLED = "true";
+  assert.match(
+    validateTokenlessProductionReadiness(missing).join("\n"),
+    /TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK is required/i,
+  );
+
+  const { privateKey } = generateKeyPairSync("ed25519");
+  const enabled = validFixture();
+  Object.assign(enabled.env, {
+    TOKENLESS_THIRDWEB_WALLET_ENABLED: "true",
+    NEXT_PUBLIC_THIRDWEB_CLIENT_ID: "public-client-id",
+    TOKENLESS_THIRDWEB_WALLET_AUDIENCE: "thirdweb-project-audience",
+    TOKENLESS_THIRDWEB_WALLET_KEY_ID: "rateloop-wallet-v1",
+    TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK: JSON.stringify(privateKey.export({ format: "jwk" })),
+  });
+  assert.deepEqual(validateTokenlessProductionReadiness(enabled), []);
 });
 
 test("non-sandbox production requires valid server-only Stripe configuration only when subscriptions are enabled", () => {

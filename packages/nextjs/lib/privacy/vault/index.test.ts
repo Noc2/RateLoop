@@ -39,6 +39,10 @@ test("vault environment rejects public keys, local production keys, missing KMS,
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_vault_key_forbidden",
   );
   assert.throws(
+    () => validateVaultEnvironment({ NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY: "leak" } as unknown as NodeJS.ProcessEnv),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_vault_key_forbidden",
+  );
+  assert.throws(
     () =>
       validateVaultEnvironment({
         NODE_ENV: "production",

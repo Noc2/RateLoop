@@ -1,3 +1,4 @@
+import { validateTokenlessEuDeployment } from "../../../scripts/validate-tokenless-eu-deployment.mjs";
 import {
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
@@ -27,12 +28,14 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "DATABASE_URL",
   "RESEND_API_KEY",
   "RESEND_FROM_EMAIL",
-  "NEXT_PUBLIC_THIRDWEB_CLIENT_ID",
-  "NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN",
-  "THIRDWEB_SECRET_KEY",
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_PASSKEY_RP_ID",
+  "TOKENLESS_THIRDWEB_WALLET_ENABLED",
   "BLOB_READ_WRITE_TOKEN",
-  "TOKENLESS_ARTIFACT_MASTER_KEY",
+  "TOKENLESS_KMS_PROVIDER",
+  "TOKENLESS_KMS_KEY_RESOURCE",
   "TOKENLESS_ARTIFACT_KEY_VERSION",
+  "TOKENLESS_PSEUDONYM_KEY",
   "TOKENLESS_ASSURANCE_RATIONALE_VAULT_KEY_VERSION",
   "TOKENLESS_ASSURANCE_RATIONALE_VAULT_KEYS",
   "TOKENLESS_ASSURANCE_REVIEWER_MAPPING_KEY_VERSION",
@@ -100,8 +103,12 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
 const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_DATABASE_URL",
   "NEXT_PUBLIC_BLOB_READ_WRITE_TOKEN",
-  "NEXT_PUBLIC_THIRDWEB_SECRET_KEY",
+  "NEXT_PUBLIC_BETTER_AUTH_SECRET",
+  "NEXT_PUBLIC_BETTER_AUTH_GOOGLE_CLIENT_SECRET",
+  "NEXT_PUBLIC_BETTER_AUTH_APPLE_CLIENT_SECRET",
+  "NEXT_PUBLIC_TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK",
   "NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY",
+  "NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY",
   "NEXT_PUBLIC_TOKENLESS_ASSURANCE_RATIONALE_VAULT_KEYS",
   "NEXT_PUBLIC_TOKENLESS_ASSURANCE_REVIEWER_MAPPING_KEYS",
   "NEXT_PUBLIC_TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
@@ -207,6 +214,7 @@ export function validateTokenlessProductionReadiness({
   if (sandboxMode !== "true" && sandboxMode !== "false") {
     return ["TOKENLESS_SANDBOX_MODE must be explicitly true or false in production."];
   }
+  errors.push(...validateTokenlessEuDeployment({ env, sandbox: sandboxMode === "true" }));
   if (sandboxMode === "true") return errors;
 
   for (const [capability, label] of Object.entries(NON_SANDBOX_RELEASE_CAPABILITY_LABELS)) {
@@ -224,6 +232,11 @@ export function validateTokenlessProductionReadiness({
   }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because production secrets must remain server-only.`);
+  }
+  if (value(env, "TOKENLESS_ARTIFACT_MASTER_KEY")) {
+    errors.push(
+      "TOKENLESS_ARTIFACT_MASTER_KEY is sandbox-only; non-sandbox production must use the managed KMS vault boundary.",
+    );
   }
   const subscriptionsEnabled = value(env, "TOKENLESS_SUBSCRIPTIONS_ENABLED");
   if (subscriptionsEnabled !== "true" && subscriptionsEnabled !== "false") {
@@ -244,6 +257,39 @@ export function validateTokenlessProductionReadiness({
       !/^price_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID"))
     ) {
       errors.push("STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID must be a Stripe Price ID.");
+    }
+  }
+  if (value(env, "BETTER_AUTH_SECRET").length < 32) {
+    errors.push("BETTER_AUTH_SECRET must contain at least 32 characters.");
+  }
+  try {
+    const appHost = new URL(value(env, "APP_URL")).hostname.toLowerCase();
+    if (value(env, "BETTER_AUTH_PASSKEY_RP_ID").toLowerCase() !== appHost) {
+      errors.push("BETTER_AUTH_PASSKEY_RP_ID must exactly match the tokenless APP_URL hostname.");
+    }
+  } catch {
+    // APP_URL receives its canonical URL error after the missing-configuration guard.
+  }
+  for (const [idName, secretName, label] of [
+    ["BETTER_AUTH_GOOGLE_CLIENT_ID", "BETTER_AUTH_GOOGLE_CLIENT_SECRET", "Google sign-in"],
+    ["BETTER_AUTH_APPLE_CLIENT_ID", "BETTER_AUTH_APPLE_CLIENT_SECRET", "Apple sign-in"],
+  ]) {
+    if (Boolean(value(env, idName)) !== Boolean(value(env, secretName))) {
+      errors.push(`${label} requires both ${idName} and ${secretName}, or neither.`);
+    }
+  }
+  const thirdwebWalletEnabled = value(env, "TOKENLESS_THIRDWEB_WALLET_ENABLED").toLowerCase();
+  if (thirdwebWalletEnabled !== "true" && thirdwebWalletEnabled !== "false") {
+    errors.push("TOKENLESS_THIRDWEB_WALLET_ENABLED must be explicitly true or false in production.");
+  }
+  if (thirdwebWalletEnabled === "true") {
+    for (const name of [
+      "NEXT_PUBLIC_THIRDWEB_CLIENT_ID",
+      "TOKENLESS_THIRDWEB_WALLET_AUDIENCE",
+      "TOKENLESS_THIRDWEB_WALLET_KEY_ID",
+      "TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK",
+    ]) {
+      if (!value(env, name)) errors.push(`${name} is required when optional thirdweb wallet creation is enabled.`);
     }
   }
   if (missingConfiguration) return errors;
@@ -338,9 +384,6 @@ export function validateTokenlessProductionReadiness({
   if (!/^[0-9a-fA-F]{64}$/u.test(worldSigningKey)) errors.push("WORLD_ID_RP_SIGNING_KEY must be a 32-byte hex key.");
   else addSecretRole(secretRoles, "WORLD_ID_RP_SIGNING_KEY", worldSigningKey);
 
-  const artifactKey = decode32(value(env, "TOKENLESS_ARTIFACT_MASTER_KEY"));
-  if (!artifactKey) errors.push("TOKENLESS_ARTIFACT_MASTER_KEY must encode exactly 32 bytes.");
-  addSecretRole(secretRoles, "TOKENLESS_ARTIFACT_MASTER_KEY", artifactKey);
   for (const [prefix, encoding] of [
     ["TOKENLESS_ASSURANCE_RATIONALE_VAULT", "base64url"],
     ["TOKENLESS_ASSURANCE_REVIEWER_MAPPING", "base64url"],
@@ -352,6 +395,9 @@ export function validateTokenlessProductionReadiness({
   ]) {
     addSecretRole(secretRoles, prefix, currentKey(env, prefix, encoding, errors));
   }
+  const pseudonymKey = decode32(value(env, "TOKENLESS_PSEUDONYM_KEY"), "base64url");
+  if (!pseudonymKey) errors.push("TOKENLESS_PSEUDONYM_KEY must encode exactly 32 bytes.");
+  addSecretRole(secretRoles, "TOKENLESS_PSEUDONYM_KEY", pseudonymKey);
   for (const [name, encoding] of [
     ["TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY", "base64url"],
     ["TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY", "base64url"],
@@ -397,13 +443,41 @@ export function validateTokenlessProductionReadiness({
     "TOKENLESS_PIPELINE_TOKEN",
     "CRON_SECRET",
     "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
-    "THIRDWEB_SECRET_KEY",
+    "BETTER_AUTH_SECRET",
   ]) {
     if (value(env, name).length < 32) errors.push(`${name} must contain at least 32 characters.`);
     addSecretRole(secretRoles, name, Buffer.from(value(env, name), "utf8"));
   }
   if (value(env, "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION").length > 80) {
     errors.push("TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION must not exceed 80 characters.");
+  }
+  if (thirdwebWalletEnabled === "true") {
+    if (value(env, "TOKENLESS_THIRDWEB_WALLET_KEY_ID").length > 128) {
+      errors.push("TOKENLESS_THIRDWEB_WALLET_KEY_ID must not exceed 128 characters.");
+    }
+    if (value(env, "TOKENLESS_THIRDWEB_WALLET_AUDIENCE").length > 256) {
+      errors.push("TOKENLESS_THIRDWEB_WALLET_AUDIENCE must not exceed 256 characters.");
+    }
+    try {
+      const jwk = JSON.parse(value(env, "TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK"));
+      const walletIssuerKey = createPrivateKey({ key: jwk, format: "jwk" });
+      if (
+        walletIssuerKey.asymmetricKeyType !== "ed25519" ||
+        jwk.kty !== "OKP" ||
+        jwk.crv !== "Ed25519" ||
+        !jwk.d ||
+        !jwk.x
+      ) {
+        throw new Error("wrong key type");
+      }
+      addSecretRole(
+        secretRoles,
+        "TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK",
+        walletIssuerKey.export({ format: "der", type: "pkcs8" }),
+      );
+    } catch {
+      errors.push("TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK must be a dedicated Ed25519 private JWK.");
+    }
   }
   for (const names of secretRoles.values()) {
     const message = `Production key roles must be distinct: ${names.join(", ")}.`;

@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "rateloop-eu-deployment-v1",
+  "policyVersion": "2026-07-15",
+  "deploymentLine": "tokenless",
+  "homeRegion": "eu",
+  "mode": "verified-eu",
+  "resources": {
+    "webCompute": {
+      "provider": "vercel",
+      "dataScope": "application-and-api-runtime",
+      "region": "fra1",
+      "regionEnv": "TOKENLESS_VERCEL_FUNCTION_REGION",
+      "resourceIdEnv": "TOKENLESS_VERCEL_PROJECT_ID",
+      "expectedResourceId": "prj_H6C2pfWKEAupFroHbLfzhquaNCLm"
+    },
+    "railwayProject": {
+      "provider": "railway",
+      "dataScope": "tokenless-service-control-plane",
+      "region": "europe-west4-drams3a",
+      "regionEnv": "TOKENLESS_RAILWAY_REGION",
+      "resourceIdEnv": "TOKENLESS_RAILWAY_PROJECT_ID"
+    },
+    "postgres": {
+      "provider": "railway",
+      "dataScope": "customer-relational-data-and-auth",
+      "region": "europe-west4-drams3a",
+      "regionEnv": "TOKENLESS_POSTGRES_REGION",
+      "resourceIdEnv": "TOKENLESS_EU_POSTGRES_RESOURCE_ID"
+    },
+    "objectStorage": {
+      "provider": "vercel-blob",
+      "dataScope": "private-customer-artifacts",
+      "region": "fra1",
+      "regionEnv": "TOKENLESS_BLOB_REGION",
+      "resourceIdEnv": "TOKENLESS_EU_BLOB_STORE_ID",
+      "accessEnv": "TOKENLESS_BLOB_ACCESS",
+      "expectedAccess": "private"
+    },
+    "kms": {
+      "provider": "managed-kms",
+      "providerEnv": "TOKENLESS_KMS_PROVIDER",
+      "allowedProviders": ["aws-kms", "gcp-kms", "azure-key-vault"],
+      "dataScope": "wrapping-keys",
+      "region": "eu",
+      "regionEnv": "TOKENLESS_KMS_REGION",
+      "resourceIdEnv": "TOKENLESS_KMS_KEY_RESOURCE"
+    },
+    "keeperWorker": {
+      "provider": "railway",
+      "dataScope": "settlement-orchestration",
+      "region": "europe-west4-drams3a",
+      "regionEnv": "TOKENLESS_KEEPER_REGION",
+      "resourceIdEnv": "TOKENLESS_KEEPER_SERVICE_ID"
+    },
+    "ponderWorker": {
+      "provider": "railway",
+      "dataScope": "public-chain-index-and-operational-state",
+      "region": "europe-west4-drams3a",
+      "regionEnv": "TOKENLESS_PONDER_REGION",
+      "resourceIdEnv": "TOKENLESS_PONDER_SERVICE_ID"
+    },
+    "logs": {
+      "provider": "configured-sink",
+      "dataScope": "security-and-operational-events",
+      "region": "eu",
+      "regionEnv": "TOKENLESS_LOG_REGION",
+      "resourceIdEnv": "TOKENLESS_EU_LOG_SINK_ID"
+    },
+    "backups": {
+      "provider": "configured-backup",
+      "dataScope": "encrypted-database-and-artifact-backups",
+      "region": "eu",
+      "regionEnv": "TOKENLESS_BACKUP_REGION",
+      "resourceIdEnv": "TOKENLESS_EU_BACKUP_POLICY_ID"
+    },
+    "auth": {
+      "provider": "better-auth-self-hosted",
+      "dataScope": "browser-identity-and-sessions",
+      "region": "eu",
+      "regionEnv": "TOKENLESS_AUTH_REGION",
+      "resourceIdEnv": "TOKENLESS_AUTH_DEPLOYMENT_ID"
+    },
+    "supportAccess": {
+      "provider": "rateloop",
+      "dataScope": "approved-break-glass-support-access",
+      "region": "eu",
+      "regionEnv": "TOKENLESS_SUPPORT_ACCESS_REGION",
+      "resourceIdEnv": "TOKENLESS_SUPPORT_ACCESS_POLICY_ID"
+    }
+  },
+  "externalProcessors": {
+    "email": {
+      "dataScope": "transactional-email-address-and-content",
+      "evidenceEnv": "TOKENLESS_EMAIL_PROCESSOR_EVIDENCE_ID"
+    },
+    "billing": {
+      "dataScope": "billing-contact-and-payment-metadata",
+      "evidenceEnv": "TOKENLESS_BILLING_PROCESSOR_EVIDENCE_ID"
+    },
+    "analytics": {
+      "dataScope": "public-site-aggregate-analytics-only",
+      "evidenceEnv": "TOKENLESS_ANALYTICS_PROCESSOR_EVIDENCE_ID"
+    },
+    "rpc": {
+      "dataScope": "public-chain-requests-without-private-artifacts",
+      "evidenceEnv": "TOKENLESS_RPC_PROCESSOR_EVIDENCE_ID"
+    }
+  },
+  "publicChainExceptions": [
+    {
+      "network": "base-sepolia",
+      "dataScope": "wallet-addresses-commitments-settlement-and-public-evidence",
+      "erasable": false,
+      "customerContentAllowed": false
+    }
+  ],
+  "signature": {
+    "algorithm": "Ed25519",
+    "publicKeyEnv": "TOKENLESS_EU_MANIFEST_SIGNING_PUBLIC_KEY",
+    "signatureEnv": "TOKENLESS_EU_MANIFEST_SIGNATURE"
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalContentSha256": "890b0c69a982aa79874642c0e8efa390c2ccf675fe74ee5496bbd08466d100e1"
+  }
+}

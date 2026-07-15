@@ -156,7 +156,11 @@ export function createManagedKeyWrappingProvider(input: {
 }
 
 export function validateVaultEnvironment(env: NodeJS.ProcessEnv = process.env) {
-  if (env.NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY || env.NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE) {
+  if (
+    env.NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY ||
+    env.NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE ||
+    env.NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY
+  ) {
     throw new TokenlessServiceError(
       "Vault keys must never use NEXT_PUBLIC_ variables.",
       500,

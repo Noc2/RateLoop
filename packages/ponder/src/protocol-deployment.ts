@@ -1,6 +1,7 @@
 import { isAddress, zeroAddress } from "viem";
 
 export const TOKENLESS_SCHEMA_VERSION = "tokenless-v3";
+const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
 export const PONDER_NETWORK_CHAIN_IDS = {
   hardhat: 31_337,
   baseSepolia: 84_532,
@@ -72,6 +73,46 @@ function unsignedInteger(
   return parsed;
 }
 
+function validateEuRuntime(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+) {
+  if (read(env, "NODE_ENV") !== "production") return;
+  const sandbox = read(env, "TOKENLESS_SANDBOX_MODE")?.toLowerCase();
+  if (sandbox !== "true" && sandbox !== "false") {
+    throw new Error(
+      "TOKENLESS_SANDBOX_MODE must be explicitly true or false in production.",
+    );
+  }
+  if (sandbox === "true") return;
+  if (read(env, "TOKENLESS_HOME_REGION") !== "eu") {
+    throw new Error(
+      "TOKENLESS_HOME_REGION must be eu outside the explicit sandbox.",
+    );
+  }
+  if (read(env, "RAILWAY_REPLICA_REGION") !== TOKENLESS_EU_RAILWAY_REGION) {
+    throw new Error(
+      `RAILWAY_REPLICA_REGION must be ${TOKENLESS_EU_RAILWAY_REGION}.`,
+    );
+  }
+  for (const [actualName, expectedName] of [
+    ["RAILWAY_PROJECT_ID", "TOKENLESS_RAILWAY_PROJECT_ID"],
+    ["RAILWAY_SERVICE_ID", "TOKENLESS_PONDER_SERVICE_ID"],
+  ]) {
+    const actual = read(env, actualName);
+    const expected = read(env, expectedName);
+    if (
+      !actual ||
+      !expected ||
+      actual !== expected ||
+      /(?:legacy|rate-loop-nextjs|rateloop\.ai)/iu.test(actual)
+    ) {
+      throw new Error(
+        `${actualName} must match ${expectedName} for the isolated tokenless EU worker.`,
+      );
+    }
+  }
+}
+
 export function buildTokenlessDeploymentKey(params: {
   chainId: number;
   panelAddress: `0x${string}`;
@@ -90,6 +131,7 @@ export function buildTokenlessDeploymentKey(params: {
 export function resolveTokenlessDeployment(
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): TokenlessDeployment {
+  validateEuRuntime(env);
   const network =
     read(env, "PONDER_NETWORK") ??
     (read(env, "NODE_ENV") === "production" ? undefined : "hardhat");

@@ -26,12 +26,29 @@ Services must fail closed if their chain, addresses, start block, or deployment 
 - The keeper uses a dedicated gas-only Base Sepolia key.
 - The credential issuer uses a separate server-only signer key. Never expose it through a `NEXT_PUBLIC_` variable.
 
+## EU-first deployment contract
+
+The non-sandbox production target has one immutable home region, `eu`. Application functions are pinned to Vercel
+`fra1`; Ponder and keeper are pinned to Railway `europe-west4-drams3a`. The machine-readable resource inventory,
+integrity digest, signature boundary, and exact readiness procedure are in
+[`tokenless-eu-deployment-runbook.md`](tokenless-eu-deployment-runbook.md).
+
+The current hosted test deployment remains an explicit sandbox and does not establish an EU-hosted or residency
+claim. Non-sandbox startup is refused unless the signed manifest identifies matching EU Postgres, private Blob, KMS,
+logs, backups, auth, support-access, worker, and approved external-processor evidence.
+
 ## Required production variables
 
 Next.js:
 
 - `APP_URL`, `NEXT_PUBLIC_APP_URL`
-- `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`, `NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN`, and server-only `THIRDWEB_SECRET_KEY`
+- explicit `TOKENLESS_SANDBOX_MODE`; non-sandbox additionally requires the complete signed EU manifest variables from
+  `packages/nextjs/.env.example`
+- server-only `BETTER_AUTH_SECRET`; email OTP additionally requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL`
+- optional Better Auth Google/Apple credential pairs and `BETTER_AUTH_PASSKEY_RP_ID`
+- only when optional wallet creation is enabled: `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`,
+  `TOKENLESS_THIRDWEB_WALLET_AUDIENCE`, `TOKENLESS_THIRDWEB_WALLET_KEY_ID`, and the server-only Ed25519
+  `TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK`
 - `DATABASE_URL`
 - `NEXT_PUBLIC_TARGET_NETWORKS=84532`
 - `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
@@ -51,8 +68,9 @@ Next.js:
   `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION`, with no public key variant
 - explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
-The thirdweb project must allow only local development origins and `rateloop-tokenless.vercel.app`; never add
-`rateloop.ai`. Run `yarn workspace @rateloop/nextjs auth:check` before a hosted authentication rollout.
+Better Auth callback and passkey origins must allow only local development and `rateloop-tokenless.vercel.app`; never
+add `rateloop.ai`. If optional thirdweb wallet creation is enabled, configure its custom-JWT audience and the exact
+tokenless JWKS URL, and restrict its browser origins to the same isolated hosts.
 
 Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
 human-assurance APIs or enabling live mode. Isolated Vercel production builds apply and verify pending journal entries

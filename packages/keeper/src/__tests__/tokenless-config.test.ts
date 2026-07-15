@@ -21,6 +21,7 @@ beforeAll(async () => {
 function productionEnv(): NodeJS.ProcessEnv {
   return {
     NODE_ENV: "production",
+    TOKENLESS_SANDBOX_MODE: "true",
     CHAIN_ID: "84532",
     RPC_URL: "https://sepolia.base.org",
     TOKENLESS_PANEL_ADDRESS: PANEL,
@@ -77,5 +78,25 @@ describe("tokenless keeper config", () => {
         METRICS_AUTH_TOKEN: "short",
       })
     ).toThrow(/RPC_URL must use HTTPS/);
+  });
+
+  it("requires the exact EU Railway runtime identity outside the explicit sandbox", () => {
+    const verifiedEu = {
+      ...productionEnv(),
+      TOKENLESS_SANDBOX_MODE: "false",
+      TOKENLESS_HOME_REGION: "eu",
+      RAILWAY_REPLICA_REGION: "europe-west4-drams3a",
+      RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+      TOKENLESS_RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+      RAILWAY_SERVICE_ID: "svc-tokenless-keeper-eu",
+      TOKENLESS_KEEPER_SERVICE_ID: "svc-tokenless-keeper-eu",
+    };
+    expect(loadConfig(verifiedEu).chainId).toBe(84532);
+    expect(() =>
+      loadConfig({ ...verifiedEu, RAILWAY_REPLICA_REGION: "us-east4-eqdc4a" }),
+    ).toThrow(/RAILWAY_REPLICA_REGION must be europe-west4-drams3a/);
+    expect(() =>
+      loadConfig({ ...verifiedEu, RAILWAY_SERVICE_ID: "legacy-keeper" }),
+    ).toThrow(/RAILWAY_SERVICE_ID must match TOKENLESS_KEEPER_SERVICE_ID/);
   });
 });

@@ -15,6 +15,7 @@ describe("tokenless Ponder config", () => {
     process.env = {
       ...originalEnv,
       NODE_ENV: "production",
+      TOKENLESS_SANDBOX_MODE: "true",
       PONDER_NETWORK: "baseSepolia",
       PONDER_RPC_URL_84532: "https://sepolia.base.org",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
@@ -31,6 +32,7 @@ describe("tokenless Ponder config", () => {
     process.env = {
       ...originalEnv,
       NODE_ENV: "production",
+      TOKENLESS_SANDBOX_MODE: "true",
       PONDER_NETWORK: "baseSepolia",
       PONDER_RPC_URL_84532: "http://rpc.example.test",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,

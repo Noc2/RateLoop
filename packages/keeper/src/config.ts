@@ -6,6 +6,7 @@ loadDotenv();
 
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 const LOCAL_CHAIN_ID = 31337;
+const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
 export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v3";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
@@ -79,6 +80,49 @@ function optionalAddress(
   return value;
 }
 
+function validateEuRuntime(
+  env: NodeJS.ProcessEnv,
+  production: boolean,
+  errors: string[],
+) {
+  if (!production) return;
+  const sandbox = readEnv(env, "TOKENLESS_SANDBOX_MODE")?.toLowerCase();
+  if (sandbox !== "true" && sandbox !== "false") {
+    errors.push(
+      "TOKENLESS_SANDBOX_MODE must be explicitly true or false in production",
+    );
+    return;
+  }
+  if (sandbox === "true") return;
+  if (readEnv(env, "TOKENLESS_HOME_REGION") !== "eu") {
+    errors.push(
+      "TOKENLESS_HOME_REGION must be eu outside the explicit sandbox",
+    );
+  }
+  if (readEnv(env, "RAILWAY_REPLICA_REGION") !== TOKENLESS_EU_RAILWAY_REGION) {
+    errors.push(
+      `RAILWAY_REPLICA_REGION must be ${TOKENLESS_EU_RAILWAY_REGION}`,
+    );
+  }
+  for (const [actualName, expectedName] of [
+    ["RAILWAY_PROJECT_ID", "TOKENLESS_RAILWAY_PROJECT_ID"],
+    ["RAILWAY_SERVICE_ID", "TOKENLESS_KEEPER_SERVICE_ID"],
+  ]) {
+    const actual = readEnv(env, actualName);
+    const expected = readEnv(env, expectedName);
+    if (
+      !actual ||
+      !expected ||
+      actual !== expected ||
+      /(?:legacy|rate-loop-nextjs|rateloop\.ai)/iu.test(actual)
+    ) {
+      errors.push(
+        `${actualName} must match ${expectedName} for the isolated tokenless EU worker`,
+      );
+    }
+  }
+}
+
 export function buildTokenlessDeploymentKey(params: {
   chainId: number;
   panel: Address;
@@ -97,6 +141,7 @@ export function buildTokenlessDeploymentKey(params: {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const errors: string[] = [];
   const production = readEnv(env, "NODE_ENV") === "production";
+  validateEuRuntime(env, production, errors);
   const chainId = positiveInteger(env, "CHAIN_ID", 0, errors);
   if (![LOCAL_CHAIN_ID, BASE_SEPOLIA_CHAIN_ID].includes(chainId)) {
     errors.push(

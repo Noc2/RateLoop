@@ -5,6 +5,7 @@
       "tokenless": false
     }
   },
+  "regions": ["fra1"],
   "crons": [
     {
       "path": "/api/cron/tokenless-maintenance",

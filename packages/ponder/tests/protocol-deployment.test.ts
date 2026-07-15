@@ -23,6 +23,7 @@ describe("tokenless deployment identity", () => {
   it("resolves Base Sepolia and fails closed on a mixed identity", () => {
     const env = {
       NODE_ENV: "production",
+      TOKENLESS_SANDBOX_MODE: "true",
       PONDER_NETWORK: "baseSepolia",
       PONDER_CHAIN_ID: "84532",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
@@ -71,6 +72,7 @@ describe("tokenless deployment identity", () => {
   it("exposes the complete deployment identity used by the Railway health gate", () => {
     const deployment = resolveTokenlessDeployment({
       NODE_ENV: "production",
+      TOKENLESS_SANDBOX_MODE: "true",
       PONDER_NETWORK: "baseSepolia",
       PONDER_CHAIN_ID: "84532",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
@@ -85,5 +87,37 @@ describe("tokenless deployment identity", () => {
       deploymentKey: `tokenless-v3:84532:${panel}:${issuer}:${zeroAddress}`,
       startBlock: 44_051_709,
     });
+  });
+
+  it("requires the exact EU Railway runtime identity outside the explicit sandbox", () => {
+    const env = {
+      NODE_ENV: "production",
+      TOKENLESS_SANDBOX_MODE: "false",
+      TOKENLESS_HOME_REGION: "eu",
+      RAILWAY_REPLICA_REGION: "europe-west4-drams3a",
+      RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+      TOKENLESS_RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+      RAILWAY_SERVICE_ID: "svc-tokenless-ponder-eu",
+      TOKENLESS_PONDER_SERVICE_ID: "svc-tokenless-ponder-eu",
+      PONDER_NETWORK: "baseSepolia",
+      PONDER_CHAIN_ID: "84532",
+      PONDER_TOKENLESS_PANEL_ADDRESS: panel,
+      PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
+      PONDER_TOKENLESS_START_BLOCK: "44051709",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v3:84532:${panel}:${issuer}:${zeroAddress}`,
+    };
+    expect(resolveTokenlessDeployment(env).chainId).toBe(84_532);
+    expect(() =>
+      resolveTokenlessDeployment({
+        ...env,
+        RAILWAY_REPLICA_REGION: "us-east4-eqdc4a",
+      }),
+    ).toThrow("RAILWAY_REPLICA_REGION must be europe-west4-drams3a");
+    expect(() =>
+      resolveTokenlessDeployment({
+        ...env,
+        RAILWAY_PROJECT_ID: "legacy-project",
+      }),
+    ).toThrow("RAILWAY_PROJECT_ID must match TOKENLESS_RAILWAY_PROJECT_ID");
   });
 });
