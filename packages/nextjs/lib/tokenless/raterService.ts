@@ -63,11 +63,11 @@ function digest(value: string) {
 }
 
 export async function listPaidRaterTasks(
-  accountAddress: string,
+  accountAddress: string | null,
   optionsOrNow: { query?: string; scope?: "all" | "public" } | Date = {},
   now = new Date(),
 ) {
-  const address = getAddress(accountAddress).toLowerCase();
+  const address = accountAddress ? getAddress(accountAddress).toLowerCase() : null;
   const options = optionsOrNow instanceof Date ? {} : optionsOrNow;
   now = optionsOrNow instanceof Date ? optionsOrNow : now;
   const query = options.query?.trim() ?? "";

@@ -52,6 +52,7 @@ test("Human Discover keeps sign-in requirements concise", () => {
 
 test("Human Discover discloses source filters only when both queues have work", () => {
   const page = source("./answer/AnswerPageClient.tsx");
+  const card = source("./answer/PublicQuestionCard.tsx");
 
   assert.match(page, /tasks\.length > 0 && assignments\.length > 0/);
   assert.match(page, /\["all", "public", "private"\]/);
@@ -59,12 +60,15 @@ test("Human Discover discloses source filters only when both queues have work", 
   assert.ok(page.indexOf("assignments.map") < page.indexOf("tasks.map"));
   assert.match(page, /No review work is available right now/);
   assert.match(page, /Check again/);
+  assert.match(card, /Public reviews can be browsed now/);
+  assert.match(card, /\/settings\/wallets/);
 });
 
 test("Human profile and settings disclose one task at a time", () => {
   const page = source("../../app/(app)/human/page.tsx");
   const profile = source("./account/ProfileClient.tsx");
   const invitations = source("./account/InvitationRouterPanel.tsx");
+  const paidEligibility = source("./PaidEligibilityClient.tsx");
 
   assert.match(page, /ProfileOverview/);
   assert.match(page, /InvitationRouterPanel/);
@@ -76,6 +80,8 @@ test("Human profile and settings disclose one task at a time", () => {
   assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);
   assert.match(invitations, /startsWith\("rli_"\)/);
   assert.match(invitations, /startsWith\("rlgi_"\)/);
+  assert.match(paidEligibility, /Add payout wallet/);
+  assert.doesNotMatch(paidEligibility, /Sign in to RateLoop first/);
 });
 
 test("answer search is rendered only by Human Discover", () => {

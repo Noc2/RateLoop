@@ -175,3 +175,10 @@ test("task discovery exposes exact compensation for confirmed public work", asyn
   });
   assert.equal("votePrivateKey" in tasks[0]!, false);
 });
+
+test("public task browsing does not require a payout wallet", async () => {
+  await seedTask();
+  const tasks = await listPaidRaterTasks(null, NOW);
+  assert.equal(tasks[0]?.question.prompt, "Ship it?");
+  assert.equal(tasks[0]?.alreadyVouchered, false);
+});

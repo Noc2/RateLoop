@@ -39,6 +39,11 @@ export type PublicAnswerTask = {
   beacon: { network: "quicknet-t"; round: number };
 };
 
+export type PaidTaskAccess =
+  | { state: "ready" }
+  | { state: "payout_wallet_required" }
+  | { state: "eligibility_required"; eligibilityStatus: string };
+
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
   if (!response.ok) throw new Error(typeof body.message === "string" ? body.message : "Answer request failed.");
@@ -51,7 +56,15 @@ function usdc(value: string) {
   );
 }
 
-export function PublicQuestionCard({ task, onSubmitted }: { task: PublicAnswerTask; onSubmitted: () => void }) {
+export function PublicQuestionCard({
+  task,
+  paidAccess,
+  onSubmitted,
+}: {
+  task: PublicAnswerTask;
+  paidAccess: PaidTaskAccess;
+  onSubmitted: () => void;
+}) {
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,7 +85,7 @@ export function PublicQuestionCard({ task, onSubmitted }: { task: PublicAnswerTa
   }, [recoveryPackage]);
 
   async function submitResponse() {
-    if (!answer || prediction === null || task.alreadyVouchered) return;
+    if (paidAccess.state !== "ready" || !answer || prediction === null || task.alreadyVouchered) return;
     if (recoverySecret.length < 12) {
       setError("Choose a recovery secret of at least 12 characters before submitting paid work.");
       return;
@@ -183,82 +196,116 @@ export function PublicQuestionCard({ task, onSubmitted }: { task: PublicAnswerTa
       </section>
 
       <aside className="surface-card rounded-lg p-4 sm:p-5">
-        <p className="text-sm font-semibold">Your answer</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {(["yes", "no"] as const).map((value, index) => (
+        {paidAccess.state === "ready" ? (
+          <>
+            <p className="text-sm font-semibold">Your answer</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(["yes", "no"] as const).map((value, index) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`tab-control px-3 py-3 text-sm font-semibold transition-colors ${
+                    answer === value ? "pill-active" : "pill-inactive"
+                  }`}
+                  onClick={() => setAnswer(value)}
+                >
+                  {options[index]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-5 text-xs leading-5 text-base-content/50">Predict the share choosing the first option</p>
+            <div className="mt-2 grid grid-cols-5 gap-1.5">
+              {[10, 30, 50, 70, 90].map(value => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`rounded-md px-1 py-2 text-xs transition-colors ${
+                    prediction === value ? "pill-active" : "pill-inactive"
+                  }`}
+                  onClick={() => setPrediction(value)}
+                >
+                  {value}%
+                </button>
+              ))}
+            </div>
+            <label className="mt-5 block border-t border-white/10 pt-4 text-xs text-base-content/55">
+              Recovery secret
+              <input
+                type="password"
+                className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={recoverySecret}
+                onChange={event => setRecoverySecret(event.target.value)}
+                minLength={12}
+                maxLength={1024}
+                autoComplete="new-password"
+                placeholder="12+ characters"
+              />
+            </label>
             <button
-              key={value}
               type="button"
-              className={`tab-control px-3 py-3 text-sm font-semibold transition-colors ${
-                answer === value ? "pill-active" : "pill-inactive"
-              }`}
-              onClick={() => setAnswer(value)}
+              className="rateloop-gradient-action mt-4 w-full px-4 text-sm disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={busy || !answer || prediction === null || task.alreadyVouchered}
+              onClick={() => void submitResponse()}
             >
-              {options[index]}
+              {busy ? "Sealing…" : task.alreadyVouchered ? "Submitted" : "Submit answer"}
             </button>
-          ))}
-        </div>
-        <p className="mt-5 text-xs leading-5 text-base-content/50">Predict the share choosing the first option</p>
-        <div className="mt-2 grid grid-cols-5 gap-1.5">
-          {[10, 30, 50, 70, 90].map(value => (
-            <button
-              key={value}
-              type="button"
-              className={`rounded-md px-1 py-2 text-xs transition-colors ${
-                prediction === value ? "pill-active" : "pill-inactive"
-              }`}
-              onClick={() => setPrediction(value)}
+            {recoveryUrl ? (
+              <a
+                href={recoveryUrl}
+                download={`rateloop-round-${task.roundId}-recovery.json`}
+                className="mt-3 block text-center text-xs underline underline-offset-4"
+              >
+                Save recovery package
+              </a>
+            ) : null}
+            {status ? (
+              <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
+                {status}
+              </p>
+            ) : null}
+            {error ? (
+              <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
+                {error}
+              </p>
+            ) : null}
+            <Link
+              href="/human?tab=profile&section=paid-work"
+              className="mt-4 block text-center text-xs underline underline-offset-4"
             >
-              {value}%
-            </button>
-          ))}
-        </div>
-        <label className="mt-5 block border-t border-white/10 pt-4 text-xs text-base-content/55">
-          Recovery secret
-          <input
-            type="password"
-            className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={recoverySecret}
-            onChange={event => setRecoverySecret(event.target.value)}
-            minLength={12}
-            maxLength={1024}
-            autoComplete="new-password"
-            placeholder="12+ characters"
-          />
-        </label>
-        <button
-          type="button"
-          className="rateloop-gradient-action mt-4 w-full px-4 text-sm disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={busy || !answer || prediction === null || task.alreadyVouchered}
-          onClick={() => void submitResponse()}
-        >
-          {busy ? "Sealing…" : task.alreadyVouchered ? "Submitted" : "Submit answer"}
-        </button>
-        {recoveryUrl ? (
-          <a
-            href={recoveryUrl}
-            download={`rateloop-round-${task.roundId}-recovery.json`}
-            className="mt-3 block text-center text-xs underline underline-offset-4"
-          >
-            Save recovery package
-          </a>
-        ) : null}
-        {status ? (
-          <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
-            {status}
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
-            {error}
-          </p>
-        ) : null}
-        <Link
-          href="/human?tab=profile&section=paid-work"
-          className="mt-4 block text-center text-xs underline underline-offset-4"
-        >
-          Paid-work eligibility
-        </Link>
+              Paid-work eligibility
+            </Link>
+          </>
+        ) : (
+          <div className="flex min-h-52 flex-col justify-center">
+            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-yellow)]">Paid work</p>
+            <h3 className="mt-2 text-lg font-semibold">
+              {paidAccess.state === "payout_wallet_required"
+                ? "Add a payout wallet"
+                : paidAccess.eligibilityStatus === "expired"
+                  ? "Renew paid-work access"
+                  : paidAccess.eligibilityStatus === "review"
+                    ? "Eligibility review pending"
+                    : paidAccess.eligibilityStatus === "blocked"
+                      ? "Paid work unavailable"
+                      : "Complete paid-work eligibility"}
+            </h3>
+            <p className="mt-3 text-xs leading-5 text-base-content/55">
+              {paidAccess.state === "payout_wallet_required"
+                ? "Public reviews can be browsed now. Add a purpose-bound wallet before submitting paid work."
+                : "Every paid-work check must be complete before RateLoop issues your first voucher."}
+            </p>
+            <Link
+              href={
+                paidAccess.state === "payout_wallet_required"
+                  ? "/settings/wallets"
+                  : "/human?tab=profile&section=paid-work"
+              }
+              className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"
+            >
+              {paidAccess.state === "payout_wallet_required" ? "Add payout wallet" : "Review paid-work access"}
+            </Link>
+          </div>
+        )}
       </aside>
     </article>
   );

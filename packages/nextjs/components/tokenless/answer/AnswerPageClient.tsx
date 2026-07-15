@@ -8,10 +8,28 @@ import {
   type PrivateAnswerAssignment,
   PrivateAssignmentCard,
 } from "~~/components/tokenless/answer/PrivateAssignmentCard";
-import { type PublicAnswerTask, PublicQuestionCard } from "~~/components/tokenless/answer/PublicQuestionCard";
+import {
+  type PaidTaskAccess,
+  type PublicAnswerTask,
+  PublicQuestionCard,
+} from "~~/components/tokenless/answer/PublicQuestionCard";
 import { AnswerRequestError, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
 
 type VisibleScope = "all" | "public" | "private";
+
+function paidTaskAccess(value: unknown): PaidTaskAccess {
+  if (value && typeof value === "object") {
+    const access = value as Record<string, unknown>;
+    if (access.state === "ready" || access.state === "payout_wallet_required") return { state: access.state };
+    if (access.state === "eligibility_required") {
+      return {
+        state: "eligibility_required",
+        eligibilityStatus: typeof access.eligibilityStatus === "string" ? access.eligibilityStatus : "not_started",
+      };
+    }
+  }
+  return { state: "eligibility_required", eligibilityStatus: "not_started" };
+}
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
@@ -31,6 +49,10 @@ export function AnswerPageClient({
   const [scope, setScope] = useState<VisibleScope>(initialScope);
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
+  const [paidAccess, setPaidAccess] = useState<PaidTaskAccess>({
+    state: "eligibility_required",
+    eligibilityStatus: "not_started",
+  });
   const [loading, setLoading] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +62,18 @@ export function AnswerPageClient({
     setError(null);
     setSignedOut(false);
     try {
-      const [publicBody, privateBody] = await loadAnswerQueues(nextQuery, "all");
-      setTasks((publicBody.tasks ?? []) as PublicAnswerTask[]);
-      setAssignments((privateBody.assignments ?? []) as PrivateAnswerAssignment[]);
+      const [publicQueue, privateQueue] = await loadAnswerQueues(nextQuery, "all");
+      setTasks((publicQueue.body.tasks ?? []) as PublicAnswerTask[]);
+      setAssignments((privateQueue.body.assignments ?? []) as PrivateAnswerAssignment[]);
+      setPaidAccess(paidTaskAccess(publicQueue.body.paidAccess));
+      const requestErrors = [publicQueue.error, privateQueue.error].filter(
+        (value): value is AnswerRequestError => value !== null,
+      );
+      if (requestErrors.some(requestError => requestError.status === 401)) {
+        setSignedOut(true);
+      } else if (requestErrors.length) {
+        setError([...new Set(requestErrors.map(requestError => requestError.message))].join(" "));
+      }
     } catch (cause) {
       if (cause instanceof AnswerRequestError && cause.status === 401) setSignedOut(true);
       else setError(cause instanceof Error ? cause.message : "Unable to load the Answer queue.");
@@ -106,7 +137,14 @@ export function AnswerPageClient({
             ))
           : null}
         {!loading && !signedOut && scope !== "private"
-          ? tasks.map(task => <PublicQuestionCard key={task.roundId} task={task} onSubmitted={() => void load()} />)
+          ? tasks.map(task => (
+              <PublicQuestionCard
+                key={task.roundId}
+                task={task}
+                paidAccess={paidAccess}
+                onSubmitted={() => void load()}
+              />
+            ))
           : null}
         {!loading && signedOut ? (
           <section className="surface-card rounded-2xl p-6 text-center">

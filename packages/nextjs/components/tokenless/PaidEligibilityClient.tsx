@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { readBrowserSession } from "~~/lib/auth/client";
 
 type EligibilityState = {
@@ -76,11 +77,16 @@ export function PaidEligibilityClient() {
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
-    const [session, eligibility] = await Promise.all([
-      readBrowserSession(),
-      readJson(await fetch("/api/rater/eligibility", { cache: "no-store", credentials: "same-origin" })),
-    ]);
-    setAccountAddress(session?.wallets.payout ?? null);
+    const session = await readBrowserSession();
+    const payoutAddress = session?.wallets.payout ?? null;
+    setAccountAddress(payoutAddress);
+    if (!payoutAddress) {
+      setState({ status: "not_started" });
+      return;
+    }
+    const eligibility = await readJson(
+      await fetch("/api/rater/eligibility", { cache: "no-store", credentials: "same-origin" }),
+    );
     setState(eligibility as EligibilityState);
   }
 
@@ -317,17 +323,24 @@ export function PaidEligibilityClient() {
         ) : (
           <div className="mt-6">
             <p className="text-sm leading-6 text-base-content/60">
-              Verify identity, age, and residence with the configured provider. Tax details and sanctions consent are
-              collected only after that handoff succeeds.
+              {state && !accountAddress
+                ? "Add a payout wallet before starting paid-work verification. Private assignments remain available without one."
+                : "Verify identity, age, and residence with the configured provider. Tax details and sanctions consent are collected only after that handoff succeeds."}
             </p>
-            <button
-              type="button"
-              className="rateloop-gradient-action mt-5 px-6"
-              disabled={busy || !accountAddress}
-              onClick={() => void startProvider()}
-            >
-              {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Sign in to RateLoop first"}
-            </button>
+            {state && !accountAddress ? (
+              <Link href="/settings/wallets" className="rateloop-gradient-action mt-5 inline-flex px-6">
+                Add payout wallet
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="rateloop-gradient-action mt-5 px-6"
+                disabled={busy || !accountAddress}
+                onClick={() => void startProvider()}
+              >
+                {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Checking account…"}
+              </button>
+            )}
           </div>
         )}
         {state?.blockedReason ? (
