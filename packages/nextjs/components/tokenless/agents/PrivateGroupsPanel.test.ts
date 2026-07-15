@@ -16,6 +16,8 @@ test("workspace managers can issue secret-once invitations and revoke access", (
   assert.match(panel, /Recipient email \(optional\)/);
   assert.match(panel, /Leave blank to create a one-use invitation code\./);
   assert.match(panel, /Invitation restrictions/);
+  assert.match(panel, /initialWorkspaceId/);
+  assert.match(panel, /showWorkspaceSelector/);
   assert.ok(panel.indexOf("Invitation restrictions") < panel.indexOf("Token lifetime \(days\)"));
   assert.match(panel, /Copy this invitation now\. It will not be shown again\./);
   assert.match(panel, /method: "DELETE"/);

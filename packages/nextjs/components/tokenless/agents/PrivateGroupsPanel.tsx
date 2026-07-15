@@ -74,7 +74,13 @@ function invitationStatus(invitation: PrivateGroupInvitation) {
   return "active";
 }
 
-export function PrivateGroupsPanel() {
+export function PrivateGroupsPanel({
+  initialWorkspaceId = "",
+  showWorkspaceSelector = true,
+}: {
+  initialWorkspaceId?: string;
+  showWorkspaceSelector?: boolean;
+}) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [groups, setGroups] = useState<PrivateGroup[]>([]);
@@ -164,9 +170,11 @@ export function PrivateGroupsPanel() {
         );
         if (controller.signal.aborted) return;
         setWorkspaces(manageable);
-        const firstWorkspaceId = manageable[0]?.workspaceId ?? "";
-        setWorkspaceId(firstWorkspaceId);
-        await loadGroups(firstWorkspaceId, undefined, controller.signal);
+        const selectedWorkspaceId = manageable.some(workspace => workspace.workspaceId === initialWorkspaceId)
+          ? initialWorkspaceId
+          : (manageable[0]?.workspaceId ?? "");
+        setWorkspaceId(selectedWorkspaceId);
+        await loadGroups(selectedWorkspaceId, undefined, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Unable to load private groups.");
@@ -176,7 +184,7 @@ export function PrivateGroupsPanel() {
       }
     })();
     return () => controller.abort();
-  }, [loadGroups]);
+  }, [initialWorkspaceId, loadGroups]);
 
   async function selectWorkspace(nextWorkspaceId: string) {
     setWorkspaceId(nextWorkspaceId);
@@ -355,7 +363,7 @@ export function PrivateGroupsPanel() {
             </h2>
             <p className="mt-2 text-sm text-base-content/55">Create a group, then invite people by code or email.</p>
           </div>
-          {workspaces.length > 1 ? (
+          {showWorkspaceSelector && workspaces.length > 1 ? (
             <label className="min-w-56 text-sm text-base-content/60">
               Workspace
               <select

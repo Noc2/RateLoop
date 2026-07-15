@@ -128,7 +128,13 @@ function RunCard({ run }: { run: EvaluationRun }) {
   );
 }
 
-export function EvaluationDashboardPanel() {
+export function EvaluationDashboardPanel({
+  initialWorkspaceId = "",
+  showWorkspaceSelector = true,
+}: {
+  initialWorkspaceId?: string;
+  showWorkspaceSelector?: boolean;
+}) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [dashboard, setDashboard] = useState<EvaluationDashboard | null>(null);
@@ -151,7 +157,11 @@ export function EvaluationDashboardPanel() {
         const next = (body.workspaces ?? []) as Workspace[];
         if (controller.signal.aborted) return;
         setWorkspaces(next);
-        setWorkspaceId(next[0]?.workspaceId ?? "");
+        setWorkspaceId(
+          next.some(workspace => workspace.workspaceId === initialWorkspaceId)
+            ? initialWorkspaceId
+            : (next[0]?.workspaceId ?? ""),
+        );
         if (next.length === 0) setLoading(false);
       } catch (cause) {
         if (!controller.signal.aborted) {
@@ -161,7 +171,7 @@ export function EvaluationDashboardPanel() {
       }
     })();
     return () => controller.abort();
-  }, []);
+  }, [initialWorkspaceId]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -204,7 +214,7 @@ export function EvaluationDashboardPanel() {
             <h2 className="mt-2 text-2xl font-semibold">Human review results</h2>
             <p className="mt-2 text-sm text-base-content/55">Decisions and evidence from your agent workflows.</p>
           </div>
-          {workspaces.length > 1 ? (
+          {showWorkspaceSelector && workspaces.length > 1 ? (
             <label className="min-w-56 text-sm text-base-content/60">
               Workspace
               <select

@@ -11,9 +11,11 @@ test("default connection UI creates and copies one safe connection intent", () =
   assert.match(source, /method: "POST"/);
   assert.match(source, /buildAgentConnectionMessage\(\{ connectionUrl \}\)/);
   assert.match(source, /navigator\.clipboard\.writeText\(message\)/);
-  assert.match(source, /Paste it once into the agent chat/);
-  assert.match(source, /Can check when human review is needed/);
-  assert.match(source, /Cannot spend, publish, read private files, or administer/);
+  assert.match(source, /Connect your agent/);
+  assert.match(source, /Copy one message into the agent chat you want to connect/);
+  assert.match(source, /cannot spend, publish, read private workspace content, or change/);
+  assert.doesNotMatch(source, /No connection is currently in progress/);
+  assert.doesNotMatch(source, /No approved agent integration exists yet/);
   assert.doesNotMatch(source, /expiresInSeconds: 600/);
   assert.doesNotMatch(source, /onClick=\{\(\) => void generatePairing/);
 });
@@ -32,8 +34,6 @@ test("connection status polling pauses completely while the page is hidden", () 
   assert.match(source, /document\.visibilityState === "visible"\) schedule\(PAIRING_POLL_INTERVAL_MS\)/);
   assert.match(source, /PAIRING_POLL_INTERVAL_MS = 5_000/);
   assert.match(source, /PAIRING_HIDDEN_POLL_INTERVAL_MS = 10_000/);
-  assert.match(source, /You can close it/);
-  assert.match(source, /agent and host continue[\s\S]{0,20}independently/);
   assert.doesNotMatch(source, /Listening for agent/);
 });
 

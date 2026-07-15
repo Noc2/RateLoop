@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { InfoPopover } from "../InfoPopover";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
+import { isUsableAgentConnection } from "./agentWorkspaceState";
 
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
 
@@ -41,6 +42,7 @@ type AgentIntegration = {
   clientVersion: string;
   lastSeenAt: string | null;
   credentialExpiresAt: string | null;
+  connectionStatus: string | null;
 };
 
 type PublishingPolicy = {
@@ -182,12 +184,13 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
     publishingPolicyName: stringField(row, "publishingPolicyName") || stringField(publishingPolicy, "name"),
     reviewPolicyId: stringField(row, "reviewPolicyId") || stringField(reviewPolicy, "policyId", "id"),
     reviewPolicyVersion: numberField(row, "reviewPolicyVersion") ?? numberField(reviewPolicy, "version"),
-    status: stringField(row, "status") === "revoked" ? "revoked" : "active",
+    status: stringField(row, "status") === "active" ? "active" : "revoked",
     enforcementMode: stringField(row, "enforcementMode") === "host_enforced" ? "host_enforced" : "advisory",
     clientName: stringField(row, "clientName"),
     clientVersion: stringField(row, "clientVersion"),
     lastSeenAt: nullableStringField(row, "lastSeenAt"),
     credentialExpiresAt: nullableStringField(row, "credentialExpiresAt", "expiresAt"),
+    connectionStatus: nullableStringField(row, "connectionStatus"),
   };
 }
 
@@ -630,7 +633,15 @@ export function AgentConnectionPanel({
       setPairings(responseList(pairingBody, "pairings", "sessions").map(normalizeAgentPairing));
       const nextIntegrations = responseList(integrationBody, "integrations").map(normalizeAgentIntegration);
       setIntegrations(nextIntegrations);
-      onConnectionStateChange?.(nextIntegrations.some(integration => integration.status === "active"));
+      onConnectionStateChange?.(
+        nextIntegrations.some(integration =>
+          isUsableAgentConnection({
+            status: integration.status,
+            connectionStatus: integration.connectionStatus,
+            expiresAt: integration.credentialExpiresAt,
+          }),
+        ),
+      );
       setPublishingPolicies(
         responseList(policyBody, "policies")
           .map(normalizePublishingPolicy)
@@ -896,7 +907,16 @@ export function AgentConnectionPanel({
   );
   const activePairings = pairings.filter(pairing => isPendingAgentPairing(pairing, connectionClock));
   const pairingHistory = pairings.filter(pairing => !isPendingAgentPairing(pairing, connectionClock));
-  const activeIntegrations = integrations.filter(integration => integration.status === "active");
+  const activeIntegrations = integrations.filter(integration =>
+    isUsableAgentConnection(
+      {
+        status: integration.status,
+        connectionStatus: integration.connectionStatus,
+        expiresAt: integration.credentialExpiresAt,
+      },
+      connectionClock,
+    ),
+  );
   const isFreshWorkspace =
     !loading && activeConnectionIntents.length === 0 && activePairings.length === 0 && activeIntegrations.length === 0;
 
@@ -904,37 +924,37 @@ export function AgentConnectionPanel({
     <div className="space-y-5">
       {isFreshWorkspace ? (
         <section className="surface-card rounded-2xl p-6">
-        <div>
-          <h2 className="text-2xl font-semibold">Connect your agent</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Copy one message into the agent chat you want to connect.
-          </p>
-        </div>
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            className="rateloop-gradient-action px-5"
-            disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
-            onClick={() => void copyConnectionMessage()}
-          >
-            {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
-          </button>
-          <InfoPopover label="About safe agent access">
-            This creates safe access. The agent cannot spend, publish, read private workspace content, or change
-            workspace settings.
-          </InfoPopover>
-        </div>
-        {status ? (
-          <p role="status" aria-live="polite" className="mt-4 text-sm text-emerald-100">
-            {status}
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
-            {error}
-          </p>
-        ) : null}
-      </section>
+          <div>
+            <h2 className="text-2xl font-semibold">Connect your agent</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
+              Copy one message into the agent chat you want to connect.
+            </p>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="rateloop-gradient-action px-5"
+              disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
+              onClick={() => void copyConnectionMessage()}
+            >
+              {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
+            </button>
+            <InfoPopover label="About safe agent access">
+              This creates safe access. The agent cannot spend, publish, read private workspace content, or change
+              workspace settings.
+            </InfoPopover>
+          </div>
+          {status ? (
+            <p role="status" aria-live="polite" className="mt-4 text-sm text-emerald-100">
+              {status}
+            </p>
+          ) : null}
+          {error ? (
+            <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+              {error}
+            </p>
+          ) : null}
+        </section>
       ) : null}
 
       {!isFreshWorkspace && status ? (
@@ -1141,57 +1161,6 @@ export function AgentConnectionPanel({
         </details>
       ) : null}
 
-      {!loading && workspaceId && activeIntegrations.length > 0 && connectionIntentHistory.length + pairingHistory.length > 0 ? (
-        <details className="surface-card rounded-2xl p-6">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Connection history ({connectionIntentHistory.length + pairingHistory.length})
-          </summary>
-          <div className="mt-4 space-y-3">
-            {connectionIntentHistory.map(intent => {
-              const displayStatus =
-                isActiveAgentConnectionIntent(intent, connectionClock) ||
-                intent.status === "connected" ||
-                !intent.hardExpiresAt ||
-                new Date(intent.hardExpiresAt).getTime() > connectionClock
-                  ? intent.status
-                  : "expired";
-              return (
-                <article key={intent.intentId} className="surface-card-nested rounded-xl p-4 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium">{intent.clientName || "Agent connection"}</span>
-                    <span className="badge badge-ghost">{displayStatus}</span>
-                  </div>
-                  <p className="mt-2 text-xs text-base-content/45">
-                    Created {formatTimestamp(intent.createdAt, "at an unknown time")}
-                  </p>
-                </article>
-              );
-            })}
-            {pairingHistory.map(pairing => {
-              const displayStatus =
-                (pairing.status === "open" || pairing.status === "claimed") &&
-                pairing.expiresAt &&
-                new Date(pairing.expiresAt).getTime() <= connectionClock
-                  ? "expired"
-                  : pairing.status;
-              return (
-                <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium">
-                      {pairing.displayName || pairing.clientName || "Agent connection"}
-                    </span>
-                    <span className="badge badge-ghost">legacy · {displayStatus}</span>
-                  </div>
-                  <p className="mt-2 text-xs text-base-content/45">
-                    Created {formatTimestamp(pairing.createdAt, "at an unknown time")}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        </details>
-      ) : null}
-
       {!loading && workspaceId && activeIntegrations.length > 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="connected-agents-heading">
           <h2 id="connected-agents-heading" className="text-xl font-semibold">
@@ -1205,94 +1174,144 @@ export function AgentConnectionPanel({
           <details className="mt-5">
             <summary className="cursor-pointer text-sm font-semibold">Manage</summary>
             <div className="mt-4 space-y-4">
-            {activeIntegrations.map(integration => {
-              const active = integration.status === "active";
-              const legacyCredential = Boolean(integration.apiKeyId);
-              return (
-                <article
-                  key={integration.integrationId}
-                  className="rounded-xl border border-white/10 bg-white/[0.025] p-5"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-semibold">{integration.agentDisplayName || integration.agentId}</h4>
-                        {integration.agentVersionNumber ? (
-                          <span className="badge badge-ghost">v{integration.agentVersionNumber}</span>
-                        ) : null}
-                        <span
-                          className={`badge border-0 ${active ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/50"}`}
-                        >
-                          {integration.status}
-                        </span>
-                        <span className="badge badge-ghost">
-                          {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
-                        </span>
-                        <span className="badge badge-ghost">
-                          {legacyCredential ? "legacy credential" : "safe OAuth"}
-                        </span>
+              {activeIntegrations.map(integration => {
+                const active = integration.status === "active";
+                const legacyCredential = Boolean(integration.apiKeyId);
+                return (
+                  <article
+                    key={integration.integrationId}
+                    className="rounded-xl border border-white/10 bg-white/[0.025] p-5"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-semibold">{integration.agentDisplayName || integration.agentId}</h4>
+                          {integration.agentVersionNumber ? (
+                            <span className="badge badge-ghost">v{integration.agentVersionNumber}</span>
+                          ) : null}
+                          <span
+                            className={`badge border-0 ${active ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/50"}`}
+                          >
+                            {integration.status}
+                          </span>
+                          <span className="badge badge-ghost">
+                            {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
+                          </span>
+                          <span className="badge badge-ghost">
+                            {legacyCredential ? "legacy credential" : "safe OAuth"}
+                          </span>
+                        </div>
+                        <p className="mt-2 font-mono text-xs text-base-content/40">{integration.integrationId}</p>
+                        <p className="mt-3 text-sm text-base-content/60">
+                          {integration.clientName || "Unknown client"}
+                          {integration.clientVersion ? ` ${integration.clientVersion}` : ""}
+                        </p>
                       </div>
-                      <p className="mt-2 font-mono text-xs text-base-content/40">{integration.integrationId}</p>
-                      <p className="mt-3 text-sm text-base-content/60">
-                        {integration.clientName || "Unknown client"}
-                        {integration.clientVersion ? ` ${integration.clientVersion}` : ""}
-                      </p>
-                    </div>
-                    {active ? (
-                      <div className="flex flex-wrap gap-2">
-                        {legacyCredential ? (
+                      {active ? (
+                        <div className="flex flex-wrap gap-2">
+                          {legacyCredential ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm border-white/10"
+                              disabled={Boolean(busyAction)}
+                              onClick={() => void rotateIntegration(integration)}
+                            >
+                              Rotate legacy credential
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            className="btn btn-sm border-white/10"
+                            className="btn btn-sm btn-ghost text-error"
                             disabled={Boolean(busyAction)}
-                            onClick={() => void rotateIntegration(integration)}
+                            onClick={() => void revokeIntegration(integration)}
                           >
-                            Rotate legacy credential
+                            Revoke
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost text-error"
-                          disabled={Boolean(busyAction)}
-                          onClick={() => void revokeIntegration(integration)}
-                        >
-                          Revoke
-                        </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <dl className="mt-4 grid gap-4 border-t border-white/10 pt-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className="text-xs text-base-content/45">Last seen</dt>
+                        <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
                       </div>
-                    ) : null}
+                      <div>
+                        <dt className="text-xs text-base-content/45">
+                          {legacyCredential ? "Credential expiry" : "Access"}
+                        </dt>
+                        <dd className="mt-1">
+                          {legacyCredential
+                            ? formatTimestamp(integration.credentialExpiresAt, "No expiry")
+                            : "OAuth-managed safe access"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-base-content/45">Review policy</dt>
+                        <dd className="mt-1">
+                          {integration.reviewPolicyId || "Unknown"}
+                          {integration.reviewPolicyVersion ? ` · v${integration.reviewPolicyVersion}` : ""}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-base-content/45">Publishing policy</dt>
+                        <dd className="mt-1">
+                          {integration.publishingPolicyName || integration.publishingPolicyId || "No publishing access"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                );
+              })}
+              {connectionIntentHistory.length + pairingHistory.length > 0 ? (
+                <details className="border-t border-white/10 pt-4">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    Connection history ({connectionIntentHistory.length + pairingHistory.length})
+                  </summary>
+                  <div className="mt-4 space-y-3">
+                    {connectionIntentHistory.map(intent => {
+                      const displayStatus =
+                        isActiveAgentConnectionIntent(intent, connectionClock) ||
+                        intent.status === "connected" ||
+                        !intent.hardExpiresAt ||
+                        new Date(intent.hardExpiresAt).getTime() > connectionClock
+                          ? intent.status
+                          : "expired";
+                      return (
+                        <article key={intent.intentId} className="surface-card-nested rounded-xl p-4 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium">{intent.clientName || "Agent connection"}</span>
+                            <span className="badge badge-ghost">{displayStatus}</span>
+                          </div>
+                          <p className="mt-2 text-xs text-base-content/45">
+                            Created {formatTimestamp(intent.createdAt, "at an unknown time")}
+                          </p>
+                        </article>
+                      );
+                    })}
+                    {pairingHistory.map(pairing => {
+                      const displayStatus =
+                        (pairing.status === "open" || pairing.status === "claimed") &&
+                        pairing.expiresAt &&
+                        new Date(pairing.expiresAt).getTime() <= connectionClock
+                          ? "expired"
+                          : pairing.status;
+                      return (
+                        <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium">
+                              {pairing.displayName || pairing.clientName || "Agent connection"}
+                            </span>
+                            <span className="badge badge-ghost">legacy · {displayStatus}</span>
+                          </div>
+                          <p className="mt-2 text-xs text-base-content/45">
+                            Created {formatTimestamp(pairing.createdAt, "at an unknown time")}
+                          </p>
+                        </article>
+                      );
+                    })}
                   </div>
-                  <dl className="mt-4 grid gap-4 border-t border-white/10 pt-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                      <dt className="text-xs text-base-content/45">Last seen</dt>
-                      <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-base-content/45">
-                        {legacyCredential ? "Credential expiry" : "Access"}
-                      </dt>
-                      <dd className="mt-1">
-                        {legacyCredential
-                          ? formatTimestamp(integration.credentialExpiresAt, "No expiry")
-                          : "OAuth-managed safe access"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-base-content/45">Review policy</dt>
-                      <dd className="mt-1">
-                        {integration.reviewPolicyId || "Unknown"}
-                        {integration.reviewPolicyVersion ? ` · v${integration.reviewPolicyVersion}` : ""}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-base-content/45">Publishing policy</dt>
-                      <dd className="mt-1">
-                        {integration.publishingPolicyName || integration.publishingPolicyId || "No publishing access"}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })}
+                </details>
+              ) : null}
             </div>
           </details>
         </section>

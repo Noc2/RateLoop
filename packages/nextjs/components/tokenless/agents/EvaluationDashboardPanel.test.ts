@@ -6,6 +6,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   assert.match(source, /dashboard\?\.runs\.length === 0/);
   assert.match(source, /No evaluations yet/);
+  assert.match(source, /initialWorkspaceId/);
+  assert.match(source, /showWorkspaceSelector/);
   assert.match(source, /Results appear after your agent requests human review\./);
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
   assert.match(source, /decisionLabel\(run\.clientDecision\)/);
