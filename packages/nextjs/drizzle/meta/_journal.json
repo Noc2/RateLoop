@@ -316,6 +316,13 @@
       "when": 1784016000000,
       "tag": "0044_provider_neutral_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1784019600000,
+      "tag": "0045_security_audit_scope",
+      "breakpoints": true
     }
   ]
 }
