@@ -716,11 +716,8 @@ export function AgentConnectionPanel() {
             disabled={!workspaceId || busyAction === "create-pairing"}
             onClick={() => void generatePairing()}
           >
-            {busyAction === "create-pairing" ? "Generating…" : "Generate 10-minute connection"}
+            {busyAction === "create-pairing" ? "Generating…" : "Connect an agent"}
           </button>
-          <span className="text-xs leading-5 text-base-content/45">
-            The secret is random, single-use, hash-only at rest, and shown once.
-          </span>
         </div>
         {!loading && workspaces.length === 0 ? (
           <p className="mt-5 rounded-lg bg-white/[0.04] p-4 text-sm text-base-content/65">

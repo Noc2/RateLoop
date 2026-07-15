@@ -5,7 +5,9 @@ import test from "node:test";
 const source = readFileSync(new URL("./AgentConnectionPanel.tsx", import.meta.url), "utf8");
 
 test("agent connection UI uses a bounded pairing and owner-approval flow", () => {
-  assert.match(source, /Generate 10-minute connection/);
+  assert.match(source, /: "Connect an agent"/);
+  assert.doesNotMatch(source, /Generate 10-minute connection/);
+  assert.doesNotMatch(source, /The secret is random, single-use, hash-only at rest, and shown once/);
   assert.match(source, /expiresInSeconds: 600/);
   assert.match(source, /Possessing the pairing secret does not grant workspace/);
   assert.match(source, /workspace[\s\S]{0,40}access/);
