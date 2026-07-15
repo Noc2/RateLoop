@@ -358,6 +358,13 @@
       "when": 1784037600000,
       "tag": "0050_tokenless_public_rater_responses",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1784124000000,
+      "tag": "0051_workspace_agent_setup",
+      "breakpoints": true
     }
   ]
 }

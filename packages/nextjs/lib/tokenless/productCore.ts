@@ -279,6 +279,12 @@ export async function createWorkspace(input: { name: string; ownerAddress: strin
        VALUES ($1, 'free', 'free_2026_07', 'free', false, $2, $2)`,
       [workspaceId, now],
     );
+    await client.query(
+      `INSERT INTO tokenless_workspace_agent_setups
+       (workspace_id, schema_version, status, current_step, review_draft_json, revision, created_at, updated_at)
+       VALUES ($1, 1, 'in_progress', 'connect', '{}', 1, $2, $2)`,
+      [workspaceId, now],
+    );
     await client.query("COMMIT");
     return { workspaceId };
   } catch (error) {
