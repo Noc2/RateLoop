@@ -315,6 +315,9 @@ async function callIntegrationTool(
     }
     if (name === "rateloop_get_agent_context") {
       requireObjectWithKeys(args, [], "Agent context arguments are invalid.");
+      if (!binding.audiencePolicyHash) {
+        throw new TokenlessServiceError("The bound review audience is unavailable.", 500, "agent_context_invalid");
+      }
       return toolResult({
         schemaVersion: "rateloop.agent-context.v1",
         integrationId: binding.integrationId,
@@ -324,7 +327,11 @@ async function callIntegrationTool(
         status: binding.status,
         enforcementMode: binding.enforcementMode,
         allowedWorkflowKeys: binding.allowedWorkflowKeys,
-        reviewPolicy: { policyId: binding.reviewPolicyId, version: binding.reviewPolicyVersion },
+        reviewPolicy: {
+          policyId: binding.reviewPolicyId,
+          version: binding.reviewPolicyVersion,
+          audiencePolicyHash: binding.audiencePolicyHash,
+        },
         publishingPolicy:
           binding.publishingPolicyId && binding.publishingPolicyVersion
             ? { policyId: binding.publishingPolicyId, version: binding.publishingPolicyVersion }

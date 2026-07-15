@@ -6,6 +6,7 @@ import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import {
+  AGENT_OAUTH_SAFE_SCOPES,
   type AgentOAuthAccessPrincipal,
   AgentOAuthError,
   authenticateAgentOAuthAccessToken,
@@ -29,6 +30,10 @@ const WORKFLOW_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const PAIRING_TTL_MS = 10 * 60_000;
 const ACTIVE_TTL_MS = 90 * 24 * 60 * 60_000;
 
+export const OWNER_APPROVED_AGENT_SCOPES = [
+  ...new Set([...AGENT_OAUTH_SAFE_SCOPES, ...TOKENLESS_AGENT_SCOPES]),
+] as const;
+
 export type AgentRegistrationInput = {
   externalId: string;
   displayName: string;
@@ -51,6 +56,7 @@ export type AgentIntegrationBinding = {
   agentVersionId: string;
   reviewPolicyId: string;
   reviewPolicyVersion: number;
+  audiencePolicyHash?: string;
   publishingPolicyId: string | null;
   publishingPolicyVersion: number | null;
   status: "active";
@@ -93,6 +99,16 @@ function jsonArray(value: unknown, field: string) {
     const parsed = JSON.parse(String(value ?? "[]")) as unknown;
     if (!Array.isArray(parsed) || parsed.some(item => typeof item !== "string")) throw new Error();
     return parsed as string[];
+  } catch {
+    throw new Error(`Database returned invalid ${field}.`);
+  }
+}
+
+function jsonObject(value: unknown, field: string) {
+  try {
+    const parsed = JSON.parse(String(value ?? "null")) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    return parsed as Record<string, unknown>;
   } catch {
     throw new Error(`Database returned invalid ${field}.`);
   }
@@ -214,6 +230,7 @@ function bindingFromRow(row: Row): AgentIntegrationBinding {
     agentVersionId: text(row, "agent_version_id")!,
     reviewPolicyId: text(row, "review_policy_id")!,
     reviewPolicyVersion: integer(row, "review_policy_version"),
+    audiencePolicyHash: `sha256:${digest(stableJson(jsonObject(row.audience_policy_json, "audience policy")))}`,
     publishingPolicyId: text(row, "publishing_policy_id"),
     publishingPolicyVersion:
       row.publishing_policy_version === null || row.publishing_policy_version === undefined
@@ -299,13 +316,17 @@ export async function listAgentConnections(input: { accountAddress: string; work
     dbClient.execute({
       sql: `SELECT i.*, k.key_prefix AS credential_prefix,
                              COALESCE(k.expires_at, f.absolute_expires_at) AS expires_at,
-                             a.external_id, v.display_name, c.status AS connection_status
+                             a.external_id, v.display_name, c.status AS connection_status,
+                             rp.audience_policy_json
                              FROM tokenless_agent_integrations i
                              LEFT JOIN tokenless_workspace_api_keys k ON k.key_id = i.api_key_id
                              LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
                              LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
                              JOIN tokenless_agents a ON a.agent_id = i.agent_id
                              JOIN tokenless_agent_versions v ON v.version_id = i.agent_version_id
+                             JOIN tokenless_agent_review_policies rp
+                               ON rp.workspace_id = i.workspace_id AND rp.policy_id = i.review_policy_id
+                              AND rp.version = i.review_policy_version
                              WHERE i.workspace_id = ? ORDER BY i.created_at DESC`,
       args: [input.workspaceId],
     }),
@@ -344,9 +365,12 @@ export async function authenticateAgentMcpPrincipal(authorization: string | null
       throw error;
     }
     const integrationResult = await dbClient.execute({
-      sql: `SELECT i.*, c.status AS connection_status
+      sql: `SELECT i.*, c.status AS connection_status, rp.audience_policy_json
             FROM tokenless_agent_integrations i
             JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+            JOIN tokenless_agent_review_policies rp
+              ON rp.workspace_id = i.workspace_id AND rp.policy_id = i.review_policy_id
+             AND rp.version = i.review_policy_version
             WHERE i.token_family_id = ? AND i.status = 'active' LIMIT 1`,
       args: [oauth.tokenFamilyId],
     });
@@ -359,15 +383,17 @@ export async function authenticateAgentMcpPrincipal(authorization: string | null
       sql: "UPDATE tokenless_agent_integrations SET last_seen_at = ?, updated_at = ? WHERE integration_id = ?",
       args: [now, now, text(row, "integration_id")],
     });
+    const grantedScopes = jsonArray(row.granted_scopes_json, "granted scopes");
+    if (grantedScopes.some(scope => !(OWNER_APPROVED_AGENT_SCOPES as readonly string[]).includes(scope))) {
+      throw new TokenlessServiceError("Agent integration scopes are invalid.", 500, "agent_integration_invalid");
+    }
     const principal: ApiPrincipal = {
       kind: "api_key",
       apiKeyId: oauth.tokenFamilyId,
       workspaceId: text(row, "workspace_id")!,
       role: "member",
-      scopes: oauth.scopes.filter(scope =>
-        (TOKENLESS_AGENT_SCOPES as readonly string[]).includes(scope),
-      ) as TokenlessAgentScope[],
-      policyId: null,
+      scopes: TOKENLESS_AGENT_SCOPES.filter(scope => grantedScopes.includes(scope)) as TokenlessAgentScope[],
+      policyId: text(row, "publishing_policy_id"),
       expiresAt: oauth.expiresAt.toISOString(),
     };
     return {
@@ -411,7 +437,12 @@ export async function authenticateAgentMcpPrincipal(authorization: string | null
   if (principal.kind !== "api_key")
     throw new TokenlessServiceError("Invalid agent credential.", 401, "invalid_agent_credential");
   const integrationResult = await dbClient.execute({
-    sql: "SELECT * FROM tokenless_agent_integrations WHERE api_key_id = ? AND workspace_id = ? AND status = 'active' LIMIT 1",
+    sql: `SELECT i.*, rp.audience_policy_json
+          FROM tokenless_agent_integrations i
+          JOIN tokenless_agent_review_policies rp
+            ON rp.workspace_id = i.workspace_id AND rp.policy_id = i.review_policy_id
+           AND rp.version = i.review_policy_version
+          WHERE i.api_key_id = ? AND i.workspace_id = ? AND i.status = 'active' LIMIT 1`,
     args: [principal.apiKeyId, principal.workspaceId],
   });
   const row = integrationResult.rows[0] as Row | undefined;
@@ -815,6 +846,301 @@ export async function rejectAgentPairing(input: { accountAddress: string; worksp
     workspaceId: input.workspaceId,
   });
   return { pairing: { pairingId: input.pairingId, status: "rejected" } };
+}
+
+function publishingActivationBody(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError(
+      "Publishing activation body is invalid.",
+      400,
+      "invalid_publishing_activation",
+    );
+  }
+  const body = value as Record<string, unknown>;
+  if (Object.keys(body).some(key => key !== "publishingPolicyId" && key !== "allowedWorkflowKeys")) {
+    throw new TokenlessServiceError(
+      "Publishing activation body contains unsupported fields.",
+      400,
+      "invalid_publishing_activation",
+    );
+  }
+  const publishingPolicyId =
+    typeof body.publishingPolicyId === "string" ? body.publishingPolicyId.trim() : "";
+  if (!/^agpol_[a-f0-9]{32}$/.test(publishingPolicyId)) {
+    throw new TokenlessServiceError(
+      "Publishing policy is invalid.",
+      400,
+      "invalid_publishing_activation",
+    );
+  }
+  if (!Array.isArray(body.allowedWorkflowKeys) || body.allowedWorkflowKeys.length === 0 || body.allowedWorkflowKeys.length > 32) {
+    throw new TokenlessServiceError(
+      "At least one allowed workflow is required.",
+      400,
+      "invalid_publishing_activation",
+    );
+  }
+  const allowedWorkflowKeys = [
+    ...new Set(body.allowedWorkflowKeys.map(value => (typeof value === "string" ? value.trim() : ""))),
+  ];
+  if (allowedWorkflowKeys.some(value => !WORKFLOW_PATTERN.test(value))) {
+    throw new TokenlessServiceError(
+      "Allowed workflows are invalid.",
+      400,
+      "invalid_publishing_activation",
+    );
+  }
+  return { publishingPolicyId, allowedWorkflowKeys };
+}
+
+export async function activateAgentIntegrationPublishing(input: {
+  accountAddress: string;
+  workspaceId: string;
+  integrationId: string;
+  body: unknown;
+}) {
+  const actor = await management(input.accountAddress, input.workspaceId);
+  const activation = publishingActivationBody(input.body);
+  const now = new Date();
+  const scopes = [...OWNER_APPROVED_AGENT_SCOPES];
+  const client = await dbPool.connect();
+  let activated:
+    | {
+        agentId: string;
+        agentVersionId: string;
+        reviewPolicyId: string;
+        reviewPolicyVersion: number;
+        audiencePolicyHash: string;
+        publishingPolicyVersion: number;
+      }
+    | undefined;
+  try {
+    await client.query("BEGIN");
+    const integrationResult = await client.query(
+      `SELECT i.*, c.status AS connection_status FROM tokenless_agent_integrations i
+       JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+       WHERE i.workspace_id = $1 AND i.integration_id = $2 AND i.status = 'active'
+       FOR UPDATE`,
+      [input.workspaceId, input.integrationId],
+    );
+    const integration = integrationResult.rows[0] as Row | undefined;
+    if (!integration) {
+      throw new TokenlessServiceError("Integration not found.", 404, "agent_integration_not_found");
+    }
+    if (
+      !text(integration, "token_family_id") ||
+      !text(integration, "oauth_client_id") ||
+      !text(integration, "oauth_subject_principal_id") ||
+      text(integration, "connection_status") !== "connected" ||
+      !["preauthorized_safe", "owner_approved"].includes(text(integration, "activation_mode") ?? "")
+    ) {
+      throw new TokenlessServiceError(
+        "Only an OAuth-connected agent can receive this browser publishing grant.",
+        409,
+        "publishing_activation_not_supported",
+      );
+    }
+    const agentId = text(integration, "agent_id")!;
+    const versionResult = await client.query(
+      `SELECT version_id FROM tokenless_agent_versions
+       WHERE workspace_id = $1 AND agent_id = $2
+       ORDER BY version_number DESC LIMIT 1 FOR SHARE`,
+      [input.workspaceId, agentId],
+    );
+    const agentVersionId = text(versionResult.rows[0] as Row | undefined, "version_id");
+    if (!agentVersionId) {
+      throw new TokenlessServiceError("Current agent version not found.", 409, "agent_version_not_found");
+    }
+    const reviewResult = await client.query(
+      `SELECT * FROM tokenless_agent_review_policies
+       WHERE workspace_id = $1 AND agent_id = $2 AND agent_version_id = $3
+         AND enabled = true AND superseded_at IS NULL
+       ORDER BY version DESC LIMIT 1 FOR UPDATE`,
+      [input.workspaceId, agentId, agentVersionId],
+    );
+    const review = reviewResult.rows[0] as Row | undefined;
+    if (!review) {
+      throw new TokenlessServiceError(
+        "Create the current agent version's review behavior before granting autonomous access.",
+        409,
+        "review_policy_not_found",
+      );
+    }
+    const publishingResult = await client.query(
+      `SELECT policy_id, version FROM tokenless_agent_publishing_policies
+       WHERE workspace_id = $1 AND policy_id = $2 AND enabled = true AND revoked_at IS NULL
+         AND effective_at <= $3 AND (expires_at IS NULL OR expires_at > $3)
+       FOR SHARE`,
+      [input.workspaceId, activation.publishingPolicyId, now],
+    );
+    const publishing = publishingResult.rows[0] as Row | undefined;
+    if (!publishing) {
+      throw new TokenlessServiceError("Publishing policy not found or inactive.", 404, "publishing_policy_not_found");
+    }
+    const reviewPolicyId = text(review, "policy_id")!;
+    let reviewPolicyVersion = integer(review, "version");
+    if (text(review, "publishing_policy_id") !== activation.publishingPolicyId) {
+      reviewPolicyVersion += 1;
+      await client.query(
+        `UPDATE tokenless_agent_review_policies SET enabled = false, superseded_at = $1
+         WHERE workspace_id = $2 AND policy_id = $3 AND version = $4
+           AND enabled = true AND superseded_at IS NULL`,
+        [now, input.workspaceId, reviewPolicyId, reviewPolicyVersion - 1],
+      );
+      await client.query(
+        `INSERT INTO tokenless_agent_review_policies
+         (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,
+          agreement_threshold_bps,production_floor_bps,maximum_unreviewed_gap,rules_json,
+          audience_policy_json,publishing_policy_id,created_by,approved_by,created_at,superseded_at)
+         VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,$12,$13,$13,$14,NULL)`,
+        [
+          reviewPolicyId,
+          reviewPolicyVersion,
+          input.workspaceId,
+          agentId,
+          agentVersionId,
+          text(review, "mode"),
+          integer(review, "agreement_threshold_bps"),
+          integer(review, "production_floor_bps"),
+          integer(review, "maximum_unreviewed_gap"),
+          String(review.rules_json),
+          String(review.audience_policy_json),
+          activation.publishingPolicyId,
+          actor,
+          now,
+        ],
+      );
+    }
+    const rules = jsonObject(review.rules_json, "review rules");
+    const enforcementMode = rules.enforcementMode === "host_enforced" ? "host_enforced" : "advisory";
+    if (enforcementMode === "host_enforced" && !text(integration, "host_enforcement_evidence_reference")) {
+      throw new TokenlessServiceError(
+        "Host-enforced review behavior requires verified host enforcement evidence.",
+        409,
+        "host_enforcement_evidence_required",
+      );
+    }
+    const previousBinding = {
+      agentVersionId: text(integration, "agent_version_id"),
+      reviewPolicyId: text(integration, "review_policy_id"),
+      reviewPolicyVersion: integer(integration, "review_policy_version"),
+      publishingPolicyId: text(integration, "publishing_policy_id"),
+      publishingPolicyVersion:
+        integration.publishing_policy_version === null || integration.publishing_policy_version === undefined
+          ? null
+          : integer(integration, "publishing_policy_version"),
+      allowedWorkflowKeys: jsonArray(integration.allowed_workflow_keys_json, "allowed workflows"),
+      grantedScopes: jsonArray(integration.granted_scopes_json, "granted scopes"),
+    };
+    const publishingPolicyVersion = integer(publishing, "version");
+    await client.query(
+      `UPDATE tokenless_agent_integrations
+       SET agent_version_id = $1, review_policy_id = $2, review_policy_version = $3,
+           publishing_policy_id = $4, publishing_policy_version = $5, enforcement_mode = $6,
+           allowed_workflow_keys_json = $7, activation_mode = 'owner_approved',
+           granted_scopes_json = $8, updated_at = $9
+       WHERE integration_id = $10`,
+      [
+        agentVersionId,
+        reviewPolicyId,
+        reviewPolicyVersion,
+        activation.publishingPolicyId,
+        publishingPolicyVersion,
+        enforcementMode,
+        JSON.stringify(activation.allowedWorkflowKeys),
+        JSON.stringify(scopes),
+        now,
+        input.integrationId,
+      ],
+    );
+    const audiencePolicyHash = `sha256:${digest(
+      stableJson(jsonObject(review.audience_policy_json, "audience policy")),
+    )}`;
+    await client.query(
+      `INSERT INTO tokenless_agent_integration_events
+       (event_id,integration_id,workspace_id,event_type,actor_type,actor_reference,details_json,created_at)
+       VALUES ($1,$2,$3,'scope_upgraded','account',$4,$5,$6)`,
+      [
+        `agie_${randomUUID().replaceAll("-", "")}`,
+        input.integrationId,
+        input.workspaceId,
+        actor,
+        JSON.stringify({
+          source: "browser_owner_step_up",
+          explicitBrowserConsent: true,
+          previousBinding,
+          activeBinding: {
+            agentId,
+            agentVersionId,
+            reviewPolicyId,
+            reviewPolicyVersion,
+            audiencePolicyHash,
+            publishingPolicyId: activation.publishingPolicyId,
+            publishingPolicyVersion,
+            allowedWorkflowKeys: activation.allowedWorkflowKeys,
+            grantedScopes: scopes,
+          },
+        }),
+        now,
+      ],
+    );
+    activated = {
+      agentId,
+      agentVersionId,
+      reviewPolicyId,
+      reviewPolicyVersion,
+      audiencePolicyHash,
+      publishingPolicyVersion,
+    };
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (!activated) throw new Error("Publishing activation did not complete.");
+  await appendAuditEvent({
+    action: "agent.integration_scope_upgraded",
+    actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+    actorReference: actor,
+    assuranceMethod: "rateloop_session",
+    metadata: {
+      agentId: activated.agentId,
+      agentVersionId: activated.agentVersionId,
+      reviewPolicyId: activated.reviewPolicyId,
+      reviewPolicyVersion: activated.reviewPolicyVersion,
+      publishingPolicyId: activation.publishingPolicyId,
+      publishingPolicyVersion: activated.publishingPolicyVersion,
+      allowedWorkflowCount: activation.allowedWorkflowKeys.length,
+      explicitBrowserConsent: true,
+    },
+    purpose: "agent_publishing_step_up",
+    reason: "workspace_administrator_browser_consent",
+    result: "success",
+    targetId: input.integrationId,
+    targetKind: "agent_integration",
+    workspaceId: input.workspaceId,
+  });
+  return {
+    integration: {
+      integrationId: input.integrationId,
+      workspaceId: input.workspaceId,
+      status: "active" as const,
+      activationMode: "owner_approved" as const,
+      agentId: activated.agentId,
+      agentVersionId: activated.agentVersionId,
+      reviewPolicyId: activated.reviewPolicyId,
+      reviewPolicyVersion: activated.reviewPolicyVersion,
+      audiencePolicyHash: activated.audiencePolicyHash,
+      publishingPolicyId: activation.publishingPolicyId,
+      publishingPolicyVersion: activated.publishingPolicyVersion,
+      allowedWorkflowKeys: activation.allowedWorkflowKeys,
+      grantedScopes: scopes,
+      canPublish: true,
+      canSpend: true,
+    },
+  };
 }
 
 export async function revokeAgentIntegration(input: {

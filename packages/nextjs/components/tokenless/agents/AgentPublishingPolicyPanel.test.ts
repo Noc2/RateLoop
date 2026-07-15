@@ -4,6 +4,7 @@ import {
   classificationsForContentBoundary,
   formatUsdcAtomic,
   parseUsdcToAtomic,
+  workflowKeysFromInput,
 } from "./AgentPublishingPolicyPanel";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -27,6 +28,14 @@ test("content boundary choices map fail-closed to the legacy server contract", (
     ]),
     /restricted|regulated/,
   );
+});
+
+test("publishing activation normalizes a bounded workflow list for exact browser consent", () => {
+  assert.deepEqual(workflowKeysFromInput(" general-assistance, support-reply, general-assistance "), [
+    "general-assistance",
+    "support-reply",
+  ]);
+  assert.deepEqual(workflowKeysFromInput(" , "), []);
 });
 
 test("review payload preserves every server-enforced field behind safe defaults", () => {
@@ -74,5 +83,12 @@ test("publishing policy UI uses explicit step-up and exact confirmation", () => 
   assert.match(source, /maxBountyAtomic/);
   assert.match(source, /publishingRevision = 0/);
   assert.match(source, /onPoliciesChanged\?\.\(\)/);
+  assert.match(source, /Activate for a connected agent/);
+  assert.match(source, /Until you activate it here, the connection remains safe and cannot publish or/);
+  assert.match(source, /Allow agent to publish and spend/);
+  assert.match(source, /agent-integrations\/\$\{encodeURIComponent\(selectedIntegrationId\)\}\/publishing/);
+  assert.match(source, /method: "POST"/);
+  assert.match(source, /publishingPolicyId: selectedPolicyId, allowedWorkflowKeys/);
+  assert.doesNotMatch(source, /void activatePolicy\(\).*createPolicy/);
   assert.doesNotMatch(source, /mock|simulat(?:e|ed) policy/i);
 });

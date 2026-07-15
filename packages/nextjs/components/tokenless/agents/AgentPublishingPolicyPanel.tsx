@@ -25,6 +25,16 @@ type PublishingPolicy = {
   version: number;
 };
 
+type ConnectedIntegration = {
+  activationMode: string | null;
+  allowedWorkflowKeys: string[];
+  connectionStatus: string | null;
+  displayName: string | null;
+  integrationId: string;
+  publishingPolicyId: string | null;
+  status: string;
+};
+
 type Audience = "private_invited" | "public_network" | "hybrid";
 export type ContentBoundary = "public_or_test" | "private_workspace";
 
@@ -113,6 +123,10 @@ export function classificationsForContentBoundary(boundary: ContentBoundary) {
   const classifications = CONTENT_BOUNDARY_CLASSIFICATIONS[boundary];
   if (!classifications) throw new Error("Choose a supported content boundary.");
   return [...classifications];
+}
+
+export function workflowKeysFromInput(value: string) {
+  return [...new Set(value.split(",").map(entry => entry.trim()).filter(Boolean))];
 }
 
 function audienceSources(audience: Audience) {
@@ -219,6 +233,7 @@ export function AgentPublishingPolicyPanel({
 }) {
   const advancedId = useId();
   const [policies, setPolicies] = useState<PublishingPolicy[]>([]);
+  const [integrations, setIntegrations] = useState<ConnectedIntegration[]>([]);
   const [draft, setDraft] = useState<PolicyDraft>(() => ({ ...INITIAL_DRAFT }));
   const [pendingPolicy, setPendingPolicy] = useState<PublishingPolicyPayload | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -227,20 +242,51 @@ export function AgentPublishingPolicyPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
+  const [selectedPolicyId, setSelectedPolicyId] = useState("");
+  const [allowedWorkflows, setAllowedWorkflows] = useState("");
 
   const loadPolicies = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
     if (!selectedWorkspaceId) {
       setPolicies([]);
       return;
     }
-    const body = await readJson(
-      await fetch(`/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}/agent-publishing-policies`, {
-        cache: "no-store",
-        credentials: "same-origin",
-        signal,
-      }),
+    const [policyBody, integrationBody] = await Promise.all([
+      readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}/agent-publishing-policies`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal,
+        }),
+      ),
+      readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}/agent-integrations`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal,
+        }),
+      ),
+    ]);
+    const nextPolicies = (policyBody.policies ?? []) as PublishingPolicy[];
+    const nextIntegrations = ((integrationBody.integrations ?? []) as ConnectedIntegration[]).filter(
+      integration =>
+        integration.status === "active" &&
+        integration.connectionStatus === "connected" &&
+        (integration.activationMode === "preauthorized_safe" || integration.activationMode === "owner_approved"),
     );
-    setPolicies((body.policies ?? []) as PublishingPolicy[]);
+    setPolicies(nextPolicies);
+    setIntegrations(nextIntegrations);
+    setSelectedPolicyId(current =>
+      nextPolicies.some(policy => policy.policyId === current && policy.enabled && !policy.revokedAt)
+        ? current
+        : (nextPolicies.find(policy => policy.enabled && !policy.revokedAt)?.policyId ?? ""),
+    );
+    setSelectedIntegrationId(current =>
+      nextIntegrations.some(integration => integration.integrationId === current)
+        ? current
+        : (nextIntegrations[0]?.integrationId ?? ""),
+    );
+    setAllowedWorkflows(current => current || (nextIntegrations[0]?.allowedWorkflowKeys ?? []).join(", "));
   }, []);
 
   useEffect(() => {
@@ -300,7 +346,7 @@ export function AgentPublishingPolicyPanel({
     setError(null);
     setStatus(null);
     try {
-      await readJson(
+      const body = await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-publishing-policies`, {
           method: "POST",
           credentials: "same-origin",
@@ -309,14 +355,46 @@ export function AgentPublishingPolicyPanel({
         }),
       );
       await loadPolicies(workspaceId);
+      const created = body.policy as PublishingPolicy | undefined;
+      if (created?.policyId) setSelectedPolicyId(created.policyId);
       onPoliciesChanged?.();
       setDraft({ ...INITIAL_DRAFT });
       setPendingPolicy(null);
       setAdvancedOpen(false);
       setEditorOpen(false);
-      setStatus("Autonomous review access approved.");
+      setStatus("Policy saved. Choose a connected agent below to activate it.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to approve autonomous access.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function activatePolicy() {
+    const allowedWorkflowKeys = workflowKeysFromInput(allowedWorkflows);
+    if (!selectedIntegrationId || !selectedPolicyId || allowedWorkflowKeys.length === 0) {
+      setError("Choose a connected agent, a policy, and at least one workflow.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-integrations/${encodeURIComponent(selectedIntegrationId)}/publishing`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publishingPolicyId: selectedPolicyId, allowedWorkflowKeys }),
+          },
+        ),
+      );
+      await loadPolicies(workspaceId);
+      setStatus("Autonomous publishing and spending are active for this agent.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to activate autonomous access.");
     } finally {
       setBusy(false);
     }
@@ -682,6 +760,81 @@ export function AgentPublishingPolicyPanel({
               );
             })}
           </div>
+        </section>
+      ) : null}
+
+      {workspaceId && policies.some(policy => policy.enabled && !policy.revokedAt) ? (
+        <section className="surface-card rounded-2xl p-6" aria-labelledby="activate-agent-publishing-heading">
+          <h2 id="activate-agent-publishing-heading" className="text-xl font-semibold">
+            Activate for a connected agent
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
+            This separate owner approval lets the selected agent publish review requests and spend within the chosen
+            policy without asking again. Until you activate it here, the connection remains safe and cannot publish or
+            spend.
+          </p>
+          {integrations.length > 0 ? (
+            <div className="mt-6 space-y-5">
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="text-sm text-base-content/70">
+                  Connected agent
+                  <select
+                    className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={selectedIntegrationId}
+                    onChange={event => {
+                      const integrationId = event.target.value;
+                      const integration = integrations.find(entry => entry.integrationId === integrationId);
+                      setSelectedIntegrationId(integrationId);
+                      setAllowedWorkflows((integration?.allowedWorkflowKeys ?? []).join(", "));
+                    }}
+                  >
+                    {integrations.map(integration => (
+                      <option key={integration.integrationId} value={integration.integrationId}>
+                        {integration.displayName || "Connected agent"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm text-base-content/70">
+                  Autonomous access policy
+                  <select
+                    className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={selectedPolicyId}
+                    onChange={event => setSelectedPolicyId(event.target.value)}
+                  >
+                    {policies
+                      .filter(policy => policy.enabled && !policy.revokedAt)
+                      .map(policy => (
+                        <option key={policy.policyId} value={policy.policyId}>
+                          {policy.name} · v{policy.version}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+              <label className="block text-sm text-base-content/70">
+                Allowed workflows
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                  value={allowedWorkflows}
+                  onChange={event => setAllowedWorkflows(event.target.value)}
+                  placeholder="general-assistance"
+                />
+              </label>
+              <button
+                type="button"
+                className="rateloop-gradient-action px-5"
+                onClick={() => void activatePolicy()}
+                disabled={busy || !selectedIntegrationId || !selectedPolicyId}
+              >
+                {busy ? "Activating…" : "Allow agent to publish and spend"}
+              </button>
+            </div>
+          ) : (
+            <p className="mt-5 text-sm text-base-content/60">
+              No verified OAuth-connected agent is available. Connect and verify an agent first.
+            </p>
+          )}
         </section>
       ) : null}
     </div>

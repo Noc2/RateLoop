@@ -9,6 +9,7 @@ import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import {
+  activateAgentIntegrationPublishing,
   approveAgentPairing,
   authenticateAgentMcpPrincipal,
   createAgentPairing,
@@ -307,6 +308,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   );
   const agentContext = (await context.json()).result.structuredContent;
   assert.equal(agentContext.workspaceId, workspaceId);
+  assert.match(agentContext.reviewPolicy.audiencePolicyHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(agentContext.publishingPolicy, null);
   assert.equal(agentContext.safeAccess.canSpend, false);
   const verified = await POST(
@@ -351,6 +353,52 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   );
   assert.equal(oauthIntegration?.activationMode, "preauthorized_safe");
   assert.equal(oauthIntegration?.credentialPrefix, null);
+  const publishing = await createAgentPublishingPolicy({
+    accountAddress: principalId,
+    workspaceId,
+    policy: {
+      name: "Consented OAuth publishing",
+      allowedPaymentModes: ["prepaid"],
+      maxPanelAtomic: "30000000",
+      maxDailyAtomic: "100000000",
+      maxMonthlyAtomic: "1000000000",
+      maxPanelSize: 15,
+      maxBountyAtomic: "20000000",
+      maxFeeBps: 750,
+      maxAttemptReserveAtomic: "5000000",
+      allowedReviewerSources: ["customer_invited"],
+      allowedAdmissionPolicyHashes: [`0x${"22".repeat(32)}`],
+      allowedDataClassifications: ["internal"],
+      onPolicyMiss: "deny",
+    },
+  });
+  const stepUp = await activateAgentIntegrationPublishing({
+    accountAddress: principalId,
+    workspaceId,
+    integrationId: claim.connection.integrationId,
+    body: { publishingPolicyId: publishing.policyId, allowedWorkflowKeys: ["general-assistance"] },
+  });
+  const upgradedContextResponse = await POST(
+    request(
+      {
+        id: 151,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  const upgradedContext = (await upgradedContextResponse.json()).result.structuredContent;
+  assert.equal(upgradedContext.agentVersionId, stepUp.integration.agentVersionId);
+  assert.deepEqual(upgradedContext.reviewPolicy, {
+    policyId: stepUp.integration.reviewPolicyId,
+    version: stepUp.integration.reviewPolicyVersion,
+    audiencePolicyHash: agentContext.reviewPolicy.audiencePolicyHash,
+  });
+  assert.deepEqual(upgradedContext.publishingPolicy, { policyId: publishing.policyId, version: publishing.version });
+  assert.equal(upgradedContext.safeAccess.canSpend, true);
+  assert.equal(upgradedContext.safeAccess.canPublish, true);
   await assert.rejects(
     () =>
       rotateAgentIntegration({
