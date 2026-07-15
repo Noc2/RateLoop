@@ -594,18 +594,6 @@ export function WorkspaceSettingsClient() {
                 </div>
               </section>
             ) : null}
-            <section className="mt-5 rounded-xl border border-white/10 p-5" aria-labelledby="agent-setup-heading">
-              <h2 id="agent-setup-heading" className="text-xl font-semibold">
-                Agent setup
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/50">
-                Connect an agent once. RateLoop creates its bound access automatically, and the agent uses MCP to
-                register, follow the approved policy, wait for reviews, and read results.
-              </p>
-              <Link href="/agents?tab=agents" className="rateloop-gradient-action mt-4 inline-flex px-5">
-                Connect an agent
-              </Link>
-            </section>
           </>
         ) : (
           <p className="mt-4 text-sm leading-6 text-base-content/50">Create a workspace to fund panels.</p>
@@ -627,9 +615,6 @@ export function WorkspaceSettingsClient() {
             Create workspace
           </button>
         </form>
-        <p className="mt-4 text-xs leading-5 text-base-content/45">
-          Prepaid funds are usable only after settlement. Reserved amounts cannot be double-spent.
-        </p>
         {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
       </aside>
     </div>

@@ -47,9 +47,8 @@ test("workspace billing profile collects self-declared business invoice details"
 
 test("workspace setup does not expose manual agent credentials or result webhooks", () => {
   assert.doesNotMatch(source, /Agent API keys|Result webhooks|\/api-keys|\/webhooks/);
-  assert.match(source, /Connect an agent once/);
-  assert.match(source, /RateLoop creates its bound access automatically/);
-  assert.match(source, /\/agents\?tab=agents/);
+  assert.doesNotMatch(source, /Agent setup|Connect an agent once|RateLoop creates its bound access automatically/);
+  assert.doesNotMatch(source, /Prepaid funds are usable only after settlement|Reserved amounts cannot be double-spent/);
   assert.equal(existsSync(apiKeyRoute), false);
   assert.equal(existsSync(webhookRoute), false);
 });
