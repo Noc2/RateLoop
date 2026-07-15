@@ -289,7 +289,7 @@ The current repo already has workspaces, hash-only API keys, prepaid mode, priva
    - Preserve the existing API for agencies and technical buyers.
 
 4. **Explicit reviewer provenance**
-   - Add separate modes for independent external, customer-invited, and sandbox/simulated panels.
+   - Add separate modes for independent external and customer-invited panels; keep deterministic fixtures inside tests.
    - Add language, geography, role/industry, recent activity, and repeat-cohort filters with honest verification labels.
 
 5. **Useful evidence instead of one score**
@@ -335,12 +335,12 @@ These changes belong on the existing PMF backlog because they also serve direct 
 
 ## The immediate product constraint
 
-The [production-readiness assessment](tokenless-production-readiness-2026-07.md) is still controlling. The fresh isolated contract deployment, automated result pipeline, complete rater/funder loops, privacy hardening, and real-money controls are not finished. The tokenless MCP is therefore limited to privacy-bounded browser handoffs, status, and results on the isolated deployment. Its deterministic sandbox proves the integration path, not that a live B2B human panel is ready.
+The [production-readiness assessment](tokenless-production-readiness-2026-07.md) is still controlling. The fresh isolated contract deployment, automated result pipeline, complete rater/funder loops, privacy hardening, and real-money controls are not finished. The tokenless MCP is therefore limited to privacy-bounded browser handoffs, status, and results on the isolated deployment. Deterministic integration fixtures validate the adapter only; hosted work must use the persisted reviewer path.
 
 Therefore:
 
 - consulting can start now;
-- RateLoop's sandbox can demonstrate the intended mechanics with explicit simulation labels;
+- deterministic tests can demonstrate the intended mechanics without becoming a hosted product path;
 - early acceptance testing can be run as a transparent concierge process with invited reviewers; but
 - do not sell a live independent RateLoop panel, public-chain evidence, or paid settlement until the tokenless readiness gates actually pass.
 

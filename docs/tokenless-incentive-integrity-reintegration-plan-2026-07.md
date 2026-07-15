@@ -514,7 +514,7 @@ deployment boundaries.
 - World outage affects only new/fresh admission and never accepted commitments;
 - logs, analytics, receipts, webhooks, and public evidence contain no raw proof, nullifier, session ID, provider subject,
   document field, or cross-round identity mapping; and
-- customer-invited, network, hybrid, and sandbox evidence remain visibly distinct.
+- customer-invited, network, and hybrid evidence remain visibly distinct.
 
 ### Correlation properties
 

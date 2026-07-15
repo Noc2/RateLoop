@@ -222,7 +222,7 @@ Keep each numbered item as an independent commit.
 8. **`feat(agents): support delegated prepaid runs`**
    Add the no-wallet B2B path through the same policy and audit controls.
 9. **`test(e2e): verify autonomous agent publishing`**
-   Exercise sandbox, Base Sepolia x402, prepaid, policy misses, cap races, retries, revocation, expiry, bad deployment,
+   Exercise staging, Base Sepolia x402, prepaid, policy misses, cap races, retries, revocation, expiry, bad deployment,
    relayer outage, and browser fallback.
 10. **`docs(marketing): explain agent publishing choices`**
     Update landing, agent docs, SDK docs, examples, plugin instructions, and security guidance only after the behavior is

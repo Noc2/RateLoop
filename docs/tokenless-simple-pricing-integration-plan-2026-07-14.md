@@ -418,7 +418,7 @@ claims, evidence generation, or result retrieval.
 ### Paid-panel access
 
 Check `paidPanels` before a production paid run reaches quote/funding/freeze. The ideal gate is before the customer signs
-or funds anything. Sandbox asks remain available independently of subscription billing. Once paid funding or an
+or funds anything. Unpaid invited work remains available independently of subscription billing. Once paid funding or an
 accepted commit exists, a subscription change can never cancel or redirect the panel.
 
 ## Website integration

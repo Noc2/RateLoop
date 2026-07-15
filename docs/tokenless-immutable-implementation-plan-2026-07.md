@@ -1,6 +1,6 @@
 # RateLoop Tokenless: Architecture & Implementation Plan (July 2026)
 
-**Status:** Current design of record and implementation baseline. The product direction is **human assurance for AI-enabled workflows**; its dependency-ordered implementation is specified in the [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md). The [EU trust and identity implementation plan](tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md) supersedes the earlier Base-Account-only and thirdweb-primary browser identity decisions: Better Auth supplies primary authentication, a RateLoop-owned opaque principal is the application identity, and thirdweb is an optional wallet adapter. Smart-contract deployments on this branch are disposable until Phase 5; none of the current Base contracts should be treated as final or as a compatibility constraint. Legal/revenue reference in [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md).
+**Status:** Current design of record and implementation baseline. The product direction is **human assurance for AI-enabled workflows**; its dependency-ordered implementation is specified in the [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md). The [production-readiness register](tokenless-production-readiness-2026-07.md) supersedes the earlier Base-Account-only and thirdweb-primary browser identity decisions: Better Auth supplies primary authentication, a RateLoop-owned opaque principal is the application identity, and thirdweb is an optional wallet adapter. Smart-contract deployments on this branch are disposable until Phase 5; none of the current Base contracts should be treated as final or as a compatibility constraint. Legal/revenue reference in [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md).
 
 **Mechanism-integrity amendment — 13 July 2026:** the
 [incentive and integrity reintegration plan](tokenless-incentive-integrity-reintegration-plan-2026-07.md) reopens the
@@ -193,7 +193,7 @@ Start with one stateful fund-holding core to eliminate mutual-reference cycles. 
 
 **Phase 4B — human-assurance redesign:** execute the [dependency-ordered redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md). Private artifacts, assignment-gated access, provider-neutral audience policies, multi-case runs, client-approved manifests, source-derived evidence packets, invited/network/hybrid reviewer modes, and recurring quality loops must replace the one-question demo before Phase 5 claims or a broad real-user launch.
 
-**Phase 5 — hardening at traction:** audit competition on the (small) immutable core, Immunefi bounty, soak, then the final adminless-funds mainnet deployment; publish TRUST.md, the transparency log, the recompute script, and the keeper runbook.
+**Phase 5 — hardening at traction:** audit competition on the (small) immutable core, Immunefi bounty, soak, then the final adminless-funds mainnet deployment; publish the verified contract addresses, transparency log, recompute script, and keeper runbook in their relevant technical documentation.
 
 ## Cutover and cleanup rules
 
@@ -203,7 +203,7 @@ Start with one stateful fund-holding core to eliminate mutual-reference cycles. 
 - During migration, the new deployment uses a distinct deployment schema/version; never make a mixed old/new address bundle look healthy. Readiness fails closed if any legacy-required address is accidentally treated as part of the tokenless core.
 - Commit deletion, new contract core, service/indexer migration, and app/SDK migration as separate concerns. A phase is complete only when `rg` finds no unintended legacy symbol and the relevant tests no longer encode old behavior.
 
-## TRUST.md (published trust posture)
+## Public settlement and custody documentation
 
 Immutable fund-holding core (addresses + verification links); no operator/admin path to funds; separately disclosed credential-issuer signer rotation and its admission/censorship power. State honest limits: funds are USDC and inherit Circle's freeze/blacklist power and depeg risk; sealing trusts drand; vote admission and caps are operator-attested; a normal claim links the vote key to its destination; the operator stores the off-chain vote-key↔identity mapping during required retention. Raters never deposit funds; votes are sealed and cast from single-use keys; one-vote-per-identity is enforced by on-chain nullifiers under the issuer trust assumption; settlement is recomputable; bounded remediation and attempt-compensation policies are explicit; bug policy = disclose → exit → redeploy; run-your-own-keeper instructions.
 

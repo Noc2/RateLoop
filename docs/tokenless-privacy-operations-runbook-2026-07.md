@@ -49,13 +49,13 @@ model. Pre-workspace authentication events use a separate chain. These are not a
 archive, or complete log of every application action. If verification fails, stop export, preserve database and runtime
 evidence, open an incident, and do not repair or reseed the chain before independent review.
 
-## Trust-claim withdrawal
+## Public-statement correction
 
 If implementation, live configuration, processor terms, or evidence no longer supports a public statement:
 
-1. mark the registry entry `withheld`, `verification_pending`, or `not_available` as appropriate;
-2. update the exact public statement and review date in the versioned trust registry;
-3. run trust-page and homepage source/render tests;
+1. remove or narrow the statement in the product surface and its corresponding technical documentation;
+2. record the evidence change, review owner, and next approval gate internally;
+3. run the affected source/render tests;
 4. publish only to the isolated tokenless deployment and confirm `rateloop.ai` did not move; and
 5. record the affected evidence, owner, withdrawal time, customer-notice decision, and remediation gate.
 

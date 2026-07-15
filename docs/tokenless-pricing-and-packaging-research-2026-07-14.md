@@ -150,7 +150,7 @@ event, must increment usage idempotently.
 - community support; and
 - no public-network or paid-panel launch, production SLA, custom retention, SSO, or bulk export.
 
-The free plan must demonstrate the real private-group loop; a dashboard-only sandbox will not establish value. Also
+The free plan must demonstrate the real private-group loop; a dashboard-only mock will not establish value. Also
 offer a 14-day Team trial for buyers that need to test webhooks, adaptive policy, and larger groups. Rate limits and
 retention should control cost; withholding the core integration should not.
 

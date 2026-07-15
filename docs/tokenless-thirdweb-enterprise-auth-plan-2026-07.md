@@ -1,6 +1,6 @@
 # Tokenless thirdweb and enterprise authentication plan (July 2026)
 
-**Status:** Historical implementation reference. The [EU trust and identity implementation plan](tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md) supersedes this document's thirdweb-primary browser identity decision. thirdweb remains an optional, explicit funding/payout wallet adapter after Better Auth login. This document does not change the immutable fund-core, deployment key, settlement rules, or the isolation boundary from `main` and `rateloop.ai`.
+**Status:** Historical implementation reference. The [production-readiness register](tokenless-production-readiness-2026-07.md) supersedes this document's thirdweb-primary browser identity decision. thirdweb remains an optional, explicit funding/payout wallet adapter after Better Auth login. This document does not change the immutable fund-core, deployment key, settlement rules, or the isolation boundary from `main` and `rateloop.ai`.
 
 ## Outcome
 

@@ -108,7 +108,7 @@ The public MCP keeps exactly four tools: capabilities, create-browser-handoff, h
 - Image tests cover MIME spoofing, corrupt input, size/pixel/animation limits, EXIF stripping, normalized digest binding, quotas, idempotency, cross-workspace access, moderation failure, orphan cleanup, and takedown.
 - Product tests prove changing image order, digest, alt text, or YouTube ID changes the content hash and that ask preparation cannot alter the quoted descriptor.
 - Renderer tests prove no raw storage references escape, images have meaningful alt text, and YouTube uses click-to-load privacy-enhanced embeds without autoplay.
-- Browser verification covers upload → preview/remove → sandbox submit → Answer rendering for images and YouTube on desktop and mobile.
+- Browser verification covers upload → preview/remove → persisted submit → Answer rendering for images and YouTube on desktop and mobile.
 - `rg` proves no legacy media contract, registry, wallet challenge, confidentiality, or local-signer imports returned.
 - Run SDK, agents, and Next.js tests, type checks, lint, and production build before the guarded `tokenless` push.
 

@@ -237,7 +237,7 @@ Add an append-only migration after the current `0047` migration:
 
 - add visibility/material-kind/private-sensitivity fields where needed;
 - add a publishing-policy public-lane flag and private-sensitivity ceiling;
-- map existing sandbox rows deterministically;
+- map obsolete hosted-preview rows deterministically;
 - fail closed on any row that cannot be mapped;
 - update indexes and constraints;
 - update `dataPolicy.ts`, `productCore.ts`, private-group enforcement, question records, account routes, SDK schemas,
@@ -599,7 +599,7 @@ Phase 1 may deploy without changing the privacy schema because the obsolete poli
 ### Phase 3 — normalize privacy/content policy
 
 8. **`feat(db): separate visibility material kind and sensitivity`**
-   - append-only migration and deterministic sandbox mapping.
+   - append-only migration and deterministic obsolete-row mapping.
 
 9. **`refactor(privacy): enforce normalized content dimensions`**
    - backend services, credential policy, project/group authorization, publishing policy, and public ingress.

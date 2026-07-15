@@ -414,13 +414,13 @@ If design partners still reject the residual public metadata, that is a product-
 
 1. **Finish the existing live-product gates.** Complete fresh Base Sepolia deployment, deployment-key propagation, automated pipeline driving, smoke E2E, and the rater/funder post-submit loops from the readiness assessment.
 2. **Add evaluation context and artifacts.** The current [`TokenlessQuestion`](../packages/sdk/src/tokenlessTypes.ts) carries a prompt and labels but no source artifact, response pair, transcript bundle, rubric, URL, or image. A workflow or release decision cannot be judged from a bare sentence.
-3. **Guarantee the rater type.** The current [landing page](<../packages/nextjs/app/(public)/page.tsx>) says “Human and AI raters guide decisions.” The recommended product needs an explicit **verified-human panel** mode. Synthetic or agent raters can remain in a labeled sandbox, but must never be mixed into a human-calibration result.
+3. **Guarantee the rater type.** The current [landing page](<../packages/nextjs/app/(public)/page.tsx>) says “Human and AI raters guide decisions.” The recommended product needs an explicit **verified-human panel** mode. Synthetic or agent-generated fixtures belong only in automated tests and must never be mixed into a human-calibration result.
 4. **Add job-relevant cohorts.** Current audience selection is identity assurance (`selfie`, `passport`, `orb`, `presence`). The buyer needs language, geography, AI-tool familiarity, role/industry when applicable, and repeat-cohort controls. Personhood is an input to quality, not the finished audience product.
 5. **Return decision evidence, not a magic confidence score.** For small panels, expose sample size, cohort definition, vote split, rationale themes, disagreement, completion/failure state, and methodology. Do not imply statistical representativeness from an opaque `confidenceBps` field.
 6. **Orchestrate an eval run.** Add an off-chain run object that groups multiple binary/A/B rounds, tracks a release candidate or experiment, and emits one webhook summary. This need not expand the fund-holding contract.
 7. **Capture evaluation provenance and client acceptance.** Record who funded the work, selected cases, wrote the rubric, chose the cohort, operated the run, interpreted the result, and owned the final decision. For concierge pilots, a signed client approval of the manifest is enough; do not build a full consultant portal before repeated demand.
 8. **Make private-by-default evidence a launch gate.** Complete the field/event-level public-metadata threat model, DPIA/data map, keyed commitment scheme, per-rater mapping encryption, tenant access controls, deletion/retention path, and a clear managed-panel confidentiality contract before accepting private customer artifacts. Consultant access must be scoped to its client engagement rather than an undifferentiated agency account.
-9. **Benchmark the scoring mechanism.** Label v0 correctly as consensus-prediction accuracy, publish worked examples, and compare it in sandbox/concierge studies with equal-pay simple majority. Measure task time, completion, comprehension, honest minority preservation, repeatability, manipulation response, and whether the prediction bucket changes the business decision.
+9. **Benchmark the scoring mechanism.** Label v0 correctly as consensus-prediction accuracy, publish worked examples, and compare it in controlled concierge studies with equal-pay simple majority. Measure task time, completion, comprehension, honest minority preservation, repeatability, manipulation response, and whether the prediction bucket changes the business decision.
 10. **Stand up one managed supply cohort.** Recruit and qualify only the rater segment required by the first design partners; implement the advisory/practice funnel, active-capacity metrics, task notifications, receipts, and a minimum fill-rate operating playbook.
 
 ### P1: required for repeated paid use
@@ -623,7 +623,7 @@ Build only the minimum P0 additions around the existing API:
 - one eval-platform export or generic webhook example; and
 - a signed evaluation manifest recording funder, case/rubric author, operator, reviewer source, acceptance rule, interpreter, and client decision owner.
 
-Use sandbox/test funds until the production-readiness gates for real money are closed.
+Use testnet funds until the production-readiness gates for real money are closed.
 
 ### Weeks 6–9: run repeated partner decisions
 
@@ -636,7 +636,7 @@ Target at least two channel partners across three client-isolated projects, plus
 
 Measure turnaround, completion, cohort quality, disagreement, decision change, time saved, and repeat usage. Do not market agreement with internal reviewers as accuracy; the purpose is to learn when each signal is useful.
 
-In sandbox or matched low-risk runs, compare the five-bucket prediction interaction with a simple equal-pay version. Measure completion time, abandonment, rater comprehension, payout dispersion, stability across repeats, minority-signal preservation, buyer understanding, and whether either result better predicts later user evidence. Do not silently run two paid mechanisms with different terms inside one panel.
+In matched low-risk studies, compare the five-bucket prediction interaction with a simple equal-pay version. Measure completion time, abandonment, rater comprehension, payout dispersion, stability across repeats, minority-signal preservation, buyer understanding, and whether either result better predicts later user evidence. Do not silently run two paid mechanisms with different terms inside one panel.
 
 For privacy, record what each partner actually submits, what must be redacted, who accesses it, which public metadata they reject, and whether the portable evidence packet is used. For supply, measure cohort-specific fill latency and active capacity rather than total signups.
 
@@ -674,7 +674,7 @@ Reconsider or stop if:
 
 ## Self-dogfooding and outside validation
 
-The RateLoop ratings workflow would normally be useful for testing the positioning, rater comprehension, and privacy language. It was not used for this report because the available live workflow targets the legacy `rateloop.ai` deployment, while the `tokenless` branch rules prohibit sending tokenless review asks through that product. The isolated tokenless client currently exposes a deterministic sandbox, not an outside-human handoff.
+The RateLoop ratings workflow would normally be useful for testing the positioning, rater comprehension, and privacy language. It was not used for this report because the available live workflow targets the legacy `rateloop.ai` deployment, while the `tokenless` branch rules prohibit sending tokenless review asks through that product. The isolated tokenless client did not yet expose an outside-human handoff when this report was written.
 
 After the isolated tokenless deployment has a real human-panel path, run three separate tests:
 

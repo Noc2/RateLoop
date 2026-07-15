@@ -2,13 +2,11 @@
 
 **Status:** Accepted product and implementation amendment for the `tokenless` branch. The
 [concise progressive-disclosure product plan](tokenless-concise-product-ux-plan-2026-07-15.md) supersedes this document's
-screen composition, always-visible tab, and large-form recommendations where they conflict. This plan supersedes the
-information architecture and human-authored `/ask` journey in the
-[Answer, Ask, and Account plan](tokenless-answer-ask-account-navigation-plan-2026-07.md). It does not
+screen composition, always-visible tab, and large-form recommendations where they conflict. It does not
 supersede the fund-custody, settlement, identity, privacy, or deployment-isolation decisions in the
 [tokenless design of record](tokenless-immutable-implementation-plan-2026-07.md). It turns existing production-grade
-building blocks into a coherent two-sided product and closes the gap between an explicit sandbox publication and a
-non-sandbox launch.
+building blocks into a coherent two-sided product and closes the gap between the current implementation and a
+production-ready launch.
 
 ## 1. Recommended decision
 
@@ -90,7 +88,8 @@ The main gaps are product composition and production operations:
 5. Spending policies exist in services and migrations but do not have a complete owner-facing product UI.
 6. Review frequency cannot yet adapt from continuous calibration evidence.
 7. There is no evaluation dashboard joining an agent suggestion to the eventual human result.
-8. The active v3 deployment registry is intentionally empty; the hosted app remains an explicit sandbox.
+8. The active v3 Base Sepolia deployment is pinned as one complete deployment key; hosted publication remains
+   fail-closed until the production-readiness register is complete.
 9. Production KMS, paid settlement integration, screening/legal operations, workers, E2E, and external review remain open.
 10. Starting World ID enrollment currently requires an existing paid rater profile, even though browser identity,
     Proof of Human, and paid eligibility are separate concepts.
@@ -223,7 +222,7 @@ have read-only access to permitted results. It has four URL-backed tabs.
 
 Show setup and operational state, not marketing copy:
 
-- production/sandbox badge and complete deployment key status;
+- release status and complete deployment key status;
 - workspace funding balance and this-month authorized/spent USDC;
 - active agents and review-policy health;
 - pending reviews, results ready, expiring invitations, and delivery failures;
@@ -528,7 +527,7 @@ replaces paid eligibility.
 
 ### 8.2 Artifact and identity privacy
 
-Before non-sandbox private data:
+Before hosted private data:
 
 - use a production object store and per-domain envelope encryption backed by KMS/HSM;
 - separate browser identity, provider evidence, vote linkage, customer artifact, and statutory/tax key domains;
@@ -652,7 +651,7 @@ Do not redirect `/handoff`.
 22. **`test(e2e): verify adaptive agent review`**
     Calibrate → step down → forced sample → drift → reset → policy miss → handoff, including crash and retry paths.
 
-### Phase E — non-sandbox production hardening
+### Phase E — production hardening
 
 23. **`fix(contracts): close remaining paid-settlement blockers`**
     Complete assignment-specific paid settlement/receipts and any unresolved reserve, scoring, deadline, gas, or size
@@ -676,8 +675,8 @@ Do not redirect `/handoff`.
     isolated app, database, Ponder, keeper, workers, and signer atomically.
 30. **`test(audit): complete external contract privacy and app review`**
     Resolve findings, publish verifier/runbooks and trust limitations, then repeat the full live fixture.
-31. **`chore(release): enable isolated non-sandbox production`**
-    Set `TOKENLESS_SANDBOX_MODE=false` only after all fail-closed checks pass. The release targets only the
+31. **`chore(release): enable isolated production`**
+    Publish only after all fail-closed checks pass. The release targets only the
     `rateloop-tokenless` Vercel/Railway line and its Vercel-provided domain. It must not move `main`, the legacy
     `rate-loop-nextjs` project, `rateloop.ai`, or `www.rateloop.ai`.
 
@@ -745,7 +744,7 @@ The redesign is production-ready only when all of the following are true:
     resets on change or drift.
 11. The agent can read the current assurance state through authenticated MCP, but cannot edit evidence or policy.
 12. Evaluations use precommitted agent suggestions and source-derived human results and show uncertainty/sample size.
-13. World ID, thirdweb, notifications, private storage, workers, and payment paths pass live non-sandbox E2E.
+13. World ID, thirdweb, notifications, private storage, workers, and payment paths pass live production E2E.
 14. Production secrets use managed, separated custody and operational rotation/recovery runbooks.
 15. Paid settlement, contracts, privacy, tenant isolation, and operating controls pass external review.
 16. A fresh active v3 deployment and every isolated service share one complete deployment key.

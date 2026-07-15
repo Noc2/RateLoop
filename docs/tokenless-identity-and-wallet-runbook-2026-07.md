@@ -14,7 +14,7 @@ payout, or recovery action; an existing self-custodial wallet remains supported.
 3. Configure an approved Resend account and a verified domain dispatched from `eu-west-1` for email OTP. Resend account
    data, email metadata, logs, and API records remain in the US, so attach the DPA/transfer assessment and do not count
    this processor as EU-resident. RateLoop stores OTP values hashed and limits them to three attempts and five minutes.
-4. Set `BETTER_AUTH_PASSKEY_RP_ID=rateloop-tokenless.vercel.app` for the hosted sandbox. Register only the exact
+4. Set `BETTER_AUTH_PASSKEY_RP_ID=rateloop-tokenless.vercel.app` for the isolated hosted application. Register only the exact
    `https://rateloop-tokenless.vercel.app` WebAuthn origin.
 5. Add Google or Apple credentials only as complete server-only pairs. Their callback must use the isolated tokenless
    origin; never authorize `rateloop.ai`.

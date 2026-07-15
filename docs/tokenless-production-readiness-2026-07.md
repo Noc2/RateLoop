@@ -30,7 +30,7 @@ not permitted.
 ## Gates before the next hosted staging release
 
 1. **Remove the simulation surface end to end.** Delete the runtime mode and in-memory result path; remove the
-   `sandbox` reviewer source and simulated-payment vocabulary from SDK/API schemas, MCP, UI, persistence, and tests; add
+   obsolete reviewer source and fabricated-payment vocabulary from SDK/API schemas, MCP, UI, persistence, and tests; add
    a forward migration that rejects or removes obsolete records. Preserve only injected deterministic test fixtures.
 2. **Complete managed signing.** Replace hosted hot-key assumptions with reviewed managed signing for credential
    issuance and every chain transaction role. Keep credential issuer, gas-only relayer, prepaid funder, surprise-bonus

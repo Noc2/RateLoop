@@ -21,7 +21,7 @@
   Self remains a later optional document-predicate provider. Customer-invited private panels do not inherit that gate.
 - Pipeline and integration foundations are present, but production scheduling, safe artifact upload, settlement
   notifications, earnings, full buyer APIs/UI, compliance operations, browser E2E, and the atomic fresh deployment
-  remain open. The isolated web deployment may be published only as an explicitly simulated sandbox meanwhile.
+  remain open. Hosted publication remains fail-closed until those release gates pass.
 
 ## Decision
 
@@ -58,7 +58,7 @@ Keep these modes separate in the data model, UI, report, and pricing:
 | Customer-invited | Named employees, users, customers, or experts | Off-chain if unpaid; on-chain if paid            | Relevant customer-selected reviewers; not independent by default |
 | RateLoop network | RateLoop-recruited and qualified reviewers    | On-chain paid rounds                             | External panel with disclosed qualifications and assurance       |
 | Hybrid           | Separate invited and RateLoop sub-panels      | Separate results and, when paid, separate rounds | Comparison across sources; never one opaque blended score        |
-| Sandbox          | Simulated responses only                      | None                                             | Test data, never represented as human evidence                   |
+| Test fixtures    | Deterministic injected responses              | None                                             | Automated tests only; never a hosted reviewer source             |
 
 Customer invitations should be the default private B2B path. A one-time access code proves authorization to a project; it does not prove unique humanity, age, expertise, sanctions clearance, or paid-work eligibility. Every paid reviewer must complete the legal/payout gate before the first voucher, including customer invitees.
 
@@ -76,7 +76,7 @@ Customer invitations should be the default private B2B path. A one-time access c
 Do not replace World ID with Self, and do not make either provider mandatory for customer-invited reviews. Require World ID 4 Proof of Human for RateLoop-network supply while retaining a versioned, provider-neutral audience policy that can compose later providers and never reduces assurance to `selfie < passport < orb < presence`.
 
 ```text
-source: invited | rateloop_network | hybrid | sandbox
+source: invited | rateloop_network | hybrid
 cohorts: qualifications, quotas, and source provenance
 assurance: required capabilities and acceptable providers
 selection: randomized | customer_named
@@ -216,7 +216,7 @@ Each numbered item is one intended commit. Keep contract, schema, privacy, produ
    Make this category, the four reviewer modes, product objects, privacy boundary, evidence claims, success metrics, and non-goals part of the design of record. Reconcile readiness, PMF, consulting, README, TRUST, and deployment-staleness statements.
 
 2. **`fix(privacy): fail closed on task visibility`**
-   Stop returning live content to unassigned accounts. Until assignment authorization exists, allow only explicitly public synthetic/sandbox tasks; add authorization-bypass regression tests.
+   Stop returning content to unassigned accounts. Until assignment authorization exists, allow only explicitly public synthetic fixtures in automated tests; add authorization-bypass regression tests.
 
 3. **`fix(contracts): harden beacon failure compensation`**
    Close reserve farming, enforce safe deadline separation, extend invariants, and mark all deployment artifacts/hosted addresses stale.
@@ -239,7 +239,7 @@ Each numbered item is one intended commit. Keep contract, schema, privacy, produ
    Add authenticated uploads, encrypted object storage, separate key domains, salted commitments, assignment leases, read/export logs, and retention/deletion jobs. Remove confidential payloads from the public quote path.
 
 9. **`feat(audience): add cohorts invitations and assignments`**
-   Implement invited, network, hybrid, and sandbox sources; hashed single-use codes; account-bound redemption; quotas; capacity reservations; confidentiality acceptance; and assignment-only content access.
+   Implement invited, network, and hybrid sources; hashed single-use codes; account-bound redemption; quotas; capacity reservations; confidentiality acceptance; and assignment-only content access.
 
 10. **`refactor(eligibility): separate access assurance and paid compliance`**
     Replace the single identity tier record with capability evidence, split all country meanings, isolate DAC7/provider key domains, and keep paid eligibility before vouchers.
@@ -268,7 +268,7 @@ Each numbered item is one intended commit. Keep contract, schema, privacy, produ
     Replace the manual operator-input publication path with a deployment-pinned worker, deterministic analytics, signed webhook delivery, rater earnings, buyer/rater notifications, and retry/alerting.
 
 18. **`feat(mcp): restore privacy-safe agent handoffs`**
-    Add a fresh tokenless MCP adapter rather than reviving the legacy tool graph. Expose exactly capabilities, create browser handoff, handoff status, and result. Keep quote, ask, payment, upload, and bounded wait in the browser or authenticated API. Bundle a Codex skill that requires explicit approval of the exact outbound public, synthetic, or safely redacted payload. The hosted MCP processes that approved payload without persisting it and returns a bearer URL whose fragment holds the draft through browser review. The browser stores the reviewed question and panel terms only when the user requests an exact quote, and submits the ask only through a second explicit action. Keep sandbox output explicitly simulated. Do not expose private artifact upload until owner/admin approval has server-recorded provenance and an access-log event.
+    Add a fresh tokenless MCP adapter rather than reviving the legacy tool graph. Expose exactly capabilities, create browser handoff, handoff status, and result. Keep quote, ask, payment, upload, and bounded wait in the browser or authenticated API. Bundle a Codex skill that requires explicit approval of the exact outbound public, synthetic, or safely redacted payload. The hosted MCP processes that approved payload without persisting it and returns a bearer URL whose fragment holds the draft through browser review. The browser stores the reviewed question and panel terms only when the user requests an exact quote, and submits the ask only through a second explicit action. Deterministic responses belong only in injected tests. Do not expose private artifact upload until owner/admin approval has server-recorded provenance and an access-log event.
 
 19. **`feat(integrations): expose authenticated assurance runs`**
     Add project/run endpoints, owner-approved artifact uploads, batch status/results, signed webhooks, OAuth for interactive MCP clients, scoped API keys for server integrations, and examples for one eval platform and one consulting workflow. A workspace may preauthorize bounded audience, budget, classification, and retention policies; otherwise submission continues through the browser handoff.
