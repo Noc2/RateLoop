@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
-import { getAddress } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
+import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ARTIFACT_KEY_DOMAIN = "customer_artifact";
@@ -30,11 +30,7 @@ function rowString(row: QueryRow | undefined, key: string) {
 }
 
 function actorAddress(value: string) {
-  try {
-    return getAddress(value).toLowerCase();
-  } catch {
-    throw new TokenlessServiceError("A valid signed-in account is required.", 401, "invalid_account");
-  }
+  return projectAccountReference(value);
 }
 
 function decodeMasterKey(value: string | undefined) {
@@ -133,21 +129,13 @@ async function requireProjectMember(input: {
   workspaceId: string;
   manage?: boolean;
 }) {
-  const address = actorAddress(input.accountAddress);
-  const result = await dbClient.execute({
-    sql: `SELECT m.role, p.retention_days
-          FROM tokenless_assurance_projects p
-          JOIN tokenless_workspace_members m ON m.workspace_id = p.workspace_id
-          WHERE p.project_id = ? AND p.workspace_id = ? AND m.account_address = ? AND p.status <> 'deleted'
-          LIMIT 1`,
-    args: [input.projectId, input.workspaceId, address],
+  const access = await authorizeProjectAccount({
+    accountAddress: input.accountAddress,
+    action: input.manage ? "manage" : "write",
+    projectId: input.projectId,
+    workspaceId: input.workspaceId,
   });
-  const row = result.rows[0] as QueryRow | undefined;
-  const role = rowString(row, "role");
-  if (!role || role === "billing" || (input.manage && role !== "owner" && role !== "admin")) {
-    throw new TokenlessServiceError("Project not found.", 404, "project_not_found");
-  }
-  return { address, retentionDays: Number(rowString(row, "retention_days")), role };
+  return { address: access.accountReference, retentionDays: access.retentionDays, role: access.role };
 }
 
 async function appendAccessLog(input: {
@@ -345,16 +333,28 @@ export async function readEncryptedArtifact(input: {
   now?: Date;
 }) {
   const address = actorAddress(input.accountAddress);
-  const memberResult = await dbClient.execute({
-    sql: `SELECT m.role FROM tokenless_assurance_projects p
-          JOIN tokenless_workspace_members m ON m.workspace_id = p.workspace_id
-          WHERE p.project_id = ? AND p.workspace_id = ? AND m.account_address = ? LIMIT 1`,
-    args: [input.projectId, input.workspaceId, address],
+  const action = input.purpose === "export" ? "export" : "read";
+  const assigned = await authorizeProjectAccount({
+    accountAddress: input.accountAddress,
+    action,
+    projectId: input.projectId,
+    workspaceId: input.workspaceId,
+    now: input.now,
+  }).catch(error => {
+    if (
+      error instanceof TokenlessServiceError &&
+      ["project_not_found", "project_access_forbidden"].includes(error.code)
+    ) {
+      return null;
+    }
+    throw error;
   });
-  const memberRole = rowString(memberResult.rows[0] as QueryRow | undefined, "role");
-  const role = memberRole === "billing" ? null : memberRole;
+  const role = assigned?.role ?? null;
   let leaseId: string | null = null;
   if (!role) {
+    if (input.purpose === "export") {
+      throw new TokenlessServiceError("Artifact export is not permitted.", 403, "artifact_export_forbidden");
+    }
     const leaseResult = await dbClient.execute({
       sql: `SELECT lease_id FROM tokenless_assurance_artifact_leases
             WHERE lease_id = ? AND artifact_id = ? AND workspace_id = ? AND project_id = ? AND account_address = ?
@@ -371,16 +371,33 @@ export async function readEncryptedArtifact(input: {
     leaseId = rowString(leaseResult.rows[0] as QueryRow | undefined, "lease_id");
     if (!leaseId) throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
   }
-  if (input.purpose === "export" && role !== "owner" && role !== "admin") {
-    throw new TokenlessServiceError("Artifact export is not permitted.", 403, "artifact_export_forbidden");
-  }
   const result = await dbClient.execute({
     sql: `SELECT a.content_type, a.size_bytes, o.storage_ref, o.key_version, o.content_nonce, o.content_auth_tag,
                  o.wrapped_data_key, o.wrap_nonce, o.wrap_auth_tag
           FROM tokenless_assurance_artifacts a
           JOIN tokenless_assurance_artifact_objects o ON o.artifact_id = a.artifact_id
-          WHERE a.artifact_id = ? AND a.project_id = ? AND o.workspace_id = ? AND o.status = 'active' LIMIT 1`,
-    args: [input.artifactId, input.projectId, input.workspaceId],
+          LEFT JOIN tokenless_project_access_assignments pa
+            ON pa.workspace_id = o.workspace_id AND pa.project_id = o.project_id
+            AND pa.subject_kind = 'account' AND pa.subject_reference = ? AND pa.status = 'active'
+            AND (pa.expires_at IS NULL OR pa.expires_at > ?) AND pa.role = ANY(?::text[])
+          LEFT JOIN tokenless_assurance_artifact_leases l
+            ON l.lease_id = ? AND l.artifact_id = a.artifact_id AND l.workspace_id = o.workspace_id
+            AND l.project_id = o.project_id AND l.account_address = ?
+            AND l.revoked_at IS NULL AND l.expires_at > ?
+          WHERE a.artifact_id = ? AND a.project_id = ? AND o.workspace_id = ? AND o.status = 'active'
+            AND (pa.assignment_id IS NOT NULL OR l.lease_id IS NOT NULL)
+          LIMIT 1`,
+    args: [
+      address,
+      input.now ?? new Date(),
+      action === "export" ? ["admin", "auditor"] : ["admin", "contributor", "auditor"],
+      leaseId ?? "",
+      address,
+      input.now ?? new Date(),
+      input.artifactId,
+      input.projectId,
+      input.workspaceId,
+    ],
   });
   const row = result.rows[0] as QueryRow | undefined;
   const storageRef = rowString(row, "storage_ref");

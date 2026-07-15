@@ -14,6 +14,7 @@ import {
   storeEncryptedArtifact,
 } from "~~/lib/tokenless/artifactPrivacy";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -62,6 +63,7 @@ async function seedProject(owner = OWNER, name = "Private quality loop") {
           VALUES (?, ?, ?, 'confidential', 'active', 30, ?, ?, ?)`,
     args: [projectId, workspaceId, name, owner.toLowerCase(), now, now],
   });
+  await createProjectOwnerAssignment({ accountAddress: owner, projectId, workspaceId, now });
   return { projectId, workspaceId };
 }
 

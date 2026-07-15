@@ -13,6 +13,11 @@ import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } fr
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
+import {
+  type ProjectAccessSubjectKind,
+  authorizeProjectSubject,
+  createInitialProjectAssignment,
+} from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown>;
@@ -93,6 +98,15 @@ function principalLabel(principal: AssurancePrincipal) {
   return principal.kind === "api_key"
     ? `api_key:${principal.apiKeyId}`
     : `account:${principal.accountAddress.toLowerCase()}`;
+}
+
+function projectAccessSubject(principal: AssurancePrincipal): {
+  subjectKind: ProjectAccessSubjectKind;
+  subjectReference: string;
+} {
+  return principal.kind === "api_key"
+    ? { subjectKind: "api_key", subjectReference: principal.apiKeyId }
+    : { subjectKind: "account", subjectReference: principal.accountAddress.toLowerCase() };
 }
 
 function assertWriteRole(role: TokenlessWorkspaceRole) {
@@ -177,21 +191,25 @@ async function requireProjectAccess(
     throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
   }
 
-  if (principal.kind === "api_key" || principal.kind === "workspace_session") {
-    if (principal.workspaceId !== workspaceId) {
-      throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
-    }
-    assertWriteRole(principal.role);
-  } else {
-    const membership = await dbClient.execute({
-      sql: `SELECT role FROM tokenless_workspace_members
-            WHERE workspace_id = ? AND account_address = ? LIMIT 1`,
-      args: [workspaceId, principal.accountAddress.toLowerCase()],
+  if (
+    (principal.kind === "api_key" || principal.kind === "workspace_session") &&
+    principal.workspaceId !== workspaceId
+  ) {
+    throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
+  }
+  const subject = projectAccessSubject(principal);
+  try {
+    await authorizeProjectSubject({
+      action: "write",
+      projectId,
+      workspaceId,
+      ...subject,
     });
-    const role = rowString(membership.rows[0] as QueryRow | undefined, "role") as TokenlessWorkspaceRole | null;
-    if (!role || !WRITE_ROLES.has(role)) {
+  } catch (error) {
+    if (error instanceof TokenlessServiceError && error.code.startsWith("project_")) {
       throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
     }
+    throw error;
   }
 
   if (options.active && rowString(row, "status") !== "active") {
@@ -248,24 +266,34 @@ export async function createAssuranceProject(input: {
       now,
     ],
   });
+  await createInitialProjectAssignment({
+    projectId,
+    workspaceId,
+    ...projectAccessSubject(input.principal),
+    now,
+  });
   return { projectId, workspaceId };
 }
 
 export async function listAssuranceProjects(principal: AssurancePrincipal) {
   const workspaceId = await resolveOnlyWritableWorkspace(principal);
+  const subject = projectAccessSubject(principal);
   const result = await dbClient.execute({
     sql: `SELECT p.project_id, p.name, p.description, p.data_classification, p.status,
                  p.retention_days, p.created_at, p.updated_at,
                  COUNT(DISTINCT s.suite_id) AS suite_count,
                  COUNT(DISTINCT r.run_id) AS run_count
           FROM tokenless_assurance_projects p
+          JOIN tokenless_project_access_assignments pa ON pa.project_id = p.project_id AND pa.workspace_id = p.workspace_id
           LEFT JOIN tokenless_assurance_suites s ON s.project_id = p.project_id
           LEFT JOIN tokenless_assurance_runs r ON r.project_id = p.project_id
           WHERE p.workspace_id = ? AND p.status <> 'deleted'
+            AND pa.subject_kind = ? AND pa.subject_reference = ? AND pa.status = 'active'
+            AND (pa.expires_at IS NULL OR pa.expires_at > ?)
           GROUP BY p.project_id, p.name, p.description, p.data_classification, p.status,
                    p.retention_days, p.created_at, p.updated_at
           ORDER BY p.updated_at DESC`,
-    args: [workspaceId],
+    args: [workspaceId, subject.subjectKind, subject.subjectReference, new Date()],
   });
   return result.rows.map(value => {
     const row = value as QueryRow;

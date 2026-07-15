@@ -281,6 +281,13 @@
       "when": 1783998000000,
       "tag": "0039_remove_private_group_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784001600000,
+      "tag": "0040_project_access_assignments",
+      "breakpoints": true
     }
   ]
 }

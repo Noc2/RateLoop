@@ -35,6 +35,36 @@ export const tokenlessAssuranceProjects = pgTable(
   }),
 );
 
+export const tokenlessProjectAccessAssignments = pgTable(
+  "tokenless_project_access_assignments",
+  {
+    assignmentId: text("assignment_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => tokenlessAssuranceProjects.projectId),
+    subjectKind: text("subject_kind").notNull(),
+    subjectReference: text("subject_reference").notNull(),
+    role: text("role").notNull(),
+    status: text("status").notNull().default("active"),
+    expiresAt: time("expires_at"),
+    grantedBy: text("granted_by").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: time("created_at").notNull(),
+    revokedAt: time("revoked_at"),
+    revokedBy: text("revoked_by"),
+  },
+  table => ({
+    lookupIdx: index("tokenless_project_access_assignments_lookup_idx").on(
+      table.workspaceId,
+      table.projectId,
+      table.subjectKind,
+      table.subjectReference,
+      table.status,
+    ),
+  }),
+);
+
 export const tokenlessAssuranceArtifacts = pgTable(
   "tokenless_assurance_artifacts",
   {
