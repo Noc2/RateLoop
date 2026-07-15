@@ -1,25 +1,37 @@
 # How RateLoop works
 
-RateLoop is designed to add a blinded human quality gate to an AI-enabled workflow.
+RateLoop adds a blinded human quality gate to an AI-enabled workflow.
 
-The public tokenless deployment is currently a simulated sandbox: it previews setup and reviewer journeys but does not recruit or pay live reviewers and does not produce live human evidence.
+1. **Freeze the decision.** A buyer or agent defines one question, the response format, a versioned audience policy,
+   panel size, deadlines, and the complete USDC economics.
+2. **Fund the panel.** A prepaid workspace or a self-funded agent authorizes the bounty, platform fee, and bounded
+   accepted-work reserve. The immutable round terms prevent the funder from changing the deal after the first commit.
+3. **Select eligible humans.** Customer-invited, RateLoop-network, and hybrid panels remain distinct. Network admission
+   can require World ID Proof of Human plus task-specific eligibility; the exact policy hash is bound into the round.
+4. **Collect blind judgments.** Reviewers answer through one-time vote keys. Commit-reveal and drand/tlock sealing keep
+   early answers hidden, while short assignment leases protect private material.
+5. **Settle deterministically.** Base pay rewards accepted work. Robust Bayesian Truth Serum can add a bounded reporting
+   bonus, and a separately funded Surprisingly Popular bounty can reward useful minority signal. Neither changes the
+   panel verdict.
+6. **Handle failure paths.** Anyone can continue settlement. Zero-commit rounds refund in full; under-quorum and beacon
+   failure paths return unused bounty and fee while preserving compensation for accepted valid work.
+7. **Return a decision packet.** The versioned result combines the verdict, disagreement, written reasons, reviewer
+   coverage, settlement evidence, refunds, and compensation. The customer records the final go, revise, or stop action.
 
-1. A customer creates a client-isolated project and freezes representative cases, baseline and candidate artifacts, a rubric, and a pass rule.
-2. The customer chooses invited reviewers, a RateLoop-network panel, separate hybrid subpanels, or a simulated sandbox. The exact audience policy is hashed into paid terms.
-3. Private artifacts are minimized, redacted, encrypted, and released only through short assignment leases.
-4. Any paid quote itemizes the reviewer bounty, platform fee, and maximum accepted-work reserve. Paid eligibility must be complete before an assignment or voucher.
-5. Reviewers compare blinded A/B artifacts, add bounded failure tags and a rationale, and cannot see early answers.
-6. Paid case rounds settle permissionlessly. Zero-commit rounds refund fully; under-quorum or beacon-failure paths refund bounty and fee while accepted valid work remains compensable.
-7. A private decision packet separates reviewer coverage from case judgments and reports per-case descriptive results, disagreement, limitations, and any valid settlement evidence. The customer records the final go, revise, or stop decision separately.
+## Agent integration
 
-There is no funder cancellation after the first accepted paid commit. A normal claim links the one-time vote key to its payout address. Assigned reviewers can read their leased material and public-chain settlement evidence remains public. A decision packet is evidence, not an automatic release, safety, legal, or compliance approval.
+The authenticated API and SDK use `quote -> ask -> wait -> result`. A scoped workspace key supports prepaid automation;
+a self-funded agent can use short-lived x402/EIP-3009 USDC authorizations. The public MCP Adapter creates an
+approval-bound browser handoff and never turns draft content into a funded ask by itself.
 
-Browser access starts with Better Auth and resolves to an opaque RateLoop principal; creating an account does not create
-or require a wallet. A signed-in user explicitly adds a self-custodial or optional thirdweb app wallet only for a
-funding, payout, or recovery purpose. That wallet binding is revocable and never grants workspace access by itself.
+## Identity and access
 
-Private project access is limited by workspace membership, explicit project assignment, and reviewer lease where
-applicable. Repository controls also bind data to classification, permitted use, EU home region, retention and legal-hold
-policy; provide structured subject-request workflows; and create integrity-chained exportable application audit records.
-The audit chain is not an immutable/WORM log. The current public sandbox is not represented as EU-hosted or certified;
-live EU resources, KMS, processors, backups, and external approvals remain separate gates described at `/trust`.
+Browser access starts with Better Auth and resolves to an opaque RateLoop principal. A wallet is optional and is bound
+only for an explicit funding, payout, or recovery purpose. Private project access depends on workspace membership,
+project assignment, and reviewer lease rather than wallet ownership.
+
+## Evidence boundary
+
+Private artifacts are encrypted and access-controlled. Paid settlement inputs and outputs are independently
+recomputable on Base. A normal claim publicly links its one-time vote key to the chosen payout destination, while the
+customer's private artifacts and decision record remain outside the public chain.

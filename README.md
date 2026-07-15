@@ -1,77 +1,62 @@
 # RateLoop
 
-RateLoop is **human assurance for AI-enabled workflows**: blinded baseline-versus-candidate evaluation by relevant
-reviewers, a private decision packet, and independently checkable evidence. The branch now includes the private
-project, suite, audience, assignment, response, and evidence foundations alongside the case-level settlement
-primitive. The public deployment remains an explicitly simulated sandbox; the
-[human-assurance redesign plan](docs/tokenless-human-assurance-redesign-plan-2026-07.md) tracks the remaining buyer,
-paid-settlement, operational, and E2E work.
+RateLoop is **human assurance for AI-enabled workflows**. Agents and teams can send a focused question to a blinded
+human panel, pay for accepted work in USDC, and receive a decision packet with independently checkable evidence.
 
-## Deployment status
+## How it works
 
-The disposable tokenless contracts deployed to Base Sepolia on 13 July 2026 at block `44083251` are now historical.
-The checked-in `tokenless-v1/84532.json` artifact is explicit historical evidence. The active generated deployment
-registry is empty, and every live service now requires the reserved v2 schema/key. A fresh isolated v2 deployment is
-required after the planned contract commits.
+1. An agent or buyer freezes the question, audience policy, panel size, and economic terms.
+2. Eligible reviewers commit blinded answers and reveal them after the round closes.
+3. RateLoop combines the panel signal, written reasons, settlement evidence, and complete fund accounting in a
+   versioned result. The customer remains responsible for the final decision.
 
-- isolated app: <https://rateloop-tokenless.vercel.app>
-- isolated Ponder service: <https://tokenless-ponder-production.up.railway.app>
-- isolated keeper service: <https://tokenless-keeper-production.up.railway.app/live>
+The integration contract is deliberately small: `quote -> ask -> wait -> result`. Remote MCP browser handoffs keep the
+outbound payload approval-bound, while scoped workspace API keys support autonomous agent workflows. The underlying
+mechanisms include x402 USDC funding, proof-of-human admission, commit-reveal voting, drand/tlock reveal timing, Robust
+Bayesian Truth Serum, Surprisingly Popular incentives, and permissionless settlement on Base.
+
+## Deployment
+
+The isolated tokenless application is at <https://rateloop-tokenless.vercel.app>. Its supporting Ponder and keeper
+services are also isolated from the legacy RateLoop deployment.
+
+The checked-in Base Sepolia deployment is `tokenless-v3`, deployed at block `44132668`:
 
 ```text
-tokenless-v1:84532:0x9f21adbac4c007dd45c55d24e38f0067d1e1c5ba:0x830bee10d5304142cd87acac983af140d946def0:0x226891915c1ccce315ddfe58195fdc0a16bd977d
+tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9
 ```
 
-- `TokenlessPanel`: `0x9f21ADBAC4C007dd45c55D24E38F0067D1e1C5ba`
-- `CredentialIssuer`: `0x830BEe10D5304142cD87ACAC983Af140D946dEf0`
-- `X402PanelSubmitter`: `0x226891915c1CCCe315ddFE58195Fdc0A16bd977D`
-- unrestricted test `tUSDC`: `0x1A63AF26F6bD65De51B20DBaeF093C088A52C9df`
+Hosted releases use the same persisted workflow as production. Release checks fail closed until the configured chain,
+database, regional resources, signing roles, private storage, and operational evidence all match the approved
+deployment manifest. The current release record is maintained internally in
+[`docs/tokenless-production-readiness-2026-07.md`](docs/tokenless-production-readiness-2026-07.md).
 
-After the next redeployment, generate `packages/foundry/deployments/tokenless-v2/84532.json` and [`packages/contracts/src/tokenless`](packages/contracts/src/tokenless), then update Vercel, Ponder, keeper, and the deployment-scoped database together. Do not overwrite the historical v1 artifact.
+## Identity and privacy
 
-The explicit sandbox remains deterministic and simulated. Production mode implements Base Account funding, prepaid and
-x402 execution, paid eligibility and vouchers, sponsored sealed commits, permissionless keeper settlement, indexed
-evidence, analytics publication, and signed webhooks. The Vercel deployment remains explicitly sandboxed until the
-complete live secret/provider bundle is provisioned; configuring the contract identity alone does not enable paid mode.
+Browser accounts use Better Auth and resolve to an opaque RateLoop principal. A wallet is optional and is connected
+only for an explicit funding, payout, or recovery action; it never grants workspace access. Server-to-server callers
+use scoped, revocable workspace API keys.
 
-## Identity, privacy, and EU-first controls
-
-Browser accounts are wallet-independent. Better Auth verifies email OTP, passkey, and configured social-provider
-sign-ins; RateLoop exchanges that identity for an opaque principal and a RateLoop-owned, hashed, HttpOnly application
-session. A user adds a self-custodial or thirdweb in-app wallet only when a funding, payout, or recovery flow requires
-one. Wallet bindings are explicit, purpose-scoped, revocable, and never grant workspace access by themselves.
-
-The repository now includes an EU-first deployment contract, canonical data classifications and permitted uses,
-project-assignment authorization for private artifacts, an envelope-vault boundary, retention/subject-request/legal-hold
-workflows, and integrity-chained exportable application audit records. These are implemented controls, not evidence that
-the current sandbox is EU-hosted or certified. The live EU resource bundle, managed regional KMS, processor evidence,
-backup/restore proof, and external security/legal approvals remain release gates.
-
-The versioned trust-claim registry and public `/trust` page are the source of truth for marketable statements. RateLoop
-does not currently claim verified EU hosting, a contractual no-training commitment, SOC 2, blanket GDPR compliance,
-HIPAA via BAA, customer-VPC deployment, SAML/SCIM, independent penetration-test coverage, or immutable/WORM audit logs.
-See the [EU deployment runbook](docs/tokenless-eu-deployment-runbook.md) and
-[privacy operations runbook](docs/tokenless-privacy-operations-runbook-2026-07.md), plus the
-[implementation plan](docs/tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md), for the exact gates.
+Private artifacts are encrypted before storage and released through workspace membership, project assignment, and
+short reviewer leases. Workspaces carry data-classification, permitted-use, retention, legal-hold, and regional
+policies. Paid settlement evidence remains publicly verifiable, while private project material stays access-controlled.
 
 ## Architecture
 
-- `packages/foundry` — immutable panel, credential issuer, stateless x402 adapter, tests, and Base Sepolia deployment tooling.
-- `packages/contracts` — tokenless-only generated ABIs and deployment metadata; the checked-in Base Sepolia metadata is currently stale.
-- `packages/ponder` — tokenless event indexer and public evidence/status API.
-- `packages/keeper` — permissionless reveal, settlement, claim, compensation, and stale-return automation.
-- `packages/sdk` — versioned quote → ask → wait → result and assurance project/run clients and JSON schemas.
-- `packages/agents` — tokenless agent CLI, including API-key-scoped assurance project/run reads.
-- `packages/nextjs` — wallet-independent browser identity, buyer/rater foundations, private evidence packets, lifecycle
-  and audit controls, and durable agent APIs.
+- `packages/foundry` — immutable fund custody and settlement, credential issuance, and the stateless x402 adapter.
+- `packages/contracts` — generated tokenless ABIs and deployment metadata.
+- `packages/ponder` — tokenless event indexer and evidence/status API.
+- `packages/keeper` — permissionless reveal, settlement, claims, compensation, and stale-return automation.
+- `packages/sdk` — the versioned `quote -> ask -> wait -> result` client and schemas.
+- `packages/agents` — the tokenless agent CLI and assurance project/run helpers.
+- `packages/nextjs` — browser product, authentication, buyer/rater workflows, evidence packets, and agent APIs.
 
-See [`TRUST.md`](TRUST.md) for the exact operator, issuer, USDC, drand, privacy, and deployment trust boundaries.
-
-The contract core has no owner, pause, sweep, setter, proxy, or operator path to funds. The separate issuer can rotate signers for future vouchers but cannot alter accepted commits or move escrowed funds.
+The contract core has no owner, pause, sweep, setter, proxy, or operator path to funds. The separate credential issuer
+can rotate admission signers for future work but cannot alter accepted commits or move escrowed funds.
 
 ## Development
 
-Requirements: Node.js 24, Yarn 3.2.3, Foundry, and Docker for the hosted-service images.
+Requirements: Node.js 24, Yarn 3.2.3, Foundry, and Docker for hosted-service images.
 
 ```bash
 yarn install --immutable
@@ -84,8 +69,10 @@ yarn agents:check-types && yarn workspace @rateloop/agents test
 yarn next:check-types && yarn next:test
 ```
 
-The authoritative design is [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md). The detailed redesign sequence is [`docs/tokenless-human-assurance-redesign-plan-2026-07.md`](docs/tokenless-human-assurance-redesign-plan-2026-07.md). The legal/revenue document is a supporting reference.
+The design of record is
+[`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md).
 
 ## License and security
 
-See [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+See [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), and
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

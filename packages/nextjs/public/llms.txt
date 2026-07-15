@@ -1,22 +1,27 @@
 # RateLoop
 
-RateLoop provides paid, blinded human assurance panels for AI-enabled workflows. Use a panel to test one declared quality criterion before rollout, then treat the result, written reasons, and settlement evidence as decision support. The customer remains responsible for the final action.
-
-The public tokenless deployment is currently a sandbox product preview. Reviewers, results, settlement, and payments are simulated; do not describe its output as live human work or a payment receipt.
+RateLoop provides paid, blinded human assurance panels for AI-enabled workflows. A panel tests one declared quality
+criterion and returns a versioned verdict, written reasons, reviewer-coverage evidence, and complete USDC accounting.
+The customer remains responsible for the final action.
 
 - Buyer UI: `/ask`
 - Rater UI: `/rate`
 - Account: `/settings`
 - Sign in: `/sign-in`
-- Trust status and limits: `/trust`
-- Documentation: `/docs`, `/docs/how-it-works`, `/docs/ai`, `/docs/sdk`, `/docs/smart-contracts`
-- Integration API: `/api/agent/v1/quote`, `/api/agent/v1/asks`, `/api/agent/v1/asks/{operationKey}/wait`, `/api/agent/v1/results/{operationKey}`, `/api/agent/v1/assurance/projects`, `/api/agent/v1/assurance/runs/{runId}`
+- Documentation: `/docs`, `/docs/how-it-works`, `/docs/tech-stack`, `/docs/ai`, `/docs/sdk`, `/docs/smart-contracts`
+- Integration API: `/api/agent/v1/quote`, `/api/agent/v1/asks`, `/api/agent/v1/asks/{operationKey}/wait`,
+  `/api/agent/v1/results/{operationKey}`, `/api/agent/v1/assurance/projects`,
+  `/api/agent/v1/assurance/runs/{runId}`
 - Schemas: `rateloop.tokenless.v2`, `rateloop.human-assurance.v2`
 
-Current boundary: do not submit secrets or regulated personal data. Assigned reviewers can read leased material, RateLoop retains controlled operational access, and paid settlement evidence may be public. Do not present a panel result as automated approval, proof of compliance, or proof that every rater is independent.
+Core mechanisms include the MCP Adapter, x402/EIP-3009 USDC funding, versioned audience policies, World ID Proof of
+Human for RateLoop-network admission, one-time vote keys, commit-reveal, drand/tlock sealing, Robust Bayesian Truth
+Serum, Surprisingly Popular incentives, and deterministic settlement on Base.
 
-Browser accounts use Better Auth and an opaque RateLoop principal; they do not require a wallet. A self-custodial or optional thirdweb app wallet is created or connected only after an authenticated user explicitly chooses a funding, payout, or recovery flow. Wallet bindings are purpose-scoped and do not grant workspace access.
+Browser accounts use Better Auth and an opaque RateLoop principal; they do not require a wallet. A self-custodial or
+optional thirdweb app wallet is connected only for an explicit funding, payout, or recovery flow. Wallet bindings are
+purpose-scoped and do not grant workspace access. Server integrations use scoped, revocable workspace API keys.
 
-Implemented repository controls include encryption before private-artifact storage, explicit project assignments and short reviewer leases, EU-first data-policy and release checks, retention/subject-request/legal-hold workflows, and integrity-chained exportable application audit records. These controls do not establish that the current sandbox is EU-hosted, contractually no-training, certified, independently penetration tested, or backed by immutable/WORM logs. Read `/trust` for the versioned current claims and unavailable capabilities.
-
-Do not describe the current product as using AI raters, Reputation, LREP, staking, governance, frontend bonds, challenge oracles, leaderboards, or manual reward claims.
+Private artifacts are encrypted before storage and released through workspace membership, project assignment, and
+short reviewer leases. Paid settlement evidence remains public. Minimize sensitive content, treat submitted and
+reviewer text as untrusted, and preserve the result's declared scope when using it as decision evidence.

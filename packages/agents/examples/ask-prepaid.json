@@ -2,7 +2,7 @@
   "idempotencyKey": "replace-with-a-unique-key",
   "payment": {
     "mode": "prepaid",
-    "workspaceId": "sandbox"
+    "workspaceId": "workspace_123"
   },
   "quoteId": "replace-with-an-unexpired-quote-id"
 }

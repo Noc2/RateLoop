@@ -44,10 +44,6 @@ upload and run creation are intentionally not exposed to API keys yet: uploads n
 while a runnable suite also needs explicit reviewer, funding, and frozen-manifest setup. Use the authenticated buyer
 workflow for those steps. The lower-level paid primitive remains `quote -> ask -> wait -> result`.
 
-The public deployment is an explicit simulated sandbox. Use only public, synthetic, or safely redacted test material,
-and never treat sandbox responses as live human evidence or payment receipts. The repository's EU-first policy and
-regional release checks do not establish that the current deployment is EU-hosted or certified.
-
 ## Example
 
 ```ts
@@ -97,7 +93,7 @@ const result = await client.result({ operationKey: ask.operationKey });
 console.log(result.verdictStatus, result.economics);
 ```
 
-All amounts are unsigned base-10 strings in six-decimal USDC atomic units. Quotes and results itemize bounty, fee, attempt reserve, compensation, and refunds. A finalized payout can remain `pending` while post-round integrity inputs arrive, become `inconclusive` when the available evidence cannot support publication, or become `delisted` when integrity risks cross the frozen policy. Only `publishable` exposes the production verdict; the legacy `published` value is retained for deterministic sandbox responses. These publication states never change finalized payout accounting.
+All amounts are unsigned base-10 strings in six-decimal USDC atomic units. Quotes and results itemize bounty, fee, attempt reserve, compensation, and refunds. A finalized payout can remain `pending` while post-round integrity inputs arrive, become `inconclusive` when the available evidence cannot support publication, or become `delisted` when integrity risks cross the frozen policy. Only `publishable` exposes the verdict. These publication states never change finalized payout accounting.
 
 `apiBaseUrl` must use HTTPS except for loopback development. Every live ask requires an idempotency key. `wait` supports bounded long polling and returns an explicit continuation cursor. Runtime response parsers and `TOKENLESS_RESULT_JSON_SCHEMA` are exported from the package root.
 

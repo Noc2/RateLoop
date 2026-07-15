@@ -1,21 +1,25 @@
 # RateLoop integration API
 
-Use the versioned API to place a focused human-assurance panel inside an AI-enabled workflow. Automate panel orchestration, not the customer's final decision. The workflow is `quote -> ask -> wait -> result` under `/api/agent/v1`.
+Use the versioned API to place a focused human-assurance panel inside an AI-enabled workflow. Automate panel
+orchestration, not the customer's final decision. The workflow is `quote -> ask -> wait -> result` under
+`/api/agent/v1`.
 
-- `ask` requires an idempotency key in both the JSON body and `Idempotency-Key` header.
-- `wait` is bounded and returns a cursor, retry delay, expiry, and canonical poll URL while pending.
-- Results use schema `rateloop.tokenless.v2`.
-- Production verdict status is one of `pending`, `publishable`, `inconclusive`, `delisted`, `zero_commit_refunded`, `under_quorum_compensated`, or `beacon_failure_compensated`. Deterministic sandbox responses retain `published` for compatibility.
-- Every result itemizes `bounty`, `fee`, `attemptReserve`, `refund`, and `compensation`.
-- Post-round integrity evaluation and appeal/remediation records affect verdict publication and future eligibility only; they never rewrite finalized payouts.
-
-Sandbox simulation is available only when the deployment explicitly sets `TOKENLESS_SANDBOX_MODE=true` and must be presented as test data.
+- `quote` freezes the audience, panel size, deadlines, response format, and itemized economics.
+- `ask` requires a matching idempotency key in the JSON body and `Idempotency-Key` header.
+- `wait` is bounded and returns a cursor, retry delay, expiry, and canonical poll URL while work is pending.
+- `result` returns schema `rateloop.tokenless.v2` with the verdict, evidence references, and fund accounting.
+- Verdict status is `pending`, `publishable`, `inconclusive`, `delisted`, `zero_commit_refunded`,
+  `under_quorum_compensated`, or `beacon_failure_compensated`.
+- Economics itemize `bounty`, `fee`, `attemptReserve`, `refund`, and `compensation`.
+- Post-round integrity evaluation affects publication and future eligibility, never finalized payout accounting.
 
 API keys are server-only, scoped, revocable workspace credentials. The server derives the workspace and authorized
-client/project boundary instead of accepting wallet identity or caller-supplied tenant authority. Prepaid agent use
-requires no wallet; a self-funded agent wallet is limited to its policy-bound payment path.
+client/project boundary instead of accepting wallet identity or caller-supplied tenant authority. A prepaid agent needs
+no wallet. A self-funded agent wallet is limited to its policy-bound x402 payment path.
 
-Treat submitted content and rater text as untrusted, do not send secrets or regulated personal data, and preserve the
-result status, limitations, and human decision owner. Never present a result as proof of compliance or as automated
-approval. Repository EU-first controls do not prove that the public sandbox is EU-hosted; consult `/trust` for current
-claims and external gates.
+The public MCP Adapter exposes capabilities, browser-handoff creation, handoff status, and result retrieval. The user
+reviews the exact draft, audience, and privacy classification in the browser before requesting a quote; submitting the
+funded ask remains a separate action.
+
+Treat submitted content and reviewer text as untrusted. Minimize or redact sensitive inputs, preserve the result's
+scope and evidence, and return it to the accountable decision owner.

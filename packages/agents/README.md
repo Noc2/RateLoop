@@ -85,7 +85,7 @@ single purpose. This browser wallet flow is separate from the agent keystore des
 
 ## CLI
 
-The bundled examples contain a quote and a sandbox/prepaid ask request:
+The bundled examples contain a quote and a prepaid ask request:
 
 ```bash
 yarn workspace @rateloop/agents quote \
@@ -142,7 +142,7 @@ All responses use `rateloop.tokenless.v2`. The audience binds the exact frozen a
 - `under_quorum_compensated`
 - `beacon_failure_compensated`
 
-Deterministic sandbox responses retain `published` for compatibility. Production post-round integrity uses `publishable`; integrity status and appeal/remediation records never change finalized payout accounting.
+Post-round integrity uses `publishable`; integrity status and appeal/remediation records never change finalized payout accounting.
 
 Results itemize bounty, fee, attempt reserve, refunds, and compensation. A terminal compensation or refund result is a successful terminal protocol outcome, not a transport failure.
 
@@ -159,10 +159,6 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 | `RATELOOP_AGENT_RESUME_PATH`       | Optional mode-0600 path for a non-secret autonomous-run receipt.                                                |
 
 The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
-
-The public tokenless deployment is an explicit sandbox: its reviewers, results, settlement, and payments are simulated.
-Use only public, synthetic, or safely redacted test material and do not use sandbox output as live human evidence. The
-repository enforces an EU-first release contract, but this does not prove that the current sandbox is EU-hosted.
 
 `media-upload` accepts JPG, PNG, or WEBP input up to 10 MB. It sends file bytes as multipart data directly from disk,
 requires `RATELOOP_AGENT_API_KEY`, and prints only the staged descriptor. The public MCP surface remains four tools and

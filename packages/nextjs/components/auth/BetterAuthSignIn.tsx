@@ -103,7 +103,7 @@ export function BetterAuthSignIn() {
   if (!configuration.configured) {
     return (
       <p className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-base-content/70">
-        Account sign-in is not configured for this sandbox deployment yet.
+        Account sign-in is not configured for this deployment yet.
       </p>
     );
   }
