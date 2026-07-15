@@ -1,99 +1,70 @@
+import Link from "next/link";
+import { AgentRunFlowDiagram } from "~~/components/docs/AgentRunFlowDiagram";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { ReviewerFlowDiagram } from "~~/components/docs/ReviewerFlowDiagram";
+import { SettlementPathsDiagram } from "~~/components/docs/SettlementPathsDiagram";
+
 export default function HowTokenlessWorksPage() {
   return (
     <article className="prose max-w-none">
-      <h1>How it works</h1>
+      <DocsTitle gradientText="Works">How It</DocsTitle>
+      <p className="lead text-base-content/60 text-lg">
+        An agent asks one focused question. A blinded human panel reports independently. RateLoop returns a verdict,
+        reasons, disagreement, and payment evidence for the next decision.
+      </p>
+
+      <AgentRunFlowDiagram />
+
+      <h2 id="agent-flow">1. The agent flow</h2>
       <p>
-        RateLoop turns a defined quality question into blinded human judgment, recomputable incentive evidence, and a
-        decision packet that keeps the final action with the customer.
+        An integration requests a quote, creates an idempotent ask, funds it from a prepaid balance or signed USDC
+        authorization, waits on the operation, and reads the result. The same{" "}
+        <Link href="/docs/sdk">quote → ask → payment → wait → result</Link> contract works through the SDK and private
+        workspace integrations. Public MCP handoffs add a browser approval step before submission.
+      </p>
+
+      <h2 id="reviewer-flow">2. The reviewer flow</h2>
+      <p>
+        Before paid work is offered, each reviewer passes the frozen eligibility policy. RateLoop then assigns a blinded
+        case. The reviewer chooses an answer, predicts the panel&apos;s answer share, and submits a sealed commit before
+        anyone can see the crowd. After reveal, every accepted valid report can be claimed at the reviewer-selected
+        payout address.
       </p>
       <p>
-        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. It previews these journeys with simulated
-        activity, results, settlement, and payments; it does not produce live human evidence.
+        A network panel uses <Link href="/docs/tech-stack#proof-of-human">Proof of Human</Link> for provider-scoped
+        uniqueness. Invited and hybrid panels use their own explicit{" "}
+        <Link href="/docs/tech-stack#audience-policies">audience policies</Link>.
       </p>
-      <ol>
-        <li>
-          The customer creates a client-isolated project, freezes a baseline, a candidate, representative cases, a
-          rubric, and a pass rule.
-        </li>
-        <li>
-          The customer chooses customer-invited reviewers, a RateLoop-network panel, or separate hybrid subpanels. The
-          exact audience policy is content-hashed.
-        </li>
-        <li>Submitted material is minimized, redacted, encrypted, and shown only through short assignment leases.</li>
-        <li>Any paid quote itemizes bounty, fee, and maximum accepted-work reserve before funding.</li>
-        <li>
-          Before a paid assignment or voucher, reviewers complete the policy&apos;s capability and legal/payout gates.
-          RateLoop-network reviewers must enroll with World ID 4 Proof of Human.
-        </li>
-        <li>
-          Reviewers compare blinded A/B artifacts, choose an option, predict the panel&apos;s answer share, add bounded
-          failure tags, and explain the difference without seeing other answers.
-        </li>
-        <li>
-          Paid case rounds use sealed commits and permissionless deterministic settlement. Accepted work receives fixed
-          USDC plus a bounded binary Robust Bayesian Truth Serum bonus.
-        </li>
-        <li>
-          Before the round is funded, RateLoop reserves a separate platform-funded surprise-bounty maximum. After
-          finalization, a versioned Surprisingly Popular calculation compares actual answer share with the panel&apos;s
-          predicted share and uses leave-one-out scoring so a reviewer cannot score against their own report.
-        </li>
-        <li>
-          Zero-commit rounds refund fully; failed quorum or beacon paths refund bounty and fee while accepted valid work
-          remains compensable from the disclosed reserve.
-        </li>
-        <li>
-          A qualifying Surprisingly Popular answer earns a non-negative central USDC top-up, capped per reviewer and
-          paid to the same reviewer-selected address after the base claim. It never changes the majority verdict,
-          contract settlement, fixed pay, or RBTS pay. Correlation analytics can qualify or limit result publication,
-          but cannot reduce accepted-work payment.
-        </li>
-        <li>
-          A private decision packet separates reviewer coverage from case judgments and reports per-case descriptive
-          results, disagreement, reviewer source, limitations, and any valid settlement evidence. The customer records
-          the final go, revise, or stop decision separately.
-        </li>
-      </ol>
-      <h2>One focused quality gate</h2>
+      <ReviewerFlowDiagram />
+
+      <h2 id="settlement-paths">3. Every funded round terminates</h2>
       <p>
-        The current product is strongest when one panel can change the next action: approve, revise, retest, escalate,
-        or stop. It is not a substitute for domain testing, monitoring, legal review, or accountable human approval.
+        Normal rounds reveal and settle with fixed pay plus a bounded{" "}
+        <Link href="/docs/tech-stack#robust-bayesian-truth-serum">RBTS bonus</Link>. A zero-commit round refunds the
+        customer. If quorum or the reveal beacon fails after reviewers have submitted valid work, the customer receives
+        the remaining bounty and fee while accepted work is compensated from the reserved amount. A paid round cannot be
+        cancelled after its first accepted commit.
       </p>
-      <h2>No post-commit cancellation</h2>
-      <p>After the first accepted paid commit, the round follows its deterministic settlement or compensation path.</p>
-      <h2>Independent controls, explicit limits</h2>
+      <SettlementPathsDiagram />
+
+      <h2 id="decision-evidence">4. Evidence, not an automatic decision</h2>
       <p>
-        World ID limits duplicate provider subjects, RBTS changes reporting incentives, and prospective integrity epochs
-        diversify assignments. Surprisingly Popular bounties reward collectively underestimated answers rather than
-        declaring them correct. None of these controls proves expertise, honest judgment, behavioral independence, or
-        objective truth on its own.
+        The result separates the panel verdict from the material needed to interpret it: reviewer source, individual
+        reports, reasons, disagreement, scoring version, compensation, and settlement references. The customer decides
+        whether to approve, revise, retest, escalate, or stop.
       </p>
-      <h2>Privacy, identity, and recovery</h2>
+
+      <h2 id="adaptive-review">5. Review can follow the evidence</h2>
       <p>
-        Browser access starts with Better Auth and resolves to an opaque RateLoop principal. Creating an account does
-        not create or require a wallet. A signed-in user explicitly adds a self-custodial or optional thirdweb app
-        wallet only for funding, payout, or recovery; the purpose-scoped binding never grants workspace access.
+        A workflow can stop when its declared evidence bar is met or open another review when disagreement, coverage, or
+        a material change calls for more judgment. Correlation analytics may affect publication and future assignment,
+        but never reduce pay for accepted work.
       </p>
+
       <p>
-        RateLoop encrypts private artifacts before storage. Workspace membership, explicit project assignment, and short
-        reviewer leases limit access, but customers must still minimize sensitive data and keep regulated or
-        safety-critical decisions under accountable human control. Invitations are the default private B2B access path.
-        External identity assurance is used only when a frozen audience policy requires a specific capability.
-      </p>
-      <p>
-        One-time vote and payout keys are created in the browser and exported in an encrypted recovery package. The
-        operator never receives those keys. Claiming publicly links the vote key to its per-round payout address.
-      </p>
-      <h2>Lifecycle, audit, and EU release boundary</h2>
-      <p>
-        Workspaces and projects carry an EU home region, classification, permitted-use, retention, and legal-hold
-        policy. Structured subject-request workflows and integrity-chained exportable application audit records are
-        implemented; the audit chain is not an immutable or WORM log.
-      </p>
-      <p>
-        EU-first configuration and release checks do not prove that the current sandbox is EU-hosted. Live EU data
-        resources, managed regional KMS, processor evidence, backup/restore proof, and external approvals remain gates.
-        The <a href="/trust">trust registry</a> records the current claims and unavailable capabilities.
+        Continue with <Link href="/docs/tech-stack">Tech Stack</Link> for the mechanisms behind the flow,{" "}
+        <Link href="/docs/ai">Agents &amp; MCP</Link> for integration lanes, or{" "}
+        <Link href="/docs/smart-contracts">Smart Contracts</Link> for fund custody and settlement.
       </p>
     </article>
   );

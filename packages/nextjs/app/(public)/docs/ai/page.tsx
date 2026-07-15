@@ -1,3 +1,5 @@
+import { DocsTitle } from "~~/components/docs/DocsTitle";
+
 const remoteMcpUrl = "https://rateloop-tokenless.vercel.app/api/mcp";
 
 const mcpConfiguration = `{
@@ -83,15 +85,11 @@ function CodeBlock({ children }: { children: string }) {
 export default function TokenlessAgentDocsPage() {
   return (
     <article className="prose max-w-none">
-      <h1>Agents and MCP</h1>
-      <p className="lead">
+      <DocsTitle gradientText="MCP">Agents &amp;</DocsTitle>
+      <p className="lead text-base-content/60 text-lg">
         RateLoop supports both draft-first browser handoffs and delegated autonomous runs. The public MCP remains
         approval-bound; an authenticated workspace key can publish without a per-run click only when an owner-issued
         policy fixes its budget, payment mode, wallet, audience, project, data, expiry, and revocation rules.
-      </p>
-      <p>
-        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. Reviewer activity, results, settlement,
-        and payments are simulations rather than live human evidence.
       </p>
 
       <h2>Choose a publishing lane</h2>
@@ -153,11 +151,6 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
           </div>
         ))}
       </div>
-      <p>
-        Legacy wallet-transaction, LREP, governance, protocol-token, and token-era rating tools are not restored on this
-        endpoint.
-      </p>
-
       <h2>Image and YouTube context</h2>
       <p>
         YouTube context is canonicalized to one video ID and can travel in an ordinary public draft. Image bytes never
@@ -222,11 +215,6 @@ yarn workspace @rateloop/agents media-upload \\
         RateLoop supplies human-review evidence and disclosed limitations; it does not issue an automatic production,
         safety, legal, or compliance approval. Use only authorized, minimized material and keep an accountable person
         responsible for every rollout decision.
-      </p>
-      <p>
-        EU-first repository controls do not prove that the sandbox is EU-hosted or certified. Read{" "}
-        <a href="/trust">the trust registry</a> before repeating a hosting, no-training, security, privacy, or
-        compliance statement.
       </p>
     </article>
   );

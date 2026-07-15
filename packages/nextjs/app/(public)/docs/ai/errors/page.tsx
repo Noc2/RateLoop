@@ -16,7 +16,7 @@ const errors = [
 
 const AIErrorsPage: NextPage = () => (
   <article className="prose max-w-none">
-    <DocsTitle gradientText="Errors">RateLoop API</DocsTitle>
+    <DocsTitle gradientText="Errors">API</DocsTitle>
     <p className="lead text-base-content/60 text-lg">
       The v1 API returns one stable error envelope. A retryable error is safe to poll again; it does not authorize a
       duplicate payment or ask.

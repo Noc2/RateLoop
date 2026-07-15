@@ -1,27 +1,71 @@
+import Link from "next/link";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
+
+const CONTRACTS = [
+  {
+    id: "tokenless-panel",
+    name: "TokenlessPanel",
+    role: "Immutable fund core",
+    description:
+      "Holds customer USDC and enforces funding, voucher-bound commits, deterministic settlement, compensation, refunds, and claims. It has no operator or administrator path to customer funds.",
+    color: "var(--rateloop-blue)",
+  },
+  {
+    id: "credential-issuer",
+    name: "CredentialIssuer",
+    role: "Admission epochs",
+    description:
+      "Accepts epoch-scoped signers for new admission vouchers. It holds no funds and cannot alter an accepted commit or redirect a claim.",
+    color: "var(--rateloop-green)",
+  },
+  {
+    id: "x402-panel-submitter",
+    name: "X402PanelSubmitter",
+    role: "Agent-funded adapter",
+    description:
+      "Consumes the agent's EIP-3009 USDC authorization and funds the selected panel with terms that bind the complete economics and destination.",
+    color: "var(--rateloop-pink)",
+  },
+] as const;
+
 export default function TokenlessContractsPage() {
   return (
     <article className="prose max-w-none">
-      <h1>Smart contracts</h1>
-      <dl>
-        <dt>
-          <code>TokenlessPanel</code>
-        </dt>
-        <dd>
-          The only fund-holding core: round funding, voucher-bound commits, settlement, compensation, refunds, and
-          claims.
-        </dd>
-        <dt>
-          <code>CredentialIssuer</code>
-        </dt>
-        <dd>Epoch-based signer acceptance for future admission. It holds no funds.</dd>
-        <dt>
-          <code>X402PanelSubmitter</code>
-        </dt>
-        <dd>Optional stateless funding adapter whose signed terms bind every economic field and panel address.</dd>
-      </dl>
+      <DocsTitle gradientText="Contracts">Smart</DocsTitle>
+      <p className="lead text-base-content/60 text-lg">
+        Three contracts keep fund custody small, admission separate, and agent-funded USDC settlement explicit.
+      </p>
+
+      <div className="not-prose my-8 grid gap-5">
+        {CONTRACTS.map(contract => (
+          <section
+            key={contract.id}
+            id={contract.id}
+            className="rateloop-surface-card scroll-mt-24 rounded-2xl border-l-2 p-5 sm:p-6"
+            style={{ borderLeftColor: contract.color }}
+          >
+            <p
+              className="font-mono text-xs font-semibold uppercase tracking-[0.16em]"
+              style={{ color: contract.color }}
+            >
+              {contract.role}
+            </p>
+            <h2 className="mt-2 text-xl font-bold text-base-content">
+              <code>{contract.name}</code>
+            </h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-base-content/65">{contract.description}</p>
+          </section>
+        ))}
+      </div>
+
+      <h2 id="deployment-key">One deployment key</h2>
       <p>
-        Production releases pin the panel, issuer, funding adapter, chain, deployment block, and generated interfaces as
-        one complete deployment key. Services fail closed when any part of that bundle disagrees.
+        A release pins the panel, issuer, funding adapter, chain, deployment block, and generated interfaces as one
+        complete key. Services reject mixed address bundles instead of guessing which deployment is authoritative.
+      </p>
+      <p>
+        Return to <Link href="/docs/tech-stack#immutable-fund-core">Immutable Fund Core</Link> for the settlement model,
+        or follow the full <Link href="/docs/how-it-works#settlement-paths">settlement paths</Link>.
       </p>
     </article>
   );

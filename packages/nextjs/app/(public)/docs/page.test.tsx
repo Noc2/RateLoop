@@ -8,16 +8,17 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("documentation introduction states the account-first and EU trust boundaries", async () => {
+test("documentation introduction presents the focused production path", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: DocsPage } = await import("./page");
   const html = renderToStaticMarkup(<DocsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
-  assert.match(html, /Better Auth.*opaque RateLoop principal/i);
-  assert.match(html, /wallet.*funding, payout, or recovery/i);
-  assert.match(html, /explicit project assignment.*short reviewer leases/i);
-  assert.match(html, /not an immutable or WORM log/i);
-  assert.match(html, /do not prove that the current sandbox is EU-hosted/i);
-  assert.match(html, /href="\/trust"/i);
+  assert.match(html, /Human.*rateloop-text-gradient.*Assurance/i);
+  assert.match(html, /paid human-review step/i);
+  assert.match(html, /Define:.*Review:.*Settle:.*Decide:/i);
+  assert.match(html, /The final decision stays with you/i);
+  assert.match(html, /href="\/docs\/how-it-works"/i);
+  assert.match(html, /href="\/docs\/tech-stack"/i);
+  assert.match(html, /href="\/docs\/smart-contracts"/i);
+  assert.doesNotMatch(html, /sandbox|simulation|href="\/trust"|unavailable capabilities/i);
 });

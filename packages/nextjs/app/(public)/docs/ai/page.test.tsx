@@ -13,7 +13,7 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   const { default: AgentDocsPage } = await import("./page");
   const html = renderToStaticMarkup(<AgentDocsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Agents and MCP/);
+  assert.match(html, /Agents.*rateloop-text-gradient.*MCP/);
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/mcp/);
   assert.match(html, /codex plugin marketplace add \./);
   assert.match(html, /codex plugin add rateloop@rateloop/);
@@ -30,12 +30,9 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /Creating a handoff is not submission/i);
   assert.match(html, /public.*synthetic.*redacted/i);
   assert.match(html, /does not issue an automatic production/i);
-  assert.match(html, /wallet-transaction, LREP, governance, protocol-token/i);
   assert.match(html, /media-upload/);
   assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
-  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
   assert.match(html, /workspace and authorized client\/project boundary/i);
-  assert.match(html, /do not prove that the sandbox is EU-hosted or certified/i);
-  assert.match(html, /href="\/trust"/i);
+  assert.doesNotMatch(html, /sandbox|simulation|href="\/trust"|LREP|governance|protocol-token/i);
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
 });

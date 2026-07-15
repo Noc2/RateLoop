@@ -8,24 +8,54 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("tech-stack docs explain the tokenless integrity layers and their limits", async () => {
+const LANDING_TECH_ANCHORS = [
+  "mcp-adapter",
+  "x402-usdc",
+  "proof-of-human",
+  "audience-policies",
+  "commit-reveal",
+  "drand-tlock",
+  "robust-bayesian-truth-serum",
+  "surprisingly-popular",
+  "base-usdc",
+] as const;
+
+test("tech-stack docs explain the production mechanisms behind the landing page", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: TechStackPage } = await import("./page");
   const html = renderToStaticMarkup(<TechStackPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /no.*LREP/i);
-  assert.match(html, /fixed base payment.*Robust Bayesian Truth Serum bonus/i);
-  assert.match(html, /World ID 4 Proof of Human/i);
-  assert.match(html, /correlation epochs/i);
-  assert.match(html, /Surprisingly Popular bounty.*pre-reserved platform-funded maximum/i);
-  assert.match(html, /cannot alter the majority verdict, contract settlement, fixed pay, or RBTS pay/i);
-  assert.match(html, /dedicated signer nonce allocation/i);
-  assert.match(html, /truth oracle/i);
-  assert.match(html, /never accepted work payment/i);
-  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
-  assert.match(html, /Better Auth account-first sign-in.*opaque RateLoop principal/i);
-  assert.match(html, /EU-first classification.*subject-request controls/i);
-  assert.match(html, /not represented as an immutable or WORM external audit log/i);
-  assert.doesNotMatch(html, /future incentive use|diagnostic/i);
-  assert.doesNotMatch(html, /token reward|stake-weighted|guarantees honest/i);
+  assert.match(html, /Tech.*rateloop-text-gradient.*Stack/i);
+  for (const anchor of LANDING_TECH_ANCHORS) {
+    assert.match(html, new RegExp('id="' + anchor + '"', "i"));
+  }
+  assert.match(html, /Model Context Protocol.*Streamable HTTP/i);
+  assert.match(html, /EIP-3009.*X402PanelSubmitter.*Base/i);
+  assert.match(html, /World ID 4.*unique_human/i);
+  assert.match(html, /signed correlation epochs/i);
+  assert.match(html, /fixedBasePay.*maximumBonus.*score/i);
+  assert.match(html, /at least ten reports.*500 basis points.*2,500 basis points/i);
+  assert.match(html, /12\.5%.*guaranteedBase/i);
+  assert.match(html, /only fund-holding core/i);
+  assert.doesNotMatch(html, /sandbox|simulation|\/trust|LREP|staking|governance|truth oracle/i);
+});
+
+test("every technical landing-page link resolves to a rendered docs anchor", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const [{ default: HomePage }, { default: TechStackPage }, { default: SmartContractsPage }] = await Promise.all([
+    import("../../page"),
+    import("./page"),
+    import("../smart-contracts/page"),
+  ]);
+  const landingHtml = renderToStaticMarkup(<HomePage />);
+  const targetHtml = {
+    "/docs/tech-stack": renderToStaticMarkup(<TechStackPage />),
+    "/docs/smart-contracts": renderToStaticMarkup(<SmartContractsPage />),
+  };
+  const links = [...landingHtml.matchAll(/href="(\/docs\/(?:tech-stack|smart-contracts))#([^"]+)"/g)];
+
+  assert.equal(links.length, 10);
+  for (const [, pathname, fragment] of links) {
+    assert.match(targetHtml[pathname as keyof typeof targetHtml], new RegExp('id="' + fragment + '"'));
+  }
 });

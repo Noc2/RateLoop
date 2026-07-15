@@ -8,24 +8,22 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("how-it-works explains the production integrity stack and its limits", async () => {
+test("how-it-works follows the production agent, reviewer, and settlement paths", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: HowItWorksPage } = await import("./page");
   const html = renderToStaticMarkup(<HowItWorksPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /World ID 4 Proof of Human/);
-  assert.match(html, /Robust Bayesian Truth Serum bonus/);
-  assert.match(html, /Surprisingly Popular calculation/);
-  assert.match(html, /platform-funded surprise-bounty maximum/i);
-  assert.match(html, /same reviewer-selected address/);
-  assert.match(html, /prospective integrity epochs/);
-  assert.match(html, /cannot reduce accepted-work payment/i);
-  assert.match(html, /None of these controls proves.*objective truth/i);
-  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
-  assert.match(html, /Better Auth.*opaque RateLoop principal/i);
-  assert.match(html, /purpose-scoped binding never grants workspace access/i);
-  assert.match(html, /explicit project assignment.*short reviewer leases/i);
-  assert.match(html, /not an immutable or WORM log/i);
-  assert.match(html, /do not prove that the current sandbox is EU-hosted/i);
-  assert.doesNotMatch(html, /Base Sepolia/i);
+  assert.match(html, /How It.*rateloop-text-gradient.*Works/i);
+  assert.match(html, /quote.*ask.*payment.*wait.*result/i);
+  assert.match(html, /eligibility policy.*blinded case.*sealed commit/i);
+  assert.match(html, /zero-commit round refunds/i);
+  assert.match(html, /quorum or the reveal beacon fails.*accepted work is compensated/i);
+  assert.match(html, /cannot be cancelled after its first accepted commit/i);
+  assert.match(html, /Correlation analytics.*never reduce pay for accepted work/i);
+  assert.match(html, /id="agent-flow"/i);
+  assert.match(html, /id="reviewer-flow"/i);
+  assert.match(html, /id="settlement-paths"/i);
+  assert.match(html, /id="decision-evidence"/i);
+  assert.match(html, /id="adaptive-review"/i);
+  assert.doesNotMatch(html, /sandbox|simulation|\/trust|LREP|staking|governance|truth oracle/i);
 });

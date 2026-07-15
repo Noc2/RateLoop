@@ -13,11 +13,11 @@ test("SDK docs expose only the versioned tokenless agent flow", async () => {
   const { default: SdkPage } = await import("./page");
   const html = renderToStaticMarkup(<SdkPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /quote.*ask.*wait.*result/i);
+  assert.match(html, /quote.*ask.*payment.*wait.*result/i);
   assert.match(html, /rateloop\.tokenless\.v2/i);
-  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
-  assert.match(html, /Better Auth.*opaque RateLoop principal/i);
+  assert.match(html, /EIP-3009 authorization/i);
+  assert.match(html, /scoped, revocable workspace API keys/i);
   assert.match(html, /authorized client\/project assignment/i);
-  assert.match(html, /EU-first repository checks do not establish verified EU hosting or certification/i);
-  assert.doesNotMatch(html, /LREP|stake|governance|frontend reward/i);
+  assert.match(html, /wallets remain optional/i);
+  assert.doesNotMatch(html, /sandbox|simulation|\/trust|LREP|stake|governance|frontend reward/i);
 });
