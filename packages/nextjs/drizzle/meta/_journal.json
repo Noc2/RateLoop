@@ -302,6 +302,13 @@
       "when": 1784008800000,
       "tag": "0042_privacy_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1784012400000,
+      "tag": "0043_canonical_audit",
+      "breakpoints": true
     }
   ]
 }

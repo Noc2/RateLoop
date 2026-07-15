@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { assertProjectDeletionAllowed } from "~~/lib/privacy/lifecycle";
 import {
   type KeyWrappingProvider,
@@ -229,6 +230,20 @@ async function appendAccessLog(input: {
       input.requestReference ?? null,
       new Date(),
     ],
+  });
+  await appendAuditEvent({
+    action: `artifact.${input.action}`,
+    actorKind: "account",
+    actorReference: actorReference(input.runtime.commitmentKey!, actorAddress(input.accountAddress)),
+    assuranceMethod: "rateloop_session",
+    metadata: { artifactId: input.artifactId, leaseId: input.leaseId ?? null },
+    purpose: input.purpose,
+    reason: input.requestReference ?? "authorized_request",
+    requestCorrelation: input.requestReference,
+    result: "success",
+    targetId: input.artifactId ?? input.projectId,
+    targetKind: input.artifactId ? "artifact" : "project",
+    workspaceId: input.workspaceId,
   });
 }
 
@@ -596,6 +611,18 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
               WHERE project_id = ? AND status = 'active'
             )`,
     args: [now, rowString(row, "project_id"), now, rowString(row, "project_id")],
+  });
+  await appendAuditEvent({
+    action: "artifact.retention_delete",
+    actorKind: "system",
+    actorReference: "system:retention_worker",
+    assuranceMethod: "scheduled_worker",
+    purpose: "retention_enforcement",
+    reason: "delete_after_reached",
+    result: "success",
+    targetId: rowString(row, "artifact_id")!,
+    targetKind: "artifact",
+    workspaceId: rowString(row, "workspace_id")!,
   });
   return true;
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { authorizeProjectAccount } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -96,6 +97,19 @@ export async function createLegalHold(input: {
   } finally {
     client.release();
   }
+  await appendAuditEvent({
+    action: "privacy.legal_hold_created",
+    actorKind: "account",
+    actorReference: manager.accountReference,
+    assuranceMethod: "rateloop_session",
+    metadata: { holdId, projectId: input.projectId, reviewAt: input.reviewAt.toISOString() },
+    purpose: "legal_hold",
+    reason: input.reason,
+    result: "success",
+    targetId: holdId,
+    targetKind: "legal_hold",
+    workspaceId: input.workspaceId,
+  });
   return { holdId, reviewAt: input.reviewAt.toISOString() };
 }
 
@@ -146,6 +160,19 @@ export async function releaseLegalHold(input: {
   } finally {
     client.release();
   }
+  await appendAuditEvent({
+    action: "privacy.legal_hold_released",
+    actorKind: "account",
+    actorReference: manager.accountReference,
+    assuranceMethod: "rateloop_session",
+    metadata: { holdId: input.holdId, projectId: input.projectId },
+    purpose: "legal_hold",
+    reason: input.reason,
+    result: "success",
+    targetId: input.holdId,
+    targetKind: "legal_hold",
+    workspaceId: input.workspaceId,
+  });
 }
 
 export async function assertProjectDeletionAllowed(projectId: string, workspaceId: string) {
@@ -205,6 +232,21 @@ export async function createSubjectRequest(input: {
   } finally {
     client.release();
   }
+  if (input.workspaceId) {
+    await appendAuditEvent({
+      action: "privacy.subject_request_received",
+      actorKind: "principal",
+      actorReference: principalId,
+      assuranceMethod: input.identityAssurance,
+      metadata: { requestType: input.requestType },
+      purpose: "data_subject_rights",
+      reason: "subject_request",
+      result: "success",
+      targetId: requestId,
+      targetKind: "subject_request",
+      workspaceId: input.workspaceId,
+    });
+  }
   return { dueAt: dueAt.toISOString(), requestId };
 }
 
@@ -216,6 +258,8 @@ export async function transitionSubjectRequest(input: {
   now?: Date;
 }) {
   const now = input.now ?? new Date();
+  let workspaceId: string | null = null;
+  let previousStatus: SubjectRequestStatus | null = null;
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -232,6 +276,8 @@ export async function transitionSubjectRequest(input: {
         "invalid_subject_request_transition",
       );
     }
+    previousStatus = status;
+    workspaceId = rowString(current.rows[0] as QueryRow | undefined, "workspace_id");
     await client.query(
       `UPDATE tokenless_subject_requests SET status = $1, completed_at = CASE WHEN $1 IN ('completed','denied') THEN $2 ELSE NULL END
        WHERE request_id = $3`,
@@ -257,6 +303,21 @@ export async function transitionSubjectRequest(input: {
     throw error;
   } finally {
     client.release();
+  }
+  if (workspaceId && previousStatus) {
+    await appendAuditEvent({
+      action: "privacy.subject_request_transitioned",
+      actorKind: "operator",
+      actorReference: input.actorReference,
+      assuranceMethod: "privacy_workflow",
+      metadata: { fromStatus: previousStatus, toStatus: input.nextStatus },
+      purpose: "data_subject_rights",
+      reason: input.reason,
+      result: "success",
+      targetId: input.requestId,
+      targetKind: "subject_request",
+      workspaceId,
+    });
   }
 }
 
