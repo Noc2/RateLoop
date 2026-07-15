@@ -432,3 +432,282 @@ export const tokenlessNotificationEmailDeliveries = pgTable(
 );
 
 export type TokenlessNotificationEmailDelivery = typeof tokenlessNotificationEmailDeliveries.$inferSelect;
+
+export const tokenlessAgentOauthClients = pgTable(
+  "tokenless_agent_oauth_clients",
+  {
+    clientId: text("client_id").primaryKey(),
+    clientSecretHash: text("client_secret_hash"),
+    clientName: text("client_name").notNull(),
+    clientUri: text("client_uri"),
+    logoUri: text("logo_uri"),
+    redirectUrisJson: text("redirect_uris_json").notNull(),
+    redirectUrisDigest: text("redirect_uris_digest").notNull(),
+    tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull(),
+    grantTypesJson: text("grant_types_json").notNull().default('["authorization_code","refresh_token"]'),
+    responseTypesJson: text("response_types_json").notNull().default('["code"]'),
+    allowedScopesJson: text("allowed_scopes_json").notNull(),
+    registrationSource: text("registration_source").notNull(),
+    clientIdMetadataUrl: text("client_id_metadata_url"),
+    metadataDocumentDigest: text("metadata_document_digest"),
+    metadataFetchedAt: timestamp("metadata_fetched_at", { mode: "date", withTimezone: true }),
+    softwareId: text("software_id"),
+    softwareVersion: text("software_version"),
+    registeredByPrincipalId: text("registered_by_principal_id").references(() => tokenlessPrincipals.principalId, {
+      onDelete: "restrict",
+    }),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    revocationReason: text("revocation_reason"),
+  },
+  table => ({
+    metadataIdx: index("tokenless_agent_oauth_clients_metadata_idx").on(
+      table.clientIdMetadataUrl,
+      table.metadataFetchedAt,
+    ),
+    statusIdx: index("tokenless_agent_oauth_clients_status_idx").on(table.status, table.expiresAt),
+  }),
+);
+
+export const tokenlessAgentOauthTokenFamilies = pgTable(
+  "tokenless_agent_oauth_token_families",
+  {
+    tokenFamilyId: text("token_family_id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthClients.clientId, { onDelete: "restrict" }),
+    subjectPrincipalId: text("subject_principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "restrict" }),
+    audience: text("audience").notNull(),
+    resource: text("resource").notNull(),
+    grantedScopesJson: text("granted_scopes_json").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    absoluteExpiresAt: timestamp("absolute_expires_at", { mode: "date", withTimezone: true }).notNull(),
+    lastRotatedAt: timestamp("last_rotated_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    revokedBy: text("revoked_by"),
+    revocationReason: text("revocation_reason"),
+  },
+  table => ({
+    clientSubjectIdx: index("tokenless_agent_oauth_token_families_client_subject_idx").on(
+      table.clientId,
+      table.subjectPrincipalId,
+      table.status,
+    ),
+    expiryIdx: index("tokenless_agent_oauth_token_families_expiry_idx").on(table.status, table.absoluteExpiresAt),
+  }),
+);
+
+export const tokenlessAgentOauthAuthorizationCodes = pgTable(
+  "tokenless_agent_oauth_authorization_codes",
+  {
+    authorizationCodeId: text("authorization_code_id").primaryKey(),
+    codeHash: text("code_hash").notNull(),
+    tokenFamilyId: text("token_family_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthTokenFamilies.tokenFamilyId, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthClients.clientId, { onDelete: "restrict" }),
+    subjectPrincipalId: text("subject_principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "restrict" }),
+    redirectUri: text("redirect_uri").notNull(),
+    redirectUriDigest: text("redirect_uri_digest").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    codeChallengeMethod: text("code_challenge_method").notNull().default("S256"),
+    stateHash: text("state_hash"),
+    audience: text("audience").notNull(),
+    resource: text("resource").notNull(),
+    grantedScopesJson: text("granted_scopes_json").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    codeHashUnique: uniqueIndex("tokenless_agent_oauth_authorization_codes_hash_unique").on(table.codeHash),
+    expiryIdx: index("tokenless_agent_oauth_authorization_codes_expiry_idx").on(
+      table.expiresAt,
+      table.consumedAt,
+      table.revokedAt,
+    ),
+    familyUnique: uniqueIndex("tokenless_agent_oauth_authorization_codes_family_unique").on(table.tokenFamilyId),
+  }),
+);
+
+export const tokenlessAgentOauthRefreshTokens = pgTable(
+  "tokenless_agent_oauth_refresh_tokens",
+  {
+    refreshTokenId: text("refresh_token_id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    tokenFamilyId: text("token_family_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthTokenFamilies.tokenFamilyId, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthClients.clientId, { onDelete: "restrict" }),
+    subjectPrincipalId: text("subject_principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "restrict" }),
+    audience: text("audience").notNull(),
+    resource: text("resource").notNull(),
+    grantedScopesJson: text("granted_scopes_json").notNull(),
+    generation: integer("generation").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { mode: "date", withTimezone: true }),
+    replacedAt: timestamp("replaced_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    revocationReason: text("revocation_reason"),
+  },
+  table => ({
+    expiryIdx: index("tokenless_agent_oauth_refresh_tokens_expiry_idx").on(table.expiresAt, table.revokedAt),
+    familyStatusIdx: index("tokenless_agent_oauth_refresh_tokens_family_status_idx").on(
+      table.tokenFamilyId,
+      table.generation,
+      table.revokedAt,
+    ),
+    generationUnique: uniqueIndex("tokenless_agent_oauth_refresh_tokens_generation_unique").on(
+      table.tokenFamilyId,
+      table.generation,
+    ),
+    tokenHashUnique: uniqueIndex("tokenless_agent_oauth_refresh_tokens_hash_unique").on(table.tokenHash),
+  }),
+);
+
+export const tokenlessAgentOauthAccessTokens = pgTable(
+  "tokenless_agent_oauth_access_tokens",
+  {
+    accessTokenId: text("access_token_id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    tokenFamilyId: text("token_family_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthTokenFamilies.tokenFamilyId, { onDelete: "cascade" }),
+    refreshTokenId: text("refresh_token_id").references(() => tokenlessAgentOauthRefreshTokens.refreshTokenId, {
+      onDelete: "set null",
+    }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => tokenlessAgentOauthClients.clientId, { onDelete: "restrict" }),
+    subjectPrincipalId: text("subject_principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "restrict" }),
+    audience: text("audience").notNull(),
+    resource: text("resource").notNull(),
+    grantedScopesJson: text("granted_scopes_json").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    revocationReason: text("revocation_reason"),
+  },
+  table => ({
+    familyStatusIdx: index("tokenless_agent_oauth_access_tokens_family_status_idx").on(
+      table.tokenFamilyId,
+      table.expiresAt,
+      table.revokedAt,
+    ),
+    refreshIdx: index("tokenless_agent_oauth_access_tokens_refresh_idx").on(table.refreshTokenId, table.expiresAt),
+    tokenHashUnique: uniqueIndex("tokenless_agent_oauth_access_tokens_hash_unique").on(table.tokenHash),
+  }),
+);
+
+export const tokenlessAgentConnectionIntents = pgTable(
+  "tokenless_agent_connection_intents",
+  {
+    intentId: text("intent_id").primaryKey(),
+    claimNonceHash: text("claim_nonce_hash").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    createdBy: text("created_by").notNull(),
+    status: text("status").notNull().default("issued"),
+    profileKey: text("profile_key").notNull(),
+    profileVersion: integer("profile_version").notNull(),
+    maximumScopesJson: text("maximum_scopes_json").notNull(),
+    allowedWorkflowKeysJson: text("allowed_workflow_keys_json").notNull().default("[]"),
+    reviewPresetJson: text("review_preset_json").notNull().default("{}"),
+    preferredHostFamily: text("preferred_host_family"),
+    allowedHostFamiliesJson: text("allowed_host_families_json").notNull().default("[]"),
+    autoActivate: boolean("auto_activate").notNull().default(false),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    claimExpiresAt: timestamp("claim_expires_at", { mode: "date", withTimezone: true }).notNull(),
+    hardExpiresAt: timestamp("hard_expires_at", { mode: "date", withTimezone: true }).notNull(),
+    claimedAt: timestamp("claimed_at", { mode: "date", withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    testedAt: timestamp("tested_at", { mode: "date", withTimezone: true }),
+    connectedAt: timestamp("connected_at", { mode: "date", withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { mode: "date", withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { mode: "date", withTimezone: true }),
+    claimedTokenFamilyId: text("claimed_token_family_id").references(
+      () => tokenlessAgentOauthTokenFamilies.tokenFamilyId,
+      { onDelete: "restrict" },
+    ),
+    claimedOauthClientId: text("claimed_oauth_client_id").references(() => tokenlessAgentOauthClients.clientId, {
+      onDelete: "restrict",
+    }),
+    claimedSubjectPrincipalId: text("claimed_subject_principal_id").references(() => tokenlessPrincipals.principalId, {
+      onDelete: "restrict",
+    }),
+    clientName: text("client_name"),
+    clientVersion: text("client_version"),
+    clientCapabilitiesJson: text("client_capabilities_json").notNull().default("[]"),
+    lastTransitionAt: timestamp("last_transition_at", { mode: "date", withTimezone: true }).notNull(),
+    lastTransitionReason: text("last_transition_reason"),
+    lastDiagnosticCode: text("last_diagnostic_code"),
+    lastDiagnosticAt: timestamp("last_diagnostic_at", { mode: "date", withTimezone: true }),
+    recoveryAction: text("recovery_action"),
+  },
+  table => ({
+    expiryIdx: index("tokenless_agent_connection_intents_expiry_idx").on(
+      table.status,
+      table.claimExpiresAt,
+      table.hardExpiresAt,
+    ),
+    familyUnique: uniqueIndex("tokenless_agent_connection_intents_family_unique").on(table.claimedTokenFamilyId),
+    nonceUnique: uniqueIndex("tokenless_agent_connection_intents_nonce_unique").on(table.claimNonceHash),
+    workspaceStatusIdx: index("tokenless_agent_connection_intents_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const tokenlessAgentConnectionIntentEvents = pgTable(
+  "tokenless_agent_connection_intent_events",
+  {
+    eventId: text("event_id").primaryKey(),
+    intentId: text("intent_id")
+      .notNull()
+      .references(() => tokenlessAgentConnectionIntents.intentId, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    actorType: text("actor_type").notNull(),
+    actorReference: text("actor_reference").notNull(),
+    reason: text("reason").notNull(),
+    diagnosticCode: text("diagnostic_code"),
+    detailsJson: text("details_json").notNull().default("{}"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    intentCreatedIdx: index("tokenless_agent_connection_intent_events_intent_created_idx").on(
+      table.intentId,
+      table.createdAt,
+    ),
+    workspaceCreatedIdx: index("tokenless_agent_connection_intent_events_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type TokenlessAgentOauthClient = typeof tokenlessAgentOauthClients.$inferSelect;
+export type TokenlessAgentOauthTokenFamily = typeof tokenlessAgentOauthTokenFamilies.$inferSelect;
+export type TokenlessAgentConnectionIntent = typeof tokenlessAgentConnectionIntents.$inferSelect;
+export type TokenlessAgentConnectionIntentEvent = typeof tokenlessAgentConnectionIntentEvents.$inferSelect;

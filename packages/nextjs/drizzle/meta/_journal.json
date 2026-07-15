@@ -323,6 +323,13 @@
       "when": 1784019600000,
       "tag": "0045_security_audit_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1784023200000,
+      "tag": "0046_agent_connection_intents_oauth",
+      "breakpoints": true
     }
   ]
 }
