@@ -27,6 +27,19 @@ That boundary is now enforced across runtime configuration, API and MCP schemas,
 product UI. Migration `0048` removes obsolete hosted-preview data and constraints. Hosted publication still remains
 fail-closed on the independent release gates below.
 
+### Isolated review deployment exception
+
+`rateloop-tokenless.vercel.app` may be updated before the release gates are complete only by setting the build-only
+`TOKENLESS_REVIEW_DEPLOYMENT=1` flag. The exception is accepted solely for Vercel project
+`prj_H6C2pfWKEAupFroHbLfzhquaNCLm` (`rateloop-tokenless`), the `tokenless` Git branch, the exact tokenless origin, and
+with public network panels disabled. It does not make the deployment production-ready and must never be accepted by
+`rate-loop-nextjs`, `main`, `rateloop.ai`, or `www.rateloop.ai`.
+
+Before any tokenless production deployment or integration with `rateloop.ai`, run an unflagged build and satisfy every
+release gate in this register. The review flag is a deployment-channel exception only; it does not waive managed
+signing, paid assignment settlement, EU infrastructure evidence, migration verification, or end-to-end paid-path
+testing.
+
 ## Completed in this branch
 
 - Removed the hosted runtime mode, in-memory result path, fabricated payment/result states, and reviewer source from
