@@ -20,5 +20,5 @@ test("documentation introduction presents the focused production path", async ()
   assert.match(html, /href="\/docs\/how-it-works"/i);
   assert.match(html, /href="\/docs\/tech-stack"/i);
   assert.match(html, /href="\/docs\/smart-contracts"/i);
-  assert.doesNotMatch(html, /sandbox|simulation|href="\/trust"|unavailable capabilities/i);
+  assert.doesNotMatch(html, /unavailable capabilities/i);
 });

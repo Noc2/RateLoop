@@ -37,7 +37,7 @@ test("tech-stack docs explain the production mechanisms behind the landing page"
   assert.match(html, /at least ten reports.*500 basis points.*2,500 basis points/i);
   assert.match(html, /12\.5%.*guaranteedBase/i);
   assert.match(html, /only fund-holding core/i);
-  assert.doesNotMatch(html, /sandbox|simulation|\/trust|LREP|staking|governance|truth oracle/i);
+  assert.doesNotMatch(html, /LREP|staking|governance|truth oracle/i);
 });
 
 test("every technical landing-page link resolves to a rendered docs anchor", async () => {

@@ -149,7 +149,7 @@ test("quote request validation preserves editable binary and head-to-head choice
     () =>
       validateTokenlessQuoteRequest({
         ...request(),
-        audience: { ...request().audience, source: "sandbox" },
+        audience: { ...request().audience, source: "unsupported" },
       }),
     /audience.source is unsupported/i,
   );

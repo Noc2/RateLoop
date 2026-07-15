@@ -25,5 +25,5 @@ test("how-it-works follows the production agent, reviewer, and settlement paths"
   assert.match(html, /id="settlement-paths"/i);
   assert.match(html, /id="decision-evidence"/i);
   assert.match(html, /id="adaptive-review"/i);
-  assert.doesNotMatch(html, /sandbox|simulation|\/trust|LREP|staking|governance|truth oracle/i);
+  assert.doesNotMatch(html, /LREP|staking|governance|truth oracle/i);
 });

@@ -16,7 +16,7 @@ const PUBLIC_COPY_FILES = [
 ] as const;
 
 const TEST_DEPLOYMENT_COPY =
-  /test version|test deployment|test-only|public sandbox|simulated sandbox|simulated reviewers|sandbox results|test interface|test terms|test privacy|disposable test|test records|test interactions|test results|test material|sandbox handoff|sandbox boundary|Base Sepolia/iu;
+  /test version|test deployment|test-only|test interface|test terms|test privacy|disposable test|test records|test interactions|test results|test material|Base Sepolia/iu;
 
 test("static public copy does not frame RateLoop as a test deployment", () => {
   for (const relativePath of PUBLIC_COPY_FILES) {

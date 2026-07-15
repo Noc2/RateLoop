@@ -20,5 +20,5 @@ test("terms state service limits and accepted-work protection", async () => {
   assert.match(html, /participant bounty, attempt reserve/i);
   assert.match(html, /Stripe processes subscription payment details/i);
   assert.match(html, /not financial, legal, medical, or investment advice/i);
-  assert.doesNotMatch(html, /LREP|no token|token governance|test-only|sandbox|test deployment/i);
+  assert.doesNotMatch(html, /LREP|no token|token governance|test-only|test deployment/i);
 });

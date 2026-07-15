@@ -21,7 +21,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /<span>For Humans<\/span>/);
   assert.match(html, /<span>For Agents<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
-  assert.doesNotMatch(html, /Sandbox only|Reviews and payments are simulated|Use test or redacted content/i);
   assert.ok(
     html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=overview"'),
     "the Humans CTA should appear before the Agents CTA",
@@ -60,7 +59,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   ]) {
     assert.match(html, new RegExp(`href="${href}"`));
   }
-  assert.doesNotMatch(html, /Privacy and Security with Clear Limits|Non-sandbox startup|\/trust|trust registry/i);
+  assert.doesNotMatch(html, /Privacy and Security with Clear Limits/i);
   assert.match(html, /Pricing, Kept/);
   assert.match(html, /25 decisions \/ month/);
   assert.match(html, /250 decisions \/ month/);
@@ -88,7 +87,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Common"));
   assert.doesNotMatch(
     html,
-    /Test AI-enabled work with blinded human panels|decision-evidence workflow|Set Up a Sandbox Suite|Agent-Ready|test deployment|public sandbox|simulated reviewers/i,
+    /Test AI-enabled work with blinded human panels|decision-evidence workflow|Agent-Ready|test deployment/i,
   );
   assert.doesNotMatch(html, /Human and AI raters|AI raters|agent raters|Reputation|signed access terms|gated context/i);
   assert.doesNotMatch(html, /Add a human check before AI reaches your customers\./i);

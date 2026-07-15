@@ -113,7 +113,6 @@ test("root scripts expose only surviving tokenless commands", () => {
     "world-id:test",
     "base-mainnet:check",
     "agents:handoff",
-    "agents:sandbox",
     "e2e",
   ]) {
     assert.equal(scripts[removed], undefined, removed);

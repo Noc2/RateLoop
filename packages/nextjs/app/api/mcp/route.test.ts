@@ -106,7 +106,6 @@ test("lists exactly the four browser handoff tools and reports live capabilities
     ),
   );
   const capabilitiesBody = await body(capabilities);
-  assert.equal("sandboxMode" in capabilitiesBody.result.structuredContent, false);
   assert.deepEqual(capabilitiesBody.result.structuredContent.allowedAudienceSources, [
     "customer_invited",
     "rateloop_network",

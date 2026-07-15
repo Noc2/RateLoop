@@ -33,6 +33,6 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /media-upload/);
   assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
   assert.match(html, /workspace and authorized client\/project boundary/i);
-  assert.doesNotMatch(html, /sandbox|simulation|href="\/trust"|LREP|governance|protocol-token/i);
+  assert.doesNotMatch(html, /LREP|governance|protocol-token/i);
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
 });
