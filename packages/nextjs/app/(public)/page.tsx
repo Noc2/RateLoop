@@ -8,91 +8,31 @@ const howItWorksSteps = [
   ["02", "Humans answer", "Eligible reviewers answer independently without seeing early responses.", "#03CEA4"],
   [
     "03",
-    "Evidence returns",
-    "RateLoop returns the verdict, reasons, and settlement evidence to the workflow.",
+    "Review adapts",
+    "The verdict and reasons return to the workflow so the agent can act or escalate.",
     "#EF476F",
   ],
 ] as const;
 
 const whyItWorksFeatures = [
   {
-    title: "Agent-Native",
-    body: "Request human review through MCP, the SDK, or a scoped workspace connection.",
-    color: "#359EEE",
-    links: [
-      ["MCP Adapter", "/docs/tech-stack#mcp-adapter"],
-      ["x402", "/docs/tech-stack#x402-usdc"],
-      ["SDK", "/docs/sdk"],
-    ],
-  },
-  {
-    title: "Proof of Human",
-    body: "World ID-backed network panels add a uniqueness signal before assignments are issued.",
+    title: "Independent humans",
+    body: "Eligible reviewers answer without seeing early responses.",
     color: "#03CEA4",
-    links: [
-      ["Proof of Human", "/docs/tech-stack#proof-of-human"],
-      ["Audience Policies", "/docs/tech-stack#audience-policies"],
-    ],
+    href: "/docs/tech-stack#proof-of-human",
   },
   {
-    title: "Blind by Design",
-    body: "Commit-reveal keeps answers sealed until the round closes; drand/tlock opens them on schedule.",
+    title: "Blind by design",
+    body: "Commit-reveal keeps answers sealed until the round closes.",
     color: "#EF476F",
-    links: [
-      ["Commit-Reveal", "/docs/tech-stack#commit-reveal"],
-      ["drand/tlock", "/docs/tech-stack#drand-tlock"],
-    ],
+    href: "/docs/tech-stack#commit-reveal",
   },
   {
-    title: "Paid for Useful Signal",
-    body: "Accepted work earns fixed USDC; RBTS and Surprisingly Popular reward informative reports.",
-    color: "#FFC43D",
-    links: [
-      ["RBTS", "/docs/tech-stack#robust-bayesian-truth-serum"],
-      ["Surprisingly Popular", "/docs/tech-stack#surprisingly-popular"],
-    ],
-  },
-  {
-    title: "Auditable Settlement",
-    body: "Base records commitments, scoring, refunds, compensation, and claims for recomputation.",
+    title: "Auditable settlement",
+    body: "Base records the evidence needed to recompute settlement.",
     color: "#359EEE",
-    links: [
-      ["Base + USDC", "/docs/tech-stack#base-usdc"],
-      ["Fund Core", "/docs/smart-contracts#tokenless-panel"],
-    ],
+    href: "/docs/smart-contracts#tokenless-panel",
   },
-] as const;
-
-const questions = [
-  [
-    "What Does RateLoop Do?",
-    "It gathers blind human reviews of AI work and returns a clear result with reasons. Your team makes the final decision.",
-  ],
-  [
-    "What Can I Evaluate?",
-    "Support replies, marketing, consulting work, product behavior, internal copilots, and other AI work with a clear quality bar.",
-  ],
-  [
-    "Who Reviews the Work?",
-    "Your invited reviewers, RateLoop's World ID-backed network, or a clearly separated hybrid panel.",
-  ],
-  [
-    "Can an Agent Publish by Itself?",
-    "Yes, when you give it a scoped RateLoop key and a prepaid budget or agent-controlled wallet. Otherwise it creates a browser draft for you to approve.",
-  ],
-  [
-    "Can I Use Private Data?",
-    "Use only material you are authorized to share, minimize it, and redact unnecessary sensitive data. Assigned reviewers and RateLoop may read what you submit.",
-  ],
-  [
-    "What Does the Blockchain Record?",
-    "Commitments, payment terms, scoring, and settlement. It does not prove the work is safe or compliant.",
-  ],
-] as const;
-
-const pricingPlans = [
-  ["Free", "$0", "25 decisions / month", "1 agent · 1 private group", "Start free", "/agents?tab=overview"],
-  ["Early Access", "$99", "250 decisions / month", "3 agents · 5 private groups", "View Early Access", "/pricing"],
 ] as const;
 
 function SectionTitle({
@@ -185,11 +125,11 @@ export default function TokenlessLandingPage() {
           <SectionTitle number="02" gradient="Works">
             Why It
           </SectionTitle>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-14 md:grid-cols-2 lg:grid-cols-6">
+          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
             {whyItWorksFeatures.map((feature, index) => (
               <article
                 key={feature.title}
-                className={`flex min-h-56 flex-col border-l-2 py-2 pl-6 ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`}
+                className="flex min-h-52 flex-col border-l-2 py-2 pl-6"
                 style={{ borderColor: feature.color }}
               >
                 <span className="font-mono text-sm" style={{ color: feature.color }}>
@@ -197,18 +137,13 @@ export default function TokenlessLandingPage() {
                 </span>
                 <h3 className="mt-3 text-[1.45rem] font-bold leading-tight sm:text-[1.65rem]">{feature.title}</h3>
                 <p className="mt-4 text-base leading-7 text-base-content/60">{feature.body}</p>
-                <div className="mt-auto flex flex-wrap gap-2 pt-5">
-                  {feature.links.map(([label, href]) => (
-                    <Link
-                      key={`${feature.title}-${href}`}
-                      href={href}
-                      prefetch={false}
-                      className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72 transition hover:border-base-content/20 hover:bg-base-content/[0.1] hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content"
-                    >
-                      {label}
-                    </Link>
-                  ))}
-                </div>
+                <Link
+                  href={feature.href}
+                  prefetch={false}
+                  className="mt-auto pt-5 text-sm font-semibold text-base-content underline decoration-base-content/30 underline-offset-4"
+                >
+                  See evidence <span aria-hidden="true">→</span>
+                </Link>
               </article>
             ))}
           </div>
@@ -220,80 +155,13 @@ export default function TokenlessLandingPage() {
           <SectionTitle number="03" gradient="Simple">
             Pricing, Kept
           </SectionTitle>
-          <div className="grid gap-5 lg:grid-cols-[0.8fr_1fr_1fr]">
-            <div className="flex flex-col justify-between py-3 lg:pr-8">
-              <p className="text-lg leading-8 text-base-content/65">
-                Bring your own reviewers for free. Upgrade the workspace when you need more decisions, agents, groups,
-                or paid human supply.
-              </p>
-              <p className="mt-6 text-sm leading-6 text-base-content/45">
-                Public-panel bounty, attempt reserve, and the 7.5% execution fee are funded separately from the
-                subscription.
-              </p>
-            </div>
-            {pricingPlans.map(([name, price, allowance, limits, cta, href], index) => (
-              <article
-                key={name}
-                className={`surface-card flex min-h-72 flex-col rounded-2xl border-t-2 p-7 ${
-                  index === 0 ? "border-[var(--rateloop-blue)]" : "border-[var(--rateloop-green)]"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-2xl font-semibold">{name}</h3>
-                  {index === 1 ? (
-                    <span className="rounded-full bg-[var(--rateloop-green)]/10 px-2.5 py-1 font-mono text-[0.65rem] uppercase tracking-wider text-[var(--rateloop-green)]">
-                      Early Access
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-7 display-section text-5xl">{price}</p>
-                <p className="mt-5 text-base font-semibold">{allowance}</p>
-                <p className="mt-1 text-sm text-base-content/50">{limits}</p>
-                <Link
-                  href={href}
-                  className="mt-auto pt-7 text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
-                >
-                  {cta} <span aria-hidden="true">→</span>
-                </Link>
-              </article>
-            ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Link
-              href="/pricing"
-              className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
-            >
-              Compare plans and panel costs
-            </Link>
-          </div>
-        </section>
-
-        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
-
-        <section className="relative z-10 w-full">
-          <SectionTitle number="04" gradient="Questions">
-            Common
-          </SectionTitle>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-4 xl:grid-cols-2">
-            {questions.map(([question, answer]) => (
-              <details
-                key={question}
-                className="group border-l border-base-content/20 py-2 pl-5 hover:border-base-content/40 open:border-base-content/50"
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-left [&::-webkit-details-marker]:hidden">
-                  <span className="text-lg font-semibold sm:text-xl">{question}</span>
-                  <span className="text-xl text-base-content/50 transition-transform group-open:rotate-45">+</span>
-                </summary>
-                <p className="pb-5 pr-4 text-base leading-7 text-base-content/60">{answer}</p>
-              </details>
-            ))}
-          </div>
-          <div className="mt-12 text-center">
-            <Link
-              href="/docs"
-              className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
-            >
-              Read the docs
+          <div className="surface-card flex flex-col gap-6 rounded-2xl p-7 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-3xl text-lg leading-8 text-base-content/65">
+              Start free with 25 decisions each month. Early Access is $99 for 250 decisions; paid reviewer costs are
+              separate.
+            </p>
+            <Link href="/pricing" className="rateloop-gradient-action shrink-0 px-5">
+              See pricing
             </Link>
           </div>
         </section>

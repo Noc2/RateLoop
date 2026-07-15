@@ -1,74 +1,6 @@
-"use client";
+import Link from "next/link";
 
-import { useEffect, useState } from "react";
-
-const REMOTE_MCP_URL = "https://rateloop-tokenless.vercel.app/api/mcp";
-
-type Agent = {
-  name: string;
-  description: string;
-  snippet: string;
-};
-
-const agents: readonly Agent[] = [
-  {
-    name: "Claude Code",
-    description: "Run this command in the project where you use Claude Code.",
-    snippet: `claude mcp add --transport http rateloop ${REMOTE_MCP_URL}`,
-  },
-  {
-    name: "OpenAI Codex",
-    description: "Run this command in Codex CLI, or add the same server in the Codex app.",
-    snippet: `codex mcp add rateloop --url ${REMOTE_MCP_URL}`,
-  },
-  {
-    name: "Cursor",
-    description: "Add this server to your workspace or user MCP settings.",
-    snippet: `{
-  "mcpServers": {
-    "rateloop": {
-      "type": "http",
-      "url": "${REMOTE_MCP_URL}"
-    }
-  }
-}`,
-  },
-  {
-    name: "GitHub Copilot",
-    description: "Add this entry to .vscode/mcp.json for Copilot Agent mode.",
-    snippet: `{
-  "servers": {
-    "rateloop": {
-      "type": "http",
-      "url": "${REMOTE_MCP_URL}"
-    }
-  }
-}`,
-  },
-  {
-    name: "Gemini CLI",
-    description: "Use this remote HTTP server entry in your Gemini CLI configuration.",
-    snippet: `{
-  "mcpServers": {
-    "rateloop": {
-      "httpUrl": "${REMOTE_MCP_URL}"
-    }
-  }
-}`,
-  },
-  {
-    name: "OpenClaw",
-    description: "Add this generic Streamable HTTP server to your OpenClaw MCP configuration.",
-    snippet: `{
-  "mcpServers": {
-    "rateloop": {
-      "type": "http",
-      "url": "${REMOTE_MCP_URL}"
-    }
-  }
-}`,
-  },
-] as const;
+const agents = ["Claude Code", "OpenAI Codex", "Cursor", "GitHub Copilot", "Gemini CLI", "OpenClaw"] as const;
 
 function AgentIcon({ name }: { name: string }) {
   const iconClass = "h-5 w-5 shrink-0";
@@ -117,125 +49,30 @@ function AgentIcon({ name }: { name: string }) {
 }
 
 export function SupportedAgentsSection() {
-  const [activeAgentName, setActiveAgentName] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const activeAgent = agents.find(agent => agent.name === activeAgentName) ?? null;
-
-  useEffect(() => {
-    if (!activeAgent) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActiveAgentName(null);
-    };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeAgent]);
-
-  async function copySetup() {
-    if (!activeAgent) return;
-    try {
-      await navigator.clipboard.writeText(activeAgent.snippet);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setCopied(false);
-    }
-  }
-
   return (
     <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40" aria-labelledby="supported-agents-title">
-      <p id="supported-agents-title" className="mb-5 text-center text-base leading-7 text-base-content/70 sm:text-lg">
-        Use RateLoop with your favorite AI agent
+      <p id="supported-agents-title" className="mb-5 text-center text-sm text-base-content/60">
+        Works with the agents your team already uses
       </p>
       <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:gap-2.5 sm:px-0 lg:gap-3">
-        {agents.map(agent => {
-          const isSelected = activeAgent?.name === agent.name;
-          return (
-            <button
-              key={agent.name}
-              type="button"
-              onClick={() => {
-                setCopied(false);
-                setActiveAgentName(agent.name);
-              }}
-              aria-haspopup="dialog"
-              aria-expanded={isSelected}
-              aria-label={`${agent.name} RateLoop setup`}
-              className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors hover:border-base-content/25 hover:bg-base-content/[0.08] hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content sm:px-3.5 lg:px-4 ${isSelected ? "border-base-content bg-base-content text-base-100" : "border-base-content/10 bg-base-content/[0.055] text-base-content/76"}`}
-            >
-              <AgentIcon name={agent.name} />
-              <span className="whitespace-nowrap text-sm font-semibold sm:text-base">{agent.name}</span>
-            </button>
-          );
-        })}
+        {agents.map(agent => (
+          <span
+            key={agent}
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-base-content/10 bg-base-content/[0.055] px-3 py-2 text-base-content/70"
+          >
+            <AgentIcon name={agent} />
+            <span className="whitespace-nowrap text-sm font-semibold">{agent}</span>
+          </span>
+        ))}
       </div>
-
-      {activeAgent ? (
-        <div
-          className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${activeAgent.name} setup`}
+      <p className="mt-5 text-center">
+        <Link
+          href="/docs/ai"
+          className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4"
         >
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-sm"
-            aria-label="Close agent setup"
-            onClick={() => setActiveAgentName(null)}
-          />
-          <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-t-2xl border border-base-content/10 bg-base-200 shadow-2xl sm:rounded-2xl">
-            <div className="flex items-center gap-3 border-b border-base-content/10 px-4 py-4 pr-14 sm:px-6">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-base-content/[0.08]">
-                <AgentIcon name={activeAgent.name} />
-              </div>
-              <div className="min-w-0">
-                <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Agent setup</p>
-                <h2 className="mt-1 text-lg font-semibold leading-tight text-base-content sm:text-xl">
-                  {activeAgent.name}
-                </h2>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveAgentName(null)}
-              className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/70 hover:text-base-content"
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
-              <p className="text-base leading-7 text-base-content/70">{activeAgent.description}</p>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-base-content/45">
-                  RateLoop MCP setup
-                </p>
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-4 font-mono text-xs leading-5 text-base-content/78">
-                  {activeAgent.snippet}
-                </pre>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void copySetup()}
-                  className="btn btn-sm rounded-md border-base-content/10 bg-base-content/[0.06] text-base-content hover:border-base-content/20 hover:bg-base-content/[0.1]"
-                >
-                  {copied ? "Copied" : "Copy setup"}
-                </button>
-                <a
-                  href="/docs/ai"
-                  className="text-sm font-semibold text-base-content/65 underline decoration-base-content/25 underline-offset-4 hover:text-base-content"
-                >
-                  Open full agent docs
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+          See supported agents <span aria-hidden="true">→</span>
+        </Link>
+      </p>
     </section>
   );
 }

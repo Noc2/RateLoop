@@ -29,62 +29,41 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /How It/);
   assert.match(html, /Agent asks/);
   assert.match(html, /Humans answer/);
-  assert.match(html, /Evidence returns/);
+  assert.match(html, /Review adapts/);
   assert.match(html, /without seeing early responses/i);
-  assert.match(html, /verdict, reasons, and settlement evidence/i);
+  assert.match(html, /verdict and reasons return to the workflow/i);
   assert.match(html, /poster="\/videos\/rateloop-promo-poster\.jpg"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.mp4"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);
   assert.match(html, /Why It/);
-  assert.match(html, /Agent-Native/);
-  assert.match(html, /Proof of Human/);
-  assert.match(html, /World ID-backed network panels add a uniqueness signal/);
-  assert.match(html, /Blind by Design/);
-  assert.match(html, /Commit-reveal keeps answers sealed/);
-  assert.match(html, /Paid for Useful Signal/);
-  assert.match(html, /Accepted work earns fixed USDC/);
-  assert.match(html, /Auditable Settlement/);
-  assert.match(html, /Base records commitments, scoring, refunds, compensation, and claims/);
+  assert.match(html, /Independent humans/);
+  assert.match(html, /Blind by design/);
+  assert.match(html, /Auditable settlement/);
   for (const href of [
-    "/docs/tech-stack#mcp-adapter",
-    "/docs/tech-stack#x402-usdc",
     "/docs/tech-stack#proof-of-human",
-    "/docs/tech-stack#audience-policies",
     "/docs/tech-stack#commit-reveal",
-    "/docs/tech-stack#drand-tlock",
-    "/docs/tech-stack#robust-bayesian-truth-serum",
-    "/docs/tech-stack#surprisingly-popular",
-    "/docs/tech-stack#base-usdc",
     "/docs/smart-contracts#tokenless-panel",
   ]) {
     assert.match(html, new RegExp(`href="${href}"`));
   }
+  assert.equal(html.match(/See evidence/g)?.length, 3);
   assert.doesNotMatch(html, /Privacy and Security with Clear Limits/i);
   assert.match(html, /Pricing, Kept/);
-  assert.match(html, /25 decisions \/ month/);
-  assert.match(html, /250 decisions \/ month/);
-  assert.match(html, /7\.5% execution fee/);
+  assert.match(html, /Start free with 25 decisions each month/);
+  assert.match(html, /Early Access is \$99 for 250 decisions/);
   assert.match(html, /href="\/pricing"/);
-  assert.match(html, /What Does RateLoop Do\?/);
-  assert.match(html, /Your team makes the final decision/i);
-  assert.match(html, /Use RateLoop with your favorite AI agent/);
-  assert.match(html, /Claude Code RateLoop setup/);
-  assert.match(html, /OpenAI Codex RateLoop setup/);
-  assert.match(html, /Cursor RateLoop setup/);
-  assert.match(html, /GitHub Copilot RateLoop setup/);
-  assert.match(html, /Gemini CLI RateLoop setup/);
-  assert.match(html, /OpenClaw RateLoop setup/);
-  assert.doesNotMatch(html, /Connect through the tokenless remote MCP server|View setup/);
+  assert.match(html, /Works with the agents your team already uses/);
   assert.match(html, /Claude Code/);
   assert.match(html, /OpenAI Codex/);
   assert.match(html, /Cursor/);
   assert.match(html, /GitHub Copilot/);
   assert.match(html, /Gemini CLI/);
   assert.match(html, /OpenClaw/);
-  assert.match(html, /Common/);
-  assert.equal(html.match(/<details/g)?.length, 6);
+  assert.match(html, /href="\/docs\/ai"/);
+  assert.doesNotMatch(html, /Agent setup|Copy setup|role="dialog"/);
+  assert.doesNotMatch(html, /Common|What Does RateLoop Do\?|<details/);
   assert.ok(html.indexOf('id="how-it-works"') < html.indexOf('id="why-it-works"'));
-  assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Common"));
+  assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Pricing, Kept"));
   assert.doesNotMatch(
     html,
     /Test AI-enabled work with blinded human panels|decision-evidence workflow|Agent-Ready|test deployment/i,
@@ -94,4 +73,11 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /id="problem"|id="solution"|id="safety-privacy"|Safety &amp; Privacy/i);
   assert.doesNotMatch(html, /\/api\/mcp\/public|www\.rateloop\.ai/i);
   assert.doesNotMatch(html, /LREP|staking|protocol token|governance|leaderboard|manual claim/i);
+
+  const visibleWords = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-zA-Z0-9#]+;/g, " ")
+    .trim()
+    .split(/\s+/).length;
+  assert.ok(visibleWords <= 250, `landing page should stay under 250 visible words; found ${visibleWords}`);
 });
