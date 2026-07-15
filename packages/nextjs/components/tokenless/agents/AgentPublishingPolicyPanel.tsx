@@ -1,7 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { type FormEvent, useCallback, useEffect, useId, useState } from "react";
 
 type PublishingPolicy = {
   allowedAdmissionPolicyHashes: string[];
@@ -27,13 +26,12 @@ type PublishingPolicy = {
 };
 
 type Audience = "private_invited" | "public_network" | "hybrid";
+export type ContentBoundary = "public_or_test" | "private_workspace";
 
-type PolicyDraft = {
+export type PolicyDraft = {
   admissionPolicyHash: string;
-  allowedDataClassifications: string[];
   audience: Audience;
-  maxAttemptReserveUsdc: string;
-  maxBountyUsdc: string;
+  contentBoundary: ContentBoundary;
   maxDailyUsdc: string;
   maxFeePercent: string;
   maxMonthlyUsdc: string;
@@ -45,14 +43,27 @@ type PolicyDraft = {
   paymentMode: "prepaid" | "x402";
 };
 
-const DATA_CLASSIFICATIONS = ["public", "synthetic", "redacted", "internal", "confidential", "restricted"] as const;
+export type PublishingPolicyPayload = {
+  allowedAdmissionPolicyHashes: string[];
+  allowedDataClassifications: string[];
+  allowedPaymentModes: Array<"prepaid" | "x402">;
+  allowedReviewerSources: string[];
+  maxAttemptReserveAtomic: string;
+  maxBountyAtomic: string;
+  maxDailyAtomic: string;
+  maxFeeBps: number;
+  maxMonthlyAtomic: string;
+  maxPanelAtomic: string;
+  maxPanelSize: number;
+  name: string;
+  onPolicyMiss: "handoff" | "deny";
+  payerAddress: string | null;
+};
 
-const INITIAL_DRAFT: PolicyDraft = {
+export const INITIAL_DRAFT: PolicyDraft = {
   admissionPolicyHash: "",
-  allowedDataClassifications: ["internal"],
   audience: "private_invited",
-  maxAttemptReserveUsdc: "5",
-  maxBountyUsdc: "20",
+  contentBoundary: "private_workspace",
   maxDailyUsdc: "100",
   maxFeePercent: "7.5",
   maxMonthlyUsdc: "1000",
@@ -63,6 +74,14 @@ const INITIAL_DRAFT: PolicyDraft = {
   payerAddress: "",
   paymentMode: "prepaid",
 };
+
+const CONTENT_BOUNDARY_CLASSIFICATIONS: Record<ContentBoundary, readonly string[]> = {
+  public_or_test: ["public", "synthetic", "redacted"],
+  private_workspace: ["internal", "confidential"],
+};
+
+const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -90,6 +109,12 @@ export function formatUsdcAtomic(value: string) {
   return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} USDC`;
 }
 
+export function classificationsForContentBoundary(boundary: ContentBoundary) {
+  const classifications = CONTENT_BOUNDARY_CLASSIFICATIONS[boundary];
+  if (!classifications) throw new Error("Choose a supported content boundary.");
+  return [...classifications];
+}
+
 function audienceSources(audience: Audience) {
   if (audience === "private_invited") return ["customer_invited"];
   if (audience === "public_network") return ["rateloop_network"];
@@ -97,9 +122,90 @@ function audienceSources(audience: Audience) {
 }
 
 function audienceLabel(sources: string[]) {
-  if (sources.includes("hybrid")) return "Hybrid invited + public network";
-  if (sources.includes("rateloop_network")) return "Public RateLoop network";
-  return "Private invited reviewers";
+  if (sources.includes("hybrid")) return "Invited and RateLoop reviewers";
+  if (sources.includes("rateloop_network")) return "RateLoop reviewer network";
+  return "Invited reviewers";
+}
+
+function contentBoundaryLabel(boundary: ContentBoundary) {
+  return boundary === "public_or_test" ? "Public or test material only" : "Private workspace material";
+}
+
+function policyContentBoundaryLabel(classifications: string[]) {
+  const values = new Set(classifications);
+  if (
+    classifications.length > 0 &&
+    classifications.every(value => ["public", "synthetic", "redacted"].includes(value))
+  ) {
+    return "Public or test material only";
+  }
+  if (classifications.length > 0 && classifications.every(value => ["internal", "confidential"].includes(value))) {
+    return "Private workspace material";
+  }
+  if (values.has("restricted") || values.has("regulated")) return "Restricted material";
+  return "Custom content boundary";
+}
+
+function minimumAtomic(value: string, ceiling: string) {
+  const amount = BigInt(value);
+  const maximum = BigInt(ceiling);
+  return (amount < maximum ? amount : maximum).toString();
+}
+
+/**
+ * Fail-closed adapter for the current publishing-policy API. The UI presents two
+ * understandable content boundaries, but the server still requires the legacy
+ * classification array. Restricted and regulated material are intentionally not
+ * mapped because this component cannot prove the separate entitlement they need.
+ */
+export function buildPublishingPolicyPayload(draft: PolicyDraft): PublishingPolicyPayload {
+  const maxPanelAtomic = parseUsdcToAtomic(draft.maxPanelUsdc);
+  const maxDailyAtomic = parseUsdcToAtomic(draft.maxDailyUsdc);
+  const maxMonthlyAtomic = parseUsdcToAtomic(draft.maxMonthlyUsdc);
+  if ([maxPanelAtomic, maxDailyAtomic, maxMonthlyAtomic].some(value => BigInt(value) <= 0n)) {
+    throw new Error("Spending limits must be greater than zero.");
+  }
+  if (BigInt(maxDailyAtomic) < BigInt(maxPanelAtomic)) {
+    throw new Error("The daily limit must be at least the per-request limit.");
+  }
+  if (BigInt(maxMonthlyAtomic) < BigInt(maxDailyAtomic)) {
+    throw new Error("The monthly limit must be at least the daily limit.");
+  }
+
+  const admissionPolicyHash = draft.admissionPolicyHash.trim().toLowerCase();
+  if (!BYTES32_PATTERN.test(admissionPolicyHash)) {
+    throw new Error("Add the audience policy binding under Advanced.");
+  }
+  const panelSize = Number(draft.maxPanelSize);
+  if (!Number.isSafeInteger(panelSize) || panelSize < 3 || panelSize > 500) {
+    throw new Error("Maximum responses must be a whole number between 3 and 500.");
+  }
+  const feePercent = Number(draft.maxFeePercent);
+  if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 20) {
+    throw new Error("The fee cap must be between 0% and 20%.");
+  }
+
+  const payerAddress = draft.payerAddress.trim().toLowerCase();
+  if (draft.paymentMode === "x402" && !ADDRESS_PATTERN.test(payerAddress)) {
+    throw new Error("Add the bound payer wallet under Advanced.");
+  }
+
+  return {
+    name: draft.name.trim() || "Autonomous review requests",
+    allowedPaymentModes: [draft.paymentMode],
+    payerAddress: draft.paymentMode === "x402" ? payerAddress : null,
+    maxPanelAtomic,
+    maxDailyAtomic,
+    maxMonthlyAtomic,
+    maxPanelSize: panelSize,
+    maxBountyAtomic: minimumAtomic(maxPanelAtomic, parseUsdcToAtomic("20")),
+    maxFeeBps: Math.round(feePercent * 100),
+    maxAttemptReserveAtomic: minimumAtomic(maxPanelAtomic, parseUsdcToAtomic("5")),
+    allowedReviewerSources: audienceSources(draft.audience),
+    allowedAdmissionPolicyHashes: [admissionPolicyHash],
+    allowedDataClassifications: classificationsForContentBoundary(draft.contentBoundary),
+    onPolicyMiss: draft.onPolicyMiss,
+  };
 }
 
 export function AgentPublishingPolicyPanel({
@@ -111,8 +217,12 @@ export function AgentPublishingPolicyPanel({
   publishingRevision?: number;
   onPoliciesChanged?: () => void;
 }) {
+  const advancedId = useId();
   const [policies, setPolicies] = useState<PublishingPolicy[]>([]);
-  const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
+  const [draft, setDraft] = useState<PolicyDraft>(() => ({ ...INITIAL_DRAFT }));
+  const [pendingPolicy, setPendingPolicy] = useState<PublishingPolicyPayload | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +252,7 @@ export function AgentPublishingPolicyPanel({
         await loadPolicies(workspaceId, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load publishing policies.");
+          setError(cause instanceof Error ? cause.message : "Unable to load autonomous access.");
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -153,62 +263,60 @@ export function AgentPublishingPolicyPanel({
 
   function updateDraft<Key extends keyof PolicyDraft>(key: Key, value: PolicyDraft[Key]) {
     setDraft(current => ({ ...current, [key]: value }));
+    setPendingPolicy(null);
   }
 
-  function toggleClassification(value: string) {
-    setDraft(current => ({
-      ...current,
-      allowedDataClassifications: current.allowedDataClassifications.includes(value)
-        ? current.allowedDataClassifications.filter(item => item !== value)
-        : [...current.allowedDataClassifications, value],
-    }));
+  function startEditor() {
+    setEditorOpen(true);
+    setPendingPolicy(null);
+    setError(null);
+    setStatus(null);
   }
 
-  async function createPolicy(event: FormEvent<HTMLFormElement>) {
+  function closeEditor() {
+    if (busy) return;
+    setEditorOpen(false);
+    setAdvancedOpen(false);
+    setPendingPolicy(null);
+    setDraft({ ...INITIAL_DRAFT });
+    setError(null);
+  }
+
+  function reviewPolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspaceId) return;
+    setError(null);
+    try {
+      setPendingPolicy(buildPublishingPolicyPayload(draft));
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Unable to review autonomous access.";
+      if (message.includes("Advanced")) setAdvancedOpen(true);
+      setError(message);
+    }
+  }
+
+  async function createPolicy() {
+    if (!workspaceId || !pendingPolicy) return;
     setBusy(true);
     setError(null);
     setStatus(null);
     try {
-      if (draft.allowedDataClassifications.length === 0) {
-        throw new Error("Select at least one permitted data classification.");
-      }
-      const feePercent = Number(draft.maxFeePercent);
-      if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 20) {
-        throw new Error("The fee cap must be between 0% and 20%.");
-      }
-      const panelSize = Number(draft.maxPanelSize);
-      if (!Number.isSafeInteger(panelSize)) throw new Error("Maximum responses must be a whole number.");
       await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-publishing-policies`, {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: draft.name,
-            allowedPaymentModes: [draft.paymentMode],
-            payerAddress: draft.paymentMode === "x402" ? draft.payerAddress : null,
-            maxPanelAtomic: parseUsdcToAtomic(draft.maxPanelUsdc),
-            maxDailyAtomic: parseUsdcToAtomic(draft.maxDailyUsdc),
-            maxMonthlyAtomic: parseUsdcToAtomic(draft.maxMonthlyUsdc),
-            maxPanelSize: panelSize,
-            maxBountyAtomic: parseUsdcToAtomic(draft.maxBountyUsdc),
-            maxFeeBps: Math.round(feePercent * 100),
-            maxAttemptReserveAtomic: parseUsdcToAtomic(draft.maxAttemptReserveUsdc),
-            allowedReviewerSources: audienceSources(draft.audience),
-            allowedAdmissionPolicyHashes: [draft.admissionPolicyHash],
-            allowedDataClassifications: draft.allowedDataClassifications,
-            onPolicyMiss: draft.onPolicyMiss,
-          }),
+          body: JSON.stringify(pendingPolicy),
         }),
       );
       await loadPolicies(workspaceId);
       onPoliciesChanged?.();
-      setDraft(INITIAL_DRAFT);
-      setStatus("Publishing policy created. Select it when approving an agent connection.");
+      setDraft({ ...INITIAL_DRAFT });
+      setPendingPolicy(null);
+      setAdvancedOpen(false);
+      setEditorOpen(false);
+      setStatus("Autonomous review access approved.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the publishing policy.");
+      setError(cause instanceof Error ? cause.message : "Unable to approve autonomous access.");
     } finally {
       setBusy(false);
     }
@@ -228,9 +336,9 @@ export function AgentPublishingPolicyPanel({
       );
       await loadPolicies(workspaceId);
       onPoliciesChanged?.();
-      setStatus("Publishing policy revoked. Existing audit records remain available.");
+      setStatus("Autonomous review access revoked.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to revoke the publishing policy.");
+      setError(cause instanceof Error ? cause.message : "Unable to revoke autonomous access.");
     } finally {
       setBusy(false);
     }
@@ -238,116 +346,56 @@ export function AgentPublishingPolicyPanel({
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
-            Delegated publishing
+      {workspaceId && !editorOpen && policies.length === 0 ? (
+        <section className="surface-card rounded-2xl p-6">
+          <h2 className="text-xl font-semibold">Autonomous review requests</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
+            Your agent cannot spend or request reviewers until you allow it.
           </p>
-          <h2 className="mt-2 text-2xl font-semibold">Put a hard boundary around autonomous agent spend</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Policies are server-enforced and bound automatically when you approve an agent connection. Audience hashes,
-            reviewer supply, classifications, payment rail, panel size, and USDC caps must all match before an ask is
-            accepted.
-          </p>
-        </div>
-      </section>
+          <button type="button" className="rateloop-gradient-action mt-5 px-5" onClick={startEditor} disabled={loading}>
+            {loading ? "Checking access…" : "Allow autonomous review requests"}
+          </button>
+        </section>
+      ) : null}
 
-      {workspaceId ? (
-        <form className="surface-card rounded-2xl p-6" onSubmit={createPolicy}>
-          <h3 className="text-xl font-semibold">New publishing policy</h3>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">
-            A policy is append-only after creation. Replace it with a new version and revoke the old policy when limits
-            change.
+      {workspaceId && editorOpen && !pendingPolicy ? (
+        <form className="surface-card rounded-2xl p-6" onSubmit={reviewPolicy}>
+          <h2 className="text-xl font-semibold">Allow autonomous review requests</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
+            Set where the agent may send work and how much it may spend without asking you again.
           </p>
 
-          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
             <label className="text-sm text-base-content/70">
-              Policy name
-              <input
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={draft.name}
-                onChange={event => updateDraft("name", event.target.value)}
-                maxLength={120}
-                required
-              />
-            </label>
-            <label className="text-sm text-base-content/70">
-              Reviewer supply
+              Reviewer source
               <select
                 className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                 value={draft.audience}
                 onChange={event => updateDraft("audience", event.target.value as Audience)}
               >
-                <option value="private_invited">Private invited reviewers</option>
-                <option value="public_network">Public RateLoop network</option>
-                <option value="hybrid">Hybrid subpanels</option>
+                <option value="private_invited">Invited reviewers</option>
+                <option value="public_network">RateLoop reviewer network</option>
+                <option value="hybrid">Invited and RateLoop reviewers</option>
               </select>
             </label>
-            <label className="text-sm text-base-content/70 lg:col-span-2">
-              Frozen admission-policy hash
-              <input
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
-                value={draft.admissionPolicyHash}
-                onChange={event => updateDraft("admissionPolicyHash", event.target.value)}
-                placeholder="0x… (32-byte policy hash)"
-                pattern="0x[0-9a-fA-F]{64}"
-                required
-              />
-              <span className="mt-2 block text-xs leading-5 text-base-content/50">
-                Exact binding prevents an agent from silently changing group, World ID, qualification, or compensation
-                rules. Public-network admission requires the registered World ID assurance policy.
-              </span>
+            <label className="text-sm text-base-content/70">
+              Content boundary
+              <select
+                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={draft.contentBoundary}
+                onChange={event => updateDraft("contentBoundary", event.target.value as ContentBoundary)}
+              >
+                <option value="public_or_test">Public or test material only</option>
+                <option value="private_workspace">Private workspace material</option>
+              </select>
             </label>
           </div>
 
-          <fieldset className="mt-6">
-            <legend className="text-sm font-medium">Permitted data classifications</legend>
-            <div className="mt-3 flex flex-wrap gap-3">
-              {DATA_CLASSIFICATIONS.map(value => (
-                <label key={value} className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-sm"
-                    checked={draft.allowedDataClassifications.includes(value)}
-                    onChange={() => toggleClassification(value)}
-                  />
-                  {value}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            <label className="text-sm text-base-content/70">
-              Payment rail
-              <select
-                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={draft.paymentMode}
-                onChange={event => updateDraft("paymentMode", event.target.value as "prepaid" | "x402")}
-              >
-                <option value="prepaid">Workspace prepaid USDC</option>
-                <option value="x402">Self-funded x402</option>
-              </select>
-            </label>
-            {draft.paymentMode === "x402" ? (
-              <label className="text-sm text-base-content/70 md:col-span-2">
-                Bound payer wallet
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
-                  value={draft.payerAddress}
-                  onChange={event => updateDraft("payerAddress", event.target.value)}
-                  placeholder="0x…"
-                  pattern="0x[0-9a-fA-F]{40}"
-                  required
-                />
-              </label>
-            ) : null}
+          <div className="mt-6 grid gap-5 md:grid-cols-3">
             {[
-              ["maxPanelUsdc", "Per review total", draft.maxPanelUsdc],
-              ["maxDailyUsdc", "Daily total", draft.maxDailyUsdc],
-              ["maxMonthlyUsdc", "Monthly total", draft.maxMonthlyUsdc],
-              ["maxBountyUsdc", "Bounty per review", draft.maxBountyUsdc],
-              ["maxAttemptReserveUsdc", "Accepted-work reserve", draft.maxAttemptReserveUsdc],
+              ["maxPanelUsdc", "Maximum per request", draft.maxPanelUsdc],
+              ["maxDailyUsdc", "Daily limit", draft.maxDailyUsdc],
+              ["maxMonthlyUsdc", "Monthly limit", draft.maxMonthlyUsdc],
             ].map(([key, label, value]) => (
               <label key={key} className="text-sm text-base-content/70">
                 {label} (USDC)
@@ -360,61 +408,192 @@ export function AgentPublishingPolicyPanel({
                 />
               </label>
             ))}
-            <label className="text-sm text-base-content/70">
-              Maximum responses
-              <input
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono"
-                type="number"
-                min={3}
-                max={500}
-                step={1}
-                value={draft.maxPanelSize}
-                onChange={event => updateDraft("maxPanelSize", event.target.value)}
-                required
-              />
-            </label>
-            <label className="text-sm text-base-content/70">
-              Maximum platform fee (%)
-              <input
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono"
-                type="number"
-                min={0}
-                max={20}
-                step={0.01}
-                value={draft.maxFeePercent}
-                onChange={event => updateDraft("maxFeePercent", event.target.value)}
-                required
-              />
-            </label>
-            <label className="text-sm text-base-content/70">
-              When a request misses policy
-              <select
-                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={draft.onPolicyMiss}
-                onChange={event => updateDraft("onPolicyMiss", event.target.value as "handoff" | "deny")}
-              >
-                <option value="handoff">Return approval_required</option>
-                <option value="deny">Deny</option>
-              </select>
-            </label>
           </div>
 
-          <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm leading-6 text-base-content/60">
-            Public-network reviews require a non-zero bounty and paid eligibility. Private unpaid employee reviews use
-            the private-group assurance workflow; this delegated quote → ask policy does not convert paid panels into
-            unpaid work. Response windows, assignment leases, and minimum usable answers are frozen separately in each
-            assurance run, while this policy limits the maximum panel size.
-          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost mt-6 border border-white/10"
+            aria-controls={advancedId}
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen(open => !open)}
+          >
+            Advanced
+          </button>
+
+          {advancedOpen ? (
+            <div id={advancedId} className="mt-4 grid gap-5 rounded-xl border border-white/10 p-4 md:grid-cols-2">
+              <label className="text-sm text-base-content/70 md:col-span-2">
+                Audience policy binding
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+                  value={draft.admissionPolicyHash}
+                  onChange={event => updateDraft("admissionPolicyHash", event.target.value)}
+                  placeholder="0x…"
+                  pattern="0x[0-9a-fA-F]{64}"
+                  required
+                />
+              </label>
+              <label className="text-sm text-base-content/70">
+                Payment method
+                <select
+                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={draft.paymentMode}
+                  onChange={event => updateDraft("paymentMode", event.target.value as "prepaid" | "x402")}
+                >
+                  <option value="prepaid">Workspace prepaid USDC</option>
+                  <option value="x402">Bound payer wallet</option>
+                </select>
+              </label>
+              {draft.paymentMode === "x402" ? (
+                <label className="text-sm text-base-content/70">
+                  Payer wallet
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+                    value={draft.payerAddress}
+                    onChange={event => updateDraft("payerAddress", event.target.value)}
+                    placeholder="0x…"
+                    pattern="0x[0-9a-fA-F]{40}"
+                    required
+                  />
+                </label>
+              ) : null}
+              <label className="text-sm text-base-content/70">
+                Policy name
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={draft.name}
+                  onChange={event => updateDraft("name", event.target.value)}
+                  maxLength={120}
+                  placeholder="Autonomous review requests"
+                />
+              </label>
+              <label className="text-sm text-base-content/70">
+                Maximum responses
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono"
+                  type="number"
+                  min={3}
+                  max={500}
+                  step={1}
+                  value={draft.maxPanelSize}
+                  onChange={event => updateDraft("maxPanelSize", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="text-sm text-base-content/70">
+                Maximum platform fee (%)
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono"
+                  type="number"
+                  min={0}
+                  max={20}
+                  step={0.01}
+                  value={draft.maxFeePercent}
+                  onChange={event => updateDraft("maxFeePercent", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="text-sm text-base-content/70">
+                If a request exceeds these limits
+                <select
+                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={draft.onPolicyMiss}
+                  onChange={event => updateDraft("onPolicyMiss", event.target.value as "handoff" | "deny")}
+                >
+                  <option value="handoff">Ask me for approval</option>
+                  <option value="deny">Deny the request</option>
+                </select>
+              </label>
+              <p className="text-xs leading-5 text-base-content/50 md:col-span-2">
+                Restricted and regulated material remain blocked. The current server contract requires the audience
+                policy binding shown above.
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
-              {busy ? "Saving…" : "Create enforced policy"}
+            <button type="submit" className="rateloop-gradient-action px-5">
+              Review access
             </button>
-            <Link href="/handoff" className="btn btn-ghost border border-white/10">
-              Open manual handoff
-            </Link>
+            <button type="button" className="btn btn-ghost" onClick={closeEditor}>
+              Cancel
+            </button>
           </div>
         </form>
+      ) : null}
+
+      {workspaceId && editorOpen && pendingPolicy ? (
+        <section className="surface-card rounded-2xl p-6">
+          <h2 className="text-xl font-semibold">Confirm autonomous access</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
+            The agent may request and pay for reviews within every limit below without asking again.
+          </p>
+          <dl className="mt-6 grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <dt className="text-base-content/45">Reviewers</dt>
+              <dd className="mt-1">{audienceLabel(pendingPolicy.allowedReviewerSources)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Content</dt>
+              <dd className="mt-1">{contentBoundaryLabel(draft.contentBoundary)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Payment</dt>
+              <dd className="mt-1">
+                {pendingPolicy.allowedPaymentModes[0] === "prepaid" ? "Workspace prepaid USDC" : "Bound payer wallet"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Per request</dt>
+              <dd className="mt-1">{formatUsdcAtomic(pendingPolicy.maxPanelAtomic)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Daily</dt>
+              <dd className="mt-1">{formatUsdcAtomic(pendingPolicy.maxDailyAtomic)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Monthly</dt>
+              <dd className="mt-1">{formatUsdcAtomic(pendingPolicy.maxMonthlyAtomic)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Bounty ceiling</dt>
+              <dd className="mt-1">{formatUsdcAtomic(pendingPolicy.maxBountyAtomic)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Accepted-work reserve</dt>
+              <dd className="mt-1">{formatUsdcAtomic(pendingPolicy.maxAttemptReserveAtomic)}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Maximum responses</dt>
+              <dd className="mt-1">{pendingPolicy.maxPanelSize}</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">Maximum platform fee</dt>
+              <dd className="mt-1">{pendingPolicy.maxFeeBps / 100}%</dd>
+            </div>
+            <div>
+              <dt className="text-base-content/45">If a request exceeds the limits</dt>
+              <dd className="mt-1">{pendingPolicy.onPolicyMiss === "handoff" ? "Ask for approval" : "Deny"}</dd>
+            </div>
+            <div className="md:col-span-2 lg:col-span-3">
+              <dt className="text-base-content/45">Audience policy binding</dt>
+              <dd className="mt-1 break-all font-mono text-xs">{pendingPolicy.allowedAdmissionPolicyHashes[0]}</dd>
+            </div>
+          </dl>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="rateloop-gradient-action px-5"
+              onClick={() => void createPolicy()}
+              disabled={busy}
+            >
+              {busy ? "Approving…" : "Approve autonomous access"}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setPendingPolicy(null)} disabled={busy}>
+              Back
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {error ? (
@@ -427,15 +606,17 @@ export function AgentPublishingPolicyPanel({
           {status}
         </p>
       ) : null}
-      {workspaceId ? (
+
+      {workspaceId && policies.length > 0 ? (
         <section className="surface-card rounded-2xl p-6">
-          <h3 className="text-xl font-semibold">Active and historical policies</h3>
-          {loading ? <p className="mt-4 text-sm text-base-content/55">Loading policies…</p> : null}
-          {!loading && policies.length === 0 ? (
-            <p className="mt-4 text-sm text-base-content/55">
-              No publishing policy has been created for this workspace.
-            </p>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Autonomous review access</h2>
+            {!editorOpen ? (
+              <button type="button" className="btn btn-sm btn-ghost border border-white/10" onClick={startEditor}>
+                Add policy
+              </button>
+            ) : null}
+          </div>
           <div className="mt-5 space-y-4">
             {policies.map(policy => {
               const active = policy.enabled && !policy.revokedAt;
@@ -444,34 +625,31 @@ export function AgentPublishingPolicyPanel({
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-semibold">{policy.name}</h4>
+                        <h3 className="font-semibold">{policy.name}</h3>
                         <span className={`badge ${active ? "badge-success" : "badge-ghost"}`}>
                           {active ? "active" : "revoked"}
                         </span>
                         <span className="badge badge-ghost">v{policy.version}</span>
                       </div>
-                      <p className="mt-2 font-mono text-xs text-base-content/45">{policy.policyId}</p>
                       <p className="mt-3 text-sm text-base-content/65">
-                        {audienceLabel(policy.allowedReviewerSources)} · {policy.allowedPaymentModes.join(" + ")} · max{" "}
-                        {policy.maxPanelSize} responses
+                        {audienceLabel(policy.allowedReviewerSources)} ·{" "}
+                        {policyContentBoundaryLabel(policy.allowedDataClassifications)}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {active ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost text-error"
-                          onClick={() => void revokePolicy(policy)}
-                          disabled={busy}
-                        >
-                          Revoke
-                        </button>
-                      ) : null}
-                    </div>
+                    {active ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost text-error"
+                        onClick={() => void revokePolicy(policy)}
+                        disabled={busy}
+                      >
+                        Revoke
+                      </button>
+                    ) : null}
                   </div>
-                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                     <div>
-                      <dt className="text-base-content/45">Per review</dt>
+                      <dt className="text-base-content/45">Per request</dt>
                       <dd>{formatUsdcAtomic(policy.maxPanelAtomic)}</dd>
                     </div>
                     <div>
@@ -482,15 +660,24 @@ export function AgentPublishingPolicyPanel({
                       <dt className="text-base-content/45">Monthly</dt>
                       <dd>{formatUsdcAtomic(policy.maxMonthlyAtomic)}</dd>
                     </div>
-                    <div>
-                      <dt className="text-base-content/45">On miss</dt>
-                      <dd>{policy.onPolicyMiss}</dd>
-                    </div>
                   </dl>
-                  <p className="mt-3 text-xs leading-5 text-base-content/50">
-                    Classifications: {policy.allowedDataClassifications.join(", ") || "legacy unrestricted"}. Admission:{" "}
-                    {policy.allowedAdmissionPolicyHashes[0]}
-                  </p>
+                  <details className="mt-4 text-xs text-base-content/50">
+                    <summary className="cursor-pointer">Technical details</summary>
+                    <dl className="mt-3 space-y-2 break-all font-mono">
+                      <div>
+                        <dt className="sr-only">Policy ID</dt>
+                        <dd>{policy.policyId}</dd>
+                      </div>
+                      <div>
+                        <dt className="sr-only">Audience policy binding</dt>
+                        <dd>{policy.allowedAdmissionPolicyHashes[0]}</dd>
+                      </div>
+                      <div>
+                        <dt className="sr-only">Server classifications</dt>
+                        <dd>{policy.allowedDataClassifications.join(", ") || "legacy unrestricted"}</dd>
+                      </div>
+                    </dl>
+                  </details>
                 </article>
               );
             })}
