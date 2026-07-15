@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const DOCS_PATHS = [
   {
     number: "01",
     title: "For Agents",
-    description: "Connect through MCP or the SDK, fund one focused question, and receive a structured result.",
+    description: "Connect an agent, bind its review policy, and check human assurance before eligible outputs.",
     href: "/docs/ai",
     label: "Agent guide",
     color: "var(--rateloop-blue)",
@@ -33,16 +34,20 @@ export default function DocsPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Assurance">Human</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        RateLoop gives AI workflows a paid human-review step: ask a focused question, collect independent reports, and
-        receive decision evidence your application can inspect.
+        RateLoop gives AI workflows a Human Assurance Loop: review frequently at first, then let scoped evidence—not
+        blind trust—decide when baseline review can decrease.
       </p>
 
-      <h2>One focused quality gate</h2>
+      <h2>Human judgment that follows the evidence</h2>
       <p>
-        Use RateLoop when the next action depends on judgment that a model should not supply alone: approve a candidate,
-        revise it, compare two versions, or escalate the case. You choose the criterion and audience; RateLoop runs the
-        blinded panel and returns the evidence. The final decision stays with you.
+        A new agent version and workflow starts with 100% review. Repeated agreement can move its baseline coverage to
+        50%, 25%, and a 10% monitoring floor. Risk rules, missing context, review gaps, or weaker measured agreement
+        keep humans in the loop or restore calibration. The final decision stays with you.
       </p>
+
+      <div className="not-prose my-8">
+        <HumanAssuranceLoop />
+      </div>
 
       <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
         {DOCS_PATHS.map(path => (
@@ -50,7 +55,7 @@ export default function DocsPage() {
         ))}
       </div>
 
-      <h2>From question to evidence</h2>
+      <h2>Inside one human check</h2>
       <ol>
         <li>
           <strong>Define:</strong> write one question, choose the panel, and set the budget.

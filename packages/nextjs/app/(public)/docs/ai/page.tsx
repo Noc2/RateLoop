@@ -1,6 +1,7 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const remoteMcpUrl = "https://rateloop-tokenless.vercel.app/api/mcp";
+const workspaceMcpUrl = "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
 
 const mcpConfiguration = `{
   "mcpServers": {
@@ -118,6 +119,38 @@ export default function TokenlessAgentDocsPage() {
         need no wallet, while a self-funded wallet is limited to its policy-bound payment path.
       </p>
 
+      <h2>The connected workspace assurance loop</h2>
+      <p>
+        The workspace MCP at <code>{workspaceMcpUrl}</code> binds one approved agent version to one owner-approved
+        review policy. A safe connection can read that context and evaluate review requirements, but it cannot spend,
+        publish, read private artifacts, or administer the workspace. Requesting a paid review requires a separate
+        owner-approved publishing step-up with explicit limits.
+      </p>
+      <ol>
+        <li>
+          Call <code>rateloop_get_agent_context</code> after connection. Use the returned immutable agent version,
+          policy, audience hash, and allowed workflows; caller-supplied identity is not trusted.
+        </li>
+        <li>
+          Before each eligible output, call <code>rateloop_evaluate_review_requirement</code> with its workflow, risk,
+          declared confidence, completeness, suggestion commitment, and source-evidence reference.
+        </li>
+        <li>
+          If the decision says skip, continue and keep the recorded evidence scope. If review is required and publishing
+          authority is active, call <code>rateloop_request_review</code>, then <code>rateloop_wait_for_review</code> and
+          <code>rateloop_get_review_result</code> before the host releases the output.
+        </li>
+        <li>
+          Call <code>rateloop_get_assurance_state</code> to read the current scoped coverage, human agreement,
+          conservative lower bound, checked/skipped counts, and next reassessment. The same source-derived evidence
+          appears in the workspace Agents tab.
+        </li>
+      </ol>
+      <p>
+        Generic MCP is advisory: RateLoop records when review is required, but cannot prove that every host blocks its
+        output. Use a host-enforced integration when blocking is mandatory.
+      </p>
+
       <h2>Supported agent clients</h2>
       <p>
         The same remote MCP surface can be used from Claude Code, OpenAI Codex, Cursor, GitHub Copilot, Gemini CLI, and
@@ -142,7 +175,7 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
       <p>Start a new Codex task after installation so the plugin and its safety instructions are loaded.</p>
 
       <h2>Four-purpose tool surface</h2>
-      <p>The public integration intentionally exposes only four RateLoop tools:</p>
+      <p>The public browser-handoff integration intentionally exposes only four RateLoop tools:</p>
       <div className="not-prose grid gap-3 sm:grid-cols-2">
         {tools.map(([name, description]) => (
           <div key={name} className="rateloop-surface-card rounded-xl p-4">

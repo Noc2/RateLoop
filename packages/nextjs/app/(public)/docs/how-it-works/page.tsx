@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { AgentRunFlowDiagram } from "~~/components/docs/AgentRunFlowDiagram";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { ReviewerFlowDiagram } from "~~/components/docs/ReviewerFlowDiagram";
@@ -9,13 +10,30 @@ export default function HowTokenlessWorksPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Works">How It</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        An agent asks one focused question. A blinded human panel reports independently. RateLoop returns a verdict,
-        reasons, disagreement, and payment evidence for the next decision.
+        RateLoop begins by checking an agent frequently. Independent human agreement can earn lower baseline review for
+        the same evidence scope, while safety rules and weaker evidence keep humans involved.
       </p>
 
-      <AgentRunFlowDiagram />
+      <div className="not-prose my-8">
+        <HumanAssuranceLoop />
+      </div>
 
-      <h2 id="agent-flow">1. The agent flow</h2>
+      <h2 id="adaptive-review">1. Evidence sets review coverage</h2>
+      <p>
+        RateLoop keeps assurance separate by agent version, review-policy version, workflow, risk tier, and reviewer
+        audience. A new scope starts in calibration at 100% review; evidence from another model version or workflow
+        cannot silently lower it.
+      </p>
+      <p>
+        Under the default adaptive policy, two independent 15-case windows must each contain at least 14 comparable
+        agent-human agreements before coverage can move to 50%. Another 50 stable cases can move it to 25%, and 100 more
+        can move it to the 10% monitoring floor. A complete evidence window below the agreement threshold restores 100%
+        calibration. Critical risk, missing required context, and the maximum unreviewed gap can force a check at any
+        stage.
+      </p>
+
+      <h2 id="agent-flow">2. One human-review cycle</h2>
+      <AgentRunFlowDiagram />
       <p>
         An integration requests a quote, creates an idempotent ask, funds it from a prepaid balance or signed USDC
         authorization, waits on the operation, and reads the result. The same{" "}
@@ -23,7 +41,7 @@ export default function HowTokenlessWorksPage() {
         workspace integrations. Public MCP handoffs add a browser approval step before submission.
       </p>
 
-      <h2 id="reviewer-flow">2. The reviewer flow</h2>
+      <h2 id="reviewer-flow">3. The reviewer flow</h2>
       <p>
         Before paid work is offered, each reviewer passes the frozen eligibility policy. RateLoop then assigns a blinded
         case. The reviewer chooses an answer, predicts the panel&apos;s answer share, and submits a sealed commit before
@@ -37,7 +55,7 @@ export default function HowTokenlessWorksPage() {
       </p>
       <ReviewerFlowDiagram />
 
-      <h2 id="settlement-paths">3. Every funded round terminates</h2>
+      <h2 id="settlement-paths">4. Every funded round terminates</h2>
       <p>
         Normal rounds reveal and settle with fixed pay plus a bounded{" "}
         <Link href="/docs/tech-stack#robust-bayesian-truth-serum">RBTS bonus</Link>. A zero-commit round refunds the
@@ -47,19 +65,14 @@ export default function HowTokenlessWorksPage() {
       </p>
       <SettlementPathsDiagram />
 
-      <h2 id="decision-evidence">4. Evidence, not an automatic decision</h2>
+      <h2 id="decision-evidence">5. Evidence, not an automatic decision</h2>
       <p>
         The result separates the panel verdict from the material needed to interpret it: reviewer source, individual
         reports, reasons, disagreement, scoring version, compensation, and settlement references. The customer decides
         whether to approve, revise, retest, escalate, or stop.
       </p>
 
-      <h2 id="adaptive-review">5. Review can follow the evidence</h2>
-      <p>
-        A workflow can stop when its declared evidence bar is met or open another review when disagreement, coverage, or
-        a material change calls for more judgment. Correlation analytics may affect publication and future assignment,
-        but never reduce pay for accepted work.
-      </p>
+      <p>Correlation analytics may affect publication and future assignment, but never reduce pay for accepted work.</p>
 
       <p>
         Continue with <Link href="/docs/tech-stack">Tech Stack</Link> for the mechanisms behind the flow,{" "}

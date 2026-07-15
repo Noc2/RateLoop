@@ -15,6 +15,7 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
 
   assert.match(html, /Agents.*rateloop-text-gradient.*MCP/);
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/mcp/);
+  assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp/);
   assert.match(html, /codex plugin marketplace add \./);
   assert.match(html, /codex plugin add rateloop@rateloop/);
   assert.match(html, /Start a new Codex task/);
@@ -33,6 +34,15 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /media-upload/);
   assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
   assert.match(html, /workspace and authorized client\/project boundary/i);
+  assert.match(html, /rateloop_get_agent_context/);
+  assert.match(html, /rateloop_evaluate_review_requirement/);
+  assert.match(html, /rateloop_request_review/);
+  assert.match(html, /rateloop_wait_for_review/);
+  assert.match(html, /rateloop_get_review_result/);
+  assert.match(html, /rateloop_get_assurance_state/);
+  assert.match(html, /safe connection.*cannot spend, publish, read private artifacts, or administer/i);
+  assert.match(html, /separate owner-approved publishing step-up/i);
+  assert.match(html, /Generic MCP is advisory/i);
   assert.doesNotMatch(html, /LREP|governance|protocol-token/i);
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
 });
