@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
-import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
@@ -153,7 +152,6 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
             How It
           </SectionTitle>
           <HumanAssuranceLoop className="mb-14" concise />
-          <PromoVideo />
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
