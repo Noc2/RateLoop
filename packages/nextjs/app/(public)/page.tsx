@@ -1,18 +1,8 @@
 import Link from "next/link";
+import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
-
-const howItWorksSteps = [
-  ["01", "Agent asks", "An agent sends one focused question and chooses who should review it.", "#359EEE"],
-  ["02", "Humans answer", "Eligible reviewers answer independently without seeing early responses.", "#03CEA4"],
-  [
-    "03",
-    "Review adapts",
-    "The verdict and reasons return to the workflow so the agent can act or escalate.",
-    "#EF476F",
-  ],
-] as const;
 
 const whyItWorksFeatures = [
   {
@@ -114,6 +104,9 @@ export default function TokenlessLandingPage() {
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
               Scale AI autonomy without scaling blind trust.
             </p>
+            <p className="mt-3 max-w-[36rem] text-center text-sm leading-6 text-base-content/55 sm:text-base lg:text-left">
+              Human checks decrease only when scoped evidence stays strong.
+            </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
                 <span>For Humans</span>
@@ -145,18 +138,8 @@ export default function TokenlessLandingPage() {
           <SectionTitle number="01" gradient="Works" className="mb-6">
             How It
           </SectionTitle>
+          <HumanAssuranceLoop className="mb-14" concise />
           <PromoVideo />
-          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
-            {howItWorksSteps.map(([number, title, body, color]) => (
-              <article key={number} className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
-                <span className="font-mono text-sm" style={{ color }}>
-                  {number}
-                </span>
-                <h3 className="mt-3 text-[1.55rem] font-bold leading-tight sm:text-[1.75rem]">{title}</h3>
-                <p className="mt-4 text-[1.05rem] leading-8 text-base-content/60">{body}</p>
-              </article>
-            ))}
-          </div>
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />

@@ -17,7 +17,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /<span class="block">Assurance <span class="rateloop-text-gradient">Loop<\/span><\/span>/);
   assert.doesNotMatch(html, /class="rateloop-text-gradient[^\"]*">Assurance/);
   assert.match(html, /Scale AI autonomy without scaling blind trust\./);
-  assert.doesNotMatch(html, /Give your agent frequent human feedback at first/);
+  assert.match(html, /Human checks decrease only when scoped evidence stays strong/);
   assert.match(html, /<span>For Humans<\/span>/);
   assert.match(html, /<span>For Agents<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
@@ -27,11 +27,14 @@ test("landing page presents the tokenless human-assurance story", async () => {
   );
   assert.doesNotMatch(html, /Verified Humans|Ratings|USDC Paid/);
   assert.match(html, /How It/);
-  assert.match(html, /Agent asks/);
-  assert.match(html, /Humans answer/);
-  assert.match(html, /Review adapts/);
-  assert.match(html, /without seeing early responses/i);
-  assert.match(html, /verdict and reasons return to the workflow/i);
+  assert.match(html, /The Human Assurance/);
+  assert.match(html, /Agent prepares/);
+  assert.match(html, /RateLoop decides/);
+  assert.match(html, /Humans judge/);
+  assert.match(html, /Evidence adapts/);
+  assert.match(html, /100 → 50 → 25 → 10%/);
+  assert.match(html, /Risk, missing context, and review gaps can force checks/i);
+  assert.match(html, /Measured drop restores calibration/i);
   assert.match(html, /poster="\/videos\/rateloop-promo-poster\.jpg"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.mp4"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);

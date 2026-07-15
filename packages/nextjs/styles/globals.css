@@ -197,6 +197,55 @@
   transform: translateY(-1px);
 }
 
+.rateloop-assurance-tracer {
+  transform-box: view-box;
+  transform-origin: 220px 220px;
+  animation: rateloop-assurance-orbit 8s linear infinite;
+}
+
+.rateloop-assurance-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rateloop-assurance-pulse 4s ease-in-out infinite;
+}
+
+.rateloop-assurance-node:nth-of-type(2) {
+  animation-delay: -1s;
+}
+
+.rateloop-assurance-node:nth-of-type(3) {
+  animation-delay: -2s;
+}
+
+.rateloop-assurance-node:nth-of-type(4) {
+  animation-delay: -3s;
+}
+
+@keyframes rateloop-assurance-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rateloop-assurance-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rateloop-assurance-tracer,
+  .rateloop-assurance-node {
+    animation: none;
+  }
+}
+
 .docs-prose,
 .legal-shell {
   padding-bottom: 4rem;
