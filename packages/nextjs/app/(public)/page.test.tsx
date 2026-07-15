@@ -45,6 +45,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /100 → 50 → 25 → 10%/);
   assert.match(html, /Risk, missing context, and review gaps can force checks/i);
   assert.match(html, /Measured drop restores calibration/i);
+  assert.equal(html.match(/stroke-dasharray="25 75"/g)?.length, 4);
   assert.doesNotMatch(html, /rateloop-promo/);
   assert.match(html, /Why It/);
   assert.match(html, /Agent-native/);

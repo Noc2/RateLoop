@@ -66,7 +66,7 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
                   stroke={stage.color}
                   strokeWidth="9"
                   strokeLinecap="round"
-                  strokeDasharray="20 80"
+                  strokeDasharray="25 75"
                   strokeDashoffset={String(index * -25)}
                   transform="rotate(-90 220 220)"
                 />
