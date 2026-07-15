@@ -5,9 +5,10 @@ import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { TRUST_CLAIM_BY_KEY } from "~~/content/trustClaims";
 
 const homepageTrustCopy = [
+  TRUST_CLAIM_BY_KEY["wallet-independent-account"].statement,
   TRUST_CLAIM_BY_KEY["private-artifact-encryption"].statement,
-  TRUST_CLAIM_BY_KEY["assigned-reviewer-leases"].statement,
-  TRUST_CLAIM_BY_KEY["scoped-agent-credentials"].statement,
+  TRUST_CLAIM_BY_KEY["eu-release-gate"].statement,
+  TRUST_CLAIM_BY_KEY["integrity-chained-audit"].statement,
   TRUST_CLAIM_BY_KEY["public-chain-limits"].statement,
 ].join(" ");
 
@@ -70,7 +71,7 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "Privacy with Clear Limits",
+    title: "Privacy and Security with Clear Limits",
     body: homepageTrustCopy,
     color: "#359EEE",
     links: [

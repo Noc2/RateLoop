@@ -46,10 +46,11 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Robust Bayesian Truth Serum bonus/);
   assert.match(html, /platform-funded Surprisingly Popular bounty/);
   assert.match(html, /Auditable Settlement/);
-  assert.match(html, /Privacy with Clear Limits/);
+  assert.match(html, /Privacy and Security with Clear Limits/);
+  assert.match(html, /RateLoop account access uses an opaque principal and does not require or create a wallet\./);
   assert.match(html, /Private artifacts are encrypted before storage\./);
-  assert.match(html, /Assigned reviewers receive short-lived access leases/);
-  assert.match(html, /Agent connections use scoped, revocable credentials\./);
+  assert.match(html, /Non-sandbox startup refuses mixed-region resources and missing EU deployment evidence\./);
+  assert.match(html, /integrity-chained, workspace-exportable audit records\./);
   assert.match(html, /Public-chain commitments and settlement records remain visible and cannot be erased\./);
   assert.match(html, /Agents ask; human reviewers provide the judgment/i);
   assert.match(html, /href="\/docs\/tech-stack"/);

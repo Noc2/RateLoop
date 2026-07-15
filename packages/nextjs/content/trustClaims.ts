@@ -1,4 +1,4 @@
-export const TRUST_CLAIM_REGISTRY_VERSION = "2026-07-15.1" as const;
+export const TRUST_CLAIM_REGISTRY_VERSION = "2026-07-15.2" as const;
 
 export type TrustClaimKind = "control" | "limitation" | "availability";
 export type TrustClaimStatus = "implemented" | "limitation" | "not_available" | "verification_pending";
@@ -79,6 +79,85 @@ const rawRegistry = {
       reviewDate: "2026-10-15",
       expiresDate: null,
       evidence: [{ label: "Agents and MCP", href: "/docs/ai" }],
+    },
+    {
+      key: "wallet-independent-account",
+      title: "Wallet-independent account",
+      statement: "RateLoop account access uses an opaque principal and does not require or create a wallet.",
+      kind: "control",
+      status: "implemented",
+      approval: "approved",
+      visibility: "public",
+      effectiveDate: "2026-07-15",
+      reviewDate: "2026-10-15",
+      expiresDate: null,
+      evidence: [
+        { label: "Sign in", href: "/sign-in" },
+        { label: "Privacy notice", href: "/legal/privacy" },
+      ],
+    },
+    {
+      key: "eu-release-gate",
+      title: "EU-first release gate",
+      statement: "Non-sandbox startup refuses mixed-region resources and missing EU deployment evidence.",
+      kind: "control",
+      status: "implemented",
+      approval: "approved",
+      visibility: "public",
+      effectiveDate: "2026-07-15",
+      reviewDate: "2026-10-15",
+      expiresDate: null,
+      evidence: [{ label: "EU deployment runbook", href: "/docs/how-it-works" }],
+    },
+    {
+      key: "managed-key-release-gate",
+      title: "Managed-key release gate",
+      statement:
+        "Non-sandbox private-artifact storage requires a managed KMS resource; local wrapping keys are limited to sandbox and test use.",
+      kind: "control",
+      status: "implemented",
+      approval: "approved",
+      visibility: "public",
+      effectiveDate: "2026-07-15",
+      reviewDate: "2026-10-15",
+      expiresDate: null,
+      evidence: [
+        { label: "Privacy notice", href: "/legal/privacy" },
+        { label: "Privacy and recovery", href: "/docs/how-it-works" },
+      ],
+    },
+    {
+      key: "privacy-lifecycle-evidence",
+      title: "Privacy lifecycle evidence",
+      statement:
+        "Project deletion respects active legal holds, and subject requests produce category-level completion evidence.",
+      kind: "control",
+      status: "implemented",
+      approval: "approved",
+      visibility: "public",
+      effectiveDate: "2026-07-15",
+      reviewDate: "2026-10-15",
+      expiresDate: null,
+      evidence: [
+        { label: "Privacy notice", href: "/legal/privacy" },
+        { label: "Privacy and recovery", href: "/docs/how-it-works" },
+      ],
+    },
+    {
+      key: "integrity-chained-audit",
+      title: "Integrity-chained application audit",
+      statement: "Covered security and privacy actions produce integrity-chained, workspace-exportable audit records.",
+      kind: "control",
+      status: "implemented",
+      approval: "approved",
+      visibility: "public",
+      effectiveDate: "2026-07-15",
+      reviewDate: "2026-10-15",
+      expiresDate: null,
+      evidence: [
+        { label: "Trust boundaries", href: "/trust" },
+        { label: "Privacy notice", href: "/legal/privacy" },
+      ],
     },
     {
       key: "public-chain-limits",
