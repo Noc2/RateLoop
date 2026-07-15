@@ -1,6 +1,8 @@
 # RateLoop tokenless: Humans and Agents production redesign plan (July 2026)
 
-**Status:** Accepted product and implementation amendment for the `tokenless` branch. This plan supersedes the
+**Status:** Accepted product and implementation amendment for the `tokenless` branch. The
+[concise progressive-disclosure product plan](tokenless-concise-product-ux-plan-2026-07-15.md) supersedes this document's
+screen composition, always-visible tab, and large-form recommendations where they conflict. This plan supersedes the
 information architecture and human-authored `/ask` journey in the
 [Answer, Ask, and Account plan](tokenless-answer-ask-account-navigation-plan-2026-07.md). It does not
 supersede the fund-custody, settlement, identity, privacy, or deployment-isolation decisions in the
