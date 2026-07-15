@@ -1,3 +1,4 @@
+import { isPendingAgentPairing } from "./AgentConnectionPanel";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -14,8 +15,24 @@ test("agent connection UI uses a bounded pairing and owner-approval flow", () =>
   assert.match(source, /\/agent-pairings/);
   assert.match(source, /\/approve/);
   assert.match(source, /\/reject/);
-  assert.match(source, /PAIRING_POLL_INTERVAL_MS = 3_000/);
+  assert.match(source, /PAIRING_POLL_INTERVAL_MS = 5_000/);
   assert.match(source, /Agent is waiting for approval/);
+});
+
+test("elapsed connection attempts are never kept pending client-side", () => {
+  const now = Date.parse("2026-07-15T10:00:00.000Z");
+  assert.equal(isPendingAgentPairing({ status: "open", expiresAt: "2026-07-15T10:01:00.000Z" }, now), true);
+  assert.equal(isPendingAgentPairing({ status: "claimed", expiresAt: "2026-07-15T09:59:00.000Z" }, now), false);
+  assert.equal(isPendingAgentPairing({ status: "expired", expiresAt: "2026-07-15T10:01:00.000Z" }, now), false);
+});
+
+test("pending connection UX is actionable without an indefinite listener", () => {
+  assert.doesNotMatch(source, /Listening for agent/);
+  assert.match(source, /Waiting for the agent to open your connection/);
+  assert.match(source, /Cancel attempt/);
+  assert.match(source, /Connection history/);
+  assert.match(source, /document\.visibilityState/);
+  assert.match(source, /close it without stopping the connection/);
 });
 
 test("generic MCP activation stays advisory and binds publishing plus adaptive defaults", () => {

@@ -69,7 +69,8 @@ type ApprovalPayload = {
   allowedWorkflowKeys: string[];
 };
 
-const PAIRING_POLL_INTERVAL_MS = 3_000;
+const PAIRING_POLL_INTERVAL_MS = 5_000;
+const PAIRING_HIDDEN_POLL_INTERVAL_MS = 10_000;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -196,6 +197,13 @@ function formatTimestamp(value: string | null, empty = "Never") {
   if (!value) return empty;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+export function isPendingAgentPairing(pairing: Pick<AgentPairing, "status" | "expiresAt">, now = Date.now()) {
+  if (pairing.status !== "open" && pairing.status !== "claimed") return false;
+  if (!pairing.expiresAt) return true;
+  const expiresAt = new Date(pairing.expiresAt).getTime();
+  return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
 function fallbackMcpUrl() {
@@ -470,6 +478,7 @@ export function AgentConnectionPanel({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [connectionClock, setConnectionClock] = useState(() => Date.now());
 
   const loadConnectionState = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
     if (!selectedWorkspaceId) {
@@ -513,14 +522,46 @@ export function AgentConnectionPanel({
     return () => controller.abort();
   }, [loadConnectionState, publishingRevision, workspaceId]);
 
-  const shouldPoll = pairings.some(pairing => pairing.status === "open" || pairing.status === "claimed");
+  const shouldPoll = pairings.some(pairing => isPendingAgentPairing(pairing, connectionClock));
 
   useEffect(() => {
     if (!workspaceId || !shouldPoll) return;
-    const timer = window.setInterval(() => {
-      void loadConnectionState(workspaceId).catch(() => undefined);
-    }, PAIRING_POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    let timer: number | null = null;
+    let stopped = false;
+    let failures = 0;
+
+    const schedule = (delay: number) => {
+      timer = window.setTimeout(() => void refresh(), delay);
+    };
+    const refresh = async () => {
+      if (stopped) return;
+      if (document.visibilityState !== "visible") {
+        schedule(PAIRING_HIDDEN_POLL_INTERVAL_MS);
+        return;
+      }
+      try {
+        await loadConnectionState(workspaceId);
+        failures = 0;
+        setConnectionClock(Date.now());
+      } catch {
+        failures += 1;
+        setError("Connection status could not refresh. RateLoop will retry while this page is visible.");
+      }
+      schedule(Math.min(PAIRING_POLL_INTERVAL_MS * Math.max(1, failures), PAIRING_HIDDEN_POLL_INTERVAL_MS));
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible" || stopped) return;
+      if (timer !== null) window.clearTimeout(timer);
+      schedule(0);
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    schedule(PAIRING_POLL_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [loadConnectionState, shouldPoll, workspaceId]);
 
   async function generatePairing() {
@@ -656,7 +697,8 @@ export function AgentConnectionPanel({
     }
   }
 
-  const activePairings = pairings.filter(pairing => pairing.status === "open" || pairing.status === "claimed");
+  const activePairings = pairings.filter(pairing => isPendingAgentPairing(pairing, connectionClock));
+  const pairingHistory = pairings.filter(pairing => !isPendingAgentPairing(pairing, connectionClock));
 
   return (
     <div className="space-y-5">
@@ -739,18 +781,13 @@ export function AgentConnectionPanel({
 
       {!loading && workspaceId ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="pending-agent-connections-heading">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 id="pending-agent-connections-heading" className="text-xl font-semibold">
-                Pending connections
-              </h3>
-              <p className="mt-2 text-sm text-base-content/55">This list refreshes while an agent is connecting.</p>
-            </div>
-            {shouldPoll ? (
-              <span className="badge border-0 bg-[var(--rateloop-blue)]/10 text-[var(--rateloop-blue)]">
-                Listening for agent…
-              </span>
-            ) : null}
+          <div>
+            <h3 id="pending-agent-connections-heading" className="text-xl font-semibold">
+              Pending connections
+            </h3>
+            <p className="mt-2 text-sm text-base-content/55">
+              RateLoop refreshes this page only while it is visible. You can close it without stopping the connection.
+            </p>
           </div>
           {activePairings.length === 0 ? (
             <p className="mt-5 text-sm text-base-content/55">No agent is waiting for approval.</p>
@@ -770,18 +807,61 @@ export function AgentConnectionPanel({
                 <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h4 className="font-semibold">Waiting for agent metadata</h4>
-                      <p className="mt-1 font-mono text-xs text-base-content/45">{pairing.pairingId}</p>
+                      <h4 className="font-semibold">Waiting for the agent to open your connection</h4>
+                      <p className="mt-1 text-sm text-base-content/55">
+                        No action is needed here. Cancel this attempt if you shared it with the wrong agent.
+                      </p>
                     </div>
-                    <time className="text-xs text-base-content/45" dateTime={pairing.expiresAt ?? undefined}>
-                      Expires {formatTimestamp(pairing.expiresAt, "soon")}
-                    </time>
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <time className="text-xs text-base-content/45" dateTime={pairing.expiresAt ?? undefined}>
+                        Expires {formatTimestamp(pairing.expiresAt, "soon")}
+                      </time>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost text-base-content/60"
+                        disabled={busyAction === `reject:${pairing.pairingId}`}
+                        onClick={() => void rejectPairing(pairing.pairingId)}
+                      >
+                        Cancel attempt
+                      </button>
+                    </div>
                   </div>
                 </article>
               ),
             )}
           </div>
         </section>
+      ) : null}
+
+      {!loading && workspaceId && pairingHistory.length > 0 ? (
+        <details className="surface-card rounded-2xl p-6">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Connection history ({pairingHistory.length})
+          </summary>
+          <div className="mt-4 space-y-3">
+            {pairingHistory.map(pairing => {
+              const displayStatus =
+                (pairing.status === "open" || pairing.status === "claimed") &&
+                pairing.expiresAt &&
+                new Date(pairing.expiresAt).getTime() <= connectionClock
+                  ? "expired"
+                  : pairing.status;
+              return (
+                <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {pairing.displayName || pairing.clientName || "Agent connection"}
+                    </span>
+                    <span className="badge badge-ghost">{displayStatus}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-base-content/45">
+                    Created {formatTimestamp(pairing.createdAt, "at an unknown time")}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </details>
       ) : null}
 
       {!loading && workspaceId ? (
