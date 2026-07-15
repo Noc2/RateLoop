@@ -497,6 +497,36 @@ test("voucher issuance rejects policy JSON that no longer matches its frozen has
   );
 });
 
+test("voucher issuance rejects invalid or caller-mismatched reviewer sources", async () => {
+  await unlockPaidTasks();
+  await openRound();
+  const request = {
+    idempotencyKey: "voucher:test:source-binding",
+    roundId: "42",
+    contentId: CONTENT_ID,
+    voteKey: VOTE_KEY,
+    reviewerSource: "rateloop_network",
+  } as const;
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { ...request, reviewerSource: "invented_source" } as unknown as typeof request,
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_voucher_request",
+  );
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        accountAddress: ACCOUNT,
+        request: { ...request, reviewerSource: "customer_invited" },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "voucher_reviewer_source_mismatch",
+  );
+});
+
 test("voucher admission composes independent provider assertions and snapshots the exact mix", async () => {
   await unlockPaidTasks();
   const rater = await dbClient.execute("SELECT rater_id FROM tokenless_rater_profiles LIMIT 1");

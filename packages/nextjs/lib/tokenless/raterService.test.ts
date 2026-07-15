@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/raterService";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
@@ -167,6 +168,20 @@ test("task discovery exposes exact compensation for confirmed public work", asyn
   assert.equal(tasks[0]?.question.prompt, "Ship it?");
   assert.deepEqual(tasks[0]?.question.media, { kind: "youtube", videoId: "dQw4w9WgXcQ" });
   assert.equal(tasks[0]?.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
+  assert.equal(tasks[0]?.reviewerSource, "rateloop_network");
+  assert.deepEqual(
+    buildPublicVoucherRequest(tasks[0]!, {
+      idempotencyKey: "voucher:web:42",
+      voteKey: ACCOUNT,
+    }),
+    {
+      idempotencyKey: "voucher:web:42",
+      roundId: "42",
+      contentId: `0x${"11".repeat(32)}`,
+      voteKey: ACCOUNT,
+      reviewerSource: "rateloop_network",
+    },
+  );
   assert.deepEqual(tasks[0]?.earnings, {
     guaranteedBaseAtomic: "1333333",
     possibleBonusAtomic: "333333",
@@ -174,6 +189,22 @@ test("task discovery exposes exact compensation for confirmed public work", asyn
     attemptCompensationAtomic: "333333",
   });
   assert.equal("votePrivateKey" in tasks[0]!, false);
+});
+
+test("task discovery fails closed when the persisted reviewer source no longer matches its frozen hash", async () => {
+  await seedTask();
+  const stored = await dbClient.execute(
+    "SELECT admission_policy_json FROM tokenless_voucher_rounds WHERE round_id = 42",
+  );
+  const mismatched = {
+    ...(JSON.parse(String(stored.rows[0]?.admission_policy_json)) as Record<string, unknown>),
+    reviewerSource: "customer_invited",
+  };
+  await dbClient.execute({
+    sql: "UPDATE tokenless_voucher_rounds SET admission_policy_json = ? WHERE round_id = 42",
+    args: [JSON.stringify(mismatched)],
+  });
+  assert.deepEqual(await listPaidRaterTasks(ACCOUNT, NOW), []);
 });
 
 test("public task browsing does not require a payout wallet", async () => {

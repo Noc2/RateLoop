@@ -1331,7 +1331,8 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   if (
     !IDEMPOTENCY_KEY.test(input.request.idempotencyKey) ||
     !/^\d+$/.test(input.request.roundId) ||
-    !BYTES32.test(input.request.contentId)
+    !BYTES32.test(input.request.contentId) ||
+    !["customer_invited", "rateloop_network"].includes(input.request.reviewerSource)
   ) {
     throw new TokenlessServiceError("Voucher request is invalid.", 400, "invalid_voucher_request");
   }
@@ -1339,23 +1340,6 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   const requestHash = hash(
     stableJson({ ...input.request, voteKey: voteKey.toLowerCase(), contentId: input.request.contentId.toLowerCase() }),
   );
-  const eligibility = await loadVoucherEligibility(accountAddress, input.request.reviewerSource, now);
-  const raterId = stringValue(eligibility.row, "rater_id")!;
-  const previous = await dbClient.execute({
-    sql: "SELECT * FROM tokenless_paid_vouchers WHERE rater_id = ? AND request_idempotency_key = ? LIMIT 1",
-    args: [raterId, input.request.idempotencyKey],
-  });
-  const priorRow = previous.rows[0] as QueryRow | undefined;
-  if (priorRow) {
-    if (stringValue(priorRow, "request_hash") !== requestHash) {
-      throw new TokenlessServiceError(
-        "The idempotency key belongs to another voucher request.",
-        409,
-        "voucher_conflict",
-      );
-    }
-    return voucherResponse(priorRow);
-  }
   const issuer = getIssuerConfig();
   const roundResult = await dbClient.execute({
     sql: `SELECT content_id, admission_policy_hash, admission_policy_json, maximum_commits,
@@ -1364,13 +1348,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
     args: [issuer.chainId, issuer.panelAddress.toLowerCase(), input.request.roundId],
   });
   const round = roundResult.rows[0] as QueryRow | undefined;
-  if (
-    !round ||
-    stringValue(round, "status") !== "open" ||
-    stringValue(round, "content_id")?.toLowerCase() !== input.request.contentId.toLowerCase() ||
-    new Date(String(round.voucher_not_before)) > now ||
-    new Date(String(round.voucher_deadline)) <= now
-  ) {
+  if (!round || stringValue(round, "content_id")?.toLowerCase() !== input.request.contentId.toLowerCase()) {
     throw new TokenlessServiceError("This round is not accepting vouchers.", 409, "round_not_open");
   }
   const policyJson = stringValue(round, "admission_policy_json");
@@ -1392,6 +1370,40 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
       409,
       "admission_policy_mismatch",
     );
+  }
+  if (
+    frozenPolicy.policy.reviewerSource === "hybrid" ||
+    frozenPolicy.policy.reviewerSource !== input.request.reviewerSource
+  ) {
+    throw new TokenlessServiceError(
+      "The requested reviewer source does not match this round's frozen admission policy.",
+      409,
+      "voucher_reviewer_source_mismatch",
+    );
+  }
+  const eligibility = await loadVoucherEligibility(accountAddress, input.request.reviewerSource, now);
+  const raterId = stringValue(eligibility.row, "rater_id")!;
+  const previous = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_paid_vouchers WHERE rater_id = ? AND request_idempotency_key = ? LIMIT 1",
+    args: [raterId, input.request.idempotencyKey],
+  });
+  const priorRow = previous.rows[0] as QueryRow | undefined;
+  if (priorRow) {
+    if (stringValue(priorRow, "request_hash") !== requestHash) {
+      throw new TokenlessServiceError(
+        "The idempotency key belongs to another voucher request.",
+        409,
+        "voucher_conflict",
+      );
+    }
+    return voucherResponse(priorRow);
+  }
+  if (
+    stringValue(round, "status") !== "open" ||
+    new Date(String(round.voucher_not_before)) > now ||
+    new Date(String(round.voucher_deadline)) <= now
+  ) {
+    throw new TokenlessServiceError("This round is not accepting vouchers.", 409, "round_not_open");
   }
   const admission = evaluateFrozenAdmissionPolicy({
     policy: frozenPolicy.policy,

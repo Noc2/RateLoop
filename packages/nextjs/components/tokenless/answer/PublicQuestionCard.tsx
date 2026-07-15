@@ -12,6 +12,7 @@ import {
   sealTokenlessReveal,
   signTokenlessCommit,
 } from "~~/lib/tokenless/rater";
+import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 
 export type PublicAnswerTask = {
   operationKey: string;
@@ -19,6 +20,7 @@ export type PublicAnswerTask = {
   panelAddress: `0x${string}`;
   roundId: string;
   contentId: `0x${string}`;
+  reviewerSource: "customer_invited" | "rateloop_network";
   question: {
     kind: "binary" | "head_to_head";
     prompt: string;
@@ -116,12 +118,12 @@ export function PublicQuestionCard({
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyBase },
-          body: JSON.stringify({
-            idempotencyKey: idempotencyBase,
-            roundId: task.roundId,
-            contentId: task.contentId,
-            voteKey: secrets.reveal.voteKey,
-          }),
+          body: JSON.stringify(
+            buildPublicVoucherRequest(task, {
+              idempotencyKey: idempotencyBase,
+              voteKey: secrets.reveal.voteKey,
+            }),
+          ),
         }),
       );
       if (typeof voucherBody.voucherId !== "string") throw new Error("Voucher response is incomplete.");

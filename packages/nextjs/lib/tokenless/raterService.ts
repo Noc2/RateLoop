@@ -15,6 +15,7 @@ import {
   recoverTypedDataAddress,
 } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { maximumSurpriseBonusForBase } from "~~/lib/tokenless/surpriseBounties";
 
@@ -62,6 +63,25 @@ function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function boundTaskReviewerSource(row: Row): "customer_invited" | "rateloop_network" | null {
+  const policyJson = rowString(row, "admission_policy_json");
+  const policyHash = rowString(row, "admission_policy_hash");
+  if (!policyJson || !policyHash) return null;
+  try {
+    const frozen = freezeAdmissionPolicy(JSON.parse(policyJson));
+    if (
+      frozen.policyJson !== policyJson ||
+      frozen.admissionPolicyHash.toLowerCase() !== policyHash.toLowerCase() ||
+      frozen.policy.reviewerSource === "hybrid"
+    ) {
+      return null;
+    }
+    return frozen.policy.reviewerSource;
+  } catch {
+    return null;
+  }
+}
+
 export async function listPaidRaterTasks(
   accountAddress: string | null,
   optionsOrNow: { query?: string; scope?: "all" | "public" } | Date = {},
@@ -79,7 +99,7 @@ export async function listPaidRaterTasks(
   }
   const result = await dbClient.execute({
     sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id,
-                 vr.admission_policy_hash, vr.voucher_deadline,
+                 vr.admission_policy_hash, vr.admission_policy_json, vr.voucher_deadline,
                  c.content_json, e.round_terms_json, e.operation_key,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
@@ -98,30 +118,35 @@ export async function listPaidRaterTasks(
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
     args: [address, now, query, `%${query}%`],
   });
-  return result.rows.map(value => {
+  return result.rows.flatMap(value => {
     const row = value as Row;
+    const reviewerSource = boundTaskReviewerSource(row);
+    if (!reviewerSource) return [];
     const terms = JSON.parse(rowString(row, "round_terms_json")!) as Record<string, string | number>;
     const maximumCommits = Number(terms.maximumCommits);
     const guaranteedBaseAtomic = (BigInt(String(terms.bountyAmount)) * 8n) / 10n / BigInt(maximumCommits);
-    return {
-      operationKey: rowString(row, "operation_key"),
-      chainId: Number(row.chain_id),
-      panelAddress: getAddress(rowString(row, "panel_address")!),
-      roundId: rowString(row, "round_id"),
-      contentId: rowString(row, "content_id"),
-      question: JSON.parse(rowString(row, "content_json")!),
-      admissionPolicyHash: rowString(row, "admission_policy_hash"),
-      voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
-      alreadyVouchered: Boolean(row.already_vouchered),
-      earnings: {
-        guaranteedBaseAtomic: guaranteedBaseAtomic.toString(),
-        possibleBonusAtomic: ((BigInt(String(terms.bountyAmount)) * 2n) / 10n / BigInt(maximumCommits)).toString(),
-        possibleSurpriseBonusAtomic: maximumSurpriseBonusForBase(guaranteedBaseAtomic).toString(),
-        attemptCompensationAtomic: String(terms.attemptCompensation),
+    return [
+      {
+        operationKey: rowString(row, "operation_key")!,
+        chainId: Number(row.chain_id),
+        panelAddress: getAddress(rowString(row, "panel_address")!),
+        roundId: rowString(row, "round_id")!,
+        contentId: rowString(row, "content_id") as Hex,
+        question: JSON.parse(rowString(row, "content_json")!),
+        admissionPolicyHash: rowString(row, "admission_policy_hash"),
+        reviewerSource,
+        voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
+        alreadyVouchered: Boolean(row.already_vouchered),
+        earnings: {
+          guaranteedBaseAtomic: guaranteedBaseAtomic.toString(),
+          possibleBonusAtomic: ((BigInt(String(terms.bountyAmount)) * 2n) / 10n / BigInt(maximumCommits)).toString(),
+          possibleSurpriseBonusAtomic: maximumSurpriseBonusForBase(guaranteedBaseAtomic).toString(),
+          attemptCompensationAtomic: String(terms.attemptCompensation),
+        },
+        beacon: { network: "quicknet-t" as const, round: Number(terms.beaconRound) },
+        visibility: "public" as const,
       },
-      beacon: { network: "quicknet-t" as const, round: Number(terms.beaconRound) },
-      visibility: "public" as const,
-    };
+    ];
   });
 }
 
