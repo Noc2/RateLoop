@@ -21,11 +21,11 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const OWNER = "0x1111111111111111111111111111111111111111";
 
 class EmptyStore implements PrivateArtifactStore {
-  async delete(_reference: string) {}
-  async get(_reference: string): Promise<Uint8Array> {
+  async delete() {}
+  async get(): Promise<Uint8Array> {
     throw new Error("not used");
   }
-  async put(_pathname: string, _body: Uint8Array): Promise<string> {
+  async put(): Promise<string> {
     throw new Error("not used");
   }
 }
