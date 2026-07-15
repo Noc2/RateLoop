@@ -11,6 +11,10 @@ import {
   createPostRoundIntegrityAppeal,
   evaluatePostRoundIntegrity,
 } from "~~/lib/tokenless/postRoundIntegrity";
+import {
+  listAuthorizedTerminalPublicFeedback,
+  verifyPublicRaterResponseCommitments,
+} from "~~/lib/tokenless/publicRaterResponses";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { finalizeSurpriseBountyRound } from "~~/lib/tokenless/surpriseBountyService";
 
@@ -1259,6 +1263,10 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
   };
   validateFinalizedEvidence(evidence);
+  await verifyPublicRaterResponseCommitments({
+    operationKey: input.operationKey,
+    reveals: voteKeys.map((voteKey, index) => ({ voteKey, responseHash: responseHashes[index] as Hex })),
+  });
   return { evidence, integrityInput: assurance.integrityInput, surpriseReports: normativeReveals };
 }
 
@@ -1499,12 +1507,14 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
   const audience = quote.audience as Row;
   const preferenceShareBps = Math.floor((evidence.upVotes * BPS_MAX) / evidence.revealCount);
   const intervalBps = wilsonIntervalBps(evidence.upVotes, evidence.revealCount);
+  const terminal = evaluation.status !== "pending";
+  const feedback = await listAuthorizedTerminalPublicFeedback({ operationKey: input.operationKey, terminal });
   const result = parseTokenlessResult({
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     operationKey: input.operationKey,
     roundId: evidence.roundId,
     verdictStatus: evaluation.status,
-    terminal: evaluation.status !== "pending",
+    terminal,
     economics: evidence.economics,
     audience: {
       admissionPolicyHash: audience.admissionPolicyHash,
@@ -1520,6 +1530,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
             selected: selectedChoice(request, preferenceShareBps),
           }
         : null,
+    feedback,
     methodologyUrl: `${input.appOrigin.replace(/\/$/, "")}/docs/how-it-works`,
     updatedAt: now.toISOString(),
   });

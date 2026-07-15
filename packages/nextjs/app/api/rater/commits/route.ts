@@ -11,13 +11,18 @@ export async function POST(request: NextRequest) {
     const session = await requireRaterSession(request, true);
     const body = (await request.json()) as Partial<RaterCommitRequest>;
     const idempotencyKey = request.headers.get("idempotency-key") ?? body.idempotencyKey;
-    if (!idempotencyKey || !body.voucherId || !body.authorization) {
+    if (!idempotencyKey || !body.voucherId || !body.authorization || !body.response) {
       throw new TokenlessServiceError("Commit request is incomplete.", 400, "invalid_commit_request");
     }
     return NextResponse.json(
       await relayPaidRaterCommit({
         accountAddress: session.payoutAddress,
-        request: { idempotencyKey, voucherId: body.voucherId, authorization: body.authorization },
+        request: {
+          idempotencyKey,
+          voucherId: body.voucherId,
+          authorization: body.authorization,
+          response: body.response,
+        },
       }),
       { status: 202 },
     );

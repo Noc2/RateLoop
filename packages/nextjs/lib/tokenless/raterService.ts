@@ -16,6 +16,8 @@ import {
 } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
+import type { PublicRaterResponseInput } from "~~/lib/tokenless/rater/publicResponse";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { maximumSurpriseBonusForBase } from "~~/lib/tokenless/surpriseBounties";
 
@@ -27,6 +29,7 @@ const IDEMPOTENCY = /^[A-Za-z0-9._:-]{8,160}$/;
 export type RaterCommitRequest = {
   idempotencyKey: string;
   voucherId: string;
+  response: PublicRaterResponseInput;
   authorization: {
     roundId: string;
     drandNetwork: "quicknet-t";
@@ -223,11 +226,15 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
   }
   const voucherResult = await dbClient.execute({
     sql: `SELECT v.*, p.account_address, vr.voucher_deadline,
-                 vr.admission_policy_hash AS round_admission_policy_hash, e.round_terms_json
+                 vr.admission_policy_hash AS round_admission_policy_hash, e.round_terms_json,
+                 e.operation_key, o.question_id, c.content_json
           FROM tokenless_paid_vouchers v
           JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
           JOIN tokenless_voucher_rounds vr ON vr.chain_id = v.chain_id AND vr.panel_address = v.panel_address AND vr.round_id = v.round_id
           JOIN tokenless_chain_executions e ON e.chain_id = v.chain_id AND e.panel_address = v.panel_address AND e.round_id = v.round_id
+          JOIN tokenless_ask_ownership o ON o.operation_key = e.operation_key
+          JOIN tokenless_question_records q ON q.question_id = o.question_id
+          JOIN tokenless_content_records c ON c.content_id = q.content_id
           WHERE v.voucher_id = ? LIMIT 1`,
     args: [input.request.voucherId],
   });
@@ -275,47 +282,75 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
   }
   const requestJson = stableJson(input.request);
   const requestHash = digest(requestJson);
-  const previous = await dbClient.execute({
-    sql: "SELECT * FROM tokenless_rater_commits WHERE voucher_id = ? OR request_idempotency_key = ? LIMIT 1",
-    args: [input.request.voucherId, input.request.idempotencyKey],
-  });
-  const previousRow = previous.rows[0] as Row | undefined;
   let commitId: string;
   let persistedNonce: number | null = null;
-  if (previousRow) {
-    if (rowString(previousRow, "request_hash") !== requestHash) {
-      throw new TokenlessServiceError("Commit request conflicts with the existing attempt.", 409, "commit_conflict");
-    }
-    if (!new Set(["prepared", "retry"]).has(rowString(previousRow, "state") ?? "")) {
-      return publicCommit(previousRow);
-    }
-    commitId = rowString(previousRow, "commit_id")!;
-    persistedNonce = rowString(previousRow, "relay_nonce") === null ? null : Number(previousRow.relay_nonce);
-  } else {
-    commitId = `cmt_${randomUUID().replaceAll("-", "")}`;
+  let terminalPrevious: Row | null = null;
+  const preparationClient = await dbPool.connect();
+  try {
+    await preparationClient.query("BEGIN");
+    const previous = await preparationClient.query(
+      "SELECT * FROM tokenless_rater_commits WHERE voucher_id = $1 OR request_idempotency_key = $2 LIMIT 1 FOR UPDATE",
+      [input.request.voucherId, input.request.idempotencyKey],
+    );
+    const previousRow = previous.rows[0] as Row | undefined;
     const now = new Date();
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_rater_commits
-            (commit_id, voucher_id, request_idempotency_key, request_hash, deployment_key, round_id, vote_key,
-             sealed_commitment, sealed_payload_hash, payout_commitment, relay_payload_json, state, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', ?, ?)`,
-      args: [
-        commitId,
-        input.request.voucherId,
-        input.request.idempotencyKey,
-        requestHash,
-        config.deploymentKey,
-        auth.roundId,
-        auth.voteKey.toLowerCase(),
-        auth.sealedCommitment,
-        auth.sealedPayloadHash,
-        auth.payoutCommitment,
-        requestJson,
-        now,
-        now,
-      ],
+    if (previousRow) {
+      if (rowString(previousRow, "request_hash") !== requestHash) {
+        throw new TokenlessServiceError("Commit request conflicts with the existing attempt.", 409, "commit_conflict");
+      }
+      commitId = rowString(previousRow, "commit_id")!;
+      persistedNonce = rowString(previousRow, "relay_nonce") === null ? null : Number(previousRow.relay_nonce);
+      if (!new Set(["prepared", "retry"]).has(rowString(previousRow, "state") ?? "")) terminalPrevious = previousRow;
+    } else {
+      commitId = `cmt_${randomUUID().replaceAll("-", "")}`;
+      const relayPayloadJson = stableJson({
+        idempotencyKey: input.request.idempotencyKey,
+        voucherId: input.request.voucherId,
+        authorization: input.request.authorization,
+      });
+      await preparationClient.query(
+        `INSERT INTO tokenless_rater_commits
+          (commit_id, voucher_id, request_idempotency_key, request_hash, deployment_key, round_id, vote_key,
+           sealed_commitment, sealed_payload_hash, payout_commitment, relay_payload_json, state, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'prepared', $12, $12)`,
+        [
+          commitId,
+          input.request.voucherId,
+          input.request.idempotencyKey,
+          requestHash,
+          config.deploymentKey,
+          auth.roundId,
+          auth.voteKey.toLowerCase(),
+          auth.sealedCommitment,
+          auth.sealedPayloadHash,
+          auth.payoutCommitment,
+          relayPayloadJson,
+          now,
+        ],
+      );
+    }
+    const question = JSON.parse(rowString(voucherRow, "content_json")!) as {
+      rationale?: { mode: "optional" | "required"; minLength?: number; maxLength?: number };
+    };
+    await preparePublicRaterResponse(preparationClient, {
+      voucherId: input.request.voucherId,
+      operationKey: rowString(voucherRow, "operation_key")!,
+      questionId: rowString(voucherRow, "question_id")!,
+      roundId: auth.roundId,
+      contentId: String(voucher.contentId) as Hex,
+      voteKey: auth.voteKey,
+      rationale: question.rationale,
+      response: input.request.response,
+      now,
     });
+    await preparationClient.query("COMMIT");
+  } catch (error) {
+    await preparationClient.query("ROLLBACK");
+    throw error;
+  } finally {
+    preparationClient.release();
   }
+  if (terminalPrevious) return publicCommit(terminalPrevious);
   const voucherStruct = {
     voteKey: getAddress(String(voucher.voteKey)),
     contentId: String(voucher.contentId) as Hex,

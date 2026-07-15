@@ -229,6 +229,21 @@ export interface TokenlessResultRequest {
   operationKey: string;
 }
 
+export interface TokenlessResultFeedback {
+  items: Array<{
+    category:
+      | "opinion"
+      | "evidence"
+      | "clarification"
+      | "concern"
+      | "bug_report"
+      | "other";
+    body: string;
+    sourceUrl: string | null;
+  }>;
+  redactedCount: number;
+}
+
 export interface TokenlessResult {
   schemaVersion: typeof TOKENLESS_SCHEMA_VERSION;
   operationKey: string;
@@ -247,6 +262,7 @@ export interface TokenlessResult {
     preferenceShareBps: number | null;
     selected: string | null;
   } | null;
+  feedback?: TokenlessResultFeedback;
   methodologyUrl: string;
   updatedAt: string;
 }

@@ -107,6 +107,7 @@ function validFixture() {
   const keyrings = [
     ["TOKENLESS_ASSURANCE_RATIONALE_VAULT", 2, "base64url"],
     ["TOKENLESS_ASSURANCE_REVIEWER_MAPPING", 3, "base64url"],
+    ["TOKENLESS_PUBLIC_RATER_RESPONSE_VAULT", 15, "base64url"],
     ["TOKENLESS_PROVIDER_EVIDENCE_VAULT", 4, "base64"],
     ["TOKENLESS_TAX_VAULT", 5, "base64"],
     ["TOKENLESS_VOTE_MAPPING_VAULT", 6, "base64"],

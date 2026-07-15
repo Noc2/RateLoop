@@ -137,3 +137,32 @@ export async function getTokenlessModerationState(operationKey: string) {
     moderatedAt: row.moderated_at ? new Date(String(row.moderated_at)).toISOString() : null,
   };
 }
+
+export async function moderateTokenlessPublicRaterResponse(input: {
+  responseId: string;
+  decision: "approved" | "rejected";
+  reasonCode: string;
+  now?: Date;
+}) {
+  if (!/^rrs_[a-f0-9]{32}$/.test(input.responseId)) {
+    throw new TokenlessServiceError("Response id is invalid.", 400, "invalid_public_response_id");
+  }
+  if (!/^[A-Za-z0-9._:-]{3,120}$/.test(input.reasonCode)) {
+    throw new TokenlessServiceError("Moderation reason code is invalid.", 400, "invalid_moderation_reason");
+  }
+  const result = await dbPool.query(
+    `UPDATE tokenless_public_rater_responses
+     SET moderation_status = $1, moderation_reason = $2, updated_at = $3
+     WHERE response_id = $4 AND moderation_status = 'pending'
+     RETURNING response_id, operation_key, moderation_status`,
+    [input.decision, input.reasonCode, input.now ?? new Date(), input.responseId],
+  );
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError("Pending public response not found.", 404, "public_response_not_found");
+  }
+  return {
+    responseId: rowString(result.rows[0] as Row, "response_id")!,
+    operationKey: rowString(result.rows[0] as Row, "operation_key")!,
+    decision: rowString(result.rows[0] as Row, "moderation_status") as "approved" | "rejected",
+  };
+}

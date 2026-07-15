@@ -17,6 +17,7 @@ import {
   type TokenlessRefundAccounting,
   type TokenlessReviewerSource,
   type TokenlessResult,
+  type TokenlessResultFeedback,
   type TokenlessVerdictStatus,
   type TokenlessWaitResponse,
 } from "./tokenlessTypes";
@@ -67,6 +68,11 @@ function integer(
 
 function boolean(value: unknown, path: string): boolean {
   if (typeof value !== "boolean") invalid(path, "a boolean");
+  return value;
+}
+
+function array(value: unknown, path: string): unknown[] {
+  if (!Array.isArray(value)) invalid(path, "an array");
   return value;
 }
 
@@ -336,22 +342,13 @@ export function parseTokenlessPaymentInstructions(
     }
     authorizationSpec = {
       schemaVersion: TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
-      eip3009Domain: domain(
-        eip3009Domain,
-        "authorizationSpec.eip3009Domain",
-      ),
+      eip3009Domain: domain(eip3009Domain, "authorizationSpec.eip3009Domain"),
       roundAuthorizationDomain: domain(
         roundAuthorizationDomain,
         "authorizationSpec.roundAuthorizationDomain",
       ),
-      validAfter: atomic(
-        spec.validAfter,
-        "authorizationSpec.validAfter",
-      ),
-      validBefore: atomic(
-        spec.validBefore,
-        "authorizationSpec.validBefore",
-      ),
+      validAfter: atomic(spec.validAfter, "authorizationSpec.validAfter"),
+      validBefore: atomic(spec.validBefore, "authorizationSpec.validBefore"),
       nonce: bytes32(spec.nonce, "authorizationSpec.nonce"),
     };
     if (
@@ -567,6 +564,64 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
   if ((parsedVerdictStatus === "publishable") !== (parsedVerdict !== null)) {
     invalid("verdict", "present only for publishable results");
   }
+  const feedback =
+    input.feedback === undefined ? null : record(input.feedback, "feedback");
+  const parsedFeedback: TokenlessResultFeedback = feedback
+    ? {
+        items: array(feedback.items, "feedback.items").map((value, index) => {
+          const item = record(value, `feedback.items[${index}]`);
+          const category = string(
+            item.category,
+            `feedback.items[${index}].category`,
+          );
+          if (
+            ![
+              "opinion",
+              "evidence",
+              "clarification",
+              "concern",
+              "bug_report",
+              "other",
+            ].includes(category)
+          ) {
+            invalid(
+              `feedback.items[${index}].category`,
+              "a supported feedback category",
+            );
+          }
+          const body = string(
+            item.body,
+            `feedback.items[${index}].body`,
+          ).trim();
+          if (!body || body.length > 1_500)
+            invalid(`feedback.items[${index}].body`, "1-1500 characters");
+          const sourceUrl =
+            item.sourceUrl === null
+              ? null
+              : httpUrl(item.sourceUrl, `feedback.items[${index}].sourceUrl`);
+          if (sourceUrl && new URL(sourceUrl).protocol !== "https:") {
+            invalid(`feedback.items[${index}].sourceUrl`, "an HTTPS URL");
+          }
+          return {
+            category:
+              category as TokenlessResultFeedback["items"][number]["category"],
+            body,
+            sourceUrl,
+          };
+        }),
+        redactedCount: integer(
+          feedback.redactedCount,
+          "feedback.redactedCount",
+          0,
+        ),
+      }
+    : { items: [], redactedCount: 0 };
+  if (
+    !parsedTerminal &&
+    (parsedFeedback.items.length > 0 || parsedFeedback.redactedCount > 0)
+  ) {
+    invalid("feedback", "empty until the result is terminal");
+  }
 
   return {
     schemaVersion: schemaVersion(input.schemaVersion),
@@ -588,6 +643,7 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
       source: reviewerSource(audience.source, "audience.source"),
     },
     verdict: parsedVerdict,
+    feedback: parsedFeedback,
     methodologyUrl: httpUrl(input.methodologyUrl, "methodologyUrl"),
     updatedAt: isoDate(input.updatedAt, "updatedAt"),
   };
@@ -731,6 +787,36 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
         },
       ],
     },
+    feedback: {
+      additionalProperties: false,
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            additionalProperties: false,
+            properties: {
+              category: {
+                enum: [
+                  "opinion",
+                  "evidence",
+                  "clarification",
+                  "concern",
+                  "bug_report",
+                  "other",
+                ],
+              },
+              body: { minLength: 1, maxLength: 1500, type: "string" },
+              sourceUrl: { format: "uri", type: ["string", "null"] },
+            },
+            required: ["category", "body", "sourceUrl"],
+            type: "object",
+          },
+        },
+        redactedCount: { minimum: 0, type: "integer" },
+      },
+      required: ["items", "redactedCount"],
+      type: "object",
+    },
     methodologyUrl: { format: "uri", type: "string" },
     updatedAt: { format: "date-time", type: "string" },
   },
@@ -743,6 +829,7 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
     "economics",
     "audience",
     "verdict",
+    "feedback",
     "methodologyUrl",
     "updatedAt",
   ],

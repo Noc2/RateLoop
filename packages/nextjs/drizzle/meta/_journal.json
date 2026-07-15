@@ -351,6 +351,13 @@
       "when": 1784034000000,
       "tag": "0049_normalize_content_dimensions",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1784037600000,
+      "tag": "0050_tokenless_public_rater_responses",
+      "breakpoints": true
     }
   ]
 }

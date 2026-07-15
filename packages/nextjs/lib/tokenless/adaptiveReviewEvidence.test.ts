@@ -213,6 +213,7 @@ async function storedResult(
           selected: input.selected === undefined ? "yes" : input.selected,
         }
       : null,
+    feedback: { items: [], redactedCount: 0 },
     methodologyUrl: "https://rateloop-tokenless.example/docs/how-it-works",
     updatedAt: input.updatedAt ?? new Date(Date.now() + 1_000).toISOString(),
   };
