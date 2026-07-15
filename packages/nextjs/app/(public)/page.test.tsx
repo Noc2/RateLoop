@@ -10,14 +10,22 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 test("landing page presents the tokenless human-assurance story", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const { default: HomePage } = await import("./page");
-  const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
+  const { TokenlessLandingPage } = await import("./page");
+  const html = renderToStaticMarkup(
+    <TokenlessLandingPage
+      socialProofItems={[
+        { value: "10", label: "Verified Humans" },
+        { value: "21", label: "Ratings" },
+        { value: "$12", label: "USDC Paid" },
+      ]}
+    />,
+  ).replace(/\s+/g, " ");
 
   assert.match(html, /The Human/);
   assert.match(html, /<span class="block">Assurance <span class="rateloop-text-gradient">Loop<\/span><\/span>/);
   assert.doesNotMatch(html, /class="rateloop-text-gradient[^\"]*">Assurance/);
   assert.match(html, /Scale AI autonomy without scaling blind trust\./);
-  assert.match(html, /Human checks decrease only when scoped evidence stays strong/);
+  assert.doesNotMatch(html, /Human checks decrease only when scoped evidence stays strong/);
   assert.match(html, /<span>For Humans<\/span>/);
   assert.match(html, /<span>For Agents<\/span>/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
@@ -25,7 +33,9 @@ test("landing page presents the tokenless human-assurance story", async () => {
     html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=overview"'),
     "the Humans CTA should appear before the Agents CTA",
   );
-  assert.doesNotMatch(html, /Verified Humans|Ratings|USDC Paid/);
+  assert.match(html, /<span class="font-semibold text-base-content">10<\/span> Verified Humans/);
+  assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Ratings/);
+  assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC Paid/);
   assert.match(html, /How It/);
   assert.match(html, /The Human Assurance/);
   assert.match(html, /Agent prepares/);

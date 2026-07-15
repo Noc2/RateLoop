@@ -3,6 +3,10 @@ import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
+import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
+import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
+
+export const revalidate = 300;
 
 const whyItWorksFeatures = [
   {
@@ -86,7 +90,7 @@ function SectionTitle({
   );
 }
 
-export default function TokenlessLandingPage() {
+export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: LandingSocialProofItem[] }) {
   return (
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
       <div className="relative flex w-full max-w-6xl flex-col items-center">
@@ -103,9 +107,6 @@ export default function TokenlessLandingPage() {
             </h1>
             <p className="mt-4 max-w-[40rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
               Scale AI autonomy without scaling blind trust.
-            </p>
-            <p className="mt-3 max-w-[36rem] text-center text-sm leading-6 text-base-content/55 sm:text-base lg:text-left">
-              Human checks decrease only when scoped evidence stays strong.
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
@@ -130,6 +131,19 @@ export default function TokenlessLandingPage() {
                 </span>
               </Link>
             </div>
+            {socialProofItems.length > 0 ? (
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
+                {socialProofItems.map(({ value, label }, index) => (
+                  <div key={label} className="flex items-center">
+                    <span
+                      className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
+                    >
+                      <span className="font-semibold text-base-content">{value}</span> {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <SupportedAgentsSection />
         </section>
@@ -231,4 +245,8 @@ export default function TokenlessLandingPage() {
       </div>
     </div>
   );
+}
+
+export default async function LandingPage() {
+  return <TokenlessLandingPage socialProofItems={await getLandingPageSocialProofItems()} />;
 }

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { and, asc, desc, eq, replaceBigInts } from "ponder";
+import { and, asc, desc, eq, replaceBigInts, sum } from "ponder";
 import { db } from "ponder:api";
 import {
   tokenlessClaim,
@@ -107,6 +107,17 @@ app.get("/status/tokenless", async (c) => {
     totalRemainingCredit: creditBalances
       .reduce((total, row) => total + row.remainingCredit, 0n)
       .toString(),
+  });
+});
+
+app.get("/stats", async (c) => {
+  const [totals] = await db
+    .select({ totalClaimedAtomic: sum(tokenlessClaim.amount) })
+    .from(tokenlessClaim)
+    .where(eq(tokenlessClaim.deploymentKey, deployment.deploymentKey));
+  c.header("cache-control", "public, max-age=60, s-maxage=300");
+  return c.json({
+    totalClaimedAtomic: String(totals?.totalClaimedAtomic ?? 0),
   });
 });
 
