@@ -27,12 +27,16 @@ export function AgentsSignInPrompt() {
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <div className="w-full sm:w-auto">
             <ThirdwebSessionButton
+              compact
               onSessionChange={authenticated => {
                 if (authenticated) router.refresh();
               }}
             />
           </div>
-          <Link href="/docs/ai" className="btn btn-outline btn-sm min-h-11 w-full px-4 sm:w-auto">
+          <Link
+            href="/docs/ai"
+            className="btn btn-outline h-10 min-h-10 w-auto min-w-0 px-[0.9rem] text-base font-bold leading-none"
+          >
             Agent docs
           </Link>
         </div>
