@@ -26,7 +26,7 @@ const notificationOptions = [
   {
     key: "accountSecurity",
     label: "Account and security",
-    description: "Keep important sign-in, eligibility, and account changes visible.",
+    description: "Required for important sign-in and account changes.",
   },
 ] as const;
 
@@ -149,6 +149,7 @@ export function NotificationSettingsPanel() {
   );
 
   async function updatePreference(key: NotificationKey, value: boolean) {
+    if (key === "accountSecurity") return;
     const next = { ...preferences, [key]: value };
     setPreferences(next);
     setSavingPreferences(true);
@@ -237,8 +238,8 @@ export function NotificationSettingsPanel() {
                 <PreferenceToggle
                   key={option.key}
                   option={option}
-                  checked={preferences[option.key]}
-                  disabled={savingPreferences}
+                  checked={option.key === "accountSecurity" ? true : preferences[option.key]}
+                  disabled={savingPreferences || option.key === "accountSecurity"}
                   onChange={value => void updatePreference(option.key, value)}
                 />
               ))}

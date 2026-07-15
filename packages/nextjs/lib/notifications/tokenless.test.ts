@@ -18,6 +18,10 @@ test("tokenless notification preferences require every supported boolean", () =>
     () => normalizeNotificationPreferences({ ...DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES, askResults: "yes" }),
     /askResults must be a boolean/,
   );
+  assert.throws(
+    () => normalizeNotificationPreferences({ ...DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES, accountSecurity: false }),
+    /Account and security notifications are required/,
+  );
 });
 
 test("tokenless notification email normalization is lowercase and rejects malformed addresses", () => {

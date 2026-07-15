@@ -56,7 +56,7 @@ function preferencesFromRow(row: Row | undefined): TokenlessNotificationPreferen
     assignmentCompleted: readBoolean(row, "assignment_completed", true),
     paymentUpdates: readBoolean(row, "payment_updates", true),
     askResults: readBoolean(row, "ask_results", true),
-    accountSecurity: readBoolean(row, "account_security", true),
+    accountSecurity: true,
   };
 }
 
@@ -66,6 +66,7 @@ export function normalizeNotificationPreferences(input: unknown): TokenlessNotif
   }
 
   const source = input as Record<string, unknown>;
+  if (source.accountSecurity !== true) throw new Error("Account and security notifications are required.");
   return Object.fromEntries(
     TOKENLESS_NOTIFICATION_KEYS.map(key => {
       if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean.`);
@@ -119,7 +120,7 @@ export async function upsertTokenlessNotificationPreferences(
       preferences.assignmentCompleted,
       preferences.paymentUpdates,
       preferences.askResults,
-      preferences.accountSecurity,
+      true,
       now,
       now,
     ],
@@ -260,7 +261,7 @@ export async function upsertTokenlessEmailNotificationSettings(
       preferences.assignmentCompleted,
       preferences.paymentUpdates,
       preferences.askResults,
-      preferences.accountSecurity,
+      true,
       existing?.created_at ?? now,
       now,
     ],
