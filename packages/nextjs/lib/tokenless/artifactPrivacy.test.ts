@@ -10,6 +10,7 @@ import {
   listArtifactAccessLog,
   processDueArtifactDeletions,
   readEncryptedArtifact,
+  registerArtifactManagedKeyProvider,
   requestProjectDeletion,
   storeEncryptedArtifact,
 } from "~~/lib/tokenless/artifactPrivacy";
@@ -50,6 +51,7 @@ beforeEach(() => {
 
 afterEach(() => {
   __setArtifactPrivacyRuntimeForTests(null);
+  registerArtifactManagedKeyProvider(null);
   __setDatabaseResourcesForTests(null);
 });
 
@@ -197,10 +199,21 @@ test("artifact vault refuses browser-exposed keys and malformed master keys", ()
         NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY: "forbidden",
         TOKENLESS_ARTIFACT_MASTER_KEY: Buffer.alloc(32).toString("base64url"),
       } as unknown as NodeJS.ProcessEnv),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_artifact_key_forbidden",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_vault_key_forbidden",
   );
   assert.throws(
     () => __artifactPrivacyTestUtils.decodeMasterKey("too-short"),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_artifact_key",
+  );
+  assert.throws(
+    () =>
+      __artifactPrivacyTestUtils.getRuntime({
+        NODE_ENV: "production",
+        TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/europe-west4/keyRings/rateloop",
+        TOKENLESS_KMS_PROVIDER: "gcp-kms",
+        TOKENLESS_PSEUDONYM_KEY: Buffer.alloc(32, 9).toString("base64url"),
+        TOKENLESS_SANDBOX_MODE: "false",
+      } as unknown as NodeJS.ProcessEnv),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_kms_adapter_unavailable",
   );
 });

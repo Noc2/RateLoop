@@ -1,6 +1,11 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import {
+  type KeyWrappingProvider,
+  createLocalKeyWrappingProvider,
+  validateVaultEnvironment,
+} from "~~/lib/privacy/vault";
 import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -17,12 +22,15 @@ export type PrivateArtifactStore = {
 };
 
 type ArtifactPrivacyRuntime = {
+  commitmentKey?: Uint8Array;
+  keyProvider?: KeyWrappingProvider;
   keyVersion: string;
-  masterKey: Uint8Array;
+  masterKey?: Uint8Array;
   store: PrivateArtifactStore;
 };
 
 let runtimeOverride: ArtifactPrivacyRuntime | null = null;
+let managedKeyProvider: KeyWrappingProvider | null = null;
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -82,17 +90,45 @@ function createVercelBlobStore(): PrivateArtifactStore {
 }
 
 function getRuntime(env: NodeJS.ProcessEnv = process.env): ArtifactPrivacyRuntime {
-  if (runtimeOverride) return runtimeOverride;
-  if (env.NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY) {
-    throw new TokenlessServiceError(
-      "Artifact encryption keys must never use a NEXT_PUBLIC_ variable.",
-      500,
-      "public_artifact_key_forbidden",
-    );
+  if (runtimeOverride) {
+    if (runtimeOverride.keyProvider && runtimeOverride.commitmentKey) return runtimeOverride;
+    const masterKey = runtimeOverride.masterKey;
+    if (!masterKey) throw new TokenlessServiceError("Artifact test vault is invalid.", 500, "invalid_artifact_key");
+    return {
+      ...runtimeOverride,
+      commitmentKey: runtimeOverride.commitmentKey ?? masterKey,
+      keyProvider:
+        runtimeOverride.keyProvider ??
+        createLocalKeyWrappingProvider({ key: masterKey, keyVersion: runtimeOverride.keyVersion }),
+    };
   }
+  const policy = validateVaultEnvironment(env);
+  if (policy.mode === "managed") {
+    if (
+      !managedKeyProvider ||
+      managedKeyProvider.provider !== policy.provider ||
+      managedKeyProvider.keyResource !== policy.keyResource
+    ) {
+      throw new TokenlessServiceError(
+        "The configured managed KMS adapter is unavailable.",
+        503,
+        "artifact_kms_adapter_unavailable",
+      );
+    }
+    return {
+      commitmentKey: decodeMasterKey(env.TOKENLESS_PSEUDONYM_KEY),
+      keyProvider: managedKeyProvider,
+      keyVersion: managedKeyProvider.keyVersion,
+      store: createVercelBlobStore(),
+    };
+  }
+  const masterKey = decodeMasterKey(env.TOKENLESS_ARTIFACT_MASTER_KEY);
+  const keyVersion = env.TOKENLESS_ARTIFACT_KEY_VERSION?.trim() || "artifact-v1";
   return {
-    keyVersion: env.TOKENLESS_ARTIFACT_KEY_VERSION?.trim() || "artifact-v1",
-    masterKey: decodeMasterKey(env.TOKENLESS_ARTIFACT_MASTER_KEY),
+    commitmentKey: masterKey,
+    keyProvider: createLocalKeyWrappingProvider({ key: masterKey, keyVersion }),
+    keyVersion,
+    masterKey,
     store: createVercelBlobStore(),
   };
 }
@@ -121,6 +157,33 @@ function tenantCommitment(masterKey: Uint8Array, workspaceId: string, content: U
     .update(`artifact-commitment:${workspaceId}:`)
     .update(content)
     .digest("hex")}`;
+}
+
+function keyDomain(provider: KeyWrappingProvider) {
+  return JSON.stringify({
+    domain: ARTIFACT_KEY_DOMAIN,
+    keyResource: provider.keyResource,
+    provider: provider.provider,
+  });
+}
+
+function parseKeyDomain(value: string | null, fallback: KeyWrappingProvider) {
+  if (!value || value === ARTIFACT_KEY_DOMAIN) {
+    return { keyResource: fallback.keyResource, provider: fallback.provider };
+  }
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (
+      parsed.domain !== ARTIFACT_KEY_DOMAIN ||
+      typeof parsed.provider !== "string" ||
+      typeof parsed.keyResource !== "string"
+    ) {
+      throw new Error("invalid");
+    }
+    return { keyResource: parsed.keyResource, provider: parsed.provider };
+  } catch {
+    throw new TokenlessServiceError("Artifact key metadata is invalid.", 500, "invalid_artifact_key_metadata");
+  }
 }
 
 async function requireProjectMember(input: {
@@ -159,7 +222,7 @@ async function appendAccessLog(input: {
       input.projectId,
       input.artifactId,
       input.leaseId ?? null,
-      actorReference(input.runtime.masterKey, actorAddress(input.accountAddress)),
+      actorReference(input.runtime.commitmentKey!, actorAddress(input.accountAddress)),
       input.action,
       input.purpose,
       input.requestReference ?? null,
@@ -194,7 +257,8 @@ export async function storeEncryptedArtifact(input: {
   const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${artifactId}`;
   const dataKey = randomBytes(32);
   const content = encrypt(input.bytes, dataKey, aad);
-  const wrapped = encrypt(dataKey, runtime.masterKey, `${aad}:${runtime.keyVersion}`);
+  const wrapped = await runtime.keyProvider!.wrap(dataKey, Buffer.from(`${aad}:${runtime.keyVersion}`));
+  dataKey.fill(0);
   const pathname = `rateloop-private/${input.workspaceId}/${input.projectId}/${objectId}.bin`;
   const storageRef = await runtime.store.put(pathname, content.ciphertext);
   const createdAt = new Date();
@@ -211,7 +275,7 @@ export async function storeEncryptedArtifact(input: {
         input.projectId,
         input.role,
         label,
-        tenantCommitment(runtime.masterKey, input.workspaceId, input.bytes),
+        tenantCommitment(runtime.commitmentKey!, input.workspaceId, input.bytes),
         contentType,
         input.bytes.byteLength,
         storageRef,
@@ -231,13 +295,13 @@ export async function storeEncryptedArtifact(input: {
         input.workspaceId,
         input.projectId,
         storageRef,
-        ARTIFACT_KEY_DOMAIN,
+        keyDomain(runtime.keyProvider!),
         runtime.keyVersion,
         content.nonce.toString("base64url"),
         content.tag.toString("base64url"),
-        wrapped.ciphertext.toString("base64url"),
-        wrapped.nonce.toString("base64url"),
-        wrapped.tag.toString("base64url"),
+        wrapped.ciphertext,
+        wrapped.nonce ?? "",
+        wrapped.authTag ?? "",
         deleteAfter,
         createdAt,
       ],
@@ -262,7 +326,7 @@ export async function storeEncryptedArtifact(input: {
   return {
     artifactId,
     contentType,
-    digest: tenantCommitment(runtime.masterKey, input.workspaceId, input.bytes),
+    digest: tenantCommitment(runtime.commitmentKey!, input.workspaceId, input.bytes),
     sizeBytes: input.bytes.byteLength,
   };
 }
@@ -372,7 +436,7 @@ export async function readEncryptedArtifact(input: {
     if (!leaseId) throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
   }
   const result = await dbClient.execute({
-    sql: `SELECT a.content_type, a.size_bytes, o.storage_ref, o.key_version, o.content_nonce, o.content_auth_tag,
+    sql: `SELECT a.content_type, a.size_bytes, o.storage_ref, o.key_domain, o.key_version, o.content_nonce, o.content_auth_tag,
                  o.wrapped_data_key, o.wrap_nonce, o.wrap_auth_tag
           FROM tokenless_assurance_artifacts a
           JOIN tokenless_assurance_artifact_objects o ON o.artifact_id = a.artifact_id
@@ -408,12 +472,17 @@ export async function readEncryptedArtifact(input: {
     throw new TokenlessServiceError("The artifact key version is unavailable.", 503, "artifact_key_unavailable");
   }
   const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${input.artifactId}`;
-  const dataKey = decrypt(
-    Buffer.from(rowString(row, "wrapped_data_key")!, "base64url"),
-    runtime.masterKey,
-    rowString(row, "wrap_nonce")!,
-    rowString(row, "wrap_auth_tag")!,
-    `${aad}:${keyVersion}`,
+  const storedKeyDomain = parseKeyDomain(rowString(row, "key_domain"), runtime.keyProvider!);
+  const dataKey = await runtime.keyProvider!.unwrap(
+    {
+      authTag: rowString(row, "wrap_auth_tag") || null,
+      ciphertext: rowString(row, "wrapped_data_key")!,
+      keyResource: storedKeyDomain.keyResource,
+      keyVersion,
+      nonce: rowString(row, "wrap_nonce") || null,
+      provider: storedKeyDomain.provider,
+    },
+    Buffer.from(`${aad}:${keyVersion}`),
   );
   const ciphertext = await runtime.store.get(storageRef);
   const bytes = decrypt(
@@ -553,6 +622,10 @@ export async function listArtifactAccessLog(input: { accountAddress: string; pro
 
 export function __setArtifactPrivacyRuntimeForTests(runtime: ArtifactPrivacyRuntime | null) {
   runtimeOverride = runtime;
+}
+
+export function registerArtifactManagedKeyProvider(provider: KeyWrappingProvider | null) {
+  managedKeyProvider = provider;
 }
 
 export const __artifactPrivacyTestUtils = { decodeMasterKey, getRuntime };
