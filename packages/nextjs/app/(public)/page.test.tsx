@@ -47,10 +47,15 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /platform-funded Surprisingly Popular bounty/);
   assert.match(html, /Auditable Settlement/);
   assert.match(html, /Privacy with Clear Limits/);
+  assert.match(html, /Private artifacts are encrypted before storage\./);
+  assert.match(html, /Assigned reviewers receive short-lived access leases/);
+  assert.match(html, /Agent connections use scoped, revocable credentials\./);
+  assert.match(html, /Public-chain commitments and settlement records remain visible and cannot be erased\./);
   assert.match(html, /Agents ask; human reviewers provide the judgment/i);
   assert.match(html, /href="\/docs\/tech-stack"/);
   assert.match(html, /href="\/docs\/smart-contracts"/);
   assert.match(html, /href="\/legal\/privacy"/);
+  assert.match(html, /href="\/trust"/);
   assert.match(html, /Pricing, Kept/);
   assert.match(html, /25 decisions \/ month/);
   assert.match(html, /250 decisions \/ month/);

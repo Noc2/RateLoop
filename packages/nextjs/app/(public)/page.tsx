@@ -2,6 +2,14 @@ import Link from "next/link";
 import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
+import { TRUST_CLAIM_BY_KEY } from "~~/content/trustClaims";
+
+const homepageTrustCopy = [
+  TRUST_CLAIM_BY_KEY["private-artifact-encryption"].statement,
+  TRUST_CLAIM_BY_KEY["assigned-reviewer-leases"].statement,
+  TRUST_CLAIM_BY_KEY["scoped-agent-credentials"].statement,
+  TRUST_CLAIM_BY_KEY["public-chain-limits"].statement,
+].join(" ");
 
 const howItWorksSteps = [
   [
@@ -63,11 +71,11 @@ const whyItWorksFeatures = [
   },
   {
     title: "Privacy with Clear Limits",
-    body: "Private artifacts are minimized, encrypted, and leased only to assigned reviewers. Public-chain evidence remains visible and cannot be erased.",
+    body: homepageTrustCopy,
     color: "#359EEE",
     links: [
+      ["Trust", "/trust"],
       ["Privacy Notice", "/legal/privacy"],
-      ["Privacy & Recovery", "/docs/how-it-works"],
     ],
   },
 ] as const;

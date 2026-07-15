@@ -2,16 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("tokenless shell exposes Humans, Agents, and Docs without the legacy product navigation", async () => {
+test("tokenless shell exposes Humans, Agents, Docs, and Trust without the legacy product navigation", async () => {
   const source = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
   assert.match(source, /href: "\/human", label: "For Humans"/);
   assert.match(source, /href: "\/agents", label: "For Agents"/);
   assert.match(source, /href: "\/docs", label: "Docs"/);
+  assert.match(source, /href: "\/trust", label: "Trust"/);
   assert.match(source, /\["Pricing", "\/pricing"\]/);
+  assert.match(source, /\["Trust", "\/trust"\]/);
   assert.match(source, /href="\/pricing"/);
   assert.match(source, /icon: GlobeAltIcon/);
   assert.match(source, /icon: PlusCircleIcon/);
   assert.match(source, /icon: BookOpenIcon/);
+  assert.match(source, /icon: ShieldCheckIcon/);
   assert.match(source, /Human Assurance/);
   assert.match(source, /w-52/);
   assert.match(source, /border-t[^\n]+px-2\.5 pt-4/);

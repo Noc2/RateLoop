@@ -67,14 +67,34 @@ function BookOpenIcon({ className }: IconProps) {
   );
 }
 
+function ShieldCheckIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3 5 6v5c0 4.5 2.8 8.2 7 10 4.2-1.8 7-5.5 7-10V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
 const links = [
   { href: "/human", label: "For Humans", icon: GlobeAltIcon },
   { href: "/agents", label: "For Agents", icon: PlusCircleIcon },
   { href: "/docs", label: "Docs", icon: BookOpenIcon },
+  { href: "/trust", label: "Trust", icon: ShieldCheckIcon },
 ] as const;
 
 const footerLinks = [
   ["Pricing", "/pricing"],
+  ["Trust", "/trust"],
   ["Terms", "/legal/terms"],
   ["Privacy", "/legal/privacy"],
   ["Imprint", "/legal/imprint"],
