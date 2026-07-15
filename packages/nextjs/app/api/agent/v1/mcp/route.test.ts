@@ -359,10 +359,66 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   );
   const firstVerification = (await verified.json()).result.structuredContent;
   assert.equal(firstVerification.connection.status, "connected");
-  const repeatedVerification = await POST(
+
+  const resumedInitialization = await POST(
     request(
       {
         id: 141,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: { tools: { listChanged: true } },
+          clientInfo: { name: "Codex", version: "2026.07.15" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const resumedInitializationBody = await resumedInitialization.json();
+  assert.match(resumedInitializationBody.result.instructions, /workspace connection is available/i);
+
+  const resumedTools = await POST(
+    request({ id: 142, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
+  );
+  assert.deepEqual(
+    (await resumedTools.json()).result.tools.map((candidate: { name: string }) => candidate.name),
+    names,
+  );
+
+  const repeatedClaim = await POST(
+    request(
+      {
+        id: 143,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_claim_connection_intent", arguments: { connectionUrl: intent.connectionUrl } },
+      },
+      tokens.access_token,
+    ),
+  );
+  const resumedClaim = (await repeatedClaim.json()).result.structuredContent;
+  assert.equal(resumedClaim.idempotent, true);
+  assert.equal(resumedClaim.connection.integrationId, claim.connection.integrationId);
+  assert.equal(resumedClaim.connection.status, "connected");
+
+  const resumedContext = await POST(
+    request(
+      {
+        id: 144,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  assert.deepEqual((await resumedContext.json()).result.structuredContent, agentContext);
+
+  const repeatedVerification = await POST(
+    request(
+      {
+        id: 145,
         jsonrpc: "2.0",
         method: "tools/call",
         params: { name: "rateloop_verify_connection", arguments: {} },
@@ -371,6 +427,22 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     ),
   );
   assert.deepEqual((await repeatedVerification.json()).result.structuredContent, firstVerification);
+  const entityCounts = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_agents WHERE workspace_id = ?) AS agents,
+            (SELECT COUNT(*) FROM tokenless_agent_integrations WHERE workspace_id = ?) AS integrations`,
+    args: [workspaceId, workspaceId],
+  });
+  assert.equal(Number(entityCounts.rows[0]?.agents ?? 0), 1);
+  assert.equal(Number(entityCounts.rows[0]?.integrations ?? 0), 1);
+  const resumedMetadata = await dbClient.execute({
+    sql: `SELECT client_name, client_version, client_capabilities_json
+          FROM tokenless_agent_integrations WHERE integration_id = ?`,
+    args: [claim.connection.integrationId],
+  });
+  assert.equal(resumedMetadata.rows[0]?.client_name, "Codex");
+  assert.equal(resumedMetadata.rows[0]?.client_version, "2026.07.15");
+  assert.deepEqual(JSON.parse(String(resumedMetadata.rows[0]?.client_capabilities_json)), ["tools"]);
   const connectedEvents = await dbClient.execute({
     sql: `SELECT COUNT(*) AS total FROM tokenless_agent_integration_events
           WHERE integration_id = ? AND event_type = 'connected'`,
