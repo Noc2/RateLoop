@@ -1,7 +1,7 @@
 # Tokenless EU deployment contract
 
 This runbook applies only to the isolated `tokenless` deployment line. The checked controls make EU the only accepted
-non-sandbox data-plane configuration; they do not prove that a live deployment is EU-hosted.
+hosted data-plane configuration; region configuration alone does not prove that a live deployment is EU-hosted.
 
 ## Sources of truth
 
@@ -13,26 +13,17 @@ non-sandbox data-plane configuration; they do not prove that a live deployment i
 - `scripts/validate-tokenless-eu-deployment.mjs` rejects changed manifest content, mixed regions, legacy identifiers,
   public Blob access, missing processor evidence, and an invalid manifest signature.
 
-Run the repository-only check without live credentials:
+Run the repository tests for manifest structure, digest, and region pins without live credentials:
 
 ```sh
-node scripts/validate-tokenless-eu-deployment.mjs --sandbox
+node --test scripts/validate-tokenless-eu-deployment.test.mjs
 ```
 
-## Explicit sandbox
+## Hosted EU release bundle
 
-The public test deployment remains an explicit sandbox by setting `TOKENLESS_SANDBOX_MODE=true`. Sandbox builds still
-validate the checked manifest digest and all static region pins. They do not require live EU resource identifiers or a
-manifest signature, and they must not activate an `EU-hosted` or residency claim.
+Before any staging or production deployment:
 
-Keeper and Ponder also require explicit sandbox mode when `NODE_ENV=production`. This prevents a test worker from
-being mistaken for a verified production worker.
-
-## Verified EU bundle
-
-Before setting `TOKENLESS_SANDBOX_MODE=false`:
-
-1. Provision new resources rather than reusing or relocating the existing US sandbox: EU Postgres and backups, a
+1. Provision new resources rather than reusing or relocating preview resources: EU Postgres and backups, a
    private EU Blob store, managed EU KMS, EU log sink, EU keeper, and EU Ponder.
 2. Record every provider resource ID and exact region in the environment variables named by the manifest. Do not put
    credentials or connection strings in the manifest.
@@ -44,8 +35,8 @@ Before setting `TOKENLESS_SANDBOX_MODE=false`:
    edit. Update the checked digest in the same reviewed change.
 6. Select one approved managed provider (`aws-kms`, `gcp-kms`, or `azure-key-vault`), connect its wrap/unwrap adapter
    to the provider-neutral vault boundary, and set its regional resource identifier. The repository supplies the
-   boundary and fail-closed checks, but setting the provider name alone does not create or verify a live adapter. A
-   local provider or `TOKENLESS_ARTIFACT_MASTER_KEY` is permitted only in the explicit sandbox.
+   boundary and fail-closed checks, but setting the provider name alone does not create or verify a live adapter.
+   Local test keys and `TOKENLESS_ARTIFACT_MASTER_KEY` are test-fixture inputs only and are forbidden in hosted builds.
 7. Have the release approver sign the 32-byte digest with the dedicated Ed25519 manifest-approval key. Store the
    public key and base64url signature as `TOKENLESS_EU_MANIFEST_SIGNING_PUBLIC_KEY` and
    `TOKENLESS_EU_MANIFEST_SIGNATURE`; keep the private key outside the application deployment.
@@ -60,9 +51,11 @@ before hosted migrations run.
 
 ## Claim and rollback gate
 
-`EU-hosted RateLoop data plane` remains unavailable until the live checks above have dated evidence and legal/security
-approval. Even then, disclose the global processor/control-plane and public-chain exceptions; do not claim `EU-only`,
-`EU sovereign`, or strict residency from region configuration alone.
+Do not publish an `EU-hosted RateLoop data plane` claim until the live checks above have dated evidence and
+legal/security approval. Approved customer copy must describe the implemented boundary directly and must not link to a
+separate public limitations or trust-status page. Do not claim `EU-only`, `EU sovereign`, or strict residency from region
+configuration alone; processor/control-plane and public-chain disclosures belong in the applicable privacy and legal
+notices.
 
 If a runtime identity or region differs from the signed manifest, stop admission and workers, preserve evidence, and
 roll back only the isolated tokenless services. Never point the tokenless app at `rateloop.ai`, the legacy Vercel

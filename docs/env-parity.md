@@ -13,8 +13,9 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 
 Historical v1 and v2 artifacts must not be used by a live service. The current v3 bundle was deployed at block
 `44132668`; the isolated Vercel app, Ponder, and keeper must be pinned to its complete deployment key. This is a
-Base Sepolia test-profile bundle with unrestricted test currency. The web app remains in explicit sandbox mode until
-the non-sandbox secret/provider bundle, managed signer roles, workers, and paid end-to-end path are verified.
+Base Sepolia test-profile bundle with unrestricted test currency, not a production release target. Staging must use the
+same persisted assignment, payment, settlement, and result machinery as production. Hosted startup must fail closed until
+the signed resource/provider bundle, managed signer roles, workers, and paid end-to-end path are verified.
 
 Services must fail closed if their chain, addresses, start block, or deployment key disagree. Do not fall back to Base mainnet, an unversioned deployment JSON, or the former production services.
 
@@ -28,22 +29,22 @@ Services must fail closed if their chain, addresses, start block, or deployment 
 
 ## EU-first deployment contract
 
-The non-sandbox production target has one immutable home region, `eu`. Application functions are pinned to Vercel
+The hosted production target has one immutable home region, `eu`. Application functions are pinned to Vercel
 `fra1`; Ponder and keeper are pinned to Railway `europe-west4-drams3a`. The machine-readable resource inventory,
 integrity digest, signature boundary, and exact readiness procedure are in
 [`tokenless-eu-deployment-runbook.md`](tokenless-eu-deployment-runbook.md).
 
-The current hosted test deployment remains an explicit sandbox and does not establish an EU-hosted or residency
-claim. Non-sandbox startup is refused unless the signed manifest identifies matching EU Postgres, private Blob, KMS,
-logs, backups, auth, support-access, worker, and approved external-processor evidence.
+Every hosted startup is refused unless the signed manifest identifies matching EU Postgres, private Blob, KMS, logs,
+backups, auth, support-access, worker, and approved external-processor evidence. Region settings alone are not release
+evidence; the deployment must also pass the dated runtime and operational checks in the runbook.
 
 ## Required production variables
 
 Next.js:
 
 - `APP_URL`, `NEXT_PUBLIC_APP_URL`
-- explicit `TOKENLESS_SANDBOX_MODE`; non-sandbox additionally requires the complete signed EU manifest variables from
-  `packages/nextjs/.env.example`
+- the complete signed EU manifest variables from `packages/nextjs/.env.example`; hosted releases have no simulation
+  bypass
 - server-only `BETTER_AUTH_SECRET`; email OTP additionally requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL`
 - `TOKENLESS_EMAIL_DELIVERY_REGION=eu-west-1` plus approved processor/transfer evidence; Resend's account metadata and
   logs remain in the US even when mail is dispatched from Ireland
@@ -68,14 +69,14 @@ Next.js:
   `STRIPE_WEBHOOK_SECRET`, and `STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID`
 - dedicated `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY` (32-byte base64url or hex) and
   `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION`, with no public key variant
-- explicit tokenless sandbox flags only when deliberately running the permanent test sandbox
 
 Better Auth callback and passkey origins must allow only local development and `rateloop-tokenless.vercel.app`; never
 add `rateloop.ai`. If optional thirdweb wallet creation is enabled, configure its custom-JWT audience and the exact
 tokenless JWKS URL, and restrict its browser origins to the same isolated hosts.
 
 Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
-human-assurance APIs or enabling live mode. Isolated Vercel production builds apply and verify pending journal entries
+human-assurance APIs or enabling a hosted release. The current journal runs from `0000` through
+`0047_agent_oauth_device_authorization.sql`. Isolated Vercel production builds apply and verify pending journal entries
 before compiling; preview and local builds never mutate a database. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 

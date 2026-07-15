@@ -38,19 +38,34 @@ retries are idempotent; other claimants are rejected. The agent completes the fl
 non-mutating `rateloop_verify_connection`; connection verification never creates or evaluates a review opportunity. The
 public four-tool handoff MCP remains separate and unchanged.
 
-## Implementation status — 13 July 2026
+**Concise progressive-disclosure UX amendment — 15 July 2026:** the accepted
+[concise product plan](tokenless-concise-product-ux-plan-2026-07-15.md) supersedes earlier screen-composition,
+always-visible-tab, and large-form recommendations where they conflict. A new workspace shows one next action:
+**Connect an agent**. Connection progress and success replace that surface; agent registry, review behavior, groups,
+evaluations, billing, and autonomous publishing appear only after their prerequisite exists and the user requests the
+capability. Backend privacy, authorization, budget, eligibility, and settlement controls remain enforced, but internal
+hashes, schema taxonomies, and protocol terminology are not exposed merely because the backend supports them. The
+six-checkbox data-classification UI is removed; visibility, public-material declaration, and private-sensitivity
+enforcement are normalized as separate dimensions. Every signed-in and public surface follows the same rule: one primary
+task, safe defaults, secondary explanation on demand, and technical detail in Docs.
 
-Phases 1-4 are implemented in the `tokenless` package graph: greenfield contracts and invariants; tokenless-only ABIs,
-Ponder and keeper; RateLoop-owned browser sessions with Base Account authentication/funding; B2B workspaces and API keys; prepaid, wallet, and x402 chain
-execution; pre-round moderation; paid eligibility and epoch-bound vouchers; per-round vote/payout keys with encrypted
-user-controlled recovery; sponsored commits; transparency analytics; signed webhooks; and the funder/rater journeys.
-A disposable Base Sepolia v2 deployment was completed at block `44090502`, producing deployment key
-`tokenless-v2:84532:0x465174830061bdaf829567b3253b5001e1d885f5:0x9fdd25d3bc526c5dddfb34cf629ab1f70736a9e3:0x3fb8d0b01d4101bf7038f7d103f35c307dce0d42`.
-The generated package and isolated Vercel app, Ponder, and keeper are aligned on that complete key, but this disposable
-deployment is not a release target and must not be promoted. Before further hosted publication, staging must use dedicated
-persistence, the real assignment/payment/settlement/result path, testnet assets where appropriate, and the complete
-production-shaped secret/provider bundle. Any later fund-core change invalidates this disposable bundle and requires the
-same atomic redeployment procedure. Phase 5 audit/bounty/mainnet hardening remains intentionally open.
+## Implementation status — 15 July 2026
+
+Phases 1-4 are implemented in the `tokenless` package graph: greenfield contracts and invariants; tokenless-only ABIs;
+Ponder and keeper; Better Auth browser sessions and opaque RateLoop principals; B2B workspaces; payment execution;
+pre-round moderation; paid eligibility and epoch-bound vouchers; per-round vote and payout keys with user-controlled
+recovery; sponsored commits; transparency analytics; and agent OAuth. The ordered application migration journal currently
+runs through `0047_agent_oauth_device_authorization.sql`.
+
+The current disposable Base Sepolia v3 bundle was deployed at block `44132668`, producing deployment key
+`tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9`.
+Generated contract exports, Ponder, and keeper identify that complete bundle. It is a disposable Base Sepolia test-profile
+deployment, not a production release target. No further hosted release may use deterministic or in-memory simulation:
+staging and production must use dedicated persistence and the real assignment, payment, settlement, and result path.
+Release remains fail-closed until managed signing, paid-assignment settlement, every migration through `0047`, the signed
+EU resource/provider bundle, and a deployment-pinned paid end-to-end exercise are complete. Any later fund-core change
+invalidates this bundle and requires the same atomic redeployment procedure. Phase 5 audit, bounty, and mainnet hardening
+remain open.
 
 ## Execution philosophy: build-first
 
