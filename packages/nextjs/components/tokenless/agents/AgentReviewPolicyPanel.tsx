@@ -1,6 +1,13 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type ReviewPolicyAgentChoice,
+  findBoundAgentVersion,
+  listUnboundAgentVersions,
+  reviewPolicySectionIsVisible,
+  versionHasPolicy,
+} from "./agentReviewPolicyPresentation";
 import type {
   ManagedReviewPolicy,
   ReviewAudience,
@@ -8,12 +15,7 @@ import type {
   ReviewPolicyMode,
 } from "~~/lib/tokenless/reviewPolicyManagement";
 
-type AgentChoice = {
-  agentId: string;
-  displayName: string;
-  versions: Array<{ versionId: string; versionNumber: number; displayName: string }>;
-};
-type PolicyRegistry = { canManage: boolean; agents: AgentChoice[]; policies: ManagedReviewPolicy[] };
+type PolicyRegistry = { canManage: boolean; agents: ReviewPolicyAgentChoice[]; policies: ManagedReviewPolicy[] };
 
 type PolicyDraft = {
   agentId: string;
@@ -104,18 +106,6 @@ function draftForPolicy(policy: ManagedReviewPolicy): PolicyDraft {
   };
 }
 
-function versionIsBound(registry: PolicyRegistry, versionId: string, exceptPolicyId?: string | null) {
-  return registry.policies.some(policy => policy.agentVersionId === versionId && policy.policyId !== exceptPolicyId);
-}
-
-function firstUnboundVersion(registry: PolicyRegistry) {
-  for (const agent of registry.agents) {
-    const version = agent.versions.find(entry => !versionIsBound(registry, entry.versionId));
-    if (version) return { agentId: agent.agentId, versionId: version.versionId };
-  }
-  return null;
-}
-
 export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string }) {
   const [registry, setRegistry] = useState<PolicyRegistry | null>(null);
   const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
@@ -125,6 +115,7 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
 
   const loadPolicies = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
     if (!selectedWorkspaceId) {
@@ -141,10 +132,11 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
     setRegistry(body);
     setDraft(current => {
       const currentAvailable =
-        current.agentVersionId && !versionIsBound(body, current.agentVersionId)
+        current.agentVersionId && !versionHasPolicy(body, current.agentVersionId)
           ? { agentId: current.agentId, versionId: current.agentVersionId }
           : null;
-      const selected = currentAvailable ?? firstUnboundVersion(body);
+      const first = listUnboundAgentVersions(body)[0];
+      const selected = currentAvailable ?? (first ? { agentId: first.agentId, versionId: first.versionId } : null);
       return { ...current, agentId: selected?.agentId ?? "", agentVersionId: selected?.versionId ?? "" };
     });
   }, []);
@@ -165,7 +157,7 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
       }
     })();
     return () => controller.abort();
-  }, [loadPolicies, workspaceId]);
+  }, [loadPolicies, retryVersion, workspaceId]);
 
   function updateDraft<Key extends keyof PolicyDraft>(key: Key, value: PolicyDraft[Key]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -173,12 +165,19 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
 
   function selectAgent(agentId: string) {
     const agent = registry?.agents.find(entry => entry.agentId === agentId);
-    const version = agent?.versions.find(entry => !registry || !versionIsBound(registry, entry.versionId));
+    const version = agent?.versions.find(entry => !registry || !versionHasPolicy(registry, entry.versionId));
     setDraft(current => ({
       ...current,
       agentId,
       agentVersionId: version?.versionId ?? "",
     }));
+  }
+
+  function selectPolicyTarget(versionId: string) {
+    if (!registry) return;
+    const target = listUnboundAgentVersions(registry).find(entry => entry.versionId === versionId);
+    if (!target) return;
+    setDraft(current => ({ ...current, agentId: target.agentId, agentVersionId: target.versionId }));
   }
 
   async function savePolicy(event: FormEvent<HTMLFormElement>) {
@@ -268,15 +267,55 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
     }
   }
 
+  if (loading && !registry) return null;
+
+  if (error && !registry) {
+    return (
+      <div className="rounded-lg bg-red-400/10 p-4 text-sm text-red-100" role="alert">
+        <p>{error}</p>
+        <button
+          type="button"
+          className="btn btn-sm mt-3 border border-red-100/20 bg-transparent"
+          onClick={() => {
+            setError(null);
+            setRetryVersion(current => current + 1);
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!registry || !reviewPolicySectionIsVisible(registry)) return null;
+
+  const unboundVersions = listUnboundAgentVersions(registry);
+  const selectedTarget =
+    unboundVersions.find(entry => entry.versionId === draft.agentVersionId) ?? unboundVersions[0] ?? null;
+
+  function toggleCreateEditor() {
+    if (!selectedTarget) return;
+    setShowForm(current => !current);
+    setEditingPolicyId(null);
+    setDraft({
+      ...INITIAL_DRAFT,
+      agentId: selectedTarget.agentId,
+      agentVersionId: selectedTarget.versionId,
+    });
+  }
+
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Human feedback</p>
-          <h2 className="mt-2 text-2xl font-semibold">Review policy and adaptive coverage</h2>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
+            Agent-level feedback
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold">Human review policy by agent version</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Decide when each immutable agent version asks humans for feedback. Stable agreement can reduce review
-            volume, but critical risk, missing metadata, the maximum gap, and the production floor keep sampling on.
+            Each policy applies to one immutable version of one agent, not every agent in this workspace. Stable
+            agreement can reduce review volume, but critical risk, missing metadata, the maximum gap, and the production
+            floor keep sampling on.
           </p>
         </div>
 
@@ -294,23 +333,36 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
           Critical-risk or incomplete opportunities require review in always, rules, and adaptive modes. Manual mode is
           advisory by definition. Editing creates a new version and restarts new scopes at calibration.
         </p>
-        <button
-          type="button"
-          className="rateloop-gradient-action mt-5 px-5"
-          disabled={loading || !registry || !firstUnboundVersion(registry)}
-          onClick={() => {
-            const selected = registry ? firstUnboundVersion(registry) : null;
-            setShowForm(current => !current);
-            setEditingPolicyId(null);
-            setDraft({
-              ...INITIAL_DRAFT,
-              agentId: selected?.agentId ?? "",
-              agentVersionId: selected?.versionId ?? "",
-            });
-          }}
-        >
-          {showForm && !editingPolicyId ? "Close policy editor" : "Create review policy"}
-        </button>
+        {unboundVersions.length > 0 && selectedTarget ? (
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+            {unboundVersions.length > 1 ? (
+              <label className="min-w-72 text-sm text-base-content/60">
+                Agent version without a policy
+                <select
+                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={selectedTarget.versionId}
+                  onChange={event => selectPolicyTarget(event.target.value)}
+                >
+                  {unboundVersions.map(target => (
+                    <option key={target.versionId} value={target.versionId}>
+                      {target.agentDisplayName} · v{target.versionNumber} · {target.versionDisplayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button type="button" className="rateloop-gradient-action px-5" onClick={toggleCreateEditor}>
+              {showForm && !editingPolicyId
+                ? "Close policy editor"
+                : `Create policy for ${selectedTarget.agentDisplayName} · v${selectedTarget.versionNumber}`}
+            </button>
+          </div>
+        ) : registry.agents.length > 0 ? (
+          <p className="mt-5 rounded-lg bg-white/[0.04] p-3 text-sm text-base-content/60">
+            Every active agent version already has a review policy. Use Edit as new version on the relevant policy
+            below.
+          </p>
+        ) : null}
       </section>
 
       {showForm ? (
@@ -333,7 +385,7 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
                     .filter(
                       agent =>
                         editingPolicyId ||
-                        agent.versions.some(version => !registry || !versionIsBound(registry, version.versionId)),
+                        agent.versions.some(version => !registry || !versionHasPolicy(registry, version.versionId)),
                     )
                     .map(agent => (
                       <option key={agent.agentId} value={agent.agentId}>
@@ -348,12 +400,14 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
                   className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                   value={draft.agentVersionId}
                   onChange={event => updateDraft("agentVersionId", event.target.value)}
+                  disabled={Boolean(editingPolicyId)}
                   required
                 >
                   {registry?.agents
                     .find(agent => agent.agentId === draft.agentId)
                     ?.versions.filter(
-                      version => !registry || !versionIsBound(registry, version.versionId, editingPolicyId),
+                      version =>
+                        Boolean(editingPolicyId) || !registry || !versionHasPolicy(registry, version.versionId),
                     )
                     .map(version => (
                       <option key={version.versionId} value={version.versionId}>
@@ -516,54 +570,63 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
         </section>
       ) : null}
 
-      {loading ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading review policies…
+      {registry.agents.length === 0 && registry.policies.length > 0 ? (
+        <div className="rounded-lg border border-amber-200/20 bg-amber-200/[0.06] p-4 text-sm text-amber-50">
+          No active agent is registered, but existing policies remain visible for audit and may still be bound to a live
+          integration. Disable a policy only after confirming its connection is no longer operating.
         </div>
       ) : null}
-      {!loading && registry?.agents.length === 0 ? (
+      {registry.agents.length > 0 && registry.policies.length === 0 ? (
         <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55">
-          Register or connect an active agent before creating its review policy.
-        </div>
-      ) : null}
-      {!loading && registry?.agents.length && registry.policies.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55">
-          No review policy is active. The agent has no workspace-approved feedback behavior yet.
+          No review policy is active for these agent versions yet.
         </div>
       ) : null}
 
       <div className="space-y-4">
-        {registry?.policies.map(policy => {
-          const agent = registry.agents.find(entry => entry.agentId === policy.agentId);
+        {registry.policies.map(policy => {
+          const { agent, version } = findBoundAgentVersion(registry, policy);
           return (
             <article key={`${policy.policyId}:${policy.version}`} className="surface-card rounded-2xl p-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-xl font-semibold">{agent?.displayName ?? policy.agentId}</h3>
+                    <h3 className="text-xl font-semibold">
+                      {version?.displayName ?? agent?.displayName ?? policy.agentId}
+                    </h3>
+                    {version ? (
+                      <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
+                        agent v{version.versionNumber}
+                      </span>
+                    ) : null}
                     <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">{policy.mode}</span>
                     <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
                       {policy.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
                     </span>
-                    <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">policy v{policy.version}</span>
+                    <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
+                      policy version {policy.version}
+                    </span>
                   </div>
-                  <p className="mt-2 font-mono text-xs text-base-content/40">{policy.policyId}</p>
+                  <p className="mt-2 font-mono text-xs text-base-content/40">
+                    {policy.policyId} · {policy.agentVersionId}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="btn border-0 bg-white/[0.08]"
-                    disabled={busy}
-                    onClick={() => {
-                      setDraft(draftForPolicy(policy));
-                      setEditingPolicyId(policy.policyId);
-                      setShowForm(true);
-                      setStatus(null);
-                      setError(null);
-                    }}
-                  >
-                    Edit as new version
-                  </button>
+                  {agent ? (
+                    <button
+                      type="button"
+                      className="btn border-0 bg-white/[0.08]"
+                      disabled={busy}
+                      onClick={() => {
+                        setDraft(draftForPolicy(policy));
+                        setEditingPolicyId(policy.policyId);
+                        setShowForm(true);
+                        setStatus(null);
+                        setError(null);
+                      }}
+                    >
+                      Edit as new version
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="btn border border-red-300/20 bg-red-300/[0.06] text-red-100"

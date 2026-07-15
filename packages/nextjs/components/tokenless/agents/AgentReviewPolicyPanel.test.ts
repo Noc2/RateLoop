@@ -14,5 +14,18 @@ test("review policy UI explains adaptive coverage, immutable edits, and honest h
   assert.match(source, /Editing creates a new version/);
   assert.match(source, /MCP transport alone does not provide that guarantee/);
   assert.match(source, /Edit as new version/);
+  assert.match(source, /Human review policy by agent version/);
+  assert.match(source, /one immutable version of one agent, not every agent in this workspace/);
+  assert.match(
+    source,
+    /Create policy for \$\{selectedTarget\.agentDisplayName\} · v\$\{selectedTarget\.versionNumber\}/,
+  );
+  assert.match(source, /Every active agent version already has a review policy/);
+  assert.match(source, /existing policies remain visible for audit/);
+  assert.match(source, /disabled=\{Boolean\(editingPolicyId\)\}/);
+  assert.match(source, /if \(loading && !registry\) return null/);
+  assert.match(source, /reviewPolicySectionIsVisible\(registry\)/);
+  assert.match(source, />\s*Retry\s*</);
+  assert.doesNotMatch(source, /disabled=\{loading \|\| !registry/);
   assert.match(page, /<AgentWorkspacePanels\s*\/>/);
 });
