@@ -4,6 +4,7 @@ import test from "node:test";
 
 const signIn = readFileSync(new URL("./BetterAuthSignIn.tsx", import.meta.url), "utf8");
 const wallets = readFileSync(new URL("./WalletBindingsClient.tsx", import.meta.url), "utf8");
+const walletSettings = readFileSync(new URL("../../app/(app)/settings/wallets/page.tsx", import.meta.url), "utf8");
 const privacy = readFileSync(new URL("../../app/(public)/legal/privacy/page.tsx", import.meta.url), "utf8");
 
 test("account sign-in is Better Auth first and explicitly creates no wallet", () => {
@@ -20,6 +21,8 @@ test("wallet setup is explicit, purpose-bound, and supports thirdweb plus self-c
   assert.match(wallets, /Connect existing wallet/);
   assert.match(wallets, /signMessage/);
   assert.match(wallets, /never grants access to your RateLoop account/);
+  assert.match(walletSettings, /findAuthSession/);
+  assert.match(walletSettings, /redirect\("\/sign-in\?returnTo=%2Fsettings%2Fwallets"\)/);
 });
 
 test("privacy copy separates account identity, thirdweb processing, and public-chain linkability", () => {

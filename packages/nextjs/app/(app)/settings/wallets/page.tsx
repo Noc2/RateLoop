@@ -1,12 +1,19 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { WalletBindingsClient } from "~~/components/auth/WalletBindingsClient";
+import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Wallets | RateLoop",
   description: "Optionally bind a purpose-scoped funding, payout, or recovery wallet.",
 };
 
-export default function WalletSettingsPage() {
+export default async function WalletSettingsPage() {
+  const cookieStore = await cookies();
+  const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
+  if (!session) redirect("/sign-in?returnTo=%2Fsettings%2Fwallets");
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-16">
       <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Account settings</p>
