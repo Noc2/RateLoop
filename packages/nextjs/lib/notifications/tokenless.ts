@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import "server-only";
-import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 
 export const TOKENLESS_NOTIFICATION_KEYS = [
@@ -40,7 +40,7 @@ type Row = Record<string, unknown>;
 
 function principalAddress(value: string) {
   try {
-    return getAddress(value).toLowerCase();
+    return normalizeAccountSubject(value);
   } catch {
     throw new Error("Account address is invalid.");
   }
