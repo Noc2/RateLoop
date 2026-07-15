@@ -16,22 +16,35 @@ const howItWorksSteps = [
 
 const whyItWorksFeatures = [
   {
-    title: "Independent humans",
-    body: "Eligible reviewers answer without seeing early responses.",
-    color: "#03CEA4",
-    href: "/docs/tech-stack#proof-of-human",
-  },
-  {
-    title: "Blind by design",
-    body: "Commit-reveal keeps answers sealed until the round closes.",
-    color: "#EF476F",
-    href: "/docs/tech-stack#commit-reveal",
-  },
-  {
-    title: "Auditable settlement",
-    body: "Base records the evidence needed to recompute settlement.",
+    title: "Agent-native",
+    body: "MCP Adapter handoffs and x402 funding turn one agent request into a scoped human panel.",
     color: "#359EEE",
-    href: "/docs/smart-contracts#tokenless-panel",
+    links: [
+      ["MCP Adapter", "/docs/tech-stack#mcp-adapter"],
+      ["x402", "/docs/tech-stack#x402-usdc"],
+    ],
+  },
+  {
+    title: "Verified and blind",
+    body: "Proof of Human, audience policies, and commit-reveal keep admission explicit and early answers sealed.",
+    color: "#03CEA4",
+    links: [
+      ["Proof of Human", "/docs/tech-stack#proof-of-human"],
+      ["Audience Policies", "/docs/tech-stack#audience-policies"],
+      ["Commit-Reveal", "/docs/tech-stack#commit-reveal"],
+      ["drand/tlock", "/docs/tech-stack#drand-tlock"],
+    ],
+  },
+  {
+    title: "Useful signal, auditable pay",
+    body: "RBTS and Surprisingly Popular reward informative reports; Base + USDC makes settlement recomputable.",
+    color: "#EF476F",
+    links: [
+      ["RBTS", "/docs/tech-stack#robust-bayesian-truth-serum"],
+      ["Surprisingly Popular", "/docs/tech-stack#surprisingly-popular"],
+      ["Base + USDC", "/docs/tech-stack#base-usdc"],
+      ["Fund Core", "/docs/smart-contracts#tokenless-panel"],
+    ],
   },
 ] as const;
 
@@ -137,13 +150,18 @@ export default function TokenlessLandingPage() {
                 </span>
                 <h3 className="mt-3 text-[1.45rem] font-bold leading-tight sm:text-[1.65rem]">{feature.title}</h3>
                 <p className="mt-4 text-base leading-7 text-base-content/60">{feature.body}</p>
-                <Link
-                  href={feature.href}
-                  prefetch={false}
-                  className="mt-auto pt-5 text-sm font-semibold text-base-content underline decoration-base-content/30 underline-offset-4"
-                >
-                  See evidence <span aria-hidden="true">→</span>
-                </Link>
+                <div className="mt-auto flex flex-wrap gap-2 pt-5">
+                  {feature.links.map(([label, href]) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      prefetch={false}
+                      className="rounded-lg border border-base-content/15 bg-base-content/[0.06] px-3 py-2 text-xs font-semibold text-base-content/70 transition-colors hover:border-base-content/30 hover:text-base-content"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </div>
               </article>
             ))}
           </div>

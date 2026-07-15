@@ -36,17 +36,38 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /src="\/videos\/rateloop-promo\.mp4"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);
   assert.match(html, /Why It/);
-  assert.match(html, /Independent humans/);
-  assert.match(html, /Blind by design/);
-  assert.match(html, /Auditable settlement/);
+  assert.match(html, /Agent-native/);
+  assert.match(html, /Verified and blind/);
+  assert.match(html, /Useful signal, auditable pay/);
+  for (const term of [
+    "MCP Adapter",
+    "x402",
+    "Proof of Human",
+    "Audience Policies",
+    "Commit-Reveal",
+    "drand/tlock",
+    "RBTS",
+    "Surprisingly Popular",
+    "Base + USDC",
+    "Fund Core",
+  ]) {
+    assert.match(html, new RegExp(term.replace(/[+]/g, "\\+")));
+  }
   for (const href of [
+    "/docs/tech-stack#mcp-adapter",
+    "/docs/tech-stack#x402-usdc",
     "/docs/tech-stack#proof-of-human",
+    "/docs/tech-stack#audience-policies",
     "/docs/tech-stack#commit-reveal",
+    "/docs/tech-stack#drand-tlock",
+    "/docs/tech-stack#robust-bayesian-truth-serum",
+    "/docs/tech-stack#surprisingly-popular",
+    "/docs/tech-stack#base-usdc",
     "/docs/smart-contracts#tokenless-panel",
   ]) {
     assert.match(html, new RegExp(`href="${href}"`));
   }
-  assert.equal(html.match(/See evidence/g)?.length, 3);
+  assert.doesNotMatch(html, /See evidence/);
   assert.doesNotMatch(html, /Privacy and Security with Clear Limits/i);
   assert.match(html, /Pricing, Kept/);
   assert.match(html, /Start free with 25 decisions each month/);
