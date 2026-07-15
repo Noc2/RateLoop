@@ -34,3 +34,35 @@ test("Better Auth is self-hosted at the isolated origin with email providers dis
   assert.equal(response.status, 200);
   assert.equal(await response.json(), null);
 });
+
+test("email OTP writes a generated verification ID before delivery", async () => {
+  process.env.RESEND_API_KEY = "re_test";
+  process.env.RESEND_FROM_EMAIL = "RateLoop <login@info.rateloop.ai>";
+  __resetBetterAuthForTests();
+
+  const originalFetch = globalThis.fetch;
+  let resendRequests = 0;
+  globalThis.fetch = async input => {
+    assert.equal(input.toString(), "https://api.resend.com/emails");
+    resendRequests += 1;
+    return Response.json({ id: "email_test" });
+  };
+
+  try {
+    const response = await getBetterAuth().handler(
+      new Request("https://rateloop-tokenless.vercel.app/api/auth/better/email-otp/send-verification-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "person@example.com", type: "sign-in" }),
+      }),
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(resendRequests, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.RESEND_API_KEY;
+    delete process.env.RESEND_FROM_EMAIL;
+    __resetBetterAuthForTests();
+  }
+});

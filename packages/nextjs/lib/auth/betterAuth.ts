@@ -2,6 +2,7 @@ import { passkey as passkeyPlugin } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins";
+import { randomUUID } from "node:crypto";
 import "server-only";
 import { getAuthOrigin } from "~~/lib/auth/session";
 import { db } from "~~/lib/db";
@@ -69,7 +70,7 @@ function createRateLoopAuth() {
     },
     advanced: {
       cookiePrefix: "rateloop-identity",
-      database: { generateId: "uuid" },
+      database: { generateId: () => randomUUID() },
       defaultCookieAttributes: {
         httpOnly: true,
         sameSite: "lax",
