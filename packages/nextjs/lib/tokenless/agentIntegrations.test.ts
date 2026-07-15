@@ -6,6 +6,7 @@ import {
   approveAgentPairing,
   authenticateAgentMcpPrincipal,
   createAgentPairing,
+  listAgentConnections,
   rejectAgentPairing,
   revokeAgentIntegration,
   rotateAgentIntegration,
@@ -125,5 +126,41 @@ test("owners can reject an untrusted claim without activating its bearer", async
   assert.deepEqual(
     audit.rows.map(row => row.action),
     ["agent.pairing_created", "agent.pairing_rejected"],
+  );
+});
+
+test("elapsed pairings expire on read and cannot be approved", async () => {
+  const { workspaceId, policy } = await fixture();
+  const issued = await createAgentPairing({ accountAddress: OWNER, workspaceId, origin: "https://tokenless.example" });
+  const provisional = await authenticateAgentMcpPrincipal(`Bearer ${issued.secret}`);
+  assert.equal(provisional.kind, "pairing");
+  if (provisional.kind !== "pairing") return;
+  await submitAgentRegistration({
+    pairing: provisional,
+    registration: {
+      externalId: "expired-agent",
+      displayName: "Expired agent",
+      provider: "unknown",
+      model: "unknown",
+      environment: "production",
+      requestedWorkflowKeys: ["general-assistance"],
+    },
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_pairing_sessions SET expires_at = ? WHERE pairing_id = ?",
+    args: [new Date(Date.now() - 1_000), issued.pairing.pairingId],
+  });
+
+  const listed = await listAgentConnections({ accountAddress: OWNER, workspaceId });
+  assert.equal(listed.pairings.find(row => row.pairingId === issued.pairing.pairingId)?.status, "expired");
+  await assert.rejects(
+    () =>
+      approveAgentPairing({
+        accountAddress: OWNER,
+        workspaceId,
+        pairingId: issued.pairing.pairingId,
+        body: { publishingPolicyId: policy.policyId, allowedWorkflowKeys: ["general-assistance"] },
+      }),
+    /expired/,
   );
 });

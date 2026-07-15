@@ -250,6 +250,30 @@ export async function createAgentPairing(input: { accountAddress: string; worksp
 
 export async function listAgentConnections(input: { accountAddress: string; workspaceId: string }) {
   await management(input.accountAddress, input.workspaceId);
+  const now = new Date();
+  const expired = await dbClient.execute({
+    sql: `UPDATE tokenless_agent_pairing_sessions
+          SET status = 'expired'
+          WHERE workspace_id = ? AND status IN ('open','claimed') AND expires_at <= ?
+          RETURNING pairing_id`,
+    args: [input.workspaceId, now],
+  });
+  await Promise.all(
+    expired.rows.map(row =>
+      appendAuditEvent({
+        action: "agent.pairing_expired",
+        actorKind: "system",
+        actorReference: "agent-connection-expiry",
+        assuranceMethod: "system_clock",
+        purpose: "agent_connection",
+        reason: "pairing_deadline_elapsed",
+        result: "success",
+        targetId: text(row as Row, "pairing_id")!,
+        targetKind: "agent_pairing",
+        workspaceId: input.workspaceId,
+      }),
+    ),
+  );
   const [pairings, integrations] = await Promise.all([
     dbClient.execute({
       sql: "SELECT * FROM tokenless_agent_pairing_sessions WHERE workspace_id = ? ORDER BY created_at DESC",
@@ -576,12 +600,20 @@ export async function approveAgentPairing(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const now = new Date();
     const result = await client.query(
-      "SELECT * FROM tokenless_agent_pairing_sessions WHERE workspace_id = $1 AND pairing_id = $2 AND status = 'claimed' FOR UPDATE",
-      [input.workspaceId, input.pairingId],
+      "SELECT * FROM tokenless_agent_pairing_sessions WHERE workspace_id = $1 AND pairing_id = $2 AND status = 'claimed' AND expires_at > $3 FOR UPDATE",
+      [input.workspaceId, input.pairingId, now],
     );
     const pairing = result.rows[0] as Row | undefined;
-    if (!pairing) throw new TokenlessServiceError("Claimed pairing not found.", 404, "agent_pairing_not_found");
+    if (!pairing) {
+      await client.query(
+        `UPDATE tokenless_agent_pairing_sessions SET status = 'expired'
+         WHERE workspace_id = $1 AND pairing_id = $2 AND status IN ('open','claimed') AND expires_at <= $3`,
+        [input.workspaceId, input.pairingId, now],
+      );
+      throw new TokenlessServiceError("Claimed pairing not found or expired.", 404, "agent_pairing_not_found");
+    }
     const registration = normalizeRegistration({
       externalId: body.externalId ?? pairing.external_id,
       displayName: body.displayName ?? pairing.display_name,
