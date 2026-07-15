@@ -2,81 +2,63 @@ import Link from "next/link";
 import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
-import { TRUST_CLAIM_BY_KEY } from "~~/content/trustClaims";
-
-const homepageTrustCopy = [
-  TRUST_CLAIM_BY_KEY["wallet-independent-account"].statement,
-  TRUST_CLAIM_BY_KEY["private-artifact-encryption"].statement,
-  TRUST_CLAIM_BY_KEY["eu-release-gate"].statement,
-  TRUST_CLAIM_BY_KEY["integrity-chained-audit"].statement,
-  TRUST_CLAIM_BY_KEY["public-chain-limits"].statement,
-].join(" ");
 
 const howItWorksSteps = [
-  [
-    "01",
-    "Agent asks",
-    "An AI agent sends the question, its suggestion, audience, timing, and review policy.",
-    "#359EEE",
-  ],
-  [
-    "02",
-    "Humans answer",
-    "Invited or public-network humans answer independently. Public work pays USDC; internal work can stay unpaid.",
-    "#03CEA4",
-  ],
+  ["01", "Agent asks", "An agent sends one focused question and chooses who should review it.", "#359EEE"],
+  ["02", "Humans answer", "Eligible reviewers answer independently without seeing early responses.", "#03CEA4"],
   [
     "03",
-    "Review adapts",
-    "RateLoop measures human agreement, disagreement, drift, latency, and cost so review can reduce only when evidence supports it.",
+    "Evidence returns",
+    "RateLoop returns the verdict, reasons, and settlement evidence to the workflow.",
     "#EF476F",
   ],
 ] as const;
 
 const whyItWorksFeatures = [
   {
-    title: "Built for AI Workflows",
-    body: "Agents can draft approval-bound browser handoffs or use a scoped workspace policy. Agents ask; human reviewers provide the judgment.",
+    title: "Agent-Native",
+    body: "Request human review through MCP, the SDK, or a scoped workspace connection.",
     color: "#359EEE",
     links: [
-      ["Agents & MCP", "/docs/ai"],
+      ["MCP Adapter", "/docs/tech-stack#mcp-adapter"],
+      ["x402", "/docs/tech-stack#x402-usdc"],
       ["SDK", "/docs/sdk"],
     ],
   },
   {
-    title: "Proof-of-Human Panels",
-    body: "RateLoop-network reviewers enroll with World ID 4 Proof of Human. Blinded, correlation-diversified assignments reduce duplicate and crowd-following risk; invited and hybrid panels remain separate in the evidence.",
+    title: "Proof of Human",
+    body: "World ID-backed network panels add a uniqueness signal before assignments are issued.",
     color: "#03CEA4",
     links: [
-      ["Review Flow", "/docs/how-it-works"],
-      ["Panel Integrity", "/docs/tech-stack"],
+      ["Proof of Human", "/docs/tech-stack#proof-of-human"],
+      ["Audience Policies", "/docs/tech-stack#audience-policies"],
     ],
   },
   {
-    title: "Bayesian Reporting Incentives",
-    body: "Accepted paid work receives fixed USDC plus a bounded Robust Bayesian Truth Serum bonus. A separate, platform-funded Surprisingly Popular bounty rewards answers that outperform the panel's own predictions; neither changes the verdict or acts as a truth oracle.",
+    title: "Blind by Design",
+    body: "Commit-reveal keeps answers sealed until the round closes; drand/tlock opens them on schedule.",
     color: "#EF476F",
     links: [
-      ["Scoring & Incentives", "/docs/tech-stack"],
-      ["Fund Core", "/docs/smart-contracts"],
+      ["Commit-Reveal", "/docs/tech-stack#commit-reveal"],
+      ["drand/tlock", "/docs/tech-stack#drand-tlock"],
+    ],
+  },
+  {
+    title: "Paid for Useful Signal",
+    body: "Accepted work earns fixed USDC; RBTS and Surprisingly Popular reward informative reports.",
+    color: "#FFC43D",
+    links: [
+      ["RBTS", "/docs/tech-stack#robust-bayesian-truth-serum"],
+      ["Surprisingly Popular", "/docs/tech-stack#surprisingly-popular"],
     ],
   },
   {
     title: "Auditable Settlement",
-    body: "Commitments, economic terms, scoring, compensation, refunds, and settlement can be verified. The customer still owns the final decision.",
-    color: "#FFC43D",
-    links: [
-      ["Smart Contracts", "/docs/smart-contracts"],
-      ["Decision Evidence", "/docs/how-it-works"],
-    ],
-  },
-  {
-    title: "Privacy and Security with Clear Limits",
-    body: homepageTrustCopy,
+    body: "Base records commitments, scoring, refunds, compensation, and claims for recomputation.",
     color: "#359EEE",
     links: [
-      ["Trust", "/trust"],
-      ["Privacy Notice", "/legal/privacy"],
+      ["Base + USDC", "/docs/tech-stack#base-usdc"],
+      ["Fund Core", "/docs/smart-contracts#tokenless-panel"],
     ],
   },
 ] as const;

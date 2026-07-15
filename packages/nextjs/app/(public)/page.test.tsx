@@ -10,7 +10,6 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 test("landing page presents the tokenless human-assurance story", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  process.env.TOKENLESS_SANDBOX_MODE = "true";
   const { default: HomePage } = await import("./page");
   const html = renderToStaticMarkup(<HomePage />).replace(/\s+/g, " ");
 
@@ -31,32 +30,37 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /How It/);
   assert.match(html, /Agent asks/);
   assert.match(html, /Humans answer/);
-  assert.match(html, /Review adapts/);
-  assert.match(html, /Public work pays USDC/i);
-  assert.match(html, /human agreement, disagreement, drift, latency, and cost/i);
+  assert.match(html, /Evidence returns/);
+  assert.match(html, /without seeing early responses/i);
+  assert.match(html, /verdict, reasons, and settlement evidence/i);
   assert.match(html, /poster="\/videos\/rateloop-promo-poster\.jpg"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.mp4"/);
   assert.match(html, /src="\/videos\/rateloop-promo\.vtt"/);
   assert.match(html, /Why It/);
-  assert.match(html, /Built for AI Workflows/);
-  assert.match(html, /Proof-of-Human Panels/);
-  assert.match(html, /World ID 4 Proof of Human/);
-  assert.match(html, /correlation-diversified assignments/);
-  assert.match(html, /Bayesian Reporting Incentives/);
-  assert.match(html, /Robust Bayesian Truth Serum bonus/);
-  assert.match(html, /platform-funded Surprisingly Popular bounty/);
+  assert.match(html, /Agent-Native/);
+  assert.match(html, /Proof of Human/);
+  assert.match(html, /World ID-backed network panels add a uniqueness signal/);
+  assert.match(html, /Blind by Design/);
+  assert.match(html, /Commit-reveal keeps answers sealed/);
+  assert.match(html, /Paid for Useful Signal/);
+  assert.match(html, /Accepted work earns fixed USDC/);
   assert.match(html, /Auditable Settlement/);
-  assert.match(html, /Privacy and Security with Clear Limits/);
-  assert.match(html, /RateLoop account access uses an opaque principal and does not require or create a wallet\./);
-  assert.match(html, /Private artifacts are encrypted before storage\./);
-  assert.match(html, /Non-sandbox startup refuses mixed-region resources and missing EU deployment evidence\./);
-  assert.match(html, /integrity-chained, workspace-exportable audit records\./);
-  assert.match(html, /Public-chain commitments and settlement records remain visible and cannot be erased\./);
-  assert.match(html, /Agents ask; human reviewers provide the judgment/i);
-  assert.match(html, /href="\/docs\/tech-stack"/);
-  assert.match(html, /href="\/docs\/smart-contracts"/);
-  assert.match(html, /href="\/legal\/privacy"/);
-  assert.match(html, /href="\/trust"/);
+  assert.match(html, /Base records commitments, scoring, refunds, compensation, and claims/);
+  for (const href of [
+    "/docs/tech-stack#mcp-adapter",
+    "/docs/tech-stack#x402-usdc",
+    "/docs/tech-stack#proof-of-human",
+    "/docs/tech-stack#audience-policies",
+    "/docs/tech-stack#commit-reveal",
+    "/docs/tech-stack#drand-tlock",
+    "/docs/tech-stack#robust-bayesian-truth-serum",
+    "/docs/tech-stack#surprisingly-popular",
+    "/docs/tech-stack#base-usdc",
+    "/docs/smart-contracts#tokenless-panel",
+  ]) {
+    assert.match(html, new RegExp(`href="${href}"`));
+  }
+  assert.doesNotMatch(html, /Privacy and Security with Clear Limits|Non-sandbox startup|\/trust|trust registry/i);
   assert.match(html, /Pricing, Kept/);
   assert.match(html, /25 decisions \/ month/);
   assert.match(html, /250 decisions \/ month/);
@@ -78,7 +82,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /GitHub Copilot/);
   assert.match(html, /Gemini CLI/);
   assert.match(html, /OpenClaw/);
-  assert.match(html, /href="\/docs\/ai"/);
   assert.match(html, /Common/);
   assert.equal(html.match(/<details/g)?.length, 6);
   assert.ok(html.indexOf('id="how-it-works"') < html.indexOf('id="why-it-works"'));
