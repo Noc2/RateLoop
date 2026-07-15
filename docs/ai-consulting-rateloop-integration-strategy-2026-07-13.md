@@ -245,7 +245,7 @@ For each pilot:
 8. Let the named client owner decide to ship, revise, or stop.
 9. Preserve the accepted cases as a versioned regression suite.
 
-Never mix customer-invited, independent external, and simulated raters under one generic “human verified” label. The source and qualification of the reviewers are part of the result.
+Never mix customer-invited, independent external, and internal reviewers under one generic “human verified” label. The source and qualification of the reviewers are part of the result.
 
 ### Define independence honestly
 
@@ -257,7 +257,7 @@ Every client evaluation should therefore use a signed manifest that records:
 - who implemented the candidate;
 - who selected the baseline and candidate cases;
 - who wrote and approved the rubric and acceptance threshold;
-- whether reviewers were external, customer-invited, internal, or simulated;
+- whether reviewers were external, customer-invited, or internal;
 - who operated the run and interpreted the result; and
 - the named client owner who made the go, revise, or stop decision.
 

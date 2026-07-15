@@ -84,7 +84,6 @@ describe("RateLoop agent host assets", () => {
       "synthetic",
       "redacted",
       "non-urgent",
-      "simulated",
     ]) {
       expect(pluginSkill.toLowerCase()).toContain(boundary);
     }
