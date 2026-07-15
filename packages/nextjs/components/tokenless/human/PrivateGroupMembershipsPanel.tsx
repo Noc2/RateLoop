@@ -28,7 +28,6 @@ type PrivateGroupMembership = {
   policy: {
     defaultCompensation?: "unpaid" | "paid";
     worldIdRequired?: boolean;
-    retentionDays?: number;
   };
 };
 

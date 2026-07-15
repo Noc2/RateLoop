@@ -6,7 +6,6 @@ type Workspace = { workspaceId: string; name: string; role: string };
 type GroupPolicy = {
   defaultCompensation?: "unpaid" | "paid";
   worldIdRequired?: boolean;
-  retentionDays?: number;
   exportAllowed?: boolean;
   notificationDefaults?: { assignmentAvailable?: boolean };
 };
@@ -94,7 +93,6 @@ export function PrivateGroupsPanel() {
   const [purpose, setPurpose] = useState("");
   const [compensation, setCompensation] = useState<"unpaid" | "paid">("unpaid");
   const [worldIdRequired, setWorldIdRequired] = useState(false);
-  const [retentionDays, setRetentionDays] = useState("30");
   const [exportAllowed, setExportAllowed] = useState(false);
   const [assignmentNotifications, setAssignmentNotifications] = useState(true);
 
@@ -230,7 +228,6 @@ export function PrivateGroupsPanel() {
             policy: {
               defaultCompensation: compensation,
               worldIdRequired,
-              retentionDays: Number(retentionDays),
               exportAllowed,
               assignmentNotifications,
             },
@@ -425,19 +422,7 @@ export function PrivateGroupsPanel() {
                 required
               />
             </label>
-            <label className="text-sm text-base-content/60">
-              Retention period (days)
-              <input
-                type="number"
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                min={1}
-                max={3650}
-                value={retentionDays}
-                onChange={event => setRetentionDays(event.target.value)}
-                required
-              />
-            </label>
-            <fieldset className="space-y-3 rounded-lg border border-white/10 p-4 text-sm text-base-content/65">
+            <fieldset className="space-y-3 rounded-lg border border-white/10 p-4 text-sm text-base-content/65 sm:col-span-2">
               <legend className="px-1 font-semibold text-base-content/80">Policy defaults</legend>
               <label className="flex items-center gap-3">
                 <input
@@ -528,7 +513,7 @@ export function PrivateGroupsPanel() {
                 {group.name}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">{group.purpose}</p>
-              <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
                 <div>
                   <dt className="text-xs text-base-content/45">Compensation</dt>
                   <dd className="mt-1 capitalize">{group.policy.defaultCompensation ?? "unpaid"}</dd>
@@ -536,10 +521,6 @@ export function PrivateGroupsPanel() {
                 <div>
                   <dt className="text-xs text-base-content/45">World ID</dt>
                   <dd className="mt-1">{group.policy.worldIdRequired ? "Required" : "Optional"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-base-content/45">Retention</dt>
-                  <dd className="mt-1">{group.policy.retentionDays ?? 30} days</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-base-content/45">Policy version</dt>

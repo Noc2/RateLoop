@@ -23,7 +23,6 @@ export type PrivateGroupPolicyInput = {
   worldIdRequired?: boolean;
   allowedProjectIds?: string[];
   dataClassifications?: string[];
-  retentionDays?: number;
   exportAllowed?: boolean;
   assignmentNotifications?: boolean;
 };
@@ -279,12 +278,11 @@ function normalizePolicy(input: PrivateGroupPolicyInput = {}) {
     throw new TokenlessServiceError("defaultCompensation is invalid.", 400, "invalid_private_group");
   }
   return {
-    schemaVersion: "rateloop.private-group-policy.v1" as const,
+    schemaVersion: "rateloop.private-group-policy.v2" as const,
     defaultCompensation: compensation,
     worldIdRequired: input.worldIdRequired ?? false,
     allowedProjectIds: normalizedIds(input.allowedProjectIds, "allowedProjectIds"),
     dataClassifications: normalizedClassifications(input.dataClassifications),
-    retentionDays: integer(input.retentionDays ?? 30, "retentionDays", 1, 3650),
     exportAllowed: input.exportAllowed ?? false,
     notificationDefaults: { assignmentAvailable: input.assignmentNotifications ?? true },
   };
@@ -314,16 +312,15 @@ export async function createPrivateGroup(input: CreatePrivateGroupInput) {
     await client.query(
       `INSERT INTO tokenless_private_group_policy_versions
        (group_id, version, default_compensation, world_id_required, allowed_project_ids_json,
-        data_classifications_json, retention_days, export_allowed, notification_defaults_json,
+        data_classifications_json, export_allowed, notification_defaults_json,
         policy_hash, policy_json, created_by, created_at)
-       VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+       VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         groupId,
         policy.defaultCompensation,
         policy.worldIdRequired,
         canonicalJson(policy.allowedProjectIds),
         canonicalJson(policy.dataClassifications),
-        policy.retentionDays,
         policy.exportAllowed,
         canonicalJson(policy.notificationDefaults),
         frozenPolicyHash,
@@ -388,9 +385,9 @@ export async function createPrivateGroupPolicyVersion(input: {
     await client.query(
       `INSERT INTO tokenless_private_group_policy_versions
        (group_id, version, default_compensation, world_id_required, allowed_project_ids_json,
-        data_classifications_json, retention_days, export_allowed, notification_defaults_json,
+        data_classifications_json, export_allowed, notification_defaults_json,
         policy_hash, policy_json, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [
         input.groupId,
         version,
@@ -398,7 +395,6 @@ export async function createPrivateGroupPolicyVersion(input: {
         policy.worldIdRequired,
         canonicalJson(policy.allowedProjectIds),
         canonicalJson(policy.dataClassifications),
-        policy.retentionDays,
         policy.exportAllowed,
         canonicalJson(policy.notificationDefaults),
         frozenPolicyHash,

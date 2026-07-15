@@ -274,6 +274,13 @@
       "when": 1783994400000,
       "tag": "0038_agent_pairing_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783998000000,
+      "tag": "0039_remove_private_group_retention",
+      "breakpoints": true
     }
   ]
 }

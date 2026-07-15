@@ -60,13 +60,13 @@ test("private groups have immutable policy versions scoped to workspace managers
     accountAddress: OWNER,
     workspaceId,
     groupId: group.groupId,
-    policy: { defaultCompensation: "paid", worldIdRequired: true, retentionDays: 90 },
+    policy: { defaultCompensation: "paid", worldIdRequired: true },
   });
   assert.equal(updated.version, 2);
   assert.notEqual(updated.policyHash, group.policyHash);
 
   const versions = await dbClient.execute({
-    sql: `SELECT version, default_compensation, world_id_required, policy_hash
+    sql: `SELECT version, default_compensation, world_id_required, policy_hash, policy_json
           FROM tokenless_private_group_policy_versions WHERE group_id = ? ORDER BY version`,
     args: [group.groupId],
   });
@@ -76,6 +76,10 @@ test("private groups have immutable policy versions scoped to workspace managers
       [1, "unpaid", false],
       [2, "paid", true],
     ],
+  );
+  assert.equal(
+    versions.rows.some(row => String(row.policy_json).includes("retentionDays")),
+    false,
   );
 
   await assert.rejects(

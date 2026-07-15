@@ -275,7 +275,7 @@ Groups are workspace-owned reviewer cohorts. A group record includes:
 - allowed projects and data classifications;
 - optional World ID or qualification requirements;
 - member count, active assignments, and notification defaults;
-- retention policy and export permissions.
+- export permissions; retention remains a project-level artifact policy rather than a group-membership setting.
 
 Owners can create invitations as a token or link with:
 
@@ -289,7 +289,7 @@ credential. Default to single-use invitations; allow bounded multi-use invitatio
 onboarding, with short expiry and immediate revocation. Show a group preview before acceptance, but no private content.
 
 A removed member immediately loses feed visibility, artifact leases, response rights, result access, and future
-notifications. Existing submitted responses remain in the evidence record under the retention policy.
+notifications. Existing submitted responses remain in the evidence record under the project's retention policy.
 
 #### Evaluations
 
