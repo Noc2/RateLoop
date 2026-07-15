@@ -48,6 +48,33 @@ const whyItWorksFeatures = [
   },
 ] as const;
 
+const questions = [
+  [
+    "What Does RateLoop Do?",
+    "It gathers blind human reviews of AI work and returns a clear result with reasons. Your team makes the final decision.",
+  ],
+  [
+    "What Can I Evaluate?",
+    "Support replies, marketing, consulting work, product behavior, internal copilots, and other AI work with a clear quality bar.",
+  ],
+  [
+    "Who Reviews the Work?",
+    "Your invited reviewers, RateLoop's World ID-backed network, or clearly separated hybrid panels.",
+  ],
+  [
+    "Can an Agent Run Reviews Automatically?",
+    "Yes. Once you approve its connection and limits, an agent can request reviews and receive results without a click on every run. You control the project, audience, data rules, and budget.",
+  ],
+  [
+    "Can I Use Private Data?",
+    "Only submit material you are authorized to share. Minimize it, redact unnecessary sensitive data, and remember that assigned reviewers and RateLoop may read what you submit.",
+  ],
+  [
+    "What Does the Blockchain Record?",
+    "Funding terms, accepted commitments, scoring inputs, and settlement evidence. Private context stays off-chain, and the chain record does not replace your final judgment.",
+  ],
+] as const;
+
 function SectionTitle({
   number,
   children,
@@ -180,6 +207,41 @@ export default function TokenlessLandingPage() {
             </p>
             <Link href="/pricing" className="rateloop-gradient-action shrink-0 px-5">
               See pricing
+            </Link>
+          </div>
+        </section>
+
+        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
+
+        <section id="faq" className="relative z-10 w-full">
+          <SectionTitle number="04" gradient="Questions">
+            Common
+          </SectionTitle>
+          <div className="grid grid-cols-1 gap-x-12 gap-y-4 xl:grid-cols-2">
+            {questions.map(([question, answer]) => (
+              <details
+                key={question}
+                className="group border-l border-base-content/20 py-2 pl-5 transition-colors hover:border-base-content/40 open:border-base-content/50"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-left [&::-webkit-details-marker]:hidden">
+                  <span className="text-lg font-semibold sm:text-xl">{question}</span>
+                  <span
+                    aria-hidden="true"
+                    className="text-xl text-base-content/50 transition-transform group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </summary>
+                <p className="pb-5 pr-4 text-base leading-7 text-base-content/60">{answer}</p>
+              </details>
+            ))}
+          </div>
+          <div className="mt-12 text-center">
+            <Link
+              href="/docs"
+              className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
+            >
+              Read the docs
             </Link>
           </div>
         </section>

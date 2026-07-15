@@ -82,9 +82,17 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /OpenClaw/);
   assert.match(html, /href="\/docs\/ai"/);
   assert.doesNotMatch(html, /Agent setup|Copy setup|role="dialog"/);
-  assert.doesNotMatch(html, /Common|What Does RateLoop Do\?|<details/);
+  assert.match(html, /id="faq"/);
+  assert.match(html, /Common/);
+  assert.match(html, /What Does RateLoop Do\?/);
+  assert.match(html, /Can an Agent Run Reviews Automatically\?/);
+  assert.match(html, /approve its connection and limits/i);
+  assert.match(html, /What Does the Blockchain Record\?/);
+  assert.equal(html.match(/<details/g)?.length, 6);
+  assert.match(html, /href="\/docs"/);
   assert.ok(html.indexOf('id="how-it-works"') < html.indexOf('id="why-it-works"'));
   assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Pricing, Kept"));
+  assert.ok(html.indexOf("Pricing, Kept") < html.indexOf('id="faq"'));
   assert.doesNotMatch(
     html,
     /Test AI-enabled work with blinded human panels|decision-evidence workflow|Agent-Ready|test deployment/i,
@@ -100,5 +108,5 @@ test("landing page presents the tokenless human-assurance story", async () => {
     .replace(/&[a-zA-Z0-9#]+;/g, " ")
     .trim()
     .split(/\s+/).length;
-  assert.ok(visibleWords <= 250, `landing page should stay under 250 visible words; found ${visibleWords}`);
+  assert.ok(visibleWords <= 390, `landing page should stay under 390 visible words; found ${visibleWords}`);
 });
