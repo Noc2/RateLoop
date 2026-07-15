@@ -25,9 +25,9 @@ const SESSION = {
   wallets: { funding: null, payout: null, recovery: null },
 };
 
-test("enterprise session labels prefer a name and otherwise identify the opaque principal", () => {
+test("enterprise session labels prefer a name without exposing the opaque principal", () => {
   assert.equal(sessionLabel(SESSION), "Buyer Example");
-  assert.equal(sessionLabel({ ...SESSION, displayName: null }), "Account 901234");
+  assert.equal(sessionLabel({ ...SESSION, displayName: null }), "Your account");
 });
 
 test("a verified RateLoop session renders independently of optional wallet state", () => {
@@ -38,8 +38,20 @@ test("a verified RateLoop session renders independently of optional wallet state
 
   assert.match(html, />Signed in</);
   assert.match(html, />Buyer Example</);
+  assert.match(html, /href="\/human\?tab=profile"/);
+  assert.match(html, /aria-label="Open profile for Buyer Example"/);
   assert.match(html, /aria-label="Sign out Buyer Example"/);
   assert.doesNotMatch(html, />Sign In</);
+});
+
+test("the signed-in fallback is understandable and does not leak the internal principal id", () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const html = renderToStaticMarkup(
+    <AuthenticatedSessionControl compact session={{ ...SESSION, displayName: null }} onSignOut={() => undefined} />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, />Your account</);
+  assert.doesNotMatch(html, /rlp_|901234/);
 });
 
 test("the signed-out control links to provider-neutral sign-in", () => {

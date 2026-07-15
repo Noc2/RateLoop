@@ -32,7 +32,7 @@ export function rateLoopConnectButtonStyle(compact: boolean) {
 export function sessionLabel(session: BrowserSessionResponse | null) {
   if (!session) return null;
   if (session.displayName) return session.displayName;
-  return `Account ${session.principalId.slice(-6)}`;
+  return "Your account";
 }
 
 export function AuthenticatedSessionControl({
@@ -47,23 +47,56 @@ export function AuthenticatedSessionControl({
   const label = sessionLabel(session) ?? "RateLoop account";
   return (
     <div
-      className={`flex w-full items-center justify-between gap-2 rounded-lg border border-base-content/15 bg-base-content/[0.06] ${
-        compact ? "px-2.5 py-2" : "px-3 py-2.5"
+      className={`flex w-full items-center gap-2 rounded-lg border border-base-content/15 bg-base-content/[0.06] ${
+        compact ? "p-2" : "p-2.5"
       }`}
     >
-      <div className="min-w-0">
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Signed in</span>
-        <span className="block truncate text-sm font-semibold text-base-content" title={label}>
-          {label}
+      <Link
+        href="/human?tab=profile"
+        className="group flex min-w-0 flex-1 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
+        aria-label={`Open profile for ${label}`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-base-content/15 bg-base-content/[0.07] text-base-content/70 transition-colors group-hover:text-base-content">
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <path d="M20 21a8 8 0 0 0-16 0" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
         </span>
-      </div>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-base-content" title={label}>
+            {label}
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] text-base-content/55">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            Signed in
+          </span>
+        </span>
+      </Link>
       <button
         type="button"
-        className="btn btn-ghost btn-xs shrink-0 px-2 text-base-content/70 hover:text-base-content"
+        className="btn btn-ghost btn-sm h-8 min-h-8 w-8 shrink-0 px-0 text-base-content/55 hover:text-base-content"
         aria-label={`Sign out ${label}`}
+        title="Sign out"
         onClick={() => void onSignOut()}
       >
-        Sign Out
+        <svg
+          aria-hidden="true"
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path d="M10 17l5-5-5-5M15 12H3" />
+          <path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5" />
+        </svg>
       </button>
     </div>
   );
