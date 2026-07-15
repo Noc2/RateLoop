@@ -2,10 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
+import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroup, createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -475,6 +475,13 @@ export async function confirmWorkspaceSetupAgent(input: {
   } finally {
     client.release();
   }
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    event: "agent_details_confirmed",
+    revision: expectedRevision + 1,
+    occurredAt: now,
+  });
   return { confirmedAgentVersionId: confirmedVersionId, revision: expectedRevision + 1 };
 }
 
@@ -500,6 +507,13 @@ export async function configureWorkspaceSetupReviews(input: {
   if (result.rowCount !== 1) {
     throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
   }
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    event: "review_behavior_confirmed",
+    revision: expectedRevision + 1,
+    occurredAt: now,
+  });
   return { review, revision: expectedRevision + 1 };
 }
 
@@ -592,6 +606,13 @@ export async function configureWorkspaceSetupPeople(input: {
   if (updated.rowCount !== 1) {
     throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
   }
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    event: invitation ? "reviewer_invitation_issued" : "reviewers_deferred",
+    revision: expectedRevision + 1,
+    occurredAt: now,
+  });
   return { groupId: group.groupId, invitation, revision: expectedRevision + 1 };
 }
 
@@ -744,18 +765,12 @@ export async function completeWorkspaceAgentSetup(input: {
   } finally {
     client.release();
   }
-  await appendAuditEvent({
-    action: "onboarding.workspace_setup_completed",
-    actorKind: "principal",
-    actorReference: access.actor,
-    assuranceMethod: "authorized_browser_session",
-    metadata: { revision: expectedRevision + 1 },
-    purpose: "product_onboarding",
-    reason: "workspace_administrator_completed_setup",
-    result: "success",
-    targetId: input.workspaceId,
-    targetKind: "workspace_onboarding",
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: access.actor,
     workspaceId: input.workspaceId,
+    event: "workspace_setup_completed",
+    revision: expectedRevision + 1,
+    occurredAt: now,
   });
   return {
     destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,

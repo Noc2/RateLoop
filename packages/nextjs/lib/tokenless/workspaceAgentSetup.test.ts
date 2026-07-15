@@ -7,6 +7,7 @@ import {
   claimAgentConnectionIntent,
   verifyAgentConnection,
 } from "~~/lib/tokenless/agentConnectionIntents";
+import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
@@ -156,6 +157,14 @@ test("setup binds one verified connection and completes without publishing or sp
   assert.equal(audiencePolicy.reviewerSource, "private_invited");
   assert.equal(audiencePolicy.autonomousAccess, false);
   assert.equal(audiencePolicy.group.groupId, people.groupId);
+  const funnel = await loadWorkspaceOnboardingFunnel(workspaceId);
+  assert.deepEqual(
+    funnel.events
+      .map(event => event.event)
+      .filter(event => !["workspace_created", "connection_claimed", "connected"].includes(event)),
+    ["agent_details_confirmed", "review_behavior_confirmed", "reviewers_deferred", "workspace_setup_completed"],
+  );
+  assert.doesNotMatch(JSON.stringify(funnel), /Setup workspace|Setup client|pgrp_|confidential/u);
 });
 
 test("setup rejects future steps, stale revisions, and unavailable autonomous lanes", async () => {

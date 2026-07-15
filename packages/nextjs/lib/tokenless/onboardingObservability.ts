@@ -1,5 +1,5 @@
 import "server-only";
-import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
+import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -22,6 +22,11 @@ export const ONBOARDING_FUNNEL_EVENTS = [
   "approval_required",
   "connected",
   "connection_failed",
+  "agent_details_confirmed",
+  "review_behavior_confirmed",
+  "reviewer_invitation_issued",
+  "reviewers_deferred",
+  "workspace_setup_completed",
 ] as const;
 
 export type OnboardingFunnelEventName = (typeof ONBOARDING_FUNNEL_EVENTS)[number];
@@ -45,6 +50,23 @@ export type OnboardingFunnelEvent = Readonly<{
 export type ConnectionMessageCopiedPayload = Readonly<{
   event: "connection_message_copied";
 }>;
+
+export type WorkspaceSetupFunnelEventName = Extract<
+  OnboardingFunnelEventName,
+  | "agent_details_confirmed"
+  | "review_behavior_confirmed"
+  | "reviewer_invitation_issued"
+  | "reviewers_deferred"
+  | "workspace_setup_completed"
+>;
+
+const SETUP_EVENT_ACTIONS: Record<WorkspaceSetupFunnelEventName, string> = {
+  agent_details_confirmed: "onboarding.agent_details_confirmed",
+  review_behavior_confirmed: "onboarding.review_behavior_confirmed",
+  reviewer_invitation_issued: "onboarding.reviewer_invitation_issued",
+  reviewers_deferred: "onboarding.reviewers_deferred",
+  workspace_setup_completed: "onboarding.workspace_setup_completed",
+};
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -128,6 +150,35 @@ export async function recordConnectionMessageCopied(input: {
   return { event: "connection_message_copied" as const, recordedAt: occurredAt.toISOString() };
 }
 
+export async function recordWorkspaceSetupFunnelEvent(input: {
+  accountAddress: string;
+  workspaceId: string;
+  event: WorkspaceSetupFunnelEventName;
+  revision: number;
+  occurredAt?: Date;
+}) {
+  const actor = normalizeAccountSubject(input.accountAddress);
+  if (!Number.isSafeInteger(input.revision) || input.revision < 1) {
+    throw new TokenlessServiceError("Setup revision is invalid.", 400, "invalid_onboarding_event");
+  }
+  const occurredAt = input.occurredAt ?? new Date();
+  await appendAuditEvent({
+    action: SETUP_EVENT_ACTIONS[input.event],
+    actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+    actorReference: actor,
+    assuranceMethod: "authorized_browser_session",
+    metadata: { revision: input.revision },
+    occurredAt,
+    purpose: "product_onboarding",
+    reason: "workspace_agent_setup_progress",
+    result: "success",
+    targetId: input.workspaceId,
+    targetKind: "workspace_onboarding",
+    workspaceId: input.workspaceId,
+  });
+  return { event: input.event, recordedAt: occurredAt.toISOString() };
+}
+
 export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
   const workspace = await dbClient.execute({
     sql: "SELECT created_at FROM tokenless_workspaces WHERE workspace_id = ? LIMIT 1",
@@ -137,7 +188,7 @@ export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
   if (!workspaceCreatedAt) {
     throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
   }
-  const [attemptResult, copiedResult, approvalResult] = await Promise.all([
+  const [attemptResult, copiedResult, approvalResult, setupResult] = await Promise.all([
     dbClient.execute({
       sql: `SELECT intent_id,status,created_at,claimed_at,connected_at,cancelled_at,rejected_at,
                    last_diagnostic_code,last_diagnostic_at,hard_expires_at
@@ -156,6 +207,14 @@ export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
             WHERE workspace_id = ? AND to_status = 'approval_required'
             ORDER BY created_at ASC`,
       args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT action,occurred_at FROM tokenless_audit_events
+            WHERE workspace_id = ? AND action IN (${Object.values(SETUP_EVENT_ACTIONS)
+              .map(() => "?")
+              .join(",")})
+            ORDER BY occurred_at ASC`,
+      args: [workspaceId, ...Object.values(SETUP_EVENT_ACTIONS)],
     }),
   ]);
 
@@ -236,6 +295,21 @@ export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
       attempt: attemptNumbers.get(intentId) ?? null,
       elapsedMs: elapsedMs(startedAt, occurredAt),
       event: "approval_required",
+      occurredAt: occurredAt.toISOString(),
+    });
+  }
+
+  const setupEventByAction = new Map(
+    Object.entries(SETUP_EVENT_ACTIONS).map(([event, action]) => [action, event as WorkspaceSetupFunnelEventName]),
+  );
+  for (const setupRow of setupResult.rows as Row[]) {
+    const event = setupEventByAction.get(rowString(setupRow, "action") ?? "");
+    const occurredAt = rowDate(setupRow, "occurred_at");
+    if (!event || !occurredAt) continue;
+    events.push({
+      attempt: null,
+      elapsedMs: elapsedMs(workspaceCreatedAt, occurredAt),
+      event,
       occurredAt: occurredAt.toISOString(),
     });
   }

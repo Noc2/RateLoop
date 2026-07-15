@@ -3,6 +3,7 @@ import {
   loadWorkspaceOnboardingFunnel,
   parseConnectionMessageCopiedPayload,
   recordConnectionMessageCopied,
+  recordWorkspaceSetupFunnelEvent,
 } from "./onboardingObservability";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
@@ -136,4 +137,32 @@ test("failed attempts expose only category and elapsed time", async () => {
     occurredAt: new Date(startedAt.getTime() + 7_500).toISOString(),
   });
   assert.doesNotMatch(JSON.stringify(funnel), /private-host-detail/u);
+});
+
+test("guided setup events retain only the allowlisted event, revision, and elapsed time", async () => {
+  const workspace = await createWorkspace({ name: "Sensitive setup name", ownerAddress: OWNER });
+  const created = await dbClient.execute({
+    sql: "SELECT created_at FROM tokenless_workspaces WHERE workspace_id = ?",
+    args: [workspace.workspaceId],
+  });
+  const createdAt = new Date(String(created.rows[0]?.created_at));
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: OWNER,
+    workspaceId: workspace.workspaceId,
+    event: "review_behavior_confirmed",
+    revision: 4,
+    occurredAt: new Date(createdAt.getTime() + 5_000),
+  });
+  const funnel = await loadWorkspaceOnboardingFunnel(workspace.workspaceId);
+  const recorded = funnel.events.at(-1);
+  assert.equal(recorded?.attempt, null);
+  assert.equal(recorded?.event, "review_behavior_confirmed");
+  assert.ok((recorded?.elapsedMs ?? 0) >= 4_000 && (recorded?.elapsedMs ?? 0) <= 5_000);
+  const audit = await dbClient.execute({
+    sql: `SELECT action,metadata_json FROM tokenless_audit_events
+          WHERE workspace_id=? AND action='onboarding.review_behavior_confirmed'`,
+    args: [workspace.workspaceId],
+  });
+  assert.deepEqual(audit.rows, [{ action: "onboarding.review_behavior_confirmed", metadata_json: '{"revision":4}' }]);
+  assert.doesNotMatch(JSON.stringify({ funnel, audit: audit.rows }), /Sensitive setup name|agent|email|amount/u);
 });
