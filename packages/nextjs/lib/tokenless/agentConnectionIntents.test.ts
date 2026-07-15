@@ -1,0 +1,199 @@
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, test } from "node:test";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import {
+  SAFE_AGENT_CONNECTION_SCOPES,
+  claimAgentConnectionIntent,
+  createAgentConnectionIntent,
+  getPublicAgentConnectionIntent,
+  listAgentConnectionIntents,
+  verifyAgentConnection,
+} from "~~/lib/tokenless/agentConnectionIntents";
+import { createWorkspace } from "~~/lib/tokenless/productCore";
+
+const OWNER = `rlp_${"a".repeat(24)}`;
+const CLIENT_ID = "rloc_test_client";
+const RESOURCE = "https://rateloop-tokenless.example/api/agent/v1/mcp";
+
+beforeEach(async () => {
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [OWNER, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_clients
+          (client_id,client_name,redirect_uris_json,redirect_uris_digest,token_endpoint_auth_method,
+           grant_types_json,response_types_json,allowed_scopes_json,registration_source,status,created_at,updated_at)
+          VALUES (?, 'Test client', '["http://127.0.0.1/callback"]', ?, 'none',
+                  '["authorization_code","refresh_token"]', '["code"]', ?, 'dynamic', 'active', ?, ?)`,
+    args: [CLIENT_ID, "redirect-digest", JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES), now, now],
+  });
+});
+
+afterEach(() => __setDatabaseResourcesForTests(null));
+
+async function createTokenFamily(tokenFamilyId: string, subjectPrincipalId = OWNER) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_token_families
+          (token_family_id,client_id,subject_principal_id,audience,resource,granted_scopes_json,status,
+           created_at,absolute_expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+    args: [
+      tokenFamilyId,
+      CLIENT_ID,
+      subjectPrincipalId,
+      RESOURCE,
+      RESOURCE,
+      JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES),
+      now,
+      new Date(now.getTime() + 24 * 60 * 60_000),
+    ],
+  });
+  return {
+    tokenFamilyId,
+    clientId: CLIENT_ID,
+    clientName: "Test client",
+    subjectPrincipalId,
+    resource: RESOURCE,
+    scopes: [...SAFE_AGENT_CONNECTION_SCOPES],
+  };
+}
+
+test("one copied fragment intent activates safe access idempotently and verifies without review evidence", async () => {
+  const { workspaceId } = await createWorkspace({ name: "One paste", ownerAddress: OWNER });
+  const issued = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const url = new URL(issued.connectionUrl);
+  assert.match(url.pathname, /^\/connect\/aci_[a-f0-9]{32}$/);
+  assert.equal(url.search, "");
+  assert.match(url.hash, /^#claim=[A-Za-z0-9_-]{43}$/);
+  const stored = await dbClient.execute({
+    sql: "SELECT claim_nonce_hash FROM tokenless_agent_connection_intents WHERE intent_id = ?",
+    args: [issued.intent.intentId],
+  });
+  assert.notEqual(String(stored.rows[0]?.claim_nonce_hash), new URLSearchParams(url.hash.slice(1)).get("claim"));
+
+  const publicIntent = await getPublicAgentConnectionIntent(issued.intent.intentId);
+  assert.equal("workspaceId" in publicIntent, false);
+  assert.equal(publicIntent.status, "issued");
+  const principal = await createTokenFamily("oatf_safe_connection");
+  const first = await claimAgentConnectionIntent({
+    connectionUrl: issued.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal,
+  });
+  assert.equal(first.idempotent, false);
+  assert.equal(first.connection.status, "testing");
+
+  const retry = await claimAgentConnectionIntent({
+    connectionUrl: issued.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal,
+  });
+  assert.equal(retry.idempotent, true);
+  assert.equal(retry.connection.integrationId, first.connection.integrationId);
+
+  const verified = await verifyAgentConnection({
+    principal,
+    integrationId: first.connection.integrationId,
+  });
+  assert.equal(verified.connection.status, "connected");
+  assert.deepEqual(verified.safeAccess, {
+    canCheckReviewRequirement: true,
+    canSpend: false,
+    canPublish: false,
+    canReadPrivateArtifacts: false,
+    canAdministerWorkspace: false,
+  });
+  const opportunities = await dbClient.execute({
+    sql: "SELECT COUNT(*)::integer AS count FROM tokenless_agent_review_opportunities",
+  });
+  assert.equal(Number(opportunities.rows[0]?.count), 0);
+  assert.equal(
+    (await listAgentConnectionIntents({ accountAddress: OWNER, workspaceId })).intents[0]?.status,
+    "connected",
+  );
+});
+
+test("one OAuth token family cannot claim a second workspace", async () => {
+  const firstWorkspace = await createWorkspace({ name: "First", ownerAddress: OWNER });
+  const secondWorkspace = await createWorkspace({ name: "Second", ownerAddress: OWNER });
+  const first = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: firstWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const second = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: secondWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const principal = await createTokenFamily("oatf_one_workspace");
+  await claimAgentConnectionIntent({
+    connectionUrl: first.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal,
+  });
+  await assert.rejects(
+    () =>
+      claimAgentConnectionIntent({
+        connectionUrl: second.connectionUrl,
+        origin: "https://rateloop-tokenless.example",
+        principal,
+      }),
+    (error: unknown) =>
+      Boolean(error && typeof error === "object" && "code" in error && error.code === "workspace_conflict"),
+  );
+});
+
+test("verification fails closed after the hard connection deadline", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Expired verification", ownerAddress: OWNER });
+  const issued = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const principal = await createTokenFamily("oatf_expired_verification");
+  const claimed = await claimAgentConnectionIntent({
+    connectionUrl: issued.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal,
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_connection_intents
+          SET created_at = ?, claim_expires_at = ?, hard_expires_at = ? WHERE intent_id = ?`,
+    args: [
+      new Date(Date.now() - 60 * 60_000),
+      new Date(Date.now() - 30 * 60_000),
+      new Date(Date.now() - 15 * 60_000),
+      issued.intent.intentId,
+    ],
+  });
+
+  await assert.rejects(
+    () =>
+      verifyAgentConnection({
+        principal,
+        integrationId: claimed.connection.integrationId,
+      }),
+    (error: unknown) =>
+      Boolean(error && typeof error === "object" && "code" in error && error.code === "connection_intent_expired"),
+  );
+  const state = await dbClient.execute({
+    sql: `SELECT c.status AS connection_status,i.status AS integration_status
+          FROM tokenless_agent_connection_intents c
+          JOIN tokenless_agent_integrations i ON i.connection_intent_id = c.intent_id
+          WHERE c.intent_id = ?`,
+    args: [issued.intent.intentId],
+  });
+  assert.equal(state.rows[0]?.connection_status, "expired");
+  assert.equal(state.rows[0]?.integration_status, "revoked");
+});
