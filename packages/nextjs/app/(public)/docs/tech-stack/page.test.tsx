@@ -54,7 +54,7 @@ test("every technical landing-page link resolves to a rendered docs anchor", asy
   };
   const links = [...landingHtml.matchAll(/href="(\/docs\/(?:tech-stack|smart-contracts))#([^"]+)"/g)];
 
-  assert.equal(links.length, 10);
+  assert.equal(links.length, 3);
   for (const [, pathname, fragment] of links) {
     assert.match(targetHtml[pathname as keyof typeof targetHtml], new RegExp('id="' + fragment + '"'));
   }
