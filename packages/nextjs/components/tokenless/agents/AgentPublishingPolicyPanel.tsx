@@ -3,8 +3,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-type Workspace = { workspaceId: string; name: string; role: string };
-
 type PublishingPolicy = {
   allowedAdmissionPolicyHashes: string[];
   allowedDataClassifications: string[];
@@ -104,9 +102,7 @@ function audienceLabel(sources: string[]) {
   return "Private invited reviewers";
 }
 
-export function AgentPublishingPolicyPanel() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState("");
+export function AgentPublishingPolicyPanel({ workspaceId }: { workspaceId: string }) {
   const [policies, setPolicies] = useState<PublishingPolicy[]>([]);
   const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
   const [loading, setLoading] = useState(true);
@@ -133,22 +129,9 @@ export function AgentPublishingPolicyPanel() {
     const controller = new AbortController();
     void (async () => {
       setLoading(true);
+      setError(null);
       try {
-        const body = await readJson(
-          await fetch("/api/account/workspaces", {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal: controller.signal,
-          }),
-        );
-        const manageable = ((body.workspaces ?? []) as Workspace[]).filter(
-          workspace => workspace.role === "owner" || workspace.role === "admin",
-        );
-        if (controller.signal.aborted) return;
-        const selectedId = manageable[0]?.workspaceId ?? "";
-        setWorkspaces(manageable);
-        setWorkspaceId(selectedId);
-        await loadPolicies(selectedId, controller.signal);
+        await loadPolicies(workspaceId, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Unable to load publishing policies.");
@@ -158,22 +141,7 @@ export function AgentPublishingPolicyPanel() {
       }
     })();
     return () => controller.abort();
-  }, [loadPolicies]);
-
-  async function selectWorkspace(nextWorkspaceId: string) {
-    setWorkspaceId(nextWorkspaceId);
-    setPolicies([]);
-    setError(null);
-    setStatus(null);
-    setLoading(true);
-    try {
-      await loadPolicies(nextWorkspaceId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load publishing policies.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [loadPolicies, workspaceId]);
 
   function updateDraft<Key extends keyof PolicyDraft>(key: Key, value: PolicyDraft[Key]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -261,39 +229,17 @@ export function AgentPublishingPolicyPanel() {
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
-              Delegated publishing
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold">Put a hard boundary around autonomous agent spend</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              Policies are server-enforced and bound automatically when you approve an agent connection. Audience
-              hashes, reviewer supply, classifications, payment rail, panel size, and USDC caps must all match before an
-              ask is accepted.
-            </p>
-          </div>
-          <label className="min-w-56 text-sm text-base-content/60">
-            Workspace
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={workspaceId}
-              onChange={event => void selectWorkspace(event.target.value)}
-              disabled={loading}
-            >
-              {workspaces.map(workspace => (
-                <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {!loading && workspaces.length === 0 ? (
-          <p className="mt-5 rounded-lg bg-white/[0.04] p-4 text-sm text-base-content/65">
-            Create a workspace in Overview, or ask an owner to grant you an owner/admin role, before managing policies.
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
+            Delegated publishing
           </p>
-        ) : null}
+          <h2 className="mt-2 text-2xl font-semibold">Put a hard boundary around autonomous agent spend</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
+            Policies are server-enforced and bound automatically when you approve an agent connection. Audience hashes,
+            reviewer supply, classifications, payment rail, panel size, and USDC caps must all match before an ask is
+            accepted.
+          </p>
+        </div>
       </section>
 
       {workspaceId ? (

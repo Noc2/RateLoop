@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
 import type { AgentRegistry, AgentVersionInput, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 
-type Workspace = { workspaceId: string; name: string; role: string };
-
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
@@ -20,9 +18,7 @@ function shortAddress(value: string) {
   return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
 }
 
-export function AgentRegistryPanel() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState("");
+export function AgentRegistryPanel({ workspaceId }: { workspaceId: string }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -31,7 +27,7 @@ export function AgentRegistryPanel() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadRegistry = useCallback(async (selectedWorkspaceId: string) => {
+  const loadRegistry = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
     if (!selectedWorkspaceId) {
       setRegistry(null);
       return;
@@ -40,6 +36,7 @@ export function AgentRegistryPanel() {
       await fetch(`/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}/agents`, {
         cache: "no-store",
         credentials: "same-origin",
+        signal,
       }),
     );
     setRegistry(body as unknown as AgentRegistry);
@@ -49,46 +46,19 @@ export function AgentRegistryPanel() {
     const controller = new AbortController();
     void (async () => {
       setLoading(true);
+      setError(null);
       try {
-        const body = await readJson(
-          await fetch("/api/account/workspaces", {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal: controller.signal,
-          }),
-        );
-        const next = (body.workspaces ?? []) as Workspace[];
-        if (controller.signal.aborted) return;
-        setWorkspaces(next);
-        setWorkspaceId(next[0]?.workspaceId ?? "");
-        if (next[0]?.workspaceId) await loadRegistry(next[0].workspaceId);
+        await loadRegistry(workspaceId, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load agent workspaces.");
+          setError(cause instanceof Error ? cause.message : "Unable to load the agent registry.");
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
     return () => controller.abort();
-  }, [loadRegistry]);
-
-  async function selectWorkspace(nextWorkspaceId: string) {
-    setWorkspaceId(nextWorkspaceId);
-    setRegistry(null);
-    setEditingAgent(null);
-    setShowArchived(false);
-    setError(null);
-    setStatus(null);
-    setLoading(true);
-    try {
-      await loadRegistry(nextWorkspaceId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load the agent registry.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [loadRegistry, workspaceId]);
 
   async function createVersion(input: AgentVersionInput) {
     if (!editingAgent) return;
@@ -147,30 +117,13 @@ export function AgentRegistryPanel() {
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent registry</p>
-            <h2 className="mt-2 text-2xl font-semibold">Durable identities and declared model versions</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              Every version is append-only. Human results bind to the version captured when the review was requested,
-              never to a later mutable label.
-            </p>
-          </div>
-          <label className="min-w-56 text-sm text-base-content/60">
-            Workspace
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={workspaceId}
-              onChange={event => void selectWorkspace(event.target.value)}
-              disabled={loading}
-            >
-              {workspaces.map(workspace => (
-                <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent registry</p>
+          <h2 className="mt-2 text-2xl font-semibold">Durable identities and declared model versions</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
+            Every version is append-only. Human results bind to the version captured when the review was requested,
+            never to a later mutable label.
+          </p>
         </div>
         {registry && !registry.canManage ? (
           <p className="mt-5 rounded-lg bg-white/[0.04] p-3 text-sm text-base-content/60">
@@ -202,11 +155,6 @@ export function AgentRegistryPanel() {
       {loading ? (
         <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
           <span className="loading loading-spinner loading-sm mr-2" /> Loading authorized agent metadata…
-        </div>
-      ) : null}
-      {!loading && workspaces.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
-          Create a workspace in Overview before connecting an agent.
         </div>
       ) : null}
       {!loading && registry?.agents.length === 0 ? (

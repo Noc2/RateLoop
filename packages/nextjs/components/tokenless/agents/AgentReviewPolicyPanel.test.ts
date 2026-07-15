@@ -14,5 +14,5 @@ test("review policy UI explains adaptive coverage, immutable edits, and honest h
   assert.match(source, /Editing creates a new version/);
   assert.match(source, /MCP transport alone does not provide that guarantee/);
   assert.match(source, /Edit as new version/);
-  assert.match(page, /<AgentReviewPolicyPanel\s*\/>/);
+  assert.match(page, /<AgentWorkspacePanels\s*\/>/);
 });

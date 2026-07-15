@@ -3,8 +3,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 
-type Workspace = { workspaceId: string; name: string; role: string };
-
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
 
 type AgentPairing = {
@@ -452,9 +450,7 @@ function PairingApprovalCard({
   );
 }
 
-export function AgentConnectionPanel() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState("");
+export function AgentConnectionPanel({ workspaceId }: { workspaceId: string }) {
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
   const [integrations, setIntegrations] = useState<AgentIntegration[]>([]);
   const [publishingPolicies, setPublishingPolicies] = useState<PublishingPolicy[]>([]);
@@ -491,22 +487,10 @@ export function AgentConnectionPanel() {
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const body = await readJson(
-          await fetch("/api/account/workspaces", {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal: controller.signal,
-          }),
-        );
-        const manageable = (responseList(body, "workspaces") as Workspace[]).filter(
-          workspace => workspace.role === "owner" || workspace.role === "admin",
-        );
-        if (controller.signal.aborted) return;
-        const selected = manageable[0]?.workspaceId ?? "";
-        setWorkspaces(manageable);
-        setWorkspaceId(selected);
-        await loadConnectionState(selected, controller.signal);
+        await loadConnectionState(workspaceId, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Unable to load agent connections.");
@@ -516,7 +500,7 @@ export function AgentConnectionPanel() {
       }
     })();
     return () => controller.abort();
-  }, [loadConnectionState]);
+  }, [loadConnectionState, workspaceId]);
 
   const shouldPoll = pairings.some(pairing => pairing.status === "open" || pairing.status === "claimed");
 
@@ -527,24 +511,6 @@ export function AgentConnectionPanel() {
     }, PAIRING_POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [loadConnectionState, shouldPoll, workspaceId]);
-
-  async function selectWorkspace(nextWorkspaceId: string) {
-    setWorkspaceId(nextWorkspaceId);
-    setPairings([]);
-    setIntegrations([]);
-    setPublishingPolicies([]);
-    setReveal(null);
-    setError(null);
-    setStatus(null);
-    setLoading(true);
-    try {
-      await loadConnectionState(nextWorkspaceId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load agent connections.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function generatePairing() {
     if (!workspaceId) return;
@@ -683,31 +649,13 @@ export function AgentConnectionPanel() {
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent connection</p>
-            <h2 className="mt-2 text-2xl font-semibold">Connect an agent to RateLoop</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              Generate a short-lived connection, let the agent describe itself over MCP, then approve its identity,
-              spending boundary, and human-feedback policy. Possessing the pairing secret does not grant workspace
-              access.
-            </p>
-          </div>
-          <label className="min-w-56 text-sm text-base-content/60">
-            Workspace
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={workspaceId}
-              onChange={event => void selectWorkspace(event.target.value)}
-              disabled={loading}
-            >
-              {workspaces.map(workspace => (
-                <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent connection</p>
+          <h2 className="mt-2 text-2xl font-semibold">Connect an agent to RateLoop</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
+            Generate a short-lived connection, let the agent describe itself over MCP, then approve its identity,
+            spending boundary, and human-feedback policy. Possessing the pairing secret does not grant workspace access.
+          </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
@@ -719,11 +667,6 @@ export function AgentConnectionPanel() {
             {busyAction === "create-pairing" ? "Generating…" : "Connect an agent"}
           </button>
         </div>
-        {!loading && workspaces.length === 0 ? (
-          <p className="mt-5 rounded-lg bg-white/[0.04] p-4 text-sm text-base-content/65">
-            Create a workspace in Overview, or ask an owner to grant you owner/admin access, before connecting an agent.
-          </p>
-        ) : null}
       </section>
 
       {reveal ? (

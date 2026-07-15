@@ -9,7 +9,7 @@ test("agent registry UI labels model identity as declared and versions as immuta
   assert.match(source, /Every version is append-only/);
   assert.match(source, /Version history/);
   assert.match(source, /read-only access/);
-  assert.match(source, /setWorkspaceId\(nextWorkspaceId\);\s+setRegistry\(null\);/);
+  assert.match(source, /AgentRegistryPanel\(\{ workspaceId \}: \{ workspaceId: string \}\)/);
   assert.match(form, /Declared provider/);
   assert.match(form, /Saving creates an immutable version/);
   assert.match(source, /Use Connect an agent above/);
@@ -18,7 +18,6 @@ test("agent registry UI labels model identity as declared and versions as immuta
   assert.match(source, /Show archived agents \(\$\{archivedAgentCount\}\)/);
   assert.match(source, /Hide archived agents/);
   assert.match(source, /aria-pressed=\{showArchived\}/);
-  assert.match(source, /setShowArchived\(false\)/);
   assert.match(source, /Archived identities remain available for audit/);
   assert.match(source, /visibleAgents\.map/);
   assert.doesNotMatch(source, /Register agent|Register a durable agent|createAgent/);

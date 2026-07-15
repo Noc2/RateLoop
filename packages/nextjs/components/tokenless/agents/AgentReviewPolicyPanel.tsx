@@ -8,7 +8,6 @@ import type {
   ReviewPolicyMode,
 } from "~~/lib/tokenless/reviewPolicyManagement";
 
-type Workspace = { workspaceId: string; name: string; role: string };
 type AgentChoice = {
   agentId: string;
   displayName: string;
@@ -117,9 +116,7 @@ function firstUnboundVersion(registry: PolicyRegistry) {
   return null;
 }
 
-export function AgentReviewPolicyPanel() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState("");
+export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string }) {
   const [registry, setRegistry] = useState<PolicyRegistry | null>(null);
   const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -156,22 +153,9 @@ export function AgentReviewPolicyPanel() {
     const controller = new AbortController();
     void (async () => {
       setLoading(true);
+      setError(null);
       try {
-        const body = await readJson(
-          await fetch("/api/account/workspaces", {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal: controller.signal,
-          }),
-        );
-        const manageable = ((body.workspaces ?? []) as Workspace[]).filter(
-          workspace => workspace.role === "owner" || workspace.role === "admin",
-        );
-        if (controller.signal.aborted) return;
-        const selectedId = manageable[0]?.workspaceId ?? "";
-        setWorkspaces(manageable);
-        setWorkspaceId(selectedId);
-        await loadPolicies(selectedId, controller.signal);
+        await loadPolicies(workspaceId, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Unable to load review policies.");
@@ -181,25 +165,7 @@ export function AgentReviewPolicyPanel() {
       }
     })();
     return () => controller.abort();
-  }, [loadPolicies]);
-
-  async function selectWorkspace(nextWorkspaceId: string) {
-    setWorkspaceId(nextWorkspaceId);
-    setRegistry(null);
-    setDraft(INITIAL_DRAFT);
-    setEditingPolicyId(null);
-    setShowForm(false);
-    setError(null);
-    setStatus(null);
-    setLoading(true);
-    try {
-      await loadPolicies(nextWorkspaceId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load review policies.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [loadPolicies, workspaceId]);
 
   function updateDraft<Key extends keyof PolicyDraft>(key: Key, value: PolicyDraft[Key]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -305,30 +271,13 @@ export function AgentReviewPolicyPanel() {
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Human feedback</p>
-            <h2 className="mt-2 text-2xl font-semibold">Review policy and adaptive coverage</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              Decide when each immutable agent version asks humans for feedback. Stable agreement can reduce review
-              volume, but critical risk, missing metadata, the maximum gap, and the production floor keep sampling on.
-            </p>
-          </div>
-          <label className="min-w-56 text-sm text-base-content/60">
-            Workspace
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={workspaceId}
-              onChange={event => void selectWorkspace(event.target.value)}
-              disabled={loading}
-            >
-              {workspaces.map(workspace => (
-                <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Human feedback</p>
+          <h2 className="mt-2 text-2xl font-semibold">Review policy and adaptive coverage</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
+            Decide when each immutable agent version asks humans for feedback. Stable agreement can reduce review
+            volume, but critical risk, missing metadata, the maximum gap, and the production floor keep sampling on.
+          </p>
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-4" aria-label="Adaptive review progression">
