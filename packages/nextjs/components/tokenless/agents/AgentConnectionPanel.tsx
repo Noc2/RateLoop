@@ -740,6 +740,13 @@ export function AgentConnectionPanel({
         await navigator.clipboard.writeText(message);
         copied = true;
         setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
+        void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
+          method: "POST",
+          body: JSON.stringify({ event: "connection_message_copied" }),
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+        }).catch(() => undefined);
       } catch {
         setManualConnectionMessage(message);
         setError("Clipboard access was denied. The complete message is selected below for one manual copy.");

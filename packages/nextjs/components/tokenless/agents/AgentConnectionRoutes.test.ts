@@ -10,6 +10,13 @@ const accountItem = readFileSync(
   new URL("../../../app/api/account/workspaces/[workspaceId]/agent-connections/[intentId]/route.ts", import.meta.url),
   "utf8",
 );
+const onboardingEvents = readFileSync(
+  new URL(
+    "../../../app/api/account/workspaces/[workspaceId]/agent-connections/onboarding-events/route.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const publicApi = readFileSync(
   new URL("../../../app/api/agent/v1/connection-intents/[intentId]/route.ts", import.meta.url),
   "utf8",
@@ -27,6 +34,13 @@ test("agent connection intent account routes require browser authentication and 
   assert.match(accountItem, /cancelAgentConnectionIntent/);
   assert.match(accountCollection, /"Cache-Control": "private, no-store"/);
   assert.match(accountItem, /"Cache-Control": "private, no-store"/);
+});
+
+test("onboarding telemetry is authenticated and server-allowlisted", () => {
+  assert.match(onboardingEvents, /requireBrowserSession\(request, \{ mutation: true \}\)/);
+  assert.match(onboardingEvents, /parseConnectionMessageCopiedPayload\(body\)/);
+  assert.match(onboardingEvents, /recordConnectionMessageCopied/);
+  assert.doesNotMatch(onboardingEvents, /SimpleAnalytics|simpleanalytics|messageUrl|workspaceName|agentContent/u);
 });
 
 test("public intent handoff is versioned, non-consuming, and never echoes a fragment", () => {
