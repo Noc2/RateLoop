@@ -20,4 +20,6 @@ test("publishing policy UI is explicit about enforced and separately frozen cont
   assert.match(source, /Select it when approving an agent connection/);
   assert.doesNotMatch(source, /api-keys|Issue bound credential|Issue credential|newToken/);
   assert.doesNotMatch(source, /mock|simulat(?:e|ed) policy/i);
+  assert.match(source, /publishingRevision = 0/);
+  assert.match(source, /onPoliciesChanged\?\.\(\)/);
 });

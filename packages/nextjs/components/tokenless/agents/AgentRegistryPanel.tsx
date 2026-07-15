@@ -18,7 +18,15 @@ function shortAddress(value: string) {
   return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
 }
 
-export function AgentRegistryPanel({ workspaceId }: { workspaceId: string }) {
+export function AgentRegistryPanel({
+  workspaceId,
+  agentRevision = 0,
+  onAgentsChanged,
+}: {
+  workspaceId: string;
+  agentRevision?: number;
+  onAgentsChanged?: () => void;
+}) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -58,7 +66,7 @@ export function AgentRegistryPanel({ workspaceId }: { workspaceId: string }) {
       }
     })();
     return () => controller.abort();
-  }, [loadRegistry, workspaceId]);
+  }, [agentRevision, loadRegistry, workspaceId]);
 
   async function createVersion(input: AgentVersionInput) {
     if (!editingAgent) return;
@@ -78,6 +86,7 @@ export function AgentRegistryPanel({ workspaceId }: { workspaceId: string }) {
         ),
       );
       await loadRegistry(workspaceId);
+      onAgentsChanged?.();
       setEditingAgent(null);
       setStatus("A new immutable agent version was created.");
     } catch (cause) {
@@ -101,6 +110,7 @@ export function AgentRegistryPanel({ workspaceId }: { workspaceId: string }) {
         ),
       );
       await loadRegistry(workspaceId);
+      onAgentsChanged?.();
       setEditingAgent(null);
       setStatus("Agent deactivated. Existing immutable versions remain available for audit.");
     } catch (cause) {

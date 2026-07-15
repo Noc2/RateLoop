@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
 import { AgentPublishingPolicyPanel } from "./AgentPublishingPolicyPanel";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
@@ -23,6 +23,8 @@ export function AgentWorkspacePanels() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [agentRevision, refreshAgents] = useReducer(value => value + 1, 0);
+  const [publishingRevision, refreshPublishingPolicies] = useReducer(value => value + 1, 0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,10 +115,22 @@ export function AgentWorkspacePanels() {
       </section>
 
       <div key={workspaceId} className="space-y-5">
-        {canManage ? <AgentConnectionPanel workspaceId={workspaceId} /> : null}
-        <AgentRegistryPanel workspaceId={workspaceId} />
-        {canManage ? <AgentReviewPolicyPanel workspaceId={workspaceId} /> : null}
-        {canManage ? <AgentPublishingPolicyPanel workspaceId={workspaceId} /> : null}
+        {canManage ? (
+          <AgentConnectionPanel
+            workspaceId={workspaceId}
+            publishingRevision={publishingRevision}
+            onAgentApproved={refreshAgents}
+          />
+        ) : null}
+        <AgentRegistryPanel workspaceId={workspaceId} agentRevision={agentRevision} onAgentsChanged={refreshAgents} />
+        {canManage ? <AgentReviewPolicyPanel workspaceId={workspaceId} agentRevision={agentRevision} /> : null}
+        {canManage ? (
+          <AgentPublishingPolicyPanel
+            workspaceId={workspaceId}
+            publishingRevision={publishingRevision}
+            onPoliciesChanged={refreshPublishingPolicies}
+          />
+        ) : null}
       </div>
     </div>
   );

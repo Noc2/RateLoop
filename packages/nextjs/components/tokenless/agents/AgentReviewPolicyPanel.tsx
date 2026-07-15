@@ -106,7 +106,13 @@ function draftForPolicy(policy: ManagedReviewPolicy): PolicyDraft {
   };
 }
 
-export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string }) {
+export function AgentReviewPolicyPanel({
+  workspaceId,
+  agentRevision = 0,
+}: {
+  workspaceId: string;
+  agentRevision?: number;
+}) {
   const [registry, setRegistry] = useState<PolicyRegistry | null>(null);
   const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -157,7 +163,7 @@ export function AgentReviewPolicyPanel({ workspaceId }: { workspaceId: string })
       }
     })();
     return () => controller.abort();
-  }, [loadPolicies, retryVersion, workspaceId]);
+  }, [agentRevision, loadPolicies, retryVersion, workspaceId]);
 
   function updateDraft<Key extends keyof PolicyDraft>(key: Key, value: PolicyDraft[Key]) {
     setDraft(current => ({ ...current, [key]: value }));

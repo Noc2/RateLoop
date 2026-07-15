@@ -13,10 +13,10 @@ const panelFiles = [
 test("Agents uses one shared workspace selector for every panel", () => {
   assert.match(source, /Manage one workspace at a time/);
   assert.match(source, /below all use this workspace/);
-  assert.match(source, /<AgentConnectionPanel workspaceId=\{workspaceId\}/);
-  assert.match(source, /<AgentRegistryPanel workspaceId=\{workspaceId\}/);
+  assert.match(source, /<AgentConnectionPanel[\s\S]{0,160}workspaceId=\{workspaceId\}/);
+  assert.match(source, /<AgentRegistryPanel[\s\S]{0,160}workspaceId=\{workspaceId\}/);
   assert.match(source, /<AgentReviewPolicyPanel workspaceId=\{workspaceId\}/);
-  assert.match(source, /<AgentPublishingPolicyPanel workspaceId=\{workspaceId\}/);
+  assert.match(source, /<AgentPublishingPolicyPanel[\s\S]{0,160}workspaceId=\{workspaceId\}/);
 
   for (const file of panelFiles) {
     const panel = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
@@ -26,9 +26,19 @@ test("Agents uses one shared workspace selector for every panel", () => {
 
 test("read-only workspaces retain registry access without rendering management panels", () => {
   assert.match(source, /const canManage = workspace\.role === "owner" \|\| workspace\.role === "admin"/);
-  assert.match(source, /\{canManage \? <AgentConnectionPanel/);
-  assert.match(source, /<AgentRegistryPanel workspaceId=\{workspaceId\} \/>/);
+  assert.match(source, /\{canManage \? \([\s\S]{0,40}<AgentConnectionPanel/);
+  assert.match(source, /<AgentRegistryPanel/);
   assert.match(source, /\{canManage \? <AgentReviewPolicyPanel/);
-  assert.match(source, /\{canManage \? <AgentPublishingPolicyPanel/);
+  assert.match(source, /\{canManage \? \([\s\S]{0,40}<AgentPublishingPolicyPanel/);
   assert.match(source, /read-only access to the agent registry/);
+});
+
+test("agent and publishing mutations refresh dependent panels", () => {
+  assert.match(source, /const \[agentRevision, refreshAgents\] = useReducer/);
+  assert.match(source, /const \[publishingRevision, refreshPublishingPolicies\] = useReducer/);
+  assert.match(source, /onAgentApproved=\{refreshAgents\}/);
+  assert.match(source, /onAgentsChanged=\{refreshAgents\}/);
+  assert.match(source, /agentRevision=\{agentRevision\}/);
+  assert.match(source, /onPoliciesChanged=\{refreshPublishingPolicies\}/);
+  assert.match(source, /publishingRevision=\{publishingRevision\}/);
 });

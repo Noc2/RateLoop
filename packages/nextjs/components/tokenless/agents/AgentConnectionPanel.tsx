@@ -237,9 +237,12 @@ function PairingApprovalCard({
   const [declaredModelVersion, setDeclaredModelVersion] = useState(pairing.declaredModelVersion);
   const [declaredDeploymentName, setDeclaredDeploymentName] = useState(pairing.declaredDeploymentName);
   const [environment, setEnvironment] = useState(pairing.environment);
-  const [publishingPolicyId, setPublishingPolicyId] = useState(policies[0]?.policyId ?? "");
+  const [selectedPublishingPolicyId, setSelectedPublishingPolicyId] = useState("");
   const [allowedWorkflows, setAllowedWorkflows] = useState(pairing.requestedWorkflowKeys.join(", "));
   const [localError, setLocalError] = useState<string | null>(null);
+  const publishingPolicyId = policies.some(policy => policy.policyId === selectedPublishingPolicyId)
+    ? selectedPublishingPolicyId
+    : (policies[0]?.policyId ?? "");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -386,7 +389,7 @@ function PairingApprovalCard({
             <select
               className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
               value={publishingPolicyId}
-              onChange={event => setPublishingPolicyId(event.target.value)}
+              onChange={event => setSelectedPublishingPolicyId(event.target.value)}
               required
             >
               <option value="" disabled>
@@ -450,7 +453,15 @@ function PairingApprovalCard({
   );
 }
 
-export function AgentConnectionPanel({ workspaceId }: { workspaceId: string }) {
+export function AgentConnectionPanel({
+  workspaceId,
+  publishingRevision = 0,
+  onAgentApproved,
+}: {
+  workspaceId: string;
+  publishingRevision?: number;
+  onAgentApproved?: () => void;
+}) {
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
   const [integrations, setIntegrations] = useState<AgentIntegration[]>([]);
   const [publishingPolicies, setPublishingPolicies] = useState<PublishingPolicy[]>([]);
@@ -500,7 +511,7 @@ export function AgentConnectionPanel({ workspaceId }: { workspaceId: string }) {
       }
     })();
     return () => controller.abort();
-  }, [loadConnectionState, workspaceId]);
+  }, [loadConnectionState, publishingRevision, workspaceId]);
 
   const shouldPoll = pairings.some(pairing => pairing.status === "open" || pairing.status === "claimed");
 
@@ -556,6 +567,7 @@ export function AgentConnectionPanel({ workspaceId }: { workspaceId: string }) {
         ),
       );
       await loadConnectionState(workspaceId);
+      onAgentApproved?.();
       setStatus("Agent approved. Its credential is now bound to this workspace, immutable version, and policies.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to approve the agent.");

@@ -43,3 +43,9 @@ test("connection credentials are shown once and managed integrations can rotate 
   assert.match(source, /Last seen/);
   assert.match(source, /Rotate credential/);
 });
+
+test("connection approval refreshes agents and newly available publishing policies", () => {
+  assert.match(source, /onAgentApproved\?\.\(\)/);
+  assert.match(source, /publishingRevision/);
+  assert.match(source, /policies\.some\(policy => policy\.policyId === selectedPublishingPolicyId\)/);
+});

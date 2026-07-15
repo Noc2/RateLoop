@@ -102,7 +102,15 @@ function audienceLabel(sources: string[]) {
   return "Private invited reviewers";
 }
 
-export function AgentPublishingPolicyPanel({ workspaceId }: { workspaceId: string }) {
+export function AgentPublishingPolicyPanel({
+  workspaceId,
+  publishingRevision = 0,
+  onPoliciesChanged,
+}: {
+  workspaceId: string;
+  publishingRevision?: number;
+  onPoliciesChanged?: () => void;
+}) {
   const [policies, setPolicies] = useState<PublishingPolicy[]>([]);
   const [draft, setDraft] = useState<PolicyDraft>(INITIAL_DRAFT);
   const [loading, setLoading] = useState(true);
@@ -141,7 +149,7 @@ export function AgentPublishingPolicyPanel({ workspaceId }: { workspaceId: strin
       }
     })();
     return () => controller.abort();
-  }, [loadPolicies, workspaceId]);
+  }, [loadPolicies, publishingRevision, workspaceId]);
 
   function updateDraft<Key extends keyof PolicyDraft>(key: Key, value: PolicyDraft[Key]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -196,6 +204,7 @@ export function AgentPublishingPolicyPanel({ workspaceId }: { workspaceId: strin
         }),
       );
       await loadPolicies(workspaceId);
+      onPoliciesChanged?.();
       setDraft(INITIAL_DRAFT);
       setStatus("Publishing policy created. Select it when approving an agent connection.");
     } catch (cause) {
@@ -218,6 +227,7 @@ export function AgentPublishingPolicyPanel({ workspaceId }: { workspaceId: strin
         ),
       );
       await loadPolicies(workspaceId);
+      onPoliciesChanged?.();
       setStatus("Publishing policy revoked. Existing audit records remain available.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to revoke the publishing policy.");
