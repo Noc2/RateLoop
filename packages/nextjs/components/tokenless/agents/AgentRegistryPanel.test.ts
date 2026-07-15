@@ -24,6 +24,13 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.match(source, /Hide archived/);
   assert.match(source, /aria-pressed=\{showArchived\}/);
   assert.match(source, /visibleAgents\.map/);
+  assert.match(source, /Human assurance/);
+  assert.match(source, /Baseline review coverage/);
+  assert.match(source, /Agent-human agreement/);
+  assert.match(source, /95% lower bound/);
+  assert.match(source, /Evidence stays separate by agent version, policy, workflow, risk tier, and reviewer audience/);
+  assert.match(source, /first evidence scope starts with 100% review/);
+  assert.doesNotMatch(source, /trust score|accuracy score|global score/i);
   assert.doesNotMatch(source, /Agent registry/);
   assert.doesNotMatch(source, /Durable identities and declared model versions/);
   assert.doesNotMatch(source, /No approved agents are registered/);

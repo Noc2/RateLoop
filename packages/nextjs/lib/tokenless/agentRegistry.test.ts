@@ -82,6 +82,124 @@ test("agent updates append immutable declared-model versions and preserve earlie
   );
 });
 
+test("agent registry returns source-derived human-assurance evidence without pooling scopes", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Assurance registry", ownerAddress: OWNER });
+  const agent = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "assurance-agent",
+    version: version("2026-07-15"),
+  });
+  const now = new Date();
+  const policyId = "arp_assurance_registry";
+  const scopeId = "aesc_assurance_registry";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_policies
+          (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
+           agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json,
+           audience_policy_json, created_by, approved_by, created_at)
+          VALUES (?, 1, ?, ?, ?, 'adaptive', true, 7000, 1000, 20, '{}', ?, ?, ?, ?)`,
+    args: [
+      policyId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      JSON.stringify({ reviewerSource: "private_invited" }),
+      OWNER.toLowerCase(),
+      OWNER.toLowerCase(),
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_evaluation_scopes
+          (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version,
+           workflow_key, risk_tier, audience_policy_hash, partition_commitment, stage,
+           completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample,
+           stage_entered_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 1, 'support-reply', 'low', 'sha256:audience', 'sha256:partition',
+                  'high_coverage', 32, 12, 0, ?, ?)`,
+    args: [scopeId, workspaceId, agent.agentId, agent.currentVersion.versionId, policyId, now, now],
+  });
+
+  for (const [index, status] of ["completed", "completed", "skipped"].entries()) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_opportunities
+            (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
+             external_opportunity_id, suggestion_commitment, declared_confidence_bps, metadata_commitment,
+             metadata_complete, critical_risk, decision, review_rate_bps, selection_probability_bps,
+             sample_bucket, sampler_key_version, sampler_commitment, reason_codes_json, status,
+             source_evidence_reference, source_evidence_hash, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 9000, ?, true, false, ?, 5000, 5000,
+                    ?, 'sampler-v1', ?, '[]', ?, ?, ?, ?, ?)`,
+      args: [
+        `aeop_registry_${index}`,
+        workspaceId,
+        agent.agentId,
+        agent.currentVersion.versionId,
+        scopeId,
+        policyId,
+        `external-registry-${index}`,
+        `sha256:suggestion-${index}`,
+        `sha256:metadata-${index}`,
+        status === "skipped" ? "skip" : "required",
+        index,
+        `sha256:sampler-${index}`,
+        status,
+        `evidence/registry/${index}`,
+        `sha256:evidence-${index}`,
+        new Date(now.getTime() + index),
+        new Date(now.getTime() + index),
+      ],
+    });
+  }
+
+  for (const [index, agreement] of ["agree", "disagree"].entries()) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_evaluation_observations
+            (observation_id, workspace_id, scope_id, opportunity_id, evidence_reference, source_payload_hash,
+             agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
+             responding_human_count, finalized_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true, 1, ?, ?)`,
+      args: [
+        `aeob_registry_${index}`,
+        workspaceId,
+        scopeId,
+        `aeop_registry_${index}`,
+        `evidence/registry/${index}`,
+        `sha256:source-${index}`,
+        `sha256:agent-${index}`,
+        `sha256:human-${index}`,
+        agreement,
+        new Date(now.getTime() + index),
+        new Date(now.getTime() + index),
+      ],
+    });
+  }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_policy_events
+          (event_id, workspace_id, scope_id, policy_id, policy_version, event_type, from_stage, to_stage,
+           reason_codes_json, actor_type, actor_reference, event_commitment, created_at)
+          VALUES ('arpe_registry', ?, ?, ?, 1, 'stage_changed', 'calibrating', 'high_coverage', ?,
+                  'service', 'adaptive-review', 'sha256:event', ?)`,
+    args: [workspaceId, scopeId, policyId, JSON.stringify(["two_stable_windows"]), now],
+  });
+
+  const registry = await listWorkspaceAgents({ accountAddress: OWNER, workspaceId });
+  const evidence = registry.agents[0]?.assuranceScopes[0];
+  assert.ok(evidence);
+  assert.equal(evidence.workflowKey, "support-reply");
+  assert.equal(evidence.riskTier, "low");
+  assert.equal(evidence.reviewRateBps, 5_000);
+  assert.equal(evidence.reviewedOpportunityCount, 2);
+  assert.equal(evidence.skippedOpportunityCount, 1);
+  assert.equal(evidence.comparableCount, 2);
+  assert.equal(evidence.agreementCount, 1);
+  assert.equal(evidence.humanAgreementBps, 5_000);
+  assert.ok((evidence.humanAgreementLower95Bps ?? 5_000) < 5_000);
+  assert.equal(evidence.nextReassessmentAfter, 38);
+  assert.deepEqual(evidence.lastTransition?.reasonCodes, ["two_stable_windows"]);
+});
+
 test("workspace roles permit authorized reads while restricting registry mutations to owners and admins", async () => {
   const { workspaceId } = await createWorkspace({ name: "Scoped registry", ownerAddress: OWNER });
   const now = new Date();

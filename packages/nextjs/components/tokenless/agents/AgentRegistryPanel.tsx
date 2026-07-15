@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
-import type { AgentRegistry, AgentVersionInput, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import type {
+  AgentAssuranceScopeSummary,
+  AgentRegistry,
+  AgentVersionInput,
+  WorkspaceAgent,
+} from "~~/lib/tokenless/agentRegistry";
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -16,6 +21,149 @@ async function readJson(response: Response) {
 
 function shortAddress(value: string) {
   return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
+}
+
+function formatPercent(bps: number | null) {
+  if (bps === null) return "—";
+  const percent = bps / 100;
+  return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
+}
+
+function assuranceStageLabel(stage: AgentAssuranceScopeSummary["stage"]) {
+  if (stage === "high_coverage") return "High coverage";
+  if (stage === "medium_coverage") return "Medium coverage";
+  return stage === "monitoring" ? "Monitoring" : "Calibrating";
+}
+
+function transitionReason(reason: string) {
+  const labels: Record<string, string> = {
+    two_stable_windows: "Two stable 15-case windows",
+    fifty_stable_cases: "50 stable comparable cases",
+    one_hundred_stable_cases: "100 stable comparable cases",
+    agreement_below_threshold: "Measured agreement fell below the policy threshold",
+    completion_gate_failed: "Completion evidence failed its gate",
+    human_agreement_gate_failed: "Human agreement evidence failed its gate",
+    latency_gate_failed: "Review latency failed its gate",
+    missing_metadata: "Required decision context was missing",
+    severe_disagreement_open: "A severe disagreement remains open",
+  };
+  return labels[reason] ?? reason.replaceAll("_", " ");
+}
+
+function AssuranceScopeEvidence({
+  agent,
+  scope,
+  compact = false,
+}: {
+  agent: WorkspaceAgent;
+  scope: AgentAssuranceScopeSummary;
+  compact?: boolean;
+}) {
+  const version = agent.versions.find(item => item.versionId === scope.agentVersionId);
+  return (
+    <div className={compact ? "border-t border-white/10 pt-3" : ""}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">
+          {scope.workflowKey} · <span className="capitalize">{scope.riskTier} risk</span> · v
+          {version?.versionNumber ?? "?"}
+        </p>
+        <span className="badge border-white/10 bg-white/[0.04] text-xs text-base-content/65">
+          {assuranceStageLabel(scope.stage)}
+        </span>
+      </div>
+      <dl className={`mt-3 grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
+        <div>
+          <dt className="text-xs text-base-content/45">Baseline review coverage</dt>
+          <dd className="mt-1 font-semibold">{formatPercent(scope.reviewRateBps)}</dd>
+          {!compact ? <p className="mt-1 text-xs text-base-content/40">Risk rules can require extra checks.</p> : null}
+        </div>
+        <div>
+          <dt className="text-xs text-base-content/45">Agent-human agreement</dt>
+          <dd className="mt-1 font-semibold">{formatPercent(scope.humanAgreementBps)}</dd>
+          <p className="mt-1 text-xs text-base-content/40">
+            {scope.comparableCount > 0
+              ? `${scope.agreementCount} of ${scope.comparableCount} comparable checks`
+              : "No comparable check yet"}
+          </p>
+        </div>
+        {!compact ? (
+          <>
+            <div>
+              <dt className="text-xs text-base-content/45">95% lower bound</dt>
+              <dd className="mt-1 font-semibold">{formatPercent(scope.humanAgreementLower95Bps)}</dd>
+              <p className="mt-1 text-xs text-base-content/40">The conservative agreement estimate.</p>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Review record</dt>
+              <dd className="mt-1 font-semibold">
+                {scope.reviewedOpportunityCount} selected · {scope.skippedOpportunityCount} skipped
+              </dd>
+              <p className="mt-1 text-xs text-base-content/40">For this exact evidence scope.</p>
+            </div>
+          </>
+        ) : null}
+      </dl>
+      {!compact ? (
+        <div className="mt-3 space-y-1 text-xs text-base-content/50">
+          <p>
+            {scope.nextReassessmentAfter > 0
+              ? `${scope.nextReassessmentAfter} more comparable human checks before the next coverage reassessment.`
+              : "This scope is at its monitoring stage; policy floors and forced checks remain active."}
+          </p>
+          {scope.lastTransition ? (
+            <p>
+              Last coverage change:{" "}
+              {transitionReason(scope.lastTransition.reasonCodes[0] ?? scope.lastTransition.eventType)}.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AgentAssuranceSummary({ agent }: { agent: WorkspaceAgent }) {
+  const [latest, ...older] = agent.assuranceScopes;
+  return (
+    <section className="surface-card-nested mt-4 rounded-xl p-4" aria-labelledby={`assurance-${agent.agentId}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 id={`assurance-${agent.agentId}`} className="text-sm font-semibold">
+            Human assurance
+          </h3>
+          <p className="mt-1 text-xs text-base-content/45">
+            Evidence stays separate by agent version, policy, workflow, risk tier, and reviewer audience.
+          </p>
+        </div>
+        {agent.assuranceScopes.length > 0 ? (
+          <span className="text-xs text-base-content/40">
+            {agent.assuranceScopes.length} evidence {agent.assuranceScopes.length === 1 ? "scope" : "scopes"}
+          </span>
+        ) : null}
+      </div>
+      {latest ? (
+        <div className="mt-4">
+          <AssuranceScopeEvidence agent={agent} scope={latest} />
+          {older.length > 0 ? (
+            <details className="mt-4 border-t border-white/10 pt-3">
+              <summary className="cursor-pointer text-xs font-medium text-base-content/60">
+                View {older.length} older or separate {older.length === 1 ? "scope" : "scopes"}
+              </summary>
+              <div className="mt-3 space-y-3">
+                {older.map(scope => (
+                  <AssuranceScopeEvidence key={scope.scopeId} agent={agent} scope={scope} compact />
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-base-content/55">
+          No eligible output has reached RateLoop yet. The first evidence scope starts with 100% review.
+        </p>
+      )}
+    </section>
+  );
 }
 
 export function AgentRegistryPanel({
@@ -160,6 +308,7 @@ export function AgentRegistryPanel({
                 </p>
               </div>
             </div>
+            <AgentAssuranceSummary agent={agent} />
             <details className="mt-3 border-t border-white/10 pt-3">
               <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Manage</summary>
               <div className="mt-4 space-y-4">

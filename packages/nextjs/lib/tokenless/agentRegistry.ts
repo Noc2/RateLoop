@@ -4,7 +4,9 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
+import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
 export const AGENT_ENVIRONMENTS = ["staging", "production"] as const;
 export type AgentEnvironment = (typeof AGENT_ENVIRONMENTS)[number];
@@ -34,6 +36,34 @@ export type AgentVersionSnapshot = {
   createdAt: string;
 };
 
+export type AgentAssuranceScopeSummary = {
+  scopeId: string;
+  agentVersionId: string;
+  policyId: string;
+  policyVersion: number;
+  workflowKey: string;
+  riskTier: string;
+  stage: AdaptiveReviewStage;
+  reviewRateBps: number;
+  completedComparableCases: number;
+  stableCasesSinceStage: number;
+  reviewedOpportunityCount: number;
+  skippedOpportunityCount: number;
+  comparableCount: number;
+  agreementCount: number;
+  humanAgreementBps: number | null;
+  humanAgreementLower95Bps: number | null;
+  nextReassessmentAfter: number;
+  lastTransition: {
+    eventType: "stage_changed" | "reset";
+    fromStage: AdaptiveReviewStage | null;
+    toStage: AdaptiveReviewStage | null;
+    reasonCodes: string[];
+    createdAt: string;
+  } | null;
+  updatedAt: string;
+};
+
 export type WorkspaceAgent = {
   agentId: string;
   workspaceId: string;
@@ -46,6 +76,7 @@ export type WorkspaceAgent = {
   deactivatedAt: string | null;
   currentVersion: AgentVersionSnapshot;
   versions: AgentVersionSnapshot[];
+  assuranceScopes: AgentAssuranceScopeSummary[];
 };
 
 export type AgentRegistry = {
@@ -58,10 +89,32 @@ type QueryRow = Record<string, unknown>;
 
 const MANAGEMENT_ROLES = new Set<TokenlessWorkspaceRole>(["owner", "admin"]);
 const EXTERNAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
+const ASSURANCE_STAGE_RATES: Record<AdaptiveReviewStage, number> = {
+  calibrating: 10_000,
+  high_coverage: 5_000,
+  medium_coverage: 2_500,
+  monitoring: 1_000,
+};
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
   return typeof value === "string" ? value : value === null || value === undefined ? null : String(value);
+}
+
+function rowInteger(row: QueryRow | undefined, key: string) {
+  const value = Number(row?.[key]);
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Database returned an invalid ${key}.`);
+  return value;
+}
+
+function stringArray(value: unknown, field: string) {
+  try {
+    const parsed = JSON.parse(String(value ?? "[]")) as unknown;
+    if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== "string")) throw new Error();
+    return parsed as string[];
+  } catch {
+    throw new Error(`Database returned invalid ${field}.`);
+  }
 }
 
 function isUniqueViolation(error: unknown) {
@@ -181,8 +234,153 @@ function versionFromRow(row: QueryRow): AgentVersionSnapshot {
   };
 }
 
+function nextReassessmentAfter(stage: AdaptiveReviewStage, completed: number, stable: number) {
+  if (stage === "calibrating") return Math.max(0, 30 - completed);
+  if (stage === "high_coverage") return Math.max(0, 50 - stable);
+  if (stage === "medium_coverage") return Math.max(0, 100 - stable);
+  return 0;
+}
+
+async function loadWorkspaceAssuranceScopes(workspaceId: string) {
+  const [scopesResult, opportunitiesResult, observationsResult, eventsResult] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT s.scope_id, s.agent_id, s.agent_version_id, s.policy_id, s.policy_version,
+                   s.workflow_key, s.risk_tier, s.stage, s.completed_comparable_cases,
+                   s.stable_cases_since_stage, s.updated_at, p.mode, p.production_floor_bps
+            FROM tokenless_agent_evaluation_scopes s
+            JOIN tokenless_agent_review_policies p
+              ON p.workspace_id = s.workspace_id AND p.policy_id = s.policy_id AND p.version = s.policy_version
+            WHERE s.workspace_id = ?
+            ORDER BY s.updated_at DESC, s.scope_id ASC`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT scope_id,
+                   SUM(CASE WHEN status IN ('review_requested', 'completed') THEN 1 ELSE 0 END) AS reviewed,
+                   SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS skipped
+            FROM tokenless_agent_review_opportunities
+            WHERE workspace_id = ? GROUP BY scope_id`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT scope_id,
+                   SUM(CASE WHEN comparable = true THEN 1 ELSE 0 END) AS comparable,
+                   SUM(CASE WHEN comparable = true AND agreement = 'agree' THEN 1 ELSE 0 END) AS agreements
+            FROM tokenless_agent_evaluation_observations
+            WHERE workspace_id = ? GROUP BY scope_id`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT scope_id, event_type, from_stage, to_stage, reason_codes_json, created_at
+            FROM tokenless_agent_review_policy_events
+            WHERE workspace_id = ? AND event_type IN ('stage_changed', 'reset')
+            ORDER BY created_at DESC, event_id DESC`,
+      args: [workspaceId],
+    }),
+  ]);
+
+  const opportunityCounts = new Map<string, { reviewed: number; skipped: number }>();
+  for (const value of opportunitiesResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    if (!scopeId) throw new Error("Database returned an invalid assurance opportunity rollup.");
+    opportunityCounts.set(scopeId, {
+      reviewed: rowInteger(row, "reviewed"),
+      skipped: rowInteger(row, "skipped"),
+    });
+  }
+
+  const observationCounts = new Map<string, { comparable: number; agreements: number }>();
+  for (const value of observationsResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    if (!scopeId) throw new Error("Database returned an invalid assurance observation rollup.");
+    observationCounts.set(scopeId, {
+      comparable: rowInteger(row, "comparable"),
+      agreements: rowInteger(row, "agreements"),
+    });
+  }
+
+  const latestTransition = new Map<string, QueryRow>();
+  for (const value of eventsResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    if (!scopeId) throw new Error("Database returned an invalid assurance event.");
+    if (!latestTransition.has(scopeId)) latestTransition.set(scopeId, row);
+  }
+
+  const byAgent = new Map<string, AgentAssuranceScopeSummary[]>();
+  for (const value of scopesResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    const agentId = rowString(row, "agent_id");
+    const agentVersionId = rowString(row, "agent_version_id");
+    const policyId = rowString(row, "policy_id");
+    const workflowKey = rowString(row, "workflow_key");
+    const riskTier = rowString(row, "risk_tier");
+    const stage = rowString(row, "stage") as AdaptiveReviewStage | null;
+    const mode = rowString(row, "mode");
+    if (
+      !scopeId ||
+      !agentId ||
+      !agentVersionId ||
+      !policyId ||
+      !workflowKey ||
+      !riskTier ||
+      !stage ||
+      !(stage in ASSURANCE_STAGE_RATES) ||
+      !mode
+    ) {
+      throw new Error("Database returned an invalid assurance scope.");
+    }
+    const completedComparableCases = rowInteger(row, "completed_comparable_cases");
+    const stableCasesSinceStage = rowInteger(row, "stable_cases_since_stage");
+    const productionFloorBps = rowInteger(row, "production_floor_bps");
+    const opportunities = opportunityCounts.get(scopeId) ?? { reviewed: 0, skipped: 0 };
+    const observations = observationCounts.get(scopeId) ?? { comparable: 0, agreements: 0 };
+    const interval =
+      observations.comparable > 0 ? wilsonIntervalBps(observations.agreements, observations.comparable) : null;
+    const transition = latestTransition.get(scopeId);
+    const transitionType = rowString(transition, "event_type") as "stage_changed" | "reset" | null;
+    const summary: AgentAssuranceScopeSummary = {
+      scopeId,
+      agentVersionId,
+      policyId,
+      policyVersion: rowInteger(row, "policy_version"),
+      workflowKey,
+      riskTier,
+      stage,
+      reviewRateBps:
+        mode === "always" ? 10_000 : mode === "manual" ? 0 : Math.max(ASSURANCE_STAGE_RATES[stage], productionFloorBps),
+      completedComparableCases,
+      stableCasesSinceStage,
+      reviewedOpportunityCount: opportunities.reviewed,
+      skippedOpportunityCount: opportunities.skipped,
+      comparableCount: observations.comparable,
+      agreementCount: observations.agreements,
+      humanAgreementBps:
+        observations.comparable > 0 ? Math.floor((observations.agreements * 10_000) / observations.comparable) : null,
+      humanAgreementLower95Bps: interval?.lower ?? null,
+      nextReassessmentAfter: nextReassessmentAfter(stage, completedComparableCases, stableCasesSinceStage),
+      lastTransition:
+        transition && transitionType
+          ? {
+              eventType: transitionType,
+              fromStage: rowString(transition, "from_stage") as AdaptiveReviewStage | null,
+              toStage: rowString(transition, "to_stage") as AdaptiveReviewStage | null,
+              reasonCodes: stringArray(transition.reason_codes_json, "assurance transition reasons"),
+              createdAt: iso(transition.created_at, "assurance transition timestamp"),
+            }
+          : null,
+      updatedAt: iso(row.updated_at, "assurance scope timestamp"),
+    };
+    byAgent.set(agentId, [...(byAgent.get(agentId) ?? []), summary]);
+  }
+  return byAgent;
+}
+
 async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[]> {
-  const [agentsResult, versionsResult] = await Promise.all([
+  const [agentsResult, versionsResult, assuranceByAgent] = await Promise.all([
     dbClient.execute({
       sql: `SELECT agent_id, workspace_id, external_id, owner_account_address, status,
                    created_by, created_at, updated_at, deactivated_at
@@ -201,6 +399,7 @@ async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[
             ORDER BY agent_id ASC, version_number DESC`,
       args: [workspaceId],
     }),
+    loadWorkspaceAssuranceScopes(workspaceId),
   ]);
   const versionsByAgent = new Map<string, AgentVersionSnapshot[]>();
   for (const value of versionsResult.rows) {
@@ -241,6 +440,11 @@ async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[
       deactivatedAt: row.deactivated_at ? iso(row.deactivated_at, "agent deactivation timestamp") : null,
       currentVersion: versions[0],
       versions,
+      assuranceScopes: (assuranceByAgent.get(agentId) ?? []).sort((left, right) => {
+        const leftCurrent = left.agentVersionId === versions[0]?.versionId ? 1 : 0;
+        const rightCurrent = right.agentVersionId === versions[0]?.versionId ? 1 : 0;
+        return rightCurrent - leftCurrent || right.updatedAt.localeCompare(left.updatedAt);
+      }),
     };
   });
 }
