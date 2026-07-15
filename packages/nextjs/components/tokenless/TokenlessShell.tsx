@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
-import { AnswerSearch } from "~~/components/tokenless/navigation/AnswerSearch";
 import { DOCS_NAV } from "~~/constants/docsNav";
 
 const ThirdwebSessionButton = dynamic(
@@ -229,7 +228,6 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
               </svg>
             </summary>
             <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
-              <AnswerSearch mobile />
               <NavLinks mobile />
             </nav>
           </details>
@@ -240,7 +238,6 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         <div className="mb-4 px-4">
           <Brand />
         </div>
-        <AnswerSearch />
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
           <NavLinks />
         </nav>

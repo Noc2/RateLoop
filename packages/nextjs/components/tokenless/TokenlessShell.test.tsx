@@ -12,7 +12,7 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.match(source, /icon: GlobeAltIcon/);
   assert.match(source, /icon: PlusCircleIcon/);
   assert.match(source, /icon: BookOpenIcon/);
-  assert.doesNotMatch(source, /ShieldCheckIcon/);
+  assert.doesNotMatch(source, /\/trust|ShieldCheckIcon/);
   assert.match(source, /Human Assurance/);
   assert.match(source, /w-52/);
   assert.match(source, /border-t[^\n]+px-2\.5 pt-4/);
