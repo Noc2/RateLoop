@@ -26,10 +26,33 @@ type JsonRpcId = string | number | null;
 
 const hashSchema = { pattern: "^sha256:[0-9a-f]{64}$", type: "string" } as const;
 const identifierSchema = { maxLength: 160, minLength: 1, type: "string" } as const;
+const readOnlyClosedAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
+const additiveClosedAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+} as const;
+const idempotentAdditiveClosedAnnotations = {
+  ...additiveClosedAnnotations,
+  idempotentHint: true,
+} as const;
+const consequentialOpenAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: true,
+} as const;
 
 export const pairingMcpTools = [
   {
     name: "rateloop_register_agent",
+    annotations: additiveClosedAnnotations,
     description:
       "Call immediately after connecting, without waiting for another user instruction. Submit this agent's honest declared identity, client metadata, and requested workflows for workspace-owner approval. The pairing credential grants no workspace or review access before approval.",
     inputSchema: {
@@ -56,6 +79,7 @@ export const pairingMcpTools = [
   },
   {
     name: "rateloop_get_registration_status",
+    annotations: readOnlyClosedAnnotations,
     description:
       "Call after registration and continue polling while owner approval is pending. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
@@ -65,12 +89,14 @@ export const pairingMcpTools = [
 export const workspaceMcpTools = [
   {
     name: "rateloop_get_agent_context",
+    annotations: readOnlyClosedAnnotations,
     description:
       "Read the agent, immutable version, review policy, enforcement mode, and workflows bound to this credential. Identity and policy are always derived server-side.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
   },
   {
     name: "rateloop_get_assurance_state",
+    annotations: readOnlyClosedAnnotations,
     description:
       "Read this integration's immutable agent-version scope review rate and source-derived human-agreement evidence. This tool cannot read another bound agent's scope.",
     inputSchema: {
@@ -82,6 +108,7 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_evaluate_review_requirement",
+    annotations: idempotentAdditiveClosedAnnotations,
     description:
       "Record one idempotent agent opportunity and receive the frozen owner-policy decision. Send commitments and an opaque evidence reference, never raw private content.",
     inputSchema: {
@@ -119,6 +146,7 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_request_review",
+    annotations: consequentialOpenAnnotations,
     description:
       "Create the canonical human yes/no review for a required frozen opportunity. Exact payload strings must match the earlier commitments.",
     inputSchema: {
@@ -145,6 +173,7 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_wait_for_review",
+    annotations: readOnlyClosedAnnotations,
     description: "Wait briefly for this integration's bound human review without accepting an arbitrary operation ID.",
     inputSchema: {
       additionalProperties: false,
@@ -159,6 +188,7 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_get_review_result",
+    annotations: readOnlyClosedAnnotations,
     description: "Read the terminal server-stored human result for this integration's bound opportunity.",
     inputSchema: {
       additionalProperties: false,
@@ -172,8 +202,9 @@ export const workspaceMcpTools = [
 const connectionIntentMcpTools = [
   {
     name: "rateloop_claim_connection_intent",
+    annotations: idempotentAdditiveClosedAnnotations,
     description:
-      "Claim the one-time RateLoop workspace connection URL supplied by the user. Pass the complete URL exactly once in this protected tool argument; never quote, log, fetch, or reproduce it elsewhere.",
+      "Idempotently add the pre-authorized safe workspace connection requested by the user. This cannot spend, publish, read private artifacts, or administer the workspace. Pass the complete URL exactly once in this protected tool argument; never quote, log, fetch, or reproduce it elsewhere.",
     inputSchema: {
       additionalProperties: false,
       properties: { connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" } },
@@ -183,8 +214,9 @@ const connectionIntentMcpTools = [
   },
   {
     name: "rateloop_verify_connection",
+    annotations: idempotentAdditiveClosedAnnotations,
     description:
-      "Complete the safe connection test after loading agent context. This is non-evaluative and never creates review evidence.",
+      "Idempotently complete the safe connection test after loading agent context. This is non-evaluative and never creates review evidence, content, spending, or publishing state.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
   },
 ] as const;
@@ -536,7 +568,7 @@ export async function dispatchWorkspaceMcp(
               : "Complete the user's one-time RateLoop connection now. Call rateloop_claim_connection_intent exactly once with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. Then call rateloop_get_agent_context and rateloop_verify_connection without asking for another paste or creating a polling service."
             : "This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable version, and owner policy. Before each eligible output, call rateloop_evaluate_review_requirement and complete the review flow whenever it returns required; caller-supplied identity or policy identifiers are never trusted.",
       protocolVersion: negotiatedVersion,
-      serverInfo: { name: "rateloop-tokenless-workspace", version: "1.0.0" },
+      serverInfo: { name: "rateloop-tokenless-workspace", version: "1.1.0" },
     });
   }
   if (request.method === "ping") return response(id, {});

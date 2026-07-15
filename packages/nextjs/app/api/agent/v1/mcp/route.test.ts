@@ -236,10 +236,39 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     "rateloop_get_review_result",
   ];
   const before = await POST(request({ id: 10, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token));
+  const beforeTools = (await before.json()).result.tools as Array<{
+    name: string;
+    annotations?: Record<string, boolean>;
+  }>;
   assert.deepEqual(
-    (await before.json()).result.tools.map((tool: { name: string }) => tool.name),
+    beforeTools.map(tool => tool.name),
     names,
   );
+  const tool = (name: string) => beforeTools.find(candidate => candidate.name === name);
+  assert.deepEqual(tool("rateloop_claim_connection_intent")?.annotations, {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.deepEqual(tool("rateloop_get_agent_context")?.annotations, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.deepEqual(tool("rateloop_verify_connection")?.annotations, {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.deepEqual(tool("rateloop_request_review")?.annotations, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  });
   const notReady = await POST(
     request(
       {
@@ -291,7 +320,26 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
       tokens.access_token,
     ),
   );
-  assert.equal((await verified.json()).result.structuredContent.connection.status, "connected");
+  const firstVerification = (await verified.json()).result.structuredContent;
+  assert.equal(firstVerification.connection.status, "connected");
+  const repeatedVerification = await POST(
+    request(
+      {
+        id: 141,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_verify_connection", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  assert.deepEqual((await repeatedVerification.json()).result.structuredContent, firstVerification);
+  const connectedEvents = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS total FROM tokenless_agent_integration_events
+          WHERE integration_id = ? AND event_type = 'connected'`,
+    args: [claim.connection.integrationId],
+  });
+  assert.equal(Number(connectedEvents.rows[0]?.total ?? 0), 1);
   const after = await POST(request({ id: 15, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token));
   assert.deepEqual(
     (await after.json()).result.tools.map((tool: { name: string }) => tool.name),

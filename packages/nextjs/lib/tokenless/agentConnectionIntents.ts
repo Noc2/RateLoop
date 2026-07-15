@@ -600,7 +600,8 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
     transactionOpen = true;
     const result = await client.query(
       `SELECT i.integration_id,i.workspace_id,i.agent_id,i.agent_version_id,i.review_policy_id,
-              i.review_policy_version,i.connection_intent_id,c.status AS connection_status,c.hard_expires_at
+              i.review_policy_version,i.connection_intent_id,c.status AS connection_status,c.hard_expires_at,
+              c.connected_at
        FROM tokenless_agent_integrations i
        JOIN tokenless_agent_connection_intents c ON c.intent_id=i.connection_intent_id
        WHERE i.integration_id=$1 AND i.token_family_id=$2 AND i.status='active' FOR UPDATE`,
@@ -632,20 +633,22 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
     }
     const workspaceId = text(row, "workspace_id")!;
     const intentId = text(row, "connection_intent_id")!;
-    await client.query(
-      `UPDATE tokenless_agent_integrations
-       SET last_connection_test_at=$1,last_seen_at=$1,updated_at=$1,last_diagnostic_code=NULL,
-           last_diagnostic_at=$1,recovery_action=NULL WHERE integration_id=$2`,
-      [now, input.integrationId],
-    );
+    let verifiedAtValue: unknown = row.connected_at ?? now;
     if (connectionStatus !== "connected") {
       await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET last_connection_test_at=$1,last_seen_at=$1,updated_at=$1,last_diagnostic_code=NULL,
+             last_diagnostic_at=$1,recovery_action=NULL WHERE integration_id=$2`,
+        [now, input.integrationId],
+      );
+      const connected = await client.query(
         `UPDATE tokenless_agent_connection_intents
          SET status='connected',tested_at=$1,connected_at=$1,last_transition_at=$1,
              last_transition_reason='connection_verified',last_diagnostic_code=NULL,last_diagnostic_at=$1,
-             recovery_action=NULL WHERE intent_id=$2`,
+             recovery_action=NULL WHERE intent_id=$2 RETURNING connected_at`,
         [now, intentId],
       );
+      verifiedAtValue = connected.rows[0]?.connected_at ?? now;
       await client.query(
         `INSERT INTO tokenless_agent_integration_events
          (event_id,integration_id,workspace_id,event_type,actor_type,actor_reference,details_json,created_at)
@@ -665,6 +668,7 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
     }
     await client.query("COMMIT");
     transactionOpen = false;
+    const verifiedAt = new Date(String(verifiedAtValue)).toISOString();
     return {
       schemaVersion: "rateloop.connection-verification.v1",
       connection: {
@@ -681,7 +685,7 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
         canReadPrivateArtifacts: false,
         canAdministerWorkspace: false,
       },
-      verifiedAt: now.toISOString(),
+      verifiedAt,
     };
   } catch (error) {
     if (transactionOpen) await client.query("ROLLBACK");
