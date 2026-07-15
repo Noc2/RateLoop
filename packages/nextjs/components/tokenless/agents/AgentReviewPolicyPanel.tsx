@@ -48,11 +48,18 @@ const INITIAL_DRAFT: PolicyDraft = {
 };
 
 const MODE_COPY: Record<ReviewPolicyMode, string> = {
-  manual: "The agent chooses when to request a handoff. RateLoop records recommendations but does not force them.",
-  always: "Every eligible output requires human review.",
-  rules: "Critical, incomplete, low-confidence, and selected risk tiers require review.",
-  adaptive: "Coverage falls only after stable human agreement: 100% → 50% → 25% → 10% minimum.",
+  manual: "The agent asks for review only when you choose.",
+  always: "Every eligible output gets human review.",
+  rules: "Higher-risk or incomplete work gets reviewed.",
+  adaptive: "Review coverage falls only after stable human agreement.",
 };
+
+const REVIEW_PRESETS: Array<{ label: string; mode: ReviewPolicyMode }> = [
+  { label: "Review everything", mode: "always" },
+  { label: "Review higher-risk work", mode: "rules" },
+  { label: "Adaptive review", mode: "adaptive" },
+  { label: "Manual handoff only", mode: "manual" },
+];
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -169,13 +176,17 @@ export function AgentReviewPolicyPanel({
     setDraft(current => ({ ...current, [key]: value }));
   }
 
-  function selectAgent(agentId: string) {
-    const agent = registry?.agents.find(entry => entry.agentId === agentId);
-    const version = agent?.versions.find(entry => !registry || !versionHasPolicy(registry, entry.versionId));
+  function applyPreset(mode: ReviewPolicyMode) {
     setDraft(current => ({
       ...current,
-      agentId,
-      agentVersionId: version?.versionId ?? "",
+      mode,
+      enforcementMode: mode === "manual" ? "advisory" : current.enforcementMode,
+      productionFloorPercent:
+        mode === "adaptive" && Number(current.productionFloorPercent) < 10
+          ? "10"
+          : mode === "adaptive"
+            ? current.productionFloorPercent
+            : "0",
     }));
   }
 
@@ -314,31 +325,11 @@ export function AgentReviewPolicyPanel({
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
-            Agent-level feedback
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold">Human review policy by agent version</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Each policy applies to one immutable version of one agent, not every agent in this workspace. Stable
-            agreement can reduce review volume, but critical risk, missing metadata, the maximum gap, and the production
-            floor keep sampling on.
+          <h2 className="text-2xl font-semibold">Human review</h2>
+          <p className="mt-2 text-sm text-base-content/60">
+            Choose when this agent should ask people to check its work.
           </p>
         </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-4" aria-label="Adaptive review progression">
-          {["100% calibrating", "50% high coverage", "25% medium coverage", "10% monitoring floor"].map(
-            (label, index) => (
-              <div key={label} className="surface-card-nested rounded-lg p-3 text-sm">
-                <span className="font-mono text-xs text-base-content/40">0{index + 1}</span>
-                <p className="mt-1 font-medium">{label}</p>
-              </div>
-            ),
-          )}
-        </div>
-        <p className="mt-3 text-xs leading-5 text-base-content/50">
-          Critical-risk or incomplete opportunities require review in always, rules, and adaptive modes. Manual mode is
-          advisory by definition. Editing creates a new version and restarts new scopes at calibration.
-        </p>
         {unboundVersions.length > 0 && selectedTarget ? (
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
             {unboundVersions.length > 1 ? (
@@ -358,15 +349,12 @@ export function AgentReviewPolicyPanel({
               </label>
             ) : null}
             <button type="button" className="rateloop-gradient-action px-5" onClick={toggleCreateEditor}>
-              {showForm && !editingPolicyId
-                ? "Close policy editor"
-                : `Create policy for ${selectedTarget.agentDisplayName} · v${selectedTarget.versionNumber}`}
+              {showForm && !editingPolicyId ? "Close" : `Set review for ${selectedTarget.agentDisplayName}`}
             </button>
           </div>
         ) : registry.agents.length > 0 ? (
           <p className="mt-5 rounded-lg bg-white/[0.04] p-3 text-sm text-base-content/60">
-            Every active agent version already has a review policy. Use Edit as new version on the relevant policy
-            below.
+            Review behavior is already set for every active agent version.
           </p>
         ) : null}
       </section>
@@ -377,186 +365,131 @@ export function AgentReviewPolicyPanel({
             {editingPolicyId ? "Create the next immutable policy version" : "Configure human review"}
           </h2>
           <form className="mt-5 space-y-5" onSubmit={savePolicy}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="text-sm text-base-content/60">
-                Agent
-                <select
-                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={draft.agentId}
-                  onChange={event => selectAgent(event.target.value)}
-                  disabled={Boolean(editingPolicyId)}
-                  required
-                >
-                  {registry?.agents
-                    .filter(
-                      agent =>
-                        editingPolicyId ||
-                        agent.versions.some(version => !registry || !versionHasPolicy(registry, version.versionId)),
-                    )
-                    .map(agent => (
-                      <option key={agent.agentId} value={agent.agentId}>
-                        {agent.displayName}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label className="text-sm text-base-content/60">
-                Immutable version
-                <select
-                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={draft.agentVersionId}
-                  onChange={event => updateDraft("agentVersionId", event.target.value)}
-                  disabled={Boolean(editingPolicyId)}
-                  required
-                >
-                  {registry?.agents
-                    .find(agent => agent.agentId === draft.agentId)
-                    ?.versions.filter(
-                      version =>
-                        Boolean(editingPolicyId) || !registry || !versionHasPolicy(registry, version.versionId),
-                    )
-                    .map(version => (
-                      <option key={version.versionId} value={version.versionId}>
-                        Version {version.versionNumber} · {version.displayName}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label className="text-sm text-base-content/60">
-                Review mode
-                <select
-                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={draft.mode}
-                  onChange={event => {
-                    const mode = event.target.value as ReviewPolicyMode;
-                    setDraft(current => ({
-                      ...current,
-                      mode,
-                      enforcementMode: mode === "manual" ? "advisory" : current.enforcementMode,
-                      productionFloorPercent:
-                        mode === "adaptive" && Number(current.productionFloorPercent) < 10
-                          ? "10"
-                          : mode === "adaptive"
-                            ? current.productionFloorPercent
-                            : "0",
-                    }));
-                  }}
-                >
-                  <option value="adaptive">Adaptive</option>
-                  <option value="always">Always review</option>
-                  <option value="rules">Rules</option>
-                  <option value="manual">Manual handoff</option>
-                </select>
-                <span className="mt-2 block text-xs leading-5 text-base-content/45">{MODE_COPY[draft.mode]}</span>
-              </label>
-              <label className="text-sm text-base-content/60">
-                Execution
-                <select
-                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={draft.enforcementMode}
-                  onChange={event => updateDraft("enforcementMode", event.target.value as ReviewEnforcementMode)}
-                  disabled={draft.mode === "manual"}
-                >
-                  <option value="advisory">Advisory</option>
-                  <option value="host_enforced">Host-enforced</option>
-                </select>
-                <span className="mt-2 block text-xs leading-5 text-base-content/45">
-                  Host-enforced is valid only when the connected agent host has compatible middleware and attests that
-                  it blocks output until required review completes. MCP transport alone does not provide that guarantee.
-                </span>
-              </label>
-              <label className="text-sm text-base-content/60">
-                Reviewer audience
+            <fieldset>
+              <legend className="text-sm font-semibold">When should people review this agent?</legend>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {REVIEW_PRESETS.map(preset => (
+                  <button
+                    key={preset.mode}
+                    type="button"
+                    className={`rounded-xl border p-4 text-left transition ${
+                      draft.mode === preset.mode
+                        ? "border-[var(--rateloop-blue)] bg-[var(--rateloop-blue)]/10"
+                        : "border-white/10 bg-white/[0.025] hover:bg-white/[0.05]"
+                    }`}
+                    aria-pressed={draft.mode === preset.mode}
+                    onClick={() => applyPreset(preset.mode)}
+                  >
+                    <span className="block font-semibold">{preset.label}</span>
+                    <span className="mt-1 block text-sm text-base-content/55">{MODE_COPY[preset.mode]}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {draft.mode !== "manual" ? (
+              <label className="block max-w-xl text-sm text-base-content/60">
+                Who should review?
                 <select
                   className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                   value={draft.audience}
                   onChange={event => updateDraft("audience", event.target.value as ReviewAudience)}
                 >
-                  <option value="private_invited">Private invited reviewers</option>
-                  <option value="public_network">Public RateLoop network</option>
-                  <option value="hybrid">Hybrid invited + public</option>
+                  <option value="private_invited">Invited reviewers</option>
+                  <option value="public_network">RateLoop network</option>
+                  <option value="hybrid">Invited reviewers and RateLoop network</option>
                 </select>
               </label>
-              <label className="text-sm text-base-content/60">
-                Agreement threshold (%)
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={draft.agreementThresholdPercent}
-                  onChange={event => updateDraft("agreementThresholdPercent", event.target.value)}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Adaptive production floor (%)
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  type="number"
-                  min={draft.mode === "adaptive" ? "10" : "0"}
-                  max="100"
-                  step="0.01"
-                  value={draft.productionFloorPercent}
-                  onChange={event => updateDraft("productionFloorPercent", event.target.value)}
-                  disabled={draft.mode !== "adaptive"}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Maximum outputs without a sample
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  type="number"
-                  min="1"
-                  max="10000"
-                  value={draft.maximumUnreviewedGap}
-                  onChange={event => updateDraft("maximumUnreviewedGap", event.target.value)}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Minimum declared confidence (%)
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={draft.minimumConfidencePercent}
-                  onChange={event => updateDraft("minimumConfidencePercent", event.target.value)}
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Required risk tiers
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={draft.requiredRiskTiers}
-                  onChange={event => updateDraft("requiredRiskTiers", event.target.value)}
-                  placeholder="high, regulated"
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Critical risk tiers
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={draft.criticalRiskTiers}
-                  onChange={event => updateDraft("criticalRiskTiers", event.target.value)}
-                  placeholder="critical"
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Maximum review latency (seconds)
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  type="number"
-                  min="1"
-                  value={draft.maximumLatencySeconds}
-                  onChange={event => updateDraft("maximumLatencySeconds", event.target.value)}
-                />
-              </label>
-            </div>
+            ) : null}
+
+            <details className="rounded-xl border border-white/10 p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Customize rules</summary>
+              <p className="mt-2 text-sm text-base-content/50">
+                These defaults control sampling and risk escalation. Change them only when your evaluation process
+                requires different thresholds.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="text-sm text-base-content/60">
+                  Agreement threshold (%)
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={draft.agreementThresholdPercent}
+                    onChange={event => updateDraft("agreementThresholdPercent", event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Adaptive review floor (%)
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min={draft.mode === "adaptive" ? "10" : "0"}
+                    max="100"
+                    step="0.01"
+                    value={draft.productionFloorPercent}
+                    onChange={event => updateDraft("productionFloorPercent", event.target.value)}
+                    disabled={draft.mode !== "adaptive"}
+                    required
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Maximum outputs between samples
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value={draft.maximumUnreviewedGap}
+                    onChange={event => updateDraft("maximumUnreviewedGap", event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Minimum confidence (%)
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={draft.minimumConfidencePercent}
+                    onChange={event => updateDraft("minimumConfidencePercent", event.target.value)}
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Review-required risk tiers
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={draft.requiredRiskTiers}
+                    onChange={event => updateDraft("requiredRiskTiers", event.target.value)}
+                    placeholder="high, regulated"
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Critical risk tiers
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={draft.criticalRiskTiers}
+                    onChange={event => updateDraft("criticalRiskTiers", event.target.value)}
+                    placeholder="critical"
+                  />
+                </label>
+                <label className="text-sm text-base-content/60">
+                  Maximum review latency (seconds)
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min="1"
+                    value={draft.maximumLatencySeconds}
+                    onChange={event => updateDraft("maximumLatencySeconds", event.target.value)}
+                  />
+                </label>
+              </div>
+            </details>
             <div className="flex flex-wrap gap-2">
               <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
                 {busy ? "Saving…" : editingPolicyId ? "Create next policy version" : "Create review policy"}
@@ -582,12 +515,6 @@ export function AgentReviewPolicyPanel({
           integration. Disable a policy only after confirming its connection is no longer operating.
         </div>
       ) : null}
-      {registry.agents.length > 0 && registry.policies.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55">
-          No review policy is active for these agent versions yet.
-        </div>
-      ) : null}
-
       <div className="space-y-4">
         {registry.policies.map(policy => {
           const { agent, version } = findBoundAgentVersion(registry, policy);
@@ -612,9 +539,6 @@ export function AgentReviewPolicyPanel({
                       policy version {policy.version}
                     </span>
                   </div>
-                  <p className="mt-2 font-mono text-xs text-base-content/40">
-                    {policy.policyId} · {policy.agentVersionId}
-                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {agent ? (
@@ -684,9 +608,13 @@ export function AgentReviewPolicyPanel({
                   No eligible output has used this version yet. Its first adaptive scope starts at 100% review.
                 </p>
               )}
-              <p className="mt-4 break-all font-mono text-[11px] text-base-content/35">
-                audience {policy.audiencePolicyHash}
-              </p>
+              <details className="mt-4 text-xs text-base-content/45">
+                <summary className="cursor-pointer">Technical details</summary>
+                <p className="mt-2 break-all font-mono">
+                  {policy.policyId} · {policy.agentVersionId}
+                </p>
+                <p className="mt-1 break-all font-mono">audience {policy.audiencePolicyHash}</p>
+              </details>
             </article>
           );
         })}
