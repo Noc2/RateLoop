@@ -47,12 +47,11 @@ test("vault environment rejects public keys, local production keys, missing KMS,
       validateVaultEnvironment({
         NODE_ENV: "production",
         TOKENLESS_ARTIFACT_MASTER_KEY: "local",
-        TOKENLESS_SANDBOX_MODE: "false",
       } as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "local_production_vault_forbidden",
   );
   assert.throws(
-    () => validateVaultEnvironment({ NODE_ENV: "production", TOKENLESS_SANDBOX_MODE: "false" } as NodeJS.ProcessEnv),
+    () => validateVaultEnvironment({ NODE_ENV: "production" } as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "managed_kms_required",
   );
   assert.throws(
@@ -61,7 +60,6 @@ test("vault environment rejects public keys, local production keys, missing KMS,
         NODE_ENV: "production",
         TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/us/keyRings/one",
         TOKENLESS_KMS_PROVIDER: "gcp-kms",
-        TOKENLESS_SANDBOX_MODE: "false",
       } as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "kms_region_mismatch",
   );
@@ -70,7 +68,6 @@ test("vault environment rejects public keys, local production keys, missing KMS,
       NODE_ENV: "production",
       TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/europe-west4/keyRings/one",
       TOKENLESS_KMS_PROVIDER: "gcp-kms",
-      TOKENLESS_SANDBOX_MODE: "false",
     } as NodeJS.ProcessEnv),
     {
       keyResource: "projects/example/locations/europe-west4/keyRings/one",
@@ -78,4 +75,5 @@ test("vault environment rejects public keys, local production keys, missing KMS,
       provider: "gcp-kms",
     },
   );
+  assert.deepEqual(validateVaultEnvironment({ NODE_ENV: "test" } as NodeJS.ProcessEnv), { mode: "test" });
 });

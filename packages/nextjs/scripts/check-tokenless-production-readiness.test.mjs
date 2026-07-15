@@ -1,6 +1,6 @@
 import { manifestDigest, tokenlessEuDeploymentManifest } from "../../../scripts/validate-tokenless-eu-deployment.mjs";
 import {
-  DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES,
+  DEFAULT_HOSTED_RELEASE_CAPABILITIES,
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
@@ -25,7 +25,6 @@ function validFixture() {
   const env = Object.fromEntries(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.map(name => [name, `configured-${name}`]));
   Object.assign(env, {
     VERCEL_ENV: "production",
-    TOKENLESS_SANDBOX_MODE: "false",
     TOKENLESS_DATA_PLANE_MODE: "verified-eu",
     TOKENLESS_HOME_REGION: "eu",
     TOKENLESS_EU_MANIFEST_SHA256: euManifestDigest,
@@ -41,6 +40,7 @@ function validFixture() {
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     BETTER_AUTH_SECRET: "b".repeat(48),
     BETTER_AUTH_PASSKEY_RP_ID: "rateloop-tokenless.vercel.app",
+    DATABASE_URL: "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=require",
     TOKENLESS_THIRDWEB_WALLET_ENABLED: "false",
     BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
     NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
@@ -119,7 +119,7 @@ function validFixture() {
   return {
     env,
     releaseCapabilities: Object.fromEntries(
-      Object.keys(DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES).map(capability => [capability, true]),
+      Object.keys(DEFAULT_HOSTED_RELEASE_CAPABILITIES).map(capability => [capability, true]),
     ),
     activeRegistry: {
       84532: {
@@ -138,14 +138,12 @@ function validFixture() {
   };
 }
 
-test("sandbox production and non-hosted builds do not require live credentials", () => {
-  assert.deepEqual(
-    validateTokenlessProductionReadiness({
-      env: { VERCEL_ENV: "production", TOKENLESS_SANDBOX_MODE: "true" },
-      activeRegistry: {},
-    }),
-    [],
-  );
+test("hosted production and preview fail closed while local builds skip the release gate", () => {
+  for (const env of [{ VERCEL_ENV: "production" }, { VERCEL_ENV: "preview" }, { VERCEL: "1" }]) {
+    const errors = validateTokenlessProductionReadiness({ env, activeRegistry: {} });
+    assert.match(errors.join("\n"), /APP_URL is required for a hosted release/);
+    assert.match(errors.join("\n"), /managed signing/i);
+  }
   assert.deepEqual(validateTokenlessProductionReadiness({ env: {}, activeRegistry: {} }), []);
 });
 
@@ -156,12 +154,12 @@ test("the production preflight runs before hosted migrations", () => {
   assert.ok(build.indexOf("check-tokenless-production-readiness.mjs") < build.indexOf("migrate-hosted-database.mjs"));
 });
 
-test("non-sandbox production accepts only a complete matching v3 bundle", () => {
+test("hosted release accepts only a complete matching v3 bundle", () => {
   const fixture = validFixture();
   assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
 });
 
-test("non-sandbox production remains blocked while required product capabilities are incomplete", () => {
+test("hosted release remains blocked while required product capabilities are incomplete", () => {
   const fixture = validFixture();
   delete fixture.releaseCapabilities;
   const errors = validateTokenlessProductionReadiness(fixture);
@@ -169,7 +167,7 @@ test("non-sandbox production remains blocked while required product capabilities
   assert.match(errors.join("\n"), /paid assignment reservation/i);
 });
 
-test("non-sandbox production rejects an empty active v3 registry", () => {
+test("hosted release rejects an empty active v3 registry", () => {
   const fixture = validFixture();
   fixture.activeRegistry = {};
   assert.match(
@@ -178,9 +176,9 @@ test("non-sandbox production rejects an empty active v3 registry", () => {
   );
 });
 
-test("non-sandbox production fails closed before migrations without required config or active deployment", () => {
+test("hosted release fails closed before migrations without required config or active deployment", () => {
   const errors = validateTokenlessProductionReadiness({
-    env: { VERCEL_ENV: "production", TOKENLESS_SANDBOX_MODE: "false" },
+    env: { VERCEL_ENV: "production" },
     activeRegistry: {},
   });
   assert.match(errors.join("\n"), /TOKENLESS_DEPLOYMENT_KEY is required/);
@@ -191,7 +189,18 @@ test("non-sandbox production fails closed before migrations without required con
   );
 });
 
-test("non-sandbox production rejects public secrets, reused roles, and mixed deployment identity without leaking values", () => {
+test("hosted release rejects in-memory and local database URLs", () => {
+  for (const databaseUrl of ["memory:", "postgresql://localhost/rateloop", "configured-DATABASE_URL"]) {
+    const fixture = validFixture();
+    fixture.env.DATABASE_URL = databaseUrl;
+    assert.match(
+      validateTokenlessProductionReadiness(fixture).join("\n"),
+      /DATABASE_URL must identify a non-local hosted Postgres database/,
+    );
+  }
+});
+
+test("hosted release rejects public secrets, reused roles, and mixed deployment identity without leaking values", () => {
   const fixture = validFixture();
   fixture.env.NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN = "do-not-print-this";
   fixture.env.NEXT_PUBLIC_CRON_SECRET = "also-do-not-print-this";
@@ -217,16 +226,16 @@ test("non-sandbox production rejects public secrets, reused roles, and mixed dep
   assert.doesNotMatch(output, /0x11111111/);
 });
 
-test("non-sandbox production rejects local artifact keys and non-managed vault providers", () => {
+test("hosted release rejects local artifact keys and non-managed vault providers", () => {
   const fixture = validFixture();
   fixture.env.TOKENLESS_ARTIFACT_MASTER_KEY = encodedKey(1);
   fixture.env.TOKENLESS_KMS_PROVIDER = "local";
   const output = validateTokenlessProductionReadiness(fixture).join("\n");
-  assert.match(output, /TOKENLESS_ARTIFACT_MASTER_KEY is sandbox-only/);
+  assert.match(output, /TOKENLESS_ARTIFACT_MASTER_KEY is forbidden/);
   assert.match(output, /TOKENLESS_KMS_PROVIDER must select an approved managed provider/);
 });
 
-test("non-sandbox production requires a dedicated pseudonym key at the managed-vault boundary", () => {
+test("hosted release requires a dedicated pseudonym key at the managed-vault boundary", () => {
   const fixture = validFixture();
   fixture.env.TOKENLESS_PSEUDONYM_KEY = "too-short";
   assert.match(validateTokenlessProductionReadiness(fixture).join("\n"), /PSEUDONYM_KEY must encode exactly 32 bytes/);
@@ -252,7 +261,7 @@ test("optional thirdweb wallet issuance is gated separately from Better Auth", (
   assert.deepEqual(validateTokenlessProductionReadiness(enabled), []);
 });
 
-test("non-sandbox production requires valid server-only Stripe configuration only when subscriptions are enabled", () => {
+test("hosted release requires valid server-only Stripe configuration only when subscriptions are enabled", () => {
   const disabled = validFixture();
   assert.deepEqual(validateTokenlessProductionReadiness(disabled), []);
 

@@ -167,11 +167,10 @@ export function validateVaultEnvironment(env: NodeJS.ProcessEnv = process.env) {
       "public_vault_key_forbidden",
     );
   }
-  const sandbox = env.TOKENLESS_SANDBOX_MODE === "true" || env.NODE_ENV !== "production";
-  if (sandbox) return { mode: "sandbox" as const };
+  if (env.NODE_ENV === "test") return { mode: "test" as const };
   if (env.TOKENLESS_ARTIFACT_MASTER_KEY) {
     throw new TokenlessServiceError(
-      "Non-sandbox production cannot use a local artifact master key.",
+      "Hosted runtime cannot use a local artifact master key.",
       500,
       "local_production_vault_forbidden",
     );
@@ -180,7 +179,7 @@ export function validateVaultEnvironment(env: NodeJS.ProcessEnv = process.env) {
   const keyResource = env.TOKENLESS_KMS_KEY_RESOURCE?.trim();
   if (!provider || !keyResource) {
     throw new TokenlessServiceError(
-      "Non-sandbox production requires a managed KMS provider and key resource.",
+      "Hosted runtime requires a managed KMS provider and key resource.",
       503,
       "managed_kms_required",
     );

@@ -93,7 +93,6 @@ function configuredRailwayRegions(toml) {
 
 export function validateTokenlessEuDeployment({
   env = process.env,
-  sandbox = value(env, "TOKENLESS_SANDBOX_MODE").toLowerCase() === "true",
   manifest = tokenlessEuDeploymentManifest,
   vercelConfig = readJson(vercelConfigPath),
   railwayConfigs = railwayConfigPaths.map((file) => readFileSync(file, "utf8")),
@@ -181,12 +180,8 @@ export function validateTokenlessEuDeployment({
       );
     }
   }
-  if (sandbox) return errors;
-
   if (value(env, "TOKENLESS_DATA_PLANE_MODE") !== "verified-eu") {
-    errors.push(
-      "TOKENLESS_DATA_PLANE_MODE must be verified-eu outside the explicit sandbox.",
-    );
+    errors.push("TOKENLESS_DATA_PLANE_MODE must be verified-eu.");
   }
   if (value(env, "TOKENLESS_HOME_REGION") !== TOKENLESS_HOME_REGION) {
     errors.push(`TOKENLESS_HOME_REGION must be ${TOKENLESS_HOME_REGION}.`);
@@ -280,17 +275,12 @@ export function validateTokenlessEuDeployment({
 }
 
 function main() {
-  const sandbox = process.argv.includes("--sandbox");
-  const errors = validateTokenlessEuDeployment({ sandbox });
+  const errors = validateTokenlessEuDeployment();
   if (errors.length > 0)
     throw new Error(
       `Tokenless EU deployment validation refused:\n- ${errors.join("\n- ")}`,
     );
-  console.log(
-    sandbox
-      ? "Tokenless sandbox static EU controls passed."
-      : "Tokenless verified EU deployment passed.",
-  );
+  console.log("Tokenless verified EU deployment passed.");
 }
 
 if (

@@ -12,12 +12,12 @@ const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v3";
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
-export const DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES = Object.freeze({
+export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
   managedSigning: false,
   paidAssignmentSettlement: false,
 });
 
-const NON_SANDBOX_RELEASE_CAPABILITY_LABELS = Object.freeze({
+const HOSTED_RELEASE_CAPABILITY_LABELS = Object.freeze({
   managedSigning: "managed signing for credential issuance and chain transactions",
   paidAssignmentSettlement: "paid assignment reservation, voucher, commit, and settlement orchestration",
 });
@@ -153,6 +153,21 @@ function httpsUrl(raw) {
   }
 }
 
+function hostedPostgresUrl(raw) {
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:") &&
+      Boolean(host) &&
+      !["localhost", "127.0.0.1", "::1"].includes(host) &&
+      parsed.pathname.length > 1
+    );
+  } catch {
+    return false;
+  }
+}
+
 function decode32(raw, encoding = "base64url") {
   try {
     const decoded = /^[0-9a-fA-F]{64}$/u.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, encoding);
@@ -204,39 +219,35 @@ export function validateTokenlessProductionReadiness({
   env,
   activeRegistry,
   deploymentSchema = tokenlessDeploymentSchema,
-  releaseCapabilities = DEFAULT_NON_SANDBOX_RELEASE_CAPABILITIES,
-  production = env.VERCEL_ENV === "production",
+  releaseCapabilities = DEFAULT_HOSTED_RELEASE_CAPABILITIES,
+  hosted = env.VERCEL === "1" || env.VERCEL_ENV === "production" || env.VERCEL_ENV === "preview",
 }) {
   const errors = [];
-  if (!production) return errors;
+  if (!hosted) return errors;
 
-  const sandboxMode = value(env, "TOKENLESS_SANDBOX_MODE").toLowerCase();
-  if (sandboxMode !== "true" && sandboxMode !== "false") {
-    return ["TOKENLESS_SANDBOX_MODE must be explicitly true or false in production."];
-  }
-  errors.push(...validateTokenlessEuDeployment({ env, sandbox: sandboxMode === "true" }));
-  if (sandboxMode === "true") return errors;
+  errors.push(...validateTokenlessEuDeployment({ env }));
 
-  for (const [capability, label] of Object.entries(NON_SANDBOX_RELEASE_CAPABILITY_LABELS)) {
+  for (const [capability, label] of Object.entries(HOSTED_RELEASE_CAPABILITY_LABELS)) {
     if (releaseCapabilities[capability] !== true) {
-      errors.push(`Non-sandbox release is blocked until ${label} is implemented and reviewed.`);
+      errors.push(`Hosted release is blocked until ${label} is implemented and reviewed.`);
     }
   }
 
   let missingConfiguration = false;
   for (const name of REQUIRED_TOKENLESS_PRODUCTION_VARIABLES) {
     if (!value(env, name)) {
-      errors.push(`${name} is required for non-sandbox production.`);
+      errors.push(`${name} is required for a hosted release.`);
       missingConfiguration = true;
     }
   }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because production secrets must remain server-only.`);
   }
+  if (value(env, "DATABASE_URL") && !hostedPostgresUrl(value(env, "DATABASE_URL"))) {
+    errors.push("DATABASE_URL must identify a non-local hosted Postgres database.");
+  }
   if (value(env, "TOKENLESS_ARTIFACT_MASTER_KEY")) {
-    errors.push(
-      "TOKENLESS_ARTIFACT_MASTER_KEY is sandbox-only; non-sandbox production must use the managed KMS vault boundary.",
-    );
+    errors.push("TOKENLESS_ARTIFACT_MASTER_KEY is forbidden; hosted releases must use the managed KMS vault boundary.");
   }
   const subscriptionsEnabled = value(env, "TOKENLESS_SUBSCRIPTIONS_ENABLED");
   if (subscriptionsEnabled !== "true" && subscriptionsEnabled !== "false") {
@@ -335,7 +346,7 @@ export function validateTokenlessProductionReadiness({
       errors.push(`${name} must be an HTTPS URL without embedded credentials or fragments.`);
   }
   if (value(env, "WORLD_ID_ENVIRONMENT") !== "production") {
-    errors.push("WORLD_ID_ENVIRONMENT must be production for non-sandbox production.");
+    errors.push("WORLD_ID_ENVIRONMENT must be production for a hosted release.");
   }
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "true") {
     errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must be true for the production public network.");
@@ -511,21 +522,21 @@ export function validateTokenlessProductionReadiness({
 }
 
 function main() {
-  const production = process.argv.includes("--production") || process.env.VERCEL_ENV === "production";
+  const hosted =
+    process.argv.includes("--hosted") ||
+    process.argv.includes("--production") ||
+    process.env.VERCEL === "1" ||
+    process.env.VERCEL_ENV === "production" ||
+    process.env.VERCEL_ENV === "preview";
   const errors = validateTokenlessProductionReadiness({
     env: process.env,
     activeRegistry: tokenlessDeployedContracts,
-    production,
+    hosted,
   });
   if (errors.length > 0) {
-    throw new Error(`Tokenless non-sandbox production preflight refused:\n- ${errors.join("\n- ")}`);
+    throw new Error(`Tokenless hosted-release preflight refused:\n- ${errors.join("\n- ")}`);
   }
-  const sandbox = value(process.env, "TOKENLESS_SANDBOX_MODE").toLowerCase() === "true";
-  console.log(
-    production && !sandbox
-      ? "Tokenless non-sandbox production preflight passed."
-      : "Tokenless non-sandbox production preflight skipped.",
-  );
+  console.log(hosted ? "Tokenless hosted-release preflight passed." : "Tokenless hosted-release preflight skipped.");
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

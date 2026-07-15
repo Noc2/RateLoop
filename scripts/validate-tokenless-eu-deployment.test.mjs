@@ -21,7 +21,6 @@ async function verifiedFixture() {
   const digest = await manifestDigest();
   const keys = generateKeyPairSync("ed25519");
   const env = {
-    TOKENLESS_SANDBOX_MODE: "false",
     TOKENLESS_DATA_PLANE_MODE: "verified-eu",
     TOKENLESS_HOME_REGION: "eu",
     TOKENLESS_EU_MANIFEST_SHA256: digest,
@@ -54,19 +53,33 @@ async function verifiedFixture() {
   return env;
 }
 
-test("the checked deployment controls are valid in explicit sandbox mode", async () => {
-  assert.deepEqual(await validateTokenlessEuDeployment({ sandbox: true }), []);
+test("the checked deployment controls and verified resource evidence are valid together", async () => {
+  assert.deepEqual(
+    await validateTokenlessEuDeployment({
+      env: await verifiedFixture(),
+      ...staticConfigs(),
+    }),
+    [],
+  );
 });
 
 test("verified production requires EU email dispatch while disclosing the processor transfer", async () => {
   const env = await verifiedFixture();
   env.TOKENLESS_EMAIL_DELIVERY_REGION = "us-east-1";
   assert.match(
-    (await validateTokenlessEuDeployment({ env, ...staticConfigs() })).join("\n"),
+    (await validateTokenlessEuDeployment({ env, ...staticConfigs() })).join(
+      "\n",
+    ),
     /TOKENLESS_EMAIL_DELIVERY_REGION must be eu-west-1/,
   );
-  assert.equal(tokenlessEuDeploymentManifest.externalProcessors.email.accountDataRegion, "us");
-  assert.equal(tokenlessEuDeploymentManifest.externalProcessors.email.transferRequired, true);
+  assert.equal(
+    tokenlessEuDeploymentManifest.externalProcessors.email.accountDataRegion,
+    "us",
+  );
+  assert.equal(
+    tokenlessEuDeploymentManifest.externalProcessors.email.transferRequired,
+    true,
+  );
 });
 
 test("verified production requires the exact regional resource bundle and signed manifest", async () => {
@@ -95,7 +108,7 @@ test("verified production requires the exact regional resource bundle and signed
 
 test("static configuration rejects unpinned or mixed compute regions", async () => {
   const errors = await validateTokenlessEuDeployment({
-    sandbox: true,
+    env: await verifiedFixture(),
     vercelConfig: {},
     railwayConfigs: [
       '[deploy.multiRegionConfig]\n"us-east4-eqdc4a" = { numReplicas = 1 }\n',
@@ -119,7 +132,7 @@ test("the manifest cannot omit governed resources, processors, or public-chain l
   manifest.publicChainExceptions[0].customerContentAllowed = true;
   const output = (
     await validateTokenlessEuDeployment({
-      sandbox: true,
+      env: await verifiedFixture(),
       manifest,
       ...staticConfigs(),
     })

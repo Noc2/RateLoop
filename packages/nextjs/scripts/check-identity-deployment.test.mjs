@@ -15,13 +15,13 @@ function validEnv() {
 
 test("hosted Better Auth accepts only the isolated tokenless project and matching passkey domain", () => {
   assert.deepEqual(
-    validateIdentityDeployment({ env: validEnv(), projectLinks: [TOKENLESS_VERCEL_PROJECT], production: true }),
+    validateIdentityDeployment({ env: validEnv(), projectLinks: [TOKENLESS_VERCEL_PROJECT], hosted: true }),
     [],
   );
   assert.deepEqual(
     validateIdentityDeployment({
       env: { ...validEnv(), VERCEL_PROJECT_ID: TOKENLESS_VERCEL_PROJECT.projectId },
-      production: true,
+      hosted: true,
     }),
     [],
   );
@@ -36,7 +36,7 @@ test("hosted Better Auth rejects legacy production, public secrets, and missing 
       TOKENLESS_THIRDWEB_WALLET_ENABLED: "not-explicit",
     },
     projectLinks: [{ projectId: "legacy", projectName: "rate-loop-nextjs" }],
-    production: true,
+    hosted: true,
   });
   assert.match(errors.join("\n"), /BETTER_AUTH_SECRET must contain at least 32 characters/i);
   assert.match(errors.join("\n"), /does not match tokenless origin/i);
@@ -47,31 +47,22 @@ test("hosted Better Auth rejects legacy production, public secrets, and missing 
 });
 
 test("local builds remain build-safe without hosted auth variables", () => {
-  assert.deepEqual(validateIdentityDeployment({ env: {}, production: false }), []);
+  assert.deepEqual(validateIdentityDeployment({ env: {}, hosted: false }), []);
 });
 
-test("hosted sandbox builds allow auth to remain unconfigured while preserving isolation and leak checks", () => {
-  assert.deepEqual(
-    validateIdentityDeployment({
-      env: {
-        APP_URL: "https://rateloop-tokenless.vercel.app",
-        TOKENLESS_SANDBOX_MODE: "true",
-      },
-      projectLinks: [TOKENLESS_VERCEL_PROJECT],
-      production: true,
-    }),
-    [],
-  );
+test("hosted builds cannot bypass required identity configuration", () => {
   const errors = validateIdentityDeployment({
     env: {
       APP_URL: "https://rateloop-tokenless.vercel.app",
       BETTER_AUTH_GOOGLE_CLIENT_ID: "partial-google-config",
       NEXT_PUBLIC_BETTER_AUTH_SECRET: "leaked",
-      TOKENLESS_SANDBOX_MODE: "true",
     },
     projectLinks: [TOKENLESS_VERCEL_PROJECT],
-    production: true,
+    hosted: true,
   });
+  assert.match(errors.join("\n"), /BETTER_AUTH_SECRET must contain at least 32 characters/i);
+  assert.match(errors.join("\n"), /BETTER_AUTH_PASSKEY_RP_ID is required/i);
+  assert.match(errors.join("\n"), /TOKENLESS_THIRDWEB_WALLET_ENABLED must be explicitly true or false/i);
   assert.match(errors.join("\n"), /Google sign-in requires both/i);
   assert.match(errors.join("\n"), /NEXT_PUBLIC_BETTER_AUTH_SECRET is forbidden/i);
 });
@@ -79,13 +70,13 @@ test("hosted sandbox builds allow auth to remain unconfigured while preserving i
 test("hosted identity still requires the exact immutable project ID", () => {
   const missingProjectId = validateIdentityDeployment({
     env: { ...validEnv(), VERCEL_PROJECT_NAME: TOKENLESS_VERCEL_PROJECT.projectName },
-    production: true,
+    hosted: true,
   });
   assert.match(missingProjectId.join("\n"), /unexpected vercel project/i);
 
   const legacyProjectId = validateIdentityDeployment({
     env: { ...validEnv(), VERCEL_PROJECT_ID: "prj_legacy" },
-    production: true,
+    hosted: true,
   });
   assert.match(legacyProjectId.join("\n"), /unexpected vercel project/i);
 });
@@ -94,14 +85,14 @@ test("optional thirdweb wallet creation is disabled by default and requires a pr
   const disabled = validateIdentityDeployment({
     env: validEnv(),
     projectLinks: [TOKENLESS_VERCEL_PROJECT],
-    production: true,
+    hosted: true,
   });
   assert.deepEqual(disabled, []);
 
   const missing = validateIdentityDeployment({
     env: { ...validEnv(), TOKENLESS_THIRDWEB_WALLET_ENABLED: "true" },
     projectLinks: [TOKENLESS_VERCEL_PROJECT],
-    production: true,
+    hosted: true,
   });
   assert.match(missing.join("\n"), /NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required/i);
   assert.match(missing.join("\n"), /TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK is required/i);
@@ -117,7 +108,7 @@ test("optional thirdweb wallet creation is disabled by default and requires a pr
       TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK: JSON.stringify(privateKey.export({ format: "jwk" })),
     },
     projectLinks: [TOKENLESS_VERCEL_PROJECT],
-    production: true,
+    hosted: true,
   });
   assert.deepEqual(enabled, []);
 });

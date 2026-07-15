@@ -77,17 +77,8 @@ function validateEuRuntime(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
 ) {
   if (read(env, "NODE_ENV") !== "production") return;
-  const sandbox = read(env, "TOKENLESS_SANDBOX_MODE")?.toLowerCase();
-  if (sandbox !== "true" && sandbox !== "false") {
-    throw new Error(
-      "TOKENLESS_SANDBOX_MODE must be explicitly true or false in production.",
-    );
-  }
-  if (sandbox === "true") return;
   if (read(env, "TOKENLESS_HOME_REGION") !== "eu") {
-    throw new Error(
-      "TOKENLESS_HOME_REGION must be eu outside the explicit sandbox.",
-    );
+    throw new Error("TOKENLESS_HOME_REGION must be eu in production.");
   }
   if (read(env, "RAILWAY_REPLICA_REGION") !== TOKENLESS_EU_RAILWAY_REGION) {
     throw new Error(

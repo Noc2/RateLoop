@@ -21,7 +21,12 @@ beforeAll(async () => {
 function productionEnv(): NodeJS.ProcessEnv {
   return {
     NODE_ENV: "production",
-    TOKENLESS_SANDBOX_MODE: "true",
+    TOKENLESS_HOME_REGION: "eu",
+    RAILWAY_REPLICA_REGION: "europe-west4-drams3a",
+    RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+    TOKENLESS_RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+    RAILWAY_SERVICE_ID: "svc-tokenless-keeper-eu",
+    TOKENLESS_KEEPER_SERVICE_ID: "svc-tokenless-keeper-eu",
     CHAIN_ID: "84532",
     RPC_URL: "https://sepolia.base.org",
     TOKENLESS_PANEL_ADDRESS: PANEL,
@@ -41,7 +46,7 @@ describe("tokenless keeper config", () => {
         chainId: 84532,
         panel: PANEL,
         credentialIssuer: ISSUER,
-      })
+      }),
     ).toBe(`tokenless-v3:84532:${PANEL}:${ISSUER}:${ZERO}`);
   });
 
@@ -54,19 +59,19 @@ describe("tokenless keeper config", () => {
 
   it("requires a nonzero deployment block in production", () => {
     expect(() =>
-      loadConfig({ ...productionEnv(), TOKENLESS_DEPLOYMENT_BLOCK: "0" })
+      loadConfig({ ...productionEnv(), TOKENLESS_DEPLOYMENT_BLOCK: "0" }),
     ).toThrow(/TOKENLESS_DEPLOYMENT_BLOCK must be positive/);
   });
 
   it("rejects mainnet and mixed deployment keys", () => {
     expect(() => loadConfig({ ...productionEnv(), CHAIN_ID: "8453" })).toThrow(
-      /CHAIN_ID must be 31337 or 84532/
+      /CHAIN_ID must be 31337 or 84532/,
     );
     expect(() =>
       loadConfig({
         ...productionEnv(),
         TOKENLESS_DEPLOYMENT_KEY: `tokenless-v2:84532:${PANEL}:${ISSUER}:${ZERO}`,
-      })
+      }),
     ).toThrow(/does not match/);
   });
 
@@ -76,21 +81,12 @@ describe("tokenless keeper config", () => {
         ...productionEnv(),
         RPC_URL: "http://sepolia.example",
         METRICS_AUTH_TOKEN: "short",
-      })
+      }),
     ).toThrow(/RPC_URL must use HTTPS/);
   });
 
-  it("requires the exact EU Railway runtime identity outside the explicit sandbox", () => {
-    const verifiedEu = {
-      ...productionEnv(),
-      TOKENLESS_SANDBOX_MODE: "false",
-      TOKENLESS_HOME_REGION: "eu",
-      RAILWAY_REPLICA_REGION: "europe-west4-drams3a",
-      RAILWAY_PROJECT_ID: "prj-tokenless-eu",
-      TOKENLESS_RAILWAY_PROJECT_ID: "prj-tokenless-eu",
-      RAILWAY_SERVICE_ID: "svc-tokenless-keeper-eu",
-      TOKENLESS_KEEPER_SERVICE_ID: "svc-tokenless-keeper-eu",
-    };
+  it("requires the exact EU Railway runtime identity", () => {
+    const verifiedEu = productionEnv();
     expect(loadConfig(verifiedEu).chainId).toBe(84532);
     expect(() =>
       loadConfig({ ...verifiedEu, RAILWAY_REPLICA_REGION: "us-east4-eqdc4a" }),

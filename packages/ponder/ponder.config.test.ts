@@ -4,6 +4,15 @@ const originalEnv = { ...process.env };
 const panel = "0x1000000000000000000000000000000000000001";
 const issuer = "0x1000000000000000000000000000000000000002";
 const deploymentKey = `tokenless-v3:84532:${panel}:${issuer}:0x0000000000000000000000000000000000000000`;
+const hostedRuntime = {
+  NODE_ENV: "production",
+  TOKENLESS_HOME_REGION: "eu",
+  RAILWAY_REPLICA_REGION: "europe-west4-drams3a",
+  RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+  TOKENLESS_RAILWAY_PROJECT_ID: "prj-tokenless-eu",
+  RAILWAY_SERVICE_ID: "svc-tokenless-ponder-eu",
+  TOKENLESS_PONDER_SERVICE_ID: "svc-tokenless-ponder-eu",
+};
 
 afterEach(() => {
   process.env = { ...originalEnv };
@@ -14,8 +23,7 @@ describe("tokenless Ponder config", () => {
   it("registers only the panel and issuer on Base Sepolia", async () => {
     process.env = {
       ...originalEnv,
-      NODE_ENV: "production",
-      TOKENLESS_SANDBOX_MODE: "true",
+      ...hostedRuntime,
       PONDER_NETWORK: "baseSepolia",
       PONDER_RPC_URL_84532: "https://sepolia.base.org",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
@@ -24,15 +32,19 @@ describe("tokenless Ponder config", () => {
       RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     };
     const { default: config } = await import("./ponder.config");
-    expect(Object.keys((config as any).contracts).sort()).toEqual(["CredentialIssuer", "TokenlessPanel"]);
-    expect((config as any).contracts.TokenlessPanel.network.baseSepolia.address).toBe(panel);
+    expect(Object.keys((config as any).contracts).sort()).toEqual([
+      "CredentialIssuer",
+      "TokenlessPanel",
+    ]);
+    expect(
+      (config as any).contracts.TokenlessPanel.network.baseSepolia.address,
+    ).toBe(panel);
   });
 
   it("rejects plaintext live RPCs", async () => {
     process.env = {
       ...originalEnv,
-      NODE_ENV: "production",
-      TOKENLESS_SANDBOX_MODE: "true",
+      ...hostedRuntime,
       PONDER_NETWORK: "baseSepolia",
       PONDER_RPC_URL_84532: "http://rpc.example.test",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,

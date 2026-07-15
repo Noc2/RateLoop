@@ -25,7 +25,7 @@ function positiveInteger(
   env: NodeJS.ProcessEnv,
   name: string,
   fallback: number,
-  errors: string[]
+  errors: string[],
 ) {
   const raw = readEnv(env, name);
   if (!raw) return fallback;
@@ -41,7 +41,7 @@ function nonNegativeInteger(
   env: NodeJS.ProcessEnv,
   name: string,
   fallback: number,
-  errors: string[]
+  errors: string[],
 ) {
   const raw = readEnv(env, name);
   if (!raw) return fallback;
@@ -56,7 +56,7 @@ function nonNegativeInteger(
 function requiredAddress(
   env: NodeJS.ProcessEnv,
   name: string,
-  errors: string[]
+  errors: string[],
 ): Address {
   const value = required(env, name, errors);
   if (!isAddress(value) || value.toLowerCase() === zeroAddress) {
@@ -69,7 +69,7 @@ function requiredAddress(
 function optionalAddress(
   env: NodeJS.ProcessEnv,
   name: string,
-  errors: string[]
+  errors: string[],
 ): Address {
   const value = readEnv(env, name);
   if (!value) return zeroAddress;
@@ -86,18 +86,8 @@ function validateEuRuntime(
   errors: string[],
 ) {
   if (!production) return;
-  const sandbox = readEnv(env, "TOKENLESS_SANDBOX_MODE")?.toLowerCase();
-  if (sandbox !== "true" && sandbox !== "false") {
-    errors.push(
-      "TOKENLESS_SANDBOX_MODE must be explicitly true or false in production",
-    );
-    return;
-  }
-  if (sandbox === "true") return;
   if (readEnv(env, "TOKENLESS_HOME_REGION") !== "eu") {
-    errors.push(
-      "TOKENLESS_HOME_REGION must be eu outside the explicit sandbox",
-    );
+    errors.push("TOKENLESS_HOME_REGION must be eu in production");
   }
   if (readEnv(env, "RAILWAY_REPLICA_REGION") !== TOKENLESS_EU_RAILWAY_REGION) {
     errors.push(
@@ -145,12 +135,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const chainId = positiveInteger(env, "CHAIN_ID", 0, errors);
   if (![LOCAL_CHAIN_ID, BASE_SEPOLIA_CHAIN_ID].includes(chainId)) {
     errors.push(
-      `CHAIN_ID must be ${LOCAL_CHAIN_ID} or ${BASE_SEPOLIA_CHAIN_ID}`
+      `CHAIN_ID must be ${LOCAL_CHAIN_ID} or ${BASE_SEPOLIA_CHAIN_ID}`,
     );
   }
   if (production && chainId !== BASE_SEPOLIA_CHAIN_ID) {
     errors.push(
-      `production tokenless keeper requires CHAIN_ID=${BASE_SEPOLIA_CHAIN_ID}`
+      `production tokenless keeper requires CHAIN_ID=${BASE_SEPOLIA_CHAIN_ID}`,
     );
   }
 
@@ -168,12 +158,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const credentialIssuer = requiredAddress(
     env,
     "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS",
-    errors
+    errors,
   );
   const x402PanelSubmitter = optionalAddress(
     env,
     "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
-    errors
+    errors,
   );
   const expectedDeploymentKey = buildTokenlessDeploymentKey({
     chainId,
@@ -184,7 +174,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const deploymentKey = required(env, "TOKENLESS_DEPLOYMENT_KEY", errors);
   if (deploymentKey && deploymentKey.toLowerCase() !== expectedDeploymentKey) {
     errors.push(
-      "TOKENLESS_DEPLOYMENT_KEY does not match the configured chain and tokenless contract addresses"
+      "TOKENLESS_DEPLOYMENT_KEY does not match the configured chain and tokenless contract addresses",
     );
   }
 
@@ -210,7 +200,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     (!metricsAuthToken || metricsAuthToken.length < 16)
   ) {
     errors.push(
-      "METRICS_AUTH_TOKEN of at least 16 characters is required for a non-loopback production bind"
+      "METRICS_AUTH_TOKEN of at least 16 characters is required for a non-loopback production bind",
     );
   }
 
@@ -218,7 +208,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     env,
     "TOKENLESS_DEPLOYMENT_BLOCK",
     0,
-    errors
+    errors,
   );
   if (production && deploymentBlockNumber === 0) {
     errors.push("TOKENLESS_DEPLOYMENT_BLOCK must be positive in production");
@@ -228,26 +218,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     env,
     "KEEPER_MAX_ROUNDS_PER_TICK",
     100,
-    errors
+    errors,
   );
   const settlementBatchSize = positiveInteger(
     env,
     "KEEPER_SETTLEMENT_BATCH_SIZE",
     25,
-    errors
+    errors,
   );
   const maxCiphertextBytes = positiveInteger(
     env,
     "KEEPER_MAX_CIPHERTEXT_BYTES",
     16_384,
-    errors
+    errors,
   );
   const hostedPort = positiveInteger(env, "PORT", 9090, errors);
   const metricsPort = positiveInteger(env, "METRICS_PORT", hostedPort, errors);
   let minGasBalanceWei = 0n;
   try {
     minGasBalanceWei = BigInt(
-      readEnv(env, "MIN_GAS_BALANCE_WEI") ?? "1000000000000000"
+      readEnv(env, "MIN_GAS_BALANCE_WEI") ?? "1000000000000000",
     );
     if (minGasBalanceWei < 0n) throw new Error("negative");
   } catch {
@@ -256,7 +246,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 
   if (errors.length > 0) {
     throw new Error(
-      `Invalid tokenless keeper configuration:\n- ${errors.join("\n- ")}`
+      `Invalid tokenless keeper configuration:\n- ${errors.join("\n- ")}`,
     );
   }
 

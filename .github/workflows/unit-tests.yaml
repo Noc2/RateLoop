@@ -93,7 +93,6 @@ jobs:
     env:
       APP_URL: http://localhost:3000
       DATABASE_URL: "memory:"
-      TOKENLESS_SANDBOX_MODE: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

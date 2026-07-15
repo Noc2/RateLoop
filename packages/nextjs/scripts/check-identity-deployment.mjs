@@ -36,9 +36,8 @@ function validateOptionalProviderPair(env, idName, secretName, label, errors) {
   }
 }
 
-function validateThirdwebWalletIssuer(env, errors, required) {
+function validateThirdwebWalletIssuer(env, errors) {
   const enabled = env.TOKENLESS_THIRDWEB_WALLET_ENABLED?.trim().toLowerCase();
-  if (!enabled && !required) return;
   if (enabled !== "true" && enabled !== "false") {
     errors.push("TOKENLESS_THIRDWEB_WALLET_ENABLED must be explicitly true or false.");
     return;
@@ -64,19 +63,18 @@ function validateThirdwebWalletIssuer(env, errors, required) {
   }
 }
 
-export function validateIdentityDeployment({ env, projectLinks = [], production = false }) {
+export function validateIdentityDeployment({ env, projectLinks = [], hosted = false }) {
   const errors = [];
   const originHost = configuredOriginHost(env);
 
-  if (!production) return errors;
+  if (!hosted) return errors;
 
-  const sandbox = env.TOKENLESS_SANDBOX_MODE?.trim().toLowerCase() === "true";
-  if ((!sandbox || has(env.BETTER_AUTH_SECRET)) && (env.BETTER_AUTH_SECRET?.trim().length ?? 0) < 32) {
+  if ((env.BETTER_AUTH_SECRET?.trim().length ?? 0) < 32) {
     errors.push("BETTER_AUTH_SECRET must contain at least 32 characters.");
   }
   if (!originHost) errors.push("APP_URL or NEXT_PUBLIC_APP_URL must define the tokenless origin.");
   const passkeyRpId = env.BETTER_AUTH_PASSKEY_RP_ID?.trim().toLowerCase();
-  if (!passkeyRpId && !sandbox) errors.push("BETTER_AUTH_PASSKEY_RP_ID is required for hosted passkeys.");
+  if (!passkeyRpId) errors.push("BETTER_AUTH_PASSKEY_RP_ID is required for hosted passkeys.");
   else if (passkeyRpId && originHost && passkeyRpId !== originHost) {
     errors.push(`Better Auth passkey RP ID ${passkeyRpId} does not match tokenless origin ${originHost}.`);
   }
@@ -105,7 +103,7 @@ export function validateIdentityDeployment({ env, projectLinks = [], production 
   ]) {
     if (has(env[name])) errors.push(`${name} is forbidden because identity secrets must remain server-only.`);
   }
-  validateThirdwebWalletIssuer(env, errors, !sandbox);
+  validateThirdwebWalletIssuer(env, errors);
 
   const systemLink =
     env.VERCEL_PROJECT_ID || env.VERCEL_PROJECT_NAME
@@ -144,21 +142,21 @@ function main() {
     readProjectLink(path.join(packageRoot, ".vercel/project.json")),
     readProjectLink(path.join(repoRoot, ".vercel/project.json")),
   ].filter(Boolean);
-  const production =
+  const hosted =
     process.argv.includes("--production") ||
     process.env.VERCEL === "1" ||
     process.env.VERCEL_ENV === "production" ||
     process.env.VERCEL_ENV === "preview";
-  const errors = validateIdentityDeployment({ env: process.env, projectLinks, production });
+  const errors = validateIdentityDeployment({ env: process.env, projectLinks, hosted });
   if (errors.length > 0) {
     console.error(`Tokenless identity deployment check failed:\n- ${errors.join("\n- ")}`);
     process.exitCode = 1;
     return;
   }
   console.log(
-    production
+    hosted
       ? "Tokenless identity deployment check passed."
-      : "Tokenless identity deployment check skipped outside hosted production/preview.",
+      : "Tokenless identity deployment check skipped outside a hosted deployment.",
   );
 }
 
