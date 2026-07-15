@@ -21,11 +21,15 @@ function shortAddress(value: string) {
 export function AgentRegistryPanel({
   workspaceId,
   agentRevision = 0,
+  activeManagementPanel = null,
   onAgentsChanged,
+  onManagementPanelChange,
 }: {
   workspaceId: string;
   agentRevision?: number;
+  activeManagementPanel?: "review" | "publishing" | null;
   onAgentsChanged?: () => void;
+  onManagementPanelChange?: (panel: "review" | "publishing" | null) => void;
 }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
@@ -97,7 +101,7 @@ export function AgentRegistryPanel({
   }
 
   async function deactivate(agent: WorkspaceAgent) {
-    if (!window.confirm(`Deactivate ${agent.currentVersion.displayName}? Existing run snapshots remain unchanged.`))
+    if (!window.confirm(`Deactivate ${agent.currentVersion.displayName}? Existing records will stay available.`))
       return;
     setBusy(true);
     setError(null);
@@ -112,7 +116,7 @@ export function AgentRegistryPanel({
       await loadRegistry(workspaceId);
       onAgentsChanged?.();
       setEditingAgent(null);
-      setStatus("Agent deactivated. Existing immutable versions remain available for audit.");
+      setStatus("Agent deactivated. Existing records remain available.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to deactivate the agent.");
     } finally {
@@ -126,83 +130,21 @@ export function AgentRegistryPanel({
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent registry</p>
-          <h2 className="mt-2 text-2xl font-semibold">Durable identities and declared model versions</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Every version is append-only. Human results bind to the version captured when the review was requested,
-            never to a later mutable label.
-          </p>
-        </div>
-        {registry && !registry.canManage ? (
-          <p className="mt-5 rounded-lg bg-white/[0.04] p-3 text-sm text-base-content/60">
-            Your {registry.callerRole} role has read-only access to this registry.
-          </p>
-        ) : null}
-      </section>
-
-      {editingAgent && registry?.canManage ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="new-agent-version-heading">
-          <h2 id="new-agent-version-heading" className="text-xl font-semibold">
-            Create version {editingAgent.currentVersion.versionNumber + 1} for {editingAgent.currentVersion.displayName}
-          </h2>
-          <p className="mt-2 text-sm text-base-content/55">
-            Version {editingAgent.currentVersion.versionNumber} remains immutable and available in history.
-          </p>
-          <div className="mt-5">
-            <AgentVersionForm
-              key={editingAgent.currentVersion.versionId}
-              current={editingAgent.currentVersion}
-              busy={busy}
-              submitLabel="Save new immutable version"
-              onSubmit={createVersion}
-            />
-          </div>
-        </section>
-      ) : null}
-
       {loading ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading authorized agent metadata…
-        </div>
-      ) : null}
-      {!loading && registry?.agents.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
-          No approved agents are registered yet. Use Connect an agent above so the agent can describe itself before you
-          approve its immutable identity and policies.
-        </div>
-      ) : null}
-      {!loading && registry && registry.agents.length > 0 && visibleAgents.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
-          No active agents are registered. Archived identities remain available for audit.
-        </div>
-      ) : null}
-      {!loading && archivedAgentCount > 0 ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            className="btn border border-white/10 bg-white/[0.04] text-base-content/70"
-            aria-pressed={showArchived}
-            onClick={() => setShowArchived(current => !current)}
-          >
-            {showArchived ? "Hide archived agents" : `Show archived agents (${archivedAgentCount})`}
-          </button>
-        </div>
+        <p className="text-sm text-base-content/55" role="status">
+          <span className="loading loading-spinner loading-sm mr-2" /> Loading agent…
+        </p>
       ) : null}
 
       <div className="space-y-4">
         {visibleAgents.map(agent => (
-          <article key={agent.agentId} className="surface-card rounded-2xl p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <article key={agent.agentId} className="surface-card rounded-2xl p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-semibold">{agent.currentVersion.displayName}</h2>
-                  <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs text-base-content/60">
-                    v{agent.currentVersion.versionNumber}
-                  </span>
+                  <h2 className="font-semibold">{agent.currentVersion.displayName}</h2>
                   <span
-                    className={`rounded-md px-2 py-1 text-xs ${
+                    className={`badge border-0 ${
                       agent.status === "active"
                         ? "bg-emerald-300/10 text-emerald-100"
                         : "bg-white/[0.06] text-base-content/50"
@@ -211,85 +153,150 @@ export function AgentRegistryPanel({
                     {agent.status}
                   </span>
                 </div>
-                <p className="mt-2 font-mono text-xs text-base-content/45">{agent.externalId}</p>
-                {agent.currentVersion.description ? (
-                  <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-                    {agent.currentVersion.description}
-                  </p>
-                ) : null}
-              </div>
-              {registry?.canManage && agent.status === "active" ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="btn border-0 bg-white/[0.08]"
-                    disabled={busy}
-                    onClick={() => {
-                      setEditingAgent(agent);
-                    }}
-                  >
-                    New version
-                  </button>
-                  <button
-                    type="button"
-                    className="btn border border-red-300/20 bg-red-300/[0.06] text-red-100"
-                    disabled={busy}
-                    onClick={() => void deactivate(agent)}
-                  >
-                    Deactivate
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <dl className="mt-5 grid gap-4 border-y border-white/10 py-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <dt className="text-xs text-base-content/45">Declared provider</dt>
-                <dd className="mt-1">{agent.currentVersion.declaredProvider}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-base-content/45">Declared model</dt>
-                <dd className="mt-1">
+                <p className="mt-1 text-sm text-base-content/55">
                   {agent.currentVersion.declaredModel}
                   {agent.currentVersion.declaredModelVersion ? ` · ${agent.currentVersion.declaredModelVersion}` : ""}
-                </dd>
+                  {` · v${agent.currentVersion.versionNumber}`}
+                </p>
               </div>
-              <div>
-                <dt className="text-xs text-base-content/45">Environment</dt>
-                <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-base-content/45">Owner</dt>
-                <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
-                  {shortAddress(agent.ownerAccountAddress)}
-                </dd>
-              </div>
-            </dl>
-            <details className="mt-4">
-              <summary className="cursor-pointer text-sm font-semibold text-base-content/70">
-                Version history ({agent.versions.length})
-              </summary>
-              <ol className="mt-3 space-y-3">
-                {agent.versions.map(version => (
-                  <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong>Version {version.versionNumber}</strong>
-                      <time dateTime={version.createdAt} className="text-xs text-base-content/45">
-                        {new Date(version.createdAt).toLocaleString()}
-                      </time>
+            </div>
+            <details className="mt-3 border-t border-white/10 pt-3">
+              <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Manage</summary>
+              <div className="mt-4 space-y-4">
+                {registry?.canManage && agent.status === "active" ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm border-white/10"
+                      disabled={busy}
+                      onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
+                    >
+                      Change version
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm border-white/10"
+                      aria-expanded={activeManagementPanel === "review"}
+                      aria-controls="agent-review-behavior"
+                      disabled={busy}
+                      onClick={() => onManagementPanelChange?.(activeManagementPanel === "review" ? null : "review")}
+                    >
+                      Review behavior
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm border-white/10"
+                      aria-expanded={activeManagementPanel === "publishing"}
+                      aria-controls="agent-autonomous-requests"
+                      disabled={busy}
+                      onClick={() =>
+                        onManagementPanelChange?.(activeManagementPanel === "publishing" ? null : "publishing")
+                      }
+                    >
+                      Autonomous requests
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost text-error"
+                      disabled={busy}
+                      onClick={() => void deactivate(agent)}
+                    >
+                      Deactivate
+                    </button>
+                  </div>
+                ) : null}
+
+                {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
+                  <section
+                    className="surface-card-nested rounded-xl p-4"
+                    aria-labelledby={`new-version-${agent.agentId}`}
+                  >
+                    <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
+                      Change declared version
+                    </h3>
+                    <div className="mt-4">
+                      <AgentVersionForm
+                        key={editingAgent.currentVersion.versionId}
+                        current={editingAgent.currentVersion}
+                        busy={busy}
+                        submitLabel="Save new version"
+                        onSubmit={createVersion}
+                      />
                     </div>
-                    <p className="mt-2 text-base-content/60">
-                      {version.displayName} · declared {version.declaredProvider} / {version.declaredModel}
-                    </p>
-                    <code className="mt-2 block break-all text-[11px] text-base-content/40">
-                      sha256:{version.configurationCommitment}
-                    </code>
-                  </li>
-                ))}
-              </ol>
+                  </section>
+                ) : null}
+
+                {!registry?.canManage ? (
+                  <p className="text-sm text-base-content/55">Only workspace owners and admins can make changes.</p>
+                ) : null}
+
+                <details>
+                  <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                    Technical details
+                  </summary>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <dt className="text-xs text-base-content/45">External ID</dt>
+                      <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/45">Declared provider</dt>
+                      <dd className="mt-1">{agent.currentVersion.declaredProvider}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/45">Environment</dt>
+                      <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/45">Owner</dt>
+                      <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
+                        {shortAddress(agent.ownerAccountAddress)}
+                      </dd>
+                    </div>
+                  </dl>
+                </details>
+
+                <details>
+                  <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                    Audit history ({agent.versions.length})
+                  </summary>
+                  <ol className="mt-3 space-y-3">
+                    {agent.versions.map(version => (
+                      <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <strong>Version {version.versionNumber}</strong>
+                          <time dateTime={version.createdAt} className="text-xs text-base-content/45">
+                            {new Date(version.createdAt).toLocaleString()}
+                          </time>
+                        </div>
+                        <p className="mt-2 text-base-content/60">
+                          {version.displayName} · declared {version.declaredProvider} / {version.declaredModel}
+                        </p>
+                        <code className="mt-2 block break-all text-[11px] text-base-content/40">
+                          sha256:{version.configurationCommitment}
+                        </code>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              </div>
             </details>
           </article>
         ))}
       </div>
+
+      {!loading && archivedAgentCount > 0 ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost text-base-content/60"
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived(current => !current)}
+          >
+            {showArchived ? "Hide archived" : `Show archived (${archivedAgentCount})`}
+          </button>
+        </div>
+      ) : null}
 
       {status ? (
         <p role="status" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">

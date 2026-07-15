@@ -75,6 +75,14 @@ test("safe OAuth integrations show no bearer rotation or publishing permission",
   assert.match(source, /Rotate legacy credential/);
 });
 
+test("connected agent management keeps disconnect and technical state behind Manage", () => {
+  assert.match(source, />Manage</);
+  assert.match(source, /Connection details/);
+  assert.match(source, /Connection history/);
+  assert.match(source, />\s*Disconnect\s*</);
+  assert.match(source, /setStatus\("Agent disconnected\."\)/);
+});
+
 test("elapsed legacy attempts are never kept pending client-side", () => {
   const now = Date.parse("2026-07-15T10:00:00.000Z");
   assert.equal(isPendingAgentPairing({ status: "open", expiresAt: "2026-07-15T10:01:00.000Z" }, now), true);

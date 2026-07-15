@@ -34,6 +34,7 @@ export function AgentWorkspacePanels({
   const [hasConnectedAgent, setHasConnectedAgent] = useState(initialHasConnectedAgent);
   const [agentRevision, refreshAgents] = useReducer(value => value + 1, 0);
   const [publishingRevision, refreshPublishingPolicies] = useReducer(value => value + 1, 0);
+  const [managementPanel, setManagementPanel] = useState<"review" | "publishing" | null>(null);
 
   const handleConnectionState = useCallback((connected: boolean) => {
     setHasConnectedAgent(connected);
@@ -105,17 +106,27 @@ export function AgentWorkspacePanels({
           />
         ) : null}
         {hasConnectedAgent && resolvedTab === "agents" ? (
-          <AgentRegistryPanel workspaceId={workspaceId} agentRevision={agentRevision} onAgentsChanged={refreshAgents} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
-          <AgentReviewPolicyPanel workspaceId={workspaceId} agentRevision={agentRevision} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
-          <AgentPublishingPolicyPanel
+          <AgentRegistryPanel
             workspaceId={workspaceId}
-            publishingRevision={publishingRevision}
-            onPoliciesChanged={refreshPublishingPolicies}
+            agentRevision={agentRevision}
+            activeManagementPanel={managementPanel}
+            onAgentsChanged={refreshAgents}
+            onManagementPanelChange={setManagementPanel}
           />
+        ) : null}
+        {hasConnectedAgent && resolvedTab === "agents" && canManage && managementPanel === "review" ? (
+          <div id="agent-review-behavior">
+            <AgentReviewPolicyPanel workspaceId={workspaceId} agentRevision={agentRevision} />
+          </div>
+        ) : null}
+        {hasConnectedAgent && resolvedTab === "agents" && canManage && managementPanel === "publishing" ? (
+          <div id="agent-autonomous-requests">
+            <AgentPublishingPolicyPanel
+              workspaceId={workspaceId}
+              publishingRevision={publishingRevision}
+              onPoliciesChanged={refreshPublishingPolicies}
+            />
+          </div>
         ) : null}
         {hasConnectedAgent && resolvedTab === "groups" && canManage ? (
           <PrivateGroupsPanel initialWorkspaceId={workspaceId} showWorkspaceSelector={false} />

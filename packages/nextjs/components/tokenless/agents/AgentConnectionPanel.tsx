@@ -868,8 +868,7 @@ export function AgentConnectionPanel({
   }
 
   async function revokeIntegration(integration: AgentIntegration) {
-    if (!window.confirm(`Revoke the RateLoop connection for ${integration.agentDisplayName || integration.agentId}?`))
-      return;
+    if (!window.confirm(`Disconnect ${integration.agentDisplayName || integration.agentId} from RateLoop?`)) return;
     setBusyAction(`revoke:${integration.integrationId}`);
     setError(null);
     setStatus(null);
@@ -881,7 +880,7 @@ export function AgentConnectionPanel({
         ),
       );
       await loadConnectionState(workspaceId);
-      setStatus("Agent connection revoked. Its next authenticated request will be denied.");
+      setStatus("Agent disconnected.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to revoke the agent connection.");
     } finally {
@@ -1201,11 +1200,6 @@ export function AgentConnectionPanel({
                             {legacyCredential ? "legacy credential" : "safe OAuth"}
                           </span>
                         </div>
-                        <p className="mt-2 font-mono text-xs text-base-content/40">{integration.integrationId}</p>
-                        <p className="mt-3 text-sm text-base-content/60">
-                          {integration.clientName || "Unknown client"}
-                          {integration.clientVersion ? ` ${integration.clientVersion}` : ""}
-                        </p>
                       </div>
                       {active ? (
                         <div className="flex flex-wrap gap-2">
@@ -1225,40 +1219,54 @@ export function AgentConnectionPanel({
                             disabled={Boolean(busyAction)}
                             onClick={() => void revokeIntegration(integration)}
                           >
-                            Revoke
+                            Disconnect
                           </button>
                         </div>
                       ) : null}
                     </div>
-                    <dl className="mt-4 grid gap-4 border-t border-white/10 pt-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                      <div>
-                        <dt className="text-xs text-base-content/45">Last seen</dt>
-                        <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
+                    <details className="mt-4 border-t border-white/10 pt-4">
+                      <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                        Connection details
+                      </summary>
+                      <div className="mt-3">
+                        <p className="font-mono text-xs text-base-content/40">{integration.integrationId}</p>
+                        <p className="mt-2 text-sm text-base-content/60">
+                          {integration.clientName || "Unknown client"}
+                          {integration.clientVersion ? ` ${integration.clientVersion}` : ""}
+                        </p>
+                        <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                          <div>
+                            <dt className="text-xs text-base-content/45">Last seen</dt>
+                            <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/45">
+                              {legacyCredential ? "Credential expiry" : "Access"}
+                            </dt>
+                            <dd className="mt-1">
+                              {legacyCredential
+                                ? formatTimestamp(integration.credentialExpiresAt, "No expiry")
+                                : "OAuth-managed safe access"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/45">Review policy</dt>
+                            <dd className="mt-1">
+                              {integration.reviewPolicyId || "Unknown"}
+                              {integration.reviewPolicyVersion ? ` · v${integration.reviewPolicyVersion}` : ""}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/45">Publishing policy</dt>
+                            <dd className="mt-1">
+                              {integration.publishingPolicyName ||
+                                integration.publishingPolicyId ||
+                                "No publishing access"}
+                            </dd>
+                          </div>
+                        </dl>
                       </div>
-                      <div>
-                        <dt className="text-xs text-base-content/45">
-                          {legacyCredential ? "Credential expiry" : "Access"}
-                        </dt>
-                        <dd className="mt-1">
-                          {legacyCredential
-                            ? formatTimestamp(integration.credentialExpiresAt, "No expiry")
-                            : "OAuth-managed safe access"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-base-content/45">Review policy</dt>
-                        <dd className="mt-1">
-                          {integration.reviewPolicyId || "Unknown"}
-                          {integration.reviewPolicyVersion ? ` · v${integration.reviewPolicyVersion}` : ""}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-base-content/45">Publishing policy</dt>
-                        <dd className="mt-1">
-                          {integration.publishingPolicyName || integration.publishingPolicyId || "No publishing access"}
-                        </dd>
-                      </div>
-                    </dl>
+                    </details>
                   </article>
                 );
               })}

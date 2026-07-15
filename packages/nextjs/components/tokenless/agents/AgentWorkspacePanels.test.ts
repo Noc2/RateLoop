@@ -70,6 +70,14 @@ test("read-only workspaces never render connection or policy mutations", () => {
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents" && canManage/);
 });
 
+test("review and autonomous controls render only after a contextual management action", () => {
+  assert.match(panelsSource, /const \[managementPanel, setManagementPanel\] = useState/);
+  assert.match(panelsSource, /activeManagementPanel=\{managementPanel\}/);
+  assert.match(panelsSource, /onManagementPanelChange=\{setManagementPanel\}/);
+  assert.match(panelsSource, /managementPanel === "review"/);
+  assert.match(panelsSource, /managementPanel === "publishing"/);
+});
+
 test("agent and publishing mutations still refresh dependent panels", () => {
   assert.match(panelsSource, /const \[agentRevision, refreshAgents\] = useReducer/);
   assert.match(panelsSource, /const \[publishingRevision, refreshPublishingPolicies\] = useReducer/);
