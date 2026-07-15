@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 const agents = ["Claude Code", "OpenAI Codex", "Cursor", "GitHub Copilot", "Gemini CLI", "OpenClaw"] as const;
 
 function AgentIcon({ name }: { name: string }) {
@@ -51,28 +49,23 @@ function AgentIcon({ name }: { name: string }) {
 export function SupportedAgentsSection() {
   return (
     <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40" aria-labelledby="supported-agents-title">
-      <p id="supported-agents-title" className="mb-5 text-center text-sm text-base-content/60">
+      <p
+        id="supported-agents-title"
+        className="mb-4 text-center text-base leading-7 text-base-content/70 sm:mb-5 sm:text-lg"
+      >
         Works with the agents your team already uses
       </p>
-      <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:gap-2.5 sm:px-0 lg:gap-3">
+      <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:flex-nowrap sm:gap-2.5 sm:px-0 lg:gap-3">
         {agents.map(agent => (
           <span
             key={agent}
-            className="flex shrink-0 items-center gap-2 rounded-lg border border-base-content/10 bg-base-content/[0.055] px-3 py-2 text-base-content/70"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-base-content/10 bg-base-content/[0.055] px-3 py-2.5 text-base-content/70 sm:px-3.5 lg:px-4"
           >
             <AgentIcon name={agent} />
-            <span className="whitespace-nowrap text-sm font-semibold">{agent}</span>
+            <span className="whitespace-nowrap text-sm font-semibold sm:text-base">{agent}</span>
           </span>
         ))}
       </div>
-      <p className="mt-5 text-center">
-        <Link
-          href="/docs/ai"
-          className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4"
-        >
-          See supported agents <span aria-hidden="true">→</span>
-        </Link>
-      </p>
     </section>
   );
 }

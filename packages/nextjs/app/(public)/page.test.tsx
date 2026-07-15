@@ -93,7 +93,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /GitHub Copilot/);
   assert.match(html, /Gemini CLI/);
   assert.match(html, /OpenClaw/);
-  assert.match(html, /href="\/docs\/ai"/);
+  assert.match(html, /text-base leading-7 text-base-content\/70 sm:mb-5 sm:text-lg/);
+  assert.match(html, /px-3 py-2\.5 text-base-content\/70 sm:px-3\.5 lg:px-4/);
+  assert.match(html, /whitespace-nowrap text-sm font-semibold sm:text-base/);
+  assert.doesNotMatch(html, /See supported agents|href="\/docs\/ai"/);
   assert.doesNotMatch(html, /Agent setup|Copy setup|role="dialog"/);
   assert.match(html, /id="faq"/);
   assert.match(html, /Common/);
