@@ -27,10 +27,12 @@ const SOURCE_PAYLOAD = "Customer requested a refund for a duplicated charge.";
 const SUGGESTION_PAYLOAD = "Approve the refund after verifying the duplicate transaction IDs.";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+const originalNetworkPanelsEnabled = process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "77".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "orchestration-test-v1";
+  process.env.TOKENLESS_NETWORK_PANELS_ENABLED = "true";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
@@ -40,6 +42,8 @@ afterEach(() => {
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
+  if (originalNetworkPanelsEnabled === undefined) delete process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+  else process.env.TOKENLESS_NETWORK_PANELS_ENABLED = originalNetworkPanelsEnabled;
 });
 
 async function activateEarlyAccess(workspaceId: string) {
@@ -53,7 +57,13 @@ async function activateEarlyAccess(workspaceId: string) {
   });
 }
 
-async function fixture(input: { fund?: boolean; admissionHashes?: string[] } = {}) {
+async function fixture(
+  input: {
+    fund?: boolean;
+    admissionHashes?: string[];
+    audience?: "private_invited" | "public_network" | "hybrid";
+  } = {},
+) {
   const { workspaceId } = await createWorkspace({ name: "Adaptive orchestration", ownerAddress: OWNER });
   await activateEarlyAccess(workspaceId);
   const agent = await createWorkspaceAgent({
@@ -72,7 +82,7 @@ async function fixture(input: { fund?: boolean; admissionHashes?: string[] } = {
     accountAddress: OWNER,
     workspaceId,
     policy: {
-      name: "Adaptive private review",
+      name: "Adaptive review",
       allowedPaymentModes: ["prepaid"],
       maxPanelAtomic: "100000000",
       maxDailyAtomic: "500000000",
@@ -81,13 +91,19 @@ async function fixture(input: { fund?: boolean; admissionHashes?: string[] } = {
       maxBountyAtomic: "50000000",
       maxFeeBps: 1_000,
       maxAttemptReserveAtomic: "20000000",
-      allowedReviewerSources: ["customer_invited"],
+      allowedReviewerSources: [
+        input.audience === "private_invited"
+          ? "customer_invited"
+          : input.audience === "hybrid"
+            ? "hybrid"
+            : "rateloop_network",
+      ],
       allowedAdmissionPolicyHashes: input.admissionHashes ?? [ADMISSION_HASH],
-      allowedDataClassifications: ["internal"],
+      allowedDataClassifications: ["public", "synthetic", "redacted"],
     },
   });
-  const reviewPolicyId = "arp_refund_v1";
-  const audiencePolicy = { reviewerSource: "private_invited" };
+  const audiencePolicy = { reviewerSource: input.audience ?? "public_network" };
+  const reviewPolicyId = `arp_refund_${audiencePolicy.reviewerSource}`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_policies
           (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
@@ -170,6 +186,12 @@ const economics = {
   feeBps: 750,
 };
 
+const publication = {
+  visibility: "public" as const,
+  dataClassification: "synthetic" as const,
+  confirmedNoSensitiveData: true as const,
+};
+
 test("creates one prepaid canonical ask and idempotently binds the required opportunity", async () => {
   const setup = await fixture();
   const first = await requestAdaptiveHumanReview({
@@ -178,6 +200,7 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
     sourcePayload: SOURCE_PAYLOAD,
     suggestionPayload: SUGGESTION_PAYLOAD,
     economics,
+    publication,
     appOrigin: APP_ORIGIN,
   });
   const replay = await requestAdaptiveHumanReview({
@@ -186,6 +209,7 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
     sourcePayload: SOURCE_PAYLOAD,
     suggestionPayload: SUGGESTION_PAYLOAD,
     economics,
+    publication,
     appOrigin: APP_ORIGIN,
   });
 
@@ -207,7 +231,10 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
   const quoteRequest = JSON.parse(String(stored.rows[0]?.request_json)) as Record<string, unknown>;
   assert.equal(stored.rows[0]?.payment_mode, "prepaid");
   assert.equal(stored.rows[0]?.api_key_id, setup.principal.principal.apiKeyId);
-  assert.deepEqual(quoteRequest.audience, { admissionPolicyHash: ADMISSION_HASH, source: "customer_invited" });
+  assert.deepEqual(quoteRequest.audience, { admissionPolicyHash: ADMISSION_HASH, source: "rateloop_network" });
+  assert.equal(quoteRequest.visibility, "public");
+  assert.equal(quoteRequest.dataClassification, "synthetic");
+  assert.equal(quoteRequest.confirmedNoSensitiveData, true);
   assert.deepEqual(quoteRequest.question, {
     kind: "binary",
     negativeLabel: "No",
@@ -233,6 +260,93 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
   );
 });
 
+test("requires an explicit safe public publication declaration before creating an ask", async () => {
+  const setup = await fixture();
+  const invalidDeclarations: unknown[] = [
+    undefined,
+    { ...publication, visibility: "private" },
+    { ...publication, dataClassification: "internal" },
+    { ...publication, confirmedNoSensitiveData: false },
+    { ...publication, dataClassification: "redacted" },
+  ];
+  for (const invalidPublication of invalidDeclarations) {
+    await assert.rejects(
+      () =>
+        requestAdaptiveHumanReview({
+          principal: setup.principal,
+          opportunityId: setup.decision.opportunityId,
+          sourcePayload: SOURCE_PAYLOAD,
+          suggestionPayload: SUGGESTION_PAYLOAD,
+          economics,
+          publication: invalidPublication as never,
+          appOrigin: APP_ORIGIN,
+        }),
+      (error: unknown) =>
+        error instanceof TokenlessServiceError &&
+        error.code === "invalid_review_publication" &&
+        error.message.includes("confirmedNoSensitiveData true"),
+    );
+  }
+  const mutations = await dbClient.execute(
+    "SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",
+  );
+  assert.equal(Number(mutations.rows[0]?.asks), 0);
+  assert.equal(Number(mutations.rows[0]?.reservations), 0);
+});
+
+test("fails private and hybrid policies before creating unreachable asks", async () => {
+  for (const audience of ["private_invited", "hybrid"] as const) {
+    const setup = await fixture({ audience });
+    await assert.rejects(
+      () =>
+        requestAdaptiveHumanReview({
+          principal: setup.principal,
+          opportunityId: setup.decision.opportunityId,
+          sourcePayload: SOURCE_PAYLOAD,
+          suggestionPayload: SUGGESTION_PAYLOAD,
+          economics,
+          publication,
+          appOrigin: APP_ORIGIN,
+        }),
+      (error: unknown) =>
+        error instanceof TokenlessServiceError &&
+        error.code === "private_assignment_lane_unavailable" &&
+        error.message.includes("RateLoop network"),
+    );
+  }
+  const mutations = await dbClient.execute(
+    "SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",
+  );
+  assert.equal(Number(mutations.rows[0]?.asks), 0);
+  assert.equal(Number(mutations.rows[0]?.reservations), 0);
+});
+
+test("preserves the hosted RateLoop-network feature gate", async () => {
+  const setup = await fixture();
+  process.env.TOKENLESS_NETWORK_PANELS_ENABLED = "false";
+  await assert.rejects(
+    () =>
+      requestAdaptiveHumanReview({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
+        economics,
+        publication,
+        appOrigin: APP_ORIGIN,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.code === "network_panels_disabled" &&
+      error.message.includes("TOKENLESS_NETWORK_PANELS_ENABLED"),
+  );
+  const mutations = await dbClient.execute(
+    "SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",
+  );
+  assert.equal(Number(mutations.rows[0]?.asks), 0);
+  assert.equal(Number(mutations.rows[0]?.reservations), 0);
+});
+
 test("verifies both exact human-visible payload commitments before spending funds", async () => {
   const setup = await fixture();
   await assert.rejects(
@@ -243,6 +357,7 @@ test("verifies both exact human-visible payload commitments before spending fund
         sourcePayload: `${SOURCE_PAYLOAD} Changed.`,
         suggestionPayload: SUGGESTION_PAYLOAD,
         economics,
+        publication,
         appOrigin: APP_ORIGIN,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "source_payload_commitment_mismatch",
@@ -255,6 +370,7 @@ test("verifies both exact human-visible payload commitments before spending fund
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: `${SUGGESTION_PAYLOAD} Changed.`,
         economics,
+        publication,
         appOrigin: APP_ORIGIN,
       }),
     (error: unknown) =>
@@ -277,6 +393,7 @@ test("fails closed on ambiguous admission policies and insufficient prepaid fund
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: SUGGESTION_PAYLOAD,
         economics,
+        publication,
         appOrigin: APP_ORIGIN,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_admission_policy_ambiguous",
@@ -292,6 +409,7 @@ test("fails closed on ambiguous admission policies and insufficient prepaid fund
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: SUGGESTION_PAYLOAD,
         economics,
+        publication,
         appOrigin: APP_ORIGIN,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "insufficient_prepaid_balance",

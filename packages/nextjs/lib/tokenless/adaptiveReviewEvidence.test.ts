@@ -27,10 +27,12 @@ const SOURCE_PAYLOAD = "The customer was charged twice for invoice 42.";
 const SUGGESTION_PAYLOAD = "Refund the confirmed duplicate charge.";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+const originalNetworkPanelsEnabled = process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "88".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "evidence-test-v1";
+  process.env.TOKENLESS_NETWORK_PANELS_ENABLED = "true";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
@@ -40,6 +42,8 @@ afterEach(() => {
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
+  if (originalNetworkPanelsEnabled === undefined) delete process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+  else process.env.TOKENLESS_NETWORK_PANELS_ENABLED = originalNetworkPanelsEnabled;
 });
 
 async function fixture() {
@@ -76,13 +80,13 @@ async function fixture() {
       maxBountyAtomic: "50000000",
       maxFeeBps: 1_000,
       maxAttemptReserveAtomic: "20000000",
-      allowedReviewerSources: ["customer_invited"],
+      allowedReviewerSources: ["rateloop_network"],
       allowedAdmissionPolicyHashes: [ADMISSION_HASH],
-      allowedDataClassifications: ["internal"],
+      allowedDataClassifications: ["synthetic"],
     },
   });
   const reviewPolicyId = "arp_evidence_v1";
-  const audiencePolicy = { reviewerSource: "private_invited" };
+  const audiencePolicy = { reviewerSource: "public_network" };
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_policies
           (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
@@ -163,6 +167,11 @@ async function fixture() {
       attemptReserveAtomic: "5000000",
       feeBps: 750,
     },
+    publication: {
+      visibility: "public",
+      dataClassification: "synthetic",
+      confirmedNoSensitiveData: true,
+    },
     appOrigin: "https://rateloop-tokenless.example",
   });
   return { workspaceId, principal, decision, operationKey: requested.ask.operationKey };
@@ -193,9 +202,9 @@ async function storedResult(
     economics: JSON.parse(String(ask.rows[0]?.economics_json)) as TokenlessResult["economics"],
     audience: {
       admissionPolicyHash: ADMISSION_HASH,
-      label: "Customer-invited reviewers",
+      label: "RateLoop-network reviewers",
       participantCount: input.participantCount ?? 5,
-      source: "customer_invited",
+      source: "rateloop_network",
     },
     verdict: publishable
       ? {

@@ -240,6 +240,11 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   const beforeTools = (await before.json()).result.tools as Array<{
     name: string;
     annotations?: Record<string, boolean>;
+    description?: string;
+    inputSchema?: {
+      required?: string[];
+      properties?: Record<string, unknown>;
+    };
   }>;
   assert.deepEqual(
     beforeTools.map(tool => tool.name),
@@ -269,6 +274,36 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
+  });
+  const requestReviewTool = tool("rateloop_request_review");
+  assert.match(requestReviewTool?.description ?? "", /public RateLoop network/);
+  assert.match(requestReviewTool?.description ?? "", /private and hybrid assignment lanes are not available/);
+  assert.deepEqual(requestReviewTool?.inputSchema?.required, [
+    "opportunityId",
+    "sourcePayload",
+    "suggestionPayload",
+    "economics",
+    "publication",
+  ]);
+  assert.deepEqual(requestReviewTool?.inputSchema?.properties?.publication, {
+    additionalProperties: false,
+    allOf: [
+      {
+        if: {
+          properties: { dataClassification: { const: "redacted" } },
+          required: ["dataClassification"],
+        },
+        then: { required: ["redactionSummary"] },
+      },
+    ],
+    properties: {
+      visibility: { enum: ["public"], type: "string" },
+      dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
+      confirmedNoSensitiveData: { enum: [true], type: "boolean" },
+      redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
+    },
+    required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
+    type: "object",
   });
   const notReady = await POST(
     request(

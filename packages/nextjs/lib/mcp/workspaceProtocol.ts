@@ -148,7 +148,7 @@ export const workspaceMcpTools = [
     name: "rateloop_request_review",
     annotations: consequentialOpenAnnotations,
     description:
-      "Create the canonical human yes/no review for a required frozen opportunity. Exact payload strings must match the earlier commitments.",
+      "Publish the canonical human yes/no review for a required frozen opportunity to the public RateLoop network. Exact payload strings must match the earlier commitments. Declare public, synthetic, or safely redacted data with confirmedNoSensitiveData true; private and hybrid assignment lanes are not available yet.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -166,8 +166,28 @@ export const workspaceMcpTools = [
           required: ["requestedPanelSize", "bountyAtomic", "attemptReserveAtomic", "feeBps"],
           type: "object",
         },
+        publication: {
+          additionalProperties: false,
+          allOf: [
+            {
+              if: {
+                properties: { dataClassification: { const: "redacted" } },
+                required: ["dataClassification"],
+              },
+              then: { required: ["redactionSummary"] },
+            },
+          ],
+          properties: {
+            visibility: { enum: ["public"], type: "string" },
+            dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
+            confirmedNoSensitiveData: { enum: [true], type: "boolean" },
+            redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
+          },
+          required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
+          type: "object",
+        },
       },
-      required: ["opportunityId", "sourcePayload", "suggestionPayload", "economics"],
+      required: ["opportunityId", "sourcePayload", "suggestionPayload", "economics", "publication"],
       type: "object",
     },
   },
@@ -404,7 +424,7 @@ async function callIntegrationTool(
     if (name === "rateloop_request_review") {
       const input = requireObjectWithKeys(
         args,
-        ["opportunityId", "sourcePayload", "suggestionPayload", "economics"],
+        ["opportunityId", "sourcePayload", "suggestionPayload", "economics", "publication"],
         "Review request arguments are invalid.",
       );
       return toolResult(
@@ -414,6 +434,7 @@ async function callIntegrationTool(
           sourcePayload: input.sourcePayload as string,
           suggestionPayload: input.suggestionPayload as string,
           economics: input.economics as never,
+          publication: input.publication as never,
           appOrigin: context.origin,
         }),
       );

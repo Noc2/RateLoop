@@ -27,6 +27,7 @@ import {
   getTokenlessResult,
   waitForTokenlessAsk,
 } from "~~/lib/tokenless/server";
+import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
 type QueryRow = Record<string, unknown>;
 
@@ -42,12 +43,20 @@ export type AdaptiveReviewEconomics = {
   feeBps: number;
 };
 
+export type AdaptiveReviewPublicationDeclaration = {
+  visibility: "public";
+  dataClassification: "public" | "synthetic" | "redacted";
+  confirmedNoSensitiveData: true;
+  redactionSummary?: string;
+};
+
 export type AdaptiveHumanReviewRequest = {
   principal: AdaptiveReviewIntegrationPrincipal;
   opportunityId: string;
   sourcePayload: string;
   suggestionPayload: string;
   economics: AdaptiveReviewEconomics;
+  publication: AdaptiveReviewPublicationDeclaration;
   appOrigin: string;
 };
 
@@ -204,6 +213,50 @@ function exactPayload(value: string, field: "sourcePayload" | "suggestionPayload
   return value;
 }
 
+function normalizePublicationDeclaration(value: unknown): AdaptiveReviewPublicationDeclaration {
+  const declaration =
+    value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  const classification = declaration?.dataClassification;
+  const redactionSummary = declaration?.redactionSummary;
+  if (
+    declaration?.visibility !== "public" ||
+    !["public", "synthetic", "redacted"].includes(String(classification)) ||
+    declaration.confirmedNoSensitiveData !== true ||
+    (redactionSummary !== undefined && typeof redactionSummary !== "string") ||
+    (classification === "redacted" &&
+      (typeof redactionSummary !== "string" || redactionSummary.trim().length < 10))
+  ) {
+    throw new TokenlessServiceError(
+      "RateLoop-network review publication requires visibility 'public', dataClassification 'public', 'synthetic', or 'redacted', and confirmedNoSensitiveData true. Redacted work also requires a redactionSummary of at least 10 characters.",
+      400,
+      "invalid_review_publication",
+    );
+  }
+  return {
+    visibility: "public",
+    dataClassification: classification as AdaptiveReviewPublicationDeclaration["dataClassification"],
+    confirmedNoSensitiveData: true,
+    ...(typeof redactionSummary === "string" ? { redactionSummary: redactionSummary.trim() } : {}),
+  };
+}
+
+function assertAvailableReviewerLane(opportunity: BoundOpportunity) {
+  if (opportunity.audienceSource !== "rateloop_network") {
+    throw new TokenlessServiceError(
+      "Private and hybrid reviewer policies cannot publish yet because no private assignment lane is connected. Change the review audience to RateLoop network for public, non-sensitive work, or wait for private assignment support.",
+      409,
+      "private_assignment_lane_unavailable",
+    );
+  }
+  if (!isWorldIdAssuranceEnabled()) {
+    throw new TokenlessServiceError(
+      "RateLoop-network assurance is disabled. Enable TOKENLESS_NETWORK_PANELS_ENABLED on the hosted service before retrying.",
+      404,
+      "network_panels_disabled",
+    );
+  }
+}
+
 function canonicalQuestion(sourcePayload: string, suggestionPayload: string): TokenlessQuoteRequest["question"] {
   const prompt = [
     "Compare the exact source and agent suggestion payloads below.",
@@ -316,10 +369,12 @@ export async function requestAdaptiveHumanReview(
 ): Promise<{ schemaVersion: "rateloop.adaptive-review-request.v1"; opportunityId: string; ask: TokenlessAskResponse }> {
   requireProductPrincipalScope(input.principal.principal, "panel:publish");
   requireProductPrincipalScope(input.principal.principal, "payment:submit");
+  const publication = normalizePublicationDeclaration(input.publication);
   const sourcePayload = exactPayload(input.sourcePayload, "sourcePayload");
   const suggestionPayload = exactPayload(input.suggestionPayload, "suggestionPayload");
   const opportunity = await loadBoundOpportunity(input.principal, input.opportunityId);
   assertRequestable(opportunity, input.principal);
+  assertAvailableReviewerLane(opportunity);
   if (sha256(sourcePayload) !== opportunity.sourceEvidenceHash) {
     throw new TokenlessServiceError(
       "sourcePayload does not match the committed source evidence.",
@@ -342,10 +397,12 @@ export async function requestAdaptiveHumanReview(
       bountyAtomic: input.economics.bountyAtomic,
       feeBps: input.economics.feeBps,
     },
-    dataClassification: "internal",
+    confirmedNoSensitiveData: publication.confirmedNoSensitiveData,
+    dataClassification: publication.dataClassification,
     question: canonicalQuestion(sourcePayload, suggestionPayload),
+    ...(publication.redactionSummary ? { redactionSummary: publication.redactionSummary } : {}),
     requestedPanelSize: input.economics.requestedPanelSize,
-    visibility: "private",
+    visibility: publication.visibility,
   };
   const quote = await createTokenlessQuote(quoteRequest);
   const askRequest = {
@@ -417,4 +474,4 @@ export async function getAdaptiveHumanReviewResult(input: {
   };
 }
 
-export const __adaptiveReviewOrchestrationTestUtils = { canonicalQuestion, sha256 };
+export const __adaptiveReviewOrchestrationTestUtils = { canonicalQuestion, normalizePublicationDeclaration, sha256 };
