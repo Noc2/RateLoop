@@ -36,7 +36,9 @@ Before setting `TOKENLESS_SANDBOX_MODE=false`:
    private EU Blob store, managed EU KMS, EU log sink, EU keeper, and EU Ponder.
 2. Record every provider resource ID and exact region in the environment variables named by the manifest. Do not put
    credentials or connection strings in the manifest.
-3. Attach approved DPA/subprocessor/transfer evidence IDs for email, billing, analytics, and RPC processing.
+3. Attach approved DPA/subprocessor/transfer evidence IDs for email, billing, analytics, and RPC processing. The
+   current Resend adapter must dispatch from `eu-west-1`, but Resend documents that account data, email metadata, logs,
+   and API records remain in the US; record that transfer explicitly rather than presenting email as EU-resident.
 4. Set `TOKENLESS_DATA_PLANE_MODE=verified-eu` and `TOKENLESS_HOME_REGION=eu`.
 5. Recalculate the canonical manifest digest with `manifestDigest()` from the validator after any intentional manifest
    edit. Update the checked digest in the same reviewed change.

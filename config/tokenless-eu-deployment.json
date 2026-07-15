@@ -91,7 +91,11 @@
   "externalProcessors": {
     "email": {
       "dataScope": "transactional-email-address-and-content",
-      "evidenceEnv": "TOKENLESS_EMAIL_PROCESSOR_EVIDENCE_ID"
+      "evidenceEnv": "TOKENLESS_EMAIL_PROCESSOR_EVIDENCE_ID",
+      "deliveryRegion": "eu-west-1",
+      "deliveryRegionEnv": "TOKENLESS_EMAIL_DELIVERY_REGION",
+      "accountDataRegion": "us",
+      "transferRequired": true
     },
     "billing": {
       "dataScope": "billing-contact-and-payment-metadata",
@@ -121,6 +125,6 @@
   },
   "integrity": {
     "algorithm": "SHA-256",
-    "canonicalContentSha256": "890b0c69a982aa79874642c0e8efa390c2ccf675fe74ee5496bbd08466d100e1"
+    "canonicalContentSha256": "492ffaeb3a27b58c3692e600679496796830d1299ec38016c14458358fad0184"
   }
 }

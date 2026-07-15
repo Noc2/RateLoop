@@ -101,6 +101,7 @@ function validFixture() {
   }
   for (const [name, processor] of Object.entries(tokenlessEuDeploymentManifest.externalProcessors)) {
     env[processor.evidenceEnv] = `approved-${name}-evidence`;
+    if (processor.deliveryRegionEnv) env[processor.deliveryRegionEnv] = processor.deliveryRegion;
   }
   const keyrings = [
     ["TOKENLESS_ASSURANCE_RATIONALE_VAULT", 2, "base64url"],

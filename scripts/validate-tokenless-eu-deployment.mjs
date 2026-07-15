@@ -239,6 +239,14 @@ export function validateTokenlessEuDeployment({
         `${processor.evidenceEnv} must identify approved ${name} processor evidence.`,
       );
     }
+    if (
+      processor.deliveryRegionEnv &&
+      value(env, processor.deliveryRegionEnv) !== processor.deliveryRegion
+    ) {
+      errors.push(
+        `${processor.deliveryRegionEnv} must be ${processor.deliveryRegion}.`,
+      );
+    }
   }
 
   try {

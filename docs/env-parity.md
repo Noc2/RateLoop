@@ -45,6 +45,8 @@ Next.js:
 - explicit `TOKENLESS_SANDBOX_MODE`; non-sandbox additionally requires the complete signed EU manifest variables from
   `packages/nextjs/.env.example`
 - server-only `BETTER_AUTH_SECRET`; email OTP additionally requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL`
+- `TOKENLESS_EMAIL_DELIVERY_REGION=eu-west-1` plus approved processor/transfer evidence; Resend's account metadata and
+  logs remain in the US even when mail is dispatched from Ireland
 - optional Better Auth Google/Apple credential pairs and `BETTER_AUTH_PASSKEY_RP_ID`
 - only when optional wallet creation is enabled: `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`,
   `TOKENLESS_THIRDWEB_WALLET_AUDIENCE`, `TOKENLESS_THIRDWEB_WALLET_KEY_ID`, and the server-only Ed25519

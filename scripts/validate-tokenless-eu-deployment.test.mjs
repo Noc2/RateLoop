@@ -48,12 +48,25 @@ async function verifiedFixture() {
     tokenlessEuDeploymentManifest.externalProcessors,
   )) {
     env[processor.evidenceEnv] = `approved-${name}-evidence`;
+    if (processor.deliveryRegionEnv)
+      env[processor.deliveryRegionEnv] = processor.deliveryRegion;
   }
   return env;
 }
 
 test("the checked deployment controls are valid in explicit sandbox mode", async () => {
   assert.deepEqual(await validateTokenlessEuDeployment({ sandbox: true }), []);
+});
+
+test("verified production requires EU email dispatch while disclosing the processor transfer", async () => {
+  const env = await verifiedFixture();
+  env.TOKENLESS_EMAIL_DELIVERY_REGION = "us-east-1";
+  assert.match(
+    (await validateTokenlessEuDeployment({ env, ...staticConfigs() })).join("\n"),
+    /TOKENLESS_EMAIL_DELIVERY_REGION must be eu-west-1/,
+  );
+  assert.equal(tokenlessEuDeploymentManifest.externalProcessors.email.accountDataRegion, "us");
+  assert.equal(tokenlessEuDeploymentManifest.externalProcessors.email.transferRequired, true);
 });
 
 test("verified production requires the exact regional resource bundle and signed manifest", async () => {
