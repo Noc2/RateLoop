@@ -74,6 +74,7 @@ function billingStatusLabel(status: string) {
 
 export function WorkspaceSettingsClient() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [billing, setBilling] = useState<BillingSummary | null>(null);
@@ -140,9 +141,9 @@ export function WorkspaceSettingsClient() {
   }, []);
 
   useEffect(() => {
-    void loadWorkspaces().catch(cause =>
-      setError(cause instanceof Error ? cause.message : "Unable to load workspaces."),
-    );
+    void loadWorkspaces()
+      .catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load workspaces."))
+      .finally(() => setWorkspacesLoading(false));
   }, [loadWorkspaces]);
 
   useEffect(() => {
@@ -278,9 +279,7 @@ export function WorkspaceSettingsClient() {
           body: JSON.stringify({ name: workspaceName }),
         }),
       );
-      setWorkspaceName("");
-      await loadWorkspaces();
-      setSelectedId(String(body.workspaceId));
+      window.location.assign(`/agents?tab=agents&workspace=${encodeURIComponent(String(body.workspaceId))}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create workspace.");
     } finally {
@@ -292,6 +291,47 @@ export function WorkspaceSettingsClient() {
   const usageTotal = billing ? billing.usage.completed + billing.usage.reserved : 0;
   const usagePercent = billing?.usage.limit ? Math.min(100, Math.round((usageTotal / billing.usage.limit) * 100)) : 0;
   const billingWarning = ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(billing?.status ?? "");
+
+  const workspaceForm = (
+    <form className="mt-4" onSubmit={createWorkspace}>
+      <label className="sr-only" htmlFor="workspace-name">
+        Workspace name
+      </label>
+      <input
+        id="workspace-name"
+        className="input w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+        value={workspaceName}
+        onChange={event => setWorkspaceName(event.target.value)}
+        placeholder="Team or project name"
+        maxLength={120}
+        required
+      />
+      <button className="rateloop-gradient-action mt-3 w-full px-5" disabled={busy}>
+        {busy ? "Creating…" : "Create workspace"}
+      </button>
+      {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
+    </form>
+  );
+
+  if (workspacesLoading) {
+    return (
+      <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
+        <span className="loading loading-spinner loading-sm mr-2" /> Loading workspace…
+      </div>
+    );
+  }
+
+  if (workspaces.length === 0) {
+    return (
+      <section className="surface-card mx-auto max-w-xl rounded-2xl p-6" aria-labelledby="create-workspace-heading">
+        <h1 id="create-workspace-heading" className="text-2xl font-semibold">
+          Create your workspace
+        </h1>
+        <p className="mt-2 text-sm text-base-content/55">Name it, then connect your agent.</p>
+        {workspaceForm}
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -595,28 +635,13 @@ export function WorkspaceSettingsClient() {
               </section>
             ) : null}
           </>
-        ) : (
-          <p className="mt-4 text-sm leading-6 text-base-content/50">Create a workspace to fund panels.</p>
-        )}
+        ) : null}
       </section>
 
-      <aside className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">New workspace</p>
-        <form className="mt-4" onSubmit={createWorkspace}>
-          <input
-            className="input w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-            value={workspaceName}
-            onChange={event => setWorkspaceName(event.target.value)}
-            placeholder="Team or project name"
-            maxLength={120}
-            required
-          />
-          <button className="rateloop-gradient-action mt-3 w-full px-5" disabled={busy}>
-            Create workspace
-          </button>
-        </form>
-        {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
-      </aside>
+      <details className="surface-card rounded-2xl p-6">
+        <summary className="cursor-pointer text-sm font-semibold">Create another workspace</summary>
+        {workspaceForm}
+      </details>
     </div>
   );
 }
