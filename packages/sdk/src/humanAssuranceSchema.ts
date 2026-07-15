@@ -284,7 +284,6 @@ export function parseHumanAssuranceAudiencePolicy(
         "customer_invited",
         "rateloop_network",
         "hybrid",
-        "sandbox",
       ]),
     );
   const fallbackAllowed = boolean(fallbacks.allowed, "fallbacks.allowed");
@@ -305,7 +304,6 @@ export function parseHumanAssuranceAudiencePolicy(
     "customer_invited",
     "rateloop_network",
     "hybrid",
-    "sandbox",
   ]);
   const networkSupply =
     reviewerSource === "rateloop_network" || reviewerSource === "hybrid";
@@ -320,7 +318,7 @@ export function parseHumanAssuranceAudiencePolicy(
           enumeration(
             source,
             `assurance.requirements[${index}].reviewerSources[${sourceIndex}]`,
-            ["customer_invited", "rateloop_network", "sandbox"],
+            ["customer_invited", "rateloop_network"],
           ),
         );
       if (reviewerSources.length === 0) {
@@ -369,7 +367,7 @@ export function parseHumanAssuranceAudiencePolicy(
   if (input.integrity !== undefined) {
     const value = record(input.integrity, "integrity");
     if (!networkSupply)
-      invalid("integrity", "absent for invited and sandbox policies");
+      invalid("integrity", "absent for customer-invited policies");
     if (
       value.schemaVersion !==
       HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION
@@ -605,7 +603,6 @@ export function parseHumanAssuranceResponse(
       source: enumeration(reviewer.source, "reviewer.source", [
         "customer_invited",
         "rateloop_network",
-        "sandbox",
       ]),
       qualificationKeys: stringArray(
         reviewer.qualificationKeys,
@@ -970,7 +967,7 @@ export const HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA = {
     policyId: idSchema,
     version: { minimum: 1, type: "integer" },
     reviewerSource: {
-      enum: ["customer_invited", "rateloop_network", "hybrid", "sandbox"],
+      enum: ["customer_invited", "rateloop_network", "hybrid"],
     },
     compensation: { enum: ["paid", "unpaid", "mixed"] },
     cohorts: { type: "array" },
@@ -987,7 +984,7 @@ export const HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA = {
               capability: { enum: HUMAN_ASSURANCE_CAPABILITIES },
               reviewerSources: {
                 items: {
-                  enum: ["customer_invited", "rateloop_network", "sandbox"],
+                  enum: ["customer_invited", "rateloop_network"],
                 },
                 type: "array",
               },

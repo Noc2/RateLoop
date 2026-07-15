@@ -564,15 +564,8 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
       selected: nullableString(verdict.selected, "verdict.selected"),
     };
   }
-  if (
-    (parsedVerdictStatus === "publishable" ||
-      parsedVerdictStatus === "published") !==
-    (parsedVerdict !== null)
-  ) {
-    invalid(
-      "verdict",
-      "present only for publishable or sandbox-published results",
-    );
+  if ((parsedVerdictStatus === "publishable") !== (parsedVerdict !== null)) {
+    invalid("verdict", "present only for publishable results");
   }
 
   return {

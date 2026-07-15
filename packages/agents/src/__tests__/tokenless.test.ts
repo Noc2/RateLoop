@@ -149,7 +149,7 @@ describe("tokenless agents client", () => {
         operationKey: "op_123",
         schemaVersion: "rateloop.tokenless.v2",
         status: "ready",
-        verdictStatus: "published",
+        verdictStatus: "publishable",
       });
     const client = { wait } as unknown as TokenlessRateLoopClient;
 

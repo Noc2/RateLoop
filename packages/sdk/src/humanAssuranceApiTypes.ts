@@ -55,8 +55,7 @@ export interface HumanAssuranceProjectResourcesResponse {
     reviewerSource:
       | "customer_invited"
       | "rateloop_network"
-      | "hybrid"
-      | "sandbox";
+      | "hybrid";
     compensation: HumanAssuranceAudiencePolicy["compensation"];
     selection: HumanAssuranceAudiencePolicy["selection"];
     policyHash: `sha256:${string}`;

@@ -6,7 +6,6 @@ export const TOKENLESS_REVIEWER_SOURCES = [
   "customer_invited",
   "rateloop_network",
   "hybrid",
-  "sandbox",
 ] as const;
 export type TokenlessReviewerSource =
   (typeof TOKENLESS_REVIEWER_SOURCES)[number];
@@ -14,9 +13,6 @@ export type TokenlessReviewerSource =
 export const TOKENLESS_TERMINAL_VERDICT_STATUSES = [
   "publishable",
   "inconclusive",
-  // Retained only for deterministic sandbox responses created before the
-  // production post-round integrity publication vocabulary was introduced.
-  "published",
   "delisted",
   "zero_commit_refunded",
   "under_quorum_compensated",

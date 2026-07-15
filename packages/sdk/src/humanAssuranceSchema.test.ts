@@ -436,7 +436,7 @@ test("network policies freeze exact epoch constraints while non-network policies
       }),
     (error: unknown) =>
       error instanceof RateLoopSdkError &&
-      error.message.includes("invited and sandbox"),
+      error.message.includes("customer-invited"),
   );
 });
 

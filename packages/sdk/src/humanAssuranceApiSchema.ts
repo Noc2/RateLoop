@@ -263,7 +263,6 @@ export function parseHumanAssuranceProjectResourcesResponse(
               "customer_invited",
               "rateloop_network",
               "hybrid",
-              "sandbox",
             ] as const,
           ),
           compensation: enumeration(

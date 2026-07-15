@@ -290,7 +290,7 @@ function economics(
 }
 
 function resultFixture(
-  verdictStatus: (typeof TOKENLESS_VERDICT_STATUSES)[number] = "published",
+  verdictStatus: (typeof TOKENLESS_VERDICT_STATUSES)[number] = "publishable",
 ) {
   return {
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
@@ -306,7 +306,7 @@ function resultFixture(
       source: "customer_invited",
     },
     verdict:
-      verdictStatus === "published" || verdictStatus === "publishable"
+      verdictStatus === "publishable"
         ? {
             intervalBps: { lower: 4121, upper: 8510 },
             preferenceShareBps: 6700,
@@ -323,7 +323,6 @@ test("tokenless status constants and JSON Schema expose the exact accounting con
     "pending",
     "publishable",
     "inconclusive",
-    "published",
     "delisted",
     "zero_commit_refunded",
     "under_quorum_compensated",
@@ -705,7 +704,7 @@ test("tokenless wait returns an explicit polling continuation and then a result-
         schemaVersion: TOKENLESS_SCHEMA_VERSION,
         operationKey: "op.with.dot",
         status: "ready",
-        verdictStatus: "published",
+        verdictStatus: "publishable",
         continuation: null,
       });
     },
@@ -755,7 +754,7 @@ test("tokenless result uses the versioned result route and reports structured AP
   });
 
   const result = await client.result({ operationKey: "op_12345678" });
-  assert.equal(result.verdictStatus, "published");
+  assert.equal(result.verdictStatus, "publishable");
   assert.equal(result.economics.bounty.fundedAtomic, "25000000");
 
   shouldFail = true;

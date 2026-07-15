@@ -24,8 +24,7 @@ export type HumanAssuranceDataClassification =
 export type HumanAssuranceReviewerSource =
   | "customer_invited"
   | "rateloop_network"
-  | "hybrid"
-  | "sandbox";
+  | "hybrid";
 
 export interface HumanAssuranceArtifact {
   schemaVersion: typeof HUMAN_ASSURANCE_SCHEMA_VERSION;
