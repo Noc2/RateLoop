@@ -22,6 +22,22 @@ The [autonomous publishing reintegration plan](tokenless-autonomous-agent-publis
 defines the implementation and release gates. Accountless x402 publishing remains deferred until B2B, screening,
 terms, rate-limit, and abuse controls can be enforced without a workspace principal.
 
+**One-message workspace-agent connection amendment — 15 July 2026:** the accepted
+[one-message agent connection plan](tokenless-one-message-agent-connection-plan-2026-07.md) supersedes the connection and
+credential-issuance portions of the July 14 amendment where they conflict. A basic workspace connection does not create a
+publishing credential or require a publishing policy. The default safe grant may discover its bound context and check
+connection health, but it cannot create human-review work, spend, publish, read private artifacts, or administer the
+workspace. Those capabilities require a separate, versioned browser step-up with exact scopes and policy/budget limits.
+The copied chat message contains one short-lived, single-use connection intent and no bearer/API credential; OAuth 2.1
+with PKCE, or device authorization for headless clients, delivers operational credentials to host-controlled secure
+storage. Exactly one generated message, clipboard copy, and chat paste is the invariant for first-time and returning
+supported clients. Install, trust, OAuth, reload, retry, and a host-required new task preserve and resume that intent
+without asking the owner to paste again. Verified/pre-registered clients may auto-activate only the pre-authorized safe
+profile; generic or unknown clients require explicit OAuth consent showing client identity and scope. Same-client claim
+retries are idempotent; other claimants are rejected. The agent completes the flow with the dashboard closed and uses the
+non-mutating `rateloop_verify_connection`; connection verification never creates or evaluates a review opportunity. The
+public four-tool handoff MCP remains separate and unchanged.
+
 ## Implementation status — 13 July 2026
 
 Phases 1-4 are implemented in the `tokenless` package graph: greenfield contracts and invariants; tokenless-only ABIs,
@@ -108,6 +124,22 @@ invariant below.
 **Buyer/funder:** the product journey is project → versioned suite → blinded cases → reviewer policy → budget → frozen manifest → run → decision packet. Templates keep the common path short, but the buyer must preview the exact rater view and approve the rubric, reviewer source, acceptance rule, privacy/on-chain boundary, and provenance before funding. The pay button and quote itemize bounty, platform fee, and the maximum accepted-work reserve: "No responses: fully refunded. Partial panel: bounty and fee refunded; accepted work up to $X is paid." The waiting room shows assignment, commit, quorum, reveal, settlement, and exceptions without exposing early answers. The result reports preference share, sample, disagreement, reviewer provenance, limitations, settlement references, and a separate client `go/revise/stop` sign-off; it does not use an unvalidated confidence claim. Primary B2B rail = prepaid workspace balance via a regulated partner (invoice/SEPA/card; VAT-ID at workspace level; B2B gate = self-declaration + VAT-ID, never document-KYB before a small first run). Fees are all-in before purchase and itemized on every receipt.
 
 **Agent API/MCP:** project/run APIs orchestrate quote → ask → wait → result as the per-case settlement primitive; authenticated artifact upload; webhooks + polling; idempotency on every mutation; permanent sandbox (testnet USDC, deterministic simulated panels); versioned JSON-Schema results with case/run state, reviewer provenance, decision/evidence references, and structured bounty/fee/attempt-reserve/refund/compensation fields; machine-readable audience-policy SLOs; a policy-bound API-key + prepaid-balance mode so agents can integrate without any wallet; and a policy-bound x402 lane for agents that fund from their own wallet. The installable Codex surface bundles a narrow invocation skill with a stateless Streamable HTTP MCP adapter. Its initial public surface is exactly capabilities, create-browser-handoff, handoff-status, and result. The user must approve the exact public, synthetic, or safely redacted draft before an agent sends it to the hosted MCP. The MCP processes the draft to create a bearer link but does not persist it; the browser then keeps it in the URL fragment while the user reviews the question, audience, and privacy classification. Clicking “request exact quote” stores the reviewed question and panel terms as a short-lived quote; ask submission remains a separate explicit action. Autonomous quote, ask, payment, upload, and bounded wait are available only through authenticated policy-enforced API/CLI paths, not the public MCP. Do not restore the legacy category, governance, rating-transaction, local-signer, LREP, or raw wallet-plan MCP tools. Sales asset: a published benchmark of RateLoop panels versus model-as-judge and simpler equal-pay human voting (reliability, failure cases, completion, cost, latency) — positioned as the human-assurance layer of an eval stack.
+
+**Agent workspace connection:** the default `/agents` action is **Copy connection message**; it creates and copies the
+fixed safe intent in one click with no required host chooser, profile form, publishing policy, or technical settings. Host
+and client identity come from OAuth and MCP `initialize.clientInfo`, not owner guesses. The intent starts with a 30-minute
+claim window; a matching verified client that begins authorization in time may finish within a bounded continuation window
+with a hard 45-minute total cap. Claim retries from the same OAuth token family/client return the original integration;
+another claimant cannot consume or resume it. Install and OAuth callbacks persist a server-owned handoff so a reload or
+new task resumes automatically. After the initial paste, the owner is interrupted only for a host-native install/trust
+action, client-trust OAuth consent, or later elevated-scope consent. The agent performs all other work in the background
+and reports one final **Connected with safe access** confirmation. The authenticated MCP keeps one stable tool list and
+uses non-mutating `rateloop_verify_connection` for readiness; it must not use
+`rateloop_evaluate_review_requirement` as a synthetic connection test. Dashboard SSE/polling is presentation only, stops
+in hidden tabs, preserves focus, and is never required for completion. Connection progress and recovery must be keyboard
+and screen-reader operable, textually distinguish every state, announce transitions once, provide a selectable full
+message when clipboard access fails, and preserve the original intent through install/reload recovery without another
+copy or paste.
 
 ## Target contract set
 
