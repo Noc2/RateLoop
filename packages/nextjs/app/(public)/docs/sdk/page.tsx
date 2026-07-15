@@ -7,8 +7,8 @@ export default function SdkPage() {
         rollout.
       </p>
       <p>
-        The public tokenless deployment is an explicit simulated sandbox. Use only public, synthetic, or safely redacted
-        test material and do not treat its responses as live human evidence.
+        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. Use only public, synthetic, or safely
+        redacted inputs and do not treat its responses as live human evidence.
       </p>
       <pre>
         <code>{`import { createTokenlessRateLoopClient } from "@rateloop/sdk";

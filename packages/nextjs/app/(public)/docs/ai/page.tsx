@@ -90,8 +90,8 @@ export default function TokenlessAgentDocsPage() {
         policy fixes its budget, payment mode, wallet, audience, project, data, expiry, and revocation rules.
       </p>
       <p>
-        The public tokenless deployment is an explicit simulated sandbox. Its reviewer activity, results, settlement,
-        and payments are test data rather than live human evidence.
+        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. Reviewer activity, results, settlement,
+        and payments are simulations rather than live human evidence.
       </p>
 
       <h2>Choose a publishing lane</h2>

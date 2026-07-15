@@ -7,8 +7,8 @@ export default function HowTokenlessWorksPage() {
         decision packet that keeps the final action with the customer.
       </p>
       <p>
-        The public tokenless deployment is an explicit simulated sandbox. It previews these journeys with test
-        reviewers, results, settlement, and payments; it does not produce live human evidence.
+        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. It previews these journeys with simulated
+        activity, results, settlement, and payments; it does not produce live human evidence.
       </p>
       <ol>
         <li>

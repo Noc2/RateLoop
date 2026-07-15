@@ -21,7 +21,7 @@ test("how-it-works explains the production integrity stack and its limits", asyn
   assert.match(html, /prospective integrity epochs/);
   assert.match(html, /cannot reduce accepted-work payment/i);
   assert.match(html, /None of these controls proves.*objective truth/i);
-  assert.match(html, /explicit simulated sandbox/i);
+  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
   assert.match(html, /Better Auth.*opaque RateLoop principal/i);
   assert.match(html, /purpose-scoped binding never grants workspace access/i);
   assert.match(html, /explicit project assignment.*short reviewer leases/i);

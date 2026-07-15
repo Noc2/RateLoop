@@ -22,7 +22,7 @@ test("tech-stack docs explain the tokenless integrity layers and their limits", 
   assert.match(html, /dedicated signer nonce allocation/i);
   assert.match(html, /truth oracle/i);
   assert.match(html, /never accepted work payment/i);
-  assert.match(html, /explicit simulated sandbox/i);
+  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
   assert.match(html, /Better Auth account-first sign-in.*opaque RateLoop principal/i);
   assert.match(html, /EU-first classification.*subject-request controls/i);
   assert.match(html, /not represented as an immutable or WORM external audit log/i);

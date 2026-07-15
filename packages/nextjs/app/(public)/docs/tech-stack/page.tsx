@@ -7,8 +7,8 @@ export default function TokenlessTechStackPage() {
         from several independent, disclosed controls. None of them proves that an individual answer is true.
       </p>
       <p>
-        The public tokenless deployment is an explicit simulated sandbox. The production architecture below is not a
-        claim that the sandbox uses live reviewers, money, or verified EU resources.
+        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. The production architecture below is not a
+        claim that the preview uses live reviewers, money, or verified EU resources.
       </p>
       <h2>Settlement and reporting incentives</h2>
       <ul>

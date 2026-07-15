@@ -15,7 +15,7 @@ test("SDK docs expose only the versioned tokenless agent flow", async () => {
 
   assert.match(html, /quote.*ask.*wait.*result/i);
   assert.match(html, /rateloop\.tokenless\.v2/i);
-  assert.match(html, /explicit simulated sandbox/i);
+  assert.match(html, /TOKENLESS_SANDBOX_MODE=true/i);
   assert.match(html, /Better Auth.*opaque RateLoop principal/i);
   assert.match(html, /authorized client\/project assignment/i);
   assert.match(html, /EU-first repository checks do not establish verified EU hosting or certification/i);

@@ -7,8 +7,8 @@ export default function DocsPage() {
         human panel returns a signal, written reasons, and inspectable settlement evidence.
       </p>
       <p>
-        The public tokenless deployment is an explicit simulated sandbox. Its reviewers, results, settlement, and
-        payments are test data, not live human evidence or payment receipts.
+        The currently deployed preview runs with TOKENLESS_SANDBOX_MODE=true. Reviewer activity, results, settlement,
+        and payments are simulations, not live human evidence or payment receipts.
       </p>
       <h2>Good first use cases</h2>
       <ul>
