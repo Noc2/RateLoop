@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
   approveAgentPairing,
   authenticateAgentMcpPrincipal,
@@ -74,6 +75,13 @@ test("one secret moves from restricted pairing to an exact active integration", 
   assert.equal(active.integration.agentId, approved.agent.agentId);
   assert.equal(active.integration.enforcementMode, "advisory");
   assert.deepEqual(active.integration.allowedWorkflowKeys, ["support-reply"]);
+  const policies = await dbClient.execute({
+    sql: `SELECT agreement_threshold_bps FROM tokenless_agent_review_policies
+          WHERE workspace_id = ? AND agent_id = ?`,
+    args: [workspaceId, active.integration.agentId],
+  });
+  assert.equal(policies.rowCount, 1);
+  assert.equal(Number(policies.rows[0]?.agreement_threshold_bps), DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS);
 
   const rotated = await rotateAgentIntegration({
     accountAddress: OWNER,

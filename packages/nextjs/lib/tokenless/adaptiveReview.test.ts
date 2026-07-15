@@ -59,8 +59,8 @@ test("adaptive stages require two independent calibration windows and stable evi
   assert.deepEqual(monitoring, { stage: "monitoring", reviewRateBps: 1_000, reason: "one_hundred_stable_cases" });
 });
 
-test("quality failures and reset reasons cannot reduce review", () => {
-  const weak = { ...passingWindow, agreements: 10 };
+test("uncertain evidence holds coverage while failed quality gates restore calibration", () => {
+  const uncertain = { ...passingWindow, agreements: 13 };
   const held = nextAdaptiveStage({
     policy,
     state: {
@@ -69,10 +69,39 @@ test("quality failures and reset reasons cannot reduce review", () => {
       stableCasesSinceStage: 90,
       unreviewedSinceLastSample: 0,
     },
-    latestWindow: weak,
+    latestWindow: uncertain,
   });
   assert.equal(held.stage, "high_coverage");
   assert.equal(held.reviewRateBps, 5_000);
+
+  const agreementDrop = nextAdaptiveStage({
+    policy,
+    state: {
+      stage: "monitoring",
+      completedComparableCases: 500,
+      stableCasesSinceStage: 300,
+      unreviewedSinceLastSample: 0,
+    },
+    latestWindow: { ...passingWindow, agreements: 10 },
+  });
+  assert.deepEqual(agreementDrop, {
+    stage: "calibrating",
+    reviewRateBps: 10_000,
+    reason: "agreement_below_threshold",
+  });
+
+  const humanAgreementFailure = nextAdaptiveStage({
+    policy,
+    state: {
+      stage: "medium_coverage",
+      completedComparableCases: 180,
+      stableCasesSinceStage: 100,
+      unreviewedSinceLastSample: 0,
+    },
+    latestWindow: { ...passingWindow, humanAgreementGatePassed: false },
+  });
+  assert.equal(humanAgreementFailure.stage, "calibrating");
+  assert.equal(humanAgreementFailure.reason, "human_agreement_gate_failed");
 
   const reset = nextAdaptiveStage({
     policy,

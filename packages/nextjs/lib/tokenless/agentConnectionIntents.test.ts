@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
   SAFE_AGENT_CONNECTION_SCOPES,
   claimAgentConnectionIntent,
@@ -117,6 +118,13 @@ test("one copied fragment intent activates safe access idempotently and verifies
     sql: "SELECT COUNT(*)::integer AS count FROM tokenless_agent_review_opportunities",
   });
   assert.equal(Number(opportunities.rows[0]?.count), 0);
+  const policies = await dbClient.execute({
+    sql: `SELECT agreement_threshold_bps FROM tokenless_agent_review_policies
+          WHERE workspace_id = ? AND agent_id = ?`,
+    args: [workspaceId, first.connection.agentId],
+  });
+  assert.equal(policies.rowCount, 1);
+  assert.equal(Number(policies.rows[0]?.agreement_threshold_bps), DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS);
   assert.equal(
     (await listAgentConnectionIntents({ accountAddress: OWNER, workspaceId })).intents[0]?.status,
     "connected",

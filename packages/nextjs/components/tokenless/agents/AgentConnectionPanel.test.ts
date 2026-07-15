@@ -78,6 +78,13 @@ test("safe OAuth integrations show no bearer rotation or publishing permission",
   assert.match(source, /Rotate legacy credential/);
 });
 
+test("the default adaptive policy explains its reachable calibration evidence", () => {
+  assert.match(source, /two stable\s+15-case windows/);
+  assert.match(source, /at least 14 agent-human agreements each/);
+  assert.match(source, /Coverage starts at 100%, then may move to 50%,\s+25%, and a 10% monitoring floor/);
+  assert.match(source, /10% monitoring floor/);
+});
+
 test("connected agent management keeps disconnect and technical state behind Manage", () => {
   assert.match(source, />Manage</);
   assert.match(source, /Connection details/);

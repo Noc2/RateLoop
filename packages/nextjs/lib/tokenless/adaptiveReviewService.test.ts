@@ -206,7 +206,7 @@ test("adaptive review forces suggestions below the configured confidence thresho
   assert.ok(decision.reasonCodes.includes("low_confidence"));
 });
 
-test("source-derived observations advance the persisted scope only after two stable windows", async () => {
+test("source-derived observations advance after two stable windows and reset after a measured agreement drop", async () => {
   const setup = await fixture();
   for (let index = 0; index < 30; index += 1) {
     const decision = await evaluateAdaptiveReviewRequirement({
@@ -256,4 +256,46 @@ test("source-derived observations advance the persisted scope only after two sta
   assert.equal(events.rows[0]?.from_stage, "calibrating");
   assert.equal(events.rows[0]?.to_stage, "high_coverage");
   assert.deepEqual(JSON.parse(String(events.rows[0]?.reason_codes_json)), ["two_stable_windows"]);
+
+  let deteriorated = steppedDown;
+  for (let index = 0; index < 6; index += 1) {
+    deteriorated = await evaluateAdaptiveReviewRequirement({
+      principal: setup.principal,
+      request: opportunity(setup, `deterioration-${String(index).padStart(4, "0")}`),
+    });
+    const finalizedAt = new Date(Date.now() + 100 + index);
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_evaluation_observations
+            (observation_id, workspace_id, scope_id, opportunity_id, evidence_reference, source_payload_hash,
+             agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
+             responding_human_count, finalized_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'disagree', true, 1, ?, ?)`,
+      args: [
+        `obs_deterioration_${index}`,
+        setup.workspaceId,
+        deteriorated.scopeId,
+        deteriorated.opportunityId,
+        `evidence/deterioration/${index}`,
+        __adaptiveReviewServiceTestUtils.sha256({ source: "deterioration", index }),
+        deteriorated.suggestionCommitment,
+        __adaptiveReviewServiceTestUtils.sha256({ human: "disagree", index }),
+        finalizedAt,
+        finalizedAt,
+      ],
+    });
+  }
+
+  assert.equal(deteriorated.stage, "calibrating");
+  assert.equal(deteriorated.reviewRateBps, 10_000);
+
+  const resetEvents = await dbClient.execute({
+    sql: `SELECT event_type, from_stage, to_stage, reason_codes_json
+          FROM tokenless_agent_review_policy_events
+          WHERE workspace_id = ? AND scope_id = ? AND event_type = 'reset'`,
+    args: [setup.workspaceId, steppedDown.scopeId],
+  });
+  assert.equal(resetEvents.rowCount, 1);
+  assert.equal(resetEvents.rows[0]?.from_stage, "high_coverage");
+  assert.equal(resetEvents.rows[0]?.to_stage, "calibrating");
+  assert.deepEqual(JSON.parse(String(resetEvents.rows[0]?.reason_codes_json)), ["agreement_below_threshold"]);
 });

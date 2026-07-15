@@ -8,6 +8,7 @@ test("review policy UI leads with understandable presets and keeps tuning second
   assert.match(source, /Review everything/);
   assert.match(source, /Review higher-risk work/);
   assert.match(source, /Adaptive review/);
+  assert.match(source, /Confidence-adjusted agreement threshold/);
   assert.match(source, /Manual handoff only/);
   assert.match(source, /Who should review\?/);
   assert.match(source, /Customize rules/);

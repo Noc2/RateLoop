@@ -447,6 +447,7 @@ async function refreshScopeState(
   });
   const now = new Date();
   const stageChanged = result.stage !== input.scope.stage;
+  const resetToCalibration = stageChanged && result.stage === "calibrating";
   await client.query(
     `UPDATE tokenless_agent_evaluation_scopes
      SET stage = $1, completed_comparable_cases = $2, stable_cases_since_stage = $3,
@@ -467,7 +468,7 @@ async function refreshScopeState(
       workspaceId: input.workspaceId,
       scopeId: input.scope.scopeId,
       policy: input.policy,
-      eventType: input.resetReason ? "reset" : "stage_changed",
+      eventType: resetToCalibration ? "reset" : "stage_changed",
       fromStage: input.scope.stage,
       toStage: result.stage,
       reasonCodes: [result.reason],

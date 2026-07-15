@@ -74,6 +74,25 @@ function windowPasses(window: AdaptiveObservationWindow, thresholdBps: number, m
   );
 }
 
+function windowResetReason(window: AdaptiveObservationWindow, thresholdBps: number, minimumSize: number) {
+  if (
+    !Number.isSafeInteger(window.comparable) ||
+    !Number.isSafeInteger(window.agreements) ||
+    window.comparable < minimumSize ||
+    window.agreements < 0 ||
+    window.agreements > window.comparable
+  ) {
+    return null;
+  }
+  if (!window.completionGatePassed) return "completion_gate_failed";
+  if (!window.humanAgreementGatePassed) return "human_agreement_gate_failed";
+  if (!window.latencyGatePassed) return "latency_gate_failed";
+  if (!window.driftGatePassed) return "drift_gate_failed";
+  if (window.severeDisagreementOpen) return "severe_disagreement_open";
+  const observedAgreementBps = Math.floor((window.agreements * 10_000) / window.comparable);
+  return observedAgreementBps < thresholdBps ? "agreement_below_threshold" : null;
+}
+
 export function nextAdaptiveStage(input: {
   policy: AdaptiveReviewPolicy;
   state: AdaptiveScopeState;
@@ -85,6 +104,10 @@ export function nextAdaptiveStage(input: {
   assertValidPolicy(policy);
   if (input.resetReason) {
     return { stage: "calibrating" as const, reviewRateBps: 10_000, reason: input.resetReason };
+  }
+  const evidenceResetReason = windowResetReason(input.latestWindow, policy.agreementThresholdBps, 15);
+  if (state.stage !== "calibrating" && evidenceResetReason) {
+    return { stage: "calibrating" as const, reviewRateBps: 10_000, reason: evidenceResetReason };
   }
   const latestPasses = windowPasses(input.latestWindow, policy.agreementThresholdBps, 15);
   if (state.stage === "calibrating") {

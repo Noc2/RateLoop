@@ -8,6 +8,7 @@ import {
   reviewPolicySectionIsVisible,
   versionHasPolicy,
 } from "./agentReviewPolicyPresentation";
+import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import type {
   ManagedReviewPolicy,
   ReviewAudience,
@@ -37,7 +38,7 @@ const INITIAL_DRAFT: PolicyDraft = {
   agentVersionId: "",
   mode: "adaptive",
   enforcementMode: "advisory",
-  agreementThresholdPercent: "90",
+  agreementThresholdPercent: String(DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS / 100),
   productionFloorPercent: "10",
   maximumUnreviewedGap: "20",
   requiredRiskTiers: "high",
@@ -410,7 +411,7 @@ export function AgentReviewPolicyPanel({
               </p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <label className="text-sm text-base-content/60">
-                  Agreement threshold (%)
+                  Confidence-adjusted agreement threshold (%)
                   <input
                     className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                     type="number"
