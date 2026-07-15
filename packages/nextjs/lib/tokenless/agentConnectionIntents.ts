@@ -170,6 +170,7 @@ export async function createAgentConnectionIntent(input: {
   accountAddress: string;
   workspaceId: string;
   origin: string;
+  setupRevision?: number;
 }) {
   const actor = await management(input.accountAddress, input.workspaceId);
   const now = new Date();
@@ -177,40 +178,91 @@ export async function createAgentConnectionIntent(input: {
   const hardExpiresAt = new Date(now.getTime() + HARD_TTL_MS);
   const intentId = `aci_${randomUUID().replaceAll("-", "")}`;
   const claimNonce = randomBytes(32).toString("base64url");
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_agent_connection_intents
+  const client = await dbPool.connect();
+  let nextSetupRevision: number | null = null;
+  try {
+    await client.query("BEGIN");
+    if (input.setupRevision !== undefined) {
+      if (!Number.isSafeInteger(input.setupRevision) || input.setupRevision < 1) {
+        throw new TokenlessServiceError("Setup revision is invalid.", 400, "invalid_agent_setup_revision");
+      }
+      const setup = await client.query(
+        `SELECT status,revision,primary_connection_intent_id
+         FROM tokenless_workspace_agent_setups WHERE workspace_id=$1 FOR UPDATE`,
+        [input.workspaceId],
+      );
+      const setupRow = setup.rows[0] as Row | undefined;
+      if (!setupRow || text(setupRow, "status") !== "in_progress") {
+        throw new TokenlessServiceError("Workspace setup is not active.", 409, "agent_setup_not_active");
+      }
+      if (Number(setupRow.revision) !== input.setupRevision) {
+        throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
+      }
+      const priorIntentId = text(setupRow, "primary_connection_intent_id");
+      if (priorIntentId) {
+        await client.query(
+          `UPDATE tokenless_agent_connection_intents
+           SET status='cancelled',cancelled_at=$1,last_transition_at=$1,
+               last_transition_reason='setup_connection_replaced',recovery_action=NULL
+           WHERE intent_id=$2 AND status IN (${ACTIVE_INTENT_STATUSES.map(status => `'${status}'`).join(",")})`,
+          [now, priorIntentId],
+        );
+      }
+    }
+    await client.query(
+      `INSERT INTO tokenless_agent_connection_intents
       (intent_id,claim_nonce_hash,workspace_id,created_by,status,profile_key,profile_version,
        maximum_scopes_json,allowed_workflow_keys_json,review_preset_json,allowed_host_families_json,
        auto_activate,created_at,claim_expires_at,hard_expires_at,last_transition_at,last_transition_reason)
-      VALUES (?,?,?,?,'issued','safe_review_decisions',1,?,?,?,'[]',true,?,?,?,?,?)`,
-    args: [
-      intentId,
-      digest(claimNonce),
-      input.workspaceId,
-      actor,
-      JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES),
-      JSON.stringify(SAFE_WORKFLOW_KEYS),
-      JSON.stringify({ mode: "adaptive", enforcementMode: "advisory" }),
-      now,
-      claimExpiresAt,
-      hardExpiresAt,
-      now,
-      "owner_created_safe_intent",
-    ],
-  });
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_agent_connection_intent_events
+      VALUES ($1,$2,$3,$4,'issued','safe_review_decisions',1,$5,$6,$7,'[]',true,$8,$9,$10,$8,$11)`,
+      [
+        intentId,
+        digest(claimNonce),
+        input.workspaceId,
+        actor,
+        JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES),
+        JSON.stringify(SAFE_WORKFLOW_KEYS),
+        JSON.stringify({ mode: "adaptive", enforcementMode: "advisory" }),
+        now,
+        claimExpiresAt,
+        hardExpiresAt,
+        "owner_created_safe_intent",
+      ],
+    );
+    await client.query(
+      `INSERT INTO tokenless_agent_connection_intent_events
           (event_id,intent_id,workspace_id,from_status,to_status,actor_type,actor_reference,reason,details_json,created_at)
-          VALUES (?, ?, ?, NULL, 'issued', ?, ?, 'owner_created_safe_intent', '{}', ?)`,
-    args: [
-      `acie_${randomUUID().replaceAll("-", "")}`,
-      intentId,
-      input.workspaceId,
-      isRateLoopPrincipalId(actor) ? "principal" : "account",
-      actor,
-      now,
-    ],
-  });
+          VALUES ($1,$2,$3,NULL,'issued',$4,$5,'owner_created_safe_intent','{}',$6)`,
+      [
+        `acie_${randomUUID().replaceAll("-", "")}`,
+        intentId,
+        input.workspaceId,
+        isRateLoopPrincipalId(actor) ? "principal" : "account",
+        actor,
+        now,
+      ],
+    );
+    if (input.setupRevision !== undefined) {
+      nextSetupRevision = input.setupRevision + 1;
+      await client.query(
+        `UPDATE tokenless_workspace_agent_setups
+         SET primary_connection_intent_id=$1,primary_integration_id=NULL,
+             confirmed_agent_version_id=NULL,agent_confirmed_at=NULL,agent_confirmed_by=NULL,
+             review_draft_json='{}',review_policy_id=NULL,review_policy_version=NULL,
+             reviews_confirmed_at=NULL,reviews_confirmed_by=NULL,people_decision=NULL,
+             private_group_id=NULL,people_decided_at=NULL,people_decided_by=NULL,
+             current_step='connect',revision=$2,updated_at=$3
+         WHERE workspace_id=$4`,
+        [intentId, nextSetupRevision, now, input.workspaceId],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
   await appendAuditEvent({
     action: "agent.connection_intent_created",
     actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
@@ -234,6 +286,7 @@ export async function createAgentConnectionIntent(input: {
       hardExpiresAt: hardExpiresAt.toISOString(),
     },
     connectionUrl: `${origin}/connect/${intentId}#claim=${claimNonce}`,
+    setupRevision: nextSetupRevision,
   };
 }
 
