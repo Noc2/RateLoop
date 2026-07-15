@@ -13,11 +13,12 @@ After the server is installed, paste the complete single-use RateLoop `/connect/
 The agent claims the intent, loads its bound policy, and verifies the connection. Installation, trust, organization policy,
 and OAuth consent remain controls of the agent host; they cannot be bypassed by a prompt.
 
-OAuth approval is a one-time action for the connection attempt. After it succeeds, the host must reload or refresh the
-authenticated MCP server once and continue in the same task. It must not start a second login, nested agent runtime, or
-new task, and it must not tell the user to approve again when no native prompt exists. Connection claim and verification
-are closed-domain, non-destructive, idempotent MCP actions; publishing and spending remain separately classified and
-approval-bound.
+OAuth approval is a one-time action for the connection attempt. Follow only the continuation, restart, or new-task action
+the host actually presents; Codex's structured plugin setup offers **Continue** when same-task resumption is available.
+On the next active turn, check for the workspace tools and complete claim, context, and verification. Do not invent a
+reload button or settings path, start a second login or nested runtime, or report success before verification. Connection
+claim and verification are closed-domain, non-destructive, idempotent MCP actions; publishing and spending remain
+separately classified and approval-bound.
 
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
@@ -27,7 +28,8 @@ alive.
 - Codex and Claude plugin bundles include both the public `rateloop` handoff server and the private
   `rateloop-workspace` server.
 - Tokenless workspace connection requires the `0.2.0` or newer RateLoop plugin surface. If a host has the older public-only
-  plugin, update RateLoop once through the host before authorizing; do not add a second MCP entry manually.
+  plugin, install from the tokenless-pinned marketplace; do not add a second MCP entry manually. An unpinned
+  `Noc2/RateLoop` Git marketplace resolves the separate legacy `main` product.
 - Generic clients may import the downloadable URL-only configuration when they support OAuth discovery for Streamable
   HTTP MCP servers.
 - A native VS Code manifest will be published only after RateLoop has verified and preregistered its public OAuth client

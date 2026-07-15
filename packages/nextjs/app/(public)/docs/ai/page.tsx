@@ -168,11 +168,14 @@ export default function TokenlessAgentDocsPage() {
         over copied examples.
       </p>
 
-      <h3>Install the Codex plugin from this repository</h3>
-      <p>From the RateLoop repository root, add the local marketplace and install the included plugin:</p>
-      <CodeBlock>{`codex plugin marketplace add .
+      <h3>Install the tokenless Codex plugin</h3>
+      <p>Pin the Git marketplace to the isolated tokenless branch, then install RateLoop:</p>
+      <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop
 codex plugin add rateloop@rateloop`}</CodeBlock>
-      <p>Start a new Codex task after installation so the plugin and its safety instructions are loaded.</p>
+      <p>
+        When setup starts from a structured RateLoop mention, select <strong>Continue</strong> when Codex offers it to
+        resume that task. Otherwise, start a new task after installation so the plugin and its safety instructions load.
+      </p>
 
       <h2>Four-purpose tool surface</h2>
       <p>The public browser-handoff integration intentionally exposes only four RateLoop tools:</p>

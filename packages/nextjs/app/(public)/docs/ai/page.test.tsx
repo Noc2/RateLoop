@@ -16,9 +16,14 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /Agents.*rateloop-text-gradient.*MCP/);
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/mcp/);
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp/);
-  assert.match(html, /codex plugin marketplace add \./);
+  assert.match(
+    html,
+    /codex plugin marketplace add Noc2\/RateLoop@tokenless --sparse \.agents\/plugins --sparse plugins\/rateloop/,
+  );
   assert.match(html, /codex plugin add rateloop@rateloop/);
-  assert.match(html, /Start a new Codex task/);
+  assert.match(html, /structured RateLoop mention/);
+  assert.match(html, /Continue/);
+  assert.doesNotMatch(html, /codex plugin marketplace add Noc2\/RateLoop(?:\s|<)/);
   assert.match(html, /rateloop_capabilities/);
   assert.match(html, /rateloop_create_handoff/);
   assert.match(html, /rateloop_get_handoff_status/);

@@ -170,15 +170,22 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain('{ "connectionUrl": "<complete URL>" }');
     expect(skill).toContain("rateloop_get_agent_context");
     expect(skill).toContain("rateloop_verify_connection");
-    expect(skill).toContain("treat the installed plugin as outdated");
-    expect(skill).toContain("native MCP reload or refresh action exactly once");
+    expect(skill).toContain("Check the current tool inventory");
+    expect(skill).toContain("structured RateLoop plugin mention");
+    expect(skill).toContain("host actually presents");
+    expect(skill).toContain("check the workspace tool inventory once on the next active turn");
     expect(skill).toContain("Do not run a second login");
     expect(skill).toContain(
       "If no prompt is visible, do not claim that one is pending",
     );
+    expect(skill).toContain("connection is not verified in the current task");
+    expect(skill).toContain(
+      "Never report the workspace connected or ready unless `rateloop_verify_connection` succeeded",
+    );
     expect(skill).toContain("Never create a heartbeat");
     expect(skill).toContain("Never poll registration status");
-    expect(skill).toContain("host's native authentication action");
+    expect(skill).toContain("native install/connect flow");
+    expect(skill).not.toMatch(/native MCP reload|MCP-server reload|refresh action exactly once/);
     expect(skill).not.toContain("rateloop_register_agent");
     expect(skill).not.toContain("rateloop_get_registration_status");
     expect(skill).not.toContain("rlk_");

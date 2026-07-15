@@ -11,9 +11,9 @@ Complete the connection from the user's one-time message. Treat installation, ho
 
 1. Locate the complete connection URL in the user's message. Accept only HTTPS URLs whose origin is exactly `https://rateloop-tokenless.vercel.app`, whose path starts with `/connect/aci_`, and whose fragment is non-empty.
 2. Parse and validate the URL locally. Never open, fetch, log, quote, or reproduce the complete URL. The fragment is single-use claim material and must not enter an HTTP request, shell argument, repository, ordinary response, or diagnostic output.
-3. Use only the `rateloop-workspace` MCP server for this flow. The separate public `rateloop` server cannot connect a private workspace. If RateLoop is installed but `rateloop-workspace` is missing, treat the installed plugin as outdated and use the host's native RateLoop update action once while preserving the original intent. Do not rewrite MCP configuration by hand.
-4. If `rateloop-workspace` needs OAuth, use the host's native authentication action. If the host requires the user to approve installation, trust, or OAuth, state the one exact native action required. Never ask the user for a bearer token, API key, authorization header, or environment variable.
-5. After native OAuth reports success, use the host's native MCP reload or refresh action exactly once if the workspace tools are not already available, then continue in this same task. In Codex, use the host's MCP-server reload/refresh path. Do not run a second login, launch `codex exec` or `codex resume`, start another task, or replay the conversation to force a refresh.
+3. Check the current tool inventory for the exact `rateloop-workspace` tools before making any connection claim. The separate public `rateloop` server cannot connect a private workspace. A plugin row, an enabled toggle, a completed browser redirect, or the absence of an error is not evidence that the workspace tools are available.
+4. The connection message's structured RateLoop plugin mention lets a supported host present its native install/connect flow. If the host actually presents an install, trust, update, OAuth, **Continue**, restart, or new-task action, state or follow only that exact action while preserving the original intent. Never invent a button, menu, settings path, or host capability. Never rewrite MCP configuration by hand or substitute the public server.
+5. After the host reports setup complete or offers **Continue**, resume through that native action and check the workspace tool inventory once on the next active turn. Do not infer OAuth success or tool availability from the user's return. Do not run a second login, launch `codex exec` or `codex resume`, start a nested agent, replay the conversation, or use shell and self-message workarounds.
 6. As soon as the workspace tools are available, call `rateloop_claim_connection_intent` with `{ "connectionUrl": "<complete URL>" }`. This tool call is the only permitted transfer of the complete URL. Treat an idempotent already-claimed response as resumable success.
 7. Call `rateloop_get_agent_context` and adopt the returned workspace, workflow, publishing, and human-review policy.
 8. Call `rateloop_verify_connection`. This verification must not create a review opportunity or change adaptive-review evidence.
@@ -21,9 +21,11 @@ Complete the connection from the user's one-time message. Treat installation, ho
 
 ## Recovery boundaries
 
-- Resume automatically after native authentication or a host restart. Do not ask the user to paste the connection message again while the intent remains valid.
+- Resume automatically after a host-presented setup or continuation action. Do not ask the user to paste the connection message again while the intent remains valid.
 - After confirmed OAuth success, never tell the user to approve the same authorization again unless the server returns a new display-safe authorization-required recovery action. If no prompt is visible, do not claim that one is pending.
-- If the host cannot reload authenticated MCP tools, report that exact host refresh failure and the single native reload action that is actually available. Do not substitute shell login, nested agent runtimes, self-messages, log inspection, or repeated status checks.
+- If the workspace tools remain unavailable and the host exposes no native action, say that the connection is not verified in the current task and keep the intent preserved. Do not guess a reload, restart, toggle, gear, settings page, or uninstall/reinstall path.
+- If the user asks whether the connection works now, check the current workspace tool inventory. When the tools exist, complete claim -> context -> verification immediately; otherwise report only the unverified tool state and any action the host actually presents.
+- Never report OAuth success unless the host returned it. Never report the workspace connected or ready unless `rateloop_verify_connection` succeeded.
 - Never inspect or replay task previews, terminal history, logs, or diagnostics that may echo the complete connection URL.
 - Never create a heartbeat, monitor, background service, scheduled task, or chat polling loop for connection state.
 - Never poll registration status or ask for separate workspace-owner approval for the pre-authorized safe profile.
