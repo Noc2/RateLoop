@@ -1,4 +1,8 @@
-import { buildContentSecurityPolicy, createContentSecurityPolicyNonce } from "../lib/security/contentSecurityPolicy";
+import {
+  buildContentSecurityPolicy,
+  createContentSecurityPolicyNonce,
+  resolveAgentOAuthFormActionRedirectOrigins,
+} from "../lib/security/contentSecurityPolicy";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { test } from "node:test";
@@ -63,6 +67,45 @@ test("script-src uses the middleware nonce without unsafe-inline", async () => {
   assert.ok(scriptSrc);
   assert.match(scriptSrc, /(?:^|\s)'nonce-testnonce'(?:\s|$)/);
   assert.doesNotMatch(scriptSrc, /(?:^|\s)'unsafe-inline'(?:\s|$)/);
+});
+
+test("OAuth consent CSP allows Chromium to follow the form redirect on the exact loopback callback port", () => {
+  const formActionRedirectOrigins = resolveAgentOAuthFormActionRedirectOrigins(
+    "/agent/oauth/authorize",
+    "http://127.0.0.1:58520/callback/codex",
+  );
+  const csp = buildContentSecurityPolicy({ formActionRedirectOrigins, nonce: "testnonce" });
+  const formAction = csp
+    .split(";")
+    .map(directive => directive.trim())
+    .find(directive => directive.startsWith("form-action "));
+
+  assert.deepEqual(formActionRedirectOrigins, [
+    "http://localhost:58520",
+    "http://127.0.0.1:58520",
+    "http://[::1]:58520",
+  ]);
+  assert.equal(formAction, "form-action 'self' http://localhost:58520 http://127.0.0.1:58520 http://[::1]:58520");
+});
+
+test("OAuth callback form-action source is limited to a safe redirect origin on the consent page", () => {
+  assert.deepEqual(
+    resolveAgentOAuthFormActionRedirectOrigins("/agent/oauth/authorize", "https://agent.example/callback?flow=1"),
+    ["https://agent.example"],
+  );
+  assert.deepEqual(resolveAgentOAuthFormActionRedirectOrigins("/rate", "https://agent.example/callback"), []);
+  assert.deepEqual(
+    resolveAgentOAuthFormActionRedirectOrigins("/agent/oauth/authorize", "http://agent.example/callback"),
+    [],
+  );
+  assert.deepEqual(
+    resolveAgentOAuthFormActionRedirectOrigins("/agent/oauth/authorize", "https://user:secret@agent.example/callback"),
+    [],
+  );
+  assert.deepEqual(
+    resolveAgentOAuthFormActionRedirectOrigins("/agent/oauth/authorize", "https://agent.example/callback#fragment"),
+    [],
+  );
 });
 
 test("YouTube context is isolated to the privacy-enhanced frame origin", async () => {

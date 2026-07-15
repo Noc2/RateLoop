@@ -1,9 +1,12 @@
 type ContentSecurityPolicyOptions = {
   baseRpcUrl?: string;
+  formActionRedirectOrigins?: string[];
   isDev?: boolean;
   isVercelLiveEnabled?: boolean;
   nonce?: string;
 };
+
+const AGENT_OAUTH_AUTHORIZE_PATH = "/agent/oauth/authorize";
 
 function httpsOrigin(value: string | undefined) {
   if (!value) return undefined;
@@ -17,6 +20,28 @@ function httpsOrigin(value: string | undefined) {
 
 function unique(values: Array<string | undefined>) {
   return values.filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index);
+}
+
+function isLoopbackHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
+}
+
+export function resolveAgentOAuthFormActionRedirectOrigins(pathname: string, redirectUri: string | null) {
+  if (pathname !== AGENT_OAUTH_AUTHORIZE_PATH || !redirectUri) return [];
+  try {
+    const url = new URL(redirectUri);
+    const secure = url.protocol === "https:";
+    const loopback = url.protocol === "http:" && isLoopbackHostname(url.hostname);
+    if ((!secure && !loopback) || url.username || url.password || url.hash) return [];
+    if (loopback) {
+      // NextRequest normalizes loopback spellings in the query to localhost, while Chromium checks form redirects.
+      const port = url.port ? `:${url.port}` : "";
+      return [`http://localhost${port}`, `http://127.0.0.1${port}`, `http://[::1]${port}`];
+    }
+    return [url.origin];
+  } catch {
+    return [];
+  }
 }
 
 export function createContentSecurityPolicyNonce() {
@@ -54,6 +79,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     ...(options.isVercelLiveEnabled ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"] : []),
     ...(options.isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : []),
   ]);
+  const formActionSources = unique(["'self'", ...(options.formActionRedirectOrigins ?? [])]);
 
   return [
     "default-src 'self'",
@@ -65,7 +91,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     `frame-src 'self' https://embedded-wallet.thirdweb.com https://www.youtube-nocookie.com ${vercelLive.join(" ")}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action ${formActionSources.join(" ")}`,
     "frame-ancestors 'none'",
   ].join("; ");
 }

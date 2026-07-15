@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   buildContentSecurityPolicy,
   createContentSecurityPolicyNonce,
+  resolveAgentOAuthFormActionRedirectOrigins,
   resolveRuntimeContentSecurityPolicyOptions,
 } from "./lib/security/contentSecurityPolicy";
 
@@ -9,6 +10,10 @@ export function middleware(request: NextRequest) {
   const nonce = createContentSecurityPolicyNonce();
   const contentSecurityPolicy = buildContentSecurityPolicy({
     ...resolveRuntimeContentSecurityPolicyOptions(),
+    formActionRedirectOrigins: resolveAgentOAuthFormActionRedirectOrigins(
+      request.nextUrl.pathname,
+      request.nextUrl.searchParams.get("redirect_uri"),
+    ),
     nonce,
   });
   const requestHeaders = new Headers(request.headers);
