@@ -47,7 +47,7 @@ test("every technical landing-page link resolves to a rendered docs anchor", asy
     import("./page"),
     import("../smart-contracts/page"),
   ]);
-  const landingHtml = renderToStaticMarkup(<HomePage />);
+  const landingHtml = renderToStaticMarkup(await HomePage());
   const targetHtml = {
     "/docs/tech-stack": renderToStaticMarkup(<TechStackPage />),
     "/docs/smart-contracts": renderToStaticMarkup(<SmartContractsPage />),
