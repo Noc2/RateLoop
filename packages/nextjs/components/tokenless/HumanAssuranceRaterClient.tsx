@@ -1,7 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { FormEvent, useMemo, useState } from "react";
 
 type QualificationProvenance = {
   key: string;
@@ -44,13 +43,6 @@ export type AssignmentTask = {
     rationale: { mode: "optional" | "required"; minLength?: number; maxLength: number };
   };
   cases: ReviewCase[];
-};
-
-type EligibilityState = {
-  status: "not_started" | "eligible" | "review" | "blocked" | "expired";
-  capabilities?: string[];
-  blockedReason?: string | null;
-  evidenceExpiresAt?: string;
 };
 
 type ReviewDraft = {
@@ -135,7 +127,6 @@ export function HumanAssuranceRaterClient({
   const [assignmentId, setAssignmentId] = useState(firstValue(initialAssignmentId));
   const [termsHash, setTermsHash] = useState(firstValue(initialTermsHash));
   const [confidentialityAccepted, setConfidentialityAccepted] = useState(false);
-  const [eligibility, setEligibility] = useState<EligibilityState | null>(null);
   const [task, setTask] = useState<AssignmentTask | null>(initialTask);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>(() =>
     initialTask ? emptyDrafts(initialTask.cases) : {},
@@ -144,21 +135,6 @@ export function HumanAssuranceRaterClient({
   const [error, setError] = useState<string | null>(null);
   const [canRecover, setCanRecover] = useState(false);
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
-
-  useEffect(() => {
-    let active = true;
-    void fetch("/api/rater/eligibility", { cache: "no-store", credentials: "same-origin" })
-      .then(readJson)
-      .then(body => {
-        if (active) setEligibility(body as EligibilityState);
-      })
-      .catch(() => {
-        if (active) setEligibility({ status: "not_started" });
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const leaseDeadline = useMemo(() => {
     const values = task?.cases.flatMap(reviewCase => [
@@ -307,30 +283,24 @@ export function HumanAssuranceRaterClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-14">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:py-10">
       <div className="border-l-2 border-[var(--rateloop-green)] pl-6">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Private review queue</p>
-        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Compare work. Explain the difference.</h1>
-        <p className="mt-4 max-w-3xl text-lg leading-8 text-base-content/60">
-          RateLoop shows only assignments selected for your signed-in account. Candidate order is blinded;
-          qualification, confidentiality, and access leases are checked before any private artifact is shown.
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Private assignment</p>
+        <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">
+          {task ? "Complete your assigned review" : "Open your assigned review"}
+        </h1>
+        <p className="mt-3 text-base text-base-content/60">
+          {task ? "Compare each blinded pair and explain your choice." : "Use the details from your invitation."}
         </p>
       </div>
 
-      <div className="mt-9 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-8">
         <main className="space-y-6">
           {!task ? (
             <>
               <section className="rateloop-surface-card p-5 sm:p-7">
-                <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
-                  01 · Open an assigned review
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold">Confirm the private assignment</h2>
-                <p className="mt-4 text-sm leading-6 text-base-content/60">
-                  The customer supplies the assignment ID and exact confidentiality-terms hash. RateLoop will not
-                  substitute another assignment, policy, or reviewer.
-                </p>
-                <form className="mt-5 space-y-4" onSubmit={openAssignment}>
+                <h2 className="text-xl font-semibold">Assignment details</h2>
+                <form className="mt-4 space-y-4" onSubmit={openAssignment}>
                   <label className="block text-sm text-base-content/60">
                     Assignment ID
                     <input
@@ -387,10 +357,14 @@ export function HumanAssuranceRaterClient({
                     {busyAction === "recovery" ? "Restoring access…" : "Retry expired assignment access"}
                   </button>
                 ) : null}
-                <p className="mt-4 text-xs leading-5 text-base-content/45">
-                  No assignment waiting? The customer controls its named roster and capacity. Redeeming an invitation
-                  qualifies your account; it does not guarantee work.
-                </p>
+                <details className="mt-4 rounded-lg border border-white/10 px-4 py-3 text-sm text-base-content/60">
+                  <summary className="cursor-pointer font-medium text-base-content/75">Privacy and access</summary>
+                  <ul className="mt-3 space-y-2 text-xs leading-5">
+                    <li>Only your assigned, blinded cases are returned.</li>
+                    <li>Private artifact access is short-lived and logged.</li>
+                    <li>Do not include personal data in your rationale.</li>
+                  </ul>
+                </details>
               </section>
             </>
           ) : (
@@ -600,54 +574,6 @@ export function HumanAssuranceRaterClient({
             </p>
           ) : null}
         </main>
-
-        <aside className="rateloop-surface-card sticky top-24 h-fit p-6">
-          <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Capability status</p>
-          <h2 className="mt-2 text-xl font-semibold">
-            {eligibility?.status === "eligible" ? "Capability evidence current" : "Private reviews first"}
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-base-content/60">
-            Customer invitations can qualify you for private unpaid work. Paid human-assurance assignments remain
-            unavailable until their frozen policy snapshot is bound through settlement and receipts.
-          </p>
-          {eligibility?.capabilities?.length ? (
-            <ul className="mt-4 flex flex-wrap gap-2" aria-label="Current eligibility capabilities">
-              {eligibility.capabilities.map(capability => (
-                <li key={capability} className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[11px]">
-                  {capability.replaceAll("_", " ")}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 rounded-lg bg-white/[0.04] p-3 text-xs leading-5 text-base-content/50">
-              No capability evidence is shown for this session. This does not block a customer-invited unpaid review.
-            </p>
-          )}
-          <Link href="/human?tab=profile&section=paid-work" className="rateloop-gradient-action mt-5 w-full px-5">
-            Review eligibility
-          </Link>
-
-          <div className="mt-6 border-t border-white/10 pt-5">
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-yellow)]">
-              Privacy & access
-            </p>
-            <ul className="mt-3 space-y-2 text-xs leading-5 text-base-content/55">
-              <li>Only your assigned, blinded cases are returned.</li>
-              <li>Artifact leases are short-lived and access is logged.</li>
-              <li>Do not enter personal data in the rationale.</li>
-              <li>The A/B mapping is not disclosed in the review interface.</li>
-            </ul>
-          </div>
-
-          <div className="mt-6 border-t border-white/10 pt-5 text-xs leading-5 text-base-content/50">
-            <strong className="text-base-content/70">Receipts and appeals</strong>
-            <p className="mt-2">
-              Server acceptance acknowledges the response batch. Payment receipts and payment-related appeal references
-              appear only after settlement, when applicable.
-            </p>
-            <p className="mt-2 font-mono">RateLoop review environment</p>
-          </div>
-        </aside>
       </div>
     </div>
   );

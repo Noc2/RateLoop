@@ -8,7 +8,7 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("private rater queue is assignment-scoped and makes no unsupported payment or identity claims", async () => {
+test("private rater queue opens one assigned task without unrelated eligibility UI", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const html = renderToStaticMarkup(
@@ -18,14 +18,13 @@ test("private rater queue is assignment-scoped and makes no unsupported payment 
     />,
   ).replace(/\s+/g, " ");
 
-  assert.match(html, /Private review queue/);
-  assert.match(html, /Open an assigned review/);
+  assert.match(html, /Private assignment/);
+  assert.match(html, /Open your assigned review/);
+  assert.match(html, /Assignment details/);
   assert.match(html, /haas_private_assignment/);
   assert.match(html, /Confidentiality terms hash/);
   assert.match(html, /Only your assigned, blinded cases are returned/);
-  assert.match(html, /No capability evidence is shown/);
-  assert.match(html, /Paid human-assurance assignments remain unavailable/i);
-  assert.match(html, /payment receipts.*appear only after settlement/i);
+  assert.doesNotMatch(html, /Capability status|Review eligibility|No capability evidence is shown/);
   assert.doesNotMatch(html, /Tier \d|World ID|Self\.xyz|passport uniqueness|guaranteed base|on-chain payment/i);
 });
 

@@ -43,9 +43,44 @@ test("Human profile keeps established surface cards without a dashboard hero", (
   assert.doesNotMatch(profile, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);
 });
 
-test("Human Discover explains that public-network work still requires a RateLoop session", () => {
+test("Human Discover keeps sign-in requirements concise", () => {
   const page = source("./answer/AnswerPageClient.tsx");
   assert.match(page, /Sign in to discover review work/);
-  assert.match(page, /public to eligible RateLoop humans, not anonymous/);
+  assert.match(page, /eligible, signed-in RateLoop humans/);
   assert.match(page, /ThirdwebSessionButton/);
+});
+
+test("Human Discover discloses source filters only when both queues have work", () => {
+  const page = source("./answer/AnswerPageClient.tsx");
+
+  assert.match(page, /tasks\.length > 0 && assignments\.length > 0/);
+  assert.match(page, /\["all", "public", "private"\]/);
+  assert.doesNotMatch(page, /\["all", "public", "private", "submitted"\]/);
+  assert.ok(page.indexOf("assignments.map") < page.indexOf("tasks.map"));
+  assert.match(page, /No review work is available right now/);
+  assert.match(page, /Check again/);
+});
+
+test("Human profile and settings disclose one task at a time", () => {
+  const page = source("../../app/(app)/human/page.tsx");
+  const profile = source("./account/ProfileClient.tsx");
+  const invitations = source("./account/InvitationRouterPanel.tsx");
+
+  assert.match(page, /ProfileOverview/);
+  assert.match(page, /InvitationRouterPanel/);
+  assert.match(page, /section === "proof-of-human"/);
+  assert.match(page, /section === "paid-work"/);
+  assert.match(page, /SettingsOverview/);
+  assert.match(page, /Account and security notifications are always required/);
+  assert.match(page, /section === "notifications"/);
+  assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);
+  assert.match(invitations, /startsWith\("rli_"\)/);
+  assert.match(invitations, /startsWith\("rlgi_"\)/);
+});
+
+test("answer search is rendered only by Human Discover", () => {
+  const page = source("../../app/(app)/human/page.tsx");
+
+  assert.match(page, /if \(tab === "discover"\)[\s\S]*<AnswerSearch \/>/);
+  assert.equal(page.match(/<AnswerSearch \/>/g)?.length, 1);
 });

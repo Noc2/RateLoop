@@ -1,0 +1,157 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+
+type PrivateInvitationPreview = {
+  groupId: string;
+  groupName: string;
+  groupPurpose: string;
+  workspaceName: string;
+};
+
+async function readJson(response: Response) {
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
+    );
+  }
+  return body;
+}
+
+export function InvitationRouterPanel() {
+  const [token, setToken] = useState("");
+  const [preview, setPreview] = useState<PrivateInvitationPreview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function checkInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalized = token.trim();
+    setBusy(true);
+    setStatus(null);
+    setError(null);
+    setPreview(null);
+    try {
+      if (normalized.startsWith("rli_")) {
+        await readJson(
+          await fetch("/api/account/assurance/reviewer-invitations/redeem", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: normalized }),
+          }),
+        );
+        setToken("");
+        setStatus("Invitation accepted.");
+        return;
+      }
+      if (normalized.startsWith("rlgi_")) {
+        const body = await readJson(
+          await fetch("/api/account/private-groups/invitations/preview", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: normalized }),
+          }),
+        );
+        setPreview(body.invitation as PrivateInvitationPreview);
+        return;
+      }
+      throw new Error("Enter a valid RateLoop invitation token.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to check the invitation.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptPrivateGroup() {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    setError(null);
+    try {
+      await readJson(
+        await fetch("/api/account/private-groups/invitations/redeem", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: token.trim() }),
+        }),
+      );
+      setPreview(null);
+      setToken("");
+      setStatus("Group invitation accepted.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to accept the invitation.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="surface-card rounded-2xl p-6">
+      <h1 className="text-2xl font-semibold">Add invitation</h1>
+      <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={checkInvitation}>
+        <label className="grow text-sm text-base-content/60">
+          Invitation token
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={event => {
+              setToken(event.target.value);
+              setPreview(null);
+              setStatus(null);
+              setError(null);
+            }}
+            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+            placeholder="Paste invitation token"
+            required
+          />
+        </label>
+        <button type="submit" className="rateloop-gradient-action px-5" disabled={busy || !token.trim()}>
+          {busy ? "Checking…" : "Continue"}
+        </button>
+      </form>
+
+      {preview ? (
+        <div className="surface-card-nested mt-5 rounded-xl p-5">
+          <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
+          <h2 className="mt-1 text-lg font-semibold">{preview.groupName}</h2>
+          {preview.groupPurpose ? <p className="mt-2 text-sm text-base-content/60">{preview.groupPurpose}</p> : null}
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="rateloop-gradient-action px-5"
+              disabled={busy}
+              onClick={acceptPrivateGroup}
+            >
+              {busy ? "Joining…" : "Accept invitation"}
+            </button>
+            <button type="button" className="btn border-0 bg-white/[0.08]" onClick={() => setPreview(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {status ? (
+        <p role="status" className="mt-5 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
+          {status}{" "}
+          <Link href="/human?tab=profile&section=private-group" className="underline">
+            Manage access
+          </Link>
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}

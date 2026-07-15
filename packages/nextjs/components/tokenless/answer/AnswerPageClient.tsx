@@ -9,7 +9,9 @@ import {
   PrivateAssignmentCard,
 } from "~~/components/tokenless/answer/PrivateAssignmentCard";
 import { type PublicAnswerTask, PublicQuestionCard } from "~~/components/tokenless/answer/PublicQuestionCard";
-import { AnswerRequestError, type AnswerScope as Scope, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
+import { AnswerRequestError, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
+
+type VisibleScope = "all" | "public" | "private";
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
@@ -21,24 +23,24 @@ export function AnswerPageClient({
   initialScope = "all",
 }: {
   initialQuery?: string;
-  initialScope?: Scope;
+  initialScope?: VisibleScope;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const query = initialQuery;
-  const [scope, setScope] = useState<Scope>(initialScope);
+  const [scope, setScope] = useState<VisibleScope>(initialScope);
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(nextQuery = query, nextScope = scope) {
+  async function load(nextQuery = query) {
     setLoading(true);
     setError(null);
     setSignedOut(false);
     try {
-      const [publicBody, privateBody] = await loadAnswerQueues(nextQuery, nextScope);
+      const [publicBody, privateBody] = await loadAnswerQueues(nextQuery, "all");
       setTasks((publicBody.tasks ?? []) as PublicAnswerTask[]);
       setAssignments((privateBody.assignments ?? []) as PrivateAnswerAssignment[]);
     } catch (cause) {
@@ -50,34 +52,40 @@ export function AnswerPageClient({
   }
 
   useEffect(() => {
-    void load(initialQuery, initialScope);
+    setScope(initialScope);
+    void load(initialQuery);
     // The route owns initial query state; explicit user search owns subsequent refreshes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, initialScope]);
 
-  function changeScope(nextScope: Scope) {
+  function changeScope(nextScope: VisibleScope) {
     setScope(nextScope);
     router.push(`${pathname}?q=${encodeURIComponent(query)}&scope=${nextScope}`);
-    void load(query, nextScope);
   }
+
+  const showScopeControls = !loading && tasks.length > 0 && assignments.length > 0;
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
-      <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Answer scopes">
-        {(["all", "public", "private", "submitted"] as const).map(value => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={scope === value}
-            onClick={() => changeScope(value)}
-            className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
-              scope === value ? "pill-active" : "pill-inactive"
-            }`}
-          >
-            {value}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        {showScopeControls ? (
+          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Review sources">
+            {(["all", "public", "private"] as const).map(value => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={scope === value}
+                onClick={() => changeScope(value)}
+                className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
+                  scope === value ? "pill-active" : "pill-inactive"
+                }`}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {query ? (
           <span className="surface-card-nested ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
             Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
@@ -92,35 +100,32 @@ export function AnswerPageClient({
             Loading…
           </div>
         ) : null}
-        {!loading && !signedOut && scope !== "private" && scope !== "submitted"
-          ? tasks.map(task => <PublicQuestionCard key={task.roundId} task={task} onSubmitted={() => void load()} />)
-          : null}
-        {!loading && !signedOut && scope !== "public" && scope !== "submitted"
+        {!loading && !signedOut && scope !== "public"
           ? assignments.map(assignment => (
               <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
             ))
           : null}
-        {!loading && !signedOut && scope === "submitted" ? (
-          <div className="surface-card rounded-lg p-6 text-sm leading-6 text-base-content/55">
-            Submitted history will appear here once public result history is exposed by the tokenless read model.
-          </div>
-        ) : null}
+        {!loading && !signedOut && scope !== "private"
+          ? tasks.map(task => <PublicQuestionCard key={task.roundId} task={task} onSubmitted={() => void load()} />)
+          : null}
         {!loading && signedOut ? (
           <section className="surface-card rounded-2xl p-6 text-center">
             <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Human access</p>
             <h2 className="mt-2 text-xl font-semibold">Sign in to discover review work</h2>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-base-content/60">
-              Public-network work is public to eligible RateLoop humans, not anonymous. Signing in protects assignment,
-              response, payment, and private-group access.
+              Review work is available to eligible, signed-in RateLoop humans.
             </p>
             <div className="mx-auto mt-5 max-w-xs">
               <ThirdwebSessionButton />
             </div>
           </section>
         ) : null}
-        {!loading && !signedOut && scope !== "submitted" && tasks.length === 0 && assignments.length === 0 ? (
-          <div className="surface-card flex min-h-48 items-center justify-center rounded-lg p-6 text-center text-base text-base-content/55">
-            No questions are available in this view yet.
+        {!loading && !signedOut && !error && tasks.length === 0 && assignments.length === 0 ? (
+          <div className="surface-card flex min-h-48 flex-col items-center justify-center gap-4 rounded-lg p-6 text-center">
+            <p className="text-base text-base-content/60">No review work is available right now.</p>
+            <button type="button" className="btn btn-sm border-0 bg-white/[0.08]" onClick={() => void load()}>
+              Check again
+            </button>
           </div>
         ) : null}
         {error ? (
