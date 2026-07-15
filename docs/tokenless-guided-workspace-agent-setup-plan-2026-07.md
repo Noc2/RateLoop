@@ -1,6 +1,6 @@
 # Guided workspace and agent setup plan
 
-- **Status:** Proposed
+- **Status:** Accepted implementation baseline
 - **Date:** 2026-07-15
 - **Scope:** First workspace creation, first agent connection, agent confirmation, review authority, spending limits,
   private-group invitations, setup resumption, and the transition into the normal Agents workspace
@@ -100,7 +100,7 @@ Keep the current single field and primary action.
 - Required input: workspace name
 - Primary action: **Create workspace**
 - Completion evidence: active workspace plus owner membership
-- Result: create the setup record and route to `/agents/setup?workspace=<id>&step=connect`
+- Result: create the setup record and route to `/agents?workspace=<id>&step=connect`
 
 Do not show billing, groups, agent registry, policies, or technical settings here.
 
@@ -185,17 +185,20 @@ The UI must show only reviewer/content combinations that are operational in the 
 Choosing an unavailable lane must fail closed on the server even if a stale client submits it. The setup should not show
 disabled future-product options merely to advertise them.
 
-Completion evidence is an active review-policy version bound to the confirmed agent version. If autonomous access was
-chosen, it additionally requires an active publishing policy, exact policy/version binding, exact allowed workflows,
-browser-recorded owner consent, and an available runtime lane.
+Completion evidence at this stage is a validated review draft recorded against the confirmed agent version. For an
+invited audience, the exact active review policy cannot be materialized until Stage 5 has selected a group and frozen its
+policy version and hash. Stage 5 or the completion transaction performs that atomic materialization and binding. If
+autonomous access is chosen in a future runnable lane, completion additionally requires an active publishing policy,
+exact policy/version binding, exact allowed workflows, browser-recorded owner consent, and an available runtime lane.
 
 ### Stage 5 — Add people and finish
 
 Keep this fifth stage in the progress indicator for every user so the number of stages does not change after Stage 4.
 Change the body according to the selected audience:
 
-- **Invited or hybrid audience:** offer a default private group and one short invitation action. The common path is an
-  optional recipient email or a one-use code with the existing seven-day expiry. Put domain/account binding,
+- **Invited or hybrid audience:** offer a default private group and one short invitation action. The common path is a
+  one-use code with the existing seven-day expiry, optionally bound to a recipient email. The current product does not
+  deliver that email; always reveal the code once and say exactly what the binding does. Put domain/account binding,
   redemptions, and membership expiry under **Invitation restrictions**.
 - **Public-only audience:** state that no private invitations are needed and show the final setup summary.
 - **Safe connection without autonomous sending:** allow **Invite later**. Record the decision and state that the agent can
@@ -236,8 +239,10 @@ Add the next ordered migration after the current `0050` journal, tentatively
 | `schema_version` | Version of the setup contract |
 | `status` | `in_progress`, `completed`, or `grandfathered` |
 | `current_step` | Last useful resume point |
+| `primary_connection_intent_id` | Exact setup-owned connection attempt |
 | `primary_integration_id` | First connected integration used by setup |
 | `confirmed_agent_version_id` | Exact owner-confirmed identity version |
+| confirmation timestamps/actors | Explicit agent, review, and people receipts |
 | `review_draft_json` | Non-sensitive, validated choices saved before materialization |
 | `review_policy_id` / `review_policy_version` | Exact active review binding |
 | `publishing_policy_id` / `publishing_policy_version` | Nullable elevated-access binding |
@@ -274,6 +279,8 @@ Proposed authenticated routes:
 
 - `GET /api/account/workspaces/[workspaceId]/agent-setup` — resolved stages, resume step, safe presentation data, and
   operational audience capabilities
+- `POST /api/account/workspaces/[workspaceId]/agent-setup/connect` — create or resume the exact setup-owned connection
+  intent; a different concurrent or historical integration cannot satisfy Stage 2
 - `PATCH /api/account/workspaces/[workspaceId]/agent-setup` — save a validated non-sensitive draft and current step with
   optimistic revision
 - `POST /api/account/workspaces/[workspaceId]/agent-setup/confirm-agent` — confirm or version identity and atomically
@@ -304,6 +311,11 @@ The completion transaction must prove:
 The guided UI can be built without weakening the current fail-closed behavior, but invited/private autonomous work must
 not be called usable until the runtime is connected.
 
+Autonomous spending also remains unavailable until OAuth-connected asks use a credential-neutral persisted actor
+binding. The current ask ownership and budget-reservation foreign keys accept workspace API-key IDs, while the OAuth
+path identifies a token family. A browser scope upgrade alone therefore does not make the full quote-to-result path
+runnable. Do not expose autonomous limits until that data model and an OAuth end-to-end test are complete.
+
 ### Public network lane
 
 The existing adaptive orchestration can build a public question only from public, synthetic, or safely redacted
@@ -317,6 +329,12 @@ Do not put private source or suggestion payloads through `canonicalQuestion` or 
 Bind the setup-selected private group into the versioned audience policy, then route required review through the existing
 private-artifact, assurance-project/run, cohort, assignment, and membership checks. The server derives the group and
 policy version from the authenticated integration; the agent must not be allowed to name an arbitrary group.
+
+The current private-group and cohort services still validate the legacy classification shape even though migration
+`0049` added normalized visibility, public-material kind, and private sensitivity. Initial setup therefore creates only
+the existing private internal/confidential invitation default and describes it as preparation. Before promising invited
+public material or a runnable private lane, migrate group policy and cohort validation to the normalized dimensions
+(including the regulated private sensitivity already allowed by SQL) and test the assignment boundary end to end.
 
 The frozen binding must include group ID, group policy version/hash, content visibility/sensitivity, review-policy
 ID/version, agent version, and publishing-policy ID/version where payment is delegated.

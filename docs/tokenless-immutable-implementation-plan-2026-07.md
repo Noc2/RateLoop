@@ -49,20 +49,30 @@ six-checkbox data-classification UI is removed; visibility, public-material decl
 enforcement are normalized as separate dimensions. Every signed-in and public surface follows the same rule: one primary
 task, safe defaults, secondary explanation on demand, and technical detail in Docs.
 
+**Guided workspace-agent setup amendment — 15 July 2026:** the accepted
+[guided setup plan](tokenless-guided-workspace-agent-setup-plan-2026-07.md) makes first-workspace setup a resumable,
+workspace-scoped five-stage flow: workspace, connection, agent confirmation, review behavior, and people. The normal
+Agents workspace navigation remains hidden until explicit completion or grandfathering, while the global product shell
+stays available. Safe OAuth connection remains separate from publishing, spending, and private-artifact authority.
+Unavailable reviewer lanes are absent and rejected server-side. Invited groups and one-use codes may be prepared, but
+the product must not claim autonomous private delivery before the assignment-gated runtime is connected. Autonomous
+OAuth spending also remains fail-closed until ask ownership and budget reservations use a credential-neutral actor
+binding and the full quote-to-result path passes end to end.
+
 ## Implementation status — 15 July 2026
 
 Phases 1-4 are implemented in the `tokenless` package graph: greenfield contracts and invariants; tokenless-only ABIs;
 Ponder and keeper; Better Auth browser sessions and opaque RateLoop principals; B2B workspaces; payment execution;
 pre-round moderation; paid eligibility and epoch-bound vouchers; per-round vote and payout keys with user-controlled
 recovery; sponsored commits; transparency analytics; and agent OAuth. The ordered application migration journal currently
-runs through `0047_agent_oauth_device_authorization.sql`.
+runs through `0051_workspace_agent_setup.sql`.
 
 The current disposable Base Sepolia v3 bundle was deployed at block `44132668`, producing deployment key
 `tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9`.
 Generated contract exports, Ponder, and keeper identify that complete bundle. It is a disposable Base Sepolia test-profile
 deployment, not a production release target. No further hosted release may use deterministic or in-memory simulation:
 staging and production must use dedicated persistence and the real assignment, payment, settlement, and result path.
-Release remains fail-closed until managed signing, paid-assignment settlement, every migration through `0047`, the signed
+Release remains fail-closed until managed signing, paid-assignment settlement, every migration through `0051`, the signed
 EU resource/provider bundle, and a deployment-pinned paid end-to-end exercise are complete. Any later fund-core change
 invalidates this bundle and requires the same atomic redeployment procedure. Phase 5 audit, bounty, and mainnet hardening
 remain open.
