@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   approveAgentPairing,
@@ -88,6 +88,27 @@ test("one secret moves from restricted pairing to an exact active integration", 
     () => authenticateAgentMcpPrincipal(`Bearer ${rotated.secret}`),
     /inactive|Invalid agent credential/,
   );
+
+  const audit = await dbClient.execute({
+    sql: `SELECT action, actor_reference, target_id, metadata_json
+          FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action LIKE 'agent.%'
+          ORDER BY sequence ASC`,
+    args: [workspaceId],
+  });
+  assert.deepEqual(
+    audit.rows.map(row => row.action),
+    [
+      "agent.pairing_created",
+      "agent.pairing_claimed",
+      "agent.integration_approved",
+      "agent.integration_credential_rotated",
+      "agent.integration_revoked",
+    ],
+  );
+  const serializedAudit = JSON.stringify(audit.rows);
+  assert.equal(serializedAudit.includes(issued.secret), false);
+  assert.equal(serializedAudit.includes(rotated.secret), false);
 });
 
 test("owners can reject an untrusted claim without activating its bearer", async () => {
@@ -95,4 +116,14 @@ test("owners can reject an untrusted claim without activating its bearer", async
   const issued = await createAgentPairing({ accountAddress: OWNER, workspaceId, origin: "https://tokenless.example" });
   await rejectAgentPairing({ accountAddress: OWNER, workspaceId, pairingId: issued.pairing.pairingId });
   await assert.rejects(() => authenticateAgentMcpPrincipal(`Bearer ${issued.secret}`), /no longer active/);
+  const audit = await dbClient.execute({
+    sql: `SELECT action FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action LIKE 'agent.%'
+          ORDER BY sequence ASC`,
+    args: [workspaceId],
+  });
+  assert.deepEqual(
+    audit.rows.map(row => row.action),
+    ["agent.pairing_created", "agent.pairing_rejected"],
+  );
 });

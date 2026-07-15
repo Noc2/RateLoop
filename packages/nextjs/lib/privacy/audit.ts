@@ -121,6 +121,14 @@ function required(value: string, field: string, max = 500) {
   return normalized;
 }
 
+function optionalCorrelation(value: string | null | undefined) {
+  const normalized = value?.trim() || null;
+  if (normalized && (normalized.length > 160 || !/^[A-Za-z0-9._:-]+$/u.test(normalized))) {
+    return null;
+  }
+  return normalized;
+}
+
 function digest(previousDigest: string, payloadJson: string) {
   return `sha256:${createHash("sha256").update(`${previousDigest}\n${payloadJson}`).digest("hex")}`;
 }
@@ -150,7 +158,7 @@ export async function appendAuditEvent(input: AuditEventInput) {
     occurredAt: occurredAt.toISOString(),
     purpose: required(input.purpose, "Audit purpose", 160),
     reason: required(input.reason, "Audit reason"),
-    requestCorrelation: input.requestCorrelation?.trim() || null,
+    requestCorrelation: optionalCorrelation(input.requestCorrelation),
     result: input.result,
     targetId: required(input.targetId, "Audit target", 255),
     targetKind: required(input.targetKind, "Audit target kind", 120),
@@ -234,7 +242,7 @@ export async function appendSecurityAuditEvent(input: SecurityAuditEventInput) {
     occurredAt: occurredAt.toISOString(),
     purpose: required(input.purpose, "Audit purpose", 160),
     reason: required(input.reason, "Audit reason"),
-    requestCorrelation: input.requestCorrelation?.trim() || null,
+    requestCorrelation: optionalCorrelation(input.requestCorrelation),
     result: input.result,
     ...scope,
     targetId: required(input.targetId, "Audit target", 255),
@@ -443,11 +451,25 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
           FROM tokenless_audit_events WHERE workspace_id = ? ORDER BY sequence ASC`,
     args: [input.workspaceId],
   });
-  return {
+  const exported = {
     exportedAt: new Date().toISOString(),
     format: "rateloop-audit-v1",
     integrity: await verifyWorkspaceAuditChain(input.workspaceId),
     events: result.rows,
     workspaceId: input.workspaceId,
   };
+  await appendAuditEvent({
+    action: "audit.export",
+    actorKind: isRateLoopPrincipalId(accountReference) ? "principal" : "account",
+    actorReference: accountReference,
+    assuranceMethod: "rateloop_session",
+    metadata: { eventCount: result.rowCount },
+    purpose: "workspace_audit_export",
+    reason: "authorized_administrator_export",
+    result: "success",
+    targetId: input.workspaceId,
+    targetKind: "workspace_audit",
+    workspaceId: input.workspaceId,
+  });
+  return exported;
 }

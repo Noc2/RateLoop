@@ -5,6 +5,7 @@ import { baseSepolia } from "viem/chains";
 import { AuthError, getAuthOrigin } from "~~/lib/auth/session";
 import { consumeThirdwebWalletJti } from "~~/lib/auth/thirdwebWalletJwt";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1_000;
 
@@ -109,6 +110,20 @@ export async function createWalletBindingChallenge(input: {
       now,
     ],
   });
+  await appendSecurityAuditEvent({
+    action: "wallet.binding_challenge_created",
+    actorKind: "principal",
+    actorReference: input.principalId,
+    assuranceMethod: "rateloop_session",
+    metadata: { chainId: baseSepolia.id, expiresAt: expiresAt.toISOString(), purpose, source },
+    purpose: "wallet_binding",
+    reason: "explicit_user_request",
+    result: "success",
+    scopeId: input.principalId,
+    scopeKind: "identity",
+    targetId: challengeId,
+    targetKind: "wallet_binding_challenge",
+  });
   return { challengeId, message, expiresAt };
 }
 
@@ -183,7 +198,22 @@ export async function completeWalletBinding(input: {
   } finally {
     client.release();
   }
-  return { bindingId, purpose, source: parseSource(row.wallet_source), walletAddress: address };
+  const source = parseSource(row.wallet_source);
+  await appendSecurityAuditEvent({
+    action: "wallet.binding_created",
+    actorKind: "principal",
+    actorReference: input.principalId,
+    assuranceMethod: "wallet_signature",
+    metadata: { bindingId, chainId: Number(row.chain_id), purpose, source },
+    purpose: "wallet_binding",
+    reason: "purpose_bound_signature_verified",
+    result: "success",
+    scopeId: input.principalId,
+    scopeKind: "identity",
+    targetId: bindingId,
+    targetKind: "wallet_binding",
+  });
+  return { bindingId, purpose, source, walletAddress: address };
 }
 
 export async function listWalletBindings(principalId: string) {
@@ -227,6 +257,20 @@ export async function revokeWalletBinding(input: { bindingId: string; principalI
     args: [input.now ?? new Date(), input.bindingId, input.principalId],
   });
   if (result.rowCount !== 1) throw new AuthError("Wallet binding was not found.", 404);
+  await appendSecurityAuditEvent({
+    action: "wallet.binding_revoked",
+    actorKind: "principal",
+    actorReference: input.principalId,
+    assuranceMethod: "rateloop_session",
+    metadata: { bindingId: input.bindingId },
+    purpose: "wallet_binding",
+    reason: "user_revocation",
+    result: "success",
+    scopeId: input.principalId,
+    scopeKind: "identity",
+    targetId: input.bindingId,
+    targetKind: "wallet_binding",
+  });
 }
 
 export function __setWalletSignatureVerifierForTests(

@@ -66,4 +66,15 @@ test("project assignments deny unassigned and cross-project access and enforce r
     () => authorizeProjectAccount({ accountAddress: AUDITOR, action: "read", ...first }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "project_not_found",
   );
+
+  const audit = await dbClient.execute({
+    sql: `SELECT action, actor_reference, target_id, metadata_json
+          FROM tokenless_audit_events WHERE workspace_id = ? ORDER BY sequence ASC`,
+    args: [first.workspaceId],
+  });
+  assert.deepEqual(
+    audit.rows.map(row => row.action),
+    ["project.access_initialized", "project.access_granted", "project.access_revoked"],
+  );
+  assert.equal(JSON.stringify(audit.rows).includes(AUDITOR), true);
 });

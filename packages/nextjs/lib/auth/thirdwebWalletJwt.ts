@@ -2,6 +2,7 @@ import { type JsonWebKey, createHash, createPrivateKey, createPublicKey, randomB
 import "server-only";
 import { AuthError, getAuthOrigin } from "~~/lib/auth/session";
 import { dbClient } from "~~/lib/db";
+import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
 
 const JWT_TTL_SECONDS = 5 * 60;
 
@@ -73,6 +74,20 @@ export async function issueThirdwebWalletJwt(principalId: string, now = new Date
     sql: `INSERT INTO tokenless_thirdweb_wallet_jtis
           (jti_hash, principal_id, audience, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`,
     args: [jtiHash, principalId, config.audience, new Date(expiresAt * 1_000), now],
+  });
+  await appendSecurityAuditEvent({
+    action: "wallet.thirdweb_exchange_issued",
+    actorKind: "principal",
+    actorReference: principalId,
+    assuranceMethod: "rateloop_session",
+    metadata: { expiresAt: new Date(expiresAt * 1_000).toISOString(), keyId: config.keyId },
+    purpose: "wallet_creation",
+    reason: "explicit_user_request",
+    result: "success",
+    scopeId: principalId,
+    scopeKind: "identity",
+    targetId: principalId,
+    targetKind: "thirdweb_wallet_exchange",
   });
   return { jwt: `${signingInput}.${base64url(signature)}`, jti, expiresAt: new Date(expiresAt * 1_000) };
 }

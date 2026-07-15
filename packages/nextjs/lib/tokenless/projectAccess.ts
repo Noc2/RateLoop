@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown>;
@@ -142,6 +143,19 @@ export async function grantProjectAccountAccess(input: {
       now,
     ],
   });
+  await appendAuditEvent({
+    action: "project.access_granted",
+    actorKind: isRateLoopPrincipalId(manager.accountReference) ? "principal" : "account",
+    actorReference: manager.accountReference,
+    assuranceMethod: "rateloop_session",
+    metadata: { assignmentId, role: input.role, subjectKind },
+    purpose: "project_authorization",
+    reason: input.reason?.trim() || "project_access",
+    result: "success",
+    targetId: subjectReference,
+    targetKind: "project_subject",
+    workspaceId: input.workspaceId,
+  });
   return { assignmentId, subjectReference };
 }
 
@@ -166,6 +180,19 @@ export async function revokeProjectAccess(input: {
   if (result.rowCount !== 1) {
     throw new TokenlessServiceError("Project assignment not found.", 404, "project_assignment_not_found");
   }
+  await appendAuditEvent({
+    action: "project.access_revoked",
+    actorKind: isRateLoopPrincipalId(manager.accountReference) ? "principal" : "account",
+    actorReference: manager.accountReference,
+    assuranceMethod: "rateloop_session",
+    metadata: { assignmentId: input.assignmentId, projectId: input.projectId },
+    purpose: "project_authorization",
+    reason: "assignment_revoked",
+    result: "success",
+    targetId: input.assignmentId,
+    targetKind: "project_assignment",
+    workspaceId: input.workspaceId,
+  });
 }
 
 export async function createProjectOwnerAssignment(input: {
@@ -211,6 +238,20 @@ export async function createInitialProjectAssignment(input: {
       `${input.subjectKind}:${subjectReference}`,
       now,
     ],
+  });
+  await appendAuditEvent({
+    action: "project.access_initialized",
+    actorKind:
+      input.subjectKind === "api_key" ? "api_key" : input.subjectKind === "principal" ? "principal" : "account",
+    actorReference: subjectReference,
+    assuranceMethod: "project_creation",
+    metadata: { assignmentId, subjectKind: input.subjectKind },
+    purpose: "project_authorization",
+    reason: "project_creator",
+    result: "success",
+    targetId: assignmentId,
+    targetKind: "project_assignment",
+    workspaceId: input.workspaceId,
   });
   return assignmentId;
 }

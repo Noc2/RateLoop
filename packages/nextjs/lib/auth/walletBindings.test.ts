@@ -99,6 +99,28 @@ test("wallet proof is purpose-bound, single-use, revocable, and independent of a
   );
   await revokeWalletBinding({ bindingId: binding.bindingId, principalId, now: new Date(now.getTime() + 3_000) });
   assert.deepEqual(await listWalletBindings(principalId), []);
+
+  const audit = await dbClient.execute({
+    sql: `SELECT action, actor_reference, target_id, metadata_json
+          FROM tokenless_security_audit_events
+          WHERE scope_kind = 'identity' AND scope_id = ?
+          ORDER BY sequence ASC`,
+    args: [principalId],
+  });
+  assert.deepEqual(
+    audit.rows.map(row => row.action),
+    [
+      "wallet.thirdweb_exchange_issued",
+      "wallet.binding_challenge_created",
+      "wallet.binding_created",
+      "wallet.binding_revoked",
+    ],
+  );
+  const serializedAudit = JSON.stringify(audit.rows);
+  assert.equal(serializedAudit.includes(address), false);
+  assert.equal(serializedAudit.includes("0x11"), false);
+  assert.equal(serializedAudit.includes(issued.jwt), false);
+  assert.equal(serializedAudit.includes(issued.jti), false);
 });
 
 test("a thirdweb JWT exchange cannot be replayed for a second wallet challenge", async () => {

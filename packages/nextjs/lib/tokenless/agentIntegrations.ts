@@ -1,9 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
+import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import type { AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
 import {
   type ProductPrincipal,
@@ -221,6 +222,19 @@ export async function createAgentPairing(input: { accountAddress: string; worksp
           VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
     args: [pairingId, input.workspaceId, keyId, digest(token), token.slice(0, 20), address, now, expiresAt],
   });
+  await appendAuditEvent({
+    action: "agent.pairing_created",
+    actorKind: isRateLoopPrincipalId(address) ? "principal" : "account",
+    actorReference: address,
+    assuranceMethod: "rateloop_session",
+    metadata: { expiresAt: expiresAt.toISOString() },
+    purpose: "agent_connection",
+    reason: "workspace_administrator_request",
+    result: "success",
+    targetId: pairingId,
+    targetKind: "agent_pairing",
+    workspaceId: input.workspaceId,
+  });
   return {
     pairing: {
       pairingId,
@@ -368,6 +382,19 @@ export async function submitAgentRegistration(input: {
   });
   if (!result.rowCount)
     throw new TokenlessServiceError("Pairing expired or was already resolved.", 410, "agent_pairing_expired");
+  await appendAuditEvent({
+    action: "agent.pairing_claimed",
+    actorKind: "api_key",
+    actorReference: input.pairing.apiKeyId,
+    assuranceMethod: "pairing_credential",
+    metadata: { environment: value.environment, requestedWorkflowCount: value.requestedWorkflowKeys.length },
+    purpose: "agent_connection",
+    reason: "agent_registration_submitted",
+    result: "success",
+    targetId: input.pairing.pairingId,
+    targetKind: "agent_pairing",
+    workspaceId: input.pairing.workspaceId,
+  });
   return {
     registration: pairingFromRow(result.rows[0] as Row),
     nextAction:
@@ -585,6 +612,24 @@ export async function approveAgentPairing(input: {
       allowedWorkflowKeys,
     });
     await client.query("COMMIT");
+    await appendAuditEvent({
+      action: "agent.integration_approved",
+      actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+      actorReference: actor,
+      assuranceMethod: "rateloop_session",
+      metadata: {
+        agentId: created.agentId,
+        allowedWorkflowCount: allowedWorkflowKeys.length,
+        publishingPolicyId,
+        reviewPolicyId: created.reviewPolicyId,
+      },
+      purpose: "agent_connection",
+      reason: "workspace_administrator_approval",
+      result: "success",
+      targetId: created.integrationId,
+      targetKind: "agent_integration",
+      workspaceId: input.workspaceId,
+    });
     return {
       pairing: { pairingId: input.pairingId, status: "approved" },
       agent: { agentId: created.agentId, versionId: created.versionId },
@@ -611,6 +656,18 @@ export async function rejectAgentPairing(input: { accountAddress: string; worksp
     args: [actor, now, input.workspaceId, input.pairingId],
   });
   if (!result.rowCount) throw new TokenlessServiceError("Pairing not found.", 404, "agent_pairing_not_found");
+  await appendAuditEvent({
+    action: "agent.pairing_rejected",
+    actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+    actorReference: actor,
+    assuranceMethod: "rateloop_session",
+    purpose: "agent_connection",
+    reason: "workspace_administrator_rejection",
+    result: "success",
+    targetId: input.pairingId,
+    targetKind: "agent_pairing",
+    workspaceId: input.workspaceId,
+  });
   return { pairing: { pairingId: input.pairingId, status: "rejected" } };
 }
 
@@ -642,6 +699,18 @@ export async function revokeAgentIntegration(input: {
       [`agie_${randomUUID().replaceAll("-", "")}`, input.integrationId, input.workspaceId, actor, now],
     );
     await client.query("COMMIT");
+    await appendAuditEvent({
+      action: "agent.integration_revoked",
+      actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+      actorReference: actor,
+      assuranceMethod: "rateloop_session",
+      purpose: "agent_connection",
+      reason: "workspace_administrator_revocation",
+      result: "success",
+      targetId: input.integrationId,
+      targetKind: "agent_integration",
+      workspaceId: input.workspaceId,
+    });
     return { integration: { integrationId: input.integrationId, status: "revoked" } };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -694,6 +763,19 @@ export async function rotateAgentIntegration(input: {
       ],
     );
     await client.query("COMMIT");
+    await appendAuditEvent({
+      action: "agent.integration_credential_rotated",
+      actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+      actorReference: actor,
+      assuranceMethod: "rateloop_session",
+      metadata: { expiresAt: expiresAt.toISOString() },
+      purpose: "agent_connection",
+      reason: "workspace_administrator_rotation",
+      result: "success",
+      targetId: input.integrationId,
+      targetKind: "agent_integration",
+      workspaceId: input.workspaceId,
+    });
     return {
       integration: { integrationId: input.integrationId, status: "active", expiresAt: expiresAt.toISOString() },
       secret: token,

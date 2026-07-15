@@ -60,6 +60,12 @@ test("canonical audit events form a verifiable tenant chain and export only to a
   const exported = await exportWorkspaceAudit({ accountAddress: OWNER, workspaceId });
   assert.equal(exported.events.length, 2);
   assert.equal(exported.integrity.valid, true);
+  const exportEvent = await dbClient.execute({
+    sql: "SELECT action, actor_reference, metadata_json FROM tokenless_audit_events WHERE workspace_id = ? AND action = 'audit.export'",
+    args: [workspaceId],
+  });
+  assert.equal(exportEvent.rowCount, 1);
+  assert.equal(exportEvent.rows[0]?.actor_reference, OWNER);
   await assert.rejects(
     () => exportWorkspaceAudit({ accountAddress: OTHER, workspaceId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
@@ -212,4 +218,27 @@ test("audit metadata rejects secrets and oversized payloads before persistence",
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_audit_event",
   );
   assert.equal((await dbClient.execute("SELECT event_id FROM tokenless_audit_events")).rowCount, 0);
+});
+
+test("untrusted request correlation values are omitted instead of blocking the audited action", async () => {
+  const result = await appendSecurityAuditEvent({
+    action: "auth.provider_request_denied",
+    actorKind: "system",
+    actorReference: "anonymous",
+    assuranceMethod: "better_auth",
+    purpose: "account_access",
+    reason: "provider_request_rejected",
+    requestCorrelation: "invalid correlation containing spaces and a bearer-shaped value",
+    result: "denied",
+    scopeId: "authentication",
+    scopeKind: "system",
+    targetId: "better_auth",
+    targetKind: "identity_provider",
+  });
+  assert.equal(result.sequence, 1);
+  const stored = await dbClient.execute({
+    sql: "SELECT request_correlation FROM tokenless_security_audit_events WHERE event_id = ?",
+    args: [result.eventId],
+  });
+  assert.equal(stored.rows[0]?.request_correlation, null);
 });
