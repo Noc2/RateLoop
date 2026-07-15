@@ -316,6 +316,7 @@ export async function listAgentConnections(input: { accountAddress: string; work
       return {
         ...bindingFromRow({ ...row, status: text(row, "status") === "active" ? "active" : "active" }),
         status: text(row, "status"),
+        apiKeyId: text(row, "api_key_id"),
         externalId: text(row, "external_id"),
         displayName: text(row, "display_name"),
         credentialPrefix: text(row, "credential_prefix"),

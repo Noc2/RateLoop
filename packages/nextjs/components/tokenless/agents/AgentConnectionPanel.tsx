@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
@@ -25,6 +25,7 @@ type AgentPairing = {
 
 type AgentIntegration = {
   integrationId: string;
+  apiKeyId: string;
   agentId: string;
   agentVersionId: string;
   agentDisplayName: string;
@@ -56,6 +57,33 @@ type ConnectionReveal = {
   expiresAt: string | null;
 };
 
+type ConnectionIntentStatus =
+  | "issued"
+  | "install_required"
+  | "authorizing"
+  | "approval_required"
+  | "testing"
+  | "connected"
+  | "action_required"
+  | "cancelled"
+  | "expired"
+  | "rejected"
+  | "revoked"
+  | "superseded";
+
+type AgentConnectionIntent = {
+  intentId: string;
+  status: ConnectionIntentStatus;
+  profile: { key: string; version: number; summary: string };
+  createdAt: string | null;
+  claimExpiresAt: string | null;
+  hardExpiresAt: string | null;
+  clientName: string;
+  clientVersion: string;
+  lastTransitionAt: string | null;
+  recoveryAction: string;
+};
+
 type ApprovalPayload = {
   externalId: string;
   displayName: string;
@@ -71,6 +99,14 @@ type ApprovalPayload = {
 
 const PAIRING_POLL_INTERVAL_MS = 5_000;
 const PAIRING_HIDDEN_POLL_INTERVAL_MS = 10_000;
+const CONNECTION_INTENT_ACTIVE_STATUSES: ConnectionIntentStatus[] = [
+  "issued",
+  "install_required",
+  "authorizing",
+  "approval_required",
+  "testing",
+  "action_required",
+];
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -136,6 +172,7 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
   const reviewPolicy = record(row.reviewPolicy);
   return {
     integrationId: stringField(row, "integrationId", "id"),
+    apiKeyId: stringField(row, "apiKeyId"),
     agentId: stringField(row, "agentId") || stringField(agent, "agentId", "id"),
     agentVersionId: stringField(row, "agentVersionId") || stringField(version, "versionId", "id"),
     agentDisplayName: stringField(row, "agentDisplayName", "displayName") || stringField(agent, "displayName"),
@@ -150,6 +187,45 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
     clientVersion: stringField(row, "clientVersion"),
     lastSeenAt: nullableStringField(row, "lastSeenAt"),
     credentialExpiresAt: nullableStringField(row, "credentialExpiresAt", "expiresAt"),
+  };
+}
+
+export function normalizeAgentConnectionIntent(value: unknown): AgentConnectionIntent {
+  const row = record(value);
+  const profile = record(row.profile);
+  const status = stringField(row, "status") as ConnectionIntentStatus;
+  return {
+    intentId: stringField(row, "intentId"),
+    status: [
+      "issued",
+      "install_required",
+      "authorizing",
+      "approval_required",
+      "testing",
+      "connected",
+      "action_required",
+      "cancelled",
+      "expired",
+      "rejected",
+      "revoked",
+      "superseded",
+    ].includes(status)
+      ? status
+      : "action_required",
+    profile: {
+      key: stringField(profile, "key"),
+      version: numberField(profile, "version") ?? 1,
+      summary:
+        stringField(profile, "summary") ||
+        "Can check when human review is needed. Cannot spend, publish, read private files, or administer the workspace.",
+    },
+    createdAt: nullableStringField(row, "createdAt"),
+    claimExpiresAt: nullableStringField(row, "claimExpiresAt"),
+    hardExpiresAt: nullableStringField(row, "hardExpiresAt"),
+    clientName: stringField(row, "clientName"),
+    clientVersion: stringField(row, "clientVersion"),
+    lastTransitionAt: nullableStringField(row, "lastTransitionAt"),
+    recoveryAction: stringField(row, "recoveryAction"),
   };
 }
 
@@ -199,10 +275,56 @@ function formatTimestamp(value: string | null, empty = "Never") {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function connectionIntentCopy(status: ConnectionIntentStatus) {
+  switch (status) {
+    case "issued":
+      return { heading: "Waiting for the agent to open your connection", detail: "Paste the copied message once." };
+    case "install_required":
+      return {
+        heading: "Host install or trust required",
+        detail: "Complete the native host prompt once. The original connection resumes automatically.",
+      };
+    case "authorizing":
+      return {
+        heading: "Waiting for authorization",
+        detail: "Complete the RateLoop authorization prompt if your host opened one.",
+      };
+    case "approval_required":
+      return {
+        heading: "Additional access needs approval",
+        detail: "The agent requested more than the safe default. Review the exact access before continuing.",
+      };
+    case "testing":
+      return { heading: "Verifying safe access", detail: "The agent and RateLoop are finishing automatically." };
+    case "action_required":
+      return {
+        heading: "Connection needs attention",
+        detail: "Return to the agent for one exact recovery action. Do not paste the message again.",
+      };
+    case "connected":
+      return {
+        heading: "Connected with safe access",
+        detail: "Review decisions are available; spending, publishing, private files, and administration stay blocked.",
+      };
+    default:
+      return { heading: "Connection ended", detail: "Create a new connection message to try again." };
+  }
+}
+
 export function isPendingAgentPairing(pairing: Pick<AgentPairing, "status" | "expiresAt">, now = Date.now()) {
   if (pairing.status !== "open" && pairing.status !== "claimed") return false;
   if (!pairing.expiresAt) return true;
   const expiresAt = new Date(pairing.expiresAt).getTime();
+  return Number.isFinite(expiresAt) && expiresAt > now;
+}
+
+export function isActiveAgentConnectionIntent(
+  intent: Pick<AgentConnectionIntent, "status" | "hardExpiresAt">,
+  now = Date.now(),
+) {
+  if (!CONNECTION_INTENT_ACTIVE_STATUSES.includes(intent.status)) return false;
+  if (!intent.hardExpiresAt) return true;
+  const expiresAt = new Date(intent.hardExpiresAt).getTime();
   return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
@@ -470,6 +592,7 @@ export function AgentConnectionPanel({
   publishingRevision?: number;
   onAgentApproved?: () => void;
 }) {
+  const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
   const [integrations, setIntegrations] = useState<AgentIntegration[]>([]);
   const [publishingPolicies, setPublishingPolicies] = useState<PublishingPolicy[]>([]);
@@ -479,22 +602,27 @@ export function AgentConnectionPanel({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [connectionClock, setConnectionClock] = useState(() => Date.now());
+  const [manualConnectionMessage, setManualConnectionMessage] = useState<string | null>(null);
+  const manualMessageRef = useRef<HTMLTextAreaElement>(null);
 
   const loadConnectionState = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
     if (!selectedWorkspaceId) {
+      setConnectionIntents([]);
       setPairings([]);
       setIntegrations([]);
       setPublishingPolicies([]);
       return;
     }
     const base = `/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}`;
-    const [pairingBody, integrationBody, policyBody] = await Promise.all([
+    const [intentBody, pairingBody, integrationBody, policyBody] = await Promise.all([
+      readJson(await fetch(`${base}/agent-connections`, { cache: "no-store", credentials: "same-origin", signal })),
       readJson(await fetch(`${base}/agent-pairings`, { cache: "no-store", credentials: "same-origin", signal })),
       readJson(await fetch(`${base}/agent-integrations`, { cache: "no-store", credentials: "same-origin", signal })),
       readJson(
         await fetch(`${base}/agent-publishing-policies`, { cache: "no-store", credentials: "same-origin", signal }),
       ),
     ]);
+    setConnectionIntents(responseList(intentBody, "intents").map(normalizeAgentConnectionIntent));
     setPairings(responseList(pairingBody, "pairings", "sessions").map(normalizeAgentPairing));
     setIntegrations(responseList(integrationBody, "integrations").map(normalizeAgentIntegration));
     setPublishingPolicies(
@@ -522,7 +650,15 @@ export function AgentConnectionPanel({
     return () => controller.abort();
   }, [loadConnectionState, publishingRevision, workspaceId]);
 
-  const shouldPoll = pairings.some(pairing => isPendingAgentPairing(pairing, connectionClock));
+  useEffect(() => {
+    if (!manualConnectionMessage) return;
+    manualMessageRef.current?.focus();
+    manualMessageRef.current?.select();
+  }, [manualConnectionMessage]);
+
+  const shouldPoll =
+    connectionIntents.some(intent => isActiveAgentConnectionIntent(intent, connectionClock)) ||
+    pairings.some(pairing => isPendingAgentPairing(pairing, connectionClock));
 
   useEffect(() => {
     if (!workspaceId || !shouldPoll) return;
@@ -535,10 +671,7 @@ export function AgentConnectionPanel({
     };
     const refresh = async () => {
       if (stopped) return;
-      if (document.visibilityState !== "visible") {
-        schedule(PAIRING_HIDDEN_POLL_INTERVAL_MS);
-        return;
-      }
+      if (document.visibilityState !== "visible") return;
       try {
         await loadConnectionState(workspaceId);
         failures = 0;
@@ -547,7 +680,9 @@ export function AgentConnectionPanel({
         failures += 1;
         setError("Connection status could not refresh. RateLoop will retry while this page is visible.");
       }
-      schedule(Math.min(PAIRING_POLL_INTERVAL_MS * Math.max(1, failures), PAIRING_HIDDEN_POLL_INTERVAL_MS));
+      if (!stopped && document.visibilityState === "visible") {
+        schedule(Math.min(PAIRING_POLL_INTERVAL_MS * Math.max(1, failures), PAIRING_HIDDEN_POLL_INTERVAL_MS));
+      }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState !== "visible" || stopped) return;
@@ -556,7 +691,7 @@ export function AgentConnectionPanel({
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
-    schedule(PAIRING_POLL_INTERVAL_MS);
+    if (document.visibilityState === "visible") schedule(PAIRING_POLL_INTERVAL_MS);
     return () => {
       stopped = true;
       document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -564,28 +699,77 @@ export function AgentConnectionPanel({
     };
   }, [loadConnectionState, shouldPoll, workspaceId]);
 
-  async function generatePairing() {
+  async function copyConnectionMessage() {
     if (!workspaceId) return;
-    setBusyAction("create-pairing");
-    setReveal(null);
+    setBusyAction("create-intent");
+    setManualConnectionMessage(null);
     setError(null);
     setStatus(null);
     try {
       const body = await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-pairings`, {
+        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections`, {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ expiresInSeconds: 600 }),
         }),
       );
-      const nextReveal = revealFromResponse(body, "One-time agent connection");
-      if (!nextReveal.secret) throw new Error("The server did not return the one-time pairing secret.");
-      setReveal(nextReveal);
-      await loadConnectionState(workspaceId);
-      setStatus("Pairing created. It expires in 10 minutes and can submit only one registration request.");
+      const connectionUrl = stringField(body, "connectionUrl");
+      if (!connectionUrl) throw new Error("RateLoop did not return a connection URL.");
+      const message = buildAgentConnectionMessage({ connectionUrl });
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(message);
+        copied = true;
+        setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
+      } catch {
+        setManualConnectionMessage(message);
+        setError("Clipboard access was denied. The complete message is selected below for one manual copy.");
+      }
+      try {
+        await loadConnectionState(workspaceId);
+      } catch {
+        if (copied) {
+          setError("The message was copied, but live status could not refresh yet. The connection can still continue.");
+        }
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create an agent pairing.");
+      setError(cause instanceof Error ? cause.message : "Unable to create the connection message.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function cancelConnectionIntent(intentId: string) {
+    if (!window.confirm("Cancel this connection attempt? Its original message will stop working.")) return;
+    setBusyAction(`cancel-intent:${intentId}`);
+    setError(null);
+    setStatus(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/${encodeURIComponent(intentId)}`,
+          { method: "DELETE", credentials: "same-origin" },
+        ),
+      );
+      await loadConnectionState(workspaceId);
+      setManualConnectionMessage(null);
+      setStatus("Connection attempt cancelled. You can create a new message when ready.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to cancel the connection attempt.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function retryConnectionStatus() {
+    setBusyAction("refresh-intents");
+    setError(null);
+    try {
+      await loadConnectionState(workspaceId);
+      setConnectionClock(Date.now());
+      setStatus("Connection status refreshed. The agent can keep using the original message.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to refresh connection status.");
     } finally {
       setBusyAction(null);
     }
@@ -688,15 +872,20 @@ export function AgentConnectionPanel({
 
   async function copyReveal() {
     if (!reveal) return;
-    const message = buildAgentConnectionMessage(reveal);
     try {
-      await navigator.clipboard.writeText(message);
-      setStatus("Setup message copied. Paste it into the agent chat you intend to connect.");
+      await navigator.clipboard.writeText(reveal.secret);
+      setStatus("Legacy credential copied. Store it only in the existing agent host's secure credential setting.");
     } catch {
-      setError("Clipboard access was denied. Copy the setup message manually.");
+      setError("Clipboard access was denied. Copy the legacy credential manually from the one-time reveal.");
     }
   }
 
+  const activeConnectionIntents = connectionIntents.filter(intent =>
+    isActiveAgentConnectionIntent(intent, connectionClock),
+  );
+  const connectionIntentHistory = connectionIntents.filter(
+    intent => !isActiveAgentConnectionIntent(intent, connectionClock),
+  );
   const activePairings = pairings.filter(pairing => isPendingAgentPairing(pairing, connectionClock));
   const pairingHistory = pairings.filter(pairing => !isPendingAgentPairing(pairing, connectionClock));
 
@@ -707,44 +896,95 @@ export function AgentConnectionPanel({
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent connection</p>
           <h2 className="mt-2 text-2xl font-semibold">Connect an agent to RateLoop</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-            Generate a short-lived connection, let the agent describe itself over MCP, then approve its identity,
-            spending boundary, and human-feedback policy. Possessing the pairing secret does not grant workspace access.
+            Copy one short message and paste it once into your agent chat. The agent and its host handle installation,
+            authorization, and verification; you only respond to a host-native install, trust, or authorization prompt.
+          </p>
+          <p className="mt-3 max-w-3xl text-sm font-medium text-base-content/75">
+            Can check when human review is needed. Cannot spend, publish, read private files, or administer this
+            workspace.
           </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
             type="button"
             className="rateloop-gradient-action px-5"
-            disabled={!workspaceId || busyAction === "create-pairing"}
-            onClick={() => void generatePairing()}
+            disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
+            onClick={() => void copyConnectionMessage()}
           >
-            {busyAction === "create-pairing" ? "Generating…" : "Connect an agent"}
+            {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
           </button>
+          {activeConnectionIntents.length > 0 ? (
+            <span className="text-xs text-base-content/50">Cancel the current attempt before creating another.</span>
+          ) : null}
         </div>
       </section>
+
+      {status ? (
+        <p role="status" aria-live="polite" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
+          {status}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+          {error}
+        </p>
+      ) : null}
+
+      {manualConnectionMessage ? (
+        <section
+          className="rounded-2xl border border-amber-300/25 bg-amber-300/[0.06] p-5"
+          aria-labelledby="manual-agent-message-heading"
+        >
+          <h3 id="manual-agent-message-heading" className="font-semibold">
+            Copy this message once
+          </h3>
+          <p id="manual-agent-message-help" className="mt-2 text-sm leading-6 text-base-content/60">
+            Your browser blocked automatic clipboard access. The complete message is selected. Copy it, paste it once
+            into the intended agent chat, then leave the rest to the agent and its host.
+          </p>
+          <textarea
+            ref={manualMessageRef}
+            className="textarea mt-4 min-h-32 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+            aria-describedby="manual-agent-message-help"
+            readOnly
+            value={manualConnectionMessage}
+            onFocus={event => event.currentTarget.select()}
+          />
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="btn btn-sm border-white/10"
+              onClick={() => {
+                manualMessageRef.current?.focus();
+                manualMessageRef.current?.select();
+              }}
+            >
+              Select complete message
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setManualConnectionMessage(null)}>
+              Hide message
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {reveal ? (
         <section
           className="rounded-2xl border border-warning/35 bg-warning/10 p-5"
-          aria-labelledby="agent-connection-secret-heading"
+          aria-labelledby="legacy-agent-credential-heading"
         >
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 id="agent-connection-secret-heading" className="font-semibold">
+              <h3 id="legacy-agent-credential-heading" className="font-semibold">
                 {reveal.title}
               </h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/65">
-                Copy one setup message into the agent chat you intend to connect. A capable agent will configure MCP,
-                register itself, and wait for your approval automatically. If its host blocks connection changes, it
-                will give you the one exact host-specific step it needs.
-              </p>
-              <p className="mt-2 max-w-3xl text-xs leading-5 text-warning/80">
-                The copied message contains the sensitive credential shown below. Share it only with the intended agent
-                and host; never put it in a repository, log, or unrelated chat.
+                This is a one-time compatibility reveal for an existing legacy integration. Store it directly in that
+                host&apos;s secure credential setting; do not paste it into a model chat.
               </p>
             </div>
             <button type="button" className="btn btn-sm border-white/10" onClick={() => void copyReveal()}>
-              Copy setup message
+              Copy legacy credential
             </button>
           </div>
           <dl className="mt-4 space-y-3 rounded-lg bg-black/30 p-4 font-mono text-xs">
@@ -753,7 +993,7 @@ export function AgentConnectionPanel({
               <dd className="mt-1 break-all">{reveal.mcpUrl}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Bearer secret</dt>
+              <dt className="text-base-content/45">Legacy bearer credential</dt>
               <dd className="mt-1 break-all">{reveal.secret}</dd>
             </div>
             {reveal.expiresAt ? (
@@ -783,15 +1023,95 @@ export function AgentConnectionPanel({
         <section className="surface-card rounded-2xl p-6" aria-labelledby="pending-agent-connections-heading">
           <div>
             <h3 id="pending-agent-connections-heading" className="text-xl font-semibold">
-              Pending connections
+              Connection progress
             </h3>
             <p className="mt-2 text-sm text-base-content/55">
-              RateLoop refreshes this page only while it is visible. You can close it without stopping the connection.
+              RateLoop refreshes status only while this page is visible. You can close it; the agent and host continue
+              independently.
             </p>
           </div>
-          {activePairings.length === 0 ? (
-            <p className="mt-5 text-sm text-base-content/55">No agent is waiting for approval.</p>
+          {activeConnectionIntents.length === 0 && !connectionIntents.some(intent => intent.status === "connected") ? (
+            <p className="mt-5 text-sm text-base-content/55">No connection is currently in progress.</p>
           ) : null}
+          <div className="mt-5 space-y-4">
+            {connectionIntents
+              .filter(intent => isActiveAgentConnectionIntent(intent, connectionClock) || intent.status === "connected")
+              .slice(0, 1)
+              .map(intent => {
+                const copy = connectionIntentCopy(intent.status);
+                const connected = intent.status === "connected";
+                return (
+                  <article
+                    key={intent.intentId}
+                    className={`rounded-xl border p-5 ${
+                      connected
+                        ? "border-emerald-300/20 bg-emerald-300/[0.045]"
+                        : "border-[var(--rateloop-blue)]/20 bg-[var(--rateloop-blue)]/[0.035]"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-semibold">{copy.heading}</h4>
+                          <span className="badge badge-ghost font-mono text-xs">{intent.status}</span>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-base-content/55">{copy.detail}</p>
+                        {intent.recoveryAction ? (
+                          <p className="mt-2 text-xs leading-5 text-base-content/45">{intent.recoveryAction}</p>
+                        ) : null}
+                        {(intent.clientName || intent.clientVersion) && (
+                          <p className="mt-2 text-xs text-base-content/45">
+                            {intent.clientName || "Agent host"}
+                            {intent.clientVersion ? ` ${intent.clientVersion}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                        {!connected ? (
+                          <time className="text-xs text-base-content/45" dateTime={intent.hardExpiresAt ?? undefined}>
+                            Finishes by {formatTimestamp(intent.hardExpiresAt, "soon")}
+                          </time>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          {!connected ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm border-white/10"
+                              disabled={Boolean(busyAction)}
+                              onClick={() => void retryConnectionStatus()}
+                            >
+                              {busyAction === "refresh-intents" ? "Checking…" : "Check status"}
+                            </button>
+                          ) : null}
+                          {!connected ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost text-base-content/60"
+                              disabled={Boolean(busyAction)}
+                              onClick={() => void cancelConnectionIntent(intent.intentId)}
+                            >
+                              {busyAction === `cancel-intent:${intent.intentId}` ? "Cancelling…" : "Cancel attempt"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+      ) : null}
+
+      {!loading && workspaceId && activePairings.length > 0 ? (
+        <details className="surface-card rounded-2xl p-6">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Legacy pairing requests ({activePairings.length})
+          </summary>
+          <p className="mt-3 text-sm leading-6 text-base-content/55">
+            These requests were created by the retired bearer-pairing flow. Finish or reject them here; new connections
+            use the one-message OAuth flow above.
+          </p>
           <div className="mt-5 space-y-4">
             {activePairings.map(pairing =>
               pairing.status === "claimed" ? (
@@ -807,38 +1127,51 @@ export function AgentConnectionPanel({
                 <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h4 className="font-semibold">Waiting for the agent to open your connection</h4>
-                      <p className="mt-1 text-sm text-base-content/55">
-                        No action is needed here. Cancel this attempt if you shared it with the wrong agent.
-                      </p>
+                      <h4 className="font-semibold">Waiting for legacy agent metadata</h4>
+                      <p className="mt-1 text-sm text-base-content/55">Cancel if this request is no longer needed.</p>
                     </div>
-                    <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <time className="text-xs text-base-content/45" dateTime={pairing.expiresAt ?? undefined}>
-                        Expires {formatTimestamp(pairing.expiresAt, "soon")}
-                      </time>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-ghost text-base-content/60"
-                        disabled={busyAction === `reject:${pairing.pairingId}`}
-                        onClick={() => void rejectPairing(pairing.pairingId)}
-                      >
-                        Cancel attempt
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost text-base-content/60"
+                      disabled={busyAction === `reject:${pairing.pairingId}`}
+                      onClick={() => void rejectPairing(pairing.pairingId)}
+                    >
+                      Cancel legacy request
+                    </button>
                   </div>
                 </article>
               ),
             )}
           </div>
-        </section>
+        </details>
       ) : null}
 
-      {!loading && workspaceId && pairingHistory.length > 0 ? (
+      {!loading && workspaceId && connectionIntentHistory.length + pairingHistory.length > 0 ? (
         <details className="surface-card rounded-2xl p-6">
           <summary className="cursor-pointer text-sm font-semibold">
-            Connection history ({pairingHistory.length})
+            Connection history ({connectionIntentHistory.length + pairingHistory.length})
           </summary>
           <div className="mt-4 space-y-3">
+            {connectionIntentHistory.map(intent => {
+              const displayStatus =
+                isActiveAgentConnectionIntent(intent, connectionClock) ||
+                intent.status === "connected" ||
+                !intent.hardExpiresAt ||
+                new Date(intent.hardExpiresAt).getTime() > connectionClock
+                  ? intent.status
+                  : "expired";
+              return (
+                <article key={intent.intentId} className="surface-card-nested rounded-xl p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">{intent.clientName || "Agent connection"}</span>
+                    <span className="badge badge-ghost">{displayStatus}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-base-content/45">
+                    Created {formatTimestamp(intent.createdAt, "at an unknown time")}
+                  </p>
+                </article>
+              );
+            })}
             {pairingHistory.map(pairing => {
               const displayStatus =
                 (pairing.status === "open" || pairing.status === "claimed") &&
@@ -852,7 +1185,7 @@ export function AgentConnectionPanel({
                     <span className="font-medium">
                       {pairing.displayName || pairing.clientName || "Agent connection"}
                     </span>
-                    <span className="badge badge-ghost">{displayStatus}</span>
+                    <span className="badge badge-ghost">legacy · {displayStatus}</span>
                   </div>
                   <p className="mt-2 text-xs text-base-content/45">
                     Created {formatTimestamp(pairing.createdAt, "at an unknown time")}
@@ -870,7 +1203,8 @@ export function AgentConnectionPanel({
             Connected agents
           </h3>
           <p className="mt-2 text-sm leading-6 text-base-content/55">
-            Each credential is bound to one workspace, agent, immutable version, review policy, and publishing policy.
+            Each connection is bound to one workspace, agent, immutable version, and review policy. Safe OAuth
+            connections have no publishing or spending permission.
           </p>
           {integrations.length === 0 ? (
             <p className="mt-5 text-sm text-base-content/55">No approved agent integration exists yet.</p>
@@ -878,6 +1212,7 @@ export function AgentConnectionPanel({
           <div className="mt-5 space-y-4">
             {integrations.map(integration => {
               const active = integration.status === "active";
+              const legacyCredential = Boolean(integration.apiKeyId);
               return (
                 <article
                   key={integration.integrationId}
@@ -898,6 +1233,9 @@ export function AgentConnectionPanel({
                         <span className="badge badge-ghost">
                           {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
                         </span>
+                        <span className="badge badge-ghost">
+                          {legacyCredential ? "legacy credential" : "safe OAuth"}
+                        </span>
                       </div>
                       <p className="mt-2 font-mono text-xs text-base-content/40">{integration.integrationId}</p>
                       <p className="mt-3 text-sm text-base-content/60">
@@ -907,14 +1245,16 @@ export function AgentConnectionPanel({
                     </div>
                     {active ? (
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-sm border-white/10"
-                          disabled={Boolean(busyAction)}
-                          onClick={() => void rotateIntegration(integration)}
-                        >
-                          Rotate credential
-                        </button>
+                        {legacyCredential ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm border-white/10"
+                            disabled={Boolean(busyAction)}
+                            onClick={() => void rotateIntegration(integration)}
+                          >
+                            Rotate legacy credential
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="btn btn-sm btn-ghost text-error"
@@ -932,8 +1272,14 @@ export function AgentConnectionPanel({
                       <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-base-content/45">Credential expiry</dt>
-                      <dd className="mt-1">{formatTimestamp(integration.credentialExpiresAt, "No expiry")}</dd>
+                      <dt className="text-xs text-base-content/45">
+                        {legacyCredential ? "Credential expiry" : "Access"}
+                      </dt>
+                      <dd className="mt-1">
+                        {legacyCredential
+                          ? formatTimestamp(integration.credentialExpiresAt, "No expiry")
+                          : "OAuth-managed safe access"}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-xs text-base-content/45">Review policy</dt>
@@ -945,7 +1291,7 @@ export function AgentConnectionPanel({
                     <div>
                       <dt className="text-xs text-base-content/45">Publishing policy</dt>
                       <dd className="mt-1">
-                        {integration.publishingPolicyName || integration.publishingPolicyId || "Unknown"}
+                        {integration.publishingPolicyName || integration.publishingPolicyId || "No publishing access"}
                       </dd>
                     </div>
                   </dl>
@@ -954,17 +1300,6 @@ export function AgentConnectionPanel({
             })}
           </div>
         </section>
-      ) : null}
-
-      {status ? (
-        <p role="status" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
-          {status}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
-          {error}
-        </p>
       ) : null}
     </div>
   );
