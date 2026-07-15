@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { assertProjectDeletionAllowed } from "~~/lib/privacy/lifecycle";
 import {
   type KeyWrappingProvider,
   createLocalKeyWrappingProvider,
@@ -519,6 +520,7 @@ export async function requestProjectDeletion(input: {
   now?: Date;
 }) {
   const member = await requireProjectMember({ ...input, manage: true });
+  await assertProjectDeletionAllowed(input.projectId, input.workspaceId);
   const now = input.now ?? new Date();
   const executeAfter = input.executeAfter ?? now;
   if (executeAfter < now || executeAfter.getTime() - now.getTime() > 30 * 86_400_000) {
@@ -565,9 +567,11 @@ export async function requestProjectDeletion(input: {
 export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
   const runtime = getRuntime();
   const result = await dbClient.execute({
-    sql: `SELECT object_id, artifact_id, workspace_id, project_id, storage_ref
-          FROM tokenless_assurance_artifact_objects
-          WHERE object_id = ? AND status = 'active' AND delete_after <= ? LIMIT 1`,
+    sql: `SELECT o.object_id, o.artifact_id, o.workspace_id, o.project_id, o.storage_ref
+          FROM tokenless_assurance_artifact_objects o
+          LEFT JOIN tokenless_legal_holds h ON h.project_id = o.project_id AND h.status = 'active'
+          WHERE o.object_id = ? AND o.status = 'active' AND o.delete_after <= ? AND h.hold_id IS NULL
+          LIMIT 1`,
     args: [objectId, now],
   });
   const row = result.rows[0] as QueryRow | undefined;
