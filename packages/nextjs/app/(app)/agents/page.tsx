@@ -3,12 +3,12 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { type AgentTab } from "~~/components/tokenless/agents/AgentTabs";
 import { AgentWorkspacePanels } from "~~/components/tokenless/agents/AgentWorkspacePanels";
 import { AgentsSignInPrompt } from "~~/components/tokenless/agents/AgentsSignInPrompt";
-import { isUsableAgentConnection, selectRequestedWorkspace } from "~~/components/tokenless/agents/agentWorkspaceState";
+import { selectRequestedWorkspace } from "~~/components/tokenless/agents/agentWorkspaceState";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
-import { listAgentConnections } from "~~/lib/tokenless/agentIntegrations";
 import { getWorkspaceEvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 import { listPrivateGroups } from "~~/lib/tokenless/privateGroups";
 import { listProductWorkspaces } from "~~/lib/tokenless/productCore";
+import { getWorkspaceAgentSetup } from "~~/lib/tokenless/workspaceAgentSetup";
 
 const AGENT_TABS = new Set<AgentTab>(["overview", "agents", "groups", "evaluations"]);
 
@@ -19,7 +19,7 @@ function firstQueryValue(value: string | string[] | undefined) {
 export default async function AgentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string | string[]; workspace?: string | string[] }>;
+  searchParams: Promise<{ tab?: string | string[]; workspace?: string | string[]; step?: string | string[] }>;
 }) {
   const cookieStore = await cookies();
   const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
@@ -31,18 +31,21 @@ export default async function AgentsPage({
   const tab = AGENT_TABS.has(rawTab as AgentTab) ? (rawTab as AgentTab) : "overview";
   const workspaces = await listProductWorkspaces(session.principalId);
   const requestedWorkspaceId = firstQueryValue(params.workspace);
+  const requestedStep = firstQueryValue(params.step);
   const workspace = selectRequestedWorkspace(workspaces, requestedWorkspaceId);
   let hasConnectedAgent = false;
   let hasGroups = false;
   let hasEvaluations = false;
+  let setup = null;
 
-  if (workspace && (workspace.role === "owner" || workspace.role === "admin")) {
-    const { integrations } = await listAgentConnections({
+  if (workspace) {
+    setup = await getWorkspaceAgentSetup({
       accountAddress: session.principalId,
       workspaceId: workspace.workspaceId,
+      requestedStep,
     });
-    hasConnectedAgent = integrations.some(integration => isUsableAgentConnection(integration));
-    if (hasConnectedAgent) {
+    hasConnectedAgent = setup.complete;
+    if (setup.complete && (workspace.role === "owner" || workspace.role === "admin")) {
       const [groups, dashboard] = await Promise.all([
         listPrivateGroups({ accountAddress: session.principalId, workspaceId: workspace.workspaceId }),
         getWorkspaceEvaluationDashboard({ accountAddress: session.principalId, workspaceId: workspace.workspaceId }),
@@ -60,6 +63,7 @@ export default async function AgentsPage({
         initialHasConnectedAgent={hasConnectedAgent}
         initialHasEvaluations={hasEvaluations}
         initialHasGroups={hasGroups}
+        initialSetup={setup}
         initialWorkspaceId={workspace?.workspaceId ?? ""}
         workspaces={workspaces}
       />

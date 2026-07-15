@@ -48,25 +48,26 @@ test("connected navigation exposes only sections backed by relevant state", () =
 test("the server resolves onboarding before the client renders downstream panels", () => {
   assert.match(pageSource, /listProductWorkspaces\(session\.principalId\)/);
   assert.match(pageSource, /selectRequestedWorkspace\(workspaces, requestedWorkspaceId\)/);
-  assert.match(pageSource, /isUsableAgentConnection\(integration\)/);
+  assert.match(pageSource, /getWorkspaceAgentSetup\(/);
+  assert.match(pageSource, /requestedStep/);
   assert.match(pageSource, /listPrivateGroups\(/);
   assert.match(pageSource, /getWorkspaceEvaluationDashboard\(/);
   assert.match(pageSource, /initialHasGroups=\{hasGroups\}/);
   assert.match(pageSource, /initialHasEvaluations=\{hasEvaluations\}/);
   assert.doesNotMatch(panelsSource, /fetch\("\/api\/account\/workspaces"/);
   assert.match(panelsSource, /workspaces\.length > 1/);
-  assert.match(panelsSource, /return <WorkspaceSettingsClient \/>/);
+  assert.match(panelsSource, /return <WorkspaceSetupStart \/>/);
+  assert.match(panelsSource, /initialSetup && !initialSetup\.complete/);
+  assert.match(panelsSource, /<AgentSetupFlow initialSetup=\{initialSetup\} \/>/);
   assert.match(panelsSource, /\{hasConnectedAgent \? \(/);
   assert.match(panelsSource, /workspaceId=\{workspaceId\}/);
-  assert.match(panelsSource, /\{onboarding && canManage \? \(/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents"/);
   assert.match(panelsSource, /resolvedTab === "groups"/);
   assert.match(panelsSource, /resolvedTab === "evaluations"/);
 });
 
-test("read-only workspaces never render connection or policy mutations", () => {
+test("completed read-only workspaces never render connection or policy mutations", () => {
   assert.match(panelsSource, /const canManage = workspace\.role === "owner" \|\| workspace\.role === "admin"/);
-  assert.match(panelsSource, /onboarding && !canManage/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents" && canManage/);
 });
 

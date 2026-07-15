@@ -5,8 +5,12 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
+import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 import { createPrivateGroup, createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
+export type { AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 
 type Row = Record<string, unknown>;
 
@@ -168,27 +172,32 @@ async function requireManager(accountAddress: string, workspaceId: string) {
 
 function stageState(resumeStep: AgentSetupStep, status: AgentSetupStatus) {
   const resumeIndex = AGENT_SETUP_STEPS.indexOf(resumeStep);
-  return AGENT_SETUP_STEPS.slice(0, -1).map((step, index) => ({
-    key: step,
-    status:
-      status !== "in_progress" || index < resumeIndex
-        ? ("complete" as const)
-        : index === resumeIndex
-          ? ("current" as const)
-          : ("not_started" as const),
-  }));
+  return [
+    { key: "workspace" as const, status: "complete" as const },
+    ...AGENT_SETUP_SCREEN_STEPS.slice(1).map((step, index) => ({
+      key: step,
+      status:
+        status !== "in_progress" || index < resumeIndex
+          ? ("complete" as const)
+          : index === resumeIndex
+            ? ("current" as const)
+            : ("not_started" as const),
+    })),
+  ];
 }
 
-export function clampAgentSetupStep(requested: string | null | undefined, resumeStep: AgentSetupStep): AgentSetupStep {
-  if (!requested || !AGENT_SETUP_STEPS.includes(requested as AgentSetupStep) || requested === "complete") {
-    return resumeStep;
+export function clampAgentSetupStep(
+  requested: string | null | undefined,
+  resumeStep: AgentSetupStep,
+): AgentSetupScreenStep | "complete" {
+  if (resumeStep === "complete") return "complete";
+  if (!requested || !AGENT_SETUP_SCREEN_STEPS.includes(requested as AgentSetupScreenStep)) {
+    return resumeStep as AgentSetupScreenStep;
   }
-  const requestedStep = requested as AgentSetupStep;
-  return AGENT_SETUP_STEPS.indexOf(requestedStep) <= AGENT_SETUP_STEPS.indexOf(resumeStep) ? requestedStep : resumeStep;
-}
-
-export function agentSetupUrl(workspaceId: string, step: AgentSetupStep) {
-  return `/agents?workspace=${encodeURIComponent(workspaceId)}&step=${encodeURIComponent(step)}`;
+  const requestedStep = requested as AgentSetupScreenStep;
+  return AGENT_SETUP_SCREEN_STEPS.indexOf(requestedStep) <= AGENT_SETUP_STEPS.indexOf(resumeStep)
+    ? requestedStep
+    : (resumeStep as AgentSetupScreenStep);
 }
 
 export async function getWorkspaceAgentSetup(input: {
@@ -295,6 +304,8 @@ export async function getWorkspaceAgentSetup(input: {
     },
   };
 }
+
+export type WorkspaceAgentSetupView = Awaited<ReturnType<typeof getWorkspaceAgentSetup>>;
 
 export async function createWorkspaceAgentSetupConnection(input: {
   accountAddress: string;

@@ -279,7 +279,7 @@ export function WorkspaceSettingsClient() {
           body: JSON.stringify({ name: workspaceName }),
         }),
       );
-      window.location.assign(`/agents?tab=agents&workspace=${encodeURIComponent(String(body.workspaceId))}`);
+      window.location.assign(`/agents?workspace=${encodeURIComponent(String(body.workspaceId))}&step=connect`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create workspace.");
     } finally {

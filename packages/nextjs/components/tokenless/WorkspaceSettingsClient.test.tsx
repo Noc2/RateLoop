@@ -53,10 +53,10 @@ test("workspace setup does not expose manual agent credentials or result webhook
   assert.equal(existsSync(webhookRoute), false);
 });
 
-test("first workspace creation is one focused step that continues to agent connection", () => {
+test("workspace management creation continues into guided agent setup", () => {
   assert.match(source, /Create your workspace/);
   assert.match(source, /Name it, then connect your agent/);
-  assert.match(source, /window\.location\.assign\(`\/agents\?tab=agents&workspace=/);
+  assert.match(source, /window\.location\.assign\(`\/agents\?workspace=.*&step=connect/);
   assert.match(source, /workspaces\.length === 0/);
   assert.match(source, /Create another workspace/);
   assert.doesNotMatch(source, /Create a workspace to fund panels/);

@@ -11,6 +11,9 @@ import { type AgentTab, AgentTabs } from "./AgentTabs";
 import { EvaluationDashboardPanel } from "./EvaluationDashboardPanel";
 import { PrivateGroupsPanel } from "./PrivateGroupsPanel";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
+import { AgentSetupFlow } from "./setup/AgentSetupFlow";
+import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
+import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 
@@ -19,6 +22,7 @@ export function AgentWorkspacePanels({
   initialHasConnectedAgent,
   initialHasEvaluations,
   initialHasGroups,
+  initialSetup,
   initialWorkspaceId,
   workspaces,
 }: {
@@ -26,29 +30,53 @@ export function AgentWorkspacePanels({
   initialHasConnectedAgent: boolean;
   initialHasEvaluations: boolean;
   initialHasGroups: boolean;
+  initialSetup: WorkspaceAgentSetupView | null;
   initialWorkspaceId: string;
   workspaces: Workspace[];
 }) {
   const router = useRouter();
   const workspaceId = initialWorkspaceId;
-  const [hasConnectedAgent, setHasConnectedAgent] = useState(initialHasConnectedAgent);
+  const hasConnectedAgent = initialSetup?.complete ?? initialHasConnectedAgent;
   const [agentRevision, refreshAgents] = useReducer(value => value + 1, 0);
   const [publishingRevision, refreshPublishingPolicies] = useReducer(value => value + 1, 0);
   const [managementPanel, setManagementPanel] = useState<"review" | "publishing" | null>(null);
 
-  const handleConnectionState = useCallback((connected: boolean) => {
-    setHasConnectedAgent(connected);
-  }, []);
+  const handleConnectionState = useCallback(() => refreshAgents(), []);
 
   if (workspaces.length === 0) {
-    return <WorkspaceSettingsClient />;
+    return <WorkspaceSetupStart />;
   }
 
   const workspace = workspaces.find(entry => entry.workspaceId === workspaceId) ?? workspaces[0];
   const canManage = workspace.role === "owner" || workspace.role === "admin";
-  const onboarding = !hasConnectedAgent;
   const visibleTabs = connectedAgentTabs({ hasEvaluations: initialHasEvaluations, hasGroups: initialHasGroups });
   const resolvedTab = resolveAvailableAgentTab(activeTab, visibleTabs);
+
+  if (initialSetup && !initialSetup.complete) {
+    return (
+      <div className="space-y-5">
+        {workspaces.length > 1 ? (
+          <div className="flex justify-end">
+            <label className="min-w-56 text-sm text-base-content/60">
+              Workspace
+              <select
+                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                value={workspaceId}
+                onChange={event => router.push(`/agents?workspace=${encodeURIComponent(event.target.value)}`)}
+              >
+                {workspaces.map(entry => (
+                  <option key={entry.workspaceId} value={entry.workspaceId}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+        <AgentSetupFlow initialSetup={initialSetup} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -80,22 +108,6 @@ export function AgentWorkspacePanels({
       ) : null}
 
       <div key={workspaceId} className="space-y-5">
-        {onboarding && canManage ? (
-          <AgentConnectionPanel
-            workspaceId={workspaceId}
-            publishingRevision={publishingRevision}
-            onAgentApproved={refreshAgents}
-            onConnectionStateChange={handleConnectionState}
-          />
-        ) : null}
-
-        {onboarding && !canManage ? (
-          <section className="surface-card rounded-2xl p-6">
-            <h2 className="text-xl font-semibold">No agent connected</h2>
-            <p className="mt-2 text-sm text-base-content/60">Ask a workspace owner to connect one.</p>
-          </section>
-        ) : null}
-
         {hasConnectedAgent && resolvedTab === "overview" ? <WorkspaceSettingsClient /> : null}
         {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
           <AgentConnectionPanel
