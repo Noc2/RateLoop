@@ -4,7 +4,7 @@
 
 **Branch:** `tokenless`
 
-**Status:** implementation plan and claim gate, not a certification or legal opinion
+**Status:** capability assessment and claim gate, not a certification or legal opinion. Repository implementation is governed by the [EU trust and identity implementation plan](tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md).
 
 **Recheck:** current code, live deployment, and provider documentation re-audited on 15 July 2026; this revision makes
 the first production data plane EU-first and marks what can actually be implemented without an outside dependency.

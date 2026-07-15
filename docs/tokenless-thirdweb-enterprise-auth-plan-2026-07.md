@@ -1,10 +1,10 @@
 # Tokenless thirdweb and enterprise authentication plan (July 2026)
 
-**Status:** Approved design amendment for the `tokenless` branch. This document reopens and supersedes the earlier decision that Base Account must be the browser identity for every human user. It does not change the immutable fund-core, deployment key, settlement rules, or the isolation boundary from `main` and `rateloop.ai`.
+**Status:** Historical implementation reference. The [EU trust and identity implementation plan](tokenless-eu-trust-and-identity-implementation-plan-2026-07-15.md) supersedes this document's thirdweb-primary browser identity decision. thirdweb remains an optional, explicit funding/payout wallet adapter after Better Auth login. This document does not change the immutable fund-core, deployment key, settlement rules, or the isolation boundary from `main` and `rateloop.ai`.
 
 ## Outcome
 
-RateLoop buyers, consultants, client stakeholders, and invited reviewers can enter with email OTP, Google, Apple, or a passkey through a thirdweb in-app wallet. The generated wallet address is a stable pseudonymous browser principal; users are not asked to install the Base app or create a Coinbase account. Base Account remains available as an external-wallet option and as a separately proven funding or payout destination where the relevant flow requires it.
+The original proposal let RateLoop buyers, consultants, client stakeholders, and invited reviewers enter through a thirdweb in-app wallet. That browser-principal model is superseded: users now authenticate with Better Auth into a RateLoop-owned opaque principal, and no wallet is created during ordinary account or workspace use. A user may later create a thirdweb in-app wallet or connect Base Account or another self-custodial wallet when a funding or payout flow requires one.
 
 Direct integrations continue to use hash-only workspace API keys. The browser login change must not give thirdweb, a social provider, or the RateLoop operator custody of panel funds, the ability to redirect claims, or authority over accepted commits.
 
