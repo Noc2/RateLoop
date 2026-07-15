@@ -1,0 +1,15 @@
+interface:
+  display_name: "RateLoop Workspace Connection"
+  short_description: "Connect this agent to one RateLoop workspace"
+  default_prompt: "Use $rateloop-workspace-connection to connect this agent from the RateLoop connection link."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "rateloop-workspace"
+      description: "OAuth-protected RateLoop workspace connection and policy tools."
+      transport: "streamable_http"
+      url: "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp"
+
+policy:
+  allow_implicit_invocation: true

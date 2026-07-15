@@ -1,7 +1,7 @@
 {
   "name": "rateloop",
-  "version": "0.1.1+codex.20260713142906",
-  "description": "Use RateLoop for human assurance of public, synthetic, or redacted AI-enabled workflows.",
+  "version": "0.2.0+codex.20260715100944",
+  "description": "Use RateLoop for privacy-bounded human assurance and OAuth-protected workspace review policies.",
   "author": {
     "name": "RateLoop",
     "url": "https://rateloop-tokenless.vercel.app"
@@ -20,21 +20,18 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "RateLoop",
-    "shortDescription": "Human assurance for AI-enabled workflows",
-    "longDescription": "RateLoop gives Codex a privacy-bounded workflow for preparing human review of public, synthetic, or redacted AI-enabled work. The user approves the exact payload before a tokenless browser handoff is created, reviews the ask in the browser, and can return later for status and auditable results.",
+    "shortDescription": "Human assurance and workspace review policies",
+    "longDescription": "RateLoop gives Codex a privacy-bounded workflow for preparing human review of public, synthetic, or redacted AI-enabled work. A separate OAuth-protected workspace connection lets an installed agent claim one single-use connection message, load its bound policy, and verify readiness without receiving a bearer credential in chat.",
     "developerName": "RateLoop",
     "category": "Developer Tools",
-    "capabilities": [
-      "Interactive",
-      "Write"
-    ],
+    "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://rateloop-tokenless.vercel.app/",
     "privacyPolicyURL": "https://rateloop-tokenless.vercel.app/legal/privacy",
     "termsOfServiceURL": "https://rateloop-tokenless.vercel.app/legal/terms",
     "defaultPrompt": [
+      "Connect this agent to my RateLoop workspace",
       "Prepare human assurance for this public AI workflow",
-      "Review this redacted output with a human panel",
-      "Check the status of my RateLoop assurance handoff"
+      "Review this redacted output with a human panel"
     ],
     "brandColor": "#03CEA4",
     "composerIcon": "./assets/rateloop-logo.svg",

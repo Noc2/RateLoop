@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "rateloop",
+  "displayName": "RateLoop",
+  "version": "0.2.0",
+  "description": "Human assurance and secure workspace policy connections for AI-enabled workflows.",
+  "author": {
+    "name": "RateLoop",
+    "url": "https://rateloop-tokenless.vercel.app"
+  },
+  "homepage": "https://rateloop-tokenless.vercel.app/docs/how-it-works",
+  "repository": "https://github.com/Noc2/RateLoop",
+  "license": "MIT",
+  "keywords": [
+    "rateloop",
+    "mcp",
+    "agents",
+    "human-assurance",
+    "workflow-review"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

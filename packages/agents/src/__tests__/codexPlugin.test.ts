@@ -13,6 +13,8 @@ const agentSkillRoot = join(
   "rateloop-human-assurance",
 );
 const tokenlessMcpUrl = "https://rateloop-tokenless.vercel.app/api/mcp";
+const workspaceMcpUrl =
+  "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
 
 async function readJson(path: string) {
   return JSON.parse(await readFile(path, "utf8")) as Record<string, any>;
@@ -27,8 +29,8 @@ async function exists(path: string) {
   }
 }
 
-describe("Codex plugin", () => {
-  it("preserves marketplace identity while targeting only the tokenless MCP", async () => {
+describe("RateLoop agent host assets", () => {
+  it("preserves marketplace identity while keeping public and workspace MCP servers separate", async () => {
     const manifest = await readJson(
       join(pluginRoot, ".codex-plugin", "plugin.json"),
     );
@@ -38,12 +40,13 @@ describe("Codex plugin", () => {
     );
 
     expect(manifest.name).toBe("rateloop");
-    expect(manifest.version).toMatch(/^0\.1\.1(?:\+codex\.[0-9A-Za-z.-]+)?$/);
+    expect(manifest.version).toMatch(/^0\.2\.0\+codex\.[0-9A-Za-z.-]+$/);
     expect(manifest.skills).toBe("./skills/");
     expect(manifest.mcpServers).toBe("./.mcp.json");
     expect(mcp).toEqual({
       mcpServers: {
         rateloop: { type: "http", url: tokenlessMcpUrl },
+        "rateloop-workspace": { type: "http", url: workspaceMcpUrl },
       },
     });
     expect(marketplace.name).toBe("rateloop");
@@ -135,6 +138,104 @@ describe("Codex plugin", () => {
       "Base mainnet",
     ]) {
       expect(surface).not.toContain(forbidden);
+    }
+  });
+
+  it("packages a secret-free one-message workspace connection for Codex and Claude", async () => {
+    const connectionSkillRoot = join(
+      pluginRoot,
+      "skills",
+      "rateloop-workspace-connection",
+    );
+    const repositorySkillRoot = join(
+      repoRoot,
+      ".agents",
+      "skills",
+      "rateloop-workspace-connection",
+    );
+    const [skill, repositorySkill, agent, repositoryAgent] = await Promise.all([
+      readFile(join(connectionSkillRoot, "SKILL.md"), "utf8"),
+      readFile(join(repositorySkillRoot, "SKILL.md"), "utf8"),
+      readFile(join(connectionSkillRoot, "agents", "openai.yaml"), "utf8"),
+      readFile(join(repositorySkillRoot, "agents", "openai.yaml"), "utf8"),
+    ]);
+
+    expect(skill).toBe(repositorySkill);
+    expect(agent).toBe(repositoryAgent);
+    expect(skill).toContain(
+      "https://rateloop-tokenless.vercel.app/connect/aci_",
+    );
+    expect(skill).toContain("fragment is non-empty");
+    expect(skill).toContain("Parse and validate the URL locally");
+    expect(skill).toContain("rateloop_claim_connection_intent");
+    expect(skill).toContain('{ "connectionUrl": "<complete URL>" }');
+    expect(skill).toContain("rateloop_get_agent_context");
+    expect(skill).toContain("rateloop_verify_connection");
+    expect(skill).toContain("Never create a heartbeat");
+    expect(skill).toContain("Never poll registration status");
+    expect(skill).toContain("host's native authentication action");
+    expect(skill).not.toContain("rateloop_register_agent");
+    expect(skill).not.toContain("rateloop_get_registration_status");
+    expect(skill).not.toContain("rlk_");
+    expect(agent).toContain('value: "rateloop-workspace"');
+    expect(agent).toContain(`url: "${workspaceMcpUrl}"`);
+
+    const claudeManifest = await readJson(
+      join(pluginRoot, ".claude-plugin", "plugin.json"),
+    );
+    expect(claudeManifest).toEqual(
+      expect.objectContaining({
+        name: "rateloop",
+        displayName: "RateLoop",
+        version: "0.2.0",
+        skills: "./skills/",
+        mcpServers: "./.mcp.json",
+      }),
+    );
+  });
+
+  it("publishes a generic URL-only workspace config without inventing host credentials", async () => {
+    const configPath = join(
+      repoRoot,
+      "packages",
+      "nextjs",
+      "public",
+      "integrations",
+      "rateloop-workspace-mcp.json",
+    );
+    const config = await readJson(configPath);
+    expect(config).toEqual({
+      mcpServers: {
+        "rateloop-workspace": { type: "http", url: workspaceMcpUrl },
+      },
+    });
+    const guide = await readFile(
+      join(
+        repoRoot,
+        "packages",
+        "nextjs",
+        "public",
+        "docs",
+        "agent-connection.md",
+      ),
+      "utf8",
+    );
+    expect(guide).toContain(workspaceMcpUrl);
+    expect(guide).toContain("host-native OAuth");
+    expect(guide).toContain(
+      "native VS Code manifest will be published only after",
+    );
+    expect(guide).toContain(
+      "Cursor installation metadata will be published only after",
+    );
+    for (const forbidden of [
+      "rlk_",
+      '"Authorization"',
+      '"clientId"',
+      '"redirectUri"',
+      "cursor://",
+    ]) {
+      expect(JSON.stringify(config)).not.toContain(forbidden);
     }
   });
 });

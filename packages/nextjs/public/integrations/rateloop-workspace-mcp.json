@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "rateloop": {
-      "type": "http",
-      "url": "https://rateloop-tokenless.vercel.app/api/mcp"
-    },
     "rateloop-workspace": {
       "type": "http",
       "url": "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp"
