@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
 import { createAgentOAuthDeviceAuthorization } from "~~/lib/tokenless/agentOAuthDevice";
+import { agentOAuthErrorResponse, enforceAgentOAuthRateLimit } from "~~/lib/tokenless/agentOAuthHttp";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
     if (!request.headers.get("content-type")?.toLowerCase().includes("application/x-www-form-urlencoded")) {
       throw new AgentOAuthError("invalid_request", "Content-Type must be application/x-www-form-urlencoded.", 415);
     }
+    await enforceAgentOAuthRateLimit(request.headers);
     if (request.headers.has("authorization")) {
       throw new AgentOAuthError("invalid_client", "Device authorization accepts public clients only.", 401);
     }
@@ -39,13 +41,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(response, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
   } catch (error) {
-    const oauth =
-      error instanceof AgentOAuthError
-        ? error
-        : new AgentOAuthError("server_error", "Device authorization could not be started.", 500);
-    return NextResponse.json(
-      { error: oauth.code, error_description: oauth.message },
-      { status: oauth.status, headers: { "Cache-Control": "no-store", Pragma: "no-cache" } },
-    );
+    const response = agentOAuthErrorResponse(error, "Device authorization could not be started.");
+    return NextResponse.json(response.body, { status: response.status, headers: response.headers });
   }
 }

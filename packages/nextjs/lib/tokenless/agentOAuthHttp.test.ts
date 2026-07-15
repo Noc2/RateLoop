@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, test } from "node:test";
+import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
+import { enforceAgentOAuthRateLimit } from "~~/lib/tokenless/agentOAuthHttp";
+
+const originalSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
+
+beforeEach(() => {
+  process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = "oauth-provisioning-rate-limit-test-secret-long-enough";
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+});
+
+afterEach(() => {
+  __setDatabaseResourcesForTests(null);
+  if (originalSecret === undefined) delete process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
+  else process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = originalSecret;
+});
+
+test("OAuth client and device provisioning is bounded per network identity", async () => {
+  const headers = new Headers({ "x-real-ip": "203.0.113.44" });
+  const now = new Date("2026-07-15T08:00:00.000Z");
+  for (let request = 0; request < 60; request += 1) {
+    await enforceAgentOAuthRateLimit(headers, now);
+  }
+  await assert.rejects(
+    () => enforceAgentOAuthRateLimit(headers, now),
+    (error: unknown) => error instanceof AgentOAuthError && error.code === "slow_down" && error.status === 429,
+  );
+});
+
+test("OAuth provisioning fails closed when the rate-limit identity is unavailable", async () => {
+  await assert.rejects(
+    () => enforceAgentOAuthRateLimit(new Headers()),
+    (error: unknown) => error instanceof AgentOAuthError && error.code === "server_error" && error.status === 503,
+  );
+});
