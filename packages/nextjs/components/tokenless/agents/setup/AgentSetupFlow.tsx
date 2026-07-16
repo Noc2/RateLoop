@@ -327,13 +327,22 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   }
 
   const back = stepBefore(currentStep);
+  const backButton = back ? (
+    <button
+      className="btn rateloop-secondary-action rateloop-back-action h-auto self-stretch gap-2 px-5"
+      type="button"
+      onClick={() => void loadStep(back)}
+    >
+      Back
+    </button>
+  ) : null;
   return (
     <section className="surface-card rounded-2xl p-5 sm:p-7">
       <AgentSetupProgress currentStep={currentStep} stages={setup.stages} onNavigate={step => void loadStep(step)} />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
-      <div className="mx-auto mt-8 max-w-2xl">
+      <div className="mt-8 max-w-2xl">
         {currentStep === "workspace" ? (
           <form onSubmit={saveWorkspace}>
             <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
@@ -351,9 +360,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               maxLength={120}
               required
             />
-            <button className="rateloop-gradient-action mt-6 px-5" disabled={busy || !workspaceName.trim()}>
-              {busy ? "Saving…" : workspaceName.trim() === setup.workspaceName ? "Continue" : "Save and continue"}
-            </button>
+            <div className="mt-6 flex items-center gap-3">
+              {backButton}
+              <button className="rateloop-gradient-action px-5" disabled={busy || !workspaceName.trim()}>
+                {busy ? "Saving…" : workspaceName.trim() === setup.workspaceName ? "Continue" : "Save and continue"}
+              </button>
+            </div>
           </form>
         ) : null}
 
@@ -365,28 +377,27 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <p className="mt-2 text-sm text-base-content/65">
               Copy one message into the agent chat. RateLoop will continue here after the connection is verified.
             </p>
-            {setup.connection.status === "connected" ? (
-              <button
-                className="rateloop-gradient-action mt-6 px-5"
-                type="button"
-                onClick={() => void loadStep("agent")}
-              >
-                Check agent
-              </button>
-            ) : (
-              <button
-                className="rateloop-gradient-action mt-6 px-5"
-                type="button"
-                disabled={busy}
-                onClick={() => void createConnectionMessage()}
-              >
-                {busy
-                  ? "Creating…"
-                  : setup.connection.intentId
-                    ? "Create a new connection message"
-                    : "Create connection message"}
-              </button>
-            )}
+            <div className="mt-6 flex items-center gap-3">
+              {backButton}
+              {setup.connection.status === "connected" ? (
+                <button className="rateloop-gradient-action px-5" type="button" onClick={() => void loadStep("agent")}>
+                  Check agent
+                </button>
+              ) : (
+                <button
+                  className="rateloop-gradient-action px-5"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void createConnectionMessage()}
+                >
+                  {busy
+                    ? "Creating…"
+                    : setup.connection.intentId
+                      ? "Create a new connection message"
+                      : "Create connection message"}
+                </button>
+              )}
+            </div>
             {connectionMessage ? (
               <div className="mt-5">
                 <label className="block text-sm font-medium" htmlFor="agent-setup-connection-message">
@@ -472,9 +483,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 artifacts, or workspace administration.
               </p>
             </div>
-            <button className="rateloop-gradient-action mt-6 px-5" disabled={busy}>
-              {busy ? "Confirming…" : "Confirm workflow"}
-            </button>
+            <div className="mt-6 flex items-center gap-3">
+              {backButton}
+              <button className="rateloop-gradient-action px-5" disabled={busy}>
+                {busy ? "Confirming…" : "Confirm workflow"}
+              </button>
+            </div>
           </form>
         ) : null}
 
@@ -515,9 +529,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 agent lane is available.
               </p>
             </div>
-            <button className="rateloop-gradient-action mt-6 px-5" disabled={busy}>
-              {busy ? "Saving…" : "Continue"}
-            </button>
+            <div className="mt-6 flex items-center gap-3">
+              {backButton}
+              <button className="rateloop-gradient-action px-5" disabled={busy}>
+                {busy ? "Saving…" : "Continue"}
+              </button>
+            </div>
           </form>
         ) : null}
 
@@ -560,9 +577,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     address.
                   </span>
                 </label>
-                <button className="rateloop-gradient-action mt-6 px-5" disabled={busy}>
-                  {busy ? "Saving…" : "Continue"}
-                </button>
+                <div className="mt-6 flex items-center gap-3">
+                  {backButton}
+                  <button className="rateloop-gradient-action px-5" disabled={busy}>
+                    {busy ? "Saving…" : "Continue"}
+                  </button>
+                </div>
               </form>
             ) : (
               <div className="mt-5 space-y-4">
@@ -600,14 +620,17 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     or spending
                   </p>
                 </div>
-                <button
-                  className="rateloop-gradient-action px-5"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void finishSetup()}
-                >
-                  {busy ? "Finishing…" : "Finish setup"}
-                </button>
+                <div className="flex items-center gap-3">
+                  {backButton}
+                  <button
+                    className="rateloop-gradient-action px-5"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void finishSetup()}
+                  >
+                    {busy ? "Finishing…" : "Finish setup"}
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -617,15 +640,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <p id="agent-setup-error" role="alert" className="mt-5 text-sm text-error">
             {error}
           </p>
-        ) : null}
-        {back ? (
-          <button
-            className="btn rateloop-secondary-action rateloop-back-action mt-6 gap-2 px-5"
-            type="button"
-            onClick={() => void loadStep(back)}
-          >
-            Back
-          </button>
         ) : null}
       </div>
     </section>

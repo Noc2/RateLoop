@@ -61,6 +61,16 @@ test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /Save and continue/);
 });
 
+test("setup content and navigation stay left-aligned with back before the primary action", () => {
+  assert.match(flowSource, /<div className="mt-8 max-w-2xl">/);
+  assert.doesNotMatch(flowSource, /mx-auto mt-8 max-w-2xl/);
+  assert.match(
+    flowSource,
+    /<div className="mt-6 flex items-center gap-3">\s*\{backButton\}\s*\{setup\.connection\.status/,
+  );
+  assert.equal(flowSource.match(/\{backButton\}/g)?.length, 6);
+});
+
 test("connection polling cleans up timers and preserves explicit-navigation focus", () => {
   assert.match(flowSource, /document\.addEventListener\("visibilitychange"/);
   assert.match(flowSource, /document\.removeEventListener\("visibilitychange"/);
