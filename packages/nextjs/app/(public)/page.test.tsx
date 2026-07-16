@@ -45,7 +45,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Evaluation/);
   assert.match(html, /risk thresholds, audience, data boundaries, and spending limits/i);
   assert.match(html, /within the owner-approved policy/i);
-  assert.match(html, /evidence-backed feedback and actionable insights for this workflow/i);
+  assert.match(html, /feedback and actionable human performance metrics for AI workflows/i);
   assert.doesNotMatch(html, /Agent prepares|RateLoop decides|Evidence adapts/);
   assert.match(
     html,

@@ -23,8 +23,8 @@ const stages = [
   {
     number: "04",
     title: "Evaluation",
-    body: "Returns evidence-backed feedback and actionable insights for this workflow.",
-    conciseBody: "Returns evidence-backed feedback and actionable insights for this workflow.",
+    body: "Returns feedback and actionable human performance metrics for AI workflows.",
+    conciseBody: "Returns feedback and actionable human performance metrics for AI workflows.",
     color: "#EF476F",
   },
 ] as const;

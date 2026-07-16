@@ -12,8 +12,7 @@ decide whether baseline review can decrease.
    output needs a human check.
 3. **Humans judge.** Eligible reviewers answer independently. RateLoop returns the verdict, reasons, disagreement, and
    source-linked agreement evidence to the agent.
-4. **Evaluation.** RateLoop returns evidence-backed feedback and actionable insights for the exact workflow and evidence
-   scope.
+4. **Evaluation.** RateLoop returns feedback and actionable human performance metrics for AI workflows.
 
 Within the same owner-approved policy, two independent 15-case windows with at least 14 comparable agent-human
 agreements each can move baseline review from 100% to 50%. Another 50 stable cases can move it to 25%, and 100 more can
