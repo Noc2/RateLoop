@@ -18,7 +18,13 @@ import {
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { finalizeSurpriseBountyRound } from "~~/lib/tokenless/surpriseBountyService";
 
-const WEBHOOK_EVENTS = new Set(["result.ready", "result.updated"]);
+const WEBHOOK_EVENTS = new Set([
+  "result.ready",
+  "result.updated",
+  "ai.rateloop.review.completed",
+  "ai.rateloop.packet.anchored",
+  "ai.rateloop.gate.blocked",
+]);
 const MAX_DELIVERY_ATTEMPTS = 8;
 const BPS_MAX = 10_000;
 const MAX_PONDER_COMMITS = 500;
@@ -32,7 +38,7 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
 
 type Row = Record<string, unknown>;
-type ResolveHostname = (hostname: string) => Promise<string[]>;
+export type ResolveHostname = (hostname: string) => Promise<string[]>;
 
 export type IndexedFinalizedEvidence = {
   deploymentKey: string;
@@ -380,6 +386,10 @@ function decryptSecret(value: string, rawKey?: string) {
   return Buffer.concat([decipher.update(parts[2]), decipher.final()]).toString("utf8");
 }
 
+export function decryptWebhookSigningSecret(value: string, rawKey?: string) {
+  return decryptSecret(value, rawKey);
+}
+
 function isPrivateHost(hostname: string) {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (normalized === "localhost" || normalized.endsWith(".localhost") || normalized.endsWith(".local")) return true;
@@ -435,7 +445,7 @@ async function defaultResolveHostname(hostname: string) {
   return (await lookup(hostname, { all: true, verbatim: true })).map(result => result.address);
 }
 
-async function assertPublicWebhookDestination(url: string, resolver: ResolveHostname = defaultResolveHostname) {
+export async function assertPublicWebhookDestination(url: string, resolver: ResolveHostname = defaultResolveHostname) {
   let addresses: string[];
   try {
     addresses = await resolver(new URL(url).hostname);
