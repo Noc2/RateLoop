@@ -21,6 +21,10 @@ function iso(value: unknown) {
   return parsed.toISOString();
 }
 
+function keyIdentity(keyId: string, publicKeySpki: string) {
+  return JSON.stringify([keyId, publicKeySpki]);
+}
+
 export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: string; workspaceId: string }) {
   await requireAssuranceAttestationManagement(input.accountAddress, input.workspaceId);
   const gateKeyring = projectHumanReviewGateTrustedKeyHistory();
@@ -36,20 +40,22 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
           ORDER BY last_seen_at DESC,ep.signing_key_id ASC`,
     args: [input.workspaceId],
   });
-  const packetById = new Map(
+  const packetByKey = new Map(
     packets.rows.map(value => {
       const row = value as Row;
-      return [text(row, "signing_key_id")!, row] as const;
+      return [keyIdentity(text(row, "signing_key_id")!, text(row, "signing_public_key")!), row] as const;
     }),
   );
   const keys = gateKeyring.keys.map(key => {
-    const packet = packetById.get(key.keyId);
-    if (packet) packetById.delete(key.keyId);
+    const publicKeySpki = encodeEd25519SpkiDerBase64url(key.publicKeyJwk);
+    const identity = keyIdentity(key.keyId, publicKeySpki);
+    const packet = packetByKey.get(identity);
+    if (packet) packetByKey.delete(identity);
     return {
       keyId: key.keyId,
       algorithm: key.algorithm,
       publicKeyJwk: key.publicKeyJwk,
-      publicKeySpki: encodeEd25519SpkiDerBase64url(key.publicKeyJwk),
+      publicKeySpki,
       status: key.status,
       uses: ["human_review_gate", ...(packet ? (["decision_packet"] as const) : [])],
       firstPacketAt: packet ? iso(packet.first_seen_at) : null,
@@ -61,6 +67,6 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
     schemaVersion: "rateloop.evidence-trusted-key-history.v1" as const,
     workspaceId: input.workspaceId,
     keys,
-    untrustedPacketKeyCount: packetById.size,
+    untrustedPacketKeyCount: packetByKey.size,
   };
 }

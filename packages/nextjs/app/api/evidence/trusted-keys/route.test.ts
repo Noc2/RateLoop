@@ -17,11 +17,13 @@ test("the public trust anchor contains only configured verification keys", () =>
   assert.match(route, /Cache-Control.*public/);
   assert.doesNotMatch(route, /requireBrowserSession|workspaceId/);
   assert.match(workspaceHistory, /listWorkspaceEvidenceSigningKeys/);
-  assert.match(historyService, /untrustedPacketKeyCount: packetById\.size/);
-  assert.match(historyService, /publicKeySpki: encodeEd25519SpkiDerBase64url\(key\.publicKeyJwk\)/);
+  assert.match(historyService, /keyIdentity\(text\(row, "signing_key_id"\)!, text\(row, "signing_public_key"\)!\)/);
+  assert.match(historyService, /keyIdentity\(key\.keyId, publicKeySpki\)/);
+  assert.match(historyService, /untrustedPacketKeyCount: packetByKey\.size/);
+  assert.match(historyService, /publicKeySpki = encodeEd25519SpkiDerBase64url\(key\.publicKeyJwk\)/);
   assert.match(workspaceHistory, /format !== "spki" \|\| !keyId/);
   assert.match(workspaceHistory, /history\.keys\.find\(key => key\.keyId === keyId\)/);
   assert.match(workspaceHistory, /Content-Disposition/);
   assert.match(workspaceHistory, /X-RateLoop-Evidence-Key-Id/);
-  assert.doesNotMatch(historyService, /packetById\.values\(\)[\s\S]*status: "retired"/);
+  assert.doesNotMatch(historyService, /packetByKey\.values\(\)[\s\S]*status: "retired"/);
 });
