@@ -14,6 +14,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import {
   assertEvidenceGenerationRequest,
   generateAssuranceEvidencePacket,
@@ -25,6 +26,7 @@ import {
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const DECISION_OWNER = "0x2222222222222222222222222222222222222222";
@@ -440,8 +442,132 @@ async function seedEvidenceFixture(input: {
   return {
     workspaceId,
     runId,
+    admissionPolicyHash,
     reviewerAddresses: Array.from({ length: reviewerIndex }, (_, index) => address(index + 1)),
   };
+}
+
+async function bindPersistedAgentReviewContext(input: {
+  workspaceId: string;
+  runId: string;
+  enforcementMode: "advisory" | "host_enforced";
+  reasonCodes: string[];
+}) {
+  const agent = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId: input.workspaceId,
+    externalId: "evidence-context-agent",
+    version: {
+      displayName: "Evidence context agent",
+      provider: "OpenAI",
+      model: "gpt-test",
+      modelVersion: "2026-07-17",
+      environment: "production",
+    },
+  });
+  const selectionPolicyId = "rpol_evidence_context";
+  const selectionPolicyVersion = 3;
+  await insert(
+    `INSERT INTO tokenless_agent_review_policies
+     (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,
+      agreement_threshold_bps,production_floor_bps,maximum_unreviewed_gap,rules_json,
+      audience_policy_json,created_by,approved_by,created_at)
+     VALUES (?,3,?,?,?,'adaptive',true,7000,1000,20,?,
+             '{"reviewerSource":"public_network"}',?,?,?)`,
+    [
+      selectionPolicyId,
+      input.workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      JSON.stringify({ enforcementMode: input.enforcementMode }),
+      OWNER,
+      OWNER,
+      NOW,
+    ],
+  );
+  const binding = await seedReadyHumanReviewBinding({
+    workspaceId: input.workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    policyId: selectionPolicyId,
+    policyVersion: selectionPolicyVersion,
+    actor: OWNER,
+  });
+  const scopeId = "scope_evidence_context";
+  await insert(
+    `INSERT INTO tokenless_agent_evaluation_scopes
+     (scope_id,workspace_id,agent_id,agent_version_id,policy_id,policy_version,workflow_key,risk_tier,
+      audience_policy_hash,execution_profile_hash,execution_profile_json,human_review_binding_id,
+      human_review_binding_version,request_profile_id,request_profile_version,request_profile_hash,
+      partition_commitment,stage,completed_comparable_cases,stable_cases_since_stage,
+      unreviewed_since_last_sample,stage_entered_at,updated_at)
+     VALUES (?,?,?,?,?,3,'release','critical',?,?,?, ?,1,?,1,?,?,'monitoring',30,12,0,?,?)`,
+    [
+      scopeId,
+      input.workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      selectionPolicyId,
+      hashHumanAssuranceDocument({ audience: "public_network" }),
+      hashHumanAssuranceDocument({ model: "gpt-test" }),
+      JSON.stringify({ schemaVersion: "rateloop.execution-profile.v1", model: "gpt-test" }),
+      binding.bindingId,
+      binding.profileId,
+      binding.profileHash,
+      hashHumanAssuranceDocument({ scopeId }),
+      NOW,
+      NOW,
+    ],
+  );
+  const opportunityId = "aop_evidence_context";
+  await insert(
+    `INSERT INTO tokenless_agent_review_opportunities
+     (opportunity_id,workspace_id,agent_id,agent_version_id,scope_id,policy_id,policy_version,
+      external_opportunity_id,suggestion_commitment,declared_confidence_bps,metadata_commitment,
+      metadata_complete,critical_risk,decision,review_rate_bps,selection_probability_bps,sample_bucket,
+      sampler_key_version,sampler_commitment,reason_codes_json,status,run_id,source_evidence_reference,
+      source_evidence_hash,human_review_binding_id,human_review_binding_version,request_profile_id,
+      request_profile_version,request_profile_hash,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,3,'release-0001',?,6500,?,true,true,'required',1000,10000,42,
+             'sampler-v1',?,?,'completed',?,'release/0001',?,?,1,?,1,?,?,?)`,
+    [
+      opportunityId,
+      input.workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      scopeId,
+      selectionPolicyId,
+      hashHumanAssuranceDocument({ suggestion: "release" }),
+      hashHumanAssuranceDocument({ metadata: "critical" }),
+      hashHumanAssuranceDocument({ sample: 42 }),
+      JSON.stringify(input.reasonCodes),
+      input.runId,
+      hashHumanAssuranceDocument({ source: "release-0001" }),
+      binding.bindingId,
+      binding.profileId,
+      binding.profileHash,
+      NOW,
+      NOW,
+    ],
+  );
+  await insert(
+    `INSERT INTO tokenless_agent_review_opportunity_lifecycles
+     (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,terminal_at,
+      created_at,updated_at)
+     VALUES (?,?,'completed',3,?, ?,?,?,?)`,
+    [input.workspaceId, opportunityId, JSON.stringify(input.reasonCodes), NOW, NOW, NOW, NOW],
+  );
+  const eventId = "hrtr_evidence_context_terminal";
+  const transitionCommitment = hashHumanAssuranceDocument({ opportunityId, terminal: "completed", revision: 3 });
+  await insert(
+    `INSERT INTO tokenless_agent_review_opportunity_transition_events
+     (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
+      reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
+     VALUES (?,?,?,'pending:completed:evidence','pending','completed',2,3,?,'service',
+             'evidence-context-test','{}',?,?)`,
+    [eventId, input.workspaceId, opportunityId, JSON.stringify(input.reasonCodes), transitionCommitment, NOW],
+  );
+  return { binding, eventId, opportunityId, selectionPolicyId, selectionPolicyVersion, transitionCommitment };
 }
 
 test("evidence derives private aggregates, verifies only against trusted pins, and is reproducible offline", async () => {
@@ -476,9 +602,27 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   assert.deepEqual(packet.payload.reviewContext.selectionTrigger, {
     kind: "owner_required",
     source: "explicit_workspace_assurance_run",
+    reasonCodes: ["explicit_workspace_assurance_run"],
   });
-  assert.equal(packet.payload.reviewContext.gate.type, "advisory");
+  assert.deepEqual(packet.payload.reviewContext.gate, {
+    type: "not_applicable",
+    policyReference: null,
+    stopGateEvidenceReference: null,
+    statement: "This workspace-started assurance run was not bound to an agent output stop gate.",
+  });
   assert.equal(packet.payload.reviewContext.versions.audiencePolicy.version, 1);
+  assert.deepEqual(packet.payload.reviewContext.versions.admissionPolicies, [
+    {
+      admissionPolicyHash: `0x${"cd".repeat(32)}`,
+      derivedFrom: {
+        kind: "assurance_audience_policy",
+        id: "policy_evidence",
+        version: 1,
+        hash: packet.payload.frozen.policyHash,
+      },
+    },
+  ]);
+  assert.deepEqual(packet.payload.frozen.admissionPolicies, packet.payload.reviewContext.versions.admissionPolicies);
   assert.deepEqual(packet.payload.reviewContext.reviewerQualifications, {
     taxonomy: "explicit_qualification_categories",
     orderedTiers: false,
@@ -535,6 +679,24 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     expectedKeyId: packet.signing.keyId,
   });
   assert.equal(trusted.valid, true);
+  const semanticallyInvalidPayload = structuredClone(packet.payload);
+  semanticallyInvalidPayload.reviewContext.gate.type = "advisory";
+  const semanticallyInvalidDocument = { payload: semanticallyInvalidPayload, signing: packet.signing };
+  const semanticallyInvalidPacket = {
+    ...semanticallyInvalidDocument,
+    packetDigest: sha256EvidenceValue(semanticallyInvalidDocument),
+    signature: sign(
+      null,
+      Buffer.from(canonicalizeEvidenceValue(semanticallyInvalidDocument)),
+      signer.privateKey,
+    ).toString("base64url"),
+  };
+  assert.ok(
+    verifyEvidenceExport(semanticallyInvalidPacket, {
+      expectedPublicKey: packet.signing.publicKey,
+      expectedKeyId: packet.signing.keyId,
+    }).errors.includes("review_context_invalid"),
+  );
   const legacyPayload: Record<string, any> = {
     ...packet.payload,
     schemaVersion: "rateloop.human-assurance.evidence.v2",
@@ -618,6 +780,120 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("evidence binds an agent-triggered review to its frozen trigger, policy/profile versions, and gate transition", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 1,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 1,
+        responses: [{ choice: "candidate", validity: "valid" }],
+      },
+    ],
+  });
+  const context = await bindPersistedAgentReviewContext({
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    enforcementMode: "host_enforced",
+    reasonCodes: ["sampled", "critical_risk"],
+  });
+  const signer = generateKeyPairSync("ed25519");
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    now: NOW,
+    signer: { privateKey: signer.privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+
+  assert.deepEqual(packet.payload.reviewContext.selectionTrigger, {
+    kind: "critical_risk",
+    source: "persisted_agent_review_opportunity",
+    opportunityId: context.opportunityId,
+    reasonCodes: ["critical_risk", "sampled"],
+    selectionProbabilityBps: 10_000,
+    sampleBucket: 42,
+  });
+  assert.deepEqual(packet.payload.reviewContext.gate, {
+    type: "blocking",
+    policyReference: {
+      id: context.selectionPolicyId,
+      version: context.selectionPolicyVersion,
+      enforcementMode: "host_enforced",
+    },
+    stopGateEvidenceReference: {
+      kind: "human_review_lifecycle_transition",
+      opportunityId: context.opportunityId,
+      lifecycleState: "completed",
+      lifecycleRevision: 3,
+      transitionEventId: context.eventId,
+      transitionCommitment: context.transitionCommitment,
+    },
+    statement:
+      "The policy required host enforcement and is bound to the persisted review lifecycle; this packet does not independently prove that the host blocked output.",
+  });
+  assert.deepEqual(packet.payload.reviewContext.versions.selectionPolicy, {
+    id: context.selectionPolicyId,
+    version: context.selectionPolicyVersion,
+    mode: "adaptive",
+  });
+  assert.deepEqual(packet.payload.reviewContext.versions.requestProfile, {
+    id: context.binding.profileId,
+    version: context.binding.profileVersion,
+    hash: context.binding.profileHash,
+  });
+  assert.deepEqual(packet.payload.reviewContext.versions.admissionPolicies, [
+    {
+      admissionPolicyHash: fixture.admissionPolicyHash,
+      derivedFrom: {
+        kind: "assurance_audience_policy",
+        id: "policy_evidence",
+        version: 1,
+        hash: packet.payload.frozen.policyHash,
+      },
+    },
+  ]);
+});
+
+test("evidence reports an advisory gate only when the persisted selection policy is advisory", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 1,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 1,
+        responses: [{ choice: "candidate", validity: "valid" }],
+      },
+    ],
+  });
+  const context = await bindPersistedAgentReviewContext({
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    enforcementMode: "advisory",
+    reasonCodes: ["maximum_gap"],
+  });
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    signer: { privateKey: generateKeyPairSync("ed25519").privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+
+  assert.equal(packet.payload.reviewContext.selectionTrigger.kind, "maximum_gap");
+  assert.equal(packet.payload.reviewContext.gate.type, "advisory");
+  assert.deepEqual(packet.payload.reviewContext.gate.policyReference, {
+    id: context.selectionPolicyId,
+    version: context.selectionPolicyVersion,
+    enforcementMode: "advisory",
+  });
+  assert.equal(packet.payload.reviewContext.gate.stopGateEvidenceReference.transitionEventId, context.eventId);
+  assert.match(packet.payload.reviewContext.gate.statement, /does not itself prove/u);
 });
 
 test("evidence keeps mixed paid and unpaid source panels separate and links only stored settlement evidence", async () => {

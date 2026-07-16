@@ -20,6 +20,13 @@ type QueryRow = Record<string, unknown>;
 type ReviewerSource = "customer_invited" | "rateloop_network";
 type ClientDecision = "go" | "revise" | "stop";
 type EvidenceSigner = { keyId?: string; privateKey: KeyObject };
+type SelectionTriggerKind =
+  | "adaptive_sample"
+  | "critical_risk"
+  | "guardrail_escalation"
+  | "maximum_gap"
+  | "owner_required"
+  | "policy_rule";
 
 type ReviewerSourceCount = {
   source: ReviewerSource;
@@ -51,6 +58,8 @@ type EvidenceExport = {
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const SOURCES = new Set<ReviewerSource>(["customer_invited", "rateloop_network"]);
 const WRITE_ROLES = new Set(["owner", "admin", "member"]);
+const SELECTION_POLICY_MODES = new Set(["manual", "always", "fixed", "rules", "adaptive"]);
+const TERMINAL_REVIEW_STATES = new Set(["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"]);
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -62,6 +71,24 @@ function rowNumber(row: QueryRow | undefined, key: string) {
   const number = typeof value === "number" ? value : Number(value);
   if (!Number.isSafeInteger(number)) throw new Error(`Database returned an invalid ${key}.`);
   return number;
+}
+
+function rowPositiveNumber(row: QueryRow | undefined, key: string) {
+  const value = rowNumber(row, key);
+  if (value < 1) throw new Error(`Database returned an invalid ${key}.`);
+  return value;
+}
+
+function rowBps(row: QueryRow | undefined, key: string) {
+  const value = rowNumber(row, key);
+  if (value < 0 || value > 10_000) throw new Error(`Database returned an invalid ${key}.`);
+  return value;
+}
+
+function rowSampleBucket(row: QueryRow | undefined, key: string) {
+  const value = rowNumber(row, key);
+  if (value < 0 || value > 9_999) throw new Error(`Database returned an invalid ${key}.`);
+  return value;
 }
 
 function rowDate(row: QueryRow | undefined, key: string) {
@@ -77,6 +104,29 @@ function parseJson<T>(value: unknown, name: string): T {
   } catch {
     throw new TokenlessServiceError(`${name} is invalid.`, 409, "assurance_evidence_source_invalid");
   }
+}
+
+function persistedReasonCodes(value: unknown) {
+  const reasons = parseJson<unknown>(value, "Review selection reasons");
+  if (
+    !Array.isArray(reasons) ||
+    reasons.length === 0 ||
+    reasons.some(reason => typeof reason !== "string" || !/^[a-z0-9][a-z0-9_]{0,63}$/u.test(reason))
+  ) {
+    evidenceError("Persisted review selection reasons are invalid.", "assurance_evidence_source_invalid");
+  }
+  return [...new Set(reasons)].sort();
+}
+
+function primarySelectionTrigger(reasons: string[], automatedTrigger: string | null): SelectionTriggerKind {
+  if (automatedTrigger === "guardrail_uncertain") return "guardrail_escalation";
+  if (reasons.includes("critical_risk")) return "critical_risk";
+  if (reasons.includes("maximum_gap")) return "maximum_gap";
+  if (reasons.includes("sampled") || reasons.includes("calibrating")) return "adaptive_sample";
+  if (reasons.some(reason => ["low_confidence", "missing_metadata", "policy_reset", "rules_match"].includes(reason))) {
+    return "policy_rule";
+  }
+  return "owner_required";
 }
 
 function normalizeAddress(value: string) {
@@ -231,6 +281,159 @@ function requireFrozenSource(row: QueryRow) {
     evidenceError("A frozen evidence source no longer matches its hash.", "assurance_evidence_hash_mismatch");
   }
   return { runManifestHash, suiteManifestHash, policyHash, runManifest, suiteManifest, policy };
+}
+
+async function persistedReviewContext(client: Queryable, input: { workspaceId: string; runId: string }) {
+  const result = await client.query(
+    `SELECT o.opportunity_id, o.policy_id AS selection_policy_id,
+            o.policy_version AS selection_policy_version, o.reason_codes_json,
+            o.selection_probability_bps, o.sample_bucket,
+            o.request_profile_id, o.request_profile_version, o.request_profile_hash,
+            rp.mode AS selection_policy_mode, rp.rules_json,
+            escalation.trigger_kind AS automated_trigger_kind,
+            lifecycle.state AS lifecycle_state, lifecycle.state_revision AS lifecycle_revision,
+            event.event_id AS transition_event_id, event.transition_commitment
+     FROM tokenless_agent_review_opportunities o
+     JOIN tokenless_agent_review_policies rp
+       ON rp.workspace_id = o.workspace_id AND rp.policy_id = o.policy_id AND rp.version = o.policy_version
+     JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+       ON lifecycle.workspace_id = o.workspace_id AND lifecycle.opportunity_id = o.opportunity_id
+     LEFT JOIN tokenless_assurance_automated_eval_escalations escalation
+       ON escalation.workspace_id = o.workspace_id AND escalation.opportunity_id = o.opportunity_id
+     LEFT JOIN tokenless_agent_review_opportunity_transition_events event
+       ON event.workspace_id = lifecycle.workspace_id AND event.opportunity_id = lifecycle.opportunity_id
+      AND event.to_revision = lifecycle.state_revision
+     WHERE o.workspace_id = $1 AND o.run_id = $2
+     LIMIT 2`,
+    [input.workspaceId, input.runId],
+  );
+  if (result.rows.length > 1) {
+    evidenceError("An assurance run has ambiguous persisted review context.", "assurance_evidence_source_invalid");
+  }
+  const row = result.rows[0];
+  if (!row) {
+    return {
+      selectionTrigger: {
+        kind: "owner_required" as const,
+        source: "explicit_workspace_assurance_run" as const,
+        reasonCodes: ["explicit_workspace_assurance_run"],
+      },
+      gate: {
+        type: "not_applicable" as const,
+        policyReference: null,
+        stopGateEvidenceReference: null,
+        statement: "This workspace-started assurance run was not bound to an agent output stop gate.",
+      },
+      versions: {
+        selectionPolicy: null,
+        requestProfile: null,
+      },
+    };
+  }
+  const opportunityId = rowString(row, "opportunity_id");
+  const policyId = rowString(row, "selection_policy_id");
+  const policyMode = rowString(row, "selection_policy_mode");
+  const requestProfileId = rowString(row, "request_profile_id");
+  const requestProfileHash = rowString(row, "request_profile_hash");
+  const lifecycleState = rowString(row, "lifecycle_state");
+  const transitionEventId = rowString(row, "transition_event_id");
+  const transitionCommitment = rowString(row, "transition_commitment");
+  const automatedTriggerKind = rowString(row, "automated_trigger_kind");
+  const rules = parseJson<Record<string, unknown>>(row.rules_json, "Review selection policy rules");
+  const enforcementMode = rules.enforcementMode;
+  if (
+    !opportunityId ||
+    !policyId ||
+    !policyMode ||
+    !SELECTION_POLICY_MODES.has(policyMode) ||
+    !requestProfileId ||
+    !requestProfileHash ||
+    !HASH_PATTERN.test(requestProfileHash) ||
+    !lifecycleState ||
+    !TERMINAL_REVIEW_STATES.has(lifecycleState) ||
+    !transitionEventId ||
+    !transitionCommitment ||
+    !HASH_PATTERN.test(transitionCommitment) ||
+    (automatedTriggerKind !== null && automatedTriggerKind !== "guardrail_uncertain") ||
+    (enforcementMode !== "advisory" && enforcementMode !== "host_enforced")
+  ) {
+    evidenceError("Persisted agent review context is incomplete.", "assurance_evidence_source_invalid");
+  }
+  const reasonCodes = persistedReasonCodes(row.reason_codes_json);
+  const lifecycleRevision = rowPositiveNumber(row, "lifecycle_revision");
+  const selectionPolicyVersion = rowPositiveNumber(row, "selection_policy_version");
+  const gateType = enforcementMode === "host_enforced" ? ("blocking" as const) : ("advisory" as const);
+  return {
+    selectionTrigger: {
+      kind: primarySelectionTrigger(reasonCodes, automatedTriggerKind),
+      source: "persisted_agent_review_opportunity" as const,
+      opportunityId,
+      reasonCodes,
+      selectionProbabilityBps: rowBps(row, "selection_probability_bps"),
+      sampleBucket: rowSampleBucket(row, "sample_bucket"),
+    },
+    gate: {
+      type: gateType,
+      policyReference: {
+        id: policyId,
+        version: selectionPolicyVersion,
+        enforcementMode,
+      },
+      stopGateEvidenceReference: {
+        kind: "human_review_lifecycle_transition" as const,
+        opportunityId,
+        lifecycleState,
+        lifecycleRevision,
+        transitionEventId,
+        transitionCommitment,
+      },
+      statement:
+        gateType === "blocking"
+          ? "The policy required host enforcement and is bound to the persisted review lifecycle; this packet does not independently prove that the host blocked output."
+          : "The advisory review lifecycle is recorded but does not itself prove that the host blocked output.",
+    },
+    versions: {
+      selectionPolicy: {
+        id: policyId,
+        version: selectionPolicyVersion,
+        mode: policyMode,
+      },
+      requestProfile: {
+        id: requestProfileId,
+        version: rowPositiveNumber(row, "request_profile_version"),
+        hash: requestProfileHash,
+      },
+    },
+  };
+}
+
+function admissionPolicyVersions(input: {
+  runManifest: Record<string, any>;
+  caseRows: QueryRow[];
+  audiencePolicy: { id: string | null; version: number; hash: string };
+}) {
+  const admissionPolicyHash = input.runManifest.audiencePolicy?.admissionPolicyHash;
+  const caseHashes = [...new Set(input.caseRows.map(row => rowString(row, "admission_policy_hash")))];
+  if (
+    typeof admissionPolicyHash !== "string" ||
+    !/^0x[0-9a-f]{64}$/u.test(admissionPolicyHash) ||
+    caseHashes.length !== 1 ||
+    caseHashes[0] !== admissionPolicyHash ||
+    !input.audiencePolicy.id
+  ) {
+    evidenceError("Admission policy linkage does not match the frozen run.", "assurance_evidence_hash_mismatch");
+  }
+  return [
+    {
+      admissionPolicyHash,
+      derivedFrom: {
+        kind: "assurance_audience_policy" as const,
+        id: input.audiencePolicy.id,
+        version: input.audiencePolicy.version,
+        hash: input.audiencePolicy.hash,
+      },
+    },
+  ];
 }
 
 function reviewerSource(value: unknown): ReviewerSource {
@@ -898,6 +1101,20 @@ export async function generateAssuranceEvidencePacket(input: {
       responseResult.rows,
       frozen.policy,
     );
+    const persistedContext = await persistedReviewContext(client, {
+      workspaceId: input.workspaceId,
+      runId: input.runId,
+    });
+    const audiencePolicyVersion = {
+      id: rowString(row, "audience_policy_id"),
+      version: rowNumber(row, "audience_policy_version"),
+      hash: frozen.policyHash,
+    };
+    const linkedAdmissionPolicies = admissionPolicyVersions({
+      runManifest: frozen.runManifest,
+      caseRows: caseResult.rows,
+      audiencePolicy: audiencePolicyVersion,
+    });
     const passRule = passRuleFrom(row, frozen.runManifest);
     const recomputation = privacySafeRecomputation(
       counts.reviewerCounts,
@@ -945,24 +1162,16 @@ export async function generateAssuranceEvidencePacket(input: {
         suiteManifest: frozen.suiteManifest,
         policyHash: frozen.policyHash,
         policy: frozen.policy,
-        admissionPolicyHashes: [
-          ...new Set(caseResult.rows.map(caseRow => rowString(caseRow, "admission_policy_hash"))),
-        ].sort(),
+        admissionPolicyHashes: linkedAdmissionPolicies.map(policy => policy.admissionPolicyHash),
+        admissionPolicies: linkedAdmissionPolicies,
       },
       reviewContext: {
-        selectionTrigger: {
-          kind: "owner_required",
-          source: "explicit_workspace_assurance_run",
-        },
+        selectionTrigger: persistedContext.selectionTrigger,
         deliveryAuthority: {
           mode: "workspace_authorized_member",
           callerSupplied: false,
         },
-        gate: {
-          type: "advisory",
-          stopGateEvidenceReference: null,
-          statement: "The measured packet is separate from the workspace client's go, revise, or stop sign-off.",
-        },
+        gate: persistedContext.gate,
         versions: {
           runManifest: { hash: frozen.runManifestHash },
           suite: {
@@ -970,11 +1179,9 @@ export async function generateAssuranceEvidencePacket(input: {
             version: rowNumber(row, "suite_version"),
             hash: frozen.suiteManifestHash,
           },
-          audiencePolicy: {
-            id: rowString(row, "audience_policy_id"),
-            version: rowNumber(row, "audience_policy_version"),
-            hash: frozen.policyHash,
-          },
+          audiencePolicy: audiencePolicyVersion,
+          admissionPolicies: linkedAdmissionPolicies,
+          ...persistedContext.versions,
         },
         reviewerQualifications: privacySafeQualificationCounts(responseResult.rows, counts.minimumAggregationSize),
         period: periodCoverage(row, responseResult.rows, aggregation),

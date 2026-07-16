@@ -228,6 +228,107 @@ export function computeEvidenceAggregation(recomputation, minimumAggregationSize
   };
 }
 
+function validEvidenceReviewContext(payload) {
+  const context = payload.reviewContext;
+  const frozen = payload.frozen;
+  if (!context || typeof context !== "object" || !frozen || typeof frozen !== "object") return false;
+  const trigger = context.selectionTrigger;
+  const gate = context.gate;
+  const versions = context.versions;
+  if (!trigger || typeof trigger !== "object" || !gate || typeof gate !== "object" || !versions) return false;
+  if (
+    !Array.isArray(trigger.reasonCodes) ||
+    trigger.reasonCodes.length === 0 ||
+    trigger.reasonCodes.some(reason => typeof reason !== "string")
+  ) {
+    return false;
+  }
+  const manual = trigger.source === "explicit_workspace_assurance_run";
+  if (manual) {
+    if (
+      trigger.kind !== "owner_required" ||
+      gate.type !== "not_applicable" ||
+      gate.policyReference !== null ||
+      gate.stopGateEvidenceReference !== null ||
+      versions.selectionPolicy !== null ||
+      versions.requestProfile !== null
+    ) {
+      return false;
+    }
+  } else {
+    const selectionPolicy = versions.selectionPolicy;
+    const requestProfile = versions.requestProfile;
+    const reference = gate.stopGateEvidenceReference;
+    const gatePolicy = gate.policyReference;
+    if (
+      trigger.source !== "persisted_agent_review_opportunity" ||
+      ![
+        "adaptive_sample",
+        "critical_risk",
+        "guardrail_escalation",
+        "maximum_gap",
+        "owner_required",
+        "policy_rule",
+      ].includes(trigger.kind) ||
+      typeof trigger.opportunityId !== "string" ||
+      !Number.isSafeInteger(trigger.selectionProbabilityBps) ||
+      trigger.selectionProbabilityBps < 0 ||
+      trigger.selectionProbabilityBps > 10_000 ||
+      !Number.isSafeInteger(trigger.sampleBucket) ||
+      trigger.sampleBucket < 0 ||
+      trigger.sampleBucket > 9_999 ||
+      (gate.type !== "blocking" && gate.type !== "advisory") ||
+      !gatePolicy ||
+      gatePolicy.id !== selectionPolicy?.id ||
+      gatePolicy.version !== selectionPolicy?.version ||
+      (gatePolicy.enforcementMode !== "advisory" && gatePolicy.enforcementMode !== "host_enforced") ||
+      (gate.type === "blocking") !== (gatePolicy.enforcementMode === "host_enforced") ||
+      !selectionPolicy ||
+      typeof selectionPolicy.id !== "string" ||
+      !Number.isSafeInteger(selectionPolicy.version) ||
+      selectionPolicy.version < 1 ||
+      !["manual", "always", "fixed", "rules", "adaptive"].includes(selectionPolicy.mode) ||
+      !requestProfile ||
+      typeof requestProfile.id !== "string" ||
+      !Number.isSafeInteger(requestProfile.version) ||
+      requestProfile.version < 1 ||
+      !/^sha256:[0-9a-f]{64}$/.test(requestProfile.hash) ||
+      !reference ||
+      reference.kind !== "human_review_lifecycle_transition" ||
+      reference.opportunityId !== trigger.opportunityId ||
+      !["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"].includes(reference.lifecycleState) ||
+      !Number.isSafeInteger(reference.lifecycleRevision) ||
+      reference.lifecycleRevision < 1 ||
+      typeof reference.transitionEventId !== "string" ||
+      !/^sha256:[0-9a-f]{64}$/.test(reference.transitionCommitment)
+    ) {
+      return false;
+    }
+  }
+  const admissionPolicies = versions.admissionPolicies;
+  if (
+    !Array.isArray(admissionPolicies) ||
+    admissionPolicies.length !== 1 ||
+    canonicalizeEvidenceValue(admissionPolicies) !== canonicalizeEvidenceValue(frozen.admissionPolicies) ||
+    !Array.isArray(frozen.admissionPolicyHashes) ||
+    frozen.admissionPolicyHashes.length !== 1
+  ) {
+    return false;
+  }
+  const admission = admissionPolicies[0];
+  const audience = versions.audiencePolicy;
+  return Boolean(
+    admission &&
+      /^0x[0-9a-f]{64}$/.test(admission.admissionPolicyHash) &&
+      admission.admissionPolicyHash === frozen.admissionPolicyHashes[0] &&
+      admission.derivedFrom?.kind === "assurance_audience_policy" &&
+      admission.derivedFrom.id === audience?.id &&
+      admission.derivedFrom.version === audience?.version &&
+      admission.derivedFrom.hash === audience?.hash &&
+      audience?.hash === frozen.policyHash,
+  );
+}
+
 export function verifyEvidenceExport(packet, trust = {}) {
   try {
     if (!packet || typeof packet !== "object" || !packet.payload || !packet.signing) {
@@ -239,6 +340,9 @@ export function verifyEvidenceExport(packet, trust = {}) {
       !LEGACY_EVIDENCE_SCHEMA_VERSIONS.includes(packet.payload.schemaVersion)
     ) {
       errors.push("unsupported_schema_version");
+    }
+    if (packet.payload.schemaVersion === EVIDENCE_SCHEMA_VERSION && !validEvidenceReviewContext(packet.payload)) {
+      errors.push("review_context_invalid");
     }
     if (packet.signing.algorithm !== "Ed25519") errors.push("unsupported_signature_algorithm");
     const derivedKeyId = evidenceSigningKeyId(packet.signing.publicKey);
