@@ -70,8 +70,21 @@ test("connection polling cleans up timers and preserves explicit-navigation focu
   assert.match(flowSource, /aria-live="polite"/);
 });
 
+test("connection creation keeps the complete message visible and confirms clipboard copies", () => {
+  const exposeMessage = flowSource.indexOf("setConnectionMessage(message)");
+  const automaticCopy = flowSource.indexOf("navigator.clipboard.writeText(message)");
+  assert.ok(exposeMessage >= 0 && exposeMessage < automaticCopy);
+  assert.match(flowSource, /id="agent-setup-connection-message"/);
+  assert.match(flowSource, /value=\{connectionMessage\}/);
+  assert.match(flowSource, /Copy message/);
+  assert.match(flowSource, /notifications\.success\("Connection message copied to clipboard\."\)/);
+  assert.match(flowSource, /notifications\.error\("Clipboard access was blocked\./);
+});
+
 test("invitation copy states that email binds the code but is not delivered", () => {
   assert.match(flowSource, /Bind code to recipient email/);
   assert.match(flowSource, /RateLoop does not send this email/);
   assert.match(flowSource, /Copy this invitation code now/);
+  assert.match(flowSource, /copyInvitationCode/);
+  assert.match(flowSource, /notifications\.success\("Invitation code copied to clipboard\."\)/);
 });

@@ -23,13 +23,18 @@ test("default connection UI creates and copies one safe connection intent", () =
   assert.doesNotMatch(source, /onClick=\{\(\) => void generatePairing/);
 });
 
-test("clipboard denial exposes a selected accessible one-copy fallback", () => {
+test("the complete connection message stays visible with accessible copy recovery", () => {
+  const exposeMessage = source.indexOf("setManualConnectionMessage(message)");
+  const automaticCopy = source.indexOf("navigator.clipboard.writeText(message)");
+  assert.ok(exposeMessage >= 0 && exposeMessage < automaticCopy);
   assert.match(source, /manualMessageRef\.current\?\.focus\(\)/);
   assert.match(source, /manualMessageRef\.current\?\.select\(\)/);
   assert.match(source, /aria-describedby="manual-agent-message-help"/);
   assert.match(source, /readOnly/);
-  assert.match(source, /Select complete message/);
+  assert.match(source, /Copy message/);
+  assert.match(source, /copyVisibleConnectionMessage/);
   assert.match(source, /complete message is selected below for one manual copy/);
+  assert.match(source, /notifications\.success\("Connection message copied to clipboard\."\)/);
 });
 
 test("connection status polling pauses completely while the page is hidden", () => {

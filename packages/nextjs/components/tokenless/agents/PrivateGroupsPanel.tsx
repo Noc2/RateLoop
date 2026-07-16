@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 type GroupPolicy = {
@@ -81,6 +82,7 @@ export function PrivateGroupsPanel({
   initialWorkspaceId?: string;
   showWorkspaceSelector?: boolean;
 }) {
+  const notifications = useRateLoopNotifications();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [groups, setGroups] = useState<PrivateGroup[]>([]);
@@ -347,8 +349,10 @@ export function PrivateGroupsPanel({
     try {
       await navigator.clipboard.writeText(issuedInvitation.token);
       setStatus("Invitation copied. Send it privately.");
+      notifications.success("Invitation code copied to clipboard.");
     } catch {
       setError("Clipboard access was unavailable. Select and copy the token manually.");
+      notifications.error("Clipboard access was blocked. Copy the invitation code manually.");
     }
   }
 

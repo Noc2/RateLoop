@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
+import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
@@ -34,14 +35,16 @@ function stepBefore(step: AgentSetupScreenStep): AgentSetupScreenStep | null {
 
 export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentSetupView }) {
   const router = useRouter();
+  const notifications = useRateLoopNotifications();
   const [setup, setSetup] = useState(initialSetup);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [manualMessage, setManualMessage] = useState<string | null>(null);
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState(initialSetup.workspaceName);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const focusOnNavigation = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
 
@@ -126,7 +129,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   async function createConnectionMessage() {
     setBusy(true);
     setError(null);
-    setManualMessage(null);
+    setConnectionMessage(null);
     try {
       const body = await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/connect`, {
@@ -139,18 +142,46 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       const connectionUrl = typeof body.connectionUrl === "string" ? body.connectionUrl : null;
       if (!connectionUrl) throw new Error("RateLoop did not return a connection message.");
       const message = buildAgentConnectionMessage({ connectionUrl });
+      setConnectionMessage(message);
       try {
         await navigator.clipboard.writeText(message);
-        setAnnouncement("Connection message copied. Paste it once into the agent chat you want to connect.");
+        setAnnouncement("Connection message copied to clipboard.");
+        notifications.success("Connection message copied to clipboard.");
       } catch {
-        setManualMessage(message);
-        setError("Clipboard access was denied. Copy the selected message below once.");
+        setError("Clipboard access was denied. Copy the visible message below once.");
+        notifications.error("Clipboard access was blocked. Copy the visible message manually.");
       }
       await loadStep("connect", { replace: true, focus: false });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create the connection message.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function copyVisibleConnectionMessage() {
+    if (!connectionMessage) return;
+    try {
+      await navigator.clipboard.writeText(connectionMessage);
+      setAnnouncement("Connection message copied to clipboard.");
+      notifications.success("Connection message copied to clipboard.");
+    } catch {
+      connectionMessageRef.current?.focus();
+      connectionMessageRef.current?.select();
+      setError("Clipboard access was denied. The visible message is selected for manual copying.");
+      notifications.error("Clipboard access was blocked. The message is selected for manual copying.");
+    }
+  }
+
+  async function copyInvitationCode() {
+    if (!inviteToken) return;
+    try {
+      await navigator.clipboard.writeText(inviteToken);
+      setAnnouncement("Invitation code copied to clipboard.");
+      notifications.success("Invitation code copied to clipboard.");
+    } catch {
+      setError("Clipboard access was denied. Select and copy the visible invitation code manually.");
+      notifications.error("Clipboard access was blocked. Copy the invitation code manually.");
     }
   }
 
@@ -353,17 +384,30 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   ? "Creating…"
                   : setup.connection.intentId
                     ? "Create a new connection message"
-                    : "Copy connection message"}
+                    : "Create connection message"}
               </button>
             )}
-            {manualMessage ? (
-              <textarea
-                className="textarea mt-4 min-h-40 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
-                aria-label="Agent connection message"
-                value={manualMessage}
-                readOnly
-                onFocus={event => event.currentTarget.select()}
-              />
+            {connectionMessage ? (
+              <div className="mt-5">
+                <label className="block text-sm font-medium" htmlFor="agent-setup-connection-message">
+                  Connection message
+                </label>
+                <textarea
+                  ref={connectionMessageRef}
+                  id="agent-setup-connection-message"
+                  className="textarea mt-2 min-h-40 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+                  value={connectionMessage}
+                  readOnly
+                  onFocus={event => event.currentTarget.select()}
+                />
+                <button
+                  className="btn rateloop-secondary-action mt-3 px-5"
+                  type="button"
+                  onClick={() => void copyVisibleConnectionMessage()}
+                >
+                  Copy message
+                </button>
+              </div>
             ) : null}
           </>
         ) : null}
@@ -529,7 +573,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <button
                       className="btn btn-sm rateloop-secondary-action mt-3"
                       type="button"
-                      onClick={() => void navigator.clipboard.writeText(inviteToken)}
+                      onClick={() => void copyInvitationCode()}
                     >
                       Copy code
                     </button>

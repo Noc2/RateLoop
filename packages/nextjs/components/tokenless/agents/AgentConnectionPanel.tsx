@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { InfoPopover } from "../InfoPopover";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 import { isUsableAgentConnection } from "./agentWorkspaceState";
+import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
 
@@ -597,6 +598,7 @@ export function AgentConnectionPanel({
   onAgentApproved?: () => void;
   onConnectionStateChange?: (connected: boolean) => void;
 }) {
+  const notifications = useRateLoopNotifications();
   const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
   const [integrations, setIntegrations] = useState<AgentIntegration[]>([]);
@@ -669,12 +671,6 @@ export function AgentConnectionPanel({
     return () => controller.abort();
   }, [loadConnectionState, publishingRevision, workspaceId]);
 
-  useEffect(() => {
-    if (!manualConnectionMessage) return;
-    manualMessageRef.current?.focus();
-    manualMessageRef.current?.select();
-  }, [manualConnectionMessage]);
-
   const shouldPoll =
     connectionIntents.some(intent => isActiveAgentConnectionIntent(intent, connectionClock)) ||
     pairings.some(pairing => isPendingAgentPairing(pairing, connectionClock));
@@ -735,11 +731,13 @@ export function AgentConnectionPanel({
       const connectionUrl = stringField(body, "connectionUrl");
       if (!connectionUrl) throw new Error("RateLoop did not return a connection URL.");
       const message = buildAgentConnectionMessage({ connectionUrl });
+      setManualConnectionMessage(message);
       let copied = false;
       try {
         await navigator.clipboard.writeText(message);
         copied = true;
         setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
+        notifications.success("Connection message copied to clipboard.");
         void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
           method: "POST",
           body: JSON.stringify({ event: "connection_message_copied" }),
@@ -748,8 +746,12 @@ export function AgentConnectionPanel({
           keepalive: true,
         }).catch(() => undefined);
       } catch {
-        setManualConnectionMessage(message);
         setError("Clipboard access was denied. The complete message is selected below for one manual copy.");
+        notifications.error("Clipboard access was blocked. The connection message is selected for manual copying.");
+        window.requestAnimationFrame(() => {
+          manualMessageRef.current?.focus();
+          manualMessageRef.current?.select();
+        });
       }
       try {
         await loadConnectionState(workspaceId);
@@ -762,6 +764,27 @@ export function AgentConnectionPanel({
       setError(cause instanceof Error ? cause.message : "Unable to create the connection message.");
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function copyVisibleConnectionMessage() {
+    if (!manualConnectionMessage) return;
+    try {
+      await navigator.clipboard.writeText(manualConnectionMessage);
+      setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
+      notifications.success("Connection message copied to clipboard.");
+      void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
+        method: "POST",
+        body: JSON.stringify({ event: "connection_message_copied" }),
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+      }).catch(() => undefined);
+    } catch {
+      setError("Clipboard access was denied. The complete message is selected below for manual copying.");
+      notifications.error("Clipboard access was blocked. The connection message is selected for manual copying.");
+      manualMessageRef.current?.focus();
+      manualMessageRef.current?.select();
     }
   }
 
@@ -900,8 +923,10 @@ export function AgentConnectionPanel({
     try {
       await navigator.clipboard.writeText(reveal.secret);
       setStatus("Legacy credential copied. Store it only in the existing agent host's secure credential setting.");
+      notifications.success("Legacy credential copied to clipboard.");
     } catch {
       setError("Clipboard access was denied. Copy the legacy credential manually from the one-time reveal.");
+      notifications.error("Clipboard access was blocked. Copy the legacy credential manually.");
     }
   }
 
@@ -975,16 +1000,12 @@ export function AgentConnectionPanel({
       ) : null}
 
       {manualConnectionMessage ? (
-        <section
-          className="rounded-2xl border border-amber-300/25 bg-amber-300/[0.06] p-5"
-          aria-labelledby="manual-agent-message-heading"
-        >
+        <section className="surface-card rounded-2xl p-5" aria-labelledby="manual-agent-message-heading">
           <h3 id="manual-agent-message-heading" className="font-semibold">
-            Copy this message once
+            Connection message
           </h3>
           <p id="manual-agent-message-help" className="mt-2 text-sm leading-6 text-base-content/60">
-            Your browser blocked automatic clipboard access. The complete message is selected. Copy it, paste it once
-            into the intended agent chat, then leave the rest to the agent and its host.
+            Review or copy the complete message below, then paste it once into the intended agent chat.
           </p>
           <textarea
             ref={manualMessageRef}
@@ -998,12 +1019,9 @@ export function AgentConnectionPanel({
             <button
               type="button"
               className="btn btn-sm rateloop-secondary-action"
-              onClick={() => {
-                manualMessageRef.current?.focus();
-                manualMessageRef.current?.select();
-              }}
+              onClick={() => void copyVisibleConnectionMessage()}
             >
-              Select complete message
+              Copy message
             </button>
             <button
               type="button"
