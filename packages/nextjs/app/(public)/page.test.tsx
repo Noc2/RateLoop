@@ -112,7 +112,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /Agent setup|Copy setup|role="dialog"/);
   assert.match(html, /id="use-cases"/);
   assert.match(html, /Where Humans/);
-  assert.match(html, /Automated checks catch many failures.*contextual decision.*actual output/i);
+  assert.doesNotMatch(html, /Automated checks catch many failures.*contextual decision.*actual output/i);
   for (const [title, body, href] of [
     [
       "Customer replies",
