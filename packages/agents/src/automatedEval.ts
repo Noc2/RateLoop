@@ -92,11 +92,40 @@ export type AutomatedEvalLabeledDataExport = {
   exportDigest: string;
 };
 
+export type AutomatedEvalResult = {
+  schemaVersion: "rateloop.automated-eval-result.v1";
+  receiptId: string;
+  receiptHash: string;
+  provider: AutomatedEvalProvider;
+  evaluator: { name: string; version: string };
+  checkName: string;
+  contentCommitment: string;
+  observedAt: string;
+  automatedSignal: AutomatedEvalIngestResult["automatedSignal"];
+  humanReview:
+    | null
+    | {
+        required: true;
+        trigger: "guardrail_uncertain";
+        opportunityId: string;
+        state: "pending" | "completed";
+        verdict:
+          | null
+          | {
+              label: "positive" | "negative" | "inconclusive";
+              resultCommitment: string;
+              responseCount: number;
+              observedAt: string;
+            };
+      };
+};
+
 export type AutomatedEvalClient = {
   ingest(
     receipt: AutomatedEvalReceipt,
     options: { idempotencyKey: string },
   ): Promise<AutomatedEvalIngestResult>;
+  getResult(receiptId: string): Promise<AutomatedEvalResult>;
   exportLabeledData(options?: {
     from?: string;
     to?: string;
@@ -196,6 +225,19 @@ export function createAutomatedEvalClient(
         redirect: "error",
       });
       return jsonResponse<AutomatedEvalLabeledDataExport>(response);
+    },
+    async getResult(receiptId) {
+      if (!/^aer_[0-9a-f]{40}$/u.test(receiptId)) {
+        throw new Error("RateLoop automated-eval receipt ID is invalid.");
+      }
+      const response = await fetchImpl(
+        `${origin}/api/assurance/v1/evaluations/receipts/${receiptId}`,
+        {
+          headers: { Authorization: `Bearer ${options.apiKey}` },
+          redirect: "error",
+        },
+      );
+      return jsonResponse<AutomatedEvalResult>(response);
     },
   };
 }

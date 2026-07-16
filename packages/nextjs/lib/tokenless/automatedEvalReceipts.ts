@@ -18,10 +18,12 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 export const AUTOMATED_EVAL_RECEIPT_SCHEMA_VERSION = "rateloop.automated-eval-receipt.v1" as const;
 export const AUTOMATED_EVAL_INGEST_RESULT_SCHEMA_VERSION = "rateloop.automated-eval-ingest-result.v1" as const;
 export const AUTOMATED_EVAL_LABELED_DATA_SCHEMA_VERSION = "rateloop.automated-eval-labeled-data.v1" as const;
+export const AUTOMATED_EVAL_RESULT_SCHEMA_VERSION = "rateloop.automated-eval-result.v1" as const;
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/u;
+const RECEIPT_ID_PATTERN = /^aer_[0-9a-f]{40}$/u;
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 const MAX_RECEIPT_AGE_MS = 366 * 24 * 60 * 60_000;
 const DEFAULT_EXPORT_WINDOW_MS = 30 * 24 * 60 * 60_000;
@@ -105,6 +107,36 @@ export type AutomatedEvalLabeledDataItem = {
   responseCount: number;
   observedAt: string;
   labeledAt: string;
+};
+
+export type AutomatedEvalResult = {
+  schemaVersion: typeof AUTOMATED_EVAL_RESULT_SCHEMA_VERSION;
+  receiptId: string;
+  receiptHash: string;
+  provider: AutomatedEvalProvider;
+  evaluator: { name: string; version: string };
+  checkName: string;
+  contentCommitment: string;
+  observedAt: string;
+  automatedSignal: {
+    sourceKind: "automated_evaluation";
+    outcome: AutomatedEvalOutcome;
+    scoreBps: number | null;
+    thresholdBps: number | null;
+    humanVerdict: null;
+  };
+  humanReview: null | {
+    required: true;
+    trigger: "guardrail_uncertain";
+    opportunityId: string;
+    state: "pending" | "completed";
+    verdict: null | {
+      label: "positive" | "negative" | "inconclusive";
+      resultCommitment: string;
+      responseCount: number;
+      observedAt: string;
+    };
+  };
 };
 
 function invalid(message: string, code = "invalid_automated_eval_receipt", status = 400): never {
@@ -530,6 +562,90 @@ function rowDate(row: QueryRow, key: string) {
   const parsed = row[key] instanceof Date ? (row[key] as Date) : new Date(String(row[key]));
   if (!Number.isFinite(parsed.getTime())) throw new Error(`Stored ${key} is invalid.`);
   return parsed.toISOString();
+}
+
+export async function getAutomatedEvalResult(input: {
+  principal: AutomatedEvalPrincipal;
+  receiptId: string;
+}): Promise<AutomatedEvalResult> {
+  requireProductPrincipalScope(input.principal, "evaluation:read");
+  if (!RECEIPT_ID_PATTERN.test(input.receiptId)) {
+    invalid("Automated-eval receipt ID is invalid.", "invalid_automated_eval_receipt_id");
+  }
+  const result = await dbPool.query(
+    `SELECT r.receipt_id,r.receipt_hash,r.provider,r.evaluator_name,r.evaluator_version,
+            r.check_name,r.automated_outcome,r.score_bps,r.threshold_bps,
+            r.content_commitment,r.observed_at,e.opportunity_id,
+            h.outcome AS human_outcome,h.result_commitment,h.response_count,h.result_observed_at
+     FROM tokenless_assurance_automated_eval_receipts r
+     LEFT JOIN tokenless_assurance_automated_eval_escalations e
+       ON e.workspace_id=r.workspace_id AND e.receipt_id=r.receipt_id
+     LEFT JOIN tokenless_agent_human_review_result_observations h
+       ON h.workspace_id=e.workspace_id AND h.opportunity_id=e.opportunity_id
+     WHERE r.workspace_id=$1 AND r.receipt_id=$2
+     LIMIT 1`,
+    [input.principal.workspaceId, input.receiptId],
+  );
+  const row = result.rows[0] as QueryRow | undefined;
+  if (!row) {
+    invalid("Automated-eval receipt was not found.", "automated_eval_receipt_not_found", 404);
+  }
+  const automatedOutcome = outcome(row.automated_outcome);
+  const opportunityId = text(row, "opportunity_id");
+  if (automatedOutcome === "uncertain" && !opportunityId) {
+    throw new Error("Stored uncertain automated-eval receipt has no required human-review opportunity.");
+  }
+  if (automatedOutcome !== "uncertain" && opportunityId) {
+    throw new Error("Stored conclusive automated-eval receipt has an invalid escalation.");
+  }
+  const humanOutcome = text(row, "human_outcome");
+  if (
+    humanOutcome !== null &&
+    humanOutcome !== "positive" &&
+    humanOutcome !== "negative" &&
+    humanOutcome !== "inconclusive"
+  ) {
+    throw new Error("Stored human-review outcome is invalid.");
+  }
+  const verdict: NonNullable<AutomatedEvalResult["humanReview"]>["verdict"] =
+    humanOutcome === null
+      ? null
+      : {
+          label: humanOutcome,
+          resultCommitment: text(row, "result_commitment")!,
+          responseCount: optionalInteger(row, "response_count")!,
+          observedAt: rowDate(row, "result_observed_at"),
+        };
+  return {
+    schemaVersion: AUTOMATED_EVAL_RESULT_SCHEMA_VERSION,
+    receiptId: text(row, "receipt_id")!,
+    receiptHash: text(row, "receipt_hash")!,
+    provider: provider(row.provider),
+    evaluator: {
+      name: text(row, "evaluator_name")!,
+      version: text(row, "evaluator_version")!,
+    },
+    checkName: text(row, "check_name")!,
+    contentCommitment: text(row, "content_commitment")!,
+    observedAt: rowDate(row, "observed_at"),
+    automatedSignal: {
+      sourceKind: "automated_evaluation",
+      outcome: automatedOutcome,
+      scoreBps: optionalInteger(row, "score_bps"),
+      thresholdBps: optionalInteger(row, "threshold_bps"),
+      humanVerdict: null,
+    },
+    humanReview:
+      automatedOutcome === "uncertain"
+        ? {
+            required: true,
+            trigger: "guardrail_uncertain",
+            opportunityId: opportunityId!,
+            state: verdict ? "completed" : "pending",
+            verdict,
+          }
+        : null,
+  };
 }
 
 export async function exportAutomatedEvalLabeledData(input: {

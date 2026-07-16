@@ -102,6 +102,44 @@ describe("automated-eval API client", () => {
       }),
     ).toThrow(/HTTPS/u);
   });
+
+  it("retrieves one eventual result by its opaque receipt ID", async () => {
+    const receiptId = `aer_${"12".repeat(20)}`;
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            schemaVersion: "rateloop.automated-eval-result.v1",
+            receiptId,
+            receiptHash: HASH,
+            provider: "promptfoo",
+            evaluator: { name: "safety", version: "1.0.0" },
+            checkName: "safety",
+            contentCommitment: HASH,
+            observedAt: "2026-07-16T12:00:00.000Z",
+            automatedSignal: ingestResult("uncertain").automatedSignal,
+            humanReview: {
+              required: true,
+              trigger: "guardrail_uncertain",
+              opportunityId: "aop_123",
+              state: "pending",
+              verdict: null,
+            },
+          }),
+          { status: 200 },
+        ),
+    );
+    const client = createAutomatedEvalClient({
+      baseUrl: "https://rateloop-tokenless.vercel.app",
+      apiKey: "workspace-secret",
+      fetchImpl,
+    });
+    const result = await client.getResult(receiptId);
+    expect(result.humanReview?.state).toBe("pending");
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `https://rateloop-tokenless.vercel.app/api/assurance/v1/evaluations/receipts/${receiptId}`,
+    );
+  });
 });
 
 describe("Promptfoo provider and assertion", () => {

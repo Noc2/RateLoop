@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { GET as GET_LABELED_DATA } from "~~/app/api/assurance/v1/evaluations/labeled-data/route";
+import { GET as GET_RESULT } from "~~/app/api/assurance/v1/evaluations/receipts/[receiptId]/route";
 import { POST as POST_RECEIPT } from "~~/app/api/assurance/v1/evaluations/receipts/route";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -69,6 +70,15 @@ test("automated-eval routes require tenant API-key scopes and exact replay idemp
   assert.equal(createdBody.automatedSignal.humanVerdict, null);
   assert.equal(createdBody.humanReview, null);
 
+  const result = await GET_RESULT(
+    new NextRequest("https://rateloop-tokenless.vercel.app/api/assurance/v1/evaluations/receipts/result", {
+      headers: { authorization: `Bearer ${setupData.token}` },
+    }),
+    { params: Promise.resolve({ receiptId: createdBody.receiptId }) },
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual((await result.json()).automatedSignal, createdBody.automatedSignal);
+
   const replay = await POST_RECEIPT(request(body(setupData), setupData.token));
   assert.equal(replay.status, 200);
   assert.equal((await replay.json()).replayed, true);
@@ -87,6 +97,29 @@ test("automated-eval routes require tenant API-key scopes and exact replay idemp
   const exportBody = await exported.json();
   assert.equal(exportBody.workspaceId, setupData.workspaceId);
   assert.deepEqual(exportBody.items, []);
+});
+
+test("specific result retrieval is tenant scoped and validates receipt identifiers", async () => {
+  const first = await setup();
+  const second = await setup();
+  const created = await POST_RECEIPT(request(body(first), first.token));
+  const receiptId = (await created.json()).receiptId as string;
+
+  const hidden = await GET_RESULT(
+    new NextRequest("https://rateloop-tokenless.vercel.app/api/assurance/v1/evaluations/receipts/result", {
+      headers: { authorization: `Bearer ${second.token}` },
+    }),
+    { params: Promise.resolve({ receiptId }) },
+  );
+  assert.equal(hidden.status, 404);
+
+  const invalid = await GET_RESULT(
+    new NextRequest("https://rateloop-tokenless.vercel.app/api/assurance/v1/evaluations/receipts/result", {
+      headers: { authorization: `Bearer ${first.token}` },
+    }),
+    { params: Promise.resolve({ receiptId: "aer_invalid" }) },
+  );
+  assert.equal(invalid.status, 400);
 });
 
 test("receipt route rejects unsupported media and oversized bodies before parsing", async () => {

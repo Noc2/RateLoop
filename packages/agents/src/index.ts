@@ -52,6 +52,7 @@ export type {
   AutomatedEvalOutcome,
   AutomatedEvalProvider,
   AutomatedEvalReceipt,
+  AutomatedEvalResult,
   AutomatedEvalReviewContext,
 } from "./automatedEval";
 export {
