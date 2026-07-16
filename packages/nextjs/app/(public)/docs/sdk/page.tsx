@@ -45,8 +45,26 @@ const result = state.status === "ready"
         Browser clients use the HttpOnly RateLoop session, and wallets remain optional until a funding, payout, or
         recovery action needs one.
       </p>
+
+      <h2 id="evidence-exports">Evidence exports</h2>
       <p>
-        Read <Link href="/docs/ai">Agents &amp; MCP</Link> for publishing lanes, or{` `}
+        Workspace members with the required role can export a completed run packet, adaptive-coverage history, the
+        workspace audit chain, and the workspace&apos;s trusted-key history.
+      </p>
+      <pre>
+        <code>{`GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
+GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
+GET /api/account/workspaces/{workspaceId}/audit/export
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys`}</code>
+      </pre>
+      <p>Run the local checkers with explicit trust pins instead of trusting keys or heads from the same export:</p>
+      <pre>
+        <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json --public-key ./key.txt --key-id ed25519:…
+yarn workspace @rateloop/nextjs audit:verify ./audit-export.json --expected-head sha256:…`}</code>
+      </pre>
+      <p>
+        Read <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link> for verification boundaries,{` `}
+        <Link href="/docs/ai">Agents &amp; MCP</Link> for publishing lanes, or{` `}
         <Link href="/docs/tech-stack#x402-usdc">x402 + USDC</Link> for the agent-funded payment path.
       </p>
     </article>

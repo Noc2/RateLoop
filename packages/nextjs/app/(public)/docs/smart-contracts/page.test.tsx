@@ -19,5 +19,8 @@ test("smart-contract docs name the complete production contract set", async () =
   assert.match(html, /id="x402-panel-submitter".*X402PanelSubmitter/i);
   assert.match(html, /no operator or administrator path to customer funds/i);
   assert.match(html, /one complete key/i);
+  assert.match(html, /id="settlement-evidence"/i);
+  assert.match(html, /It proves only those recorded chain facts/i);
+  assert.match(html, /href="\/docs\/evidence"/i);
   assert.doesNotMatch(html, /LREP|governance|oracle/i);
 });

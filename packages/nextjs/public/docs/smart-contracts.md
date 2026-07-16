@@ -42,3 +42,11 @@ Bonus funds cannot satisfy guaranteed bounty, fee, reserve, or accepted-work lia
 A v4 deployment key binds the chain, deployment block, panel, issuer, x402 adapter, Feedback Bonus escrow, and generated
 interfaces. The app, indexer, and keeper reject incomplete or mixed address bundles rather than guessing which contract
 set is authoritative.
+
+<a id="settlement-evidence"></a>
+
+## What settlement evidence proves
+
+Chain evidence can bind a review case to a deployment key, round, transaction receipt, indexed terminal event, and
+deterministic fund accounting. It proves only those recorded chain facts; it does not prove the quality of the source
+material, reviewer competence, or the customer's final decision. See [Evidence & Compliance Mapping](./evidence.md).

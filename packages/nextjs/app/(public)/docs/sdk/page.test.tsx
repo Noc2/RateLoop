@@ -19,5 +19,10 @@ test("SDK docs expose only the versioned tokenless agent flow", async () => {
   assert.match(html, /scoped, revocable workspace API keys/i);
   assert.match(html, /authorized client\/project assignment/i);
   assert.match(html, /wallets remain optional/i);
+  assert.match(html, /id="evidence-exports"/i);
+  assert.match(html, /assurance\/runs\/\{runId\}\/evidence/i);
+  assert.match(html, /assurance\/coverage\/export/i);
+  assert.match(html, /evidence:verify.*audit:verify/i);
+  assert.match(html, /href="\/docs\/evidence"/i);
   assert.doesNotMatch(html, /LREP|stake|governance|frontend reward/i);
 });

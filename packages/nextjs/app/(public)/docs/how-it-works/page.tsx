@@ -71,6 +71,10 @@ export default function HowTokenlessWorksPage() {
         reports, reasons, disagreement, scoring version, compensation, and settlement references. The customer decides
         whether to approve, revise, retest, escalate, or stop.
       </p>
+      <p>
+        See <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link> for the packet fields, local checks,
+        framework cross-references, and limits on what those records establish.
+      </p>
 
       <p>Correlation analytics may affect publication and future assignment, but never reduce pay for accepted work.</p>
 

@@ -63,6 +63,14 @@ export default function TokenlessContractsPage() {
         A release pins the panel, issuer, funding adapter, chain, deployment block, and generated interfaces as one
         complete key. Services reject mixed address bundles instead of guessing which deployment is authoritative.
       </p>
+
+      <h2 id="settlement-evidence">What settlement evidence proves</h2>
+      <p>
+        Chain evidence can bind a review case to a deployment key, round, transaction receipt, indexed terminal event,
+        and deterministic fund accounting. It proves only those recorded chain facts; it does not prove the quality of
+        the source material, reviewer competence, or the customer&apos;s final decision. See the full{" "}
+        <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link>.
+      </p>
       <p>
         Return to <Link href="/docs/tech-stack#immutable-fund-core">Immutable Fund Core</Link> for the settlement model,
         or follow the full <Link href="/docs/how-it-works#settlement-paths">settlement paths</Link>.

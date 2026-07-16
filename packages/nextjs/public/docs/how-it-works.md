@@ -42,6 +42,9 @@ audience cannot silently lower review.
 7. **Return a decision packet.** The versioned result combines the verdict, disagreement, written reasons, reviewer
    coverage, settlement evidence, refunds, and compensation. The customer records the final go, revise, or stop action.
 
+See [Evidence & Compliance Mapping](./evidence.md) for the packet fields, local checks, framework cross-references, and
+limits on what those records establish.
+
 ## Agent integration
 
 Workspace owners change audience, frequency, response window, panel, compensation, and authority from the connected

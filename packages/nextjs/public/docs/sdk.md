@@ -23,3 +23,25 @@ For self-funded automation, the SDK builds and validates the exact x402/EIP-3009
 hold private keys, invent contract addresses, or import a legacy protocol configuration. `apiBaseUrl` must use HTTPS
 except for loopback development, every ask requires an idempotency key, and every bounded wait returns an explicit
 continuation when the result is not ready.
+
+## Evidence exports
+
+Workspace members with the required role can export a completed run packet, adaptive-coverage history, the workspace
+audit chain, and trusted-key history:
+
+```text
+GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
+GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
+GET /api/account/workspaces/{workspaceId}/audit/export
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
+```
+
+Run the local checkers with explicit trust pins instead of trusting keys or heads from the same export:
+
+```sh
+yarn workspace @rateloop/nextjs evidence:verify ./packet.json --public-key ./key.txt --key-id ed25519:...
+yarn workspace @rateloop/nextjs audit:verify ./audit-export.json --expected-head sha256:...
+```
+
+See [Evidence & Compliance Mapping](./evidence.md) for packet fields, verification boundaries, and framework
+cross-references.
