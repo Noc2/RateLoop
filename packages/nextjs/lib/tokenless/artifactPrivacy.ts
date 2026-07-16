@@ -588,15 +588,26 @@ export async function requestProjectDeletion(input: {
 export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
   const runtime = getRuntime();
   const result = await dbClient.execute({
-    sql: `SELECT o.object_id, o.artifact_id, o.workspace_id, o.project_id, o.storage_ref
+    sql: `SELECT o.object_id, o.artifact_id, o.workspace_id, o.project_id, o.storage_ref,
+                 o.status, o.delete_after, h.hold_id
           FROM tokenless_assurance_artifact_objects o
           LEFT JOIN tokenless_legal_holds h ON h.project_id = o.project_id AND h.status = 'active'
-          WHERE o.object_id = ? AND o.status = 'active' AND o.delete_after <= ? AND h.hold_id IS NULL
-          LIMIT 1`,
-    args: [objectId, now],
+          WHERE o.object_id = ? LIMIT 1`,
+    args: [objectId],
   });
   const row = result.rows[0] as QueryRow | undefined;
-  if (!row) return false;
+  if (!row || rowString(row, "status") !== "active") return true;
+  if (rowString(row, "hold_id")) {
+    throw new TokenlessServiceError(
+      "Artifact deletion is deferred by an active legal hold.",
+      409,
+      "deletion_blocked_by_hold",
+      true,
+    );
+  }
+  if (new Date(String(row.delete_after)).getTime() > now.getTime()) {
+    throw new TokenlessServiceError("Artifact deletion is not due yet.", 409, "deletion_not_due", true);
+  }
   const storageRef = rowString(row, "storage_ref")!;
   await runtime.store.delete(storageRef);
   const deleted = await dbClient.execute({

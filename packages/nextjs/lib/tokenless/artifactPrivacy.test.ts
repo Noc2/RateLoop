@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { createLegalHold } from "~~/lib/privacy/lifecycle";
 import {
   type PrivateArtifactStore,
   __artifactPrivacyTestUtils,
   __setArtifactPrivacyRuntimeForTests,
   issueArtifactLease,
   listArtifactAccessLog,
+  processArtifactDeletionByObjectId,
   processDueArtifactDeletions,
   readEncryptedArtifact,
   registerArtifactManagedKeyProvider,
@@ -213,6 +215,48 @@ test("retention deletion removes ciphertext and tombstones the database referenc
   await assert.rejects(
     () => readEncryptedArtifact({ accountAddress: OWNER, artifactId: artifact.artifactId, ...project }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_not_found",
+  );
+});
+
+test("an active legal hold defers scheduled deletion without consuming the object", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "hold this artifact");
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  await createLegalHold({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "active dispute",
+    reviewAt: new Date(now.getTime() + 86_400_000),
+    workspaceId: project.workspaceId,
+    now,
+  });
+  const object = await dbClient.execute({
+    sql: "SELECT object_id FROM tokenless_assurance_artifact_objects WHERE artifact_id = ?",
+    args: [artifact.artifactId],
+  });
+  await assert.rejects(
+    () => processArtifactDeletionByObjectId(String(object.rows[0]?.object_id), now),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.retryable && error.code === "deletion_blocked_by_hold",
+  );
+  assert.equal(store.objects.size, 1);
+  assert.equal(
+    String(
+      (
+        await dbClient.execute({
+          sql: "SELECT status FROM tokenless_assurance_artifact_objects WHERE artifact_id = ?",
+          args: [artifact.artifactId],
+        })
+      ).rows[0]?.status,
+    ),
+    "active",
   );
 });
 

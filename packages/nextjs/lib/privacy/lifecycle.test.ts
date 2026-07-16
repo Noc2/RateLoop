@@ -119,14 +119,29 @@ test("subject requests have explicit transitions and category-level completion e
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_subject_request_transition",
   );
-  await recordSubjectRequestCompletion({
+  const completionInput = {
     completedBy: "privacy:operator",
     deletedCategories: ["profile", "private_artifacts"],
     pendingBackupExpiry: [{ category: "encrypted_backups", expiresAt: "2026-08-19" }],
     publicChainExceptions: ["settlement_commitment"],
     requestId: created.requestId,
     retainedCategories: [{ basis: "tax_law", category: "invoice" }],
+  };
+  const completionId = await recordSubjectRequestCompletion(completionInput);
+  const replayedCompletionId = await recordSubjectRequestCompletion({
+    ...completionInput,
+    now: new Date("2026-07-16T10:00:00.000Z"),
   });
+  assert.equal(replayedCompletionId, completionId);
+  await assert.rejects(
+    () =>
+      recordSubjectRequestCompletion({
+        ...completionInput,
+        deletedCategories: ["profile"],
+        now: new Date("2026-07-16T11:00:00.000Z"),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_request_completion_conflict",
+  );
   const row = await dbClient.execute({
     sql: `SELECT r.status, c.deleted_categories_json, c.retained_categories_json,
                  c.pending_backup_expiry_json, c.public_chain_exceptions_json
@@ -135,7 +150,51 @@ test("subject requests have explicit transitions and category-level completion e
           WHERE r.request_id = ?`,
     args: [created.requestId],
   });
+  const completionCounts = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_subject_request_completions WHERE request_id = ?) AS completion_count,
+            (SELECT COUNT(*) FROM tokenless_subject_request_events
+             WHERE request_id = ? AND to_status = 'completed') AS completion_event_count`,
+    args: [created.requestId, created.requestId],
+  });
   assert.equal(String(row.rows[0]?.status), "completed");
   assert.match(String(row.rows[0]?.public_chain_exceptions_json), /settlement_commitment/);
   assert.match(String(row.rows[0]?.pending_backup_expiry_json), /encrypted_backups/);
+  assert.equal(Number(completionCounts.rows[0]?.completion_count), 1);
+  assert.equal(Number(completionCounts.rows[0]?.completion_event_count), 1);
+});
+
+test("invalid completion transitions roll back their evidence insert", async () => {
+  const created = await createSubjectRequest({
+    identityAssurance: "better_auth_session",
+    now: new Date("2026-07-15T10:00:00.000Z"),
+    principalId: "rlp_rollback_1234567890abcdef",
+    requestType: "deletion",
+    scope: { account: true },
+  });
+
+  await assert.rejects(
+    () =>
+      recordSubjectRequestCompletion({
+        completedBy: "privacy:operator",
+        deletedCategories: ["profile"],
+        requestId: created.requestId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_subject_request_transition",
+  );
+
+  const result = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_subject_requests WHERE request_id = ?",
+    args: [created.requestId],
+  });
+  const completionCounts = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_subject_request_completions WHERE request_id = ?) AS completion_count,
+            (SELECT COUNT(*) FROM tokenless_subject_request_events
+             WHERE request_id = ? AND to_status = 'completed') AS completion_event_count`,
+    args: [created.requestId, created.requestId],
+  });
+  assert.equal(String(result.rows[0]?.status), "received");
+  assert.equal(Number(completionCounts.rows[0]?.completion_count), 0);
+  assert.equal(Number(completionCounts.rows[0]?.completion_event_count), 0);
 });

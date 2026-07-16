@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
+import { expireDeletedAuthSubjectGuards, reconcileWorkspaceDeletionJobs } from "~~/lib/privacy/deletionReconciliation";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
+import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
 import {
@@ -12,7 +14,7 @@ import {
 } from "~~/lib/tokenless/transparency";
 
 type Row = Record<string, unknown>;
-type WorkKind = "publish_finalized_round" | "delete_artifact";
+type WorkKind = "publish_finalized_round" | "delete_artifact" | "delete_public_media";
 
 const RUN_BUCKET_MS = 5 * 60_000;
 const STALE_CLAIM_MS = 10 * 60_000;
@@ -20,7 +22,12 @@ const MAX_ATTEMPTS = 20;
 const DEFAULT_WORK_LIMIT = 20;
 const DEFAULT_WEBHOOK_LIMIT = 50;
 const DEFAULT_NOTIFICATION_LIMIT = 20;
-const NON_COUNTING_DEFER_CODES = new Set(["indexed_evidence_pending", "evidence_pending"]);
+const NON_COUNTING_DEFER_CODES = new Set([
+  "indexed_evidence_pending",
+  "evidence_pending",
+  "deletion_blocked_by_hold",
+  "deletion_not_due",
+]);
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -58,7 +65,7 @@ async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
 
 export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 100) {
   const limit = bounded(scanLimit, 100, 200);
-  const [settlements, deletions] = await Promise.all([
+  const [settlements, deletions, publicMediaDeletions] = await Promise.all([
     dbClient.execute({
       sql: `SELECT e.operation_key
             FROM tokenless_chain_executions e
@@ -73,6 +80,12 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             WHERE status = 'active' AND delete_after <= ? ORDER BY created_at ASC LIMIT ?`,
       args: [now, limit],
     }),
+    dbClient.execute({
+      sql: `SELECT asset_id FROM tokenless_public_question_media
+            WHERE technical_status = 'ready' AND deletion_requested_at <= ?
+            ORDER BY deletion_requested_at ASC LIMIT ?`,
+      args: [now, limit],
+    }),
   ]);
   for (const row of settlements.rows) {
     await insertWorkItem("publish_finalized_round", rowString(row as Row, "operation_key")!, now);
@@ -80,19 +93,30 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
   for (const row of deletions.rows) {
     await insertWorkItem("delete_artifact", rowString(row as Row, "object_id")!, now);
   }
-  return { deletions: deletions.rows.length, settlements: settlements.rows.length };
+  for (const row of publicMediaDeletions.rows) {
+    await insertWorkItem("delete_public_media", rowString(row as Row, "asset_id")!, now);
+  }
+  return {
+    deletions: deletions.rows.length,
+    publicMediaDeletions: publicMediaDeletions.rows.length,
+    settlements: settlements.rows.length,
+  };
 }
 
 type MaintenanceProcessors = {
   deleteArtifact: typeof processArtifactDeletionByObjectId;
+  deletePublicMedia: typeof processPublicQuestionMediaDeletionByAssetId;
   publishFinalizedRound: (input: { operationKey: string; appOrigin: string; now: Date }) => Promise<void>;
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
   processSurpriseBounties: typeof processSurpriseBountyPayments;
+  reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
+  expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
 };
 
 const defaultProcessors: MaintenanceProcessors = {
   deleteArtifact: processArtifactDeletionByObjectId,
+  deletePublicMedia: processPublicQuestionMediaDeletionByAssetId,
   async publishFinalizedRound({ operationKey, appOrigin, now }) {
     await appendFinalizedRoundEvidence({ operationKey });
     await reviewAndPublishResult({ operationKey, appOrigin, now });
@@ -100,6 +124,8 @@ const defaultProcessors: MaintenanceProcessors = {
   deliverWebhooks: deliverPendingWebhooks,
   processNotifications: runTokenlessNotificationCycle,
   processSurpriseBounties: processSurpriseBountyPayments,
+  reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
+  expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
 };
 
 async function claimDueWork(now: Date, limit: number) {
@@ -149,7 +175,15 @@ async function processClaimedWork(input: {
           now: input.now,
         });
       } else if (kind === "delete_artifact") {
-        await input.processors.deleteArtifact(subjectKey, input.now);
+        const deleted = await input.processors.deleteArtifact(subjectKey, input.now);
+        if (!deleted) {
+          throw new TokenlessServiceError("Artifact deletion is still pending.", 409, "deletion_not_due", true);
+        }
+      } else if (kind === "delete_public_media") {
+        const deleted = await input.processors.deletePublicMedia(subjectKey, input.now);
+        if (!deleted) {
+          throw new TokenlessServiceError("Public media deletion is still pending.", 409, "deletion_not_due", true);
+        }
       } else {
         throw new Error(`Unsupported scheduled work kind: ${String(kind)}`);
       }
@@ -191,7 +225,7 @@ export async function runTokenlessScheduledMaintenance(input: {
   workLimit?: number;
   webhookLimit?: number;
   notificationLimit?: number;
-  processors?: MaintenanceProcessors;
+  processors?: Partial<MaintenanceProcessors>;
 }) {
   const now = input.now ?? new Date();
   const workLimit = bounded(input.workLimit, DEFAULT_WORK_LIMIT, 100);
@@ -215,19 +249,22 @@ export async function runTokenlessScheduledMaintenance(input: {
   if (started.rowCount !== 1) return { runId, status: "duplicate" as const };
 
   try {
+    const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
     const seeded = await seedTokenlessScheduledWork(now);
     const items = await claimDueWork(now, workLimit);
     const work = await processClaimedWork({
       appOrigin: input.appOrigin,
       items,
       now,
-      processors: input.processors ?? defaultProcessors,
+      processors,
     });
-    const surpriseBounties = await (input.processors ?? defaultProcessors).processSurpriseBounties({
+    const deletionJobs = await processors.reconcileDeletionJobs(now, workLimit);
+    const deletedAuthGuards = await processors.expireDeletedAuthGuards(now, workLimit);
+    const surpriseBounties = await processors.processSurpriseBounties({
       now,
       limit: workLimit,
     });
-    const webhookOutcomes = await (input.processors ?? defaultProcessors).deliverWebhooks({
+    const webhookOutcomes = await processors.deliverWebhooks({
       now,
       limit: webhookLimit,
     });
@@ -236,7 +273,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       delivered: webhookOutcomes.filter(value => value.state === "delivered").length,
       retry: webhookOutcomes.filter(value => value.state === "retry").length,
     };
-    const notifications = await (input.processors ?? defaultProcessors).processNotifications({
+    const notifications = await processors.processNotifications({
       appOrigin: input.appOrigin,
       now,
       limit: notificationLimit,
@@ -257,6 +294,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       work,
       webhooks,
       notifications,
+      deletionJobs,
+      deletedAuthGuards,
       surpriseBounties,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };

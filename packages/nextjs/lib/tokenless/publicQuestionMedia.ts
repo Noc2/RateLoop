@@ -381,6 +381,45 @@ export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; n
   return { deleted: expired.length - failed.length, failed };
 }
 
+export async function processPublicQuestionMediaDeletionByAssetId(assetId: string, now = new Date()) {
+  const result = await dbClient.execute({
+    sql: `SELECT media.asset_id, media.workspace_id, media.storage_ref, media.technical_status,
+                 media.deletion_requested_at
+          FROM tokenless_public_question_media media
+          WHERE media.asset_id = ? LIMIT 1`,
+    args: [assetId],
+  });
+  const row = result.rows[0] as Row | undefined;
+  if (!row || rowString(row, "technical_status") !== "ready") return true;
+  if (!row.deletion_requested_at || new Date(String(row.deletion_requested_at)).getTime() > now.getTime()) {
+    throw new TokenlessServiceError("Public media deletion is not due yet.", 409, "deletion_not_due", true);
+  }
+  const holds = await dbClient.execute({
+    sql: `SELECT hold_id FROM tokenless_legal_holds
+          WHERE workspace_id = ? AND status = 'active' LIMIT 1`,
+    args: [rowString(row, "workspace_id")],
+  });
+  if ((holds.rowCount ?? 0) > 0) {
+    throw new TokenlessServiceError(
+      "Public media deletion is deferred by an active legal hold.",
+      409,
+      "deletion_blocked_by_hold",
+      true,
+    );
+  }
+  const storageRef = rowString(row, "storage_ref");
+  if (!storageRef)
+    throw new TokenlessServiceError("Stored public media is invalid.", 500, "invalid_public_media_state");
+  await runtime().store.delete(storageRef);
+  const deleted = await dbClient.execute({
+    sql: `UPDATE tokenless_public_question_media
+          SET technical_status = 'deleted', storage_ref = ?, original_filename = 'deleted', updated_at = ?
+          WHERE asset_id = ? AND technical_status = 'ready'`,
+    args: [`deleted://${assetId}`, now, assetId],
+  });
+  return deleted.rowCount === 1;
+}
+
 export async function deleteStagedPublicQuestionImage(input: {
   accountAddress: string;
   assetId: string;

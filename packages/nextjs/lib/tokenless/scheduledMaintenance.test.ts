@@ -120,6 +120,32 @@ test("a confirmed but not-finalized round is deferred without consuming its retr
   assert.match(String(item.rows[0]?.last_error), /not completely finalized/);
 });
 
+test("a deletion processor that has not removed its object stays retryable instead of completing falsely", async () => {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_scheduled_work_items
+          (item_id, kind, subject_key, state, attempt_count, next_attempt_at, created_at, updated_at)
+          VALUES ('swi_deletion_pending', 'delete_artifact', 'object_still_held', 'pending', 0, ?, ?, ?)`,
+    args: [NOW, NOW, NOW],
+  });
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async deleteArtifact() {
+        return false;
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "healthy");
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 0, deferred: 1, retry: 0 });
+  const item = await dbClient.execute(
+    "SELECT state, attempt_count FROM tokenless_scheduled_work_items WHERE item_id = 'swi_deletion_pending'",
+  );
+  assert.deepEqual(item.rows[0], { attempt_count: 0, state: "retry" });
+});
+
 test("persistent worker failures become visible dead-letter health evidence", async () => {
   await seedConfirmedExecution("operation_broken");
   await seedTokenlessScheduledWork(NOW);
