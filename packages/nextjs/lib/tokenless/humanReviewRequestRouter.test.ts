@@ -1,0 +1,358 @@
+import type { HumanAssurancePrivateReviewCreateResponse, TokenlessAskResponse } from "@rateloop/sdk";
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
+import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
+import {
+  type ExactPrivateReviewBinding,
+  type FrozenHumanReviewRoutingContext,
+  createHumanReviewRequestRouter,
+} from "~~/lib/tokenless/humanReviewRequestRouter";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
+
+const NOW = new Date("2026-07-16T12:00:00.000Z");
+const HASH = `sha256:${"1a".repeat(32)}` as const;
+const POLICY = { id: "agpol_router", version: 3 };
+
+const principal: IntegrationPrincipal = {
+  kind: "integration",
+  principal: {
+    kind: "api_key",
+    apiKeyId: "oauth_family_router",
+    workspaceId: "workspace_router",
+    role: "member",
+    scopes: ["evaluation:read", "review:decide", "panel:publish", "payment:submit", "result:read"],
+    policyId: POLICY.id,
+  },
+  integration: {
+    integrationId: "integration_router",
+    workspaceId: "workspace_router",
+    agentId: "agent_router",
+    agentVersionId: "agent_version_router",
+    reviewPolicyId: "review_policy_router",
+    reviewPolicyVersion: 4,
+    publishingPolicyId: POLICY.id,
+    publishingPolicyVersion: POLICY.version,
+    status: "active",
+    enforcementMode: "advisory",
+    allowedWorkflowKeys: ["support-reply"],
+    lastSeenAt: NOW.toISOString(),
+  },
+};
+
+function context(input?: {
+  authority?: FrozenHumanReviewRoutingContext["binding"]["authority"];
+  decision?: FrozenHumanReviewRoutingContext["decision"];
+  grantActive?: boolean;
+  lane?: FrozenHumanReviewRoutingContext["requestProfile"]["lane"];
+  lifecycleState?: string;
+}): FrozenHumanReviewRoutingContext {
+  const lane = input?.lane ?? "public_paid_network";
+  const privateLane = lane === "private_invited_unpaid" || lane === "private_invited_paid";
+  const grantActive = input?.grantActive ?? true;
+  return {
+    workspaceId: "workspace_router",
+    integrationId: "integration_router",
+    opportunityId: "opportunity_router",
+    workflowKey: "support-reply",
+    decision: input?.decision ?? "required",
+    lifecycle: { state: input?.lifecycleState ?? "approval_required", revision: 2 },
+    binding: {
+      id: "binding_router",
+      version: 5,
+      hash: HASH,
+      authority: input?.authority ?? "ask_automatically",
+    },
+    requestProfile: {
+      id: "profile_router",
+      version: 7,
+      hash: HASH,
+      lane,
+      audience: lane === "hybrid_public_safe" ? "hybrid" : privateLane ? "private_invited" : "public_network",
+      contentBoundary: privateLane ? "private_workspace" : "public_or_test",
+      privateSensitivity: privateLane ? "confidential" : null,
+      privateGroup: privateLane ? { id: "group_router", policyVersion: 2, policyHash: HASH } : null,
+      responseWindowSeconds: 3_600,
+      panelSize: privateLane ? 2 : 3,
+      compensationMode: lane === "private_invited_unpaid" ? "unpaid" : "usdc",
+      bountyPerSeatAtomic: lane === "private_invited_unpaid" ? null : "1000000",
+    },
+    grant: {
+      active: grantActive,
+      configuredPolicy: POLICY,
+      integrationPolicy: POLICY,
+      activationMode: "owner_approved",
+      grantedScopes: ["panel:publish", "payment:submit"],
+      credentialScopes: ["panel:publish", "payment:submit"],
+      allowedWorkflowKeys: ["support-reply"],
+      policyCaps: {
+        allowedProjectIds: ["project_router"],
+        allowedReviewerSources: ["customer_invited", "rateloop_network"],
+        allowedDataClassifications: ["public", "confidential"],
+        maxRetentionDays: 30,
+      },
+    },
+  };
+}
+
+const approval = {
+  approvalId: "approval_router",
+  schemaVersion: "rateloop.human-review-owner-approval.v1",
+  action: "owner_approval_required",
+} as unknown as PreparedOwnerApproval;
+
+const ask = {
+  schemaVersion: "rateloop.tokenless.v2",
+  idempotencyKey: "ask_router",
+  operationKey: "operation_router",
+  roundId: "round_router",
+  status: "open",
+  responseWindowSeconds: 3_600,
+  commitDeadline: "2026-07-16T13:00:00.000Z",
+  requestProfile: { id: "profile_router", version: 7, hash: HASH },
+  reviewEconomics: null,
+  continuation: {
+    cursor: "1",
+    expiresAt: "2026-07-16T13:00:00.000Z",
+    pollUrl: "https://rateloop-tokenless.vercel.app/wait",
+    retryAfterMs: 1_000,
+  },
+} satisfies TokenlessAskResponse;
+
+const privateBinding: ExactPrivateReviewBinding = {
+  projectId: "project_router",
+  cohortId: "cohort_router",
+  reviewerAccountAddresses: [
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
+  ],
+};
+
+const foundation = {
+  schemaVersion: "rateloop.human-assurance.v2",
+  privateReviewId: "private_review_router",
+  status: "ready_for_assignment",
+} as unknown as HumanAssurancePrivateReviewCreateResponse;
+
+function dependencies(
+  frozen: FrozenHumanReviewRoutingContext,
+  options: { privateBinding?: ExactPrivateReviewBinding | null } = {},
+) {
+  const calls = {
+    prepare: 0,
+    activate: 0,
+    public: 0,
+    resolvePrivate: 0,
+    foundation: 0,
+    assign: 0,
+    order: [] as string[],
+    foundationInput: null as null | Record<string, unknown>,
+    assignmentInput: null as null | Record<string, unknown>,
+  };
+  const deps = {
+    loadContext: async () => frozen,
+    prepareApproval: async () => {
+      calls.prepare += 1;
+      calls.order.push("prepare");
+      return approval;
+    },
+    activateAutonomousLane: async () => {
+      calls.activate += 1;
+      calls.order.push("activate");
+    },
+    publishPublicPaid: async () => {
+      calls.public += 1;
+      calls.order.push("public");
+      return {
+        schemaVersion: "rateloop.adaptive-review-request.v1" as const,
+        opportunityId: frozen.opportunityId,
+        ask,
+      };
+    },
+    resolvePrivateBinding: async () => {
+      calls.resolvePrivate += 1;
+      calls.order.push("resolve_private");
+      return options.privateBinding === undefined ? privateBinding : options.privateBinding;
+    },
+    preparePrivateFoundation: async (input: unknown) => {
+      calls.foundation += 1;
+      calls.order.push("foundation");
+      calls.foundationInput = input as Record<string, unknown>;
+      return foundation;
+    },
+    assignPrivateUnpaid: async (input: unknown) => {
+      calls.assign += 1;
+      calls.order.push("assign");
+      calls.assignmentInput = input as Record<string, unknown>;
+      return { deliveryId: "delivery_router" } as never;
+    },
+  } as unknown as Parameters<typeof createHumanReviewRequestRouter>[0];
+  return { calls, router: createHumanReviewRequestRouter(deps) };
+}
+
+const publicMaterial = {
+  kind: "public" as const,
+  appOrigin: "https://rateloop-tokenless.vercel.app",
+  publication: {
+    visibility: "public" as const,
+    dataClassification: "public" as const,
+    confirmedNoSensitiveData: true as const,
+  },
+};
+
+test("check-only returns the recorded requirement without any preparation or delivery side effect", async () => {
+  const { calls, router } = dependencies(context({ authority: "check_only" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    now: NOW,
+  });
+  assert.equal(result.action, "requirement_recorded");
+  assert.deepEqual(result.sideEffects, {
+    prepared: false,
+    published: false,
+    assigned: false,
+    fundsReserved: false,
+    spent: false,
+  });
+  assert.deepEqual(calls.order, []);
+});
+
+test("prepare-for-approval uses only the immutable approval service and needs no publication declaration", async () => {
+  const { calls, router } = dependencies(context({ authority: "prepare_for_approval" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    now: NOW,
+  });
+  assert.equal(result.action, "owner_approval_required");
+  assert.equal(result.action === "owner_approval_required" ? result.approval.approvalId : null, "approval_router");
+  assert.deepEqual(calls.order, ["prepare"]);
+});
+
+test("inactive automatic grants block before activation, publication, assignment, reservation, or spending", async () => {
+  const { calls, router } = dependencies(context({ grantActive: false }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    material: publicMaterial,
+    now: NOW,
+  });
+  assert.equal(result.action, "blocked");
+  assert.equal(result.action === "blocked" ? result.code : null, "automatic_grant_inactive");
+  assert.deepEqual(calls.order, []);
+});
+
+test("public paid automatic routing activates the exact frozen opportunity before calling only the public adapter", async () => {
+  const { calls, router } = dependencies(context({ lifecycleState: "approval_required" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    material: publicMaterial,
+    now: NOW,
+  });
+  assert.equal(result.action, "public_review_requested");
+  assert.equal(result.action === "public_review_requested" ? result.ask.operationKey : null, "operation_router");
+  assert.deepEqual(calls.order, ["activate", "public"]);
+});
+
+test("a private material declaration cannot cross into the public lane", async () => {
+  const { calls, router } = dependencies(context());
+  await assert.rejects(
+    router({
+      principal,
+      opportunityId: "opportunity_router",
+      sourcePayload: "source",
+      suggestionPayload: "suggestion",
+      material: {
+        kind: "private",
+        sourceContentType: "text/plain",
+        suggestionContentType: "text/plain",
+      },
+      now: NOW,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_material_lane_mismatch",
+  );
+  assert.deepEqual(calls.order, []);
+});
+
+test("private unpaid routing blocks without changing lifecycle when exact owner project, cohort, and reviewers are ambiguous", async () => {
+  const { calls, router } = dependencies(context({ lane: "private_invited_unpaid", lifecycleState: "blocked" }), {
+    privateBinding: null,
+  });
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(result.action, "blocked");
+  assert.equal(result.action === "blocked" ? result.code : null, "private_routing_configuration_required");
+  assert.deepEqual(calls.order, ["resolve_private"]);
+});
+
+test("private unpaid automatic routing activates a blocked opportunity then freezes the resolved binding", async () => {
+  const { calls, router } = dependencies(context({ lane: "private_invited_unpaid", lifecycleState: "blocked" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "application/json" },
+    now: NOW,
+  });
+  assert.equal(result.action, "private_review_assigned");
+  assert.deepEqual(calls.order, ["resolve_private", "activate", "foundation", "assign"]);
+  const foundationInput = calls.foundationInput as {
+    request: {
+      idempotencyKey: string;
+      projectId: string;
+      cohortId: string;
+      source: { bytesBase64: string };
+      suggestion: { bytesBase64: string };
+    };
+  };
+  assert.match(foundationInput.request.idempotencyKey, /^private-route-[a-f0-9]{64}$/u);
+  assert.equal(foundationInput.request.projectId, privateBinding.projectId);
+  assert.equal(foundationInput.request.cohortId, privateBinding.cohortId);
+  assert.equal(Buffer.from(foundationInput.request.source.bytesBase64, "base64").toString("utf8"), "private source");
+  assert.equal(
+    Buffer.from(foundationInput.request.suggestion.bytesBase64, "base64").toString("utf8"),
+    "private suggestion",
+  );
+  const assignmentInput = calls.assignmentInput as {
+    opportunityId: string;
+    privateReviewId: string;
+    reviewerAccountAddresses: string[];
+  };
+  assert.equal(assignmentInput.opportunityId, "opportunity_router");
+  assert.equal(assignmentInput.privateReviewId, "private_review_router");
+  assert.deepEqual(assignmentInput.reviewerAccountAddresses, privateBinding.reviewerAccountAddresses);
+});
+
+test("unsupported hybrid routing remains blocked without falling back to either implemented lane", async () => {
+  const { calls, router } = dependencies(context({ lane: "hybrid_public_safe" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    material: publicMaterial,
+    now: NOW,
+  });
+  assert.equal(result.action, "blocked");
+  assert.equal(result.action === "blocked" ? result.code : null, "lane_not_implemented");
+  assert.deepEqual(calls.order, []);
+});

@@ -1,0 +1,799 @@
+import type {
+  HumanAssurancePrivateReviewCreateRequest,
+  HumanAssurancePrivateReviewCreateResponse,
+  TokenlessAskResponse,
+} from "@rateloop/sdk";
+import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
+import { createHash } from "node:crypto";
+import "server-only";
+import { dbClient } from "~~/lib/db";
+import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
+import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
+import {
+  type PreparedOwnerApproval,
+  prepareHumanReviewForOwnerApproval,
+} from "~~/lib/tokenless/humanReviewApprovalPreparation";
+import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
+import { requestPrivateUnpaidHumanReview } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
+import {
+  type PublicPaidHumanReviewPublication,
+  requestPublicPaidHumanReview,
+} from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
+import type { HumanReviewAuthorityLevel, HumanReviewLane } from "~~/lib/tokenless/reviewCapabilities";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+type Row = Record<string, unknown>;
+type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
+type PrivateUnpaidDelivery = Awaited<ReturnType<typeof requestPrivateUnpaidHumanReview>>;
+
+const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const ACTIVE_OPPORTUNITY_STATES = new Set(["approval_required", "request_ready", "pending", "blocked"]);
+
+export type HumanReviewRoutingMaterial =
+  | {
+      kind: "public";
+      appOrigin: string;
+      publication: PublicPaidHumanReviewPublication;
+    }
+  | {
+      kind: "private";
+      sourceContentType: string;
+      suggestionContentType: string;
+    };
+
+export type HumanReviewRoutingRequest = {
+  principal: IntegrationPrincipal;
+  opportunityId: string;
+  sourcePayload: string;
+  suggestionPayload: string;
+  material?: HumanReviewRoutingMaterial;
+  now?: Date;
+};
+
+export type FrozenHumanReviewRoutingContext = {
+  workspaceId: string;
+  integrationId: string;
+  opportunityId: string;
+  workflowKey: string;
+  decision: "required" | "recommended" | "skip";
+  lifecycle: { state: string; revision: number };
+  binding: {
+    id: string;
+    version: number;
+    hash: string;
+    authority: HumanReviewAuthorityLevel;
+  };
+  requestProfile: {
+    id: string;
+    version: number;
+    hash: `sha256:${string}`;
+    lane: HumanReviewLane;
+    audience: "private_invited" | "public_network" | "hybrid";
+    contentBoundary: "private_workspace" | "public_or_test";
+    privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
+    privateGroup: { id: string; policyVersion: number; policyHash: `sha256:${string}` } | null;
+    responseWindowSeconds: number;
+    panelSize: number;
+    compensationMode: "unpaid" | "usdc";
+    bountyPerSeatAtomic: string | null;
+  };
+  grant: {
+    active: boolean;
+    configuredPolicy: { id: string; version: number } | null;
+    integrationPolicy: { id: string; version: number } | null;
+    activationMode: string | null;
+    grantedScopes: string[];
+    credentialScopes: string[];
+    allowedWorkflowKeys: string[];
+    policyCaps: {
+      allowedProjectIds: string[];
+      allowedReviewerSources: string[];
+      allowedDataClassifications: string[];
+      maxRetentionDays: number | null;
+    } | null;
+  };
+};
+
+export type ExactPrivateReviewBinding = {
+  projectId: string;
+  cohortId: string;
+  reviewerAccountAddresses: string[];
+};
+
+export type HumanReviewRoutingResult =
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
+      action: "no_review_required" | "requirement_recorded";
+      opportunityId: string;
+      authority: HumanReviewAuthorityLevel;
+      lane: HumanReviewLane;
+      sideEffects: { prepared: false; published: false; assigned: false; fundsReserved: false; spent: false };
+    }
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
+      action: "owner_approval_required";
+      opportunityId: string;
+      authority: "prepare_for_approval";
+      lane: HumanReviewLane;
+      approval: PreparedOwnerApproval;
+      sideEffects: { prepared: true; published: false; assigned: false; fundsReserved: false; spent: false };
+    }
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
+      action: "public_review_requested";
+      opportunityId: string;
+      authority: "ask_automatically";
+      lane: "public_paid_network";
+      ask: TokenlessAskResponse;
+    }
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
+      action: "private_review_assigned";
+      opportunityId: string;
+      authority: "ask_automatically";
+      lane: "private_invited_unpaid";
+      foundation: HumanAssurancePrivateReviewCreateResponse;
+      delivery: PrivateUnpaidDelivery;
+    }
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
+      action: "blocked";
+      opportunityId: string;
+      authority: HumanReviewAuthorityLevel;
+      lane: HumanReviewLane;
+      code: "automatic_grant_inactive" | "lane_not_implemented" | "private_routing_configuration_required";
+      retryable: boolean;
+      sideEffects: { prepared: false; published: false; assigned: false; fundsReserved: false; spent: false };
+    };
+
+type RouterDependencies = {
+  loadContext: (
+    principal: IntegrationPrincipal,
+    opportunityId: string,
+    now: Date,
+  ) => Promise<FrozenHumanReviewRoutingContext>;
+  prepareApproval: typeof prepareHumanReviewForOwnerApproval;
+  publishPublicPaid: typeof requestPublicPaidHumanReview;
+  resolvePrivateBinding: (
+    principal: IntegrationPrincipal,
+    context: FrozenHumanReviewRoutingContext,
+    now: Date,
+  ) => Promise<ExactPrivateReviewBinding | null>;
+  activateAutonomousLane: (
+    context: FrozenHumanReviewRoutingContext,
+    privateBinding: ExactPrivateReviewBinding | null,
+    now: Date,
+  ) => Promise<void>;
+  preparePrivateFoundation: typeof preparePrivateReviewFoundation;
+  assignPrivateUnpaid: typeof requestPrivateUnpaidHumanReview;
+};
+
+const NO_SIDE_EFFECTS = Object.freeze({
+  prepared: false,
+  published: false,
+  assigned: false,
+  fundsReserved: false,
+  spent: false,
+} as const);
+
+function text(row: Row | undefined, key: string) {
+  const value = row?.[key];
+  return value === null || value === undefined ? null : String(value);
+}
+
+function positiveInteger(row: Row | undefined, key: string) {
+  const value = Number(row?.[key]);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TokenlessServiceError(`Stored ${key} is invalid.`, 500, "review_routing_configuration_invalid");
+  }
+  return value;
+}
+
+function optionalPositiveInteger(row: Row | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : positiveInteger(row, key);
+}
+
+function stringArray(value: unknown, field: string) {
+  try {
+    const parsed = JSON.parse(String(value ?? "[]")) as unknown;
+    if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== "string" || !entry)) throw new Error();
+    return [...new Set(parsed)].sort();
+  } catch {
+    throw new TokenlessServiceError(`Stored ${field} is invalid.`, 500, "review_routing_configuration_invalid");
+  }
+}
+
+function sameStrings(left: readonly string[], right: readonly string[]) {
+  const a = [...new Set(left)].sort();
+  const b = [...new Set(right)].sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function deterministicPrivateIdempotencyKey(
+  context: FrozenHumanReviewRoutingContext,
+  binding: ExactPrivateReviewBinding,
+) {
+  const canonical = JSON.stringify({
+    schemaVersion: "rateloop.private-review-route-key.v1",
+    workspaceId: context.workspaceId,
+    integrationId: context.integrationId,
+    opportunityId: context.opportunityId,
+    binding: context.binding,
+    requestProfile: {
+      id: context.requestProfile.id,
+      version: context.requestProfile.version,
+      hash: context.requestProfile.hash,
+    },
+    projectId: binding.projectId,
+    cohortId: binding.cohortId,
+    reviewers: [...binding.reviewerAccountAddresses].sort(),
+  });
+  return `private-route-${sha256(canonical)}`;
+}
+
+function deterministicActivationKey(
+  context: FrozenHumanReviewRoutingContext,
+  privateBinding: ExactPrivateReviewBinding | null,
+) {
+  const canonical = JSON.stringify({
+    schemaVersion: "rateloop.autonomous-review-activation.v1",
+    workspaceId: context.workspaceId,
+    opportunityId: context.opportunityId,
+    workflowKey: context.workflowKey,
+    lifecycle: context.lifecycle,
+    binding: context.binding,
+    requestProfile: {
+      id: context.requestProfile.id,
+      version: context.requestProfile.version,
+      hash: context.requestProfile.hash,
+      lane: context.requestProfile.lane,
+    },
+    privateBinding,
+  });
+  return `route-ready:${sha256(canonical)}`;
+}
+
+function exactDecision(value: string | null): FrozenHumanReviewRoutingContext["decision"] {
+  if (value === "required" || value === "recommended" || value === "skip") return value;
+  throw new TokenlessServiceError("Stored review decision is invalid.", 500, "review_routing_configuration_invalid");
+}
+
+async function loadFrozenContext(
+  principal: IntegrationPrincipal,
+  opportunityId: string,
+  _now: Date,
+): Promise<FrozenHumanReviewRoutingContext> {
+  const effective = await getEffectiveAgentReviewContext(principal);
+  if (
+    effective.humanReview.status !== "configured" ||
+    !effective.humanReview.binding ||
+    !effective.humanReview.requestProfile ||
+    !effective.humanReview.authority ||
+    !effective.capabilities.effectiveLane
+  ) {
+    throw new TokenlessServiceError(
+      "The exact human-review configuration is unavailable.",
+      409,
+      "human_review_configuration_required",
+    );
+  }
+  const profile = effective.humanReview.requestProfile;
+  const lane = effective.capabilities.effectiveLane.lane;
+  if (!lane) {
+    throw new TokenlessServiceError("The configured review lane is invalid.", 409, "review_lane_not_configured");
+  }
+  const configuredPolicy = effective.publishingGrant.configuredPolicy
+    ? {
+        id: effective.publishingGrant.configuredPolicy.policyId,
+        version: effective.publishingGrant.configuredPolicy.version,
+      }
+    : null;
+  const integrationPolicy = effective.publishingGrant.integrationPolicy
+    ? {
+        id: effective.publishingGrant.integrationPolicy.policyId,
+        version: effective.publishingGrant.integrationPolicy.version,
+      }
+    : null;
+  const result = await dbClient.execute({
+    sql: `SELECT o.opportunity_id,o.agent_id,o.agent_version_id,o.policy_id,o.policy_version,
+                 o.human_review_binding_id,o.human_review_binding_version,
+                 o.request_profile_id,o.request_profile_version,o.request_profile_hash,o.decision,
+                 l.state AS lifecycle_state,l.state_revision AS lifecycle_revision,l.terminal_at,
+                 s.workflow_key,
+                 pp.allowed_project_ids_json,pp.allowed_reviewer_sources_json,
+                 pp.allowed_data_classifications_json,pp.max_retention_days
+          FROM tokenless_agent_review_opportunities o
+          JOIN tokenless_agent_review_opportunity_lifecycles l
+            ON l.workspace_id=o.workspace_id AND l.opportunity_id=o.opportunity_id
+          JOIN tokenless_agent_evaluation_scopes s
+            ON s.workspace_id=o.workspace_id AND s.scope_id=o.scope_id
+          LEFT JOIN tokenless_agent_publishing_policies pp
+            ON pp.workspace_id=o.workspace_id AND pp.policy_id=? AND pp.version=?
+          WHERE o.workspace_id=? AND o.opportunity_id=?
+            AND o.agent_id=? AND o.agent_version_id=?
+          LIMIT 1`,
+    args: [
+      configuredPolicy?.id ?? null,
+      configuredPolicy?.version ?? null,
+      principal.integration.workspaceId,
+      opportunityId,
+      principal.integration.agentId,
+      principal.integration.agentVersionId,
+    ],
+  });
+  const row = result.rows[0] as Row | undefined;
+  const workflowKey = text(row, "workflow_key");
+  const state = text(row, "lifecycle_state");
+  if (!row || !workflowKey || !state) {
+    throw new TokenlessServiceError("Review opportunity not found.", 404, "review_opportunity_not_found");
+  }
+  const exactBinding =
+    text(row, "agent_id") === principal.integration.agentId &&
+    text(row, "agent_version_id") === principal.integration.agentVersionId &&
+    text(row, "policy_id") === effective.reviewPolicy.policyId &&
+    positiveInteger(row, "policy_version") === effective.reviewPolicy.version &&
+    text(row, "human_review_binding_id") === effective.humanReview.binding.bindingId &&
+    positiveInteger(row, "human_review_binding_version") === effective.humanReview.binding.version &&
+    text(row, "request_profile_id") === profile.profileId &&
+    positiveInteger(row, "request_profile_version") === profile.version &&
+    text(row, "request_profile_hash") === profile.hash &&
+    effective.allowedWorkflowKeys.includes(workflowKey) &&
+    principal.integration.allowedWorkflowKeys.includes(workflowKey) &&
+    sameStrings(effective.allowedWorkflowKeys, principal.integration.allowedWorkflowKeys);
+  if (!exactBinding || row.terminal_at !== null || !ACTIVE_OPPORTUNITY_STATES.has(state)) {
+    throw new TokenlessServiceError(
+      "The opportunity no longer matches the exact active review binding.",
+      409,
+      "review_routing_binding_mismatch",
+    );
+  }
+  const principalPolicyMatches =
+    principal.integration.publishingPolicyId === (integrationPolicy?.id ?? null) &&
+    principal.integration.publishingPolicyVersion === (integrationPolicy?.version ?? null);
+  const automaticPolicyMatches =
+    effective.humanReview.authority !== "ask_automatically" ||
+    (configuredPolicy !== null &&
+      integrationPolicy !== null &&
+      configuredPolicy.id === integrationPolicy.id &&
+      configuredPolicy.version === integrationPolicy.version);
+  if (!principalPolicyMatches || !automaticPolicyMatches) {
+    throw new TokenlessServiceError(
+      "The integration publishing grant does not match the exact review binding.",
+      409,
+      "review_routing_grant_mismatch",
+    );
+  }
+  const privateGroup = profile.audience.privateGroup;
+  if (!HASH_PATTERN.test(profile.hash) || (privateGroup && !HASH_PATTERN.test(privateGroup.policyHash))) {
+    throw new TokenlessServiceError(
+      "Stored request-profile hashes are invalid.",
+      500,
+      "review_routing_configuration_invalid",
+    );
+  }
+  const policyCaps = configuredPolicy
+    ? {
+        allowedProjectIds: stringArray(row.allowed_project_ids_json, "publishing project IDs"),
+        allowedReviewerSources: stringArray(row.allowed_reviewer_sources_json, "publishing reviewer sources"),
+        allowedDataClassifications: stringArray(
+          row.allowed_data_classifications_json,
+          "publishing data classifications",
+        ),
+        maxRetentionDays: optionalPositiveInteger(row, "max_retention_days"),
+      }
+    : null;
+  return {
+    workspaceId: principal.integration.workspaceId,
+    integrationId: principal.integration.integrationId,
+    opportunityId: text(row, "opportunity_id")!,
+    workflowKey,
+    decision: exactDecision(text(row, "decision")),
+    lifecycle: { state, revision: positiveInteger(row, "lifecycle_revision") },
+    binding: {
+      id: effective.humanReview.binding.bindingId,
+      version: effective.humanReview.binding.version,
+      hash: effective.humanReview.binding.hash,
+      authority: effective.humanReview.authority,
+    },
+    requestProfile: {
+      id: profile.profileId,
+      version: profile.version,
+      hash: profile.hash as `sha256:${string}`,
+      lane,
+      audience: profile.audience.type,
+      contentBoundary: profile.audience.contentBoundary,
+      privateSensitivity: profile.audience
+        .privateSensitivity as FrozenHumanReviewRoutingContext["requestProfile"]["privateSensitivity"],
+      privateGroup: privateGroup
+        ? {
+            id: privateGroup.groupId,
+            policyVersion: privateGroup.policyVersion,
+            policyHash: privateGroup.policyHash as `sha256:${string}`,
+          }
+        : null,
+      responseWindowSeconds: profile.responseWindowSeconds!,
+      panelSize: profile.panelSize!,
+      compensationMode: profile.compensation.mode,
+      bountyPerSeatAtomic: profile.compensation.bountyPerSeatAtomic,
+    },
+    grant: {
+      active:
+        effective.publishingGrant.active &&
+        effective.publishingGrant.exactBinding === true &&
+        effective.publishingGrant.policyActive === true,
+      configuredPolicy,
+      integrationPolicy,
+      activationMode: effective.publishingGrant.activationMode,
+      grantedScopes: [...effective.publishingGrant.grantedScopes],
+      credentialScopes: [...effective.publishingGrant.credentialScopes],
+      allowedWorkflowKeys: [...effective.publishingGrant.allowedWorkflowKeys],
+      policyCaps,
+    },
+  };
+}
+
+function parseAllowedProjects(value: unknown) {
+  return stringArray(value, "private membership project IDs");
+}
+
+async function resolveExactPrivateBinding(
+  _principal: IntegrationPrincipal,
+  context: FrozenHumanReviewRoutingContext,
+  now: Date,
+): Promise<ExactPrivateReviewBinding | null> {
+  const profile = context.requestProfile;
+  const group = profile.privateGroup;
+  const caps = context.grant.policyCaps;
+  if (
+    profile.lane !== "private_invited_unpaid" ||
+    profile.audience !== "private_invited" ||
+    profile.contentBoundary !== "private_workspace" ||
+    profile.privateSensitivity === null ||
+    !group ||
+    profile.compensationMode !== "unpaid" ||
+    profile.bountyPerSeatAtomic !== null ||
+    !caps ||
+    !caps.allowedReviewerSources.includes("customer_invited") ||
+    (caps.allowedDataClassifications.length > 0 &&
+      !caps.allowedDataClassifications.includes(profile.privateSensitivity))
+  ) {
+    return null;
+  }
+  const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
+  const result = await dbClient.execute({
+    sql: `SELECT p.project_id,p.retention_days,c.cohort_id,c.capacity,c.active_reservations,
+                 cr.reviewer_account_address,m.allowed_project_ids_json
+          FROM tokenless_assurance_projects p
+          JOIN tokenless_assurance_cohorts c
+            ON c.project_id=p.project_id AND c.private_group_id=?
+           AND c.source='customer_invited' AND c.selection='customer_named' AND c.status='active'
+          JOIN tokenless_private_groups g
+            ON g.group_id=c.private_group_id AND g.workspace_id=p.workspace_id
+           AND g.status='active' AND g.current_policy_version=?
+          JOIN tokenless_private_group_policy_versions gp
+            ON gp.group_id=g.group_id AND gp.version=g.current_policy_version AND gp.policy_hash=?
+          JOIN tokenless_assurance_cohort_reviewers cr
+            ON cr.project_id=p.project_id AND cr.cohort_id=c.cohort_id AND cr.status='active'
+           AND cr.active_reservations<cr.maximum_active_assignments
+           AND (cr.qualification_expires_at IS NULL OR cr.qualification_expires_at>?)
+          JOIN tokenless_private_group_memberships m
+            ON m.group_id=g.group_id AND m.principal_address=cr.reviewer_account_address
+           AND m.status='active' AND m.joined_at<=?
+           AND (m.membership_expires_at IS NULL OR m.membership_expires_at>?)
+          WHERE p.workspace_id=? AND p.status='active' AND p.visibility='private'
+            AND p.data_classification=? AND p.private_sensitivity=?
+          ORDER BY p.project_id,c.cohort_id,cr.reviewer_account_address`,
+    args: [
+      group.id,
+      group.policyVersion,
+      group.policyHash,
+      responseDeadline,
+      now,
+      responseDeadline,
+      context.workspaceId,
+      profile.privateSensitivity,
+      profile.privateSensitivity,
+    ],
+  });
+  const candidates = new Map<
+    string,
+    {
+      projectId: string;
+      cohortId: string;
+      retentionDays: number;
+      capacity: number;
+      reservations: number;
+      reviewers: Set<string>;
+    }
+  >();
+  for (const value of result.rows) {
+    const row = value as Row;
+    const projectId = text(row, "project_id");
+    const cohortId = text(row, "cohort_id");
+    const reviewer = text(row, "reviewer_account_address");
+    if (!projectId || !cohortId || !reviewer) continue;
+    const allowedProjects = parseAllowedProjects(row.allowed_project_ids_json);
+    if (allowedProjects.length > 0 && !allowedProjects.includes(projectId)) continue;
+    const key = `${projectId}\0${cohortId}`;
+    const candidate = candidates.get(key) ?? {
+      projectId,
+      cohortId,
+      retentionDays: positiveInteger(row, "retention_days"),
+      capacity: positiveInteger(row, "capacity"),
+      reservations: Number(row.active_reservations),
+      reviewers: new Set<string>(),
+    };
+    if (!Number.isSafeInteger(candidate.reservations) || candidate.reservations < 0) continue;
+    candidate.reviewers.add(reviewer);
+    candidates.set(key, candidate);
+  }
+  const exact = [...candidates.values()].filter(candidate => {
+    const projectAllowed = caps.allowedProjectIds.length === 0 || caps.allowedProjectIds.includes(candidate.projectId);
+    const retentionAllowed = caps.maxRetentionDays === null || candidate.retentionDays <= caps.maxRetentionDays;
+    return (
+      projectAllowed &&
+      retentionAllowed &&
+      candidate.reviewers.size === profile.panelSize &&
+      candidate.capacity - candidate.reservations >= profile.panelSize
+    );
+  });
+  if (exact.length !== 1) return null;
+  return {
+    projectId: exact[0]!.projectId,
+    cohortId: exact[0]!.cohortId,
+    reviewerAccountAddresses: [...exact[0]!.reviewers].sort(),
+  };
+}
+
+async function activateExactAutonomousLane(
+  context: FrozenHumanReviewRoutingContext,
+  privateBinding: ExactPrivateReviewBinding | null,
+  now: Date,
+) {
+  if (context.lifecycle.state === "request_ready" || context.lifecycle.state === "pending") return;
+  if (context.lifecycle.state !== "approval_required" && context.lifecycle.state !== "blocked") {
+    throw new TokenlessServiceError(
+      "The human-review opportunity is not ready for autonomous activation.",
+      409,
+      "human_review_lifecycle_not_activatable",
+    );
+  }
+  await transitionHumanReviewOpportunityLifecycle({
+    workspaceId: context.workspaceId,
+    opportunityId: context.opportunityId,
+    transitionKey: deterministicActivationKey(context, privateBinding),
+    expectedState: context.lifecycle.state,
+    expectedRevision: context.lifecycle.revision,
+    toState: "request_ready",
+    reasonCodes: [`${context.requestProfile.lane}_ready`, "exact_owner_grant_active"],
+    actor: { kind: "lane_adapter", reference: "human-review-router-v1" },
+    details: {
+      workflowKey: context.workflowKey,
+      bindingId: context.binding.id,
+      bindingVersion: context.binding.version,
+      bindingHash: context.binding.hash,
+      requestProfileId: context.requestProfile.id,
+      requestProfileVersion: context.requestProfile.version,
+      requestProfileHash: context.requestProfile.hash,
+      lane: context.requestProfile.lane,
+      publishingPolicy: context.grant.configuredPolicy,
+      ...(privateBinding
+        ? {
+            privateBinding: {
+              projectId: privateBinding.projectId,
+              cohortId: privateBinding.cohortId,
+              reviewerCount: privateBinding.reviewerAccountAddresses.length,
+            },
+          }
+        : {}),
+    },
+    occurredAt: now,
+  });
+}
+
+function requiredMaterial(context: FrozenHumanReviewRoutingContext, material: HumanReviewRoutingMaterial | undefined) {
+  const expectedKind = context.requestProfile.lane === "private_invited_unpaid" ? "private" : "public";
+  if (!material || material.kind !== expectedKind) {
+    throw new TokenlessServiceError(
+      `The frozen ${context.requestProfile.lane} lane requires ${expectedKind} review material.`,
+      409,
+      "review_material_lane_mismatch",
+    );
+  }
+  return material;
+}
+
+function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
+  if (
+    !context.grant.active ||
+    context.grant.activationMode !== "owner_approved" ||
+    !context.grant.configuredPolicy ||
+    !context.grant.integrationPolicy ||
+    context.grant.configuredPolicy.id !== context.grant.integrationPolicy.id ||
+    context.grant.configuredPolicy.version !== context.grant.integrationPolicy.version ||
+    !context.grant.allowedWorkflowKeys.includes(context.workflowKey) ||
+    !context.grant.grantedScopes.includes("panel:publish") ||
+    !context.grant.credentialScopes.includes("panel:publish")
+  ) {
+    return false;
+  }
+  if (
+    context.requestProfile.lane === "public_paid_network" &&
+    (!context.grant.grantedScopes.includes("payment:submit") ||
+      !context.grant.credentialScopes.includes("payment:submit"))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+const DEFAULT_DEPENDENCIES: RouterDependencies = {
+  loadContext: loadFrozenContext,
+  prepareApproval: prepareHumanReviewForOwnerApproval,
+  publishPublicPaid: requestPublicPaidHumanReview,
+  resolvePrivateBinding: resolveExactPrivateBinding,
+  activateAutonomousLane: activateExactAutonomousLane,
+  preparePrivateFoundation: preparePrivateReviewFoundation,
+  assignPrivateUnpaid: requestPrivateUnpaidHumanReview,
+};
+
+export function createHumanReviewRequestRouter(dependencies: RouterDependencies = DEFAULT_DEPENDENCIES) {
+  return async function routeHumanReviewRequest(input: HumanReviewRoutingRequest): Promise<HumanReviewRoutingResult> {
+    const now = input.now ?? new Date();
+    if (!Number.isFinite(now.getTime())) {
+      throw new TokenlessServiceError("Routing time is invalid.", 400, "invalid_review_routing_time");
+    }
+    const context = await dependencies.loadContext(input.principal, input.opportunityId, now);
+    const common = {
+      schemaVersion: "rateloop.human-review-route.v1" as const,
+      opportunityId: context.opportunityId,
+      authority: context.binding.authority,
+      lane: context.requestProfile.lane,
+    };
+    if (context.decision !== "required") {
+      return { ...common, action: "no_review_required", sideEffects: NO_SIDE_EFFECTS };
+    }
+    if (context.binding.authority === "check_only") {
+      return { ...common, action: "requirement_recorded", sideEffects: NO_SIDE_EFFECTS };
+    }
+    if (
+      context.requestProfile.lane !== "public_paid_network" &&
+      context.requestProfile.lane !== "private_invited_unpaid"
+    ) {
+      return {
+        ...common,
+        action: "blocked",
+        code: "lane_not_implemented",
+        retryable: false,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
+    if (context.binding.authority === "prepare_for_approval") {
+      const approval = await dependencies.prepareApproval({
+        principal: input.principal,
+        opportunityId: context.opportunityId,
+        sourcePayload: input.sourcePayload,
+        suggestionPayload: input.suggestionPayload,
+        now,
+      });
+      return {
+        ...common,
+        authority: "prepare_for_approval",
+        action: "owner_approval_required",
+        approval,
+        sideEffects: {
+          prepared: true,
+          published: false,
+          assigned: false,
+          fundsReserved: false,
+          spent: false,
+        },
+      };
+    }
+    requiredMaterial(context, input.material);
+    if (!hasExactAutonomousGrant(context)) {
+      return {
+        ...common,
+        action: "blocked",
+        code: "automatic_grant_inactive",
+        retryable: true,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
+    if (context.requestProfile.lane === "public_paid_network") {
+      const material = input.material!;
+      if (material.kind !== "public") throw new Error("Public material was checked before routing.");
+      await dependencies.activateAutonomousLane(context, null, now);
+      const requested = await dependencies.publishPublicPaid({
+        principal: input.principal,
+        opportunityId: context.opportunityId,
+        sourcePayload: input.sourcePayload,
+        suggestionPayload: input.suggestionPayload,
+        publication: material.publication,
+        appOrigin: material.appOrigin,
+      });
+      return {
+        schemaVersion: "rateloop.human-review-route.v1",
+        action: "public_review_requested",
+        opportunityId: context.opportunityId,
+        authority: "ask_automatically",
+        lane: "public_paid_network",
+        ask: requested.ask,
+      };
+    }
+    const material = input.material!;
+    if (material.kind !== "private") throw new Error("Private material was checked before routing.");
+    const privateBinding = await dependencies.resolvePrivateBinding(input.principal, context, now);
+    if (!privateBinding) {
+      return {
+        ...common,
+        action: "blocked",
+        code: "private_routing_configuration_required",
+        retryable: true,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
+    await dependencies.activateAutonomousLane(context, privateBinding, now);
+    const request: HumanAssurancePrivateReviewCreateRequest = {
+      idempotencyKey: deterministicPrivateIdempotencyKey(context, privateBinding),
+      integrationId: context.integrationId,
+      projectId: privateBinding.projectId,
+      requestProfile: {
+        id: context.requestProfile.id,
+        version: context.requestProfile.version,
+        hash: context.requestProfile.hash,
+      },
+      cohortId: privateBinding.cohortId,
+      dataClassification: context.requestProfile.privateSensitivity!,
+      source: {
+        contentType: material.sourceContentType,
+        bytesBase64: Buffer.from(input.sourcePayload, "utf8").toString("base64"),
+      },
+      suggestion: {
+        contentType: material.suggestionContentType,
+        bytesBase64: Buffer.from(input.suggestionPayload, "utf8").toString("base64"),
+      },
+    };
+    const foundation = await dependencies.preparePrivateFoundation({
+      principal: input.principal.principal,
+      request,
+      now,
+    });
+    if (foundation.schemaVersion !== HUMAN_ASSURANCE_SCHEMA_VERSION || foundation.status !== "ready_for_assignment") {
+      throw new TokenlessServiceError(
+        "The exact private review binding requires owner configuration.",
+        409,
+        "private_routing_configuration_required",
+      );
+    }
+    const delivery = await dependencies.assignPrivateUnpaid({
+      principal: input.principal.principal,
+      opportunityId: context.opportunityId,
+      privateReviewId: foundation.privateReviewId,
+      reviewerAccountAddresses: privateBinding.reviewerAccountAddresses,
+      now,
+    });
+    return {
+      schemaVersion: "rateloop.human-review-route.v1",
+      action: "private_review_assigned",
+      opportunityId: context.opportunityId,
+      authority: "ask_automatically",
+      lane: "private_invited_unpaid",
+      foundation,
+      delivery,
+    };
+  };
+}
+
+export const routeHumanReviewRequest = createHumanReviewRequestRouter();
+
+export const __humanReviewRequestRouterTestUtils = {
+  deterministicActivationKey,
+  deterministicPrivateIdempotencyKey,
+  hasExactAutonomousGrant,
+};

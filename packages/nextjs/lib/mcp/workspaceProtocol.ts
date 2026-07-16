@@ -1,10 +1,6 @@
 import "server-only";
 import { TOKENLESS_MCP_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
-import {
-  getAdaptiveHumanReviewResult,
-  requestAdaptiveHumanReview,
-  waitForAdaptiveHumanReview,
-} from "~~/lib/tokenless/adaptiveReviewOrchestration";
+import { getAdaptiveHumanReviewResult, waitForAdaptiveHumanReview } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import {
   type AdaptiveReviewDecisionRequest,
   evaluateAdaptiveReviewRequirement,
@@ -20,6 +16,7 @@ import {
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
+import { routeHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestRouter";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type JsonRecord = Record<string, unknown>;
@@ -67,6 +64,26 @@ const executionSchema = {
     generationSpans: { items: generationSpanSchema, maxItems: 64, minItems: 1, type: "array" },
   },
   required: ["externalExecutionId", "status", "primarySpanId", "generationSpans"],
+  type: "object",
+} as const;
+const publicReviewPublicationSchema = {
+  additionalProperties: false,
+  allOf: [
+    {
+      if: {
+        properties: { dataClassification: { const: "redacted" } },
+        required: ["dataClassification"],
+      },
+      then: { required: ["redactionSummary"] },
+    },
+  ],
+  properties: {
+    visibility: { enum: ["public"], type: "string" },
+    dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
+    confirmedNoSensitiveData: { enum: [true], type: "boolean" },
+    redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
+  },
+  required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
   type: "object",
 } as const;
 const readOnlyClosedAnnotations = {
@@ -197,35 +214,38 @@ export const workspaceMcpTools = [
     name: "rateloop_request_review",
     annotations: consequentialOpenAnnotations,
     description:
-      "Publish the canonical human yes/no review for a required frozen opportunity to the public RateLoop network. Exact payload strings must match the earlier commitments. RateLoop derives the question, panel, response window, bounty, fee, and accepted-work reserve from the exact owner-bound request profile. Declare public, synthetic, or safely redacted data with confirmedNoSensitiveData true; private and hybrid assignment lanes are not available yet.",
+      "Route a required frozen opportunity using its exact owner-bound authority and lane. Check-only records the requirement without preparing, publishing, assigning, reserving, or spending. Prepare-for-approval creates only an immutable owner approval. Automatic routing requires the exact active grant: public paid work goes only to the RateLoop network, while private unpaid work goes only to one unambiguous owner-configured invited group. RateLoop derives the question, panel, response window, bounty, fee, and accepted-work reserve; callers cannot override those terms.",
     inputSchema: {
       additionalProperties: false,
       properties: {
         opportunityId: identifierSchema,
         sourcePayload: { maxLength: 3_000, minLength: 1, type: "string" },
         suggestionPayload: { maxLength: 3_000, minLength: 1, type: "string" },
-        publication: {
-          additionalProperties: false,
-          allOf: [
+        material: {
+          oneOf: [
             {
-              if: {
-                properties: { dataClassification: { const: "redacted" } },
-                required: ["dataClassification"],
+              additionalProperties: false,
+              properties: {
+                kind: { const: "public", type: "string" },
+                publication: publicReviewPublicationSchema,
               },
-              then: { required: ["redactionSummary"] },
+              required: ["kind", "publication"],
+              type: "object",
+            },
+            {
+              additionalProperties: false,
+              properties: {
+                kind: { const: "private", type: "string" },
+                sourceContentType: { maxLength: 160, minLength: 1, type: "string" },
+                suggestionContentType: { maxLength: 160, minLength: 1, type: "string" },
+              },
+              required: ["kind", "sourceContentType", "suggestionContentType"],
+              type: "object",
             },
           ],
-          properties: {
-            visibility: { enum: ["public"], type: "string" },
-            dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
-            confirmedNoSensitiveData: { enum: [true], type: "boolean" },
-            redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
-          },
-          required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
-          type: "object",
         },
       },
-      required: ["opportunityId", "sourcePayload", "suggestionPayload", "publication"],
+      required: ["opportunityId", "sourcePayload", "suggestionPayload"],
       type: "object",
     },
   },
@@ -313,6 +333,31 @@ function requireObjectWithKeys(args: unknown, allowed: readonly string[], messag
     throw new TokenlessServiceError(message, 400, "invalid_tool_arguments");
   }
   return input;
+}
+
+function reviewMaterial(value: unknown, origin: string) {
+  const material = object(value);
+  if (!material) return undefined;
+  if (material.kind === "public") {
+    const exact = requireObjectWithKeys(material, ["kind", "publication"], "Public review material is invalid.");
+    return { kind: "public" as const, publication: exact.publication as never, appOrigin: origin };
+  }
+  if (material.kind === "private") {
+    const exact = requireObjectWithKeys(
+      material,
+      ["kind", "sourceContentType", "suggestionContentType"],
+      "Private review material is invalid.",
+    );
+    if (typeof exact.sourceContentType !== "string" || typeof exact.suggestionContentType !== "string") {
+      throw new TokenlessServiceError("Private review content types are required.", 400, "invalid_tool_arguments");
+    }
+    return {
+      kind: "private" as const,
+      sourceContentType: exact.sourceContentType,
+      suggestionContentType: exact.suggestionContentType,
+    };
+  }
+  throw new TokenlessServiceError("Review material lane is invalid.", 400, "invalid_tool_arguments");
 }
 
 async function callPairingTool(
@@ -436,17 +481,16 @@ async function callIntegrationTool(
     if (name === "rateloop_request_review") {
       const input = requireObjectWithKeys(
         args,
-        ["opportunityId", "sourcePayload", "suggestionPayload", "publication"],
+        ["opportunityId", "sourcePayload", "suggestionPayload", "material"],
         "Review request arguments are invalid.",
       );
       return toolResult(
-        await requestAdaptiveHumanReview({
+        await routeHumanReviewRequest({
           principal,
           opportunityId: input.opportunityId as string,
           sourcePayload: input.sourcePayload as string,
           suggestionPayload: input.suggestionPayload as string,
-          publication: input.publication as never,
-          appOrigin: context.origin,
+          material: reviewMaterial(input.material, context.origin),
         }),
       );
     }
@@ -528,15 +572,6 @@ async function callOAuthTool(
     }
     if (principal.connectionStatus !== "connected") {
       return connectionNotReady("Load agent context and verify this connection before using review tools.");
-    }
-    if (name === "rateloop_request_review" && principal.integration.publishingPolicyId === null) {
-      return toolError(
-        new TokenlessServiceError(
-          "This safe connection cannot publish or spend. A workspace administrator must grant a publishing policy first.",
-          403,
-          "publishing_not_enabled",
-        ),
-      );
     }
     return callIntegrationTool(integrationPrincipal, name, args, context);
   } catch (error) {

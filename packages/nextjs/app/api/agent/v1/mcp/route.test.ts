@@ -301,35 +301,53 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     openWorldHint: true,
   });
   const requestReviewTool = tool("rateloop_request_review");
-  assert.match(requestReviewTool?.description ?? "", /public RateLoop network/);
+  assert.match(requestReviewTool?.description ?? "", /exact owner-bound authority and lane/);
+  assert.match(requestReviewTool?.description ?? "", /Check-only records the requirement without preparing/);
+  assert.match(requestReviewTool?.description ?? "", /private unpaid work/);
   assert.match(requestReviewTool?.description ?? "", /derives the question, panel, response window, bounty, fee/);
-  assert.match(requestReviewTool?.description ?? "", /private and hybrid assignment lanes are not available/);
   assert.equal("economics" in (requestReviewTool?.inputSchema?.properties ?? {}), false);
-  assert.deepEqual(requestReviewTool?.inputSchema?.required, [
-    "opportunityId",
-    "sourcePayload",
-    "suggestionPayload",
-    "publication",
-  ]);
-  assert.deepEqual(requestReviewTool?.inputSchema?.properties?.publication, {
-    additionalProperties: false,
-    allOf: [
+  assert.deepEqual(requestReviewTool?.inputSchema?.required, ["opportunityId", "sourcePayload", "suggestionPayload"]);
+  assert.deepEqual(requestReviewTool?.inputSchema?.properties?.material, {
+    oneOf: [
       {
-        if: {
-          properties: { dataClassification: { const: "redacted" } },
-          required: ["dataClassification"],
+        additionalProperties: false,
+        properties: {
+          kind: { const: "public", type: "string" },
+          publication: {
+            additionalProperties: false,
+            allOf: [
+              {
+                if: {
+                  properties: { dataClassification: { const: "redacted" } },
+                  required: ["dataClassification"],
+                },
+                then: { required: ["redactionSummary"] },
+              },
+            ],
+            properties: {
+              visibility: { enum: ["public"], type: "string" },
+              dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
+              confirmedNoSensitiveData: { enum: [true], type: "boolean" },
+              redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
+            },
+            required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
+            type: "object",
+          },
         },
-        then: { required: ["redactionSummary"] },
+        required: ["kind", "publication"],
+        type: "object",
+      },
+      {
+        additionalProperties: false,
+        properties: {
+          kind: { const: "private", type: "string" },
+          sourceContentType: { maxLength: 160, minLength: 1, type: "string" },
+          suggestionContentType: { maxLength: 160, minLength: 1, type: "string" },
+        },
+        required: ["kind", "sourceContentType", "suggestionContentType"],
+        type: "object",
       },
     ],
-    properties: {
-      visibility: { enum: ["public"], type: "string" },
-      dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
-      confirmedNoSensitiveData: { enum: [true], type: "boolean" },
-      redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
-    },
-    required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
-    type: "object",
   });
   const notReady = await POST(
     request(
