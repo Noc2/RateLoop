@@ -307,6 +307,59 @@ export async function getWorkspaceAgentSetup(input: {
 
 export type WorkspaceAgentSetupView = Awaited<ReturnType<typeof getWorkspaceAgentSetup>>;
 
+export async function updateWorkspaceSetupName(input: {
+  accountAddress: string;
+  workspaceId: string;
+  revision: unknown;
+  name: unknown;
+}) {
+  await requireManager(input.accountAddress, input.workspaceId);
+  const expectedRevision = requiredRevision(input.revision);
+  const name = bounded(input.name, "Workspace name", 120)!;
+  const now = new Date();
+  const client = await dbPool.connect();
+  let revision = expectedRevision;
+  try {
+    await client.query("BEGIN");
+    const setupResult = await client.query(
+      `SELECT revision,status FROM tokenless_workspace_agent_setups WHERE workspace_id=$1 FOR UPDATE`,
+      [input.workspaceId],
+    );
+    const setup = setupResult.rows[0] as Row | undefined;
+    if (!setup || rowString(setup, "status") !== "in_progress") {
+      throw new TokenlessServiceError("Workspace setup is not active.", 409, "agent_setup_not_active");
+    }
+    if (rowNumber(setup, "revision") !== expectedRevision) {
+      throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
+    }
+    const workspaceResult = await client.query(
+      `SELECT name FROM tokenless_workspaces WHERE workspace_id=$1 AND status='active' FOR UPDATE`,
+      [input.workspaceId],
+    );
+    const workspace = workspaceResult.rows[0] as Row | undefined;
+    if (!workspace) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+    if (rowString(workspace, "name") !== name) {
+      revision = expectedRevision + 1;
+      await client.query(`UPDATE tokenless_workspaces SET name=$1,updated_at=$2 WHERE workspace_id=$3`, [
+        name,
+        now,
+        input.workspaceId,
+      ]);
+      await client.query(
+        `UPDATE tokenless_workspace_agent_setups SET revision=$1,updated_at=$2 WHERE workspace_id=$3`,
+        [revision, now, input.workspaceId],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return { workspaceName: name, revision };
+}
+
 export async function createWorkspaceAgentSetupConnection(input: {
   accountAddress: string;
   workspaceId: string;

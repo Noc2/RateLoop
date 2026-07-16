@@ -19,6 +19,7 @@ import {
   confirmWorkspaceSetupAgent,
   createWorkspaceAgentSetupConnection,
   getWorkspaceAgentSetup,
+  updateWorkspaceSetupName,
 } from "~~/lib/tokenless/workspaceAgentSetup";
 
 const OWNER = `rlp_${"b".repeat(24)}`;
@@ -189,6 +190,32 @@ test("setup rejects future steps, stale revisions, and unavailable autonomous la
       origin: "https://rateloop-tokenless.example",
       revision: 1,
     }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_conflict",
+  );
+});
+
+test("workspace setup can rename the workspace without losing progress", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Original workspace", ownerAddress: OWNER });
+  const initial = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, requestedStep: "workspace" });
+  assert.equal(initial.workspaceName, "Original workspace");
+  assert.equal(initial.revision, 1);
+
+  const renamed = await updateWorkspaceSetupName({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: initial.revision,
+    name: "  Renamed workspace  ",
+  });
+  assert.deepEqual(renamed, { workspaceName: "Renamed workspace", revision: 2 });
+
+  const current = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, requestedStep: "workspace" });
+  assert.equal(current.workspaceName, "Renamed workspace");
+  assert.equal(current.revision, 2);
+  assert.equal(current.currentStep, "workspace");
+  assert.equal(current.resumeStep, "connect");
+
+  await assert.rejects(
+    updateWorkspaceSetupName({ accountAddress: OWNER, workspaceId, revision: 1, name: "Stale rename" }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_conflict",
   );
 });

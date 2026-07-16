@@ -40,6 +40,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [announcement, setAnnouncement] = useState("");
   const [manualMessage, setManualMessage] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [workspaceName, setWorkspaceName] = useState(initialSetup.workspaceName);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const focusOnNavigation = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
@@ -65,6 +66,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     focusOnNavigation.current = false;
     headingRef.current?.focus();
   }, [currentStep]);
+
+  useEffect(() => setWorkspaceName(setup.workspaceName), [setup.workspaceName]);
 
   useEffect(() => {
     if (currentStep !== "connect" || !ACTIVE_CONNECTION_STATES.has(setup.connection.status ?? "")) return;
@@ -146,6 +149,30 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       await loadStep("connect", { replace: true, focus: false });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create the connection message.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = workspaceName.trim();
+    setBusy(true);
+    setError(null);
+    try {
+      if (name !== setup.workspaceName) {
+        await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/workspace`, {
+            method: "POST",
+            body: JSON.stringify({ revision: setup.revision, name }),
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      await loadStep("connect");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save the workspace name.");
     } finally {
       setBusy(false);
     }
@@ -277,19 +304,26 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       </p>
       <div className="mx-auto mt-8 max-w-2xl">
         {currentStep === "workspace" ? (
-          <>
+          <form onSubmit={saveWorkspace}>
             <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Workspace ready
+              Workspace
             </h1>
-            <p className="mt-2 text-sm text-base-content/65">{setup.workspaceName}</p>
-            <button
-              className="rateloop-gradient-action mt-6 px-5"
-              type="button"
-              onClick={() => void loadStep("connect")}
-            >
-              Continue
+            <label className="mt-5 block text-sm text-base-content/70" htmlFor="agent-setup-workspace-name">
+              Workspace name
+            </label>
+            <input
+              id="agent-setup-workspace-name"
+              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+              value={workspaceName}
+              onChange={event => setWorkspaceName(event.target.value)}
+              autoComplete="organization"
+              maxLength={120}
+              required
+            />
+            <button className="rateloop-gradient-action mt-6 px-5" disabled={busy || !workspaceName.trim()}>
+              {busy ? "Saving…" : workspaceName.trim() === setup.workspaceName ? "Continue" : "Save and continue"}
             </button>
-          </>
+          </form>
         ) : null}
 
         {currentStep === "connect" ? (

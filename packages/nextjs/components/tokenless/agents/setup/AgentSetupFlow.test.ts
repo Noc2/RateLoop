@@ -27,7 +27,7 @@ test("progress is semantic, textual, keyboard-operable, and marks only the curre
 
 test("guided setup renders one stage at a time and keeps future authority absent", () => {
   for (const heading of [
-    "Workspace ready",
+    "Workspace",
     "Connect your agent",
     "Check your agent",
     "Set review behavior",
@@ -42,6 +42,13 @@ test("guided setup renders one stage at a time and keeps future authority absent
   assert.match(flowSource, /autonomousAccess: false/);
   assert.match(flowSource, /no autonomous publishing\s+or spending/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
+});
+
+test("workspace step remains editable when revisited", () => {
+  assert.match(flowSource, /htmlFor="agent-setup-workspace-name"/);
+  assert.match(flowSource, /value=\{workspaceName\}/);
+  assert.match(flowSource, /agent-setup\/workspace/);
+  assert.match(flowSource, /Save and continue/);
 });
 
 test("connection polling cleans up timers and preserves explicit-navigation focus", () => {
