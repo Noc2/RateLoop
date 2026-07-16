@@ -63,6 +63,7 @@ attempt reserve, total authorized funding, refunds, and accepted-work compensati
 
 ## Deployment
 
-Use the isolated Vercel project, Postgres database, Ponder service, and keeper service for this branch. A hosted release
-must pass the production-readiness check with a complete deployment identity, regional resource manifest, managed
-signing roles, private storage, database migrations, and operational evidence. Region pins alone are not sufficient.
+Use the isolated Vercel project, Postgres database, Ponder service, and keeper service for this branch. Hosted builds
+from `tokenless` use the isolated test-deployment checks and do not require the production-readiness evidence. Once the
+work is merged into `main`, hosted builds activate the complete production preflight for deployment identity, regional
+resources, managed signing roles, private storage, database migrations, and operational evidence.

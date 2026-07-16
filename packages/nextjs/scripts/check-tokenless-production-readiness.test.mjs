@@ -2,7 +2,6 @@ import { manifestDigest, tokenlessEuDeploymentManifest } from "../../../scripts/
 import {
   DEFAULT_HOSTED_RELEASE_CAPABILITIES,
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
-  TOKENLESS_REVIEW_DEPLOYMENT_FLAG,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
 import assert from "node:assert/strict";
@@ -26,6 +25,7 @@ function validFixture() {
   const env = Object.fromEntries(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.map(name => [name, `configured-${name}`]));
   Object.assign(env, {
     VERCEL_ENV: "production",
+    VERCEL_GIT_COMMIT_REF: "main",
     TOKENLESS_DATA_PLANE_MODE: "verified-eu",
     TOKENLESS_HOME_REGION: "eu",
     TOKENLESS_EU_MANIFEST_SHA256: euManifestDigest,
@@ -140,8 +140,12 @@ function validFixture() {
   };
 }
 
-test("hosted production and preview fail closed while local builds skip the release gate", () => {
-  for (const env of [{ VERCEL_ENV: "production" }, { VERCEL_ENV: "preview" }, { VERCEL: "1" }]) {
+test("main hosted builds fail closed while local builds skip the release gate", () => {
+  for (const env of [
+    { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" },
+    { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "main" },
+    { VERCEL: "1", VERCEL_GIT_COMMIT_REF: "main" },
+  ]) {
     const errors = validateTokenlessProductionReadiness({ env, activeRegistry: {} });
     assert.match(errors.join("\n"), /APP_URL is required for a hosted release/);
     assert.match(errors.join("\n"), /managed signing/i);
@@ -149,7 +153,7 @@ test("hosted production and preview fail closed while local builds skip the rele
   assert.deepEqual(validateTokenlessProductionReadiness({ env: {}, activeRegistry: {} }), []);
 });
 
-test("an explicit review deployment is limited to the isolated tokenless project and keeps network panels disabled", () => {
+test("the tokenless branch automatically uses the isolated test deployment gate", () => {
   const env = {
     VERCEL: "1",
     VERCEL_ENV: "production",
@@ -159,15 +163,15 @@ test("an explicit review deployment is limited to the isolated tokenless project
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
-    [TOKENLESS_REVIEW_DEPLOYMENT_FLAG]: "1",
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  const { VERCEL_GIT_COMMIT_REF: _gitRef, ...cliDeploymentEnv } = env;
+  assert.deepEqual(validateTokenlessProductionReadiness({ env: cliDeploymentEnv, activeRegistry: {} }), []);
 
   for (const [name, invalidValue, expected] of [
     ["VERCEL_ENV", "preview", /production target/i],
     ["VERCEL_PROJECT_ID", "prj_legacy", /requires Vercel project prj_H6C2/i],
     ["VERCEL_PROJECT_NAME", "rate-loop-nextjs", /requires Vercel project rateloop-tokenless/i],
-    ["VERCEL_GIT_COMMIT_REF", "main", /tokenless Git branch/i],
     ["APP_URL", "https://rateloop.ai", /must remain https:\/\/rateloop-tokenless\.vercel\.app/i],
     ["NEXT_PUBLIC_APP_URL", "https://www.rateloop.ai", /must remain https:\/\/rateloop-tokenless\.vercel\.app/i],
     ["TOKENLESS_NETWORK_PANELS_ENABLED", "true", /must remain false/i],
@@ -175,9 +179,16 @@ test("an explicit review deployment is limited to the isolated tokenless project
     const invalid = { ...env, [name]: invalidValue };
     assert.match(validateTokenlessProductionReadiness({ env: invalid, activeRegistry: {} }).join("\n"), expected);
   }
+
+  const mainErrors = validateTokenlessProductionReadiness({
+    env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
+    activeRegistry: {},
+  }).join("\n");
+  assert.match(mainErrors, /managed signing/i);
+  assert.match(mainErrors, /APP_URL is required for a hosted release|TOKENLESS_DATA_PLANE_MODE/u);
 });
 
-test("the review deployment exception still rejects browser-exposed secrets", () => {
+test("the tokenless test deployment still rejects browser-exposed secrets", () => {
   const env = {
     VERCEL: "1",
     VERCEL_ENV: "production",
@@ -188,7 +199,6 @@ test("the review deployment exception still rejects browser-exposed secrets", ()
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
-    [TOKENLESS_REVIEW_DEPLOYMENT_FLAG]: "1",
   };
   const output = validateTokenlessProductionReadiness({ env, activeRegistry: {} }).join("\n");
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
@@ -226,7 +236,7 @@ test("hosted release rejects an empty active v3 registry", () => {
 
 test("hosted release fails closed before migrations without required config or active deployment", () => {
   const errors = validateTokenlessProductionReadiness({
-    env: { VERCEL_ENV: "production" },
+    env: { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" },
     activeRegistry: {},
   });
   assert.match(errors.join("\n"), /TOKENLESS_DEPLOYMENT_KEY is required/);

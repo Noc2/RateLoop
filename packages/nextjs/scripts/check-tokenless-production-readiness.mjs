@@ -14,8 +14,6 @@ const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
 
-export const TOKENLESS_REVIEW_DEPLOYMENT_FLAG = "TOKENLESS_REVIEW_DEPLOYMENT";
-
 export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
   managedSigning: false,
   paidAssignmentSettlement: false,
@@ -223,27 +221,27 @@ function addSecretRole(roles, name, secret) {
   else roles.set(fingerprint, [name]);
 }
 
-function validateTokenlessReviewDeployment(env) {
+function validateTokenlessTestDeployment(env) {
   const errors = [];
   if (env.VERCEL_ENV !== "production") {
-    errors.push("The tokenless review deployment may run only as the isolated project's production target.");
+    errors.push("The tokenless test deployment may run only as the isolated project's production target.");
   }
   if (env.VERCEL_PROJECT_ID !== TOKENLESS_VERCEL_PROJECT.projectId) {
-    errors.push(`The tokenless review deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectId}.`);
+    errors.push(`The tokenless test deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectId}.`);
   }
   if (env.VERCEL_PROJECT_NAME !== TOKENLESS_VERCEL_PROJECT.projectName) {
-    errors.push(`The tokenless review deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectName}.`);
+    errors.push(`The tokenless test deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectName}.`);
   }
-  if (env.VERCEL_GIT_COMMIT_REF !== "tokenless") {
-    errors.push("The tokenless review deployment requires the tokenless Git branch.");
+  if (value(env, "VERCEL_GIT_COMMIT_REF") && env.VERCEL_GIT_COMMIT_REF !== "tokenless") {
+    errors.push("The tokenless test deployment requires the tokenless Git branch.");
   }
   for (const name of ["APP_URL", "NEXT_PUBLIC_APP_URL"]) {
     if (value(env, name) !== TOKENLESS_REVIEW_ORIGIN) {
-      errors.push(`${name} must remain ${TOKENLESS_REVIEW_ORIGIN} for a tokenless review deployment.`);
+      errors.push(`${name} must remain ${TOKENLESS_REVIEW_ORIGIN} for a tokenless test deployment.`);
     }
   }
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "false") {
-    errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must remain false for a tokenless review deployment.");
+    errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must remain false for a tokenless test deployment.");
   }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because secrets must remain server-only.`);
@@ -261,8 +259,8 @@ export function validateTokenlessProductionReadiness({
   const errors = [];
   if (!hosted) return errors;
 
-  if (value(env, TOKENLESS_REVIEW_DEPLOYMENT_FLAG) === "1") {
-    return validateTokenlessReviewDeployment(env);
+  if (value(env, "VERCEL_GIT_COMMIT_REF") !== "main") {
+    return validateTokenlessTestDeployment(env);
   }
 
   errors.push(...validateTokenlessEuDeployment({ env }));
@@ -577,10 +575,10 @@ function main() {
   if (errors.length > 0) {
     throw new Error(`Tokenless hosted-release preflight refused:\n- ${errors.join("\n- ")}`);
   }
-  const reviewDeployment = hosted && value(process.env, TOKENLESS_REVIEW_DEPLOYMENT_FLAG) === "1";
+  const testDeployment = hosted && value(process.env, "VERCEL_GIT_COMMIT_REF") !== "main";
   console.log(
-    reviewDeployment
-      ? "Isolated tokenless review-deployment preflight passed; production release gates remain pending."
+    testDeployment
+      ? "Isolated tokenless test-deployment preflight passed."
       : hosted
         ? "Tokenless hosted-release preflight passed."
         : "Tokenless hosted-release preflight skipped.",

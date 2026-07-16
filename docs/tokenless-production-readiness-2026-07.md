@@ -3,7 +3,7 @@
 **Status:** Internal engineering release register for the `tokenless` branch. This is not customer-facing product copy
 and must not be exposed through a public limitations or trust-status page. The
 [implementation plan](tokenless-immutable-implementation-plan-2026-07.md) remains the design of record; this document
-records the concrete work that must pass before staging or production publication.
+records the concrete work that must pass once `tokenless` is integrated into `main` for a production release.
 
 ## Current baseline — 16 July 2026
 
@@ -24,21 +24,22 @@ test keys are test-fixture concerns only and must not be selectable through runt
 schemas, MCP capabilities, database policy values, or product UI.
 
 That boundary is now enforced across runtime configuration, API and MCP schemas, reviewer sources, persistence, and
-product UI. Migration `0048` removes obsolete hosted-preview data and constraints. Hosted publication still remains
-fail-closed on the independent release gates below.
+product UI. Migration `0048` removes obsolete hosted-preview data and constraints. While the work remains on the
+`tokenless` branch, its isolated hosted deployment is a test environment and does not run the production release gates
+below.
 
-### Isolated review deployment exception
+### Isolated tokenless test deployment
 
-`rateloop-tokenless.vercel.app` may be updated before the release gates are complete only by setting the build-only
-`TOKENLESS_REVIEW_DEPLOYMENT=1` flag. The exception is accepted solely for Vercel project
-`prj_H6C2pfWKEAupFroHbLfzhquaNCLm` (`rateloop-tokenless`), the `tokenless` Git branch, the exact tokenless origin, and
-with public network panels disabled. It does not make the deployment production-ready and must never be accepted by
-`rate-loop-nextjs`, `main`, `rateloop.ai`, or `www.rateloop.ai`.
+`rateloop-tokenless.vercel.app` may be updated from the `tokenless` branch without satisfying the production release
+gates. The build automatically uses the isolated test-deployment checks for every branch other than `main`; no manual
+review-deployment flag is required. Those checks require Vercel project
+`prj_H6C2pfWKEAupFroHbLfzhquaNCLm` (`rateloop-tokenless`), the exact tokenless origin, public network panels disabled,
+and no public secret exposure. They must never authorize `rate-loop-nextjs`, `rateloop.ai`, or `www.rateloop.ai`.
 
-Before any tokenless production deployment or integration with `rateloop.ai`, run an unflagged build and satisfy every
-release gate in this register. The review flag is a deployment-channel exception only; it does not waive managed
-signing, paid assignment settlement, EU infrastructure evidence, migration verification, or end-to-end paid-path
-testing.
+Once this work is merged into `main`, hosted builds automatically activate the complete production preflight and must
+satisfy every release gate in this register before integration with `rateloop.ai`. A successful isolated tokenless test
+deployment is not evidence that managed signing, paid assignment settlement, EU infrastructure, migration verification,
+or end-to-end paid-path testing is complete.
 
 ## Completed in this branch
 
@@ -90,7 +91,7 @@ testing.
 ## Release and documentation policy
 
 - A push to `tokenless` is not a release. Deployment remains manual and isolated.
-- Do not promote the Vercel alias, accept customer data, or enable paid work while any required gate is red.
+- Do not attach `rateloop.ai`, accept customer data, or enable real paid work while any required production gate is red.
 - Customer-facing docs explain the product, mechanisms, and implemented guarantees. They do not contain an engineering
   backlog, unsupported-capability inventory, or a separate public trust-status page.
 - Mandatory legal and privacy disclosures remain in the applicable legal notices. Security, custody, identity, and
