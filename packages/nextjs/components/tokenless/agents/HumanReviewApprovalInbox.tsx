@@ -74,7 +74,7 @@ function ApprovalCard({
         </div>
         <div>
           <dt className="text-xs text-base-content/45">Maximum charge</dt>
-          <dd className="mt-1">{formatApprovalUsdc(economics.maximumChargeAtomic)}</dd>
+          <dd className="mt-1">{formatApprovalUsdc(approval.maximumConsentAtomic)}</dd>
         </div>
         <div>
           <dt className="text-xs text-base-content/45">Compensation</dt>
@@ -88,6 +88,14 @@ function ApprovalCard({
           <dt className="text-xs text-base-content/45">Fee</dt>
           <dd className="mt-1">
             {formatApprovalUsdc(economics.feeAtomic)} ({(economics.feeBps / 100).toFixed(2)}%)
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-base-content/45">Feedback Bonus</dt>
+          <dd className="mt-1">
+            {approval.feedbackBonusEconomics.enabled
+              ? `${formatApprovalUsdc(approval.feedbackBonusEconomics.poolAtomic)} · human-awarded`
+              : "Off"}
           </dd>
         </div>
         <div>

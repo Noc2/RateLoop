@@ -104,6 +104,11 @@ function formatResponseWindow(seconds: number | null) {
   return `${seconds} seconds`;
 }
 
+function formatConsentUsdc(atomic: bigint) {
+  if (atomic === 0n) return "0";
+  return usdcAtomicToDecimal(atomic.toString());
+}
+
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "The setup request failed.");
@@ -874,7 +879,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     name="audience"
                     value={value}
                     checked={reviewAudience.audience === value}
-                    onChange={() => setReviewAudience(current => ({ ...current, audience: value }))}
+                    onChange={() => {
+                      setReviewAudience(current => ({ ...current, audience: value }));
+                      if (value !== "private_invited") {
+                        setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }));
+                      }
+                    }}
                   />
                   <span>
                     <span className="font-medium">{label}</span>
@@ -945,42 +955,49 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               </div>
             </fieldset>
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <legend className="px-1 text-sm font-medium">Reviewer payment</legend>
-              {reviewAudience.audience === "private_invited" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
-                    <input
-                      className="radio mt-0.5"
-                      type="radio"
-                      name="compensationMode"
-                      value="unpaid"
-                      checked={reviewCompensation.compensationMode === "unpaid"}
-                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "unpaid" }))}
-                    />
-                    <span>
-                      <span className="font-medium">Unpaid</span>
-                      <span className="mt-1 block text-base-content/60">No reviewer bounty.</span>
-                    </span>
-                  </label>
-                  <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
-                    <input
-                      className="radio mt-0.5"
-                      type="radio"
-                      name="compensationMode"
-                      value="usdc"
-                      checked={reviewCompensation.compensationMode === "usdc"}
-                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }))}
-                    />
-                    <span>
-                      <span className="font-medium">USDC bounty</span>
-                      <span className="mt-1 block text-base-content/60">Pay each accepted reviewer.</span>
-                    </span>
-                  </label>
-                </div>
-              ) : (
-                <p className="text-sm text-base-content/65">Network reviewers are paid in USDC.</p>
-              )}
-              {reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc" ? (
+              <legend className="px-1 text-sm font-medium">Guaranteed bounty</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
+                  <input
+                    className="radio mt-0.5"
+                    type="radio"
+                    name="compensationMode"
+                    value="unpaid"
+                    checked={
+                      reviewAudience.audience === "private_invited" && reviewCompensation.compensationMode === "unpaid"
+                    }
+                    disabled={reviewAudience.audience !== "private_invited"}
+                    onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "unpaid" }))}
+                  />
+                  <span>
+                    <span className="font-medium">No bounty</span>
+                    <span className="mt-1 block text-base-content/60">No guaranteed payment.</span>
+                  </span>
+                </label>
+                <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
+                  <input
+                    className="radio mt-0.5"
+                    type="radio"
+                    name="compensationMode"
+                    value="usdc"
+                    checked={
+                      reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc"
+                    }
+                    onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }))}
+                  />
+                  <span>
+                    <span className="font-medium">Add USDC bounty</span>
+                    <span className="mt-1 block text-base-content/60">Pay each accepted reviewer.</span>
+                  </span>
+                </label>
+              </div>
+              {reviewAudience.audience !== "private_invited" ? (
+                <p className="mt-3 text-xs text-base-content/55">
+                  Public and hybrid network assignments currently require a guaranteed bounty. Bonus-only network review
+                  will appear after its dedicated assignment adapter is available.
+                </p>
+              ) : null}
+              {reviewCompensation.compensationMode === "usdc" ? (
                 <label className="mt-4 block text-sm">
                   USDC per reviewer
                   <input
@@ -996,6 +1013,90 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     required
                   />
                 </label>
+              ) : null}
+            </fieldset>
+            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
+              <p className="text-sm text-base-content/60">
+                Optional and separate from the guaranteed bounty. A human later chooses useful written feedback to pay.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
+                <button
+                  type="button"
+                  aria-pressed={!reviewCompensation.feedbackBonusEnabled}
+                  className={`btn btn-sm ${!reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: false }))}
+                >
+                  No bonus
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={reviewCompensation.feedbackBonusEnabled}
+                  className={`btn btn-sm ${reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: true }))}
+                >
+                  Add bonus
+                </button>
+              </div>
+              {reviewCompensation.feedbackBonusEnabled ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm">
+                    Bonus pool
+                    <div className="input mt-2 flex w-full items-center gap-2 border-white/10 bg-[var(--rateloop-field)]">
+                      <input
+                        className="min-w-0 grow bg-transparent outline-none"
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]+([.][0-9]{1,6})?"
+                        maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
+                        value={reviewCompensation.feedbackBonusUsdc}
+                        onChange={event =>
+                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
+                        }
+                        required
+                      />
+                      <span className="text-base-content/50">USDC</span>
+                    </div>
+                  </label>
+                  <label className="text-sm">
+                    Human awarder
+                    <select
+                      className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                      value={reviewCompensation.feedbackBonusAwarderKind}
+                      onChange={event =>
+                        setReviewCompensation(current => ({
+                          ...current,
+                          feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
+                        }))
+                      }
+                    >
+                      <option value="requester">Me (requester)</option>
+                      <option value="designated">Designated authenticated human</option>
+                    </select>
+                  </label>
+                  {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
+                    <label className="text-sm sm:col-span-2">
+                      Awarder account
+                      <input
+                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                        value={reviewCompensation.feedbackBonusAwarderAccount}
+                        onChange={event =>
+                          setReviewCompensation(current => ({
+                            ...current,
+                            feedbackBonusAwarderAccount: event.target.value,
+                          }))
+                        }
+                        placeholder="Authenticated RateLoop account"
+                        maxLength={320}
+                        required
+                      />
+                    </label>
+                  ) : null}
+                  <p className="text-xs text-base-content/55 sm:col-span-2">
+                    The agent may prepare or fund this exact pool within its grant, but it can never select or execute
+                    an award.
+                  </p>
+                </div>
               ) : null}
             </fieldset>
             <fieldset className="mt-5 space-y-3">
@@ -1060,6 +1161,35 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
                         ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic)} USDC per accepted reviewer`
                         : "Unpaid; no base reviewer bounty"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Feedback Bonus</dt>
+                    <dd>
+                      {pendingReviewConfirmation.requestProfile.feedbackBonusEnabled &&
+                      pendingReviewConfirmation.requestProfile.feedbackBonusPoolAtomic
+                        ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.feedbackBonusPoolAtomic)} USDC pool · ${
+                            pendingReviewConfirmation.requestProfile.feedbackBonusAwarderKind === "designated"
+                              ? "designated human awarder"
+                              : "requester awards"
+                          }`
+                        : "Off"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Maximum payment consent</dt>
+                    <dd>
+                      {formatConsentUsdc(
+                        BigInt(
+                          pendingReviewConfirmation.requestProfile.compensationMode === "usdc" &&
+                            pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
+                            ? pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
+                            : "0",
+                        ) *
+                          BigInt(pendingReviewConfirmation.requestProfile.panelSize ?? 0) +
+                          BigInt(pendingReviewConfirmation.requestProfile.feedbackBonusPoolAtomic ?? "0"),
+                      )}{" "}
+                      USDC before base-review fee and attempt reserve
                     </dd>
                   </div>
                   <div className="sm:col-span-2">
@@ -1162,6 +1292,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </p>
                   </div>
                 ) : null}
+                {setup.reviewDraft?.requestProfile.feedbackBonusEnabled ? (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                    <p className="font-medium">{reviewCompensation.feedbackBonusUsdc} USDC Feedback Bonus pool</p>
+                    <p className="mt-1 text-base-content/60">
+                      Funded separately before assignment. Only the saved human awarder can choose feedback to pay.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-6 flex items-center gap-3">
                   {backButton}
                   <button className="rateloop-gradient-action px-5" disabled={busy}>
@@ -1204,6 +1342,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <p className="mt-2">
                       <span className="text-base-content/55">Base bounty:</span> {reviewCompensation.usdcPerReviewer}{" "}
                       USDC per accepted reviewer
+                    </p>
+                  ) : null}
+                  {setup.reviewDraft?.requestProfile.feedbackBonusEnabled ? (
+                    <p className="mt-2">
+                      <span className="text-base-content/55">Feedback Bonus:</span>{" "}
+                      {reviewCompensation.feedbackBonusUsdc} USDC · human-awarded
                     </p>
                   ) : null}
                   <p className="mt-2">

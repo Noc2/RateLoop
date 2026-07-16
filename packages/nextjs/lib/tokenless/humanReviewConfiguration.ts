@@ -98,6 +98,11 @@ const OWNER_PROFILE_KEYS = new Set([
   "panelSize",
   "compensationMode",
   "bountyPerSeatAtomic",
+  "feedbackBonusEnabled",
+  "feedbackBonusPoolAtomic",
+  "feedbackBonusAwarderKind",
+  "feedbackBonusAwarderAccount",
+  "feedbackBonusAwardWindowSeconds",
 ]);
 const OWNER_GRANT_KEYS = new Set([
   "integrationId",
@@ -850,6 +855,11 @@ function ownerProfileFromRow(row: Row) {
     panelSize: nullableInteger(row, "panel_size"),
     compensationMode: rowString(row, "compensation_mode")!,
     bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
+    feedbackBonusEnabled: row.feedback_bonus_enabled === true || row.feedback_bonus_enabled === "t",
+    feedbackBonusPoolAtomic: rowString(row, "feedback_bonus_pool_atomic"),
+    feedbackBonusAwarderKind: rowString(row, "feedback_bonus_awarder_kind")!,
+    feedbackBonusAwarderAccount: rowString(row, "feedback_bonus_awarder_account"),
+    feedbackBonusAwardWindowSeconds: nullableInteger(row, "feedback_bonus_award_window_seconds"),
     configurationStatus,
   };
 }
@@ -1276,9 +1286,11 @@ async function versionOwnerProfile(
      (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
       rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
       private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
-      compensation_mode, bounty_per_seat_atomic, configuration_status, profile_hash, created_by,
+      compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
+      feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
+      configuration_status, profile_hash, created_by,
       created_at, approved_by, approved_at, superseded_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'ready',$20,$21,$22,$21,$22,NULL)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'ready',$25,$26,$27,$26,$27,NULL)`,
     [
       profileId,
       version,
@@ -1299,6 +1311,11 @@ async function versionOwnerProfile(
       input.profile.panelSize,
       input.profile.compensationMode,
       input.profile.bountyPerSeatAtomic,
+      input.profile.feedbackBonusEnabled,
+      input.profile.feedbackBonusPoolAtomic,
+      input.profile.feedbackBonusAwarderKind,
+      input.profile.feedbackBonusAwarderAccount,
+      input.profile.feedbackBonusAwardWindowSeconds,
       profileHash,
       input.actor,
       input.now,
@@ -1581,7 +1598,10 @@ export async function getHumanReviewConfigurationForOwner(input: {
                 r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
                 r.content_boundary, r.private_sensitivity, r.private_group_id, r.private_group_policy_version,
                 r.private_group_policy_hash, r.response_window_seconds, r.panel_size,
-                r.compensation_mode, r.bounty_per_seat_atomic, r.configuration_status
+                r.compensation_mode, r.bounty_per_seat_atomic, r.feedback_bonus_enabled,
+                r.feedback_bonus_pool_atomic, r.feedback_bonus_awarder_kind,
+                r.feedback_bonus_awarder_account, r.feedback_bonus_award_window_seconds,
+                r.configuration_status
          FROM tokenless_agent_human_review_bindings b
          JOIN tokenless_agent_review_policies p
            ON p.workspace_id = b.workspace_id AND p.policy_id = b.selection_policy_id

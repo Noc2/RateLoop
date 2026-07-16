@@ -86,7 +86,7 @@ test("review setup controls audience and shows only the relevant material bounda
   assert.match(flowSource, /checked=\{reviewAudience\.audience === value\}/);
   assert.match(flowSource, /reviewAudience\.audience === "private_invited"/);
   assert.match(flowSource, /Public, synthetic, or safely redacted material only/);
-  assert.match(flowSource, /Network reviewers are paid in USDC/);
+  assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /buildReviewAudienceRequestProfile\(draft\.requestProfile, reviewAudience\)/);
   assert.match(flowSource, /privateClassificationsThrough\(reviewAudience\.privateSensitivity\)/);
   assert.match(flowSource, /audience === "public_network" \? null/);
@@ -121,12 +121,17 @@ test("review setup uses the legacy duration control for an explicit frozen respo
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
 });
 
-test("review setup controls base compensation and agent authority without a feedback bonus", () => {
+test("review setup controls independent base compensation, optional Feedback Bonus, and agent authority", () => {
   for (const label of [
-    "Reviewer payment",
-    "Unpaid",
-    "USDC bounty",
+    "Guaranteed bounty",
+    "No bounty",
+    "Add USDC bounty",
     "USDC per reviewer",
+    "Feedback Bonus",
+    "No bonus",
+    "Add bonus",
+    "Bonus pool",
+    "Human awarder",
     "Agent authority",
     "Check only",
     "Prepare for approval",
@@ -134,16 +139,16 @@ test("review setup controls base compensation and agent authority without a feed
   ]) {
     assert.match(flowSource, new RegExp(label));
   }
-  assert.match(flowSource, /reviewAudience\.audience === "private_invited"/);
-  assert.match(flowSource, /Network reviewers are paid in USDC/);
-  assert.match(flowSource, /checked=\{reviewCompensation\.compensationMode === "unpaid"\}/);
-  assert.match(flowSource, /checked=\{reviewCompensation\.compensationMode === "usdc"\}/);
+  assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
+  assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
+  assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
   assert.match(flowSource, /checked=\{reviewCompensation\.authority === value\}/);
   assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
   assert.match(flowSource, /\s+authority,\s+/);
-  assert.doesNotMatch(flowSource, /Feedback Bonus|feedback bonus/);
+  assert.match(flowSource, /agent may prepare or fund this exact pool/i);
+  assert.match(flowSource, /can never select or execute\s+an award/i);
   assert.doesNotMatch(flowSource, /authority: draft\.authority/);
 });
 
@@ -156,6 +161,8 @@ test("review setup requires exact informed consent before it persists the config
     "Answers",
     "Round",
     "Base payment",
+    "Feedback Bonus",
+    "Maximum payment consent",
     "Agent authority",
     "I confirm this exact human-review configuration",
   ]) {
@@ -170,6 +177,7 @@ test("review setup requires exact informed consent before it persists the config
   assert.match(flowSource, /formatResponseWindow\(pendingReviewConfirmation\.requestProfile\.responseWindowSeconds\)/);
   assert.match(flowSource, /usdcAtomicToDecimal\(pendingReviewConfirmation\.requestProfile\.bountyPerSeatAtomic\)/);
   assert.match(flowSource, /reviewAuthoritySummary\(pendingReviewConfirmation\.authority\)/);
+  assert.match(flowSource, /pendingReviewConfirmation\.requestProfile\.feedbackBonusPoolAtomic/);
 });
 
 test("setup separates the connected client from per-run model provenance", () => {

@@ -458,8 +458,9 @@ test("consumes an exact owner approval in the same transaction as the pending tr
            source_evidence_hash, suggestion_commitment,
            prepared_request_json, prepared_request_hash,
            derived_economics_json, derived_economics_hash, maximum_charge_atomic,
+           feedback_bonus_maximum_atomic, maximum_consent_atomic,
            status, owner_decision, prepared_by, decided_by, decided_at, created_at, expires_at)
-          VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                   'approved', 'approved', ?, ?, ?, ?, ?)`,
     args: [
       approvalId,
@@ -475,6 +476,8 @@ test("consumes an exact owner approval in the same transaction as the pending tr
       JSON.stringify(preparation.derivedEconomics),
       preparation.derivedEconomicsHash,
       preparation.maximumChargeAtomic,
+      preparation.feedbackBonusEconomics.poolAtomic,
+      preparation.maximumConsentAtomic,
       OWNER,
       OWNER,
       createdAt,

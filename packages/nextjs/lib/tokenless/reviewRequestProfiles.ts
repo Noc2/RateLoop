@@ -24,6 +24,11 @@ export const MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS = 86_400;
 export const MINIMUM_REVIEW_PANEL_SIZE = 1;
 export const MAXIMUM_REVIEW_PANEL_SIZE = 100;
 export const MAXIMUM_REVIEW_USDC_ATOMIC = (1n << 256n) - 1n;
+export const MINIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 3_600;
+export const MAXIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 31_536_000;
+export const DEFAULT_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 604_800;
+
+export type FeedbackBonusAwarderKind = "requester" | "designated";
 
 type QueryRow = Record<string, unknown>;
 
@@ -44,6 +49,11 @@ export type ReviewRequestProfileInput = {
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
   bountyPerSeatAtomic?: string | null;
+  feedbackBonusEnabled?: boolean;
+  feedbackBonusPoolAtomic?: string | null;
+  feedbackBonusAwarderKind?: FeedbackBonusAwarderKind;
+  feedbackBonusAwarderAccount?: string | null;
+  feedbackBonusAwardWindowSeconds?: number | null;
 };
 
 type NormalizedReviewRequestProfile = {
@@ -63,6 +73,11 @@ type NormalizedReviewRequestProfile = {
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
   bountyPerSeatAtomic: string | null;
+  feedbackBonusEnabled: boolean;
+  feedbackBonusPoolAtomic: string | null;
+  feedbackBonusAwarderKind: FeedbackBonusAwarderKind;
+  feedbackBonusAwarderAccount: string | null;
+  feedbackBonusAwardWindowSeconds: number | null;
 };
 
 export type ReviewRequestProfile = Omit<NormalizedReviewRequestProfile, "responseWindowSeconds" | "panelSize"> & {
@@ -97,6 +112,23 @@ const INPUT_KEYS = new Set<keyof ReviewRequestProfileInput>([
   "panelSize",
   "compensationMode",
   "bountyPerSeatAtomic",
+  "feedbackBonusEnabled",
+  "feedbackBonusPoolAtomic",
+  "feedbackBonusAwarderKind",
+  "feedbackBonusAwarderAccount",
+  "feedbackBonusAwardWindowSeconds",
+]);
+const NON_SEMANTIC_PROFILE_KEYS = new Set([
+  "profileId",
+  "version",
+  "workspaceId",
+  "configurationStatus",
+  "profileHash",
+  "createdBy",
+  "createdAt",
+  "approvedBy",
+  "approvedAt",
+  "supersededAt",
 ]);
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const ATOMIC_PATTERN = /^[1-9][0-9]*$/u;
@@ -219,9 +251,8 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     invalid("Public-network and hybrid review require a panel size of at least 3.");
   }
   if (audience !== "private_invited" && compensationMode !== "usdc") {
-    invalid("Public-network and hybrid reviewers must be paid in USDC.");
+    invalid("Public-network and hybrid review must be paid with a guaranteed USDC bounty.");
   }
-
   let bountyPerSeatAtomic: string | null = null;
   if (compensationMode === "unpaid") {
     if (input.bountyPerSeatAtomic !== null && input.bountyPerSeatAtomic !== undefined) {
@@ -229,6 +260,40 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     }
   } else {
     bountyPerSeatAtomic = normalizeAtomic(input.bountyPerSeatAtomic, panelSize);
+  }
+
+  const feedbackBonusEnabled = input.feedbackBonusEnabled ?? false;
+  if (typeof feedbackBonusEnabled !== "boolean") invalid("feedbackBonusEnabled must be a boolean.");
+  const feedbackBonusAwarderKind = (input.feedbackBonusAwarderKind ?? "requester") as FeedbackBonusAwarderKind;
+  if (!(feedbackBonusAwarderKind === "requester" || feedbackBonusAwarderKind === "designated")) {
+    invalid("feedbackBonusAwarderKind is invalid.");
+  }
+  const feedbackBonusAwarderAccount = optionalText(
+    input.feedbackBonusAwarderAccount,
+    "feedbackBonusAwarderAccount",
+    320,
+  );
+  if (
+    (feedbackBonusAwarderKind === "requester" && feedbackBonusAwarderAccount !== null) ||
+    (feedbackBonusAwarderKind === "designated" && feedbackBonusAwarderAccount === null)
+  ) {
+    invalid("Choose the requester or one designated authenticated human as the Feedback Bonus awarder.");
+  }
+  let feedbackBonusPoolAtomic: string | null = null;
+  let feedbackBonusAwardWindowSeconds: number | null = null;
+  if (feedbackBonusEnabled) {
+    if (rationaleMode === "off") invalid("Feedback Bonus requires optional or required written feedback.");
+    feedbackBonusPoolAtomic = normalizeAtomic(input.feedbackBonusPoolAtomic, 1);
+    feedbackBonusAwardWindowSeconds = boundedInteger(
+      input.feedbackBonusAwardWindowSeconds,
+      "feedbackBonusAwardWindowSeconds",
+      MINIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS,
+      MAXIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS,
+    );
+  } else if (input.feedbackBonusPoolAtomic !== null && input.feedbackBonusPoolAtomic !== undefined) {
+    invalid("A disabled Feedback Bonus cannot include a pool amount.");
+  } else if (input.feedbackBonusAwardWindowSeconds !== null && input.feedbackBonusAwardWindowSeconds !== undefined) {
+    invalid("A disabled Feedback Bonus cannot include an award window.");
   }
 
   return {
@@ -248,6 +313,11 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     panelSize,
     compensationMode,
     bountyPerSeatAtomic,
+    feedbackBonusEnabled,
+    feedbackBonusPoolAtomic,
+    feedbackBonusAwarderKind,
+    feedbackBonusAwarderAccount,
+    feedbackBonusAwardWindowSeconds,
   };
 }
 
@@ -294,11 +364,32 @@ export function reviewRequestProfileSemanticDocument(profile: NormalizedReviewRe
       compensationMode: profile.compensationMode,
       currency: profile.compensationMode === "usdc" ? ("USDC" as const) : null,
       bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+      feedbackBonus: {
+        enabled: profile.feedbackBonusEnabled,
+        currency: profile.feedbackBonusEnabled ? ("USDC" as const) : null,
+        poolAtomic: profile.feedbackBonusPoolAtomic,
+        awarder: {
+          kind: profile.feedbackBonusAwarderKind,
+          account: profile.feedbackBonusAwarderAccount,
+        },
+        awardWindowSeconds: profile.feedbackBonusAwardWindowSeconds,
+      },
     },
   };
 }
 
-export function hashReviewRequestProfile(profile: NormalizedReviewRequestProfile) {
+export function hashReviewRequestProfile(input: ReviewRequestProfileInput | NormalizedReviewRequestProfile) {
+  const keys = Object.keys(input);
+  const hasOnlyProfileKeys = keys.every(
+    key => INPUT_KEYS.has(key as keyof ReviewRequestProfileInput) || NON_SEMANTIC_PROFILE_KEYS.has(key),
+  );
+  const profile = normalizeReviewRequestProfileInput(
+    hasOnlyProfileKeys
+      ? Object.fromEntries(
+          Object.entries(input).filter(([key]) => INPUT_KEYS.has(key as keyof ReviewRequestProfileInput)),
+        )
+      : input,
+  );
   return `sha256:${createHash("sha256")
     .update(canonicalJson(reviewRequestProfileSemanticDocument(profile)))
     .digest("hex")}`;
@@ -333,6 +424,14 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
   const audience = rowString(row, "audience") as HumanReviewAudience | null;
   const contentBoundary = rowString(row, "content_boundary") as HumanReviewContentBoundary | null;
   const compensationMode = rowString(row, "compensation_mode") as HumanReviewCompensationMode | null;
+  const feedbackBonusEnabled = row.feedback_bonus_enabled === true || row.feedback_bonus_enabled === "t";
+  const feedbackBonusAwarderKind = rowString(row, "feedback_bonus_awarder_kind") as FeedbackBonusAwarderKind | null;
+  const feedbackBonusPoolAtomic = rowString(row, "feedback_bonus_pool_atomic");
+  const feedbackBonusAwarderAccount = rowString(row, "feedback_bonus_awarder_account");
+  const feedbackBonusAwardWindowSeconds =
+    row.feedback_bonus_award_window_seconds === null || row.feedback_bonus_award_window_seconds === undefined
+      ? null
+      : rowInteger(row, "feedback_bonus_award_window_seconds");
   const configurationStatus = rowString(row, "configuration_status") as ReviewRequestProfile["configurationStatus"];
   const profileHash = rowString(row, "profile_hash");
   const createdBy = rowString(row, "created_by");
@@ -360,6 +459,11 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     !HUMAN_REVIEW_AUDIENCES.includes(audience) ||
     !HUMAN_REVIEW_CONTENT_BOUNDARIES.includes(contentBoundary) ||
     !HUMAN_REVIEW_COMPENSATION_MODES.includes(compensationMode) ||
+    !feedbackBonusAwarderKind ||
+    !(feedbackBonusAwarderKind === "requester" || feedbackBonusAwarderKind === "designated") ||
+    (feedbackBonusAwarderKind === "requester") !== (feedbackBonusAwarderAccount === null) ||
+    (feedbackBonusEnabled && (feedbackBonusPoolAtomic === null || feedbackBonusAwardWindowSeconds === null)) ||
+    (!feedbackBonusEnabled && (feedbackBonusPoolAtomic !== null || feedbackBonusAwardWindowSeconds !== null)) ||
     !["ready", "action_required"].includes(configurationStatus) ||
     !HASH_PATTERN.test(profileHash) ||
     (configurationStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
@@ -389,6 +493,11 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     panelSize,
     compensationMode,
     bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
+    feedbackBonusEnabled,
+    feedbackBonusPoolAtomic,
+    feedbackBonusAwarderKind,
+    feedbackBonusAwarderAccount,
+    feedbackBonusAwardWindowSeconds,
     configurationStatus,
     profileHash,
     createdBy,
@@ -471,7 +580,9 @@ const PROFILE_COLUMNS = `profile_id, version, workspace_id, agent_id, agent_vers
   positive_label, negative_label,
   rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
   private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
-  compensation_mode, bounty_per_seat_atomic, configuration_status, profile_hash, created_by,
+  compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
+  feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
+  configuration_status, profile_hash, created_by,
   created_at, approved_by, approved_at, superseded_at`;
 
 async function loadProfile(workspaceId: string, profileId: string, version?: number) {
@@ -513,6 +624,11 @@ function insertValues(
     profile.panelSize,
     profile.compensationMode,
     profile.bountyPerSeatAtomic,
+    profile.feedbackBonusEnabled,
+    profile.feedbackBonusPoolAtomic,
+    profile.feedbackBonusAwarderKind,
+    profile.feedbackBonusAwarderAccount,
+    profile.feedbackBonusAwardWindowSeconds,
     profileHash,
     actor,
     now,
@@ -523,9 +639,11 @@ const INSERT_PROFILE = `INSERT INTO tokenless_agent_review_request_profiles
   (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
    rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
    private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
-   compensation_mode, bounty_per_seat_atomic, configuration_status, profile_hash, created_by,
+   compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
+   feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
+   configuration_status, profile_hash, created_by,
    created_at, approved_by, approved_at, superseded_at)
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'ready',$20,$21,$22,$21,$22,NULL)`;
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'ready',$25,$26,$27,$26,$27,NULL)`;
 
 function isUniqueViolation(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");

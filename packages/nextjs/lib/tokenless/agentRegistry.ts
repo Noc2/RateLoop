@@ -63,6 +63,10 @@ export type AgentHumanReviewSummary = {
       panelSize: number | null;
       compensationMode: HumanReviewCompensationMode;
       bountyPerSeatAtomic: string | null;
+      feedbackBonusEnabled: boolean;
+      feedbackBonusPoolAtomic: string | null;
+      feedbackBonusAwarderKind: "requester" | "designated";
+      feedbackBonusAwarderAccount: string | null;
     };
     authority: HumanReviewAuthorityLevel;
     enforcementMode: "advisory" | "host_enforced" | null;
@@ -541,6 +545,8 @@ async function loadWorkspaceHumanReviewProjection(
                    r.content_boundary, r.private_sensitivity, r.private_group_id,
                    r.private_group_policy_version, r.private_group_policy_hash,
                    r.response_window_seconds, r.panel_size, r.compensation_mode, r.bounty_per_seat_atomic,
+                   r.feedback_bonus_enabled, r.feedback_bonus_pool_atomic, r.feedback_bonus_awarder_kind,
+                   r.feedback_bonus_awarder_account,
                    r.configuration_status
             FROM tokenless_agent_human_review_bindings b
             JOIN tokenless_agent_review_policies p
@@ -869,6 +875,12 @@ function buildHumanReviewSummary(input: {
         panelSize,
         compensationMode: rowEnum(configuration, "compensation_mode", REVIEW_COMPENSATION_MODES),
         bountyPerSeatAtomic: rowString(configuration, "bounty_per_seat_atomic"),
+        feedbackBonusEnabled:
+          configuration.feedback_bonus_enabled === true || configuration.feedback_bonus_enabled === "t",
+        feedbackBonusPoolAtomic: rowString(configuration, "feedback_bonus_pool_atomic"),
+        feedbackBonusAwarderKind:
+          rowString(configuration, "feedback_bonus_awarder_kind") === "designated" ? "designated" : "requester",
+        feedbackBonusAwarderAccount: rowString(configuration, "feedback_bonus_awarder_account"),
       },
       authority,
       enforcementMode: selectedIntegration

@@ -94,6 +94,16 @@ function basePaymentLabel(request: HumanReviewConfiguration["request"]) {
   return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} USDC / reviewer`;
 }
 
+function feedbackBonusLabel(request: HumanReviewConfiguration["request"]) {
+  if (!request.feedbackBonusEnabled || request.feedbackBonusPoolAtomic === null) return "Off";
+  const atomic = BigInt(request.feedbackBonusPoolAtomic);
+  const whole = atomic / 1_000_000n;
+  const fraction = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
+  return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} USDC · ${
+    request.feedbackBonusAwarderKind === "designated" ? "designated human" : "requester"
+  } awards`;
+}
+
 function reviewAuthorityLabel(authority: HumanReviewConfiguration["authority"]) {
   if (authority === "check_only") return "Check policy only";
   if (authority === "prepare_for_approval") return "Prepare for owner approval";
@@ -141,7 +151,7 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
         </span>
       </div>
       {configuration ? (
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <div>
             <dt className="text-xs text-base-content/45">Frequency</dt>
             <dd className="mt-1 text-sm font-medium">{reviewFrequencyLabel(configuration.selection)}</dd>
@@ -159,6 +169,10 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
           <div>
             <dt className="text-xs text-base-content/45">Base payment</dt>
             <dd className="mt-1 text-sm font-medium">{basePaymentLabel(configuration.request)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/45">Feedback Bonus</dt>
+            <dd className="mt-1 text-sm font-medium">{feedbackBonusLabel(configuration.request)}</dd>
           </div>
           <div>
             <dt className="text-xs text-base-content/45">Agent authority</dt>

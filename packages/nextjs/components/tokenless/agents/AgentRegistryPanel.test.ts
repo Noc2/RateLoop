@@ -7,7 +7,7 @@ test("agent registry keeps the default row compact and reveals management on dem
   const form = readFileSync(new URL("./AgentVersionForm.tsx", import.meta.url), "utf8");
   assert.match(source, />Manage</);
   assert.match(source, /Change workflow version/);
-  assert.match(source, />Human review</);
+  assert.match(source, /Human review/);
   assert.match(source, /aria-controls="agent-human-review-editor"/);
   assert.match(source, /activeReviewAgentId === agent\.agentId/);
   assert.match(source, /onReviewAgentChange/);
@@ -37,6 +37,7 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.match(source, /Reviewers/);
   assert.match(source, /Response window/);
   assert.match(source, /Base payment/);
+  assert.match(source, /Feedback Bonus/);
   assert.match(source, /Agent authority/);
   assert.match(source, /Every eligible output/);
   assert.match(source, /Adaptive ·/);
@@ -49,7 +50,6 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.match(source, /Blocked · finish review setup/);
   assert.match(source, /Blocked · reconnect the agent/);
   assert.match(source, /Blocked · automatic requests are off/);
-  assert.doesNotMatch(source, /Feedback Bonus|feedback bonus/);
   assert.match(source, /Baseline review coverage/);
   assert.match(source, /Agent-human agreement/);
   assert.match(source, /95% lower bound/);

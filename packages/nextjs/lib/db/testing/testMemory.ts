@@ -44,6 +44,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0064_human_review_terminal_recovery.sql",
       "0065_human_review_continuations.sql",
       "0067_paid_review_voucher_receipts.sql",
+      "0068_feedback_bonus_awards.sql",
     ].includes(file) &&
     (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
   ) {

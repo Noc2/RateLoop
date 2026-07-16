@@ -904,9 +904,10 @@ test("human-review summaries use exact current bindings, aggregate durable workl
             (approval_id, workspace_id, opportunity_id, revision, request_profile_id,
              request_profile_version, request_profile_hash, source_evidence_hash, suggestion_commitment,
              prepared_request_json, prepared_request_hash, derived_economics_json, derived_economics_hash,
-             maximum_charge_atomic, status, prepared_by, created_at, expires_at)
+             maximum_charge_atomic, feedback_bonus_maximum_atomic, maximum_consent_atomic,
+             status, prepared_by, created_at, expires_at)
             VALUES (?, ?, ?, 1, 'rrp_projection_current', 1, ?, ?, ?, '{}', ?, '{}', ?,
-                    7500000, 'pending', ?, ?, ?)`,
+                    7500000, 0, 7500000, 'pending', ?, ?, ?)`,
       args: [
         approval.id,
         workspaceId,

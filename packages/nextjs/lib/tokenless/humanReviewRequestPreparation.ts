@@ -32,6 +32,21 @@ export type BoundHumanReviewRequestProfile = {
   panelSize: number;
   compensationMode: "unpaid" | "usdc";
   bountyPerSeatAtomic: string | null;
+  feedbackBonusEnabled?: boolean;
+  feedbackBonusPoolAtomic?: string | null;
+  feedbackBonusAwarderKind?: "requester" | "designated";
+  feedbackBonusAwarderAccount?: string | null;
+  feedbackBonusAwardWindowSeconds?: number | null;
+};
+
+export type HumanReviewFeedbackBonusEconomics = {
+  schemaVersion: "rateloop.feedback-bonus-economics.v1";
+  enabled: boolean;
+  currency: "USDC" | null;
+  poolAtomic: string;
+  awarder: { kind: "requester" | "designated"; account: string | null };
+  awardWindowSeconds: number | null;
+  agentMayAward: false;
 };
 
 export type HumanReviewDerivedEconomics = {
@@ -72,6 +87,7 @@ export type HumanReviewPreparedRequest = {
     selectionPolicyId: string;
     selectionPolicyVersion: number;
   };
+  feedbackBonus?: HumanReviewFeedbackBonusEconomics;
 };
 
 export type PreparedHumanReviewRequest = {
@@ -80,6 +96,8 @@ export type PreparedHumanReviewRequest = {
   derivedEconomics: Readonly<HumanReviewDerivedEconomics>;
   derivedEconomicsHash: `sha256:${string}`;
   maximumChargeAtomic: string;
+  feedbackBonusEconomics: Readonly<HumanReviewFeedbackBonusEconomics>;
+  maximumConsentAtomic: string;
   quoteTerms: Pick<
     TokenlessQuoteRequest,
     "budget" | "question" | "requestedPanelSize" | "responseWindowSeconds" | "requestProfile" | "reviewEconomics"
@@ -201,6 +219,57 @@ export function deriveHumanReviewEconomics(
   });
 }
 
+export function deriveFeedbackBonusEconomics(profile: {
+  feedbackBonusEnabled?: boolean;
+  feedbackBonusPoolAtomic?: string | null;
+  feedbackBonusAwarderKind?: "requester" | "designated";
+  feedbackBonusAwarderAccount?: string | null;
+  feedbackBonusAwardWindowSeconds?: number | null;
+}): Readonly<HumanReviewFeedbackBonusEconomics> {
+  if (!(profile.feedbackBonusEnabled ?? false)) {
+    if (
+      (profile.feedbackBonusPoolAtomic ?? null) !== null ||
+      (profile.feedbackBonusAwardWindowSeconds ?? null) !== null
+    ) {
+      configurationError("Stored disabled Feedback Bonus includes funded terms.");
+    }
+    return immutable({
+      schemaVersion: "rateloop.feedback-bonus-economics.v1",
+      enabled: false,
+      currency: null,
+      poolAtomic: "0",
+      awarder: { kind: "requester", account: null },
+      awardWindowSeconds: null,
+      agentMayAward: false,
+    });
+  }
+  const amount = canonicalAtomic(profile.feedbackBonusPoolAtomic, "Feedback Bonus pool");
+  if (amount === 0n) configurationError("Stored Feedback Bonus pool must be greater than zero.");
+  const awardWindowSeconds = boundedInteger(
+    profile.feedbackBonusAwardWindowSeconds,
+    "Feedback Bonus award window",
+    3_600,
+    31_536_000,
+  );
+  const awarderKind = profile.feedbackBonusAwarderKind ?? "requester";
+  const awarderAccount = profile.feedbackBonusAwarderAccount ?? null;
+  if (
+    !["requester", "designated"].includes(awarderKind) ||
+    (awarderKind === "requester") !== (awarderAccount === null)
+  ) {
+    configurationError("Stored Feedback Bonus human awarder is invalid.");
+  }
+  return immutable({
+    schemaVersion: "rateloop.feedback-bonus-economics.v1",
+    enabled: true,
+    currency: "USDC",
+    poolAtomic: amount.toString(),
+    awarder: { kind: awarderKind, account: awarderAccount },
+    awardWindowSeconds,
+    agentMayAward: false,
+  });
+}
+
 function exactProfile(profile: BoundHumanReviewRequestProfile) {
   const id = requiredText(profile.id, "request profile ID", 160);
   const version = boundedInteger(profile.version, "request profile version", 1, 2_147_483_647);
@@ -231,9 +300,6 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
   const panelSize = boundedInteger(profile.panelSize, "review panel size", 1, HUMAN_REVIEW_MAXIMUM_PANEL_SIZE);
   if (profile.audience !== "private_invited" && panelSize < 3) {
     configurationError("Stored public or hybrid review panel is too small.");
-  }
-  if (profile.audience !== "private_invited" && profile.compensationMode !== "usdc") {
-    configurationError("Stored public or hybrid review must be USDC-paid.");
   }
   if (
     (profile.audience === "public_network" && profile.privateGroupId !== null) ||
@@ -312,6 +378,11 @@ export function prepareHumanReviewRequest(input: {
     );
   }
   const derivedEconomics = deriveHumanReviewEconomics(profile);
+  const feedbackBonusEconomics = deriveFeedbackBonusEconomics(profile);
+  const maximumConsentAtomic = checkedUint256(
+    BigInt(derivedEconomics.maximumChargeAtomic) + BigInt(feedbackBonusEconomics.poolAtomic),
+    "maximum payment consent",
+  ).toString();
   const preparedRequest = immutable<HumanReviewPreparedRequest>({
     schemaVersion: "rateloop.human-review-prepared-request.v1",
     opportunityId: requiredText(input.opportunityId, "opportunity ID", 160),
@@ -343,6 +414,7 @@ export function prepareHumanReviewRequest(input: {
         2_147_483_647,
       ),
     },
+    feedbackBonus: feedbackBonusEconomics,
   });
   const reviewEconomics =
     profile.compensationMode === "usdc"
@@ -364,6 +436,8 @@ export function prepareHumanReviewRequest(input: {
     derivedEconomics,
     derivedEconomicsHash: hashPreparedHumanReviewValue(derivedEconomics),
     maximumChargeAtomic: derivedEconomics.maximumChargeAtomic,
+    feedbackBonusEconomics,
+    maximumConsentAtomic,
     quoteTerms: {
       budget: {
         bountyAtomic: derivedEconomics.baseBountyAtomic,

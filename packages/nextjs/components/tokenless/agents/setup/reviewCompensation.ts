@@ -6,6 +6,10 @@ type ReviewRequestProfileInput = Omit<ReviewRequestProfile, "configurationStatus
 export type ReviewCompensationFormValues = {
   compensationMode: ReviewRequestProfile["compensationMode"];
   usdcPerReviewer: string;
+  feedbackBonusEnabled?: boolean;
+  feedbackBonusUsdc?: string;
+  feedbackBonusAwarderKind?: "requester" | "designated";
+  feedbackBonusAwarderAccount?: string;
   authority: AgentSetupReviewDraft["authority"];
 };
 
@@ -47,6 +51,10 @@ export function reviewCompensationFormValues(
   return {
     compensationMode: profile?.compensationMode ?? "unpaid",
     usdcPerReviewer: profile?.bountyPerSeatAtomic ? usdcAtomicToDecimal(profile.bountyPerSeatAtomic) : "1",
+    feedbackBonusEnabled: profile?.feedbackBonusEnabled ?? false,
+    feedbackBonusUsdc: profile?.feedbackBonusPoolAtomic ? usdcAtomicToDecimal(profile.feedbackBonusPoolAtomic) : "2",
+    feedbackBonusAwarderKind: profile?.feedbackBonusAwarderKind ?? "requester",
+    feedbackBonusAwarderAccount: profile?.feedbackBonusAwarderAccount ?? "",
     authority: authority ?? "check_only",
   };
 }
@@ -70,8 +78,29 @@ export function buildReviewCompensationConfiguration(
   }
   const bountyPerSeatAtomic =
     compensationMode === "unpaid" ? null : usdcDecimalToAtomic(values.usdcPerReviewer, profile.panelSize ?? 0);
+  const feedbackBonusEnabled = values.feedbackBonusEnabled ?? false;
+  const feedbackBonusAwarderKind = values.feedbackBonusAwarderKind ?? "requester";
+  const feedbackBonusAwarderAccount = (values.feedbackBonusAwarderAccount ?? "").trim();
+  if (!(feedbackBonusAwarderKind === "requester" || feedbackBonusAwarderKind === "designated")) {
+    throw new Error("Choose a valid Feedback Bonus awarder.");
+  }
+  if (feedbackBonusAwarderKind === "designated" && !feedbackBonusAwarderAccount) {
+    throw new Error("Enter the authenticated account for the designated Feedback Bonus awarder.");
+  }
+  const feedbackBonusPoolAtomic = feedbackBonusEnabled ? usdcDecimalToAtomic(values.feedbackBonusUsdc ?? "", 1) : null;
   return {
-    requestProfile: { ...profile, compensationMode, bountyPerSeatAtomic },
+    requestProfile: {
+      ...profile,
+      compensationMode,
+      bountyPerSeatAtomic,
+      feedbackBonusEnabled,
+      feedbackBonusPoolAtomic,
+      feedbackBonusAwarderKind: feedbackBonusEnabled ? feedbackBonusAwarderKind : "requester",
+      feedbackBonusAwarderAccount:
+        feedbackBonusEnabled && feedbackBonusAwarderKind === "designated" ? feedbackBonusAwarderAccount : null,
+      feedbackBonusAwardWindowSeconds: feedbackBonusEnabled ? 604_800 : null,
+      rationaleMode: feedbackBonusEnabled && profile.rationaleMode === "off" ? "optional" : profile.rationaleMode,
+    },
     authority: values.authority,
   };
 }

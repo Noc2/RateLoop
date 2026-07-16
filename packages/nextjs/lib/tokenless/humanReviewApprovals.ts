@@ -36,6 +36,17 @@ export type HumanReviewPreparedRequest = {
     selectionPolicyId: string;
     selectionPolicyVersion: number;
   };
+  feedbackBonus?: HumanReviewFeedbackBonusEconomics;
+};
+
+export type HumanReviewFeedbackBonusEconomics = {
+  schemaVersion: "rateloop.feedback-bonus-economics.v1";
+  enabled: boolean;
+  currency: "USDC" | null;
+  poolAtomic: string;
+  awarder: { kind: "requester" | "designated"; account: string | null };
+  awardWindowSeconds: number | null;
+  agentMayAward: false;
 };
 
 export type HumanReviewDerivedEconomics = {
@@ -61,6 +72,8 @@ export type HumanReviewApproval = {
   expiresAt: string;
   preparedRequest: HumanReviewPreparedRequest;
   economics: HumanReviewDerivedEconomics;
+  feedbackBonusEconomics: HumanReviewFeedbackBonusEconomics;
+  maximumConsentAtomic: string;
 };
 
 function stableJson(value: unknown): string {
@@ -147,7 +160,7 @@ function atomic(value: unknown, field: string) {
 
 function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   const root = object(value, "prepared request");
-  exactKeys(root, "prepared request", [
+  const preparedKeys = [
     "schemaVersion",
     "opportunityId",
     "workflowKey",
@@ -158,7 +171,9 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
     "panel",
     "contentCommitments",
     "provenance",
-  ]);
+  ];
+  if (root.feedbackBonus !== undefined) preparedKeys.push("feedbackBonus");
+  exactKeys(root, "prepared request", preparedKeys);
   if (root.schemaVersion !== "rateloop.human-review-prepared-request.v1") {
     throw new Error("Stored prepared request schema is unsupported.");
   }
@@ -169,6 +184,18 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   const panel = object(root.panel, "panel");
   const contentCommitments = object(root.contentCommitments, "content commitments");
   const provenance = object(root.provenance, "provenance");
+  const bonus =
+    root.feedbackBonus === undefined
+      ? ({
+          schemaVersion: "rateloop.feedback-bonus-economics.v1",
+          enabled: false,
+          currency: null,
+          poolAtomic: "0",
+          awarder: { kind: "requester", account: null },
+          awardWindowSeconds: null,
+          agentMayAward: false,
+        } as const)
+      : feedbackBonusEconomics(root.feedbackBonus);
   exactKeys(requestProfile, "request profile", ["id", "version", "hash"]);
   exactKeys(question, "question", ["criterion", "positiveLabel", "negativeLabel", "rationaleMode"]);
   exactKeys(audience, "audience", ["kind", "contentBoundary", "privateSensitivity", "privateGroupId"]);
@@ -245,6 +272,49 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
       selectionPolicyId: requiredString(provenance.selectionPolicyId, "selection policy ID"),
       selectionPolicyVersion: integer(provenance.selectionPolicyVersion, "selection policy version"),
     },
+    feedbackBonus: bonus,
+  };
+}
+
+function feedbackBonusEconomics(value: unknown): HumanReviewFeedbackBonusEconomics {
+  const root = object(value, "Feedback Bonus economics");
+  exactKeys(root, "Feedback Bonus economics", [
+    "schemaVersion",
+    "enabled",
+    "currency",
+    "poolAtomic",
+    "awarder",
+    "awardWindowSeconds",
+    "agentMayAward",
+  ]);
+  const awarder = object(root.awarder, "Feedback Bonus awarder");
+  exactKeys(awarder, "Feedback Bonus awarder", ["kind", "account"]);
+  if (root.schemaVersion !== "rateloop.feedback-bonus-economics.v1" || typeof root.enabled !== "boolean") {
+    throw new Error("Stored Feedback Bonus economics are unsupported.");
+  }
+  const kind = oneOf(awarder.kind, "Feedback Bonus awarder", ["requester", "designated"] as const);
+  const account = optionalString(awarder.account, "Feedback Bonus awarder account");
+  const poolAtomic = atomic(root.poolAtomic, "Feedback Bonus pool");
+  const awardWindowSeconds =
+    root.awardWindowSeconds === null
+      ? null
+      : integer(root.awardWindowSeconds, "Feedback Bonus award window", 3_600, 31_536_000);
+  if (
+    root.agentMayAward !== false ||
+    (root.enabled && (root.currency !== "USDC" || BigInt(poolAtomic) === 0n || awardWindowSeconds === null)) ||
+    (!root.enabled && (root.currency !== null || BigInt(poolAtomic) !== 0n || awardWindowSeconds !== null)) ||
+    (kind === "requester") !== (account === null)
+  ) {
+    throw new Error("Stored Feedback Bonus economics are internally inconsistent.");
+  }
+  return {
+    schemaVersion: root.schemaVersion,
+    enabled: root.enabled,
+    currency: root.currency as "USDC" | null,
+    poolAtomic,
+    awarder: { kind, account },
+    awardWindowSeconds,
+    agentMayAward: false,
   };
 }
 
@@ -302,6 +372,17 @@ function approvalFromRow(row: Row): HumanReviewApproval {
   const economicsRaw = parsedObject(row.derived_economics_json, "derived economics");
   const prepared = preparedRequest(preparedRaw);
   const derived = economics(economicsRaw);
+  const bonus =
+    prepared.feedbackBonus ??
+    ({
+      schemaVersion: "rateloop.feedback-bonus-economics.v1",
+      enabled: false,
+      currency: null,
+      poolAtomic: "0",
+      awarder: { kind: "requester", account: null },
+      awardWindowSeconds: null,
+      agentMayAward: false,
+    } as const);
   const preparedHash = hash(row.prepared_request_hash, "prepared request hash");
   const economicsHash = hash(row.derived_economics_hash, "derived economics hash");
   const expiresAt = dateIso(row.expires_at, "approval expiry");
@@ -317,7 +398,9 @@ function approvalFromRow(row: Row): HumanReviewApproval {
     prepared.contentCommitments.suggestion !== text(row, "suggestion_commitment") ||
     prepared.timing.expiresAt !== expiresAt ||
     prepared.panel.size !== derived.panelSize ||
-    derived.maximumChargeAtomic !== text(row, "maximum_charge_atomic")
+    derived.maximumChargeAtomic !== text(row, "maximum_charge_atomic") ||
+    bonus.poolAtomic !== text(row, "feedback_bonus_maximum_atomic") ||
+    (BigInt(derived.maximumChargeAtomic) + BigInt(bonus.poolAtomic)).toString() !== text(row, "maximum_consent_atomic")
   ) {
     throw new Error("Stored human-review approval does not match its frozen bindings.");
   }
@@ -341,6 +424,8 @@ function approvalFromRow(row: Row): HumanReviewApproval {
     expiresAt,
     preparedRequest: prepared,
     economics: derived,
+    feedbackBonusEconomics: bonus,
+    maximumConsentAtomic: text(row, "maximum_consent_atomic")!,
   };
 }
 

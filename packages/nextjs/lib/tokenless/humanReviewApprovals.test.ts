@@ -58,6 +58,8 @@ function fixture() {
     derived_economics_json: JSON.stringify(economics),
     derived_economics_hash: __humanReviewApprovalTestUtils.sha256(economics),
     maximum_charge_atomic: "2650000",
+    feedback_bonus_maximum_atomic: "0",
+    maximum_consent_atomic: "2650000",
     status: "pending",
     lifecycle_state: "approval_required",
     lifecycle_revision: 4,

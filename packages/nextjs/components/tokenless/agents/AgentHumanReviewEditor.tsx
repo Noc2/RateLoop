@@ -40,6 +40,10 @@ type Draft = {
   panelSize: string;
   compensationMode: "unpaid" | "usdc";
   bountyUsdc: string;
+  feedbackBonusEnabled: boolean;
+  feedbackBonusUsdc: string;
+  feedbackBonusAwarderKind: "requester" | "designated";
+  feedbackBonusAwarderAccount: string;
   authority: Authority;
 };
 
@@ -105,6 +109,10 @@ function draftFromView(view: OwnerView): Draft {
     panelSize: String(number(request.panelSize, 1)),
     compensationMode: String(request.compensationMode ?? "unpaid") as Draft["compensationMode"],
     bountyUsdc: atomicToUsdc(request.bountyPerSeatAtomic),
+    feedbackBonusEnabled: request.feedbackBonusEnabled === true,
+    feedbackBonusUsdc: request.feedbackBonusPoolAtomic ? atomicToUsdc(request.feedbackBonusPoolAtomic) : "2",
+    feedbackBonusAwarderKind: request.feedbackBonusAwarderKind === "designated" ? "designated" : "requester",
+    feedbackBonusAwarderAccount: String(request.feedbackBonusAwarderAccount ?? ""),
     authority: view.configuration.authority,
   };
 }
@@ -162,7 +170,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
     criterion: draft.criterion.trim(),
     positiveLabel: draft.positiveLabel.trim(),
     negativeLabel: draft.negativeLabel.trim(),
-    rationaleMode: draft.rationaleMode,
+    rationaleMode: draft.feedbackBonusEnabled && draft.rationaleMode === "off" ? "optional" : draft.rationaleMode,
     audience: draft.audience,
     contentBoundary: draft.audience === "private_invited" ? "private_workspace" : "public_or_test",
     privateSensitivity: draft.audience === "private_invited" ? draft.privateSensitivity : null,
@@ -171,9 +179,24 @@ function buildMutation(view: OwnerView, draft: Draft) {
     panelSize,
     compensationMode,
     bountyPerSeatAtomic: compensationMode === "usdc" ? usdcToAtomic(draft.bountyUsdc) : null,
+    feedbackBonusEnabled: draft.feedbackBonusEnabled,
+    feedbackBonusPoolAtomic: draft.feedbackBonusEnabled ? usdcToAtomic(draft.feedbackBonusUsdc) : null,
+    feedbackBonusAwarderKind: draft.feedbackBonusEnabled ? draft.feedbackBonusAwarderKind : "requester",
+    feedbackBonusAwarderAccount:
+      draft.feedbackBonusEnabled && draft.feedbackBonusAwarderKind === "designated"
+        ? draft.feedbackBonusAwarderAccount.trim()
+        : null,
+    feedbackBonusAwardWindowSeconds: draft.feedbackBonusEnabled ? 604_800 : null,
   };
   if (!requestProfile.criterion || !requestProfile.positiveLabel || !requestProfile.negativeLabel) {
     throw new Error("Question and answer labels are required.");
+  }
+  if (
+    draft.feedbackBonusEnabled &&
+    draft.feedbackBonusAwarderKind === "designated" &&
+    !draft.feedbackBonusAwarderAccount.trim()
+  ) {
+    throw new Error("Enter the authenticated account for the designated Feedback Bonus awarder.");
   }
   let publishingGrant: Record<string, unknown> | null = null;
   if (draft.authority === "ask_automatically") {
@@ -222,6 +245,11 @@ function buildMutation(view: OwnerView, draft: Draft) {
             : "RateLoop network; public-safe material",
       Round: `${panelSize} reviewer${panelSize === 1 ? "" : "s"} · ${responseWindowSeconds} seconds`,
       Payment: compensationMode === "usdc" ? `${draft.bountyUsdc} USDC per accepted reviewer` : "Unpaid",
+      "Feedback Bonus": draft.feedbackBonusEnabled
+        ? `${draft.feedbackBonusUsdc} USDC · ${
+            draft.feedbackBonusAwarderKind === "designated" ? "designated human" : "requester"
+          } awards selected feedback`
+        : "Off",
       Authority:
         draft.authority === "check_only"
           ? "Check only"
@@ -464,7 +492,20 @@ export function AgentHumanReviewEditor({
             <select
               className="select mt-2 w-full"
               value={draft.audience}
-              onChange={event => update("audience", event.target.value as Audience)}
+              onChange={event => {
+                const audience = event.target.value as Audience;
+                setDraft(current =>
+                  current
+                    ? {
+                        ...current,
+                        audience,
+                        compensationMode: audience === "private_invited" ? current.compensationMode : "usdc",
+                      }
+                    : current,
+                );
+                setPending(null);
+                setConfirmed(false);
+              }}
             >
               <option value="private_invited">Invited reviewers</option>
               <option value="public_network">RateLoop network</option>
@@ -528,20 +569,25 @@ export function AgentHumanReviewEditor({
               required
             />
           </label>
-          {draft.audience === "private_invited" ? (
-            <label className="text-sm">
-              Base payment
-              <select
-                className="select mt-2 w-full"
-                value={draft.compensationMode}
-                onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
-              >
-                <option value="unpaid">Unpaid</option>
-                <option value="usdc">USDC bounty</option>
-              </select>
-            </label>
-          ) : null}
-          {draft.audience !== "private_invited" || draft.compensationMode === "usdc" ? (
+          <label className="text-sm">
+            Guaranteed bounty
+            <select
+              className="select mt-2 w-full"
+              value={draft.compensationMode}
+              onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
+            >
+              <option value="unpaid" disabled={draft.audience !== "private_invited"}>
+                No bounty
+              </option>
+              <option value="usdc">Add USDC bounty</option>
+            </select>
+            {draft.audience !== "private_invited" ? (
+              <span className="mt-1 block text-xs text-base-content/50">
+                Network assignments currently require a guaranteed bounty.
+              </span>
+            ) : null}
+          </label>
+          {draft.compensationMode === "usdc" ? (
             <label className="text-sm">
               USDC per accepted reviewer
               <input
@@ -553,6 +599,72 @@ export function AgentHumanReviewEditor({
               />
             </label>
           ) : null}
+          <fieldset className="rounded-xl border border-white/10 p-4 sm:col-span-2">
+            <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
+            <p className="text-sm text-base-content/60">
+              Optional, separately funded, and awarded only by the saved human.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-sm">
+              <button
+                type="button"
+                className={`btn btn-sm ${!draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                aria-pressed={!draft.feedbackBonusEnabled}
+                onClick={() => update("feedbackBonusEnabled", false)}
+              >
+                No bonus
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                aria-pressed={draft.feedbackBonusEnabled}
+                onClick={() => update("feedbackBonusEnabled", true)}
+              >
+                Add bonus
+              </button>
+            </div>
+            {draft.feedbackBonusEnabled ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="text-sm">
+                  Bonus pool (USDC)
+                  <input
+                    className="input mt-2 w-full"
+                    inputMode="decimal"
+                    value={draft.feedbackBonusUsdc}
+                    onChange={event => update("feedbackBonusUsdc", event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="text-sm">
+                  Human awarder
+                  <select
+                    className="select mt-2 w-full"
+                    value={draft.feedbackBonusAwarderKind}
+                    onChange={event =>
+                      update("feedbackBonusAwarderKind", event.target.value as Draft["feedbackBonusAwarderKind"])
+                    }
+                  >
+                    <option value="requester">Requester</option>
+                    <option value="designated">Designated authenticated human</option>
+                  </select>
+                </label>
+                {draft.feedbackBonusAwarderKind === "designated" ? (
+                  <label className="text-sm sm:col-span-2">
+                    Awarder account
+                    <input
+                      className="input mt-2 w-full"
+                      value={draft.feedbackBonusAwarderAccount}
+                      onChange={event => update("feedbackBonusAwarderAccount", event.target.value)}
+                      maxLength={320}
+                      required
+                    />
+                  </label>
+                ) : null}
+                <p className="text-xs text-base-content/55 sm:col-span-2">
+                  The agent can never select or execute a Feedback Bonus award.
+                </p>
+              </div>
+            ) : null}
+          </fieldset>
           <label className="text-sm sm:col-span-2">
             Agent authority
             <select

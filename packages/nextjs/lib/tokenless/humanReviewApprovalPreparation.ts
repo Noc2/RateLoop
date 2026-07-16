@@ -35,6 +35,8 @@ export type PreparedOwnerApproval = Readonly<{
   economics: Readonly<HumanReviewDerivedEconomics>;
   derivedEconomicsHash: string;
   maximumChargeAtomic: string;
+  feedbackBonusEconomics: PreparedHumanReviewRequest["feedbackBonusEconomics"];
+  maximumConsentAtomic: string;
   sideEffects: Readonly<{
     published: false;
     assigned: false;
@@ -164,6 +166,11 @@ function profileFromRow(row: Row): BoundHumanReviewRequestProfile {
     panelSize: integer(row, "panel_size", 1, 100),
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
+    feedbackBonusEnabled: boolean(row, "feedback_bonus_enabled"),
+    feedbackBonusPoolAtomic: text(row, "feedback_bonus_pool_atomic"),
+    feedbackBonusAwarderKind: oneOf(row, "feedback_bonus_awarder_kind", ["requester", "designated"] as const),
+    feedbackBonusAwarderAccount: text(row, "feedback_bonus_awarder_account"),
+    feedbackBonusAwardWindowSeconds: optionalInteger(row, "feedback_bonus_award_window_seconds"),
   };
 }
 
@@ -175,14 +182,21 @@ function assertSupportedPreparedLane(profile: BoundHumanReviewRequestProfile) {
     profile.privateGroupId === null &&
     profile.compensationMode === "usdc" &&
     profile.bountyPerSeatAtomic !== null;
-  const privateUnpaid =
+  const privateLane =
     profile.audience === "private_invited" &&
     profile.contentBoundary === "private_workspace" &&
     profile.privateSensitivity !== null &&
     profile.privateGroupId !== null &&
-    profile.compensationMode === "unpaid" &&
-    profile.bountyPerSeatAtomic === null;
-  if (!publicPaid && !privateUnpaid) {
+    ((profile.compensationMode === "unpaid" && profile.bountyPerSeatAtomic === null) ||
+      (profile.compensationMode === "usdc" && profile.bountyPerSeatAtomic !== null));
+  const hybridPaid =
+    profile.audience === "hybrid" &&
+    profile.contentBoundary === "public_or_test" &&
+    profile.privateSensitivity === null &&
+    profile.privateGroupId !== null &&
+    profile.compensationMode === "usdc" &&
+    profile.bountyPerSeatAtomic !== null;
+  if (!publicPaid && !privateLane && !hybridPaid) {
     throw new TokenlessServiceError(
       "This frozen review lane is not ready for owner approval.",
       409,
@@ -234,7 +248,9 @@ async function loadAndVerifyOpportunity(
             rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
             rrp.private_group_policy_version, rrp.private_group_policy_hash,
             rrp.response_window_seconds, rrp.panel_size, rrp.compensation_mode,
-            rrp.bounty_per_seat_atomic, rrp.configuration_status,
+            rrp.bounty_per_seat_atomic, rrp.feedback_bonus_enabled, rrp.feedback_bonus_pool_atomic,
+            rrp.feedback_bonus_awarder_kind, rrp.feedback_bonus_awarder_account,
+            rrp.feedback_bonus_award_window_seconds, rrp.configuration_status,
             rrp.approved_at AS profile_approved_at, rrp.superseded_at AS profile_superseded_at
      FROM tokenless_agent_review_opportunities o
      JOIN tokenless_agent_review_opportunity_lifecycles l
@@ -287,6 +303,11 @@ async function loadAndVerifyOpportunity(
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,
     bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+    feedbackBonusEnabled: profile.feedbackBonusEnabled,
+    feedbackBonusPoolAtomic: profile.feedbackBonusPoolAtomic,
+    feedbackBonusAwarderKind: profile.feedbackBonusAwarderKind,
+    feedbackBonusAwarderAccount: profile.feedbackBonusAwarderAccount,
+    feedbackBonusAwardWindowSeconds: profile.feedbackBonusAwardWindowSeconds,
   });
   const bindingPublishingPolicyId = text(row, "binding_publishing_policy_id");
   const bindingPublishingPolicyVersion = optionalInteger(row, "binding_publishing_policy_version");
@@ -412,6 +433,8 @@ function projection(input: { row: Row; preparation: PreparedHumanReviewRequest }
     economics: input.preparation.derivedEconomics,
     derivedEconomicsHash: input.preparation.derivedEconomicsHash,
     maximumChargeAtomic: input.preparation.maximumChargeAtomic,
+    feedbackBonusEconomics: input.preparation.feedbackBonusEconomics,
+    maximumConsentAtomic: input.preparation.maximumConsentAtomic,
     sideEffects: { published: false, assigned: false, fundsReserved: false, spent: false },
   });
 }
@@ -434,6 +457,8 @@ function assertExactStoredApproval(
     text(row, "prepared_request_hash") === preparation.preparedRequestHash &&
     text(row, "derived_economics_hash") === preparation.derivedEconomicsHash &&
     text(row, "maximum_charge_atomic") === preparation.maximumChargeAtomic &&
+    text(row, "feedback_bonus_maximum_atomic") === preparation.feedbackBonusEconomics.poolAtomic &&
+    text(row, "maximum_consent_atomic") === preparation.maximumConsentAtomic &&
     hashPreparedHumanReviewValue(storedPrepared) === preparation.preparedRequestHash &&
     hashPreparedHumanReviewValue(storedEconomics) === preparation.derivedEconomicsHash;
   if (!exact) {
@@ -521,8 +546,9 @@ export async function prepareHumanReviewForOwnerApproval(input: {
         source_evidence_hash,suggestion_commitment,
         prepared_request_json,prepared_request_hash,
         derived_economics_json,derived_economics_hash,maximum_charge_atomic,
+        feedback_bonus_maximum_atomic,maximum_consent_atomic,
         status,prepared_by,created_at,expires_at)
-       VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14,$15,$16)
+       VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',$16,$17,$18)
        RETURNING *`,
       [
         approvalId,
@@ -538,6 +564,8 @@ export async function prepareHumanReviewForOwnerApproval(input: {
         JSON.stringify(preparation.derivedEconomics),
         preparation.derivedEconomicsHash,
         preparation.maximumChargeAtomic,
+        preparation.feedbackBonusEconomics.poolAtomic,
+        preparation.maximumConsentAtomic,
         opportunity.integrationId,
         now,
         expiresAt,

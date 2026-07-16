@@ -65,6 +65,11 @@ export type AgentSetupReviewDraft = {
     panelSize: number | null;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
+    feedbackBonusEnabled?: boolean;
+    feedbackBonusPoolAtomic?: string | null;
+    feedbackBonusAwarderKind?: "requester" | "designated";
+    feedbackBonusAwarderAccount?: string | null;
+    feedbackBonusAwardWindowSeconds?: number | null;
     configurationStatus: "ready" | "action_required";
   };
   authority: "check_only" | "prepare_for_approval" | "ask_automatically";
@@ -98,6 +103,11 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
     panelSize: 2,
     compensationMode: "unpaid",
     bountyPerSeatAtomic: null,
+    feedbackBonusEnabled: false,
+    feedbackBonusPoolAtomic: null,
+    feedbackBonusAwarderKind: "requester",
+    feedbackBonusAwarderAccount: null,
+    feedbackBonusAwardWindowSeconds: null,
     configurationStatus: "ready",
   },
   authority: "check_only",
@@ -240,6 +250,8 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
       profile.privateSensitivity,
     ) ||
     !(["unpaid", "usdc"] as unknown[]).includes(profile.compensationMode) ||
+    typeof profile.feedbackBonusEnabled !== "boolean" ||
+    !(["requester", "designated"] as unknown[]).includes(profile.feedbackBonusAwarderKind) ||
     !(["ready", "action_required"] as unknown[]).includes(profile.configurationStatus)
   ) {
     throw new Error("Saved human-review configuration is invalid.");
@@ -272,6 +284,11 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode as AgentSetupReviewDraft["requestProfile"]["compensationMode"],
       bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+      feedbackBonusEnabled: profile.feedbackBonusEnabled === true,
+      feedbackBonusPoolAtomic: profile.feedbackBonusPoolAtomic,
+      feedbackBonusAwarderKind: profile.feedbackBonusAwarderKind === "designated" ? "designated" : "requester",
+      feedbackBonusAwarderAccount: profile.feedbackBonusAwarderAccount,
+      feedbackBonusAwardWindowSeconds: profile.feedbackBonusAwardWindowSeconds,
       configurationStatus:
         profile.configurationStatus as AgentSetupReviewDraft["requestProfile"]["configurationStatus"],
     },

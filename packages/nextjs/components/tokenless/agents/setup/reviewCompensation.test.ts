@@ -20,6 +20,18 @@ const profile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatu
   panelSize: 2,
   compensationMode: "unpaid",
   bountyPerSeatAtomic: null,
+  feedbackBonusEnabled: false,
+  feedbackBonusPoolAtomic: null,
+  feedbackBonusAwarderKind: "requester",
+  feedbackBonusAwarderAccount: null,
+  feedbackBonusAwardWindowSeconds: null,
+};
+
+const noBonus = {
+  feedbackBonusEnabled: false,
+  feedbackBonusUsdc: "2",
+  feedbackBonusAwarderKind: "requester" as const,
+  feedbackBonusAwarderAccount: "",
 };
 
 test("compensation form resumes exact paid USDC and authority values", () => {
@@ -28,7 +40,15 @@ test("compensation form resumes exact paid USDC and authority values", () => {
       { ...profile, compensationMode: "usdc", bountyPerSeatAtomic: "2500000", configurationStatus: "ready" },
       "prepare_for_approval",
     ),
-    { compensationMode: "usdc", usdcPerReviewer: "2.5", authority: "prepare_for_approval" },
+    {
+      compensationMode: "usdc",
+      usdcPerReviewer: "2.5",
+      feedbackBonusEnabled: false,
+      feedbackBonusUsdc: "2",
+      feedbackBonusAwarderKind: "requester",
+      feedbackBonusAwarderAccount: "",
+      authority: "prepare_for_approval",
+    },
   );
 });
 
@@ -36,6 +56,7 @@ test("unpaid invited review clears the base bounty", () => {
   const result = buildReviewCompensationConfiguration(profile, {
     compensationMode: "unpaid",
     usdcPerReviewer: "9.75",
+    ...noBonus,
     authority: "check_only",
   });
   assert.equal(result.requestProfile.compensationMode, "unpaid");
@@ -47,11 +68,13 @@ test("paid invited review converts up to six decimals exactly", () => {
   const minimum = buildReviewCompensationConfiguration(profile, {
     compensationMode: "usdc",
     usdcPerReviewer: "0.000001",
+    ...noBonus,
     authority: "prepare_for_approval",
   });
   const fractional = buildReviewCompensationConfiguration(profile, {
     compensationMode: "usdc",
     usdcPerReviewer: "001.234567",
+    ...noBonus,
     authority: "ask_automatically",
   });
   assert.equal(minimum.requestProfile.bountyPerSeatAtomic, "1");
@@ -59,11 +82,11 @@ test("paid invited review converts up to six decimals exactly", () => {
   assert.equal(fractional.authority, "ask_automatically");
 });
 
-test("public and hybrid audiences force paid USDC", () => {
+test("public and hybrid audiences fail closed to the currently routable guaranteed-bounty lane", () => {
   for (const audience of ["public_network", "hybrid"] as const) {
     const result = buildReviewCompensationConfiguration(
       { ...profile, audience, contentBoundary: "public_or_test", privateSensitivity: null, panelSize: 3 },
-      { compensationMode: "unpaid", usdcPerReviewer: "1", authority: "check_only" },
+      { compensationMode: "unpaid", usdcPerReviewer: "1", ...noBonus, authority: "check_only" },
     );
     assert.equal(result.requestProfile.compensationMode, "usdc");
     assert.equal(result.requestProfile.bountyPerSeatAtomic, "1000000");
@@ -77,6 +100,7 @@ test("USDC conversion rejects zero, unsupported precision, and non-decimal notat
         buildReviewCompensationConfiguration(profile, {
           compensationMode: "usdc",
           usdcPerReviewer,
+          ...noBonus,
           authority: "check_only",
         }),
       /USDC per reviewer/,
@@ -96,8 +120,31 @@ test("compensation composition rejects an unknown authority", () => {
       buildReviewCompensationConfiguration(profile, {
         compensationMode: "unpaid",
         usdcPerReviewer: "1",
+        ...noBonus,
         authority: "unknown" as AgentSetupReviewDraft["authority"],
       }),
     /valid agent authority/,
   );
+});
+
+test("guaranteed bounty and Feedback Bonus support all four independent combinations", () => {
+  for (const [compensationMode, feedbackBonusEnabled] of [
+    ["unpaid", false],
+    ["usdc", false],
+    ["unpaid", true],
+    ["usdc", true],
+  ] as const) {
+    const result = buildReviewCompensationConfiguration(profile, {
+      compensationMode,
+      usdcPerReviewer: "1",
+      feedbackBonusEnabled,
+      feedbackBonusUsdc: "2.5",
+      feedbackBonusAwarderKind: "requester",
+      feedbackBonusAwarderAccount: "",
+      authority: "prepare_for_approval",
+    });
+    assert.equal(result.requestProfile.compensationMode, compensationMode);
+    assert.equal(result.requestProfile.feedbackBonusEnabled, feedbackBonusEnabled);
+    assert.equal(result.requestProfile.feedbackBonusPoolAtomic, feedbackBonusEnabled ? "2500000" : null);
+  }
 });

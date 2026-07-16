@@ -833,6 +833,11 @@ export const tokenlessAgentReviewRequestProfiles = pgTable(
     panelSize: integer("panel_size"),
     compensationMode: text("compensation_mode").notNull(),
     bountyPerSeatAtomic: numeric("bounty_per_seat_atomic", { precision: 78, scale: 0 }),
+    feedbackBonusEnabled: boolean("feedback_bonus_enabled").notNull().default(false),
+    feedbackBonusPoolAtomic: numeric("feedback_bonus_pool_atomic", { precision: 78, scale: 0 }),
+    feedbackBonusAwarderKind: text("feedback_bonus_awarder_kind").notNull().default("requester"),
+    feedbackBonusAwarderAccount: text("feedback_bonus_awarder_account"),
+    feedbackBonusAwardWindowSeconds: integer("feedback_bonus_award_window_seconds"),
     configurationStatus: text("configuration_status").notNull().default("action_required"),
     profileHash: text("profile_hash").notNull(),
     createdBy: text("created_by").notNull(),
@@ -984,6 +989,10 @@ export const tokenlessAgentReviewApprovalRequests = pgTable(
     derivedEconomicsJson: text("derived_economics_json").notNull(),
     derivedEconomicsHash: text("derived_economics_hash").notNull(),
     maximumChargeAtomic: numeric("maximum_charge_atomic", { precision: 78, scale: 0 }).notNull(),
+    feedbackBonusMaximumAtomic: numeric("feedback_bonus_maximum_atomic", { precision: 78, scale: 0 })
+      .notNull()
+      .default("0"),
+    maximumConsentAtomic: numeric("maximum_consent_atomic", { precision: 78, scale: 0 }).notNull().default("0"),
     status: text("status").notNull().default("pending"),
     ownerDecision: text("owner_decision"),
     preparedBy: text("prepared_by").notNull(),

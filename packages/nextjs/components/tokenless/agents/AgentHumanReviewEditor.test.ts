@@ -22,8 +22,13 @@ test("the contextual editor owns every human-review dimension through one canoni
     "Private material sensitivity",
     "Response window",
     "Reviewers per request",
-    "Base payment",
+    "Guaranteed bounty",
     "USDC per accepted reviewer",
+    "Feedback Bonus",
+    "No bonus",
+    "Add bonus",
+    "Bonus pool",
+    "Human awarder",
     "Agent authority",
   ]) {
     assert.match(source, new RegExp(label));
@@ -34,5 +39,5 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /disabled=\{!automaticAvailable\}/);
   assert.match(source, /Confirm exact changes/);
   assert.match(source, /I confirm this exact human-review configuration/);
-  assert.doesNotMatch(source, /Feedback Bonus|feedback bonus/);
+  assert.match(source, /can never select or execute a Feedback Bonus award/);
 });
