@@ -67,6 +67,7 @@ type BoundOpportunity = {
   operationKey: string | null;
   sourceEvidenceHash: string;
   suggestionCommitment: string;
+  responseWindowSeconds: number;
   reviewPolicyEnabled: boolean;
   reviewPolicySuperseded: boolean;
   reviewPublishingPolicyId: string | null;
@@ -143,12 +144,18 @@ async function loadBoundOpportunity(
                  o.source_evidence_hash, o.suggestion_commitment,
                  rp.enabled AS review_policy_enabled, rp.superseded_at AS review_policy_superseded_at,
                  rp.publishing_policy_id AS review_publishing_policy_id, rp.audience_policy_json,
+                 rrp.response_window_seconds,
                  pp.enabled AS publishing_policy_enabled, pp.revoked_at AS publishing_policy_revoked_at,
                  pp.effective_at AS publishing_policy_effective_at, pp.expires_at AS publishing_policy_expires_at,
                  pp.allowed_admission_policy_hashes_json
           FROM tokenless_agent_review_opportunities o
           JOIN tokenless_agent_review_policies rp
             ON rp.workspace_id = o.workspace_id AND rp.policy_id = o.policy_id AND rp.version = o.policy_version
+          JOIN tokenless_agent_review_request_profiles rrp
+            ON rrp.workspace_id = o.workspace_id
+           AND rrp.profile_id = o.request_profile_id
+           AND rrp.version = o.request_profile_version
+           AND rrp.profile_hash = o.request_profile_hash
           JOIN tokenless_agent_publishing_policies pp
             ON pp.workspace_id = o.workspace_id AND pp.policy_id = ? AND pp.version = ?
           WHERE o.workspace_id = ? AND o.agent_id = ? AND o.agent_version_id = ?
@@ -186,6 +193,10 @@ async function loadBoundOpportunity(
   if (!Number.isFinite(effectiveAt.getTime()) || (expiresAt && !Number.isFinite(expiresAt.getTime()))) {
     throw new TokenlessServiceError("Stored publishing-policy dates are invalid.", 500, "review_configuration_invalid");
   }
+  const responseWindowSeconds = Number(row?.response_window_seconds);
+  if (!Number.isSafeInteger(responseWindowSeconds) || responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400) {
+    throw new TokenlessServiceError("Stored review response window is invalid.", 500, "review_configuration_invalid");
+  }
   return {
     opportunityId: storedOpportunityId,
     decision: rowString(row, "decision") ?? "",
@@ -193,6 +204,7 @@ async function loadBoundOpportunity(
     operationKey: rowString(row, "operation_key"),
     sourceEvidenceHash: rowString(row, "source_evidence_hash") ?? "",
     suggestionCommitment: rowString(row, "suggestion_commitment") ?? "",
+    responseWindowSeconds,
     reviewPolicyEnabled: rowBoolean(row, "review_policy_enabled"),
     reviewPolicySuperseded: row?.review_policy_superseded_at !== null && row?.review_policy_superseded_at !== undefined,
     reviewPublishingPolicyId: rowString(row, "review_publishing_policy_id"),
@@ -414,6 +426,7 @@ export async function requestAdaptiveHumanReview(
     question: canonicalQuestion(sourcePayload, suggestionPayload),
     ...(publication.redactionSummary ? { redactionSummary: publication.redactionSummary } : {}),
     requestedPanelSize: input.economics.requestedPanelSize,
+    responseWindowSeconds: opportunity.responseWindowSeconds,
     visibility: publication.visibility,
   };
   const quote = await createTokenlessQuote(quoteRequest);

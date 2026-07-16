@@ -221,6 +221,10 @@ async function storedResult(
     roundId: "round_evidence_0001",
     verdictStatus: status,
     terminal: status !== "pending",
+    responseWindowSeconds: 1_200,
+    commitDeadline: "2026-07-17T12:00:00.000Z",
+    requestProfile: null,
+    reviewEconomics: null,
     economics: JSON.parse(String(ask.rows[0]?.economics_json)) as TokenlessResult["economics"],
     audience: {
       admissionPolicyHash: ADMISSION_HASH,

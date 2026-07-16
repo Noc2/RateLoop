@@ -88,6 +88,7 @@ test("creates a 24-hour fragment-only bearer handoff without persisting raw capa
   );
   assert.deepEqual(payload.request, {
     ...quoteRequest(),
+    responseWindowSeconds: 3_600,
     visibility: "public",
     dataClassification: "redacted",
     redactionSummary: "Customer identifiers and confidential inputs were removed.",

@@ -52,6 +52,9 @@ describe("tokenless agents client", () => {
             expiresAt: "2026-07-12T20:00:00.000Z",
             panel: { minimumReveals: 4, requestedSize: 5 },
             quoteId: "qte_12345678",
+            requestProfile: null,
+            responseWindowSeconds: 3_600,
+            reviewEconomics: null,
             schemaVersion: "rateloop.tokenless.v2",
             slo: { estimatedSeconds: 1800 },
           }),
@@ -79,6 +82,7 @@ describe("tokenless agents client", () => {
         rationale: { mode: "optional" },
       },
       requestedPanelSize: 5,
+      responseWindowSeconds: 3_600,
     });
 
     expect(quote.schemaVersion).toBe("rateloop.tokenless.v2");
@@ -108,6 +112,10 @@ describe("tokenless agents client", () => {
             roundId: null,
             schemaVersion: "rateloop.tokenless.v2",
             status: "awaiting_payment",
+            responseWindowSeconds: 3_600,
+            commitDeadline: null,
+            requestProfile: null,
+            reviewEconomics: null,
           }),
           { headers: { "content-type": "application/json" }, status: 200 },
         ),

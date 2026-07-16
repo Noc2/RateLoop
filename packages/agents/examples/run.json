@@ -19,6 +19,7 @@
         "maxLength": 500
       }
     },
-    "requestedPanelSize": 5
+    "requestedPanelSize": 5,
+    "responseWindowSeconds": 3600
   }
 }

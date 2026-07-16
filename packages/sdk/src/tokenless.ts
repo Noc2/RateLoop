@@ -19,6 +19,7 @@ import type {
   TokenlessAskResponse,
   TokenlessClientOptions,
   TokenlessPaymentInstructions,
+  TokenlessFrozenReviewEconomics,
   TokenlessQuoteRequest,
   TokenlessQuoteResponse,
   TokenlessQuestionImageUploadRequest,
@@ -26,6 +27,7 @@ import type {
   TokenlessRateLoopClient,
   TokenlessResult,
   TokenlessResultRequest,
+  TokenlessRequestProfileReference,
   TokenlessWaitRequest,
   TokenlessWaitResponse,
   TokenlessSubmitPaymentRequest,
@@ -43,6 +45,8 @@ const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
+const MIN_RESPONSE_WINDOW_SECONDS = 1_200;
+const MAX_RESPONSE_WINDOW_SECONDS = 86_400;
 
 interface NormalizedTokenlessClientOptions {
   apiBaseUrl: string;
@@ -199,6 +203,75 @@ function normalizeQuoteRequest(
       "requestedPanelSize must be a safe integer between 1 and 500.",
     );
   }
+  if (
+    !Number.isSafeInteger(request.responseWindowSeconds) ||
+    request.responseWindowSeconds < MIN_RESPONSE_WINDOW_SECONDS ||
+    request.responseWindowSeconds > MAX_RESPONSE_WINDOW_SECONDS
+  ) {
+    throw new RateLoopSdkError(
+      `responseWindowSeconds must be a safe integer between ${MIN_RESPONSE_WINDOW_SECONDS} and ${MAX_RESPONSE_WINDOW_SECONDS}.`,
+    );
+  }
+  if (
+    (request.requestProfile === undefined) !==
+    (request.reviewEconomics === undefined)
+  ) {
+    throw new RateLoopSdkError(
+      "requestProfile and reviewEconomics must be supplied together.",
+    );
+  }
+  let requestProfile: TokenlessRequestProfileReference | undefined;
+  let reviewEconomics: TokenlessFrozenReviewEconomics | undefined;
+  if (request.requestProfile && request.reviewEconomics) {
+    if (
+      !request.requestProfile.id.trim() ||
+      !Number.isSafeInteger(request.requestProfile.version) ||
+      request.requestProfile.version < 1 ||
+      !/^sha256:[0-9a-f]{64}$/.test(request.requestProfile.hash)
+    ) {
+      throw new RateLoopSdkError(
+        "requestProfile must contain an ID, positive version, and lowercase sha256 hash.",
+      );
+    }
+    if (request.reviewEconomics.panelSize !== request.requestedPanelSize) {
+      throw new RateLoopSdkError(
+        "reviewEconomics.panelSize must equal requestedPanelSize.",
+      );
+    }
+    if (
+      request.reviewEconomics.compensationMode !== "unpaid" &&
+      request.reviewEconomics.compensationMode !== "usdc"
+    ) {
+      throw new RateLoopSdkError(
+        "reviewEconomics.compensationMode must be unpaid or usdc.",
+      );
+    }
+    if (
+      request.reviewEconomics.compensationMode === "unpaid" &&
+      request.reviewEconomics.bountyPerSeatAtomic !== null
+    ) {
+      throw new RateLoopSdkError(
+        "reviewEconomics.bountyPerSeatAtomic must be null for unpaid review.",
+      );
+    }
+    if (
+      request.reviewEconomics.compensationMode === "usdc" &&
+      (!ATOMIC_AMOUNT_PATTERN.test(
+        request.reviewEconomics.bountyPerSeatAtomic,
+      ) ||
+        BigInt(request.reviewEconomics.bountyPerSeatAtomic) < 1n)
+    ) {
+      throw new RateLoopSdkError(
+        "reviewEconomics.bountyPerSeatAtomic must be a positive USDC atomic amount.",
+      );
+    }
+    requestProfile = {
+      id: request.requestProfile.id.trim(),
+      version: request.requestProfile.version,
+      hash: request.requestProfile.hash,
+    };
+    reviewEconomics = { ...request.reviewEconomics };
+  }
   if (BigInt(request.budget.bountyAtomic) === 0n) {
     throw new RateLoopSdkError(
       "budget.bountyAtomic must be greater than zero.",
@@ -212,7 +285,13 @@ function normalizeQuoteRequest(
       "budget.attemptReserveAtomic must fund a non-zero compensation cap for every requested rater.",
     );
   }
-  return { ...request, question: normalizeTokenlessQuestion(request.question) };
+  return {
+    ...request,
+    question: normalizeTokenlessQuestion(request.question),
+    ...(requestProfile && reviewEconomics
+      ? { requestProfile, reviewEconomics }
+      : {}),
+  };
 }
 
 function assertEvmAddress(value: string, path: string) {

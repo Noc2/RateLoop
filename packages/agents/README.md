@@ -58,6 +58,7 @@ const quote = await client.quote({
     rationale: { mode: "required", minLength: 20, maxLength: 500 },
   },
   requestedPanelSize: 5,
+  responseWindowSeconds: 3600,
 });
 
 const ask = await client.ask({
@@ -143,6 +144,8 @@ All responses use `rateloop.tokenless.v2`. The audience binds the exact frozen a
 - `beacon_failure_compensated`
 
 Post-round integrity uses `publishable`; integrity status and appeal/remediation records never change finalized payout accounting.
+
+`responseWindowSeconds` is the frozen response window. An opened ask and its result expose the absolute ISO-8601 `commitDeadline`; never derive either value from the quote's `slo.estimatedSeconds` fill-time estimate. Profile-bound asks and results retain the exact `{ id, version, hash }` request-profile reference and frozen per-seat/panel economics.
 
 Results itemize bounty, fee, attempt reserve, refunds, and compensation. A terminal compensation or refund result is a successful terminal protocol outcome, not a transport failure.
 

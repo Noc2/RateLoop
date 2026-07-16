@@ -8,6 +8,7 @@ import {
   type TokenlessCompensationAccounting,
   type TokenlessEconomics,
   type TokenlessFeeAccounting,
+  type TokenlessFrozenReviewEconomics,
   type TokenlessFundAccounting,
   type TokenlessPollContinuation,
   type TokenlessPaymentInstructions,
@@ -15,6 +16,7 @@ import {
   type TokenlessX402AuthorizationSpec,
   type TokenlessQuoteResponse,
   type TokenlessRefundAccounting,
+  type TokenlessRequestProfileReference,
   type TokenlessReviewerSource,
   type TokenlessResult,
   type TokenlessResultFeedback,
@@ -26,6 +28,8 @@ type JsonRecord = Record<string, unknown>;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const verdictStatuses = new Set<string>(TOKENLESS_VERDICT_STATUSES);
 const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
+const MIN_RESPONSE_WINDOW_SECONDS = 1_200;
+const MAX_RESPONSE_WINDOW_SECONDS = 86_400;
 
 function invalid(path: string, expectation: string): never {
   throw new RateLoopSdkError(
@@ -81,6 +85,61 @@ function atomic(value: unknown, path: string): string {
   if (!ATOMIC_AMOUNT_PATTERN.test(normalized))
     invalid(path, "an unsigned base-10 atomic amount string");
   return normalized;
+}
+
+function responseWindowSeconds(value: unknown, path: string) {
+  return integer(
+    value,
+    path,
+    MIN_RESPONSE_WINDOW_SECONDS,
+    MAX_RESPONSE_WINDOW_SECONDS,
+  );
+}
+
+function requestProfileReference(
+  value: unknown,
+  path: string,
+): TokenlessRequestProfileReference | null {
+  if (value === null) return null;
+  const input = record(value, path);
+  const hash = string(input.hash, `${path}.hash`);
+  if (!/^sha256:[0-9a-f]{64}$/.test(hash)) {
+    invalid(`${path}.hash`, "a lowercase sha256 commitment");
+  }
+  return {
+    id: string(input.id, `${path}.id`),
+    version: integer(input.version, `${path}.version`, 1),
+    hash: hash as `sha256:${string}`,
+  };
+}
+
+function frozenReviewEconomics(
+  value: unknown,
+  path: string,
+): TokenlessFrozenReviewEconomics | null {
+  if (value === null) return null;
+  const input = record(value, path);
+  const panelSize = integer(input.panelSize, `${path}.panelSize`, 1, 500);
+  if (input.compensationMode === "unpaid") {
+    if (input.bountyPerSeatAtomic !== null) {
+      invalid(
+        `${path}.bountyPerSeatAtomic`,
+        "null when compensationMode is unpaid",
+      );
+    }
+    return { compensationMode: "unpaid", bountyPerSeatAtomic: null, panelSize };
+  }
+  if (input.compensationMode === "usdc") {
+    const bountyPerSeatAtomic = atomic(
+      input.bountyPerSeatAtomic,
+      `${path}.bountyPerSeatAtomic`,
+    );
+    if (BigInt(bountyPerSeatAtomic) < 1n) {
+      invalid(`${path}.bountyPerSeatAtomic`, "a positive atomic amount");
+    }
+    return { compensationMode: "usdc", bountyPerSeatAtomic, panelSize };
+  }
+  return invalid(`${path}.compensationMode`, "unpaid or usdc");
 }
 
 function isoDate(value: unknown, path: string): string {
@@ -241,6 +300,20 @@ export function parseTokenlessQuoteResponse(
   const audience = record(input.audience, "audience");
   const panel = record(input.panel, "panel");
   const slo = record(input.slo, "slo");
+  const parsedPanel = {
+    minimumReveals: integer(panel.minimumReveals, "panel.minimumReveals", 1),
+    requestedSize: integer(panel.requestedSize, "panel.requestedSize", 1),
+  };
+  const parsedReviewEconomics = frozenReviewEconomics(
+    input.reviewEconomics,
+    "reviewEconomics",
+  );
+  if (
+    parsedReviewEconomics !== null &&
+    parsedReviewEconomics.panelSize !== parsedPanel.requestedSize
+  ) {
+    invalid("reviewEconomics.panelSize", "the frozen requested panel size");
+  }
 
   return {
     schemaVersion: schemaVersion(input.schemaVersion),
@@ -255,10 +328,16 @@ export function parseTokenlessQuoteResponse(
       label: string(audience.label, "audience.label"),
       source: reviewerSource(audience.source, "audience.source"),
     },
-    panel: {
-      minimumReveals: integer(panel.minimumReveals, "panel.minimumReveals", 1),
-      requestedSize: integer(panel.requestedSize, "panel.requestedSize", 1),
-    },
+    panel: parsedPanel,
+    responseWindowSeconds: responseWindowSeconds(
+      input.responseWindowSeconds,
+      "responseWindowSeconds",
+    ),
+    requestProfile: requestProfileReference(
+      input.requestProfile,
+      "requestProfile",
+    ),
+    reviewEconomics: parsedReviewEconomics,
     slo: {
       estimatedSeconds: integer(
         slo.estimatedSeconds,
@@ -282,12 +361,33 @@ export function parseTokenlessAskResponse(
     invalid("status", "awaiting_payment, submitted, or open");
   }
 
+  const roundId = nullableString(input.roundId, "roundId");
+  const commitDeadline =
+    input.commitDeadline === null
+      ? null
+      : isoDate(input.commitDeadline, "commitDeadline");
+  if ((roundId === null) !== (commitDeadline === null)) {
+    invalid("commitDeadline", "null exactly until the response has a roundId");
+  }
   return {
     schemaVersion: schemaVersion(input.schemaVersion),
     idempotencyKey: string(input.idempotencyKey, "idempotencyKey"),
     operationKey: string(input.operationKey, "operationKey"),
-    roundId: nullableString(input.roundId, "roundId"),
+    roundId,
     status,
+    responseWindowSeconds: responseWindowSeconds(
+      input.responseWindowSeconds,
+      "responseWindowSeconds",
+    ),
+    commitDeadline,
+    requestProfile: requestProfileReference(
+      input.requestProfile,
+      "requestProfile",
+    ),
+    reviewEconomics: frozenReviewEconomics(
+      input.reviewEconomics,
+      "reviewEconomics",
+    ),
     continuation: continuation(input.continuation, "continuation"),
   };
 }
@@ -629,6 +729,19 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
     roundId: string(input.roundId, "roundId"),
     verdictStatus: parsedVerdictStatus,
     terminal: parsedTerminal,
+    responseWindowSeconds: responseWindowSeconds(
+      input.responseWindowSeconds,
+      "responseWindowSeconds",
+    ),
+    commitDeadline: isoDate(input.commitDeadline, "commitDeadline"),
+    requestProfile: requestProfileReference(
+      input.requestProfile,
+      "requestProfile",
+    ),
+    reviewEconomics: frozenReviewEconomics(
+      input.reviewEconomics,
+      "reviewEconomics",
+    ),
     economics: economics(input.economics, "economics"),
     audience: {
       admissionPolicyHash: bytes32(
@@ -653,6 +766,49 @@ const atomicAmountSchema = {
   pattern: "^(0|[1-9]\\d*)$",
   type: "string",
 } as const;
+const requestProfileReferenceSchema = {
+  anyOf: [
+    { type: "null" },
+    {
+      additionalProperties: false,
+      properties: {
+        id: { minLength: 1, type: "string" },
+        version: { minimum: 1, type: "integer" },
+        hash: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+      },
+      required: ["id", "version", "hash"],
+      type: "object",
+    },
+  ],
+} as const;
+const frozenReviewEconomicsSchema = {
+  anyOf: [
+    { type: "null" },
+    {
+      additionalProperties: false,
+      properties: {
+        compensationMode: { const: "unpaid" },
+        bountyPerSeatAtomic: { type: "null" },
+        panelSize: { maximum: 500, minimum: 1, type: "integer" },
+      },
+      required: ["compensationMode", "bountyPerSeatAtomic", "panelSize"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      properties: {
+        compensationMode: { const: "usdc" },
+        bountyPerSeatAtomic: {
+          pattern: "^[1-9]\\d*$",
+          type: "string",
+        },
+        panelSize: { maximum: 500, minimum: 1, type: "integer" },
+      },
+      required: ["compensationMode", "bountyPerSeatAtomic", "panelSize"],
+      type: "object",
+    },
+  ],
+} as const;
 const fundAccountingSchema = {
   additionalProperties: false,
   properties: {
@@ -673,6 +829,14 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
     roundId: { minLength: 1, type: "string" },
     verdictStatus: { enum: TOKENLESS_VERDICT_STATUSES },
     terminal: { type: "boolean" },
+    responseWindowSeconds: {
+      maximum: MAX_RESPONSE_WINDOW_SECONDS,
+      minimum: MIN_RESPONSE_WINDOW_SECONDS,
+      type: "integer",
+    },
+    commitDeadline: { format: "date-time", type: "string" },
+    requestProfile: requestProfileReferenceSchema,
+    reviewEconomics: frozenReviewEconomicsSchema,
     economics: {
       additionalProperties: false,
       properties: {
@@ -826,6 +990,10 @@ export const TOKENLESS_RESULT_JSON_SCHEMA = {
     "roundId",
     "verdictStatus",
     "terminal",
+    "responseWindowSeconds",
+    "commitDeadline",
+    "requestProfile",
+    "reviewEconomics",
     "economics",
     "audience",
     "verdict",

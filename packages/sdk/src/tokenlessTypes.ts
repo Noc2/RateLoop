@@ -30,6 +30,24 @@ export type TokenlessVerdictStatus =
   (typeof TOKENLESS_VERDICT_STATUSES)[number];
 export type TokenlessAtomicAmount = string;
 
+export interface TokenlessRequestProfileReference {
+  id: string;
+  version: number;
+  hash: `sha256:${string}`;
+}
+
+export type TokenlessFrozenReviewEconomics =
+  | {
+      compensationMode: "unpaid";
+      bountyPerSeatAtomic: null;
+      panelSize: number;
+    }
+  | {
+      compensationMode: "usdc";
+      bountyPerSeatAtomic: TokenlessAtomicAmount;
+      panelSize: number;
+    };
+
 export const TOKENLESS_VISIBILITIES = ["public", "private"] as const;
 export type TokenlessVisibility = (typeof TOKENLESS_VISIBILITIES)[number];
 
@@ -150,6 +168,12 @@ export interface TokenlessQuoteRequest {
   };
   question: TokenlessQuestion;
   requestedPanelSize: number;
+  /** Frozen time available for responses. This is never derived from the service fill-time estimate. */
+  responseWindowSeconds: number;
+  /** Present when this quote was prepared from an immutable agent request profile. */
+  requestProfile?: TokenlessRequestProfileReference;
+  /** Present with requestProfile when per-seat and panel terms came from that frozen profile. */
+  reviewEconomics?: TokenlessFrozenReviewEconomics;
 }
 
 export interface TokenlessQuoteResponse {
@@ -166,6 +190,10 @@ export interface TokenlessQuoteResponse {
     minimumReveals: number;
     requestedSize: number;
   };
+  responseWindowSeconds: number;
+  requestProfile: TokenlessRequestProfileReference | null;
+  reviewEconomics: TokenlessFrozenReviewEconomics | null;
+  /** Estimated end-to-end fill time only. Never use this value as the response window or commit deadline. */
   slo: {
     estimatedSeconds: number;
   };
@@ -200,6 +228,11 @@ export interface TokenlessAskResponse {
   operationKey: string;
   roundId: string | null;
   status: "awaiting_payment" | "submitted" | "open";
+  responseWindowSeconds: number;
+  /** Absolute ISO-8601 commit deadline. Null until a round exists. */
+  commitDeadline: string | null;
+  requestProfile: TokenlessRequestProfileReference | null;
+  reviewEconomics: TokenlessFrozenReviewEconomics | null;
   continuation: TokenlessPollContinuation;
 }
 
@@ -250,6 +283,11 @@ export interface TokenlessResult {
   roundId: string;
   verdictStatus: TokenlessVerdictStatus;
   terminal: boolean;
+  responseWindowSeconds: number;
+  /** Absolute ISO-8601 commit deadline frozen when the round opened. */
+  commitDeadline: string;
+  requestProfile: TokenlessRequestProfileReference | null;
+  reviewEconomics: TokenlessFrozenReviewEconomics | null;
   economics: TokenlessEconomics;
   audience: {
     admissionPolicyHash: `0x${string}`;

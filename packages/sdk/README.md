@@ -70,6 +70,7 @@ const quote = await client.quote({
     rationale: { mode: "required", maxLength: 500 },
   },
   requestedPanelSize: 15,
+  responseWindowSeconds: 3600,
 });
 
 const ask = await client.ask({
@@ -93,7 +94,9 @@ const result = await client.result({ operationKey: ask.operationKey });
 console.log(result.verdictStatus, result.economics);
 ```
 
-All amounts are unsigned base-10 strings in six-decimal USDC atomic units. Quotes and results itemize bounty, fee, attempt reserve, compensation, and refunds. A finalized payout can remain `pending` while post-round integrity inputs arrive, become `inconclusive` when the available evidence cannot support publication, or become `delisted` when integrity risks cross the frozen policy. Only `publishable` exposes the verdict. These publication states never change finalized payout accounting.
+All amounts are unsigned base-10 strings in six-decimal USDC atomic units. `responseWindowSeconds` is the frozen time available for responses. Once a round exists, ask and result envelopes expose its absolute ISO-8601 `commitDeadline`; `slo.estimatedSeconds` remains only an end-to-end fill estimate and must never be used to derive either value. Profile-bound requests and results also carry the immutable request-profile reference and frozen per-seat/panel economics.
+
+Quotes and results itemize bounty, fee, attempt reserve, compensation, and refunds. A finalized payout can remain `pending` while post-round integrity inputs arrive, become `inconclusive` when the available evidence cannot support publication, or become `delisted` when integrity risks cross the frozen policy. Only `publishable` exposes the verdict. These publication states never change finalized payout accounting.
 
 `apiBaseUrl` must use HTTPS except for loopback development. Every live ask requires an idempotency key. `wait` supports bounded long polling and returns an explicit continuation cursor. Runtime response parsers and `TOKENLESS_RESULT_JSON_SCHEMA` are exported from the package root.
 

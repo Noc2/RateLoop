@@ -98,6 +98,7 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
     throw new Error("request.audience.admissionPolicyHash must be a bytes32 hex value.");
   }
   const requestedPanelSize = integer(request.requestedPanelSize, "request.requestedPanelSize", 3, 500);
+  const responseWindowSeconds = integer(request.responseWindowSeconds, "request.responseWindowSeconds", 1_200, 86_400);
   const budget = record(request.budget, "request.budget");
   const bountyAtomic = atomic(budget.bountyAtomic, "request.budget.bountyAtomic");
   const attemptReserveAtomic = atomic(budget.attemptReserveAtomic, "request.budget.attemptReserveAtomic");
@@ -117,6 +118,7 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
     },
     question: validateQuestion(request.question),
     requestedPanelSize,
+    responseWindowSeconds,
   };
 }
 

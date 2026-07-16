@@ -8,6 +8,8 @@ import {
 } from "./tokenlessMedia";
 import {
   TOKENLESS_RESULT_JSON_SCHEMA,
+  parseTokenlessAskResponse,
+  parseTokenlessQuoteResponse,
   parseTokenlessResult,
 } from "./tokenlessSchema";
 import {
@@ -19,6 +21,16 @@ import {
 import * as sdk from "./index";
 
 const API_BASE_URL = "https://tokenless.example";
+const REQUEST_PROFILE = {
+  id: "rrp_release_v1",
+  version: 1,
+  hash: `sha256:${"a".repeat(64)}` as const,
+};
+const REVIEW_ECONOMICS = {
+  compensationMode: "usdc" as const,
+  bountyPerSeatAtomic: "1000000",
+  panelSize: 15,
+};
 
 test("package root exposes only the tokenless client, schema, types, and generic errors", () => {
   assert.deepEqual(
@@ -298,6 +310,10 @@ function resultFixture(
     roundId: "42",
     verdictStatus,
     terminal: verdictStatus !== "pending",
+    responseWindowSeconds: 3_600,
+    commitDeadline: "2026-07-12T12:30:00.000Z",
+    requestProfile: REQUEST_PROFILE,
+    reviewEconomics: REVIEW_ECONOMICS,
     economics: economics(),
     audience: {
       admissionPolicyHash: `0x${"ab".repeat(32)}`,
@@ -348,6 +364,12 @@ test("tokenless status constants and JSON Schema expose the exact accounting con
     TOKENLESS_RESULT_JSON_SCHEMA.properties.verdictStatus.enum,
     TOKENLESS_VERDICT_STATUSES,
   );
+  assert.ok(
+    TOKENLESS_RESULT_JSON_SCHEMA.required.includes("responseWindowSeconds"),
+  );
+  assert.ok(TOKENLESS_RESULT_JSON_SCHEMA.required.includes("commitDeadline"));
+  assert.ok(TOKENLESS_RESULT_JSON_SCHEMA.required.includes("requestProfile"));
+  assert.ok(TOKENLESS_RESULT_JSON_SCHEMA.required.includes("reviewEconomics"));
 });
 
 test("parseTokenlessResult validates terminal state and every accounting field", () => {
@@ -358,6 +380,10 @@ test("parseTokenlessResult validates terminal state and every accounting field",
     assert.equal(parsed.economics.attemptReserve.fundedAtomic, "5000000");
     assert.equal(parsed.economics.refund.totalAtomic, "0");
     assert.equal(parsed.economics.compensation.recipientCount, 0);
+    assert.equal(parsed.responseWindowSeconds, 3_600);
+    assert.equal(parsed.commitDeadline, "2026-07-12T12:30:00.000Z");
+    assert.deepEqual(parsed.requestProfile, REQUEST_PROFILE);
+    assert.deepEqual(parsed.reviewEconomics, REVIEW_ECONOMICS);
   }
 
   assert.throws(
@@ -378,6 +404,77 @@ test("parseTokenlessResult validates terminal state and every accounting field",
         },
       }),
     /economics\.attemptReserve\.fundedAtomic/,
+  );
+});
+
+test("review timing and frozen terms never fall back to the fill-time estimate", () => {
+  const quoteFixture = {
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    quoteId: "quote_12345678",
+    expiresAt: "2026-07-12T12:10:00.000Z",
+    economics: economics(),
+    audience: {
+      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      label: "RateLoop network",
+      source: "rateloop_network",
+    },
+    panel: { minimumReveals: 12, requestedSize: 15 },
+    responseWindowSeconds: 3_600,
+    requestProfile: REQUEST_PROFILE,
+    reviewEconomics: REVIEW_ECONOMICS,
+    slo: { estimatedSeconds: 900 },
+  };
+  const quote = parseTokenlessQuoteResponse(quoteFixture);
+  assert.equal(quote.responseWindowSeconds, 3_600);
+  assert.equal(quote.slo.estimatedSeconds, 900);
+  assert.throws(
+    () =>
+      parseTokenlessQuoteResponse({
+        ...quoteFixture,
+        responseWindowSeconds: undefined,
+      }),
+    /responseWindowSeconds/,
+  );
+
+  const awaiting = parseTokenlessAskResponse({
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    idempotencyKey: "ask:test:12345678",
+    operationKey: "op_12345678",
+    roundId: null,
+    status: "awaiting_payment",
+    responseWindowSeconds: 3_600,
+    commitDeadline: null,
+    requestProfile: REQUEST_PROFILE,
+    reviewEconomics: REVIEW_ECONOMICS,
+    continuation: {
+      cursor: "cursor_1",
+      expiresAt: "2026-07-13T12:00:00.000Z",
+      pollUrl: "https://tokenless.example/poll",
+      retryAfterMs: 1_000,
+    },
+  });
+  assert.equal(awaiting.commitDeadline, null);
+  assert.deepEqual(awaiting.requestProfile, REQUEST_PROFILE);
+  assert.throws(
+    () =>
+      parseTokenlessAskResponse({
+        ...awaiting,
+        roundId: "42",
+        commitDeadline: null,
+      }),
+    /commitDeadline/,
+  );
+  assert.throws(
+    () =>
+      parseTokenlessResult({
+        ...resultFixture(),
+        reviewEconomics: {
+          compensationMode: "unpaid",
+          bountyPerSeatAtomic: "1",
+          panelSize: 15,
+        },
+      }),
+    /bountyPerSeatAtomic/,
   );
 });
 
@@ -412,6 +509,9 @@ test("tokenless client performs quote and ask with a required idempotency header
             source: "customer_invited",
           },
           panel: { minimumReveals: 12, requestedSize: 15 },
+          responseWindowSeconds: 3_600,
+          requestProfile: REQUEST_PROFILE,
+          reviewEconomics: REVIEW_ECONOMICS,
           slo: { estimatedSeconds: 1800 },
         });
       }
@@ -422,6 +522,10 @@ test("tokenless client performs quote and ask with a required idempotency header
         operationKey: "op_12345678",
         roundId: "42",
         status: "open",
+        responseWindowSeconds: 3_600,
+        commitDeadline: "2026-07-12T12:30:00.000Z",
+        requestProfile: REQUEST_PROFILE,
+        reviewEconomics: REVIEW_ECONOMICS,
         continuation: {
           cursor: "cursor_1",
           expiresAt: "2026-07-13T12:00:00.000Z",
@@ -449,6 +553,9 @@ test("tokenless client performs quote and ask with a required idempotency header
       rationale: { mode: "optional" },
     },
     requestedPanelSize: 15,
+    responseWindowSeconds: 3_600,
+    requestProfile: REQUEST_PROFILE,
+    reviewEconomics: REVIEW_ECONOMICS,
   });
   const ask = await client.ask({
     idempotencyKey: "ask:test:12345678",
@@ -491,8 +598,54 @@ test("tokenless client performs quote and ask with a required idempotency header
           rationale: { mode: "optional" },
         },
         requestedPanelSize: 15,
+        responseWindowSeconds: 3_600,
       }),
     /feeBps must be an integer between 0 and 2000/,
+  );
+  assert.throws(
+    () =>
+      client.quote({
+        audience: {
+          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          source: "customer_invited",
+        },
+        budget: {
+          attemptReserveAtomic: "5000000",
+          bountyAtomic: "25000000",
+          feeBps: 750,
+        },
+        question: {
+          kind: "binary",
+          prompt: "Ship it?",
+          rationale: { mode: "optional" },
+        },
+        requestedPanelSize: 15,
+        responseWindowSeconds: 1_199,
+      }),
+    /responseWindowSeconds must be a safe integer between 1200 and 86400/,
+  );
+  assert.throws(
+    () =>
+      client.quote({
+        audience: {
+          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          source: "customer_invited",
+        },
+        budget: {
+          attemptReserveAtomic: "5000000",
+          bountyAtomic: "25000000",
+          feeBps: 750,
+        },
+        question: {
+          kind: "binary",
+          prompt: "Ship it?",
+          rationale: { mode: "optional" },
+        },
+        requestedPanelSize: 15,
+        responseWindowSeconds: 3_600,
+        requestProfile: REQUEST_PROFILE,
+      }),
+    /requestProfile and reviewEconomics must be supplied together/,
   );
 
   assert.throws(
@@ -546,6 +699,7 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
           rationale: { mode: "optional" },
         },
         requestedPanelSize: 15,
+        responseWindowSeconds: 3_600,
       }),
     /option keys must be different/,
   );
@@ -568,6 +722,7 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
           rationale: { mode: "required", minLength: 100, maxLength: 10 },
         },
         requestedPanelSize: 15,
+        responseWindowSeconds: 3_600,
       }),
     /required rationale lengths/,
   );

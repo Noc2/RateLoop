@@ -39,6 +39,7 @@ function request(kind: "binary" | "head_to_head" = "binary") {
             rationale: { mode: "optional" },
           },
     requestedPanelSize: 15,
+    responseWindowSeconds: 3_600,
   };
 }
 
