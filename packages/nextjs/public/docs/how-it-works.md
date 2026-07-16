@@ -5,16 +5,20 @@ decide whether baseline review can decrease.
 
 ## The Human Assurance Loop
 
-1. **Agent prepares.** A connected agent reads its owner-approved policy, then describes the workflow, risk, declared
-   confidence, completeness, suggestion commitment, and source evidence for the next eligible output.
-2. **RateLoop decides.** The exact agent-version, policy-version, workflow, risk-tier, and reviewer-audience scope starts
-   at 100% review. Critical risk, missing context, and maximum review gaps can force a human check.
+1. **Owner sets policy.** A workspace owner or admin chooses the review rules, risk thresholds, reviewer audience, data
+   boundaries, and publishing and spending limits.
+2. **Agent submits work.** A connected agent submits the workflow, declared risk, confidence, completeness, suggestion
+   commitment, and source evidence within that owner-approved policy. RateLoop applies the policy to decide whether the
+   output needs a human check.
 3. **Humans judge.** Eligible reviewers answer independently. RateLoop returns the verdict, reasons, disagreement, and
    source-linked agreement evidence to the agent.
-4. **Evidence adapts.** Under the default policy, two independent 15-case windows with at least 14 comparable
-   agent-human agreements each can move baseline review from 100% to 50%. Another 50 stable cases can move it to 25%,
-   and 100 more can move it to the 10% monitoring floor. A complete evidence window below the agreement threshold
-   restores 100% calibration.
+4. **Evaluation.** RateLoop returns evidence-backed feedback and actionable insights for the exact workflow and evidence
+   scope.
+
+Within the same owner-approved policy, two independent 15-case windows with at least 14 comparable agent-human
+agreements each can move baseline review from 100% to 50%. Another 50 stable cases can move it to 25%, and 100 more can
+move it to the 10% monitoring floor. A complete evidence window below the agreement threshold restores 100%
+calibration.
 
 Coverage never becomes a global agent score. Evidence from another version, policy, workflow, risk tier, or reviewer
 audience cannot silently lower review.
