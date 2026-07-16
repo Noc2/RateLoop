@@ -60,6 +60,9 @@ test("canonical audit events form a verifiable tenant chain and export only to a
   const exported = await exportWorkspaceAudit({ accountAddress: OWNER, workspaceId });
   assert.equal(exported.events.length, 2);
   assert.equal(exported.integrity.valid, true);
+  assert.equal(exported.retention.policyVersion, 1);
+  assert.equal(exported.retention.auditRetentionMonths, 12);
+  assert.equal(exported.retention.minimumRetentionMonths, 6);
   const exportEvent = await dbClient.execute({
     sql: "SELECT action, actor_reference, metadata_json FROM tokenless_audit_events WHERE workspace_id = ? AND action = 'audit.export'",
     args: [workspaceId],

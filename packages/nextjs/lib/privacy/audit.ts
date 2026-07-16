@@ -454,16 +454,27 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
   const snapshot = await dbClient.execute({
     sql: `WITH audit_head AS (
             SELECT last_sequence, last_digest FROM tokenless_audit_heads WHERE workspace_id = ? LIMIT 1
+          ), retention_policy AS (
+            SELECT version, audit_retention_months, basis_json, effective_at
+            FROM tokenless_workspace_evidence_retention_policies
+            WHERE workspace_id = ? AND superseded_at IS NULL LIMIT 1
           )
           SELECT e.event_id, e.workspace_id, e.sequence, e.previous_digest, e.event_digest, e.home_region,
                  e.actor_kind, e.actor_reference, e.assurance_method, e.action, e.target_kind, e.target_id,
                  e.purpose, e.reason, e.request_correlation, e.result, e.metadata_json, e.occurred_at,
-                 h.last_sequence AS head_last_sequence, h.last_digest AS head_last_digest
-          FROM audit_head h
+                 h.last_sequence AS head_last_sequence, h.last_digest AS head_last_digest,
+                 p.version AS retention_policy_version, p.audit_retention_months,
+                 p.basis_json AS retention_basis_json, p.effective_at AS retention_effective_at
+          FROM retention_policy p
+          LEFT JOIN audit_head h ON true
           LEFT JOIN tokenless_audit_events e ON e.workspace_id = ?
           ORDER BY e.sequence ASC`,
-    args: [input.workspaceId, input.workspaceId],
+    args: [input.workspaceId, input.workspaceId, input.workspaceId],
   });
+  const snapshotRow = snapshot.rows[0] as QueryRow | undefined;
+  if (!snapshotRow || snapshotRow.retention_policy_version === null) {
+    throw new TokenlessServiceError("The workspace retention policy is unavailable.", 500, "retention_unavailable");
+  }
   const events = snapshot.rows.filter(row => row.event_id !== null && row.event_id !== undefined);
   const snapshotHead = snapshot.rows[0]
     ? {
@@ -479,13 +490,25 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
     const exportedEvent = { ...event };
     delete exportedEvent.head_last_sequence;
     delete exportedEvent.head_last_digest;
+    delete exportedEvent.retention_policy_version;
+    delete exportedEvent.audit_retention_months;
+    delete exportedEvent.retention_basis_json;
+    delete exportedEvent.retention_effective_at;
     return exportedEvent;
   });
+  const retentionBasis = JSON.parse(rowString(snapshotRow, "retention_basis_json") ?? "null") as unknown;
   const exported = {
     exportedAt: new Date().toISOString(),
     format: "rateloop-audit-v1",
     integrity,
     events: exportedEvents,
+    retention: {
+      policyVersion: Number(snapshotRow.retention_policy_version),
+      auditRetentionMonths: Number(snapshotRow.audit_retention_months),
+      minimumRetentionMonths: 6,
+      basis: retentionBasis,
+      effectiveAt: new Date(String(snapshotRow.retention_effective_at)).toISOString(),
+    },
     workspaceId: input.workspaceId,
   };
   await appendAuditEvent({
