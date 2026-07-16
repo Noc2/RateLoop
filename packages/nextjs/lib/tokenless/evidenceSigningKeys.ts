@@ -1,6 +1,7 @@
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { requireAssuranceAttestationManagement } from "~~/lib/tokenless/assuranceAttestationPipeline";
+import { encodeEd25519SpkiDerBase64url } from "~~/lib/tokenless/evidenceVerificationKey";
 import { projectHumanReviewGateTrustedKeyHistory } from "~~/lib/tokenless/humanReviewGateEvidence";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -48,6 +49,7 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
       keyId: key.keyId,
       algorithm: key.algorithm,
       publicKeyJwk: key.publicKeyJwk,
+      publicKeySpki: encodeEd25519SpkiDerBase64url(key.publicKeyJwk),
       status: key.status,
       uses: ["human_review_gate", ...(packet ? (["decision_packet"] as const) : [])],
       firstPacketAt: packet ? iso(packet.first_seen_at) : null,

@@ -18,5 +18,10 @@ test("the public trust anchor contains only configured verification keys", () =>
   assert.doesNotMatch(route, /requireBrowserSession|workspaceId/);
   assert.match(workspaceHistory, /listWorkspaceEvidenceSigningKeys/);
   assert.match(historyService, /untrustedPacketKeyCount: packetById\.size/);
+  assert.match(historyService, /publicKeySpki: encodeEd25519SpkiDerBase64url\(key\.publicKeyJwk\)/);
+  assert.match(workspaceHistory, /format !== "spki" \|\| !keyId/);
+  assert.match(workspaceHistory, /history\.keys\.find\(key => key\.keyId === keyId\)/);
+  assert.match(workspaceHistory, /Content-Disposition/);
+  assert.match(workspaceHistory, /X-RateLoop-Evidence-Key-Id/);
   assert.doesNotMatch(historyService, /packetById\.values\(\)[\s\S]*status: "retired"/);
 });
