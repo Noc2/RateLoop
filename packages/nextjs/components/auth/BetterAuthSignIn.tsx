@@ -184,14 +184,14 @@ export function BetterAuthSignIn() {
           </button>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
-              className="btn btn-ghost border border-base-content/15"
+              className="btn rateloop-secondary-action"
               disabled={busy || !configuration.methods.google}
               onClick={() => void social("google")}
             >
               Continue with Google
             </button>
             <button
-              className="btn btn-ghost border border-base-content/15"
+              className="btn rateloop-secondary-action"
               disabled={busy || !configuration.methods.apple}
               onClick={() => void social("apple")}
             >

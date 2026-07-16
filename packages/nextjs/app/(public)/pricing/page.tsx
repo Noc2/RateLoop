@@ -103,7 +103,7 @@ export default function PricingPage() {
                   <div className="mt-auto pt-8">
                     <Link
                       href={href}
-                      className={`min-h-12 w-full justify-center px-5 ${isPaid ? "rateloop-gradient-action" : "btn rounded-lg border border-base-content/15 bg-base-content/[0.07] hover:bg-base-content/[0.12]"}`}
+                      className={`min-h-12 w-full justify-center px-5 ${isPaid ? "rateloop-gradient-action" : "btn rateloop-secondary-action"}`}
                     >
                       {cta}
                     </Link>

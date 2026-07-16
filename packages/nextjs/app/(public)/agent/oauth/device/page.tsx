@@ -149,7 +149,7 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
               <button type="submit" name="decision" value="approve" className="btn btn-primary flex-1">
                 Allow connection
               </button>
-              <button type="submit" name="decision" value="deny" className="btn btn-ghost flex-1">
+              <button type="submit" name="decision" value="deny" className="btn rateloop-secondary-action flex-1">
                 Deny
               </button>
             </form>

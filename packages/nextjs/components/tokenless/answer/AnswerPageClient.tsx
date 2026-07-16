@@ -161,7 +161,7 @@ export function AnswerPageClient({
         {!loading && !signedOut && !error && tasks.length === 0 && assignments.length === 0 ? (
           <div className="surface-card flex min-h-48 flex-col items-center justify-center gap-4 rounded-lg p-6 text-center">
             <p className="text-base text-base-content/60">No review work is available right now.</p>
-            <button type="button" className="btn btn-sm border-0 bg-white/[0.08]" onClick={() => void load()}>
+            <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={() => void load()}>
               Check again
             </button>
           </div>

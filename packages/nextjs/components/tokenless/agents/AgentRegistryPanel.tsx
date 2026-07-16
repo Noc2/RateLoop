@@ -316,7 +316,7 @@ export function AgentRegistryPanel({
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="btn btn-sm border-white/10"
+                      className="btn btn-sm rateloop-secondary-action"
                       disabled={busy}
                       onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
                     >
@@ -324,7 +324,7 @@ export function AgentRegistryPanel({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-sm border-white/10"
+                      className="btn btn-sm rateloop-secondary-action"
                       aria-expanded={activeManagementPanel === "review"}
                       aria-controls="agent-review-behavior"
                       disabled={busy}
@@ -334,7 +334,7 @@ export function AgentRegistryPanel({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-sm border-white/10"
+                      className="btn btn-sm rateloop-secondary-action"
                       aria-expanded={activeManagementPanel === "publishing"}
                       aria-controls="agent-autonomous-requests"
                       disabled={busy}
@@ -438,7 +438,7 @@ export function AgentRegistryPanel({
         <div className="flex justify-end">
           <button
             type="button"
-            className="btn btn-sm btn-ghost text-base-content/60"
+            className="btn btn-sm rateloop-secondary-action"
             aria-pressed={showArchived}
             onClick={() => setShowArchived(current => !current)}
           >

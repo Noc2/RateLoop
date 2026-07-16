@@ -997,7 +997,7 @@ export function AgentConnectionPanel({
           <div className="mt-3 flex flex-wrap gap-3">
             <button
               type="button"
-              className="btn btn-sm border-white/10"
+              className="btn btn-sm rateloop-secondary-action"
               onClick={() => {
                 manualMessageRef.current?.focus();
                 manualMessageRef.current?.select();
@@ -1005,7 +1005,11 @@ export function AgentConnectionPanel({
             >
               Select complete message
             </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setManualConnectionMessage(null)}>
+            <button
+              type="button"
+              className="btn btn-sm rateloop-secondary-action"
+              onClick={() => setManualConnectionMessage(null)}
+            >
               Hide message
             </button>
           </div>
@@ -1027,7 +1031,7 @@ export function AgentConnectionPanel({
                 host&apos;s secure credential setting; do not paste it into a model chat.
               </p>
             </div>
-            <button type="button" className="btn btn-sm border-white/10" onClick={() => void copyReveal()}>
+            <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={() => void copyReveal()}>
               Copy legacy credential
             </button>
           </div>
@@ -1100,7 +1104,7 @@ export function AgentConnectionPanel({
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            className="btn btn-sm border-white/10"
+                            className="btn btn-sm rateloop-secondary-action"
                             disabled={Boolean(busyAction)}
                             onClick={() => void retryConnectionStatus()}
                           >
@@ -1108,7 +1112,7 @@ export function AgentConnectionPanel({
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost text-base-content/60"
+                            className="btn btn-sm rateloop-secondary-action"
                             disabled={Boolean(busyAction)}
                             onClick={() => void cancelConnectionIntent(intent.intentId)}
                           >
@@ -1153,7 +1157,7 @@ export function AgentConnectionPanel({
                     </div>
                     <button
                       type="button"
-                      className="btn btn-sm btn-ghost text-base-content/60"
+                      className="btn btn-sm rateloop-secondary-action"
                       disabled={busyAction === `reject:${pairing.pairingId}`}
                       onClick={() => void rejectPairing(pairing.pairingId)}
                     >
@@ -1213,7 +1217,7 @@ export function AgentConnectionPanel({
                           {legacyCredential ? (
                             <button
                               type="button"
-                              className="btn btn-sm border-white/10"
+                              className="btn btn-sm rateloop-secondary-action"
                               disabled={Boolean(busyAction)}
                               onClick={() => void rotateIntegration(integration)}
                             >

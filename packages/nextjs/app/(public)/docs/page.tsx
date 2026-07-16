@@ -100,7 +100,7 @@ function DocsPathCard({ number, title, description, href, label, color }: (typeo
       <Link
         href={href}
         prefetch={false}
-        className="mt-auto w-fit rounded-md bg-base-content/[0.07] px-3 py-1.5 text-sm font-semibold text-base-content/70 no-underline transition hover:bg-base-content/[0.11] hover:text-base-content"
+        className="btn btn-sm rateloop-secondary-action mt-auto w-fit px-3 text-sm no-underline"
       >
         {label}
       </Link>

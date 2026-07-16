@@ -384,7 +384,7 @@ export function PrivateGroupsPanel({
         {workspaces.length ? (
           <button
             type="button"
-            className="rateloop-gradient-action mt-5 px-5"
+            className={`${showCreateGroup ? "btn rateloop-secondary-action" : "rateloop-gradient-action"} mt-5 px-5`}
             onClick={() => setShowCreateGroup(current => !current)}
           >
             {showCreateGroup ? "Cancel" : "Create group"}
@@ -503,7 +503,7 @@ export function PrivateGroupsPanel({
             </label>
             <button
               type="button"
-              className="btn border-0 bg-white/[0.08]"
+              className="btn rateloop-secondary-action"
               onClick={() => {
                 setShowIssueInvitation(current => !current);
                 setIssuedInvitation(null);
@@ -629,7 +629,7 @@ export function PrivateGroupsPanel({
                 {issuedInvitation.token}
               </code>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button type="button" className="btn btn-sm border-0 bg-white/[0.09]" onClick={copyInvitationToken}>
+                <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={copyInvitationToken}>
                   Copy token
                 </button>
                 <span className="text-xs text-base-content/50">Expires {formatDate(issuedInvitation.expiresAt)}</span>

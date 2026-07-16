@@ -497,7 +497,7 @@ export function AgentPublishingPolicyPanel({
 
           <button
             type="button"
-            className="btn btn-sm btn-ghost mt-6 border border-white/10"
+            className="btn btn-sm rateloop-secondary-action mt-6"
             aria-controls={advancedId}
             aria-expanded={advancedOpen}
             onClick={() => setAdvancedOpen(open => !open)}
@@ -600,7 +600,7 @@ export function AgentPublishingPolicyPanel({
             <button type="submit" className="rateloop-gradient-action px-5">
               Review access
             </button>
-            <button type="button" className="btn btn-ghost" onClick={closeEditor}>
+            <button type="button" className="btn rateloop-secondary-action px-5" onClick={closeEditor}>
               Cancel
             </button>
           </div>
@@ -674,7 +674,12 @@ export function AgentPublishingPolicyPanel({
             >
               {busy ? "Approving…" : "Approve autonomous access"}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setPendingPolicy(null)} disabled={busy}>
+            <button
+              type="button"
+              className="btn rateloop-secondary-action rateloop-back-action gap-2 px-5"
+              onClick={() => setPendingPolicy(null)}
+              disabled={busy}
+            >
               Back
             </button>
           </div>
@@ -697,7 +702,7 @@ export function AgentPublishingPolicyPanel({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold">Autonomous review access</h2>
             {!editorOpen ? (
-              <button type="button" className="btn btn-sm btn-ghost border border-white/10" onClick={startEditor}>
+              <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={startEditor}>
                 Add policy
               </button>
             ) : null}

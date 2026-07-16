@@ -873,7 +873,7 @@ export function TokenlessHandoffClient() {
             {!result ? (
               <button
                 type="button"
-                className="btn min-h-10 rounded-lg border-white/10 bg-white/5 px-4 hover:bg-white/10"
+                className="btn rateloop-secondary-action min-h-10 px-4"
                 disabled={busy !== null}
                 onClick={() => void fetchResult(ask.operationKey)}
               >

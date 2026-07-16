@@ -456,7 +456,7 @@ export function WorkspaceSettingsClient() {
                     {billing.canManageBilling && billing.portalAvailable && !billing.checkoutAvailable ? (
                       <button
                         type="button"
-                        className="btn min-h-10 rounded-lg border border-base-content/15 bg-base-content/[0.07] px-4 hover:bg-base-content/[0.12]"
+                        className="btn rateloop-secondary-action min-h-10 px-4"
                         disabled={billingBusy}
                         onClick={() => void openBillingDestination("portal")}
                       >

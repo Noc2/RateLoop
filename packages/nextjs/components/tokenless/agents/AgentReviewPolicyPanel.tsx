@@ -497,7 +497,7 @@ export function AgentReviewPolicyPanel({
               </button>
               <button
                 type="button"
-                className="btn border-0 bg-white/[0.08]"
+                className="btn rateloop-secondary-action"
                 onClick={() => {
                   setShowForm(false);
                   setEditingPolicyId(null);
@@ -545,7 +545,7 @@ export function AgentReviewPolicyPanel({
                   {agent ? (
                     <button
                       type="button"
-                      className="btn border-0 bg-white/[0.08]"
+                      className="btn rateloop-secondary-action"
                       disabled={busy}
                       onClick={() => {
                         setDraft(draftForPolicy(policy));

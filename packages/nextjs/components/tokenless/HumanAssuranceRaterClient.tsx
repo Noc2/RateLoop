@@ -350,7 +350,7 @@ export function HumanAssuranceRaterClient({
                 {canRecover ? (
                   <button
                     type="button"
-                    className="mt-4 w-full rounded-lg border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/[0.04]"
+                    className="btn rateloop-secondary-action mt-4 min-h-12 w-full px-5 text-sm"
                     disabled={busyAction !== null}
                     onClick={() => void recoverAssignment()}
                   >
@@ -379,7 +379,7 @@ export function HumanAssuranceRaterClient({
                   </div>
                   <button
                     type="button"
-                    className="rounded-md border border-white/10 px-3 py-2 text-xs text-base-content/60 hover:bg-white/[0.04]"
+                    className="btn btn-sm rateloop-secondary-action text-xs"
                     onClick={() => {
                       setTask(null);
                       setDrafts({});

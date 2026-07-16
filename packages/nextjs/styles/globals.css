@@ -78,6 +78,8 @@
   --rateloop-field: #1d1d1d;
   --rateloop-control-idle: rgb(245 245 245 / 0.11);
   --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
+  --rateloop-secondary-button-bg: rgb(245 245 245 / 0.18);
+  --rateloop-secondary-button-bg-hover: rgb(245 245 245 / 0.24);
   --rateloop-radius-control: 0.5rem;
   --rateloop-card-radius: 0.5rem;
   --rateloop-shell-border: rgb(245 245 245 / 0.1);
@@ -195,6 +197,46 @@
 .rateloop-gradient-action:hover {
   filter: brightness(1.14);
   transform: translateY(-1px);
+}
+
+.btn.rateloop-secondary-action,
+.btn.btn-outline,
+.btn.btn-secondary:not(.btn-circle):not(.btn-square) {
+  border-color: transparent;
+  background: var(--rateloop-secondary-button-bg);
+  box-shadow: none;
+  color: var(--color-base-content);
+}
+
+.btn.rateloop-secondary-action:hover:not(:disabled):not(.btn-disabled),
+.btn.btn-outline:hover:not(:disabled):not(.btn-disabled),
+.btn.btn-secondary:not(.btn-circle):not(.btn-square):hover:not(:disabled):not(.btn-disabled) {
+  border-color: transparent;
+  background: var(--rateloop-secondary-button-bg-hover);
+  box-shadow: none;
+  color: var(--color-base-content);
+}
+
+.btn.rateloop-secondary-action:disabled,
+.btn.rateloop-secondary-action.btn-disabled,
+.btn.btn-outline:disabled,
+.btn.btn-outline.btn-disabled,
+.btn.btn-secondary:not(.btn-circle):not(.btn-square):disabled,
+.btn.btn-secondary:not(.btn-circle):not(.btn-square).btn-disabled {
+  border-color: transparent;
+  background: rgb(245 245 245 / 0.055);
+  box-shadow: none;
+  color: rgb(245 245 245 / 0.36);
+}
+
+.rateloop-back-action::before {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: none;
+  border-bottom: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
+  content: "";
+  transform: rotate(45deg);
 }
 
 .rateloop-assurance-tracer {

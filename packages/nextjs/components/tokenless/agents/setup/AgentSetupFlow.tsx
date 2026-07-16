@@ -525,7 +525,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <p className="font-medium">Copy this invitation code now</p>
                     <code className="mt-2 block break-all text-sm">{inviteToken}</code>
                     <button
-                      className="btn btn-sm mt-3"
+                      className="btn btn-sm rateloop-secondary-action mt-3"
                       type="button"
                       onClick={() => void navigator.clipboard.writeText(inviteToken)}
                     >
@@ -573,7 +573,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           </p>
         ) : null}
         {back ? (
-          <button className="btn btn-ghost mt-6" type="button" onClick={() => void loadStep(back)}>
+          <button
+            className="btn rateloop-secondary-action rateloop-back-action mt-6 gap-2 px-5"
+            type="button"
+            onClick={() => void loadStep(back)}
+          >
             Back
           </button>
         ) : null}

@@ -153,7 +153,7 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
             >
               {busy ? "Joining…" : "Accept invitation"}
             </button>
-            <button type="button" className="btn border-0 bg-white/[0.08]" onClick={() => setPreview(null)}>
+            <button type="button" className="btn rateloop-secondary-action" onClick={() => setPreview(null)}>
               Cancel
             </button>
           </div>

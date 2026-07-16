@@ -247,7 +247,7 @@ export function NotificationSettingsPanel() {
             {browserPermission === "default" ? (
               <button
                 type="button"
-                className="btn mt-4 border-0 bg-white/[0.08]"
+                className="btn rateloop-secondary-action mt-4"
                 onClick={() => void requestBrowserPermission()}
               >
                 Enable browser notifications
