@@ -1262,6 +1262,27 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         ],
       );
       opportunity = inserted.rows[0] as QueryRow;
+      if (integrationId) {
+        await client.query(
+          `UPDATE tokenless_agent_integrations
+           SET last_decision_at = CASE
+             WHEN last_decision_at IS NULL OR last_decision_at < $1 THEN $1
+             ELSE last_decision_at
+           END,
+           updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
+           WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5
+             AND human_review_binding_id = $6 AND human_review_binding_version = $7`,
+          [
+            now,
+            integrationId,
+            workspaceId,
+            request.agentId,
+            request.agentVersionId,
+            binding.bindingId,
+            binding.bindingVersion,
+          ],
+        );
+      }
       await client.query(
         `UPDATE tokenless_agent_evaluation_scopes
          SET unreviewed_since_last_sample = $1, updated_at = $2

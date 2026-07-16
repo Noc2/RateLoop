@@ -5,6 +5,12 @@ import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import type {
+  HumanReviewAudience,
+  HumanReviewAuthorityLevel,
+  HumanReviewCompensationMode,
+  HumanReviewContentBoundary,
+} from "~~/lib/tokenless/reviewCapabilities";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
@@ -32,8 +38,89 @@ export type AgentVersionSnapshot = {
   declaredDeploymentName: string | null;
   environment: AgentEnvironment;
   configurationCommitment: string;
-  createdBy: string;
+  createdBy: string | null;
   createdAt: string;
+};
+
+export type AgentHumanReviewSummary = {
+  status: "configuration_required" | "configured" | "disabled";
+  configuration: {
+    selection: {
+      mode: "manual" | "always" | "rules" | "adaptive" | "fixed";
+      fixedRateBps: number | null;
+      maximumUnreviewedGap: number;
+      effectiveRateRangeBps: { minimum: number; maximum: number } | null;
+    };
+    request: {
+      criterion: string;
+      positiveLabel: string;
+      negativeLabel: string;
+      rationaleMode: "off" | "optional" | "required";
+      audience: HumanReviewAudience;
+      contentBoundary: HumanReviewContentBoundary;
+      privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
+      responseWindowSeconds: number | null;
+      panelSize: number | null;
+      compensationMode: HumanReviewCompensationMode;
+      bountyPerSeatAtomic: string | null;
+    };
+    authority: HumanReviewAuthorityLevel;
+    enforcementMode: "advisory" | "host_enforced" | null;
+    connected: boolean;
+    killSwitchActive: boolean | null;
+  } | null;
+  activity: {
+    lastDecisionAt: string | null;
+    lastRequestAt: string | null;
+    lastResultAt: string | null;
+  };
+  workload: {
+    openCount: number;
+    approvalRequiredCount: number;
+    requestReadyCount: number;
+    activeReviewCount: number;
+    blockedCount: number;
+    ownerActionCount: number;
+  };
+  lastTerminal: {
+    state: "skipped" | "completed" | "inconclusive" | "failed_terminal" | "cancelled_before_commit";
+    at: string;
+  } | null;
+  management: {
+    binding: {
+      id: string;
+      version: number;
+      canonicalHash: string;
+      approvedAt: string;
+    } | null;
+    selectionPolicy: {
+      id: string;
+      version: number;
+      agreementThresholdBps: number;
+      productionFloorBps: number;
+      requiredRiskTiers: string[];
+      criticalRiskTiers: string[];
+      minimumConfidenceBps: number | null;
+      maximumLatencyMs: number | null;
+    } | null;
+    requestProfile: { id: string; version: number; hash: string } | null;
+    privateGroup: { id: string; policyVersion: number; policyHash: string } | null;
+    delegation: {
+      integrationId: string;
+      publishingPolicy: { id: string; version: number } | null;
+      scopes: string[];
+    } | null;
+    lastTerminalDetails: { opportunityId: string; reasonCodes: string[] } | null;
+    audit: {
+      eventCount: number;
+      latest: {
+        type: "created" | "configuration_changed" | "disabled";
+        bindingVersion: number;
+        eventHash: string;
+        createdAt: string;
+      } | null;
+    };
+  } | null;
 };
 
 export type AgentExecutionModelProfile = {
@@ -98,15 +185,16 @@ export type WorkspaceAgent = {
   agentId: string;
   workspaceId: string;
   externalId: string;
-  ownerAccountAddress: string;
+  ownerAccountAddress: string | null;
   status: "active" | "inactive";
-  createdBy: string;
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
   deactivatedAt: string | null;
   currentVersion: AgentVersionSnapshot;
   versions: AgentVersionSnapshot[];
   assuranceScopes: AgentAssuranceScopeSummary[];
+  humanReview: AgentHumanReviewSummary;
 };
 
 export type AgentRegistry = {
@@ -291,7 +379,7 @@ async function requireWorkspaceManagement(accountAddress: string, workspaceId: s
   return access;
 }
 
-function versionFromRow(row: QueryRow): AgentVersionSnapshot {
+function versionFromRow(row: QueryRow, canManage: boolean): AgentVersionSnapshot {
   const versionId = rowString(row, "version_id");
   const displayName = rowString(row, "display_name");
   const provider = rowString(row, "declared_provider");
@@ -320,7 +408,7 @@ function versionFromRow(row: QueryRow): AgentVersionSnapshot {
     declaredDeploymentName: rowString(row, "declared_deployment_name"),
     environment,
     configurationCommitment: commitment,
-    createdBy,
+    createdBy: canManage ? createdBy : null,
     createdAt: iso(row.version_created_at, "agent-version timestamp"),
   };
 }
@@ -330,6 +418,474 @@ function nextReassessmentAfter(stage: AdaptiveReviewStage, completed: number, st
   if (stage === "high_coverage") return Math.max(0, 50 - stable);
   if (stage === "medium_coverage") return Math.max(0, 100 - stable);
   return 0;
+}
+
+const REVIEW_POLICY_MODES = ["manual", "always", "rules", "adaptive", "fixed"] as const;
+const REVIEW_RATIONALE_MODES = ["off", "optional", "required"] as const;
+const REVIEW_AUDIENCES = ["private_invited", "public_network", "hybrid"] as const;
+const REVIEW_CONTENT_BOUNDARIES = ["private_workspace", "public_or_test"] as const;
+const REVIEW_COMPENSATION_MODES = ["unpaid", "usdc"] as const;
+const REVIEW_AUTHORITIES = ["check_only", "prepare_for_approval", "ask_automatically"] as const;
+const REVIEW_ENFORCEMENT_MODES = ["advisory", "host_enforced"] as const;
+const REVIEW_PRIVATE_SENSITIVITIES = ["internal", "confidential", "restricted", "regulated"] as const;
+const REVIEW_TERMINAL_STATES = [
+  "skipped",
+  "completed",
+  "inconclusive",
+  "failed_terminal",
+  "cancelled_before_commit",
+] as const;
+const REVIEW_BINDING_EVENT_TYPES = ["created", "configuration_changed", "disabled"] as const;
+
+type HumanReviewConfigurationRow = QueryRow & {
+  binding_id: unknown;
+  version: unknown;
+  agent_id: unknown;
+  agent_version_id: unknown;
+};
+
+type HumanReviewProjectionData = {
+  configurations: Map<string, HumanReviewConfigurationRow>;
+  integrations: Map<string, QueryRow[]>;
+  workloads: Map<string, AgentHumanReviewSummary["workload"]>;
+  terminals: Map<string, QueryRow>;
+  audits: Map<string, { eventCount: number; latest: QueryRow }>;
+};
+
+function projectionKey(...parts: Array<string | number>) {
+  return parts.join("\u0000");
+}
+
+function rowBoolean(row: QueryRow | undefined, key: string) {
+  return row?.[key] === true || row?.[key] === "t" || row?.[key] === 1;
+}
+
+function rowEnum<const T extends readonly string[]>(row: QueryRow | undefined, key: string, allowed: T): T[number] {
+  const value = rowString(row, key);
+  if (!value || !allowed.includes(value)) throw new Error(`Database returned an invalid ${key}.`);
+  return value as T[number];
+}
+
+function nullableIso(value: unknown, field: string) {
+  return value === null || value === undefined ? null : iso(value, field);
+}
+
+function latestTimestamp(rows: QueryRow[], key: string, field: string) {
+  let latest: string | null = null;
+  for (const row of rows) {
+    const value = nullableIso(row[key], field);
+    if (value && (latest === null || value > latest)) latest = value;
+  }
+  return latest;
+}
+
+function parseReviewRules(value: unknown) {
+  let rules: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(String(value ?? "{}")) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    rules = parsed as Record<string, unknown>;
+  } catch {
+    throw new Error("Database returned invalid review rules.");
+  }
+  const riskTiers = (key: string) => {
+    const entry = rules[key] ?? [];
+    if (!Array.isArray(entry) || entry.some(item => typeof item !== "string")) {
+      throw new Error("Database returned invalid review rules.");
+    }
+    return [...new Set(entry as string[])];
+  };
+  const optionalInteger = (key: string) => {
+    const entry = rules[key];
+    if (entry === null || entry === undefined) return null;
+    const number = Number(entry);
+    if (!Number.isSafeInteger(number) || number < 0) throw new Error("Database returned invalid review rules.");
+    return number;
+  };
+  return {
+    requiredRiskTiers: riskTiers("requiredRiskTiers"),
+    criticalRiskTiers: riskTiers("criticalRiskTiers"),
+    minimumConfidenceBps: optionalInteger("minimumConfidenceBps"),
+    maximumLatencyMs: optionalInteger("maximumLatencyMs"),
+  };
+}
+
+function connectedIntegration(row: QueryRow) {
+  if (rowString(row, "status") !== "active") return false;
+  const activationMode = rowString(row, "activation_mode");
+  return activationMode === "legacy_pairing" || rowString(row, "connection_status") === "connected";
+}
+
+function publishingGrantActive(row: QueryRow, now: Date) {
+  if (!rowString(row, "publishing_policy_id") || !rowBoolean(row, "publishing_policy_enabled")) return false;
+  if (row.publishing_policy_revoked_at !== null && row.publishing_policy_revoked_at !== undefined) return false;
+  const effectiveAt = new Date(String(row.publishing_policy_effective_at));
+  const expiresAt = row.publishing_policy_expires_at ? new Date(String(row.publishing_policy_expires_at)) : null;
+  return (
+    Number.isFinite(effectiveAt.getTime()) &&
+    effectiveAt <= now &&
+    (!expiresAt || (Number.isFinite(expiresAt.getTime()) && expiresAt > now))
+  );
+}
+
+async function loadWorkspaceHumanReviewProjection(
+  workspaceId: string,
+  canManage: boolean,
+): Promise<HumanReviewProjectionData> {
+  const now = new Date();
+  const [configurationResult, integrationResult, workloadResult, approvalResult, terminalResult] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT b.*, p.mode, p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps,
+                   p.maximum_unreviewed_gap, p.rules_json,
+                   r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
+                   r.content_boundary, r.private_sensitivity, r.private_group_id,
+                   r.private_group_policy_version, r.private_group_policy_hash,
+                   r.response_window_seconds, r.panel_size, r.compensation_mode, r.bounty_per_seat_atomic,
+                   r.configuration_status
+            FROM tokenless_agent_human_review_bindings b
+            JOIN tokenless_agent_review_policies p
+              ON p.workspace_id = b.workspace_id AND p.policy_id = b.selection_policy_id
+             AND p.version = b.selection_policy_version
+            JOIN tokenless_agent_review_request_profiles r
+              ON r.workspace_id = b.workspace_id AND r.profile_id = b.request_profile_id
+             AND r.version = b.request_profile_version AND r.profile_hash = b.request_profile_hash
+            WHERE b.workspace_id = ? AND b.enabled = true AND b.superseded_at IS NULL`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT i.integration_id, i.agent_id, i.agent_version_id, i.status, i.activation_mode,
+                   i.enforcement_mode, i.granted_scopes_json, i.human_review_binding_id,
+                   i.human_review_binding_version, i.publishing_policy_id, i.publishing_policy_version,
+                   i.last_decision_at, i.last_request_at, i.last_result_at, i.updated_at,
+                   c.status AS connection_status, p.enabled AS publishing_policy_enabled,
+                   p.revoked_at AS publishing_policy_revoked_at,
+                   p.effective_at AS publishing_policy_effective_at,
+                   p.expires_at AS publishing_policy_expires_at
+            FROM tokenless_agent_integrations i
+            LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+            LEFT JOIN tokenless_agent_publishing_policies p
+              ON p.workspace_id = i.workspace_id AND p.policy_id = i.publishing_policy_id
+             AND p.version = i.publishing_policy_version
+            WHERE i.workspace_id = ?
+            ORDER BY CASE WHEN i.status = 'active' THEN 0 ELSE 1 END, i.updated_at DESC, i.integration_id ASC`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT o.agent_id,
+                   SUM(CASE WHEN l.terminal_at IS NULL THEN 1 ELSE 0 END) AS open_count,
+                   SUM(CASE WHEN l.state = 'approval_required' THEN 1 ELSE 0 END) AS approval_required_count,
+                   SUM(CASE WHEN l.state = 'request_ready' THEN 1 ELSE 0 END) AS request_ready_count,
+                   SUM(CASE WHEN l.state = 'pending' THEN 1 ELSE 0 END) AS active_review_count,
+                   SUM(CASE WHEN l.state = 'blocked' THEN 1 ELSE 0 END) AS blocked_count
+            FROM tokenless_agent_review_opportunity_lifecycles l
+            JOIN tokenless_agent_review_opportunities o
+              ON o.workspace_id = l.workspace_id AND o.opportunity_id = l.opportunity_id
+            WHERE l.workspace_id = ?
+            GROUP BY o.agent_id`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT o.agent_id, COUNT(DISTINCT a.opportunity_id) AS owner_action_count
+            FROM tokenless_agent_review_approval_requests a
+            JOIN tokenless_agent_review_opportunities o
+              ON o.workspace_id = a.workspace_id AND o.opportunity_id = a.opportunity_id
+            WHERE a.workspace_id = ? AND a.status = 'pending' AND a.expires_at > ?
+            GROUP BY o.agent_id`,
+      args: [workspaceId, now],
+    }),
+    dbClient.execute({
+      sql: `SELECT o.agent_id, l.opportunity_id, l.state, l.reason_codes_json, l.terminal_at
+            FROM tokenless_agent_review_opportunity_lifecycles l
+            JOIN tokenless_agent_review_opportunities o
+              ON o.workspace_id = l.workspace_id AND o.opportunity_id = l.opportunity_id
+            WHERE l.workspace_id = ? AND l.terminal_at IS NOT NULL
+            ORDER BY l.terminal_at DESC, l.opportunity_id ASC`,
+      args: [workspaceId],
+    }),
+  ]);
+  const auditResult = canManage
+    ? await dbClient.execute({
+        sql: `SELECT e.binding_id, e.binding_version, e.event_type, e.event_hash, e.created_at
+              FROM tokenless_agent_human_review_binding_events e
+              WHERE e.workspace_id = ?
+              ORDER BY e.created_at DESC, e.event_id DESC`,
+        args: [workspaceId],
+      })
+    : null;
+
+  const configurations = new Map<string, HumanReviewConfigurationRow>();
+  for (const value of configurationResult.rows) {
+    const row = value as HumanReviewConfigurationRow;
+    const agentId = rowString(row, "agent_id");
+    const agentVersionId = rowString(row, "agent_version_id");
+    if (!agentId || !agentVersionId) throw new Error("Database returned an invalid human-review binding.");
+    configurations.set(projectionKey(agentId, agentVersionId), row);
+  }
+
+  const integrations = new Map<string, QueryRow[]>();
+  for (const value of integrationResult.rows) {
+    const row = value as QueryRow;
+    const bindingId = rowString(row, "human_review_binding_id");
+    const bindingVersion = rowOptionalInteger(row, "human_review_binding_version");
+    if (!bindingId || bindingVersion === null) continue;
+    const key = projectionKey(bindingId, bindingVersion);
+    integrations.set(key, [...(integrations.get(key) ?? []), row]);
+  }
+
+  const workloads = new Map<string, AgentHumanReviewSummary["workload"]>();
+  for (const value of workloadResult.rows) {
+    const row = value as QueryRow;
+    const agentId = rowString(row, "agent_id");
+    if (!agentId) throw new Error("Database returned an invalid review workload.");
+    workloads.set(agentId, {
+      openCount: rowInteger(row, "open_count"),
+      approvalRequiredCount: rowInteger(row, "approval_required_count"),
+      requestReadyCount: rowInteger(row, "request_ready_count"),
+      activeReviewCount: rowInteger(row, "active_review_count"),
+      blockedCount: rowInteger(row, "blocked_count"),
+      ownerActionCount: 0,
+    });
+  }
+  for (const value of approvalResult.rows) {
+    const row = value as QueryRow;
+    const agentId = rowString(row, "agent_id");
+    if (!agentId) throw new Error("Database returned an invalid review approval count.");
+    const current = workloads.get(agentId) ?? {
+      openCount: 0,
+      approvalRequiredCount: 0,
+      requestReadyCount: 0,
+      activeReviewCount: 0,
+      blockedCount: 0,
+      ownerActionCount: 0,
+    };
+    workloads.set(agentId, { ...current, ownerActionCount: rowInteger(row, "owner_action_count") });
+  }
+
+  const terminals = new Map<string, QueryRow>();
+  for (const value of terminalResult.rows) {
+    const row = value as QueryRow;
+    const agentId = rowString(row, "agent_id");
+    if (!agentId) throw new Error("Database returned an invalid terminal review state.");
+    if (!terminals.has(agentId)) terminals.set(agentId, row);
+  }
+
+  const audits = new Map<string, { eventCount: number; latest: QueryRow }>();
+  for (const value of auditResult?.rows ?? []) {
+    const row = value as QueryRow;
+    const bindingId = rowString(row, "binding_id");
+    if (!bindingId) throw new Error("Database returned an invalid binding event.");
+    const current = audits.get(bindingId);
+    audits.set(bindingId, { eventCount: (current?.eventCount ?? 0) + 1, latest: current?.latest ?? row });
+  }
+  return { configurations, integrations, workloads, terminals, audits };
+}
+
+function buildHumanReviewSummary(input: {
+  agentId: string;
+  agentStatus: "active" | "inactive";
+  agentVersionId: string;
+  assuranceScopes: AgentAssuranceScopeSummary[];
+  canManage: boolean;
+  projection: HumanReviewProjectionData;
+}): AgentHumanReviewSummary {
+  const configuration = input.projection.configurations.get(projectionKey(input.agentId, input.agentVersionId));
+  const workload = input.projection.workloads.get(input.agentId) ?? {
+    openCount: 0,
+    approvalRequiredCount: 0,
+    requestReadyCount: 0,
+    activeReviewCount: 0,
+    blockedCount: 0,
+    ownerActionCount: 0,
+  };
+  const terminal = input.projection.terminals.get(input.agentId);
+  const terminalState = terminal ? rowEnum(terminal, "state", REVIEW_TERMINAL_STATES) : null;
+  const terminalAt = terminal ? iso(terminal.terminal_at, "terminal review timestamp") : null;
+  const emptyManagement: NonNullable<AgentHumanReviewSummary["management"]> = {
+    binding: null,
+    selectionPolicy: null,
+    requestProfile: null,
+    privateGroup: null,
+    delegation: null,
+    lastTerminalDetails:
+      terminal && terminalState
+        ? {
+            opportunityId: rowString(terminal, "opportunity_id")!,
+            reasonCodes: stringArray(terminal.reason_codes_json, "terminal review reasons"),
+          }
+        : null,
+    audit: { eventCount: 0, latest: null },
+  };
+  if (!configuration) {
+    return {
+      status: input.agentStatus === "inactive" ? "disabled" : "configuration_required",
+      configuration: null,
+      activity: { lastDecisionAt: null, lastRequestAt: null, lastResultAt: null },
+      workload,
+      lastTerminal: terminalState && terminalAt ? { state: terminalState, at: terminalAt } : null,
+      management: input.canManage ? emptyManagement : null,
+    };
+  }
+
+  const bindingId = rowString(configuration, "binding_id")!;
+  const bindingVersion = rowInteger(configuration, "version");
+  const exactIntegrations = input.projection.integrations.get(projectionKey(bindingId, bindingVersion)) ?? [];
+  const activeIntegrations = exactIntegrations.filter(row => rowString(row, "status") === "active");
+  const selectedIntegration =
+    activeIntegrations.find(connectedIntegration) ?? activeIntegrations[0] ?? exactIntegrations[0];
+  const connected = activeIntegrations.some(connectedIntegration);
+  const authority = rowEnum(configuration, "authority", REVIEW_AUTHORITIES);
+  const mode = rowEnum(configuration, "mode", REVIEW_POLICY_MODES);
+  const configurationStatus = rowEnum(configuration, "configuration_status", ["ready", "action_required"] as const);
+  const selectionPolicyId = rowString(configuration, "selection_policy_id")!;
+  const selectionPolicyVersion = rowInteger(configuration, "selection_policy_version");
+  const scopeRates = input.assuranceScopes
+    .filter(
+      scope =>
+        scope.agentVersionId === input.agentVersionId &&
+        scope.policyId === selectionPolicyId &&
+        scope.policyVersion === selectionPolicyVersion,
+    )
+    .map(scope => scope.reviewRateBps);
+  const fixedRateBps = rowOptionalInteger(configuration, "fixed_rate_bps");
+  const effectiveRates =
+    mode === "always"
+      ? [10_000]
+      : mode === "fixed" && fixedRateBps !== null
+        ? [fixedRateBps]
+        : mode === "adaptive"
+          ? scopeRates.length > 0
+            ? scopeRates
+            : [10_000]
+          : [];
+  const rules = parseReviewRules(configuration.rules_json);
+  const privateGroupId = rowString(configuration, "private_group_id");
+  const privateGroupPolicyVersion = rowOptionalInteger(configuration, "private_group_policy_version");
+  const privateGroupPolicyHash = rowString(configuration, "private_group_policy_hash");
+  if (
+    (privateGroupId === null) !== (privateGroupPolicyVersion === null) ||
+    (privateGroupId === null) !== (privateGroupPolicyHash === null)
+  ) {
+    throw new Error("Database returned an invalid private-group review binding.");
+  }
+  const publishingPolicyId = rowString(configuration, "publishing_policy_id");
+  const publishingPolicyVersion = rowOptionalInteger(configuration, "publishing_policy_version");
+  if ((publishingPolicyId === null) !== (publishingPolicyVersion === null)) {
+    throw new Error("Database returned an invalid publishing-policy review binding.");
+  }
+  const automaticGrantActive = Boolean(
+    authority === "ask_automatically" &&
+      selectedIntegration &&
+      connectedIntegration(selectedIntegration) &&
+      rowString(selectedIntegration, "publishing_policy_id") === publishingPolicyId &&
+      rowOptionalInteger(selectedIntegration, "publishing_policy_version") === publishingPolicyVersion &&
+      publishingGrantActive(selectedIntegration, new Date()),
+  );
+  const audit = input.projection.audits.get(bindingId);
+  const latestAuditType = audit ? rowEnum(audit.latest, "event_type", REVIEW_BINDING_EVENT_TYPES) : null;
+  const latestAuditHash = audit ? rowString(audit.latest, "event_hash") : null;
+  const management: AgentHumanReviewSummary["management"] = input.canManage
+    ? {
+        binding: {
+          id: bindingId,
+          version: bindingVersion,
+          canonicalHash: rowString(configuration, "canonical_hash")!,
+          approvedAt: iso(configuration.approved_at, "binding approval timestamp"),
+        },
+        selectionPolicy: {
+          id: selectionPolicyId,
+          version: selectionPolicyVersion,
+          agreementThresholdBps: rowInteger(configuration, "agreement_threshold_bps"),
+          productionFloorBps: rowInteger(configuration, "production_floor_bps"),
+          ...rules,
+        },
+        requestProfile: {
+          id: rowString(configuration, "request_profile_id")!,
+          version: rowInteger(configuration, "request_profile_version"),
+          hash: rowString(configuration, "request_profile_hash")!,
+        },
+        privateGroup:
+          privateGroupId && privateGroupPolicyVersion !== null && privateGroupPolicyHash
+            ? { id: privateGroupId, policyVersion: privateGroupPolicyVersion, policyHash: privateGroupPolicyHash }
+            : null,
+        delegation: selectedIntegration
+          ? {
+              integrationId: rowString(selectedIntegration, "integration_id")!,
+              publishingPolicy:
+                publishingPolicyId && publishingPolicyVersion !== null
+                  ? { id: publishingPolicyId, version: publishingPolicyVersion }
+                  : null,
+              scopes: stringArray(selectedIntegration.granted_scopes_json, "integration scopes"),
+            }
+          : null,
+        lastTerminalDetails: emptyManagement.lastTerminalDetails,
+        audit: {
+          eventCount: audit?.eventCount ?? 0,
+          latest:
+            audit && latestAuditType && latestAuditHash
+              ? {
+                  type: latestAuditType,
+                  bindingVersion: rowInteger(audit.latest, "binding_version"),
+                  eventHash: latestAuditHash,
+                  createdAt: iso(audit.latest.created_at, "binding event timestamp"),
+                }
+              : null,
+        },
+      }
+    : null;
+  const responseWindowSeconds = rowOptionalInteger(configuration, "response_window_seconds");
+  const panelSize = rowOptionalInteger(configuration, "panel_size");
+  if (configurationStatus === "ready" && (responseWindowSeconds === null || panelSize === null)) {
+    throw new Error("Database returned an incomplete ready review request profile.");
+  }
+  return {
+    status:
+      input.agentStatus === "inactive"
+        ? "disabled"
+        : configurationStatus === "ready"
+          ? "configured"
+          : "configuration_required",
+    configuration: {
+      selection: {
+        mode,
+        fixedRateBps,
+        maximumUnreviewedGap: rowInteger(configuration, "maximum_unreviewed_gap"),
+        effectiveRateRangeBps:
+          effectiveRates.length > 0
+            ? { minimum: Math.min(...effectiveRates), maximum: Math.max(...effectiveRates) }
+            : null,
+      },
+      request: {
+        criterion: rowString(configuration, "criterion")!,
+        positiveLabel: rowString(configuration, "positive_label")!,
+        negativeLabel: rowString(configuration, "negative_label")!,
+        rationaleMode: rowEnum(configuration, "rationale_mode", REVIEW_RATIONALE_MODES),
+        audience: rowEnum(configuration, "audience", REVIEW_AUDIENCES),
+        contentBoundary: rowEnum(configuration, "content_boundary", REVIEW_CONTENT_BOUNDARIES),
+        privateSensitivity:
+          configuration.private_sensitivity === null || configuration.private_sensitivity === undefined
+            ? null
+            : rowEnum(configuration, "private_sensitivity", REVIEW_PRIVATE_SENSITIVITIES),
+        responseWindowSeconds,
+        panelSize,
+        compensationMode: rowEnum(configuration, "compensation_mode", REVIEW_COMPENSATION_MODES),
+        bountyPerSeatAtomic: rowString(configuration, "bounty_per_seat_atomic"),
+      },
+      authority,
+      enforcementMode: selectedIntegration
+        ? rowEnum(selectedIntegration, "enforcement_mode", REVIEW_ENFORCEMENT_MODES)
+        : null,
+      connected,
+      killSwitchActive: authority === "ask_automatically" ? !automaticGrantActive : null,
+    },
+    activity: {
+      lastDecisionAt: latestTimestamp(activeIntegrations, "last_decision_at", "review decision timestamp"),
+      lastRequestAt: latestTimestamp(activeIntegrations, "last_request_at", "review request timestamp"),
+      lastResultAt: latestTimestamp(activeIntegrations, "last_result_at", "review result timestamp"),
+    },
+    workload,
+    lastTerminal: terminalState && terminalAt ? { state: terminalState, at: terminalAt } : null,
+    management,
+  };
 }
 
 async function loadWorkspaceAssuranceScopes(workspaceId: string) {
@@ -522,8 +1078,8 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
   return byAgent;
 }
 
-async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[]> {
-  const [agentsResult, versionsResult, assuranceByAgent] = await Promise.all([
+async function loadWorkspaceAgents(workspaceId: string, canManage: boolean): Promise<WorkspaceAgent[]> {
+  const [agentsResult, versionsResult, assuranceByAgent, humanReviewProjection] = await Promise.all([
     dbClient.execute({
       sql: `SELECT agent_id, workspace_id, external_id, owner_account_address, status,
                    created_by, created_at, updated_at, deactivated_at
@@ -543,13 +1099,14 @@ async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[
       args: [workspaceId],
     }),
     loadWorkspaceAssuranceScopes(workspaceId),
+    loadWorkspaceHumanReviewProjection(workspaceId, canManage),
   ]);
   const versionsByAgent = new Map<string, AgentVersionSnapshot[]>();
   for (const value of versionsResult.rows) {
     const row = value as QueryRow;
     const agentId = rowString(row, "agent_id");
     if (!agentId) throw new Error("Database returned an invalid agent version binding.");
-    versionsByAgent.set(agentId, [...(versionsByAgent.get(agentId) ?? []), versionFromRow(row)]);
+    versionsByAgent.set(agentId, [...(versionsByAgent.get(agentId) ?? []), versionFromRow(row, canManage)]);
   }
   return agentsResult.rows.map(value => {
     const row = value as QueryRow;
@@ -575,9 +1132,9 @@ async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[
       agentId,
       workspaceId: storedWorkspaceId,
       externalId,
-      ownerAccountAddress,
+      ownerAccountAddress: canManage ? ownerAccountAddress : null,
       status,
-      createdBy,
+      createdBy: canManage ? createdBy : null,
       createdAt: iso(row.created_at, "agent creation timestamp"),
       updatedAt: iso(row.updated_at, "agent update timestamp"),
       deactivatedAt: row.deactivated_at ? iso(row.deactivated_at, "agent deactivation timestamp") : null,
@@ -587,6 +1144,14 @@ async function loadWorkspaceAgents(workspaceId: string): Promise<WorkspaceAgent[
         const leftCurrent = left.agentVersionId === versions[0]?.versionId ? 1 : 0;
         const rightCurrent = right.agentVersionId === versions[0]?.versionId ? 1 : 0;
         return rightCurrent - leftCurrent || right.updatedAt.localeCompare(left.updatedAt);
+      }),
+      humanReview: buildHumanReviewSummary({
+        agentId,
+        agentStatus: status,
+        agentVersionId: versions[0].versionId,
+        assuranceScopes: assuranceByAgent.get(agentId) ?? [],
+        canManage,
+        projection: humanReviewProjection,
       }),
     };
   });
@@ -600,7 +1165,7 @@ export async function listWorkspaceAgents(input: {
   return {
     callerRole: access.role,
     canManage: access.canManage,
-    agents: await loadWorkspaceAgents(input.workspaceId),
+    agents: await loadWorkspaceAgents(input.workspaceId, access.canManage),
   };
 }
 
@@ -679,7 +1244,7 @@ export async function createWorkspaceAgent(input: {
   } finally {
     client.release();
   }
-  const agents = await loadWorkspaceAgents(input.workspaceId);
+  const agents = await loadWorkspaceAgents(input.workspaceId, true);
   const created = agents.find(agent => agent.agentId === agentId);
   if (!created) throw new Error("Created agent could not be loaded.");
   return created;
@@ -769,7 +1334,7 @@ export async function createWorkspaceAgentVersion(input: {
   } finally {
     client.release();
   }
-  const agents = await loadWorkspaceAgents(input.workspaceId);
+  const agents = await loadWorkspaceAgents(input.workspaceId, true);
   const updated = agents.find(agent => agent.agentId === input.agentId);
   if (!updated) throw new Error("Updated agent could not be loaded.");
   return updated;
@@ -814,7 +1379,7 @@ export async function deactivateWorkspaceAgent(input: {
   } finally {
     client.release();
   }
-  const agents = await loadWorkspaceAgents(input.workspaceId);
+  const agents = await loadWorkspaceAgents(input.workspaceId, true);
   const inactive = agents.find(agent => agent.agentId === input.agentId);
   if (!inactive) throw new Error("Deactivated agent could not be loaded.");
   return inactive;

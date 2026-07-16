@@ -8,7 +8,7 @@ import {
   deactivateWorkspaceAgent,
   listWorkspaceAgents,
 } from "~~/lib/tokenless/agentRegistry";
-import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const MEMBER = "0x2222222222222222222222222222222222222222";
@@ -28,6 +28,185 @@ function version(modelVersion: string) {
     deploymentName: "support-prod",
     environment: "production" as const,
   };
+}
+
+const HASH = (character: string) => `sha256:${character.repeat(64)}`;
+
+async function insertReviewProjectionPolicy(input: {
+  workspaceId: string;
+  agentId: string;
+  agentVersionId: string;
+  policyId: string;
+  profileId: string;
+  profileHash: string;
+  now: Date;
+}) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_policies
+          (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
+           agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap,
+           rules_json, audience_policy_json, publishing_policy_id, created_by, approved_by, created_at)
+          VALUES (?, 1, ?, ?, ?, 'adaptive', true, 8750, 1000, NULL, 9, ?, ?, NULL, ?, ?, ?)`,
+    args: [
+      input.policyId,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      JSON.stringify({
+        enforcementMode: "advisory",
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7000,
+        maximumLatencyMs: 120000,
+      }),
+      JSON.stringify({ reviewerSource: "public_network" }),
+      OWNER,
+      OWNER,
+      input.now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_request_profiles
+          (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label,
+           negative_label, rationale_mode, audience, content_boundary, private_sensitivity,
+           private_group_id, private_group_policy_version, private_group_policy_hash,
+           response_window_seconds, panel_size, compensation_mode, bounty_per_seat_atomic,
+           configuration_status, profile_hash, created_by, created_at, approved_by, approved_at)
+          VALUES (?, 1, ?, ?, ?, 'Check whether this response is correct', 'Approve', 'Reject', 'required',
+                  'public_network', 'public_or_test', NULL, NULL, NULL, NULL, 3600, 3, 'usdc',
+                  '2500000', 'ready', ?, ?, ?, ?, ?)`,
+    args: [
+      input.profileId,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.profileHash,
+      OWNER,
+      input.now,
+      OWNER,
+      input.now,
+    ],
+  });
+}
+
+async function insertReviewProjectionScope(input: {
+  workspaceId: string;
+  agentId: string;
+  agentVersionId: string;
+  policyId: string;
+  bindingId: string;
+  bindingVersion: number;
+  profileId: string;
+  profileHash: string;
+  scopeId: string;
+  hashCharacter: string;
+  now: Date;
+}) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_evaluation_scopes
+          (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version,
+           workflow_key, risk_tier, audience_policy_hash, partition_commitment,
+           execution_profile_hash, execution_profile_json, human_review_binding_id, human_review_binding_version,
+           request_profile_id, request_profile_version, request_profile_hash, stage, completed_comparable_cases,
+           stable_cases_since_stage, unreviewed_since_last_sample, stage_entered_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 1, ?, 'normal', ?, ?, ?, '{}', ?, ?, ?, 1, ?,
+                  'calibrating', 0, 0, 0, ?, ?)`,
+    args: [
+      input.scopeId,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.policyId,
+      `workflow-${input.hashCharacter}`,
+      HASH(input.hashCharacter),
+      HASH(input.hashCharacter),
+      HASH(input.hashCharacter),
+      input.bindingId,
+      input.bindingVersion,
+      input.profileId,
+      input.profileHash,
+      input.now,
+      input.now,
+    ],
+  });
+}
+
+async function insertReviewProjectionOpportunity(input: {
+  workspaceId: string;
+  agentId: string;
+  agentVersionId: string;
+  policyId: string;
+  bindingId: string;
+  bindingVersion: number;
+  profileId: string;
+  profileHash: string;
+  scopeId: string;
+  opportunityId: string;
+  state: "approval_required" | "request_ready" | "pending" | "blocked" | "skipped" | "completed";
+  createdAt: Date;
+  terminalAt?: Date | null;
+}) {
+  const terminalAt = input.terminalAt ?? null;
+  const legacyStatus =
+    input.state === "pending"
+      ? "review_requested"
+      : input.state === "completed"
+        ? "completed"
+        : input.state === "skipped"
+          ? "skipped"
+          : "decided";
+  const decision = input.state === "skipped" ? "skip" : "required";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunities
+          (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
+           external_opportunity_id, suggestion_commitment, declared_confidence_bps, metadata_commitment,
+           metadata_complete, critical_risk, decision, review_rate_bps, selection_probability_bps,
+           sample_bucket, sampler_key_version, sampler_commitment, reason_codes_json, status,
+           source_evidence_reference, source_evidence_hash, human_review_binding_id,
+           human_review_binding_version, request_profile_id, request_profile_version,
+           request_profile_hash, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 9000, ?, true, false, ?, 10000, 10000, 1,
+                  'projection-test-v1', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+    args: [
+      input.opportunityId,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.scopeId,
+      input.policyId,
+      `external-${input.opportunityId}`,
+      HASH("a"),
+      HASH("b"),
+      decision,
+      HASH("c"),
+      JSON.stringify([`${input.state}_reason`]),
+      legacyStatus,
+      `source/${input.opportunityId}`,
+      HASH("d"),
+      input.bindingId,
+      input.bindingVersion,
+      input.profileId,
+      input.profileHash,
+      input.createdAt,
+      terminalAt ?? input.createdAt,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
+          (workspace_id, opportunity_id, state, state_revision, reason_codes_json,
+           state_entered_at, terminal_at, created_at, updated_at)
+          VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+    args: [
+      input.workspaceId,
+      input.opportunityId,
+      input.state,
+      JSON.stringify([`${input.state}_reason`]),
+      terminalAt ?? input.createdAt,
+      terminalAt,
+      input.createdAt,
+      terminalAt ?? input.createdAt,
+    ],
+  });
 }
 
 test("agent updates append immutable declared-model versions and preserve earlier snapshots", async () => {
@@ -93,6 +272,9 @@ test("agent registry returns source-derived human-assurance evidence without poo
   const now = new Date();
   const policyId = "arp_assurance_registry";
   const scopeId = "aesc_assurance_registry";
+  const bindingId = "hrb_assurance_registry";
+  const requestProfileId = "rrp_assurance_registry";
+  const requestProfileHash = HASH("c");
   const executionProfileHash = `sha256:${"a".repeat(64)}`;
   const executionProfileJson = JSON.stringify({
     schemaVersion: "rateloop.execution-profile.v1",
@@ -127,8 +309,52 @@ test("agent registry returns source-derived human-assurance evidence without poo
       workspaceId,
       agent.agentId,
       agent.currentVersion.versionId,
-      JSON.stringify({ reviewerSource: "private_invited" }),
+      JSON.stringify({ reviewerSource: "public_network" }),
       OWNER.toLowerCase(),
+      OWNER.toLowerCase(),
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_request_profiles
+          (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label,
+           negative_label, rationale_mode, audience, content_boundary, private_sensitivity,
+           private_group_id, private_group_policy_version, private_group_policy_hash,
+           response_window_seconds, panel_size, compensation_mode, bounty_per_seat_atomic,
+           configuration_status, profile_hash, created_by, created_at, approved_by, approved_at)
+          VALUES (?, 1, ?, ?, ?, 'Check whether this response is correct', 'Approve', 'Reject', 'required',
+                  'public_network', 'public_or_test', NULL, NULL, NULL, NULL, 3600, 3, 'usdc',
+                  '1000000', 'ready', ?, ?, ?, ?, ?)`,
+    args: [
+      requestProfileId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      requestProfileHash,
+      OWNER.toLowerCase(),
+      now,
+      OWNER.toLowerCase(),
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_human_review_bindings
+          (binding_id, version, workspace_id, agent_id, agent_version_id,
+           selection_policy_id, selection_policy_version, request_profile_id, request_profile_version,
+           request_profile_hash, publishing_policy_id, publishing_policy_version, authority, enabled,
+           canonical_hash, created_by, created_at, approved_by, approved_at)
+          VALUES (?, 1, ?, ?, ?, ?, 1, ?, 1, ?, NULL, NULL, 'check_only', true, ?, ?, ?, ?, ?)`,
+    args: [
+      bindingId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      policyId,
+      requestProfileId,
+      requestProfileHash,
+      HASH("d"),
+      OWNER.toLowerCase(),
+      now,
       OWNER.toLowerCase(),
       now,
     ],
@@ -137,11 +363,13 @@ test("agent registry returns source-derived human-assurance evidence without poo
     sql: `INSERT INTO tokenless_agent_evaluation_scopes
           (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version,
            workflow_key, risk_tier, audience_policy_hash, partition_commitment,
-           execution_profile_hash, execution_profile_json, stage,
+           execution_profile_hash, execution_profile_json, human_review_binding_id,
+           human_review_binding_version, request_profile_id, request_profile_version,
+           request_profile_hash, stage,
            completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample,
            stage_entered_at, updated_at)
           VALUES (?, ?, ?, ?, ?, 1, 'support-reply', 'low', 'sha256:audience', 'sha256:partition', ?, ?,
-                  'high_coverage', 32, 12, 0, ?, ?)`,
+                  ?, 1, ?, 1, ?, 'high_coverage', 32, 12, 0, ?, ?)`,
     args: [
       scopeId,
       workspaceId,
@@ -150,6 +378,9 @@ test("agent registry returns source-derived human-assurance evidence without poo
       policyId,
       executionProfileHash,
       executionProfileJson,
+      bindingId,
+      requestProfileId,
+      requestProfileHash,
       now,
       now,
     ],
@@ -195,9 +426,11 @@ test("agent registry returns source-derived human-assurance evidence without poo
              execution_id, external_opportunity_id, suggestion_commitment, declared_confidence_bps, metadata_commitment,
              metadata_complete, critical_risk, decision, review_rate_bps, selection_probability_bps,
              sample_bucket, sampler_key_version, sampler_commitment, reason_codes_json, status,
-             source_evidence_reference, source_evidence_hash, created_at, updated_at)
+             source_evidence_reference, source_evidence_hash, human_review_binding_id,
+             human_review_binding_version, request_profile_id, request_profile_version,
+             request_profile_hash, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 9000, ?, true, false, ?, 5000, 5000,
-                    ?, 'sampler-v1', ?, '[]', ?, ?, ?, ?, ?)`,
+                    ?, 'sampler-v1', ?, '[]', ?, ?, ?, ?, 1, ?, 1, ?, ?, ?)`,
       args: [
         `aeop_registry_${index}`,
         workspaceId,
@@ -215,6 +448,9 @@ test("agent registry returns source-derived human-assurance evidence without poo
         status,
         `evidence/registry/${index}`,
         `sha256:evidence-${index}`,
+        bindingId,
+        requestProfileId,
+        requestProfileHash,
         new Date(now.getTime() + index),
         new Date(now.getTime() + index),
       ],
@@ -257,11 +493,13 @@ test("agent registry returns source-derived human-assurance evidence without poo
     sql: `INSERT INTO tokenless_agent_evaluation_scopes
           (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version,
            workflow_key, risk_tier, audience_policy_hash, partition_commitment,
-           execution_profile_hash, execution_profile_json, stage,
+           execution_profile_hash, execution_profile_json, human_review_binding_id,
+           human_review_binding_version, request_profile_id, request_profile_version,
+           request_profile_hash, stage,
            completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample,
            stage_entered_at, updated_at)
           VALUES (?, ?, ?, ?, ?, 1, 'support-reply', 'low', 'sha256:audience', 'sha256:legacy-partition',
-                  ?, '{}', 'calibrating', 0, 0, 0, ?, ?)`,
+                  ?, '{}', ?, 1, ?, 1, ?, 'calibrating', 0, 0, 0, ?, ?)`,
     args: [
       legacyScopeId,
       workspaceId,
@@ -269,6 +507,9 @@ test("agent registry returns source-derived human-assurance evidence without poo
       agent.currentVersion.versionId,
       policyId,
       `sha256:${"b".repeat(64)}`,
+      bindingId,
+      requestProfileId,
+      requestProfileHash,
       now,
       new Date(now.getTime() - 1),
     ],
@@ -352,6 +593,385 @@ test("agent registry returns source-derived human-assurance evidence without poo
     ).agents[0]?.assuranceScopes.find(scope => scope.scopeId === scopeId);
     assert.equal(nonAdaptiveEvidence?.reviewRateBps, 0);
     assert.equal(nonAdaptiveEvidence?.nextReassessmentAfter, 0);
+  }
+});
+
+test("human-review summaries use exact current bindings, aggregate durable workload, and redact member-only reads", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Review projection", ownerAddress: OWNER });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
+          VALUES (?, ?, 'member', ?)`,
+    args: [workspaceId, MEMBER, new Date()],
+  });
+  const first = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "review-projection-agent",
+    version: version("2026-07-15"),
+  });
+  const base = new Date("2026-07-16T08:00:00.000Z");
+  await insertReviewProjectionPolicy({
+    workspaceId,
+    agentId: first.agentId,
+    agentVersionId: first.currentVersion.versionId,
+    policyId: "rpol_projection_old",
+    profileId: "rrp_projection_old",
+    profileHash: HASH("e"),
+    now: base,
+  });
+  const current = await createWorkspaceAgentVersion({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: first.agentId,
+    version: { ...version("2026-07-16"), displayName: "Review projection agent v2" },
+  });
+  await insertReviewProjectionPolicy({
+    workspaceId,
+    agentId: current.agentId,
+    agentVersionId: current.currentVersion.versionId,
+    policyId: "rpol_projection_current",
+    profileId: "rrp_projection_current",
+    profileHash: HASH("f"),
+    now: new Date(base.getTime() + 1_000),
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_human_review_bindings
+          (binding_id, version, workspace_id, agent_id, agent_version_id,
+           selection_policy_id, selection_policy_version, request_profile_id, request_profile_version,
+           request_profile_hash, publishing_policy_id, publishing_policy_version, authority, enabled,
+           canonical_hash, created_by, created_at, approved_by, approved_at)
+          VALUES ('hrb_projection_old', 1, ?, ?, ?, 'rpol_projection_old', 1,
+                  'rrp_projection_old', 1, ?, NULL, NULL, 'check_only', true, ?, ?, ?, ?, ?)`,
+    args: [
+      workspaceId,
+      current.agentId,
+      first.currentVersion.versionId,
+      HASH("e"),
+      HASH("e"),
+      OWNER,
+      base,
+      OWNER,
+      base,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_human_review_bindings
+          (binding_id, version, workspace_id, agent_id, agent_version_id,
+           selection_policy_id, selection_policy_version, request_profile_id, request_profile_version,
+           request_profile_hash, publishing_policy_id, publishing_policy_version, authority, enabled,
+           canonical_hash, created_by, created_at, approved_by, approved_at, superseded_at)
+          VALUES
+          ('hrb_projection', 1, ?, ?, ?, 'rpol_projection_current', 1, 'rrp_projection_current', 1,
+           ?, NULL, NULL, 'check_only', false, ?, ?, ?, ?, ?, ?),
+          ('hrb_projection', 2, ?, ?, ?, 'rpol_projection_current', 1, 'rrp_projection_current', 1,
+           ?, NULL, NULL, 'check_only', true, ?, ?, ?, ?, ?, NULL)`,
+    args: [
+      workspaceId,
+      current.agentId,
+      current.currentVersion.versionId,
+      HASH("f"),
+      HASH("1"),
+      OWNER,
+      base,
+      OWNER,
+      base,
+      new Date(base.getTime() + 1_000),
+      workspaceId,
+      current.agentId,
+      current.currentVersion.versionId,
+      HASH("f"),
+      HASH("2"),
+      OWNER,
+      new Date(base.getTime() + 1_000),
+      OWNER,
+      new Date(base.getTime() + 1_000),
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_human_review_binding_events
+          (event_id, workspace_id, binding_id, binding_version, event_type, actor_type,
+           actor_reference, details_json, event_hash, created_at)
+          VALUES
+          ('hrbe_projection_1', ?, 'hrb_projection', 1, 'created', 'account', ?, '{}', ?, ?),
+          ('hrbe_projection_2', ?, 'hrb_projection', 2, 'configuration_changed', 'account', ?, '{}', ?, ?)`,
+    args: [workspaceId, OWNER, HASH("3"), base, workspaceId, OWNER, HASH("4"), new Date(base.getTime() + 1_000)],
+  });
+
+  const exactKey = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Exact review projection",
+    scopes: ["evaluation:read", "review:decide", "result:read"],
+  });
+  const staleKey = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Stale review projection",
+    scopes: ["evaluation:read", "review:decide", "result:read"],
+  });
+  for (const integration of [
+    {
+      id: "agi_projection_exact",
+      pairingId: "apr_projection_exact",
+      keyId: exactKey.apiKeyId,
+      bindingId: "hrb_projection",
+      bindingVersion: 2,
+      offset: 0,
+    },
+    {
+      id: "agi_projection_stale",
+      pairingId: "apr_projection_stale",
+      keyId: staleKey.apiKeyId,
+      bindingId: null,
+      bindingVersion: null,
+      offset: 86_400_000,
+    },
+  ]) {
+    const createdAt = new Date(base.getTime() + integration.offset);
+    const expiresAt = new Date(createdAt.getTime() + 7 * 86_400_000);
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_pairing_sessions
+            (pairing_id, workspace_id, api_key_id, credential_hash, credential_prefix, status,
+             created_by, resolved_by, created_at, expires_at, approved_at)
+            VALUES (?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?)`,
+      args: [
+        integration.pairingId,
+        workspaceId,
+        integration.keyId,
+        `credential-${integration.id}`,
+        integration.id.slice(0, 20),
+        OWNER,
+        OWNER,
+        createdAt,
+        expiresAt,
+        createdAt,
+      ],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_integrations
+            (integration_id, pairing_id, workspace_id, agent_id, agent_version_id,
+             review_policy_id, review_policy_version, api_key_id, status, enforcement_mode,
+             allowed_workflow_keys_json, granted_scopes_json, credential_expires_at,
+             human_review_binding_id, human_review_binding_version,
+             last_decision_at, last_request_at, last_result_at, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'rpol_projection_current', 1, ?, 'active', 'advisory', '[]', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        integration.id,
+        integration.pairingId,
+        workspaceId,
+        current.agentId,
+        current.currentVersion.versionId,
+        integration.keyId,
+        JSON.stringify(["evaluation:read", "review:decide", "result:read"]),
+        expiresAt,
+        integration.bindingId,
+        integration.bindingVersion,
+        new Date(createdAt.getTime() + 10_000),
+        new Date(createdAt.getTime() + 20_000),
+        new Date(createdAt.getTime() + 30_000),
+        OWNER,
+        createdAt,
+        createdAt,
+      ],
+    });
+  }
+
+  await insertReviewProjectionScope({
+    workspaceId,
+    agentId: current.agentId,
+    agentVersionId: first.currentVersion.versionId,
+    policyId: "rpol_projection_old",
+    bindingId: "hrb_projection_old",
+    bindingVersion: 1,
+    profileId: "rrp_projection_old",
+    profileHash: HASH("e"),
+    scopeId: "aesc_projection_old",
+    hashCharacter: "5",
+    now: base,
+  });
+  await insertReviewProjectionScope({
+    workspaceId,
+    agentId: current.agentId,
+    agentVersionId: current.currentVersion.versionId,
+    policyId: "rpol_projection_current",
+    bindingId: "hrb_projection",
+    bindingVersion: 2,
+    profileId: "rrp_projection_current",
+    profileHash: HASH("f"),
+    scopeId: "aesc_projection_current",
+    hashCharacter: "6",
+    now: base,
+  });
+  const opportunities = [
+    [
+      "aop_projection_old_approval",
+      "approval_required",
+      "aesc_projection_old",
+      "rpol_projection_old",
+      first.currentVersion.versionId,
+    ],
+    [
+      "aop_projection_current_approval",
+      "approval_required",
+      "aesc_projection_current",
+      "rpol_projection_current",
+      current.currentVersion.versionId,
+    ],
+    [
+      "aop_projection_ready",
+      "request_ready",
+      "aesc_projection_current",
+      "rpol_projection_current",
+      current.currentVersion.versionId,
+    ],
+    [
+      "aop_projection_pending",
+      "pending",
+      "aesc_projection_current",
+      "rpol_projection_current",
+      current.currentVersion.versionId,
+    ],
+    [
+      "aop_projection_blocked",
+      "blocked",
+      "aesc_projection_current",
+      "rpol_projection_current",
+      current.currentVersion.versionId,
+    ],
+  ] as const;
+  for (const [opportunityId, state, scopeId, policyId, agentVersionId] of opportunities) {
+    await insertReviewProjectionOpportunity({
+      workspaceId,
+      agentId: current.agentId,
+      agentVersionId,
+      policyId,
+      bindingId: policyId === "rpol_projection_old" ? "hrb_projection_old" : "hrb_projection",
+      bindingVersion: policyId === "rpol_projection_old" ? 1 : 2,
+      profileId: policyId === "rpol_projection_old" ? "rrp_projection_old" : "rrp_projection_current",
+      profileHash: policyId === "rpol_projection_old" ? HASH("e") : HASH("f"),
+      scopeId,
+      opportunityId,
+      state,
+      createdAt: new Date(base.getTime() + 2_000),
+    });
+  }
+  await insertReviewProjectionOpportunity({
+    workspaceId,
+    agentId: current.agentId,
+    agentVersionId: first.currentVersion.versionId,
+    policyId: "rpol_projection_old",
+    bindingId: "hrb_projection_old",
+    bindingVersion: 1,
+    profileId: "rrp_projection_old",
+    profileHash: HASH("e"),
+    scopeId: "aesc_projection_old",
+    opportunityId: "aop_projection_old_terminal",
+    state: "completed",
+    createdAt: base,
+    terminalAt: new Date(base.getTime() + 9 * 3_600_000),
+  });
+  await insertReviewProjectionOpportunity({
+    workspaceId,
+    agentId: current.agentId,
+    agentVersionId: current.currentVersion.versionId,
+    policyId: "rpol_projection_current",
+    bindingId: "hrb_projection",
+    bindingVersion: 2,
+    profileId: "rrp_projection_current",
+    profileHash: HASH("f"),
+    scopeId: "aesc_projection_current",
+    opportunityId: "aop_projection_current_terminal",
+    state: "skipped",
+    createdAt: base,
+    terminalAt: new Date(base.getTime() + 8 * 3_600_000),
+  });
+  for (const approval of [
+    {
+      id: "hrap_projection_active",
+      opportunityId: "aop_projection_current_approval",
+      createdAt: new Date(Date.now() - 60_000),
+      expiresAt: new Date(Date.now() + 3_600_000),
+      hashCharacter: "7",
+    },
+    {
+      id: "hrap_projection_expired",
+      opportunityId: "aop_projection_old_approval",
+      createdAt: new Date(Date.now() - 7_200_000),
+      expiresAt: new Date(Date.now() - 3_600_000),
+      hashCharacter: "8",
+    },
+  ]) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_approval_requests
+            (approval_id, workspace_id, opportunity_id, revision, request_profile_id,
+             request_profile_version, request_profile_hash, source_evidence_hash, suggestion_commitment,
+             prepared_request_json, prepared_request_hash, derived_economics_json, derived_economics_hash,
+             maximum_charge_atomic, status, prepared_by, created_at, expires_at)
+            VALUES (?, ?, ?, 1, 'rrp_projection_current', 1, ?, ?, ?, '{}', ?, '{}', ?,
+                    7500000, 'pending', ?, ?, ?)`,
+      args: [
+        approval.id,
+        workspaceId,
+        approval.opportunityId,
+        HASH("f"),
+        HASH("d"),
+        HASH("a"),
+        HASH(approval.hashCharacter),
+        HASH(approval.hashCharacter === "7" ? "9" : "0"),
+        OWNER,
+        approval.createdAt,
+        approval.expiresAt,
+      ],
+    });
+  }
+
+  const ownerAgent = (await listWorkspaceAgents({ accountAddress: OWNER, workspaceId })).agents[0]!;
+  assert.equal(ownerAgent.currentVersion.versionId, current.currentVersion.versionId);
+  assert.equal(ownerAgent.humanReview.status, "configured");
+  assert.deepEqual(ownerAgent.humanReview.configuration?.selection.effectiveRateRangeBps, {
+    minimum: 10_000,
+    maximum: 10_000,
+  });
+  assert.equal(ownerAgent.humanReview.configuration?.request.responseWindowSeconds, 3600);
+  assert.equal(ownerAgent.humanReview.configuration?.request.panelSize, 3);
+  assert.equal(ownerAgent.humanReview.configuration?.connected, true);
+  assert.deepEqual(ownerAgent.humanReview.activity, {
+    lastDecisionAt: "2026-07-16T08:00:10.000Z",
+    lastRequestAt: "2026-07-16T08:00:20.000Z",
+    lastResultAt: "2026-07-16T08:00:30.000Z",
+  });
+  assert.deepEqual(ownerAgent.humanReview.workload, {
+    openCount: 5,
+    approvalRequiredCount: 2,
+    requestReadyCount: 1,
+    activeReviewCount: 1,
+    blockedCount: 1,
+    ownerActionCount: 1,
+  });
+  assert.deepEqual(ownerAgent.humanReview.lastTerminal, {
+    state: "completed",
+    at: "2026-07-16T17:00:00.000Z",
+  });
+  assert.equal(ownerAgent.humanReview.management?.binding?.version, 2);
+  assert.equal(ownerAgent.humanReview.management?.selectionPolicy?.id, "rpol_projection_current");
+  assert.equal(ownerAgent.humanReview.management?.delegation?.integrationId, "agi_projection_exact");
+  assert.deepEqual(ownerAgent.humanReview.management?.delegation?.scopes, [
+    "evaluation:read",
+    "review:decide",
+    "result:read",
+  ]);
+  assert.equal(ownerAgent.humanReview.management?.audit.eventCount, 2);
+  assert.equal(ownerAgent.humanReview.management?.audit.latest?.type, "configuration_changed");
+  assert.equal(ownerAgent.humanReview.management?.lastTerminalDetails?.opportunityId, "aop_projection_old_terminal");
+
+  const memberAgent = (await listWorkspaceAgents({ accountAddress: MEMBER, workspaceId })).agents[0]!;
+  assert.equal(memberAgent.ownerAccountAddress, null);
+  assert.equal(memberAgent.createdBy, null);
+  assert.ok(memberAgent.versions.every(snapshot => snapshot.createdBy === null));
+  assert.equal(memberAgent.humanReview.management, null);
+  assert.deepEqual(memberAgent.humanReview.configuration, ownerAgent.humanReview.configuration);
+  assert.deepEqual(memberAgent.humanReview.workload, ownerAgent.humanReview.workload);
+  const memberProjection = JSON.stringify(memberAgent.humanReview);
+  for (const secret of ["hrb_projection", "rrp_projection_current", HASH("f"), "agi_projection_exact"]) {
+    assert.doesNotMatch(memberProjection, new RegExp(secret));
   }
 });
 

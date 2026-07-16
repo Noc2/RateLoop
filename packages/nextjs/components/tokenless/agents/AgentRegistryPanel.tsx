@@ -482,12 +482,14 @@ export function AgentRegistryPanel({
                       <dt className="text-xs text-base-content/45">Deployment</dt>
                       <dd className="mt-1">{agent.currentVersion.declaredDeploymentName ?? "—"}</dd>
                     </div>
-                    <div>
-                      <dt className="text-xs text-base-content/45">Owner</dt>
-                      <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
-                        {shortAddress(agent.ownerAccountAddress)}
-                      </dd>
-                    </div>
+                    {agent.ownerAccountAddress ? (
+                      <div>
+                        <dt className="text-xs text-base-content/45">Owner</dt>
+                        <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
+                          {shortAddress(agent.ownerAccountAddress)}
+                        </dd>
+                      </div>
+                    ) : null}
                   </dl>
                 </details>
 

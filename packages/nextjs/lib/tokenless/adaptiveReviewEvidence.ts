@@ -140,11 +140,15 @@ export async function finalizeAdaptiveReviewEvidence(input: {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `SELECT o.workspace_id, o.scope_id, o.opportunity_id, o.decision, o.status, o.operation_key,
-              o.execution_id, o.source_evidence_hash, o.suggestion_commitment, o.created_at,
+      `SELECT o.workspace_id, o.agent_id, o.agent_version_id, o.scope_id, o.opportunity_id,
+              o.decision, o.status, o.operation_key, o.execution_id,
+              o.source_evidence_hash, o.suggestion_commitment, o.created_at,
+              e.integration_id,
               a.result_json
        FROM tokenless_agent_review_opportunities o
        JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
+       JOIN tokenless_agent_executions e
+         ON e.workspace_id = o.workspace_id AND e.execution_id = o.execution_id
        WHERE o.operation_key = $1
        FOR UPDATE`,
       [operationKey],
@@ -221,6 +225,26 @@ export async function finalizeAdaptiveReviewEvidence(input: {
        WHERE opportunity_id = $2 AND operation_key = $3`,
       [new Date(observation.finalizedAt), observation.opportunityId, operationKey],
     );
+    const integrationId = rowString(row, "integration_id");
+    if (rowString(row, "status") === "review_requested" && integrationId) {
+      const finalizedAt = new Date(observation.finalizedAt);
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET last_result_at = CASE
+           WHEN last_result_at IS NULL OR last_result_at < $1 THEN $1
+           ELSE last_result_at
+         END,
+         updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
+         WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
+        [
+          finalizedAt,
+          integrationId,
+          observation.workspaceId,
+          rowString(row, "agent_id"),
+          rowString(row, "agent_version_id"),
+        ],
+      );
+    }
     await client.query("COMMIT");
     return observation;
   } catch (error) {

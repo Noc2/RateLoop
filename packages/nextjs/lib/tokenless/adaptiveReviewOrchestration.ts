@@ -346,12 +346,25 @@ async function bindOperation(input: {
         "review_binding_conflict",
       );
     }
+    const now = new Date();
     if (status !== "completed") {
       await client.query(
         `UPDATE tokenless_agent_review_opportunities
          SET operation_key = $1, status = 'review_requested', updated_at = $2
          WHERE opportunity_id = $3 AND (operation_key IS NULL OR operation_key = $1)`,
-        [input.operationKey, new Date(), input.opportunityId],
+        [input.operationKey, now, input.opportunityId],
+      );
+    }
+    if (status === "decided") {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET last_request_at = CASE
+           WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1
+           ELSE last_request_at
+         END,
+         updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
+         WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
+        [now, binding.integrationId, binding.workspaceId, binding.agentId, binding.agentVersionId],
       );
     }
     await client.query("COMMIT");
