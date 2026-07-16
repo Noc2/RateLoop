@@ -123,12 +123,6 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
               </li>
             ))}
           </ol>
-          {!concise ? (
-            <p className="mt-6 text-xs leading-5 text-base-content/45">
-              Coverage never becomes a global score. Evidence remains scoped to the exact agent version, policy,
-              workflow, risk tier, and reviewer audience.
-            </p>
-          ) : null}
         </div>
       </div>
     </section>

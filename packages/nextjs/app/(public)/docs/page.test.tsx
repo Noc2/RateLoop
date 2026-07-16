@@ -17,7 +17,10 @@ test("documentation introduction presents the focused production path", async ()
   assert.match(html, /Human Assurance Loop/i);
   assert.match(html, /100% review.*50%.*25%.*10% monitoring floor/i);
   assert.match(html, /weaker measured agreement.*restore calibration/i);
-  assert.match(html, /Evidence remains scoped to the exact agent version, policy, workflow/i);
+  assert.doesNotMatch(
+    html,
+    /Coverage never becomes a global score|Evidence remains scoped to the exact agent version/i,
+  );
   assert.match(html, /Define:.*Review:.*Settle:.*Decide:/i);
   assert.match(html, /The final decision stays with you/i);
   assert.match(html, /href="\/docs\/how-it-works"/i);
