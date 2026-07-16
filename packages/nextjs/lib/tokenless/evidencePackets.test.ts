@@ -472,6 +472,34 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     signer: { privateKey: signer.privateKey },
     tenantCommitmentKey: TENANT_KEY,
   });
+  assert.equal(packet.payload.schemaVersion, "rateloop.human-assurance.evidence.v3");
+  assert.deepEqual(packet.payload.reviewContext.selectionTrigger, {
+    kind: "owner_required",
+    source: "explicit_workspace_assurance_run",
+  });
+  assert.equal(packet.payload.reviewContext.gate.type, "advisory");
+  assert.equal(packet.payload.reviewContext.versions.audiencePolicy.version, 1);
+  assert.deepEqual(packet.payload.reviewContext.reviewerQualifications, {
+    taxonomy: "explicit_qualification_categories",
+    orderedTiers: false,
+    minimumAggregationSize: 3,
+    categories: [],
+    unqualified: { suppressed: false, reviewerCount: 6 },
+  });
+  assert.deepEqual(packet.payload.reviewContext.period.coverage, {
+    caseCount: 1,
+    targetExpectedJudgmentCount: 6,
+    submittedJudgmentCount: 6,
+    respondingReviewerCount: 6,
+    targetReviewerCount: 6,
+  });
+  assert.deepEqual(packet.payload.reviewContext.period.responseSubmissionLatencyFromPeriodStartMs, {
+    count: 6,
+    minimum: 0,
+    median: 0,
+    p95: 0,
+    maximum: 0,
+  });
   assert.equal(packet.payload.aggregation.reviewerCoverage.targetReviewerCount, 6);
   assert.equal(packet.payload.aggregation.reviewerCoverage.respondingReviewerCount, 6);
   assert.equal(packet.payload.aggregation.judgmentCoverage.targetExpectedJudgmentCount, 6);
@@ -497,6 +525,26 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     expectedKeyId: packet.signing.keyId,
   });
   assert.equal(trusted.valid, true);
+  const legacyPayload: Record<string, any> = {
+    ...packet.payload,
+    schemaVersion: "rateloop.human-assurance.evidence.v2",
+  };
+  delete legacyPayload.reviewContext;
+  const legacyDocument = { payload: legacyPayload, signing: packet.signing };
+  const legacyPacket = {
+    ...legacyDocument,
+    packetDigest: sha256EvidenceValue(legacyDocument),
+    signature: sign(null, Buffer.from(canonicalizeEvidenceValue(legacyDocument)), signer.privateKey).toString(
+      "base64url",
+    ),
+  };
+  assert.equal(
+    verifyEvidenceExport(legacyPacket, {
+      expectedPublicKey: packet.signing.publicKey,
+      expectedKeyId: packet.signing.keyId,
+    }).valid,
+    true,
+  );
   assert.equal(
     (await getAssuranceEvidencePacket({ accountAddress: OWNER, ...fixture })).packetDigest,
     packet.packetDigest,

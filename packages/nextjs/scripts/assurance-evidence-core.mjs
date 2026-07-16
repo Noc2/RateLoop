@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v2";
+export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v3";
+export const LEGACY_EVIDENCE_SCHEMA_VERSIONS = ["rateloop.human-assurance.evidence.v2"];
 export const EVIDENCE_AGGREGATION_VERSION = "rateloop.descriptive-case-quorum.v2";
 
 export function canonicalizeEvidenceValue(value) {
@@ -233,7 +234,12 @@ export function verifyEvidenceExport(packet, trust = {}) {
       return { valid: false, errors: ["invalid_packet_shape"] };
     }
     const errors = [];
-    if (packet.payload.schemaVersion !== EVIDENCE_SCHEMA_VERSION) errors.push("unsupported_schema_version");
+    if (
+      packet.payload.schemaVersion !== EVIDENCE_SCHEMA_VERSION &&
+      !LEGACY_EVIDENCE_SCHEMA_VERSIONS.includes(packet.payload.schemaVersion)
+    ) {
+      errors.push("unsupported_schema_version");
+    }
     if (packet.signing.algorithm !== "Ed25519") errors.push("unsupported_signature_algorithm");
     const derivedKeyId = evidenceSigningKeyId(packet.signing.publicKey);
     if (!trust.expectedPublicKey && !trust.expectedKeyId) errors.push("missing_trust_anchor");

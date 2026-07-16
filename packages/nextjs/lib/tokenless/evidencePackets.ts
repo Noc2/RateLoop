@@ -63,6 +63,13 @@ function rowNumber(row: QueryRow | undefined, key: string) {
   return number;
 }
 
+function rowDate(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (!Number.isFinite(date.getTime())) throw new Error(`Database returned an invalid ${key}.`);
+  return date;
+}
+
 function parseJson<T>(value: unknown, name: string): T {
   try {
     return JSON.parse(String(value)) as T;
@@ -448,6 +455,79 @@ function privacySafeRecomputation(
   };
 }
 
+function privacySafeQualificationCounts(responses: QueryRow[], minimumAggregationSize: number) {
+  const qualificationsByReviewer = new Map<string, string[]>();
+  for (const response of responses) {
+    const reviewerKey = rowString(response, "reviewer_key");
+    if (!reviewerKey) evidenceError("A response has no reviewer key.", "assurance_evidence_source_invalid");
+    const qualifications = [...new Set(parseJson<string[]>(response.qualification_keys_json, "Qualifications"))].sort();
+    if (qualifications.some(value => typeof value !== "string" || value.length === 0)) {
+      evidenceError("A reviewer qualification is invalid.", "assurance_evidence_source_invalid");
+    }
+    const previous = qualificationsByReviewer.get(reviewerKey);
+    if (previous && canonicalizeEvidenceValue(previous) !== canonicalizeEvidenceValue(qualifications)) {
+      evidenceError("A reviewer's frozen qualifications changed within the run.", "assurance_evidence_source_invalid");
+    }
+    qualificationsByReviewer.set(reviewerKey, qualifications);
+  }
+  const reviewersByQualification = new Map<string, Set<string>>();
+  let unqualifiedReviewerCount = 0;
+  for (const [reviewerKey, qualifications] of qualificationsByReviewer) {
+    if (qualifications.length === 0) unqualifiedReviewerCount += 1;
+    for (const qualification of qualifications) {
+      const reviewers = reviewersByQualification.get(qualification) ?? new Set<string>();
+      reviewers.add(reviewerKey);
+      reviewersByQualification.set(qualification, reviewers);
+    }
+  }
+  const privacySafeCount = (count: number) => ({
+    suppressed: count < minimumAggregationSize,
+    ...(count >= minimumAggregationSize ? { reviewerCount: count } : {}),
+  });
+  return {
+    taxonomy: "explicit_qualification_categories",
+    orderedTiers: false,
+    minimumAggregationSize,
+    categories: [...reviewersByQualification.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, reviewers]) => ({ key, ...privacySafeCount(reviewers.size) })),
+    unqualified: privacySafeCount(unqualifiedReviewerCount),
+  };
+}
+
+function periodCoverage(row: QueryRow, responses: QueryRow[], aggregation: Record<string, any>) {
+  const startedAt = rowDate(row, "created_at");
+  const endedAt = rowDate(row, "completed_at");
+  if (endedAt < startedAt) evidenceError("The assurance period is invalid.", "assurance_evidence_source_invalid");
+  const latencies = responses
+    .map(response => rowDate(response, "submitted_at").getTime() - startedAt.getTime())
+    .sort((left, right) => left - right);
+  if (latencies.some(latency => latency < 0)) {
+    evidenceError("A response predates the assurance period.", "assurance_evidence_source_invalid");
+  }
+  const percentile = (numerator: number, denominator: number) =>
+    latencies.length === 0 ? null : latencies[Math.ceil((latencies.length * numerator) / denominator) - 1];
+  return {
+    startInclusive: startedAt.toISOString(),
+    endInclusive: endedAt.toISOString(),
+    durationMs: endedAt.getTime() - startedAt.getTime(),
+    coverage: {
+      caseCount: aggregation.judgmentCoverage.caseCount,
+      targetExpectedJudgmentCount: aggregation.judgmentCoverage.targetExpectedJudgmentCount,
+      submittedJudgmentCount: aggregation.judgmentCoverage.submittedJudgmentCount,
+      respondingReviewerCount: aggregation.reviewerCoverage.respondingReviewerCount,
+      targetReviewerCount: aggregation.reviewerCoverage.targetReviewerCount,
+    },
+    responseSubmissionLatencyFromPeriodStartMs: {
+      count: latencies.length,
+      minimum: latencies[0] ?? null,
+      median: percentile(1, 2),
+      p95: percentile(95, 100),
+      maximum: latencies.at(-1) ?? null,
+    },
+  };
+}
+
 function passRuleFrom(row: QueryRow, runManifest: Record<string, any>) {
   const passRule = runManifest.rubric?.passRule ?? parseJson<Record<string, any>>(row.pass_rule_json, "Pass rule");
   if (
@@ -796,7 +876,8 @@ export async function generateAssuranceEvidencePacket(input: {
       ),
       client.query(
         `SELECT case_id, reviewer_key, reviewer_source, choice, failure_tag_keys_json, rationale_ciphertext,
-                rationale_key_ref, qualification_keys_json, response_digest, settlement_reference, validity
+                rationale_key_ref, qualification_keys_json, response_digest, settlement_reference, validity,
+                submitted_at
          FROM tokenless_assurance_responses WHERE run_id = $1 ORDER BY response_id ASC`,
         [input.runId],
       ),
@@ -859,6 +940,36 @@ export async function generateAssuranceEvidencePacket(input: {
         admissionPolicyHashes: [
           ...new Set(caseResult.rows.map(caseRow => rowString(caseRow, "admission_policy_hash"))),
         ].sort(),
+      },
+      reviewContext: {
+        selectionTrigger: {
+          kind: "owner_required",
+          source: "explicit_workspace_assurance_run",
+        },
+        deliveryAuthority: {
+          mode: "workspace_authorized_member",
+          callerSupplied: false,
+        },
+        gate: {
+          type: "advisory",
+          stopGateEvidenceReference: null,
+          statement: "The measured packet is separate from the workspace client's go, revise, or stop sign-off.",
+        },
+        versions: {
+          runManifest: { hash: frozen.runManifestHash },
+          suite: {
+            id: rowString(row, "suite_id"),
+            version: rowNumber(row, "suite_version"),
+            hash: frozen.suiteManifestHash,
+          },
+          audiencePolicy: {
+            id: rowString(row, "audience_policy_id"),
+            version: rowNumber(row, "audience_policy_version"),
+            hash: frozen.policyHash,
+          },
+        },
+        reviewerQualifications: privacySafeQualificationCounts(responseResult.rows, counts.minimumAggregationSize),
+        period: periodCoverage(row, responseResult.rows, aggregation),
       },
       roots: { caseRoot: evidenceMerkleRoot(caseLeaves), responseRoot: evidenceMerkleRoot(responseLeaves) },
       aggregation,
