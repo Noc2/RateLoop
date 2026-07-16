@@ -29,7 +29,10 @@ type Work = {
   privateAccepted?: number;
   assuranceAccepted?: number;
   publicResponses?: number;
+  publicPaidPayable?: number;
   assuranceResponses?: number;
+  assurancePaidAccepted?: number;
+  assurancePaidPayable?: number;
   publicCommits?: number;
   paidCommits?: number;
   assignmentCount?: number;
@@ -122,7 +125,10 @@ class RecoveryClient {
             private_accepted: this.work.privateAccepted ?? 0,
             assurance_accepted: this.work.assuranceAccepted ?? 0,
             public_responses: this.work.publicResponses ?? 0,
+            public_paid_payable: this.work.publicPaidPayable ?? 0,
             assurance_responses: this.work.assuranceResponses ?? 0,
+            assurance_paid_accepted: this.work.assurancePaidAccepted ?? 0,
+            assurance_paid_payable: this.work.assurancePaidPayable ?? 0,
             public_commits: this.work.publicCommits ?? 0,
             paid_commits: this.work.paidCommits ?? 0,
             assignment_count: this.work.assignmentCount ?? 0,
@@ -357,7 +363,45 @@ test("owner disable cancels only before acceptance and preserves accepted work a
   assert.ok(preserved.reasonCodes.includes("accepted_work_payable"));
   assert.ok(preserved.reasonCodes.includes("no_post_commit_cancellation"));
   assert.equal(preserved.details.acceptedWorkPayable, true);
+  assert.equal((preserved.details.payment as { disposition: string }).disposition, "not_applicable");
   assert.equal(afterCommit.state.deliveryStatus, "inconclusive");
+});
+
+test("paid accepted work reaches a payable or preserved terminal and never uses Feedback Bonus", async () => {
+  const payable = new RecoveryClient();
+  payable.work = { paidCommits: 1, publicResponses: 1, publicPaidPayable: 1 };
+  install(payable);
+  const payableTerminal = await recordHumanReviewOpportunityFailure({
+    workspaceId: "workspace_a",
+    opportunityId: "opportunity_a",
+    transitionKey: "failure:paid-response",
+    signal: "infrastructure_failure",
+    retryable: false,
+    errorCode: "result_adapter_failed",
+    occurredAt: new Date("2026-07-16T10:30:00.000Z"),
+  });
+  assert.equal(payableTerminal.toState, "inconclusive");
+  assert.deepEqual(payableTerminal.details.payment, {
+    disposition: "payable_terminal",
+    paidAcceptedWorkCount: 1,
+    paidPayableWorkCount: 1,
+    noPostCommitCancellation: true,
+    feedbackBonusMaySatisfyBaseLiability: false,
+  });
+
+  const committed = new RecoveryClient();
+  committed.work = { paidCommits: 1 };
+  install(committed);
+  const preserved = await recordHumanReviewOpportunityFailure({
+    workspaceId: "workspace_a",
+    opportunityId: "opportunity_a",
+    transitionKey: "failure:paid-commit",
+    signal: "adapter_failure",
+    retryable: false,
+    errorCode: "adapter_rejected",
+    occurredAt: new Date("2026-07-16T10:31:00.000Z"),
+  });
+  assert.equal((preserved.details.payment as { disposition: string }).disposition, "compensation_path_preserved");
 });
 
 test("response timeout and all-expired signals are verified against durable state", async () => {

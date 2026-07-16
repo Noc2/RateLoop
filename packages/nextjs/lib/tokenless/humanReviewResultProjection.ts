@@ -12,6 +12,7 @@ import {
   parseHumanReviewResultEnvelope,
 } from "@rateloop/sdk";
 import "server-only";
+import { assertResultPreservesAcceptedWorkPayment } from "~~/lib/tokenless/acceptedWorkPaymentGuarantees";
 
 export type HumanReviewResultProjectionInput = {
   workspaceId: string;
@@ -110,6 +111,12 @@ function copyEconomics(value: HumanReviewResultEconomics): HumanReviewResultEcon
  * payout destinations through object spreading.
  */
 export function projectHumanReviewResultEnvelope(input: HumanReviewResultProjectionInput): HumanReviewResultEnvelope {
+  assertResultPreservesAcceptedWorkPayment({
+    lane: input.lane,
+    outcome: input.outcome,
+    responseCount: input.panel.responseCount,
+    guaranteedBase: input.economics.guaranteedBase,
+  });
   const aggregateSummary = input.rationale.aggregateSummary?.trim() || null;
   const projected = {
     schemaVersion: HUMAN_REVIEW_RESULT_ENVELOPE_SCHEMA_VERSION,

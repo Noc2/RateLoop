@@ -206,6 +206,20 @@ test("the projection rejects cross-lane economics and outcome tampering", () => 
   assert.throws(() => projectHumanReviewResultEnvelope(outcome), /compatible with lifecycle/);
 });
 
+test("the projection cannot cancel or fully refund accepted paid responses", () => {
+  const cancelled = input("public_paid", "cancelled", "cancelled_before_commit");
+  assert.throws(() => projectHumanReviewResultEnvelope(cancelled), /accepted responses cannot be cancelled/u);
+
+  const refunded = input("hybrid", "failed", "failed_terminal");
+  refunded.economics.guaranteedBase = {
+    mode: "usdc",
+    fundedAtomic: "800000",
+    paidAtomic: "0",
+    refundedAtomic: "800000",
+  };
+  assert.throws(() => projectHumanReviewResultEnvelope(refunded), /cannot fully refund guaranteed-base funding/u);
+});
+
 test("projection output remains a fully typed envelope", () => {
   const result: HumanReviewResultEnvelope = projectHumanReviewResultEnvelope(input("public_paid"));
   assert.equal(result.commitments.result, digest("7"));

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { classifyAcceptedWorkFailurePayment } from "~~/lib/tokenless/acceptedWorkPaymentGuarantees";
 import {
   type HumanReviewOpportunityState,
   canonicalizeHumanReviewReasonCodes,
@@ -72,6 +73,9 @@ type WorkSnapshot = {
   acceptedWorkCount: number;
   committedWorkCount: number;
   responseCount: number;
+  publicPayableWorkCount: number;
+  paidAcceptedWorkCount: number;
+  paidPayableWorkCount: number;
   assignmentCount: number;
   activeAssignmentCount: number;
   expiredAssignmentCount: number;
@@ -295,8 +299,20 @@ async function loadWorkSnapshot(
            AND (assignment.accepted_at IS NOT NULL OR assignment.status IN ('accepted','completed'))) AS assurance_accepted,
        (SELECT COUNT(*) FROM tokenless_public_rater_responses response
          WHERE $3::text IS NOT NULL AND response.operation_key = $3) AS public_responses,
+       (SELECT COUNT(*) FROM tokenless_public_rater_responses response
+         WHERE $3::text IS NOT NULL AND response.operation_key = $3
+           AND response.hash_verified_at IS NOT NULL) AS public_paid_payable,
        (SELECT COUNT(*) FROM tokenless_assurance_responses response
          WHERE $4::text IS NOT NULL AND response.run_id = $4) AS assurance_responses,
+       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
+         WHERE $4::text IS NOT NULL AND assignment.run_id = $4
+           AND assignment.paid_assignment = true
+           AND (assignment.accepted_at IS NOT NULL OR assignment.status IN ('accepted','completed'))) AS assurance_paid_accepted,
+       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
+         WHERE $4::text IS NOT NULL AND assignment.run_id = $4
+           AND assignment.paid_assignment = true AND assignment.status = 'completed'
+           AND EXISTS (SELECT 1 FROM tokenless_assurance_responses response
+                        WHERE response.run_id = assignment.run_id)) AS assurance_paid_payable,
        (SELECT COUNT(*) FROM tokenless_rater_commits commit_record
           JOIN tokenless_public_rater_responses response ON response.voucher_id = commit_record.voucher_id
          WHERE $3::text IS NOT NULL AND response.operation_key = $3) AS public_commits,
@@ -331,12 +347,18 @@ async function loadWorkSnapshot(
   const assuranceAccepted = integer(row, "assurance_accepted");
   const publicResponses = integer(row, "public_responses");
   const assuranceResponses = integer(row, "assurance_responses");
+  const publicPayableWorkCount = integer(row, "public_paid_payable");
   const publicCommits = integer(row, "public_commits");
   const paidCommits = integer(row, "paid_commits");
+  const assurancePaidAccepted = integer(row, "assurance_paid_accepted");
+  const assurancePaidPayable = integer(row, "assurance_paid_payable");
   return {
     acceptedWorkCount: privateAccepted + assuranceAccepted + paidCommits,
     committedWorkCount: publicCommits + paidCommits,
     responseCount: publicResponses + assuranceResponses,
+    publicPayableWorkCount,
+    paidAcceptedWorkCount: assurancePaidAccepted + Math.max(paidCommits, publicResponses),
+    paidPayableWorkCount: assurancePaidPayable + publicPayableWorkCount,
     assignmentCount: integer(row, "assignment_count"),
     activeAssignmentCount: integer(row, "active_assignment_count"),
     expiredAssignmentCount: integer(row, "expired_assignment_count"),
@@ -592,6 +614,7 @@ export async function recordHumanReviewOpportunityFailure(input: {
     let reasons: string[];
     let nextRetryAt: Date | null = null;
     let resumeState = recovery?.resumeState ?? null;
+    let payment: ReturnType<typeof classifyAcceptedWorkFailurePayment> | null = null;
     if (shouldRetry) {
       resumeState =
         resumeState ??
@@ -654,6 +677,12 @@ export async function recordHumanReviewOpportunityFailure(input: {
       const terminal = terminalDecision(input.signal, work, cancellationIsPreCommit);
       toState = terminal.toState;
       action = terminal.action;
+      payment = classifyAcceptedWorkFailurePayment({
+        terminalState: toState,
+        anyAcceptedWork: hasAcceptedWork(work),
+        paidAcceptedWorkCount: work.paidAcceptedWorkCount,
+        paidPayableWorkCount: work.paidPayableWorkCount,
+      });
       reasons = [input.signal];
       if (isTransient && failureCount >= MAXIMUM_HUMAN_REVIEW_RECOVERY_FAILURES) {
         reasons.push("recovery_retries_exhausted");
@@ -678,6 +707,7 @@ export async function recordHumanReviewOpportunityFailure(input: {
           acceptedWorkCount: work.acceptedWorkCount,
           committedWorkCount: work.committedWorkCount,
           responseCount: work.responseCount,
+          payment,
           failureCount,
           errorCode: normalizedErrorCode,
         },
@@ -735,6 +765,7 @@ export async function recordHumanReviewOpportunityFailure(input: {
         nextRetryAt: nextRetryAt?.toISOString() ?? null,
         resumeState,
         acceptedWorkPayable: hasAcceptedWork(work),
+        payment,
         errorCode: normalizedErrorCode,
       },
       occurredAt,
