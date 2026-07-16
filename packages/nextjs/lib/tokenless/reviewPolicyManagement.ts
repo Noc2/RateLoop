@@ -149,7 +149,7 @@ function normalizeRiskTiers(value: unknown, field: string) {
   return [...new Set(value as string[])];
 }
 
-function normalizeInput(value: unknown): ManagedReviewPolicyInput {
+export function normalizeManagedReviewPolicyInput(value: unknown): ManagedReviewPolicyInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TokenlessServiceError("Review policy body must be an object.", 400, "invalid_review_policy");
   }
@@ -467,7 +467,7 @@ export async function createManagedReviewPolicy(input: {
   policy: unknown;
 }) {
   const actor = await requireManagement(input.accountAddress, input.workspaceId);
-  const policy = normalizeInput(input.policy);
+  const policy = normalizeManagedReviewPolicyInput(input.policy);
   const policyId = `rpol_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   const client = await dbPool.connect();
@@ -530,7 +530,7 @@ export async function updateManagedReviewPolicy(input: {
   policy: unknown;
 }) {
   const actor = await requireManagement(input.accountAddress, input.workspaceId);
-  const policy = normalizeInput(input.policy);
+  const policy = normalizeManagedReviewPolicyInput(input.policy);
   const now = new Date();
   const client = await dbPool.connect();
   let nextVersion = 0;
@@ -656,4 +656,4 @@ export async function disableManagedReviewPolicy(input: {
   }
 }
 
-export const __reviewPolicyManagementTestUtils = { normalizeInput };
+export const __reviewPolicyManagementTestUtils = { normalizeInput: normalizeManagedReviewPolicyInput };

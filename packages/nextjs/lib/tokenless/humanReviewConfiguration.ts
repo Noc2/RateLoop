@@ -3,7 +3,18 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import { HUMAN_REVIEW_AUTHORITY_LEVELS, type HumanReviewAuthorityLevel } from "~~/lib/tokenless/reviewCapabilities";
+import {
+  HUMAN_REVIEW_AUTHORITY_LEVELS,
+  type HumanReviewAuthorityLevel,
+  type HumanReviewReadiness,
+  resolveHumanReviewCapability,
+} from "~~/lib/tokenless/reviewCapabilities";
+import { normalizeManagedReviewPolicyInput } from "~~/lib/tokenless/reviewPolicyManagement";
+import {
+  REVIEW_REQUEST_PRIVATE_SENSITIVITIES,
+  hashReviewRequestProfile,
+  normalizeReviewRequestProfileInput,
+} from "~~/lib/tokenless/reviewRequestProfiles";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -41,8 +52,50 @@ export type SaveHumanReviewConfigurationInput = {
   authority?: HumanReviewAuthorityLevel;
 };
 
+export type PutHumanReviewConfigurationInput = {
+  accountAddress: string;
+  workspaceId: string;
+  agentId: string;
+  body: unknown;
+};
+
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const REQUIRED_AUTOMATIC_SCOPES = ["panel:publish", "payment:submit"] as const;
+const SAFE_EVALUATION_SCOPES = ["evaluation:read", "review:decide"] as const;
+const OWNER_BODY_KEYS = new Set([
+  "expectedBindingVersion",
+  "selection",
+  "requestProfile",
+  "authority",
+  "publishingGrant",
+]);
+const OWNER_SELECTION_KEYS = new Set([
+  "mode",
+  "enforcementMode",
+  "agreementThresholdBps",
+  "productionFloorBps",
+  "fixedRateBps",
+  "maximumUnreviewedGap",
+  "requiredRiskTiers",
+  "criticalRiskTiers",
+  "minimumConfidenceBps",
+  "maximumLatencyMs",
+]);
+const OWNER_PROFILE_KEYS = new Set([
+  "criterion",
+  "positiveLabel",
+  "negativeLabel",
+  "rationaleMode",
+  "audience",
+  "contentBoundary",
+  "privateSensitivity",
+  "privateGroupId",
+  "responseWindowSeconds",
+  "panelSize",
+  "compensationMode",
+  "bountyPerSeatAtomic",
+]);
+const OWNER_GRANT_KEYS = new Set(["integrationId", "publishingPolicyId", "publishingPolicyVersion"]);
 
 function configurationError(message: string, code = "invalid_human_review_configuration"): never {
   throw new TokenlessServiceError(message, 400, code);
@@ -609,6 +662,701 @@ export async function saveHumanReviewConfigurationInTransaction(
     throw new TokenlessServiceError("Account identity is invalid.", 400, "invalid_account");
   }
   return saveHumanReviewConfigurationInternal({ ...input, accountAddress: actor }, { client, actor, now: input.now });
+}
+
+function objectWithAllowedKeys(value: unknown, field: string, allowed: ReadonlySet<string>) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    configurationError(`${field} must be an object.`, "invalid_human_review_owner_request");
+  }
+  const object = value as Record<string, unknown>;
+  if (Object.keys(object).some(key => !allowed.has(key))) {
+    configurationError(`${field} contains unsupported fields.`, "invalid_human_review_owner_request");
+  }
+  return object;
+}
+
+function normalizeOwnerMutation(value: unknown) {
+  const body = objectWithAllowedKeys(value, "Human-review configuration", OWNER_BODY_KEYS);
+  if (!("expectedBindingVersion" in body)) {
+    configurationError("expectedBindingVersion is required.", "invalid_human_review_owner_request");
+  }
+  const expectedBindingVersion = body.expectedBindingVersion;
+  if (
+    expectedBindingVersion !== null &&
+    (!Number.isSafeInteger(expectedBindingVersion) || Number(expectedBindingVersion) < 1)
+  ) {
+    configurationError(
+      "expectedBindingVersion must be null or a positive integer.",
+      "invalid_human_review_owner_request",
+    );
+  }
+  const selection = objectWithAllowedKeys(body.selection, "selection", OWNER_SELECTION_KEYS);
+  const requestProfile = objectWithAllowedKeys(body.requestProfile, "requestProfile", OWNER_PROFILE_KEYS);
+  const authority = body.authority as HumanReviewAuthorityLevel;
+  if (!HUMAN_REVIEW_AUTHORITY_LEVELS.includes(authority)) {
+    configurationError("Human-review authority is invalid.", "invalid_human_review_owner_request");
+  }
+  let publishingGrant:
+    | undefined
+    | null
+    | { integrationId: string; publishingPolicyId: string; publishingPolicyVersion: number };
+  if ("publishingGrant" in body) {
+    if (body.publishingGrant === null) publishingGrant = null;
+    else {
+      const grant = objectWithAllowedKeys(body.publishingGrant, "publishingGrant", OWNER_GRANT_KEYS);
+      if (
+        typeof grant.integrationId !== "string" ||
+        !grant.integrationId.trim() ||
+        typeof grant.publishingPolicyId !== "string" ||
+        !grant.publishingPolicyId.trim() ||
+        !Number.isSafeInteger(grant.publishingPolicyVersion) ||
+        Number(grant.publishingPolicyVersion) < 1
+      ) {
+        configurationError(
+          "publishingGrant must identify one exact owner-configured integration and policy version.",
+          "invalid_human_review_owner_request",
+        );
+      }
+      publishingGrant = {
+        integrationId: grant.integrationId.trim(),
+        publishingPolicyId: grant.publishingPolicyId.trim(),
+        publishingPolicyVersion: Number(grant.publishingPolicyVersion),
+      };
+    }
+  }
+  return {
+    authority,
+    expectedBindingVersion: expectedBindingVersion === null ? null : Number(expectedBindingVersion),
+    publishingGrant,
+    requestProfile,
+    selection,
+  };
+}
+
+function parseJsonObject(value: unknown, field: string) {
+  try {
+    const parsed = JSON.parse(String(value)) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error(`Database returned invalid ${field}.`);
+  }
+}
+
+function nullableInteger(row: Row | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : rowInteger(row, key);
+}
+
+function nullableIso(value: unknown, field: string) {
+  return value === null || value === undefined ? null : iso(value, field);
+}
+
+function ownerSelectionFromRow(row: Row) {
+  const rules = parseJsonObject(row.rules_json, "review rules");
+  const audience = parseJsonObject(row.audience_policy_json, "review audience").reviewerSource;
+  return normalizeManagedReviewPolicyInput({
+    agentId: rowString(row, "agent_id"),
+    agentVersionId: rowString(row, "agent_version_id"),
+    mode: rowString(row, "mode"),
+    enforcementMode: rules.enforcementMode,
+    agreementThresholdBps: rowInteger(row, "agreement_threshold_bps"),
+    productionFloorBps: rowInteger(row, "production_floor_bps"),
+    fixedRateBps: nullableInteger(row, "fixed_rate_bps"),
+    maximumUnreviewedGap: rowInteger(row, "maximum_unreviewed_gap"),
+    requiredRiskTiers: rules.requiredRiskTiers,
+    criticalRiskTiers: rules.criticalRiskTiers,
+    minimumConfidenceBps: rules.minimumConfidenceBps,
+    maximumLatencyMs: rules.maximumLatencyMs,
+    audience,
+    publishingPolicyId: rowString(row, "publishing_policy_id"),
+  });
+}
+
+function ownerProfileFromRow(row: Row) {
+  return {
+    agentId: rowString(row, "agent_id")!,
+    agentVersionId: rowString(row, "agent_version_id")!,
+    criterion: rowString(row, "criterion")!,
+    positiveLabel: rowString(row, "positive_label")!,
+    negativeLabel: rowString(row, "negative_label")!,
+    rationaleMode: rowString(row, "rationale_mode")!,
+    audience: rowString(row, "audience")!,
+    contentBoundary: rowString(row, "content_boundary")!,
+    privateSensitivity: rowString(row, "private_sensitivity"),
+    privateGroupId: rowString(row, "private_group_id"),
+    privateGroupPolicyVersion: nullableInteger(row, "private_group_policy_version"),
+    privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
+    responseWindowSeconds: rowInteger(row, "response_window_seconds"),
+    panelSize: rowInteger(row, "panel_size"),
+    compensationMode: rowString(row, "compensation_mode")!,
+    bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
+  };
+}
+
+async function currentAgentVersion(client: PoolClient, workspaceId: string, agentId: string, lock: boolean) {
+  const result = await client.query(
+    `SELECT a.agent_id, v.version_id, v.display_name
+     FROM tokenless_agents a
+     JOIN tokenless_agent_versions v ON v.workspace_id = a.workspace_id AND v.agent_id = a.agent_id
+     WHERE a.workspace_id = $1 AND a.agent_id = $2 AND a.status = 'active'
+     ORDER BY v.version_number DESC LIMIT 1${lock ? " FOR UPDATE" : ""}`,
+    [workspaceId, agentId],
+  );
+  const row = result.rows[0] as Row | undefined;
+  const agentVersionId = rowString(row, "version_id");
+  if (!agentVersionId) throw new TokenlessServiceError("Agent not found.", 404, "agent_not_found");
+  return { agentVersionId, displayName: rowString(row, "display_name")! };
+}
+
+async function exactPublishingGrant(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    agentId: string;
+    agentVersionId: string;
+    integrationId: string;
+    publishingPolicyId: string;
+    publishingPolicyVersion: number;
+    now: Date;
+  },
+) {
+  const result = await client.query(
+    `SELECT i.integration_id, i.activation_mode, i.granted_scopes_json
+     FROM tokenless_agent_integrations i
+     JOIN tokenless_agent_publishing_policies p
+       ON p.workspace_id = i.workspace_id AND p.policy_id = i.publishing_policy_id
+      AND p.version = i.publishing_policy_version
+     LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
+     LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+     WHERE i.workspace_id = $1 AND i.agent_id = $2 AND i.agent_version_id = $3
+       AND i.integration_id = $4 AND i.publishing_policy_id = $5 AND i.publishing_policy_version = $6
+       AND i.status = 'active' AND i.revoked_at IS NULL AND i.activation_mode = 'owner_approved'
+       AND p.enabled = true AND p.revoked_at IS NULL AND p.effective_at <= $7
+       AND (p.expires_at IS NULL OR p.expires_at > $7)
+       AND (i.connection_intent_id IS NULL OR c.status = 'connected')
+       AND (i.token_family_id IS NULL OR (f.status = 'active' AND f.revoked_at IS NULL AND f.absolute_expires_at > $7))
+     FOR SHARE`,
+    [
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.integrationId,
+      input.publishingPolicyId,
+      input.publishingPolicyVersion,
+      input.now,
+    ],
+  );
+  const row = result.rows[0] as Row | undefined;
+  if (!row) {
+    throw new TokenlessServiceError(
+      "The exact owner-configured publishing grant is not active for this agent version.",
+      409,
+      "human_review_publishing_grant_mismatch",
+    );
+  }
+  const scopes = parseStringArray(row.granted_scopes_json, "publishing grant scopes");
+  if (!REQUIRED_AUTOMATIC_SCOPES.every(scope => scopes.includes(scope))) {
+    throw new TokenlessServiceError(
+      "The exact owner-configured publishing grant cannot publish and pay for review requests.",
+      409,
+      "human_review_publishing_grant_incomplete",
+    );
+  }
+  return { id: input.publishingPolicyId, version: input.publishingPolicyVersion };
+}
+
+async function resolvePrivateGroupTuple(
+  client: PoolClient,
+  input: { workspaceId: string; audience: unknown; privateGroupId: unknown },
+) {
+  if (input.audience === "public_network") {
+    if (input.privateGroupId !== null && input.privateGroupId !== undefined) {
+      configurationError(
+        "Public-network review cannot bind a private reviewer group.",
+        "invalid_human_review_owner_request",
+      );
+    }
+    return { id: null, version: null, hash: null, maximumSensitivity: null };
+  }
+  if (input.audience !== "private_invited" && input.audience !== "hybrid") {
+    return { id: null, version: null, hash: null, maximumSensitivity: null };
+  }
+  if (typeof input.privateGroupId !== "string" || !input.privateGroupId.trim()) {
+    configurationError("This audience requires a private reviewer group.", "invalid_human_review_owner_request");
+  }
+  const result = await client.query(
+    `SELECT g.group_id, g.current_policy_version, p.policy_hash, p.max_private_sensitivity
+     FROM tokenless_private_groups g
+     JOIN tokenless_private_group_policy_versions p
+       ON p.group_id = g.group_id AND p.version = g.current_policy_version
+     WHERE g.workspace_id = $1 AND g.group_id = $2 AND g.status = 'active'
+     FOR SHARE`,
+    [input.workspaceId, input.privateGroupId.trim()],
+  );
+  const row = result.rows[0] as Row | undefined;
+  const id = rowString(row, "group_id");
+  const hash = rowString(row, "policy_hash");
+  if (!id || !hash || !HASH_PATTERN.test(hash)) {
+    throw new TokenlessServiceError("Private group not found.", 404, "private_group_not_found");
+  }
+  return {
+    id,
+    version: rowInteger(row, "current_policy_version"),
+    hash,
+    maximumSensitivity: rowString(row, "max_private_sensitivity"),
+  };
+}
+
+function assertPrivateSensitivityAllowed(requested: string | null, maximum: string | null) {
+  if (requested === null) return;
+  const requestedRank = REVIEW_REQUEST_PRIVATE_SENSITIVITIES.indexOf(requested as never);
+  const maximumRank = REVIEW_REQUEST_PRIVATE_SENSITIVITIES.indexOf(maximum as never);
+  if (requestedRank < 0 || maximumRank < 0) {
+    throw new TokenlessServiceError(
+      "The private-group sensitivity policy is invalid.",
+      500,
+      "private_group_policy_invalid",
+    );
+  }
+  if (requestedRank > maximumRank) {
+    throw new TokenlessServiceError(
+      "The private reviewer group does not permit material at the requested sensitivity.",
+      400,
+      "private_group_sensitivity_exceeded",
+    );
+  }
+}
+
+async function versionOwnerSelection(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    actor: string;
+    policy: ReturnType<typeof normalizeManagedReviewPolicyInput>;
+    now: Date;
+  },
+) {
+  const currentResult = await client.query(
+    `SELECT * FROM tokenless_agent_review_policies
+     WHERE workspace_id = $1 AND agent_id = $2 AND agent_version_id = $3
+       AND enabled = true AND superseded_at IS NULL
+     ORDER BY version DESC LIMIT 1 FOR UPDATE`,
+    [input.workspaceId, input.policy.agentId, input.policy.agentVersionId],
+  );
+  const currentRow = currentResult.rows[0] as Row | undefined;
+  if (currentRow && stableJson(ownerSelectionFromRow(currentRow)) === stableJson(input.policy)) {
+    return { id: rowString(currentRow, "policy_id")!, version: rowInteger(currentRow, "version") };
+  }
+  const policyId = currentRow ? rowString(currentRow, "policy_id")! : `rpol_${randomUUID().replaceAll("-", "")}`;
+  const version = currentRow ? rowInteger(currentRow, "version") + 1 : 1;
+  if (currentRow) {
+    const superseded = await client.query(
+      `UPDATE tokenless_agent_review_policies SET enabled = false, superseded_at = $1
+       WHERE workspace_id = $2 AND policy_id = $3 AND version = $4
+         AND enabled = true AND superseded_at IS NULL`,
+      [input.now, input.workspaceId, policyId, version - 1],
+    );
+    if (superseded.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "Human-review configuration changed. Reload it and try again.",
+        409,
+        "human_review_configuration_conflict",
+      );
+    }
+  }
+  await client.query(
+    `INSERT INTO tokenless_agent_review_policies
+     (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
+      agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap,
+      rules_json, audience_policy_json, publishing_policy_id, created_by, approved_by, created_at, superseded_at)
+     VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,NULL)`,
+    [
+      policyId,
+      version,
+      input.workspaceId,
+      input.policy.agentId,
+      input.policy.agentVersionId,
+      input.policy.mode,
+      input.policy.agreementThresholdBps,
+      input.policy.productionFloorBps,
+      input.policy.fixedRateBps,
+      input.policy.maximumUnreviewedGap,
+      stableJson({
+        enforcementMode: input.policy.enforcementMode,
+        requiredRiskTiers: input.policy.requiredRiskTiers,
+        criticalRiskTiers: input.policy.criticalRiskTiers,
+        minimumConfidenceBps: input.policy.minimumConfidenceBps,
+        maximumLatencyMs: input.policy.maximumLatencyMs,
+      }),
+      stableJson({ reviewerSource: input.policy.audience }),
+      input.policy.publishingPolicyId,
+      input.actor,
+      input.now,
+    ],
+  );
+  return { id: policyId, version };
+}
+
+async function versionOwnerProfile(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    actor: string;
+    profile: ReturnType<typeof normalizeReviewRequestProfileInput>;
+    now: Date;
+  },
+) {
+  const profileHash = hashReviewRequestProfile(input.profile);
+  const currentResult = await client.query(
+    `SELECT profile_id, version, profile_hash FROM tokenless_agent_review_request_profiles
+     WHERE workspace_id = $1 AND agent_id = $2 AND agent_version_id = $3 AND superseded_at IS NULL
+     ORDER BY version DESC LIMIT 1 FOR UPDATE`,
+    [input.workspaceId, input.profile.agentId, input.profile.agentVersionId],
+  );
+  const currentRow = currentResult.rows[0] as Row | undefined;
+  if (currentRow && rowString(currentRow, "profile_hash") === profileHash) {
+    return { id: rowString(currentRow, "profile_id")!, version: rowInteger(currentRow, "version") };
+  }
+  const profileId = currentRow ? rowString(currentRow, "profile_id")! : `rrp_${randomUUID().replaceAll("-", "")}`;
+  const version = currentRow ? rowInteger(currentRow, "version") + 1 : 1;
+  if (currentRow) {
+    const superseded = await client.query(
+      `UPDATE tokenless_agent_review_request_profiles SET superseded_at = $1
+       WHERE workspace_id = $2 AND profile_id = $3 AND version = $4 AND superseded_at IS NULL`,
+      [input.now, input.workspaceId, profileId, version - 1],
+    );
+    if (superseded.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "Human-review configuration changed. Reload it and try again.",
+        409,
+        "human_review_configuration_conflict",
+      );
+    }
+  }
+  await client.query(
+    `INSERT INTO tokenless_agent_review_request_profiles
+     (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
+      rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
+      private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
+      compensation_mode, bounty_per_seat_atomic, configuration_status, profile_hash, created_by,
+      created_at, approved_by, approved_at, superseded_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'ready',$20,$21,$22,$21,$22,NULL)`,
+    [
+      profileId,
+      version,
+      input.workspaceId,
+      input.profile.agentId,
+      input.profile.agentVersionId,
+      input.profile.criterion,
+      input.profile.positiveLabel,
+      input.profile.negativeLabel,
+      input.profile.rationaleMode,
+      input.profile.audience,
+      input.profile.contentBoundary,
+      input.profile.privateSensitivity,
+      input.profile.privateGroupId,
+      input.profile.privateGroupPolicyVersion,
+      input.profile.privateGroupPolicyHash,
+      input.profile.responseWindowSeconds,
+      input.profile.panelSize,
+      input.profile.compensationMode,
+      input.profile.bountyPerSeatAtomic,
+      profileHash,
+      input.actor,
+      input.now,
+    ],
+  );
+  return { id: profileId, version };
+}
+
+export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewConfigurationInput) {
+  const actor = await requireManagement(input.accountAddress, input.workspaceId);
+  const body = normalizeOwnerMutation(input.body);
+  const now = new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const agent = await currentAgentVersion(client, input.workspaceId, input.agentId, true);
+    const currentBindingResult = await client.query(
+      `SELECT *
+       FROM tokenless_agent_human_review_bindings
+       WHERE workspace_id = $1 AND agent_id = $2 AND agent_version_id = $3
+         AND enabled = true AND superseded_at IS NULL
+       FOR UPDATE`,
+      [input.workspaceId, input.agentId, agent.agentVersionId],
+    );
+    const currentBinding = currentBindingResult.rows[0] as Row | undefined;
+    const currentBindingVersion = currentBinding ? rowInteger(currentBinding, "version") : null;
+    if (body.expectedBindingVersion !== currentBindingVersion) {
+      throw new TokenlessServiceError(
+        "Human-review configuration changed. Reload it and try again.",
+        409,
+        "human_review_configuration_conflict",
+      );
+    }
+    let publishingPolicy: HumanReviewVersionReference | null = currentBinding
+      ? rowString(currentBinding, "publishing_policy_id")
+        ? {
+            id: rowString(currentBinding, "publishing_policy_id")!,
+            version: rowInteger(currentBinding, "publishing_policy_version"),
+          }
+        : null
+      : null;
+    if (body.publishingGrant === null) publishingPolicy = null;
+    else if (body.publishingGrant) {
+      publishingPolicy = await exactPublishingGrant(client, {
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        agentVersionId: agent.agentVersionId,
+        ...body.publishingGrant,
+        now,
+      });
+    }
+    const group = await resolvePrivateGroupTuple(client, {
+      workspaceId: input.workspaceId,
+      audience: body.requestProfile.audience,
+      privateGroupId: body.requestProfile.privateGroupId,
+    });
+    const profile = normalizeReviewRequestProfileInput({
+      ...body.requestProfile,
+      agentId: input.agentId,
+      agentVersionId: agent.agentVersionId,
+      privateGroupId: group.id,
+      privateGroupPolicyVersion: group.version,
+      privateGroupPolicyHash: group.hash,
+    });
+    assertPrivateSensitivityAllowed(profile.privateSensitivity, group.maximumSensitivity);
+    const selection = normalizeManagedReviewPolicyInput({
+      ...body.selection,
+      agentId: input.agentId,
+      agentVersionId: agent.agentVersionId,
+      audience: profile.audience,
+      publishingPolicyId: publishingPolicy?.id ?? null,
+    });
+    const requestProfile = await versionOwnerProfile(client, {
+      workspaceId: input.workspaceId,
+      actor,
+      profile,
+      now,
+    });
+    const selectionPolicy = await versionOwnerSelection(client, {
+      workspaceId: input.workspaceId,
+      actor,
+      policy: selection,
+      now,
+    });
+    if (currentBinding) {
+      const current = configurationFromRow(currentBinding);
+      const unchanged =
+        current.selectionPolicy.id === selectionPolicy.id &&
+        current.selectionPolicy.version === selectionPolicy.version &&
+        current.requestProfile.id === requestProfile.id &&
+        current.requestProfile.version === requestProfile.version &&
+        current.publishingPolicy?.id === publishingPolicy?.id &&
+        current.publishingPolicy?.version === publishingPolicy?.version &&
+        current.authority === body.authority;
+      if (unchanged) {
+        await client.query("COMMIT");
+        return { configuration: current };
+      }
+    }
+    const configuration = await saveHumanReviewConfigurationInTransaction(client, {
+      actor,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      agentVersionId: agent.agentVersionId,
+      expectedBindingVersion: body.expectedBindingVersion,
+      selectionPolicy,
+      requestProfile,
+      publishingPolicy,
+      authority: body.authority,
+      now,
+    });
+    await client.query("COMMIT");
+    return { configuration };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function connectionFromRow(row: Row) {
+  const scopes = parseStringArray(row.granted_scopes_json, "connection scopes");
+  return {
+    integrationId: rowString(row, "integration_id")!,
+    status: rowString(row, "status")!,
+    connectionStatus: rowString(row, "connection_status"),
+    activationMode: rowString(row, "activation_mode")!,
+    publishingPolicyId: rowString(row, "publishing_policy_id"),
+    publishingPolicyVersion: nullableInteger(row, "publishing_policy_version"),
+    safeAccess: {
+      canCheckReviewRequirement: SAFE_EVALUATION_SCOPES.every(scope => scopes.includes(scope)),
+      canPublish: scopes.includes("panel:publish"),
+      canSpend: scopes.includes("payment:submit"),
+      canReadPrivateArtifacts: scopes.includes("artifact:read_private"),
+      canAdministerWorkspace: false,
+    },
+    activity: {
+      lastInitializedAt: nullableIso(row.last_initialize_at, "connection initialization timestamp"),
+      lastContextAt: nullableIso(row.last_context_at, "connection context timestamp"),
+      lastConnectionTestAt: nullableIso(row.last_connection_test_at, "connection test timestamp"),
+      lastSeenAt: nullableIso(row.last_seen_at, "connection activity timestamp"),
+      lastDecisionAt: nullableIso(row.last_decision_at, "review decision timestamp"),
+      lastRequestAt: nullableIso(row.last_request_at, "review request timestamp"),
+      lastResultAt: nullableIso(row.last_result_at, "review result timestamp"),
+    },
+    diagnostic: rowString(row, "last_diagnostic_code")
+      ? {
+          code: rowString(row, "last_diagnostic_code")!,
+          at: nullableIso(row.last_diagnostic_at, "connection diagnostic timestamp"),
+          recoveryAction: rowString(row, "recovery_action"),
+        }
+      : null,
+    scopes,
+    allowedWorkflowKeys: parseStringArray(row.allowed_workflow_keys_json, "allowed workflows"),
+  };
+}
+
+export async function getHumanReviewConfigurationForOwner(input: {
+  accountAddress: string;
+  workspaceId: string;
+  agentId: string;
+}) {
+  await requireManagement(input.accountAddress, input.workspaceId);
+  const client = await dbPool.connect();
+  try {
+    const agent = await currentAgentVersion(client, input.workspaceId, input.agentId, false);
+    const [bindingResult, connectionResult] = await Promise.all([
+      client.query(
+        `SELECT b.*, p.mode, p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps,
+                p.maximum_unreviewed_gap, p.rules_json, p.audience_policy_json,
+                p.publishing_policy_id AS selection_publishing_policy_id,
+                r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
+                r.content_boundary, r.private_sensitivity, r.private_group_id, r.private_group_policy_version,
+                r.private_group_policy_hash, r.response_window_seconds, r.panel_size,
+                r.compensation_mode, r.bounty_per_seat_atomic, r.configuration_status
+         FROM tokenless_agent_human_review_bindings b
+         JOIN tokenless_agent_review_policies p
+           ON p.workspace_id = b.workspace_id AND p.policy_id = b.selection_policy_id
+          AND p.version = b.selection_policy_version
+         JOIN tokenless_agent_review_request_profiles r
+           ON r.workspace_id = b.workspace_id AND r.profile_id = b.request_profile_id
+          AND r.version = b.request_profile_version AND r.profile_hash = b.request_profile_hash
+         WHERE b.workspace_id = $1 AND b.agent_id = $2 AND b.agent_version_id = $3
+           AND b.enabled = true AND b.superseded_at IS NULL
+         LIMIT 1`,
+        [input.workspaceId, input.agentId, agent.agentVersionId],
+      ),
+      client.query(
+        `SELECT i.*, c.status AS connection_status
+         FROM tokenless_agent_integrations i
+         LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+         WHERE i.workspace_id = $1 AND i.agent_id = $2 AND i.agent_version_id = $3
+         ORDER BY CASE WHEN i.status = 'active' THEN 0 ELSE 1 END, i.updated_at DESC`,
+        [input.workspaceId, input.agentId, agent.agentVersionId],
+      ),
+    ]);
+    const connections = connectionResult.rows.map(value => connectionFromRow(value as Row));
+    const connection =
+      connections.find(candidate => candidate.status === "active" && candidate.connectionStatus === "connected") ??
+      connections.find(candidate => candidate.status === "active") ??
+      connections[0] ??
+      null;
+    const bindingRow = bindingResult.rows[0] as Row | undefined;
+    if (!bindingRow) {
+      return {
+        agent: { agentId: input.agentId, agentVersionId: agent.agentVersionId, displayName: agent.displayName },
+        bindingRevision: null,
+        configuration: null,
+        capability: null,
+        blockingReason: {
+          code: "human_review_configuration_required",
+          message: "Complete the human-review configuration for this agent version.",
+        },
+        connection,
+      };
+    }
+    const selection = ownerSelectionFromRow({
+      ...bindingRow,
+      publishing_policy_id: bindingRow.selection_publishing_policy_id,
+    });
+    const requestProfile = ownerProfileFromRow(bindingRow);
+    const publishingPolicyId = rowString(bindingRow, "publishing_policy_id");
+    const publishingPolicy = publishingPolicyId
+      ? { id: publishingPolicyId, version: rowInteger(bindingRow, "publishing_policy_version") }
+      : null;
+    const delegationConnection = publishingPolicy
+      ? (connections.find(
+          candidate =>
+            candidate.activationMode === "owner_approved" &&
+            candidate.status === "active" &&
+            candidate.connectionStatus === "connected" &&
+            candidate.publishingPolicyId === publishingPolicy.id &&
+            candidate.publishingPolicyVersion === publishingPolicy.version &&
+            candidate.safeAccess.canPublish &&
+            candidate.safeAccess.canSpend,
+        ) ?? null)
+      : null;
+    const authority = rowString(bindingRow, "authority") as HumanReviewAuthorityLevel;
+    const readiness: HumanReviewReadiness = {
+      evaluation: Boolean(
+        connection?.safeAccess.canCheckReviewRequirement && connection.connectionStatus === "connected",
+      ),
+      ownerApproval: false,
+      autonomousPublishing: Boolean(delegationConnection),
+      privateInvitedUnpaid: false,
+      privateInvitedPaid: false,
+      publicPaidNetwork: false,
+      hybridPublicSafe: false,
+    };
+    const capability = resolveHumanReviewCapability(
+      {
+        audience: requestProfile.audience as Parameters<typeof resolveHumanReviewCapability>[0]["audience"],
+        compensationMode: requestProfile.compensationMode as Parameters<
+          typeof resolveHumanReviewCapability
+        >[0]["compensationMode"],
+        contentBoundary: requestProfile.contentBoundary as Parameters<
+          typeof resolveHumanReviewCapability
+        >[0]["contentBoundary"],
+        authority,
+      },
+      readiness,
+    );
+    return {
+      agent: { agentId: input.agentId, agentVersionId: agent.agentVersionId, displayName: agent.displayName },
+      bindingRevision: rowInteger(bindingRow, "version"),
+      configuration: {
+        binding: {
+          id: rowString(bindingRow, "binding_id")!,
+          version: rowInteger(bindingRow, "version"),
+          canonicalHash: rowString(bindingRow, "canonical_hash")!,
+          approvedAt: iso(bindingRow.approved_at, "binding approval timestamp"),
+        },
+        selection: {
+          id: rowString(bindingRow, "selection_policy_id")!,
+          version: rowInteger(bindingRow, "selection_policy_version"),
+          value: selection,
+        },
+        requestProfile: {
+          id: rowString(bindingRow, "request_profile_id")!,
+          version: rowInteger(bindingRow, "request_profile_version"),
+          hash: rowString(bindingRow, "request_profile_hash")!,
+          value: requestProfile,
+        },
+        authority,
+        delegation: publishingPolicy
+          ? { publishingPolicy, integrationId: delegationConnection?.integrationId ?? null }
+          : null,
+      },
+      capability,
+      blockingReason: capability.available ? null : { code: capability.code, message: capability.message },
+      connection,
+    };
+  } finally {
+    client.release();
+  }
 }
 
 export const __humanReviewConfigurationTestUtils = { semanticDocument, stableJson };
