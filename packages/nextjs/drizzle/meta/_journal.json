@@ -568,6 +568,13 @@
       "when": 1784232000000,
       "tag": "0081_artifact_deletion_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1784235600000,
+      "tag": "0082_worm_delivery_lease_fencing",
+      "breakpoints": true
     }
   ]
 }
