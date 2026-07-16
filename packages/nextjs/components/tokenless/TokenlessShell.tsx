@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { SiteSearch } from "~~/components/tokenless/navigation/SiteSearch";
 import { DOCS_NAV } from "~~/constants/docsNav";
 
 const ThirdwebSessionButton = dynamic(
@@ -221,16 +222,19 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl xl:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <Brand compact />
-          <details className="dropdown dropdown-end">
-            <summary className="btn btn-ghost btn-sm list-none px-2" aria-label="Open navigation">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
-            </summary>
-            <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
-              <NavLinks mobile />
-            </nav>
-          </details>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+            <SiteSearch mobile />
+            <details className="dropdown dropdown-end">
+              <summary className="btn btn-ghost btn-sm list-none px-2" aria-label="Open navigation">
+                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </summary>
+              <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
+                <NavLinks mobile />
+              </nav>
+            </details>
+          </div>
         </div>
       </header>
 
@@ -238,6 +242,7 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         <div className="mb-4 px-4">
           <Brand />
         </div>
+        <SiteSearch />
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
           <NavLinks />
         </nav>

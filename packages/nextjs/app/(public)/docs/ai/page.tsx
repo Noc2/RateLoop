@@ -93,7 +93,7 @@ export default function TokenlessAgentDocsPage() {
         policy fixes its budget, payment mode, wallet, audience, project, data, expiry, and revocation rules.
       </p>
 
-      <h2>Choose a publishing lane</h2>
+      <h2 id="choose-a-publishing-lane">Choose a publishing lane</h2>
       <ul>
         <li>
           <strong>Browser handoff:</strong> the agent drafts public, synthetic, or safely redacted material and a person
@@ -203,7 +203,7 @@ yarn workspace @rateloop/agents media-upload \\
         API-key-staged image cannot be silently claimed by a different browser principal.
       </p>
 
-      <h2>Approval and privacy boundary</h2>
+      <h2 id="approval-and-privacy-boundary">Approval and privacy boundary</h2>
       <ol>
         <li>Draft the question and request locally.</li>
         <li>

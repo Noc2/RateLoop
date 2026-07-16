@@ -99,9 +99,11 @@ test("Human profile and settings render their controls directly", () => {
   assert.doesNotMatch(paidEligibility, /Sign in to RateLoop first/);
 });
 
-test("answer search is rendered only by Human Discover", () => {
+test("Human Discover relies on the shell-level site search", () => {
   const page = source("../../app/(app)/human/page.tsx");
+  const shell = source("./TokenlessShell.tsx");
 
-  assert.match(page, /if \(tab === "discover"\)[\s\S]*<AnswerSearch \/>/);
-  assert.equal(page.match(/<AnswerSearch \/>/g)?.length, 1);
+  assert.doesNotMatch(page, /AnswerSearch|SiteSearch/);
+  assert.match(shell, /<SiteSearch mobile \/>/);
+  assert.match(shell, /<SiteSearch \/>/);
 });

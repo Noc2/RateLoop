@@ -17,12 +17,14 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.match(source, /Human Assurance/);
   assert.match(source, /w-52/);
   assert.match(source, /border-t[^\n]+px-2\.5 pt-4/);
-  assert.doesNotMatch(source, /AnswerSearch/);
+  assert.match(source, /import \{ SiteSearch \}/);
+  assert.match(source, /<SiteSearch mobile \/>/);
+  assert.match(source, /<SiteSearch \/>/);
   assert.doesNotMatch(source, /href: "\/(rate|ask|settings)"|Validate|Earn|Start a validation/);
 });
 
-test("tokenless answer search restores the established navbar treatment", () => {
-  const source = readFileSync(new URL("./navigation/AnswerSearch.tsx", import.meta.url), "utf8");
+test("tokenless site search restores the established navbar treatment", () => {
+  const source = readFileSync(new URL("./navigation/SiteSearch.tsx", import.meta.url), "utf8");
 
   assert.match(source, /MagnifyingGlassIcon/);
   assert.match(source, /border-0 bg-base-content\/\[0\.12\]/);
@@ -30,6 +32,8 @@ test("tokenless answer search restores the established navbar treatment", () => 
   assert.match(source, /px-4 text-center/);
   assert.doesNotMatch(source, /input-bordered|header-search-input/);
   assert.match(source, /placeholder="Search"/);
-  assert.match(source, /\/human\?tab=discover/);
+  assert.match(source, /const SEARCH_ROUTE = "\/search"/);
+  assert.match(source, /SEARCH_DEBOUNCE_MS = 200/);
+  assert.match(source, /aria-label="Search RateLoop"/);
   assert.doesNotMatch(source, /placeholder="Search answers"/);
 });
