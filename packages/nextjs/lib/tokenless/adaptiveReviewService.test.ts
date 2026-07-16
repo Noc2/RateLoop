@@ -304,6 +304,34 @@ test("source-derived observations advance after two stable windows and reset aft
   assert.ok((steppedDown.humanAgreementLower95Bps ?? 0) >= 7_000);
   assert.equal(steppedDown.nextReassessmentAfter, 50);
 
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies SET rules_json = ?
+          WHERE workspace_id = ? AND policy_id = ? AND version = 1`,
+    args: [
+      JSON.stringify({
+        criticalRiskTiers: ["critical"],
+        requiredRiskTiers: ["high"],
+        minimumConfidenceBps: 9_000,
+      }),
+      setup.workspaceId,
+      setup.policyId,
+    ],
+  });
+  const forced = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: { ...opportunity(setup, "post-calibration-low-confidence"), declaredConfidenceBps: 5_000 },
+  });
+  assert.equal(forced.reviewRateBps, 5_000);
+  assert.equal(forced.selectionProbabilityBps, 10_000);
+  const persistedForced = await dbClient.execute({
+    sql: `SELECT review_rate_bps, selection_probability_bps
+          FROM tokenless_agent_review_opportunities
+          WHERE workspace_id = ? AND opportunity_id = ?`,
+    args: [setup.workspaceId, forced.opportunityId],
+  });
+  assert.equal(persistedForced.rows[0]?.review_rate_bps, 5_000);
+  assert.equal(persistedForced.rows[0]?.selection_probability_bps, 10_000);
+
   const events = await dbClient.execute({
     sql: `SELECT event_type, from_stage, to_stage, reason_codes_json
           FROM tokenless_agent_review_policy_events
