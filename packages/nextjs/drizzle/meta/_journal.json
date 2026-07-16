@@ -533,6 +533,13 @@
       "when": 1784214000000,
       "tag": "0076_assurance_grc_connectors",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1784217600000,
+      "tag": "0077_assurance_automated_eval_receipts",
+      "breakpoints": true
     }
   ]
 }
