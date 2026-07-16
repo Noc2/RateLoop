@@ -492,14 +492,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               Set review behavior
             </h1>
             <p className="mt-2 text-sm text-base-content/65">
-              Choose when this agent should involve people. The agent cannot send or pay for requests autonomously.
+              Choose when RateLoop should mark an eligible output for human review. This saves a review policy; the safe
+              connection does not send requests or pay reviewers.
             </p>
             <fieldset className="mt-5 space-y-3">
-              <legend className="font-medium">When should it use human review?</legend>
+              <legend className="font-medium">When should RateLoop require human review?</legend>
               {[
-                ["adaptive", "When RateLoop says review is needed", "Recommended"],
+                ["adaptive", "When RateLoop’s adaptive policy requires it", "Recommended"],
                 ["always", "For every eligible output", ""],
-                ["manual", "Only after I approve a request", ""],
+                ["manual", "Manual handoffs only", ""],
               ].map(([value, label, badge]) => (
                 <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
                   <input
@@ -517,10 +518,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               ))}
             </fieldset>
             <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
-              <p className="font-medium">People you invite · private workspace material</p>
+              <p className="font-medium">Invited reviewers · private workspace material</p>
               <p className="mt-1 text-base-content/60">
-                This setup prepares a private reviewer group. Autonomous delivery stays off until the assignment-gated
-                agent lane is available.
+                This saves the private-review audience and prepares an invitation in the next step. The safe connection
+                does not assign or deliver work to reviewers.
               </p>
             </div>
             <div className="mt-6 flex items-center gap-3">
@@ -602,8 +603,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     {setup.reviewDraft?.mode === "always"
                       ? "Every eligible output"
                       : setup.reviewDraft?.mode === "manual"
-                        ? "Owner-approved requests"
-                        : "When RateLoop says review is needed"}
+                        ? "Manual handoffs only"
+                        : "When RateLoop’s adaptive policy requires it"}
                   </p>
                   <p className="mt-2">
                     <span className="text-base-content/55">People:</span>{" "}

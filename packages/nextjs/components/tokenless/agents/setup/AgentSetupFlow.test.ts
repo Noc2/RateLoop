@@ -44,6 +44,17 @@ test("guided setup renders one stage at a time and keeps future authority absent
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
 });
 
+test("review setup distinguishes a saved policy decision from delivery authority", () => {
+  assert.match(flowSource, /mark an eligible output for human review/i);
+  assert.match(flowSource, /This saves a review policy/i);
+  assert.match(flowSource, /safe connection does not send requests or pay reviewers/i);
+  assert.match(flowSource, /RateLoop’s adaptive policy requires it/i);
+  assert.match(flowSource, /Manual handoffs only/i);
+  assert.doesNotMatch(flowSource, /Only after I approve a request/i);
+  assert.match(flowSource, /safe connection\s+does not assign or deliver work to reviewers/i);
+  assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
+});
+
 test("setup separates the connected client from per-run model provenance", () => {
   assert.match(flowSource, /connected client stays separate/i);
   assert.match(flowSource, /model, effort, and timing reported for each eligible run/i);

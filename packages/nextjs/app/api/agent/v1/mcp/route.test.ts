@@ -377,6 +377,9 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   );
   const resumedInitializationBody = await resumedInitialization.json();
   assert.match(resumedInitializationBody.result.instructions, /workspace connection is available/i);
+  assert.match(resumedInitializationBody.result.instructions, /can record review-policy decisions/i);
+  assert.match(resumedInitializationBody.result.instructions, /cannot publish requests or spend funds/i);
+  assert.doesNotMatch(resumedInitializationBody.result.instructions, /owner-approved publishing policy is active/i);
 
   const resumedTools = await POST(
     request({ id: 142, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
@@ -506,6 +509,25 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.deepEqual(upgradedContext.publishingPolicy, { policyId: publishing.policyId, version: publishing.version });
   assert.equal(upgradedContext.safeAccess.canSpend, true);
   assert.equal(upgradedContext.safeAccess.canPublish, true);
+  const upgradedInitialization = await POST(
+    request(
+      {
+        id: 152,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: { tools: { listChanged: true } },
+          clientInfo: { name: "Codex", version: "2026.07.15" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const upgradedInitializationBody = await upgradedInitialization.json();
+  assert.match(upgradedInitializationBody.result.instructions, /owner-approved publishing policy is active/i);
+  assert.match(upgradedInitializationBody.result.instructions, /only within that bound policy/i);
+  assert.doesNotMatch(upgradedInitializationBody.result.instructions, /cannot publish requests or spend funds/i);
   await assert.rejects(
     () =>
       rotateAgentIntegration({
