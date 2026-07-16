@@ -6,6 +6,7 @@ import { POST } from "~~/app/api/agent/v1/mcp/route";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
+import { requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import {
@@ -14,7 +15,6 @@ import {
   authenticateAgentMcpPrincipal,
   createAgentPairing,
   listAgentConnections,
-  revokeAgentIntegration,
   rotateAgentIntegration,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
@@ -516,15 +516,25 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
       }),
     /rotate credentials in the agent host/,
   );
-  await revokeAgentIntegration({
+  await requestWorkspaceDeletion({
     accountAddress: principalId,
     workspaceId,
-    integrationId: claim.connection.integrationId,
+    confirmationName: "One-message OAuth",
+    identityAssurance: "better_auth:passkey",
   });
   const revoked = await POST(
     request({ id: 16, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
   );
   assert.equal(revoked.status, 401);
+  assert.match(revoked.headers.get("www-authenticate") ?? "", /oauth-protected-resource/);
+  const revokedFamily = await dbClient.execute({
+    sql: `SELECT f.status,f.revocation_reason
+          FROM tokenless_agent_oauth_token_families f
+          JOIN tokenless_agent_integrations i ON i.token_family_id=f.token_family_id
+          WHERE i.integration_id=?`,
+    args: [claim.connection.integrationId],
+  });
+  assert.deepEqual(revokedFamily.rows[0], { status: "revoked", revocation_reason: "workspace_deleted" });
 });
 
 test("uses a bound authenticated workspace surface without changing the public four tools", async () => {

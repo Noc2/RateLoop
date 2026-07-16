@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const pluginRoot = join(repoRoot, "plugins", "rateloop");
+const workspacePluginRoot = join(repoRoot, "plugins", "rateloop-workspace");
 const pluginSkillRoot = join(pluginRoot, "skills", "rateloop-human-assurance");
 const agentSkillRoot = join(
   repoRoot,
@@ -30,22 +31,36 @@ async function exists(path: string) {
 }
 
 describe("RateLoop agent host assets", () => {
-  it("preserves marketplace identity while keeping public and workspace MCP servers separate", async () => {
-    const manifest = await readJson(
+  it("publishes public and workspace MCP servers as separate marketplace plugins", async () => {
+    const publicManifest = await readJson(
       join(pluginRoot, ".codex-plugin", "plugin.json"),
     );
-    const mcp = await readJson(join(pluginRoot, ".mcp.json"));
+    const publicMcp = await readJson(join(pluginRoot, ".mcp.json"));
+    const workspaceManifest = await readJson(
+      join(workspacePluginRoot, ".codex-plugin", "plugin.json"),
+    );
+    const workspaceMcp = await readJson(join(workspacePluginRoot, ".mcp.json"));
     const marketplace = await readJson(
       join(repoRoot, ".agents", "plugins", "marketplace.json"),
     );
 
-    expect(manifest.name).toBe("rateloop");
-    expect(manifest.version).toMatch(/^0\.2\.0\+codex\.[0-9A-Za-z.-]+$/);
-    expect(manifest.skills).toBe("./skills/");
-    expect(manifest.mcpServers).toBe("./.mcp.json");
-    expect(mcp).toEqual({
+    expect(publicManifest.name).toBe("rateloop");
+    expect(publicManifest.version).toMatch(/^0\.2\.0\+codex\.[0-9A-Za-z.-]+$/);
+    expect(publicManifest.skills).toBe("./skills/");
+    expect(publicManifest.mcpServers).toBe("./.mcp.json");
+    expect(publicMcp).toEqual({
       mcpServers: {
         rateloop: { type: "http", url: tokenlessMcpUrl },
+      },
+    });
+    expect(workspaceManifest.name).toBe("rateloop-workspace");
+    expect(workspaceManifest.version).toMatch(
+      /^0\.1\.0\+codex\.[0-9A-Za-z.-]+$/,
+    );
+    expect(workspaceManifest.skills).toBe("./skills/");
+    expect(workspaceManifest.mcpServers).toBe("./.mcp.json");
+    expect(workspaceMcp).toEqual({
+      mcpServers: {
         "rateloop-workspace": { type: "http", url: workspaceMcpUrl },
       },
     });
@@ -54,12 +69,22 @@ describe("RateLoop agent host assets", () => {
       expect.objectContaining({
         name: "rateloop",
         source: { source: "local", path: "./plugins/rateloop" },
+        policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" },
       }),
     );
-    expect(manifest.interface.defaultPrompt).toHaveLength(3);
-    for (const prompt of manifest.interface.defaultPrompt)
+    expect(marketplace.plugins).toContainEqual(
+      expect.objectContaining({
+        name: "rateloop-workspace",
+        source: { source: "local", path: "./plugins/rateloop-workspace" },
+        policy: { installation: "AVAILABLE", authentication: "ON_USE" },
+      }),
+    );
+    expect(publicManifest.interface.defaultPrompt).toHaveLength(2);
+    for (const prompt of publicManifest.interface.defaultPrompt)
       expect(prompt.length).toBeLessThanOrEqual(128);
-    expect(manifest.interface.defaultPrompt[0]).toContain(
+    expect(JSON.stringify(publicManifest)).not.toContain("rateloop-workspace");
+    expect(workspaceManifest.interface.defaultPrompt).toHaveLength(1);
+    expect(workspaceManifest.interface.defaultPrompt[0]).toContain(
       "$rateloop-workspace-connection",
     );
   });
@@ -82,18 +107,18 @@ describe("RateLoop agent host assets", () => {
     expect(pluginSkill).toBe(agentSkill);
     expect(pluginAgent).toBe(agentAgent);
     expect(pluginSkill.toLowerCase()).toContain("explicit user approval");
-    for (const boundary of [
-      "public",
-      "synthetic",
-      "redacted",
-      "non-urgent",
-    ]) {
+    for (const boundary of ["public", "synthetic", "redacted", "non-urgent"]) {
       expect(pluginSkill.toLowerCase()).toContain(boundary);
     }
     expect(pluginAgent).toContain(`url: "${tokenlessMcpUrl}"`);
     expect(pluginAgent).toContain('value: "rateloop"');
     expect(
       await exists(join(pluginRoot, "skills", "rateloop-ratings", "SKILL.md")),
+    ).toBe(false);
+    expect(
+      await exists(
+        join(pluginRoot, "skills", "rateloop-workspace-connection", "SKILL.md"),
+      ),
     ).toBe(false);
     expect(
       await exists(
@@ -145,7 +170,7 @@ describe("RateLoop agent host assets", () => {
 
   it("packages a secret-free one-message workspace connection for Codex and Claude", async () => {
     const connectionSkillRoot = join(
-      pluginRoot,
+      workspacePluginRoot,
       "skills",
       "rateloop-workspace-connection",
     );
@@ -174,11 +199,17 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain("rateloop_get_agent_context");
     expect(skill).toContain("rateloop_verify_connection");
     expect(skill).toContain("Check the current tool inventory");
-    expect(skill).toContain("structured RateLoop plugin mention");
-    expect(skill).toContain("explicit `$rateloop-workspace-connection` invocation");
-    expect(skill).toContain("when the plugin is already installed");
+    expect(skill).toContain("structured **RateLoop Workspace** plugin mention");
+    expect(skill).toContain(
+      "explicit `$rateloop-workspace-connection` invocation",
+    );
+    expect(skill).toContain("replacement for a deleted workspace");
+    expect(skill).toContain("revokes its OAuth token family");
+    expect(skill).toContain("Do not ask the user to remove unrelated plugins");
     expect(skill).toContain("host actually presents");
-    expect(skill).toContain("check the workspace tool inventory once on the next active turn");
+    expect(skill).toContain(
+      "check the workspace tool inventory once on the next active turn",
+    );
     expect(skill).toContain("Do not run a second login");
     expect(skill).toContain(
       "If no prompt is visible, do not claim that one is pending",
@@ -190,7 +221,9 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain("Never create a heartbeat");
     expect(skill).toContain("Never poll registration status");
     expect(skill).toContain("native install/connect flow");
-    expect(skill).not.toMatch(/native MCP reload|MCP-server reload|refresh action exactly once/);
+    expect(skill).not.toMatch(
+      /native MCP reload|MCP-server reload|refresh action exactly once/,
+    );
     expect(skill).not.toContain("rateloop_register_agent");
     expect(skill).not.toContain("rateloop_get_registration_status");
     expect(skill).not.toContain("rlk_");
@@ -198,13 +231,13 @@ describe("RateLoop agent host assets", () => {
     expect(agent).toContain(`url: "${workspaceMcpUrl}"`);
 
     const claudeManifest = await readJson(
-      join(pluginRoot, ".claude-plugin", "plugin.json"),
+      join(workspacePluginRoot, ".claude-plugin", "plugin.json"),
     );
     expect(claudeManifest).toEqual(
       expect.objectContaining({
-        name: "rateloop",
-        displayName: "RateLoop",
-        version: "0.2.0",
+        name: "rateloop-workspace",
+        displayName: "RateLoop Workspace",
+        version: "0.1.0",
         skills: "./skills/",
         mcpServers: "./.mcp.json",
       }),
@@ -239,6 +272,8 @@ describe("RateLoop agent host assets", () => {
     );
     expect(guide).toContain(workspaceMcpUrl);
     expect(guide).toContain("host-native OAuth");
+    expect(guide).toContain("standard OAuth authorization challenge");
+    expect(guide).toMatch(/Do not remove unrelated\s+plugins/);
     expect(guide).toContain(
       "native VS Code manifest will be published only after",
     );

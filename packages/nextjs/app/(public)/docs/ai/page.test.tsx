@@ -18,10 +18,11 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp/);
   assert.match(
     html,
-    /codex plugin marketplace add Noc2\/RateLoop@tokenless --sparse \.agents\/plugins --sparse plugins\/rateloop/,
+    /codex plugin marketplace add Noc2\/RateLoop@tokenless --sparse \.agents\/plugins --sparse plugins\/rateloop --sparse plugins\/rateloop-workspace/,
   );
   assert.match(html, /codex plugin add rateloop@rateloop/);
-  assert.match(html, /structured RateLoop mention/);
+  assert.match(html, /rateloop-workspace@rateloop/);
+  assert.match(html, /does not need to be removed when a workspace is deleted/);
   assert.match(html, /Continue/);
   assert.doesNotMatch(html, /codex plugin marketplace add Noc2\/RateLoop(?:\s|<)/);
   assert.match(html, /rateloop_capabilities/);

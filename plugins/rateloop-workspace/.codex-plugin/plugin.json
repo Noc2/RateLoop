@@ -1,27 +1,20 @@
 {
-  "name": "rateloop",
-  "version": "0.2.0+codex.20260716080606",
-  "description": "Use RateLoop for privacy-bounded human assurance of public, synthetic, or safely redacted work.",
+  "name": "rateloop-workspace",
+  "version": "0.1.0+codex.20260716080606",
+  "description": "Connect Codex to one RateLoop workspace through host-native OAuth.",
   "author": {
     "name": "RateLoop",
     "url": "https://rateloop-tokenless.vercel.app"
   },
-  "homepage": "https://rateloop-tokenless.vercel.app/docs/how-it-works",
+  "homepage": "https://rateloop-tokenless.vercel.app/docs/agents",
   "repository": "https://github.com/Noc2/RateLoop",
   "license": "MIT",
-  "keywords": [
-    "rateloop",
-    "mcp",
-    "agents",
-    "human-assurance",
-    "workflow-review"
-  ],
+  "keywords": ["rateloop", "mcp", "agents", "oauth", "workspace"],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "RateLoop",
-    "shortDescription": "Privacy-bounded human assurance",
-    "longDescription": "RateLoop gives Codex a privacy-bounded workflow for preparing human review of public, synthetic, or safely redacted AI-enabled work.",
+    "displayName": "RateLoop Workspace",
+    "shortDescription": "Connect this agent to a RateLoop workspace",
+    "longDescription": "Activates RateLoop's OAuth-protected workspace server so an agent can claim one single-use connection message, load its bound policy, and verify readiness without receiving a bearer credential in chat.",
     "developerName": "RateLoop",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Write"],
@@ -29,13 +22,13 @@
     "privacyPolicyURL": "https://rateloop-tokenless.vercel.app/legal/privacy",
     "termsOfServiceURL": "https://rateloop-tokenless.vercel.app/legal/terms",
     "defaultPrompt": [
-      "Prepare human assurance for this public AI workflow",
-      "Review this redacted output with a human panel"
+      "Use $rateloop-workspace-connection to connect this agent to my RateLoop workspace"
     ],
     "brandColor": "#03CEA4",
     "composerIcon": "./assets/rateloop-logo.svg",
     "logo": "./assets/rateloop-logo.svg",
     "logoDark": "./assets/rateloop-logo.svg",
     "screenshots": []
-  }
+  },
+  "mcpServers": "./.mcp.json"
 }

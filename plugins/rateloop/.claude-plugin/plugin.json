@@ -3,7 +3,7 @@
   "name": "rateloop",
   "displayName": "RateLoop",
   "version": "0.2.0",
-  "description": "Human assurance and secure workspace policy connections for AI-enabled workflows.",
+  "description": "Privacy-bounded human assurance for public, synthetic, or safely redacted AI-enabled workflows.",
   "author": {
     "name": "RateLoop",
     "url": "https://rateloop-tokenless.vercel.app"

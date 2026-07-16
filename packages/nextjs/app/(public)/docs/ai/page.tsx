@@ -169,12 +169,14 @@ export default function TokenlessAgentDocsPage() {
       </p>
 
       <h3>Install the tokenless Codex plugin</h3>
-      <p>Pin the Git marketplace to the isolated tokenless branch, then install RateLoop:</p>
-      <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop
+      <p>Pin the Git marketplace to the isolated tokenless branch with both plugin sources, then install RateLoop:</p>
+      <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace
 codex plugin add rateloop@rateloop`}</CodeBlock>
       <p>
-        When setup starts from a structured RateLoop mention, select <strong>Continue</strong> when Codex offers it to
-        resume that task. Otherwise, start a new task after installation so the plugin and its safety instructions load.
+        A copied workspace connection message targets <code>rateloop-workspace@rateloop</code> directly, so Codex can
+        install the protected workspace plugin and start OAuth on use. Select <strong>Continue</strong> when Codex
+        offers it to resume that task. The public RateLoop plugin remains installed and does not need to be removed when
+        a workspace is deleted.
       </p>
 
       <h2>Four-purpose tool surface</h2>
