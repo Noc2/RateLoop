@@ -379,6 +379,13 @@
       "when": 1784131200000,
       "tag": "0053_account_workspace_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784134800000,
+      "tag": "0054_fixed_review_frequency",
+      "breakpoints": true
     }
   ]
 }

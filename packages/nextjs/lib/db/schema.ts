@@ -768,6 +768,47 @@ export type TokenlessAgentOauthDeviceAuthorization = typeof tokenlessAgentOauthD
 export type TokenlessAgentConnectionIntent = typeof tokenlessAgentConnectionIntents.$inferSelect;
 export type TokenlessAgentConnectionIntentEvent = typeof tokenlessAgentConnectionIntentEvents.$inferSelect;
 
+export const tokenlessAgentReviewPolicies = pgTable(
+  "tokenless_agent_review_policies",
+  {
+    policyId: text("policy_id").notNull(),
+    version: integer("version").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    agentVersionId: text("agent_version_id").notNull(),
+    mode: text("mode").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    agreementThresholdBps: integer("agreement_threshold_bps").notNull(),
+    productionFloorBps: integer("production_floor_bps").notNull(),
+    maximumUnreviewedGap: integer("maximum_unreviewed_gap").notNull(),
+    fixedRateBps: integer("fixed_rate_bps"),
+    rulesJson: text("rules_json").notNull().default("{}"),
+    audiencePolicyJson: text("audience_policy_json").notNull(),
+    publishingPolicyId: text("publishing_policy_id"),
+    createdBy: text("created_by").notNull(),
+    approvedBy: text("approved_by").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    supersededAt: timestamp("superseded_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.policyId, table.version] }),
+    workspaceAgentIdx: index("tokenless_agent_review_policies_workspace_agent_idx").on(
+      table.workspaceId,
+      table.agentId,
+      table.agentVersionId,
+      table.enabled,
+    ),
+    workspaceUnique: uniqueIndex("tokenless_agent_review_policies_workspace_unique").on(
+      table.workspaceId,
+      table.policyId,
+      table.version,
+    ),
+  }),
+);
+
+export type TokenlessAgentReviewPolicy = typeof tokenlessAgentReviewPolicies.$inferSelect;
+export type NewTokenlessAgentReviewPolicy = typeof tokenlessAgentReviewPolicies.$inferInsert;
+
 export const tokenlessAgentExecutions = pgTable(
   "tokenless_agent_executions",
   {
