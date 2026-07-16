@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   type ResolveHostname,
@@ -18,6 +19,8 @@ const SOURCE_EVENT_ID = /^[A-Za-z0-9._:/-]{1,200}$/;
 const MAX_DELIVERY_ATTEMPTS = 8;
 const DELIVERY_LEASE_MS = 60_000;
 const OCSF_VERSION = "1.8.0";
+const EVENT_PROJECTION_AUDIT_ACTION = "assurance.siem_event.projected";
+const EVENT_PROJECTION_AUDIT_TARGET = "assurance_lifecycle_source";
 
 export const ASSURANCE_EVENT_TYPES = [
   "ai.rateloop.review.completed",
@@ -40,6 +43,15 @@ export type AssuranceEvidenceChainReference = {
 };
 
 type Row = Record<string, unknown>;
+
+type AssuranceLifecycleEventSource = {
+  workspaceId: string;
+  sourceEventId: string;
+  eventType: AssuranceEventType;
+  subject: string;
+  packetHash: string;
+  occurredAt: Date;
+};
 
 type CloudEvent = {
   specversion: "1.0";
@@ -145,6 +157,38 @@ function sourceEventId(value: unknown) {
     throw new TokenlessServiceError("Event reference is invalid.", 400, "invalid_assurance_event");
   }
   return value;
+}
+
+function validDate(value: unknown, field: string) {
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  if (!Number.isFinite(parsed.getTime())) throw new Error(`Stored ${field} is invalid.`);
+  return parsed;
+}
+
+function nonNegativeInteger(value: unknown, field: string) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`Stored ${field} is invalid.`);
+  return parsed;
+}
+
+function lifecycleSourceFromRow(row: Row): AssuranceLifecycleEventSource {
+  return {
+    workspaceId: text(row, "workspace_id")!,
+    sourceEventId: sourceEventId(text(row, "source_event_id")),
+    eventType: eventType(text(row, "event_type")),
+    subject: sourceEventId(text(row, "subject")),
+    packetHash: packetHash(text(row, "packet_hash")),
+    occurredAt: validDate(row.occurred_at, "assurance event time"),
+  };
+}
+
+function evidenceChainFromAuditRow(row: Row): AssuranceEvidenceChainReference {
+  return evidenceChain({
+    schemaVersion: "rateloop.audit-chain-reference.v1",
+    eventHash: text(row, "event_digest")!,
+    previousHash: text(row, "previous_digest"),
+    sequence: nonNegativeInteger(row.sequence, "audit sequence"),
+  });
 }
 
 function eventDefinition(type: AssuranceEventType) {
@@ -412,6 +456,177 @@ export async function enqueueAssuranceEvent(input: {
   } finally {
     client.release();
   }
+}
+
+async function findProjectionAuditChain(source: AssuranceLifecycleEventSource) {
+  const result = await dbClient.execute({
+    sql: `SELECT event_digest,previous_digest,sequence
+          FROM tokenless_audit_events
+          WHERE workspace_id=? AND action=? AND target_kind=? AND target_id=?
+          ORDER BY sequence ASC LIMIT 1`,
+    args: [source.workspaceId, EVENT_PROJECTION_AUDIT_ACTION, EVENT_PROJECTION_AUDIT_TARGET, source.sourceEventId],
+  });
+  return result.rows[0] ? evidenceChainFromAuditRow(result.rows[0] as Row) : null;
+}
+
+async function projectAssuranceLifecycleEvent(source: AssuranceLifecycleEventSource, now: Date) {
+  const lockKey = ["rateloop", "assurance-event", source.workspaceId, source.eventType, source.sourceEventId].join(":");
+  const lockClient = await dbPool.connect();
+  let locked = false;
+  try {
+    await lockClient.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+    locked = true;
+    const existing = await dbClient.execute({
+      sql: `SELECT event_id FROM tokenless_assurance_event_outbox
+            WHERE workspace_id=? AND event_type=? AND source_event_id=? LIMIT 1`,
+      args: [source.workspaceId, source.eventType, source.sourceEventId],
+    });
+    if (existing.rows[0]) {
+      return { eventId: text(existing.rows[0] as Row, "event_id")!, state: "replayed" as const };
+    }
+
+    let chain = await findProjectionAuditChain(source);
+    if (!chain) {
+      const appended = await appendAuditEvent({
+        workspaceId: source.workspaceId,
+        actorKind: "system",
+        actorReference: "rateloop:assurance-event-projector",
+        assuranceMethod: "scheduled_lifecycle_projection",
+        action: EVENT_PROJECTION_AUDIT_ACTION,
+        targetKind: EVENT_PROJECTION_AUDIT_TARGET,
+        targetId: source.sourceEventId,
+        purpose: "compliance_evidence_delivery",
+        reason: "projected_assurance_lifecycle_event",
+        requestCorrelation: source.sourceEventId,
+        result: "success",
+        metadata: {
+          eventType: source.eventType,
+          packetHash: source.packetHash,
+          sourceOccurredAt: source.occurredAt.toISOString(),
+          subject: source.subject,
+        },
+        occurredAt: now,
+      });
+      chain = evidenceChain({
+        schemaVersion: "rateloop.audit-chain-reference.v1",
+        eventHash: appended.eventDigest,
+        previousHash: appended.previousDigest,
+        sequence: appended.sequence,
+      });
+    }
+    const queued = await enqueueAssuranceEvent({
+      ...source,
+      evidenceChain: chain,
+      now,
+    });
+    return { eventId: queued.eventId, state: queued.replay ? ("replayed" as const) : ("projected" as const) };
+  } finally {
+    if (locked) {
+      try {
+        await lockClient.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
+      } catch (error) {
+        lockClient.release(error as Error);
+        throw error;
+      }
+    }
+    lockClient.release();
+  }
+}
+
+export async function projectAssuranceLifecycleEvents(
+  input: { now?: Date; limit?: number; workspaceId?: string } = {},
+) {
+  const now = validDate(input.now ?? new Date(), "projection time");
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const workspaceFilter = input.workspaceId ? "AND t.workspace_id=?" : "";
+  const anchorWorkspaceFilter = input.workspaceId ? "AND j.workspace_id=?" : "";
+  const [transitions, anchors, deferred] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT t.event_id AS source_event_id,t.workspace_id,t.opportunity_id AS subject,
+                   p.packet_digest AS packet_hash,t.occurred_at,
+                   CASE WHEN t.to_state='completed' THEN 'ai.rateloop.review.completed'
+                        ELSE 'ai.rateloop.gate.blocked' END AS event_type
+            FROM tokenless_agent_review_opportunity_transition_events t
+            JOIN tokenless_agent_review_opportunities o
+              ON o.workspace_id=t.workspace_id AND o.opportunity_id=t.opportunity_id
+            JOIN tokenless_assurance_runs r ON r.run_id=o.run_id
+            JOIN tokenless_assurance_projects pr
+              ON pr.project_id=r.project_id AND pr.workspace_id=t.workspace_id
+            JOIN tokenless_assurance_evidence_packets p
+              ON p.run_id=r.run_id AND p.packet_digest IS NOT NULL
+            LEFT JOIN tokenless_assurance_event_outbox e
+              ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
+             AND e.event_type=CASE WHEN t.to_state='completed' THEN 'ai.rateloop.review.completed'
+                                   ELSE 'ai.rateloop.gate.blocked' END
+            WHERE t.to_state IN ('completed','blocked') AND e.event_id IS NULL ${workspaceFilter}
+            ORDER BY t.occurred_at ASC,t.event_id ASC LIMIT ?`,
+      args: [...(input.workspaceId ? [input.workspaceId] : []), limit],
+    }),
+    dbClient.execute({
+      sql: `SELECT j.job_id AS source_event_id,j.workspace_id,p.packet_id AS subject,
+                   j.artifact_digest AS packet_hash,j.completed_at AS occurred_at,
+                   'ai.rateloop.packet.anchored' AS event_type
+            FROM tokenless_assurance_attestation_jobs j
+            JOIN tokenless_assurance_evidence_packets p ON p.packet_digest=j.artifact_digest
+            JOIN tokenless_assurance_runs r ON r.run_id=p.run_id
+            JOIN tokenless_assurance_projects pr
+              ON pr.project_id=r.project_id AND pr.workspace_id=j.workspace_id
+            LEFT JOIN tokenless_assurance_event_outbox e
+              ON e.workspace_id=j.workspace_id AND e.source_event_id=j.job_id
+             AND e.event_type='ai.rateloop.packet.anchored'
+            WHERE j.artifact_kind='decision_packet' AND j.state='completed'
+              AND j.completed_at IS NOT NULL AND e.event_id IS NULL ${anchorWorkspaceFilter}
+            ORDER BY j.completed_at ASC,j.job_id ASC LIMIT ?`,
+      args: [...(input.workspaceId ? [input.workspaceId] : []), limit],
+    }),
+    dbClient.execute({
+      sql: `SELECT t.to_state,COUNT(*) AS count
+            FROM tokenless_agent_review_opportunity_transition_events t
+            JOIN tokenless_agent_review_opportunities o
+              ON o.workspace_id=t.workspace_id AND o.opportunity_id=t.opportunity_id
+            LEFT JOIN tokenless_assurance_runs r ON r.run_id=o.run_id
+            LEFT JOIN tokenless_assurance_projects pr
+              ON pr.project_id=r.project_id AND pr.workspace_id=t.workspace_id
+            LEFT JOIN tokenless_assurance_evidence_packets p
+              ON p.run_id=r.run_id AND pr.project_id IS NOT NULL
+            LEFT JOIN tokenless_assurance_event_outbox e
+              ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
+             AND e.event_type=CASE WHEN t.to_state='completed' THEN 'ai.rateloop.review.completed'
+                                   ELSE 'ai.rateloop.gate.blocked' END
+            WHERE t.to_state IN ('completed','blocked') AND p.packet_digest IS NULL
+              AND e.event_id IS NULL ${workspaceFilter}
+            GROUP BY t.to_state`,
+      args: input.workspaceId ? [input.workspaceId] : [],
+    }),
+  ]);
+  const sources = [...transitions.rows, ...anchors.rows]
+    .map(value => lifecycleSourceFromRow(value as Row))
+    .sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime())
+    .slice(0, limit);
+  const summary = {
+    scanned: sources.length,
+    projected: 0,
+    replayed: 0,
+    retry: 0,
+    deferredWithoutPacket: { gateBlocked: 0, reviewCompleted: 0 },
+    retrySources: [] as string[],
+  };
+  for (const value of deferred.rows) {
+    const row = value as Row;
+    const count = nonNegativeInteger(row.count, "deferred event count");
+    if (text(row, "to_state") === "blocked") summary.deferredWithoutPacket.gateBlocked = count;
+    if (text(row, "to_state") === "completed") summary.deferredWithoutPacket.reviewCompleted = count;
+  }
+  for (const source of sources) {
+    try {
+      const outcome = await projectAssuranceLifecycleEvent(source, now);
+      summary[outcome.state] += 1;
+    } catch {
+      summary.retry += 1;
+      summary.retrySources.push(source.sourceEventId);
+    }
+  }
+  return summary;
 }
 
 export async function listAssuranceEvents(input: { accountAddress: string; workspaceId: string; limit?: number }) {

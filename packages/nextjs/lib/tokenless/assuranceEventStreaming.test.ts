@@ -3,16 +3,21 @@ import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { verifyWorkspaceAuditChain } from "~~/lib/privacy/audit";
+import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import {
+  ASSURANCE_EVENT_TYPES,
   buildAssuranceCloudEvent,
   createAssuranceEventStream,
   deliverPendingAssuranceEvents,
   enqueueAssuranceEvent,
   listAssuranceEventStreams,
   listAssuranceEvents,
+  projectAssuranceLifecycleEvents,
 } from "~~/lib/tokenless/assuranceEventStreaming";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const OUTSIDER = "0x2222222222222222222222222222222222222222";
@@ -33,9 +38,212 @@ const CHAIN_REFERENCE = {
   },
 };
 const resolvePublic = async () => ["203.0.113.10"];
+const HASH = (character: string) => `sha256:${character.repeat(64)}`;
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
+
+async function seedLifecycleEventSources() {
+  const { workspaceId } = await createWorkspace({ name: "Lifecycle stream", ownerAddress: OWNER });
+  const agent = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "lifecycle-stream-agent",
+    version: {
+      displayName: "Lifecycle stream agent",
+      provider: "OpenAI",
+      model: "gpt-5",
+      modelVersion: "2026-07-16",
+      environment: "production",
+    },
+  });
+  const policyId = "arp_lifecycle_stream";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_policies
+          (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,
+           agreement_threshold_bps,production_floor_bps,fixed_rate_bps,maximum_unreviewed_gap,
+           rules_json,audience_policy_json,publishing_policy_id,created_by,approved_by,created_at)
+          VALUES (?,1,?,?,?,'fixed',true,8000,0,10000,1,?,?,NULL,?,?,?)`,
+    args: [
+      policyId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      JSON.stringify({ enforcementMode: "host_enforced" }),
+      JSON.stringify({ reviewerSource: "public_network" }),
+      OWNER,
+      OWNER,
+      NOW,
+    ],
+  });
+  const binding = await seedReadyHumanReviewBinding({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    policyId,
+    actor: OWNER,
+  });
+  const scopeId = "aesc_lifecycle_stream";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_evaluation_scopes
+          (scope_id,workspace_id,agent_id,agent_version_id,policy_id,policy_version,
+           workflow_key,risk_tier,audience_policy_hash,partition_commitment,
+           execution_profile_hash,execution_profile_json,human_review_binding_id,human_review_binding_version,
+           request_profile_id,request_profile_version,request_profile_hash,stage,completed_comparable_cases,
+           stable_cases_since_stage,unreviewed_since_last_sample,stage_entered_at,updated_at)
+          VALUES (?,?,?,?,?,1,'lifecycle-stream','critical',?,?,?,'{}',?,1,?,1,?,
+                  'high_coverage',0,0,0,?,?)`,
+    args: [
+      scopeId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      policyId,
+      HASH("a"),
+      HASH("b"),
+      HASH("c"),
+      binding.bindingId,
+      binding.profileId,
+      binding.profileHash,
+      NOW,
+      NOW,
+    ],
+  });
+
+  const projectId = "project_lifecycle_stream";
+  const rubricId = "rubric_lifecycle_stream";
+  const suiteId = "suite_lifecycle_stream";
+  const audiencePolicyId = "policy_lifecycle_stream";
+  const runId = "run_lifecycle_stream";
+  const packetId = "haep_lifecycle_stream";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_projects
+          (project_id,workspace_id,name,data_classification,status,retention_days,created_by,created_at,updated_at)
+          VALUES (?,?,'Lifecycle evidence','confidential','active',30,?,?,?)`,
+    args: [projectId, workspaceId, OWNER, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_rubrics
+          (rubric_id,project_id,version,prompt,failure_tags_json,rationale_json,pass_rule_json,rubric_json,created_at)
+          VALUES (?,?,1,'Review','[]','{}','{}','{}',?)`,
+    args: [rubricId, projectId, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_suites
+          (suite_id,project_id,name,version,status,rubric_id,rubric_version,created_at,updated_at)
+          VALUES (?,?,'Lifecycle suite',1,'frozen',?,1,?,?)`,
+    args: [suiteId, projectId, rubricId, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_audience_policies
+          (policy_id,project_id,version,reviewer_source,compensation,cohorts_json,selection,
+           fallbacks_json,required_qualifications_json,assurance_json,buyer_privacy_json,
+           legal_eligibility_required,policy_hash,policy_json,created_at)
+          VALUES (?,?,1,'public_network','unpaid','[]','open','{}','[]','{}','{}',false,?,'{}',?)`,
+    args: [audiencePolicyId, projectId, HASH("d"), NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_runs
+          (run_id,project_id,suite_id,suite_version,audience_policy_id,audience_policy_version,
+           status,policy_hash,created_by,created_at,updated_at,completed_at)
+          VALUES (?,?,?,1,?,1,'completed',?,?,?, ?,?)`,
+    args: [runId, projectId, suiteId, audiencePolicyId, HASH("d"), OWNER, NOW, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_evidence_packets
+          (packet_id,run_id,manifest_hash,case_root,response_root,aggregation_version,result_json,
+           limitations_json,chain_references_json,signature,generated_at,packet_digest,packet_json,
+           signature_algorithm,signing_key_id,signing_public_key)
+          VALUES (?,?,?,'case-root','response-root','v1','{}','[]','{}','signature',?,?, '{}',
+                  'Ed25519','key-test','public-key')`,
+    args: [packetId, runId, HASH("e"), NOW, PACKET_HASH],
+  });
+
+  const insertOpportunity = async (opportunityId: string, externalId: string, run: string | null) => {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_opportunities
+            (opportunity_id,workspace_id,agent_id,agent_version_id,scope_id,policy_id,policy_version,
+             external_opportunity_id,suggestion_commitment,declared_confidence_bps,metadata_commitment,
+             metadata_complete,critical_risk,decision,review_rate_bps,selection_probability_bps,sample_bucket,
+             sampler_key_version,sampler_commitment,reason_codes_json,status,run_id,source_evidence_reference,
+             source_evidence_hash,human_review_binding_id,human_review_binding_version,request_profile_id,
+             request_profile_version,request_profile_hash,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,1,?,?,9000,?,true,true,'required',10000,10000,1,'sampler-v1',?,'[]',
+                    ?,?,'evidence/lifecycle',?,?,1,?,1,?,?,?)`,
+      args: [
+        opportunityId,
+        workspaceId,
+        agent.agentId,
+        agent.currentVersion.versionId,
+        scopeId,
+        policyId,
+        externalId,
+        HASH("f"),
+        HASH("1"),
+        HASH("2"),
+        run ? "completed" : "review_requested",
+        run,
+        HASH("3"),
+        binding.bindingId,
+        binding.profileId,
+        binding.profileHash,
+        NOW,
+        NOW,
+      ],
+    });
+  };
+  const completedOpportunity = "aop_lifecycle_stream_completed";
+  const deferredOpportunity = "aop_lifecycle_stream_deferred";
+  await insertOpportunity(completedOpportunity, "external-lifecycle-completed", runId);
+  await insertOpportunity(deferredOpportunity, "external-lifecycle-deferred", null);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
+          (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,terminal_at,
+           created_at,updated_at)
+          VALUES (?,?,'completed',3,'[]',?,?,?,?),
+                 (?,?,'blocked',2,'[]',?,NULL,?,?)`,
+    args: [workspaceId, completedOpportunity, NOW, NOW, NOW, NOW, workspaceId, deferredOpportunity, NOW, NOW, NOW],
+  });
+  const blockedEventId = `hrtr_${"1".repeat(40)}`;
+  const completedEventId = `hrtr_${"2".repeat(40)}`;
+  const deferredEventId = `hrtr_${"3".repeat(40)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunity_transition_events
+          (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
+           reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
+          VALUES (?,?,?,'pending:blocked','pending','blocked',1,2,'[]','service','stream-test','{}',?,?),
+                 (?,?,?,'blocked:completed','blocked','completed',2,3,'[]','service','stream-test','{}',?,?),
+                 (?,?,?,'pending:deferred','pending','blocked',1,2,'[]','service','stream-test','{}',?,?)`,
+    args: [
+      blockedEventId,
+      workspaceId,
+      completedOpportunity,
+      HASH("4"),
+      NOW,
+      completedEventId,
+      workspaceId,
+      completedOpportunity,
+      HASH("5"),
+      NOW,
+      deferredEventId,
+      workspaceId,
+      deferredOpportunity,
+      HASH("6"),
+      NOW,
+    ],
+  });
+  const anchorJobId = `aat_${"4".repeat(40)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_attestation_jobs
+          (job_id,workspace_id,artifact_kind,artifact_schema_version,artifact_digest,boundary_at,
+           statement_json,state,signer_key_id,dsse_envelope_json,rekor_entry_uuid,rekor_log_index,
+           rekor_bundle_json,attempt_count,next_attempt_at,created_at,updated_at,completed_at)
+          VALUES (?,?,'decision_packet','rateloop.assurance-evidence.v1',?,?,'{}','completed',
+                  'managed-key','{}','rekor-entry','1','{}',1,?,?,?,?)`,
+    args: [anchorJobId, workspaceId, PACKET_HASH, NOW, NOW, NOW, NOW, NOW],
+  });
+  return { workspaceId, blockedEventId, completedEventId, deferredEventId, anchorJobId };
+}
 
 test("CloudEvents 1.0 wraps an OCSF 1.8 Compliance Finding and cross-verifiable evidence references", () => {
   const built = buildAssuranceCloudEvent({
@@ -144,6 +352,77 @@ test("workspace administrators configure streams and event enqueue is atomic, sc
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_event_conflict",
   );
+});
+
+test("lifecycle projection emits completed, blocked, and anchored events with exact audit-chain references", async () => {
+  const fixture = await seedLifecycleEventSources();
+  await createAssuranceEventStream({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    url: "https://siem.example.test/lifecycle",
+    eventTypes: [...ASSURANCE_EVENT_TYPES],
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+  });
+  const first = await projectAssuranceLifecycleEvents({ now: NOW, limit: 20 });
+  assert.deepEqual(first, {
+    scanned: 3,
+    projected: 3,
+    replayed: 0,
+    retry: 0,
+    deferredWithoutPacket: { gateBlocked: 1, reviewCompleted: 0 },
+    retrySources: [],
+  });
+  const stored = await dbClient.execute({
+    sql: `SELECT o.source_event_id,o.event_type,o.packet_hash,o.evidence_chain_json,o.cloud_event_json,
+                 a.event_digest,a.previous_digest,a.sequence,COUNT(d.delivery_id) AS deliveries
+          FROM tokenless_assurance_event_outbox o
+          JOIN tokenless_audit_events a
+            ON a.workspace_id=o.workspace_id AND a.action='assurance.siem_event.projected'
+           AND a.target_kind='assurance_lifecycle_source' AND a.target_id=o.source_event_id
+          LEFT JOIN tokenless_assurance_event_deliveries d ON d.event_id=o.event_id
+          WHERE o.workspace_id=?
+          GROUP BY o.source_event_id,o.event_type,o.packet_hash,o.evidence_chain_json,o.cloud_event_json,
+                   a.event_digest,a.previous_digest,a.sequence
+          ORDER BY o.event_type ASC`,
+    args: [fixture.workspaceId],
+  });
+  assert.equal(stored.rows.length, 3);
+  assert.deepEqual(
+    new Set(stored.rows.map(row => String(row.source_event_id))),
+    new Set([fixture.blockedEventId, fixture.completedEventId, fixture.anchorJobId]),
+  );
+  for (const row of stored.rows) {
+    const chain = JSON.parse(String(row.evidence_chain_json));
+    const envelope = JSON.parse(String(row.cloud_event_json));
+    assert.equal(row.packet_hash, PACKET_HASH);
+    assert.equal(chain.eventHash, row.event_digest);
+    assert.equal(chain.previousHash, row.previous_digest);
+    assert.equal(chain.sequence, Number(row.sequence));
+    assert.equal(envelope.rateloopchainhash, row.event_digest);
+    assert.equal(envelope.ratelooppackethash, PACKET_HASH);
+    assert.equal(Number(row.deliveries), 1);
+  }
+  assert.deepEqual(await verifyWorkspaceAuditChain(fixture.workspaceId), {
+    eventCount: 3,
+    headDigest: String(stored.rows.find(row => Number(row.sequence) === 3)?.event_digest),
+    valid: true,
+  });
+
+  const replay = await projectAssuranceLifecycleEvents({ now: new Date(NOW.getTime() + 60_000), limit: 20 });
+  assert.deepEqual(replay, {
+    scanned: 0,
+    projected: 0,
+    replayed: 0,
+    retry: 0,
+    deferredWithoutPacket: { gateBlocked: 1, reviewCompleted: 0 },
+    retrySources: [],
+  });
+  const auditCount = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_audit_events WHERE workspace_id=?",
+    args: [fixture.workspaceId],
+  });
+  assert.equal(Number(auditCount.rows[0]?.count), 3);
 });
 
 test("deliveries retry with a stable payload and signature, recover expired leases, and re-check SSRF on every attempt", async () => {
