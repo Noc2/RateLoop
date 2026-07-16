@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { GET } from "~~/app/api/account/workspaces/[workspaceId]/assurance/metrics/grafana/route";
+import { GET as GET_GRAFANA } from "~~/app/api/account/workspaces/[workspaceId]/assurance/metrics/grafana/route";
+import { GET as GET_SUMMARY } from "~~/app/api/account/workspaces/[workspaceId]/assurance/metrics/summary/route";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
@@ -22,7 +23,7 @@ test("Grafana dashboard is a versioned authenticated download with local Prometh
   const { workspaceId } = await createWorkspace({ name: "Metrics dashboard", ownerAddress: identity.principalId });
   const path = `/api/account/workspaces/${workspaceId}/assurance/metrics/grafana`;
   const context = { params: Promise.resolve({ workspaceId }) };
-  const response = await GET(
+  const response = await GET_GRAFANA(
     new NextRequest(`${ORIGIN}${path}`, {
       headers: { cookie: `${AUTH_SESSION_COOKIE}=${session.token}` },
     }),
@@ -54,6 +55,17 @@ test("Grafana dashboard is a versioned authenticated download with local Prometh
   ]);
   assert.doesNotMatch(JSON.stringify(dashboard), /https?:\/\//u);
 
-  const unauthenticated = await GET(new NextRequest(`${ORIGIN}${path}`), context);
+  const unauthenticated = await GET_GRAFANA(new NextRequest(`${ORIGIN}${path}`), context);
   assert.equal(unauthenticated.status, 401);
+
+  const summary = await GET_SUMMARY(
+    new NextRequest(`${ORIGIN}/api/account/workspaces/${workspaceId}/assurance/metrics/summary`, {
+      headers: { cookie: `${AUTH_SESSION_COOKIE}=${session.token}` },
+    }),
+    context,
+  );
+  assert.equal(summary.status, 200);
+  assert.equal(summary.headers.get("cache-control"), "private, no-store, max-age=0");
+  const summaryBody = await summary.json();
+  assert.deepEqual(summaryBody.evidenceAnchor, { state: "absent", lagSeconds: null });
 });

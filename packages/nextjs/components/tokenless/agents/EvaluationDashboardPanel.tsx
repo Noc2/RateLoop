@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 
 type Workspace = { workspaceId: string; name: string; role: string };
@@ -35,6 +36,56 @@ function decisionLabel(decision: EvaluationRun["clientDecision"]) {
   if (decision === "revise") return "Revise";
   if (decision === "stop") return "Stop";
   return null;
+}
+
+function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnapshot }) {
+  const totals = snapshot.scopes.reduce(
+    (sum, scope) => ({
+      eligible: sum.eligible + scope.eligible,
+      requested: sum.requested + scope.requested,
+      comparable: sum.comparable + scope.comparable,
+      disagreements: sum.disagreements + scope.disagreements,
+      latencyCount: sum.latencyCount + scope.latencyCount,
+      latencyMilliseconds: sum.latencyMilliseconds + scope.latencyMilliseconds,
+    }),
+    { eligible: 0, requested: 0, comparable: 0, disagreements: 0, latencyCount: 0, latencyMilliseconds: 0 },
+  );
+  const sampling = totals.eligible > 0 ? `${((totals.requested / totals.eligible) * 100).toFixed(1)}%` : "No data";
+  const disagreement =
+    totals.comparable > 0 ? `${((totals.disagreements / totals.comparable) * 100).toFixed(1)}%` : "No data";
+  const latency =
+    totals.latencyCount > 0
+      ? `${Math.round(totals.latencyMilliseconds / totals.latencyCount / 1_000).toLocaleString()} sec`
+      : "No data";
+  const anchor =
+    snapshot.evidenceAnchor.state === "absent"
+      ? "No anchor"
+      : `${snapshot.evidenceAnchor.state} · ${snapshot.evidenceAnchor.lagSeconds.toLocaleString()} sec`;
+  return (
+    <section className="surface-card rounded-2xl p-6" aria-labelledby="assurance-metrics-heading">
+      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Last 30 days</p>
+      <h2 id="assurance-metrics-heading" className="mt-2 text-xl font-semibold">
+        Assurance operations
+      </h2>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ["Sampling rate", sampling],
+          ["Mean verdict latency", latency],
+          ["Disagreement rate", disagreement],
+          ["Latest evidence anchor", anchor],
+        ].map(([label, value]) => (
+          <div key={label} className="surface-card-nested rounded-xl p-4">
+            <dt className="text-xs text-base-content/45">{label}</dt>
+            <dd className="mt-2 font-mono text-sm">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-xs text-base-content/45">
+        {snapshot.reviewsRequested} requested · {snapshot.reviewsCompleted} completed · {snapshot.blocked} blocked ·{" "}
+        {snapshot.approvalRequired} awaiting approval
+      </p>
+    </section>
+  );
 }
 
 function SampleNote({ run }: { run: EvaluationRun }) {
@@ -138,6 +189,8 @@ export function EvaluationDashboardPanel({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [dashboard, setDashboard] = useState<EvaluationDashboard | null>(null);
+  const [assuranceMetrics, setAssuranceMetrics] = useState<AssuranceMetricsSnapshot | null>(null);
+  const [metricsError, setMetricsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,6 +199,7 @@ export function EvaluationDashboardPanel({
     void (async () => {
       setLoading(true);
       setError(null);
+      setMetricsError(false);
       try {
         const body = await readJson(
           await fetch("/api/account/workspaces", {
@@ -187,7 +241,24 @@ export function EvaluationDashboardPanel({
             signal: controller.signal,
           }),
         );
-        if (!controller.signal.aborted) setDashboard(body as unknown as EvaluationDashboard);
+        const nextDashboard = body as unknown as EvaluationDashboard;
+        if (!controller.signal.aborted) setDashboard(nextDashboard);
+        if (nextDashboard.callerRole === "owner" || nextDashboard.callerRole === "admin") {
+          try {
+            const metrics = await readJson(
+              await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/metrics/summary`, {
+                cache: "no-store",
+                credentials: "same-origin",
+                signal: controller.signal,
+              }),
+            );
+            if (!controller.signal.aborted) setAssuranceMetrics(metrics as unknown as AssuranceMetricsSnapshot);
+          } catch {
+            if (!controller.signal.aborted) setMetricsError(true);
+          }
+        } else if (!controller.signal.aborted) {
+          setAssuranceMetrics(null);
+        }
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Unable to load evaluations.");
@@ -202,6 +273,7 @@ export function EvaluationDashboardPanel({
   function selectWorkspace(nextWorkspaceId: string) {
     setWorkspaceId(nextWorkspaceId);
     setDashboard(null);
+    setAssuranceMetrics(null);
     setError(null);
   }
 
@@ -249,6 +321,13 @@ export function EvaluationDashboardPanel({
           <h3 className="font-semibold">Create a workspace first</h3>
           <p className="mt-2 text-sm text-base-content/55">Evaluations belong to a workspace.</p>
         </div>
+      ) : null}
+
+      {assuranceMetrics ? <AssuranceMetricsSummary snapshot={assuranceMetrics} /> : null}
+      {metricsError ? (
+        <p className="text-xs text-amber-100/80" role="status">
+          Assurance operations metrics are temporarily unavailable.
+        </p>
       ) : null}
 
       {!loading && dashboard?.runs.length === 0 ? (

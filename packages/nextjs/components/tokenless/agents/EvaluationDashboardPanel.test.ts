@@ -18,5 +18,10 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /does not create\s+a global agent ranking/);
   assert.match(source, /Small sample/);
   assert.match(source, /Result hidden until/);
+  assert.match(source, /Assurance operations/);
+  assert.match(source, /Sampling rate/);
+  assert.match(source, /Mean verdict latency/);
+  assert.match(source, /Disagreement rate/);
+  assert.match(source, /Latest evidence anchor/);
   assert.doesNotMatch(source, /leaderboard|top agent|worst agent/i);
 });
