@@ -149,6 +149,28 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     keywords: ["decision packet", "result", "audit"],
   },
   {
+    title: "Evidence & Compliance Mapping",
+    href: "/docs/evidence",
+    area: "Docs",
+    description: "Inspect review packet fields, local verification steps, framework mappings, and explicit limits.",
+    keywords: ["auditor", "compliance map", "Ed25519", "Merkle", "OSCAL", "host reported provenance"],
+  },
+  {
+    title: "Check assurance evidence",
+    href: "/docs/evidence#verify",
+    area: "Docs",
+    description: "Check packet signatures, recomputation roots, chain references, and optional external receipts.",
+    keywords: ["evidence verify", "audit verify", "public key pin", "Rekor", "RFC 3161"],
+  },
+  {
+    title: "Evidence framework cross-reference",
+    href: "/docs/evidence#compliance-map",
+    area: "Docs",
+    description:
+      "Map RateLoop artifacts to ISO 42001, the EU AI Act, NIST AI RMF, FINRA, and SEC recordkeeping references.",
+    keywords: ["A.6", "A.9.2", "Article 12", "Article 26", "MEASURE", "MANAGE", "17a-4"],
+  },
+  {
     title: "Agents & MCP",
     href: "/docs/ai",
     area: "Docs",

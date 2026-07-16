@@ -20,6 +20,9 @@ test("site search finds documentation by title and topic", () => {
   assert.equal(searchSite("low confidence extraction")[0]?.href, "/docs/use-cases#extraction-triage");
   assert.ok(searchSite("adaptive review").some(result => result.href === "/docs/use-cases#version-calibration"));
   assert.ok(searchSite("refund compensation").some(result => result.href === "/docs/how-it-works#settlement-paths"));
+  assert.equal(searchSite("Evidence & Compliance Mapping")[0]?.href, "/docs/evidence");
+  assert.equal(searchSite("OSCAL")[0]?.href, "/docs/evidence");
+  assert.equal(searchSite("RFC 3161")[0]?.href, "/docs/evidence#verify");
 });
 
 test("site search includes Discover questions and core pages", () => {

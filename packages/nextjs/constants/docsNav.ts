@@ -5,6 +5,7 @@ export const DOCS_NAV = [
       { label: "Introduction", href: "/docs" },
       { label: "Use Cases", href: "/docs/use-cases" },
       { label: "How It Works", href: "/docs/how-it-works" },
+      { label: "Evidence & Compliance", href: "/docs/evidence" },
       { label: "Agents & MCP", href: "/docs/ai" },
     ],
   },
