@@ -1188,6 +1188,96 @@ export type TokenlessAgentReviewOpportunityRecoveryEvent =
 export type NewTokenlessAgentReviewOpportunityRecoveryEvent =
   typeof tokenlessAgentReviewOpportunityRecoveryEvents.$inferInsert;
 
+export const tokenlessAgentReviewContinuations = pgTable(
+  "tokenless_agent_review_continuations",
+  {
+    continuationId: text("continuation_id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    integrationId: text("integration_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    lifecycleRevision: integer("lifecycle_revision").notNull(),
+    allowedOperation: text("allowed_operation").notNull(),
+    callerCredentialKind: text("caller_credential_kind").notNull(),
+    callerCredentialId: text("caller_credential_id").notNull(),
+    issuanceKeyHash: text("issuance_key_hash").notNull(),
+    consumptionKeyHash: text("consumption_key_hash"),
+    status: text("status").notNull().default("active"),
+    predecessorContinuationId: text("predecessor_continuation_id"),
+    successorContinuationId: text("successor_continuation_id"),
+    retryAfterMs: integer("retry_after_ms").notNull(),
+    issuedAt: timestamp("issued_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    rotatedAt: timestamp("rotated_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    expiredAt: timestamp("expired_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    activeRevisionOperationUnique: uniqueIndex("tokenless_agent_review_continuations_active_revision_operation_unique")
+      .on(table.workspaceId, table.integrationId, table.opportunityId, table.lifecycleRevision, table.allowedOperation)
+      .where(sql`${table.status} = 'active'`),
+    bindingIdx: index("tokenless_agent_review_continuations_binding_idx").on(
+      table.workspaceId,
+      table.integrationId,
+      table.opportunityId,
+      table.issuedAt,
+    ),
+    expiryIdx: index("tokenless_agent_review_continuations_expiry_idx")
+      .on(table.status, table.expiresAt)
+      .where(sql`${table.status} = 'active'`),
+    lifecycleFk: foreignKey({
+      columns: [table.workspaceId, table.opportunityId],
+      foreignColumns: [
+        tokenlessAgentReviewOpportunityLifecycles.workspaceId,
+        tokenlessAgentReviewOpportunityLifecycles.opportunityId,
+      ],
+      name: "tokenless_agent_review_continuations_lifecycle_fk",
+    }).onDelete("restrict"),
+    tokenHashUnique: uniqueIndex("tokenless_agent_review_continuations_token_hash_unique").on(table.tokenHash),
+  }),
+);
+
+export const tokenlessAgentReviewContinuationEvents = pgTable(
+  "tokenless_agent_review_continuation_events",
+  {
+    eventId: text("event_id").primaryKey(),
+    continuationId: text("continuation_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    integrationId: text("integration_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    lifecycleRevision: integer("lifecycle_revision").notNull(),
+    eventType: text("event_type").notNull(),
+    allowedOperation: text("allowed_operation").notNull(),
+    actorCredentialKind: text("actor_credential_kind").notNull(),
+    actorCredentialCommitment: text("actor_credential_commitment").notNull(),
+    relatedContinuationId: text("related_continuation_id"),
+    reasonCode: text("reason_code").notNull(),
+    eventCommitment: text("event_commitment").notNull(),
+    occurredAt: timestamp("occurred_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    lifecycleFk: foreignKey({
+      columns: [table.workspaceId, table.opportunityId],
+      foreignColumns: [
+        tokenlessAgentReviewOpportunityLifecycles.workspaceId,
+        tokenlessAgentReviewOpportunityLifecycles.opportunityId,
+      ],
+      name: "tokenless_agent_review_continuation_events_lifecycle_fk",
+    }).onDelete("restrict"),
+    timelineIdx: index("tokenless_agent_review_continuation_events_timeline_idx").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.occurredAt,
+      table.eventId,
+    ),
+  }),
+);
+
+export type TokenlessAgentReviewContinuation = typeof tokenlessAgentReviewContinuations.$inferSelect;
+export type NewTokenlessAgentReviewContinuation = typeof tokenlessAgentReviewContinuations.$inferInsert;
+export type TokenlessAgentReviewContinuationEvent = typeof tokenlessAgentReviewContinuationEvents.$inferSelect;
+export type NewTokenlessAgentReviewContinuationEvent = typeof tokenlessAgentReviewContinuationEvents.$inferInsert;
 export type TokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferSelect;
 export type NewTokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferInsert;
 
