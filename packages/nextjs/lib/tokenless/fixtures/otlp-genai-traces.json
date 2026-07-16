@@ -1,0 +1,59 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "service.name", "value": { "stringValue": "fixture-agent-host" } },
+          { "key": "rateloop.agent.id", "value": { "stringValue": "agt_fixture0001" } },
+          { "key": "rateloop.agent.version.id", "value": { "stringValue": "agtv_fixture0001" } }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": { "name": "fixture.instrumentation", "version": "1.0.0" },
+          "schemaUrl": "https://opentelemetry.io/schemas/gen-ai/1.42.0",
+          "spans": [
+            {
+              "traceId": "5b8efff798038103d269b633813fc60c",
+              "spanId": "5fb397be34d26b51",
+              "name": "invoke_agent fixture-agent",
+              "kind": 1,
+              "startTimeUnixNano": "1784192400000000000",
+              "endTimeUnixNano": "1784192401500000000",
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "invoke_agent" } },
+                { "key": "gen_ai.provider.name", "value": { "stringValue": "openai" } },
+                { "key": "gen_ai.request.model", "value": { "stringValue": "gpt-fixture" } },
+                { "key": "gen_ai.response.model", "value": { "stringValue": "gpt-fixture-2026-07" } },
+                { "key": "gen_ai.response.id", "value": { "stringValue": "provider-response-secret-id" } },
+                { "key": "gen_ai.usage.input_tokens", "value": { "intValue": "120" } },
+                { "key": "gen_ai.usage.output_tokens", "value": { "intValue": "40" } },
+                {
+                  "key": "gen_ai.input.messages",
+                  "value": { "arrayValue": { "values": [{ "stringValue": "never-persist-this-prompt" }] } }
+                }
+              ],
+              "status": { "code": 1 }
+            },
+            {
+              "traceId": "5b8efff798038103d269b633813fc60c",
+              "spanId": "77f397be34d26b52",
+              "parentSpanId": "5fb397be34d26b51",
+              "name": "tools/call weather",
+              "kind": 3,
+              "startTimeUnixNano": "1784192400250000000",
+              "endTimeUnixNano": "1784192400500000000",
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "execute_tool" } },
+                { "key": "mcp.method.name", "value": { "stringValue": "tools/call" } },
+                { "key": "gen_ai.tool.name", "value": { "stringValue": "weather" } },
+                { "key": "gen_ai.tool.call.arguments", "value": { "stringValue": "never-persist-this-tool-input" } }
+              ],
+              "status": { "code": 1 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
