@@ -65,7 +65,7 @@ Strong foundations — most of the evidence layer already exists and only needs 
 | Workspace assurance metrics | Exists with scoped scrape credentials, app summary, and downloadable Grafana JSON | `lib/tokenless/assuranceMetrics.ts`, `EvaluationDashboardPanel` |
 | DSSE/Rekor/RFC 3161 external witnessing | Implemented with a managed AWS KMS Ed25519 runtime; **not a public live claim until provider exercise** | `assuranceAttestation*`, `verify-assurance-attestation.mjs` |
 | SIEM, S3 Object Lock, Vanta/Drata-style GRC, and OTLP integrations | Implemented; **individual provider/customer exercise gates remain false** | `assuranceEventStreaming.ts`, `assuranceWormExports.ts`, `assuranceGrcConnectors.ts`, `otlpTraceIngest.ts` |
-| Automated-eval escalation and labeled-result exchange | Exists for Promptfoo, NeMo Guardrails, Inspect, and Langfuse | `automatedEvalReceipts.ts`, `packages/agents/src/automated-eval` |
+| Automated-eval escalation and labeled-result exchange | Exists for Promptfoo, NeMo Guardrails, Inspect, and Langfuse | `automatedEvalReceipts.ts`; `packages/agents/src/automatedEval.ts`, `promptfooAutomatedEval.ts`, `inspectAutomatedEval.ts`, `langfuseHumanLabels.ts` |
 | Public trust/limitations page | Deliberately removed; register forbids a trust-status page | readiness register |
 
 Honesty constraints that shape everything below: the managed external-witness signer exists, but provider configuration
@@ -233,8 +233,9 @@ public claim must match the deployed system exactly.
 ### Landing page (selective, design-preserving)
 
 4. **Implemented:** one new `whyItWorksFeatures` card in section 03 ("Why It Works"): *"Evidence your auditors can
-   check"* — signed decision packets, tamper-evident logs, offline verifiers — chip-linking to
-   `/docs/evidence`. This is the minimal-change option and ships first.
+   check"* — tracing review policy, human judgments, coverage, and available settlement references — chip-linking to
+   `/docs/evidence`. This deliberately narrower copy does not imply that production signing or offline-verifier
+   capability gates have passed.
 5. **Intentionally deferred:** a dedicated section ("0X — Evidence, Not **Trust**") between How-It-Works and
    Why-It-Works using the existing card/rail idiom: three cards — *Decision packets* (signed, recomputable),
    *Tamper-evident by construction* (hash chain + external anchors), *Fits your compliance stack*
@@ -245,7 +246,7 @@ public claim must match the deployed system exactly.
 
    | Public phrase | May ship when |
    | --- | --- |
-   | "Signed decision packets you can verify offline" | Today (E0 — already true) |
+   | "Signed decision packets you can verify offline" | Managed evidence signing, published signing-key history, and the offline packet verifier deployed and exercised |
    | "Escalation triggers and coverage statistics in every packet" | E1.1–E1.2 deployed |
    | "Verify our audit exports yourself" | E1.3 shipped |
    | "Independently witnessed (transparency log / RFC 3161)" | E2.6 + managed signing |
@@ -258,7 +259,8 @@ public claim must match the deployed system exactly.
 - **Overclaiming is the existential risk of this positioning.** The mitigations are structural: the full "What this is
   not" boundary appears wherever evidence behavior is explained in public docs; compact surfaces link to it instead of
   repeating legal copy; packet `limitations` and `source.independentlyVerified` fields stay load-bearing; and the
-  copy-gate table above is enforced alongside the readiness register.
+  copy-gate table above is enforced across the public app, its transitive reusable components, and machine docs alongside
+  the readiness register.
 - **Provenance honesty:** host-reported execution metadata is never marketed as verified model provenance;
   an integrity upgrade would require a gateway/proxy pattern or provider attestation — out of scope here.
 - **Standards drift:** OTel GenAI semconv is pre-stable (pin + shim); prEN 18229-1 and the Art. 72/73
