@@ -82,6 +82,11 @@ test("workspace managers see the human-only Feedback Bonus award inbox", () => {
   assert.match(panelsSource, /<FeedbackBonusAwardInbox workspaceId=\{workspaceId\} \/>/);
 });
 
+test("the connected-agent task path shows a concise evidence summary", () => {
+  assert.match(panelsSource, /import \{ WorkspaceEvidenceSummaryStrip \}/);
+  assert.match(panelsSource, /<WorkspaceEvidenceSummaryStrip workspaceId=\{workspaceId\} canManage=\{canManage\} \/>/);
+});
+
 test("one canonical human-review editor renders only for the selected agent", () => {
   assert.match(panelsSource, /const \[reviewAgentId, setReviewAgentId\] = useState/);
   assert.match(panelsSource, /activeReviewAgentId=\{reviewAgentId\}/);

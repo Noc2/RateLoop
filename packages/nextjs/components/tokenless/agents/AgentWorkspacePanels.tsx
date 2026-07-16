@@ -13,6 +13,7 @@ import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { PrivateGroupsPanel } from "./PrivateGroupsPanel";
+import { WorkspaceEvidenceSummaryStrip } from "./WorkspaceEvidenceSummaryStrip";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
@@ -128,6 +129,9 @@ export function AgentWorkspacePanels({
         ) : null}
         {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
           <FeedbackBonusAwardInbox workspaceId={workspaceId} />
+        ) : null}
+        {hasConnectedAgent && resolvedTab === "agents" ? (
+          <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "agents" ? (
           <AgentRegistryPanel
