@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import {
+  type ReviewAudienceFormValues,
+  buildReviewAudienceRequestProfile,
+  privateClassificationsThrough,
+  reviewAudienceFormValues,
+} from "./reviewAudience";
+import {
   type ReviewFrequencyFormValues,
   buildReviewFrequencySelection,
   reviewFrequencyFormValues,
@@ -33,6 +39,12 @@ const REVIEW_FREQUENCY_OPTIONS = [
   ["manual", "Only after I approve", "RateLoop recommends a handoff; the agent cannot send it.", ""],
 ] as const;
 
+const REVIEW_AUDIENCE_OPTIONS = [
+  ["public_network", "Public network", "RateLoop network reviewers."],
+  ["private_invited", "Invited reviewers", "Only people you invite."],
+  ["hybrid", "Hybrid", "Invited and RateLoop network reviewers."],
+] as const;
+
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "The setup request failed.");
@@ -59,6 +71,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [workspaceName, setWorkspaceName] = useState(initialSetup.workspaceName);
   const [reviewFrequency, setReviewFrequency] = useState<ReviewFrequencyFormValues>(() =>
     reviewFrequencyFormValues(initialSetup.reviewDraft?.selection),
+  );
+  const [reviewAudience, setReviewAudience] = useState<ReviewAudienceFormValues>(() =>
+    reviewAudienceFormValues(initialSetup.reviewDraft?.requestProfile),
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
@@ -92,6 +107,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   useEffect(
     () => setReviewFrequency(reviewFrequencyFormValues(setup.reviewDraft?.selection)),
     [setup.reviewDraft?.selection],
+  );
+
+  useEffect(
+    () => setReviewAudience(reviewAudienceFormValues(setup.reviewDraft?.requestProfile)),
+    [setup.reviewDraft?.requestProfile],
   );
 
   useEffect(() => {
@@ -291,21 +311,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         throw new Error("Choose a response window and panel size before saving review behavior.");
       }
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
-      const requestProfile = {
-        criterion: draft.requestProfile.criterion,
-        positiveLabel: draft.requestProfile.positiveLabel,
-        negativeLabel: draft.requestProfile.negativeLabel,
-        rationaleMode: draft.requestProfile.rationaleMode,
-        audience: draft.requestProfile.audience,
-        contentBoundary: draft.requestProfile.contentBoundary,
-        privateSensitivity: draft.requestProfile.privateSensitivity,
-        responseWindowSeconds: draft.requestProfile.responseWindowSeconds,
-        panelSize: draft.requestProfile.panelSize,
-        compensationMode: draft.requestProfile.compensationMode,
-        bountyPerSeatAtomic: draft.requestProfile.bountyPerSeatAtomic,
-      };
-      const audience = draft.requestProfile.audience;
-      let privateGroupId = draft.requestProfile.privateGroupId ?? setup.privateGroupId;
+      const requestProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
+      const audience = requestProfile.audience;
+      let privateGroupId =
+        audience === "public_network" ? null : (requestProfile.privateGroupId ?? setup.privateGroupId);
       if ((audience === "private_invited" || audience === "hybrid") && !privateGroupId) {
         const groupsBody = await readJson(
           await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/private-groups`, {
@@ -323,7 +332,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               body: JSON.stringify({
                 name: "Reviewers",
                 purpose: "People invited to review this workspace's private material.",
-                policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
+                policy: {
+                  defaultCompensation: "unpaid",
+                  dataClassifications: privateClassificationsThrough(reviewAudience.privateSensitivity),
+                },
               }),
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
@@ -692,13 +704,55 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </p>
               </div>
             ) : null}
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
-              <p className="font-medium">Invited reviewers · private workspace material</p>
-              <p className="mt-1 text-base-content/60">
-                This saves the private-review audience and prepares an invitation in the next step. The safe connection
-                does not assign or deliver work to reviewers.
+            <fieldset className="mt-6 space-y-3">
+              <legend className="font-medium">Who should review?</legend>
+              {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => (
+                <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
+                  <input
+                    className="radio mt-0.5"
+                    type="radio"
+                    name="audience"
+                    value={value}
+                    checked={reviewAudience.audience === value}
+                    onChange={() => setReviewAudience(current => ({ ...current, audience: value }))}
+                  />
+                  <span>
+                    <span className="font-medium">{label}</span>
+                    <span className="mt-1 block text-sm text-base-content/60">{description}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {reviewAudience.audience === "private_invited" ? (
+              <label className="mt-4 block rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                Private material sensitivity
+                <select
+                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={reviewAudience.privateSensitivity}
+                  onChange={event =>
+                    setReviewAudience(current => ({
+                      ...current,
+                      privateSensitivity: event.target.value as ReviewAudienceFormValues["privateSensitivity"],
+                    }))
+                  }
+                >
+                  <option value="internal">Internal</option>
+                  <option value="confidential">Confidential</option>
+                  <option value="restricted">Restricted</option>
+                  <option value="regulated">Regulated</option>
+                </select>
+                <span className="mt-2 block text-xs text-base-content/55">
+                  Only invited reviewers can receive this private workspace material.
+                </span>
+              </label>
+            ) : (
+              <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-base-content/65">
+                Public, synthetic, or safely redacted material only. Network reviewers are paid in USDC.
               </p>
-            </div>
+            )}
+            <p className="mt-4 text-xs text-base-content/55">
+              The safe connection does not assign or deliver work to reviewers.
+            </p>
             <div className="mt-6 flex items-center gap-3">
               {backButton}
               <button className="rateloop-gradient-action px-5" disabled={busy}>

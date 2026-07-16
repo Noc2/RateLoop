@@ -70,6 +70,28 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
 });
 
+test("review setup controls audience and shows only the relevant material boundary", () => {
+  for (const label of [
+    "Public network",
+    "Invited reviewers",
+    "Hybrid",
+    "Private material sensitivity",
+    "Internal",
+    "Confidential",
+    "Restricted",
+    "Regulated",
+  ]) {
+    assert.match(flowSource, new RegExp(label));
+  }
+  assert.match(flowSource, /checked=\{reviewAudience\.audience === value\}/);
+  assert.match(flowSource, /reviewAudience\.audience === "private_invited"/);
+  assert.match(flowSource, /Public, synthetic, or safely redacted material only/);
+  assert.match(flowSource, /Network reviewers are paid in USDC/);
+  assert.match(flowSource, /buildReviewAudienceRequestProfile\(draft\.requestProfile, reviewAudience\)/);
+  assert.match(flowSource, /privateClassificationsThrough\(reviewAudience\.privateSensitivity\)/);
+  assert.match(flowSource, /audience === "public_network" \? null/);
+});
+
 test("setup separates the connected client from per-run model provenance", () => {
   assert.match(flowSource, /connected client stays separate/i);
   assert.match(flowSource, /model, effort, and timing reported for each eligible run/i);

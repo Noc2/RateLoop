@@ -13,7 +13,8 @@ const MAX_INVITATION_TTL_MS = 30 * 86_400_000;
 const EMAIL_PATTERN = /^[^\s@]+@([^\s@]+)$/u;
 const DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
-const DATA_CLASSIFICATIONS = new Set(["internal", "confidential", "restricted"]);
+const DATA_CLASSIFICATIONS = new Set(["internal", "confidential", "restricted", "regulated"]);
+const PRIVATE_SENSITIVITY_ORDER = ["internal", "confidential", "restricted", "regulated"] as const;
 
 type Row = Record<string, unknown>;
 type Client = PoolClient;
@@ -146,6 +147,14 @@ function normalizedClassifications(values: string[] | undefined) {
     throw new TokenlessServiceError("dataClassifications is invalid.", 400, "invalid_private_group");
   }
   return [...result].sort();
+}
+
+function maximumPrivateSensitivity(dataClassifications: string[]) {
+  for (let index = PRIVATE_SENSITIVITY_ORDER.length - 1; index >= 0; index -= 1) {
+    const sensitivity = PRIVATE_SENSITIVITY_ORDER[index]!;
+    if (dataClassifications.includes(sensitivity)) return sensitivity;
+  }
+  throw new TokenlessServiceError("dataClassifications is invalid.", 400, "invalid_private_group");
 }
 
 function normalizeEmail(value: string) {
@@ -312,15 +321,16 @@ export async function createPrivateGroup(input: CreatePrivateGroupInput) {
     await client.query(
       `INSERT INTO tokenless_private_group_policy_versions
        (group_id, version, default_compensation, world_id_required, allowed_project_ids_json,
-        data_classifications_json, export_allowed, notification_defaults_json,
+        data_classifications_json, max_private_sensitivity, export_allowed, notification_defaults_json,
         policy_hash, policy_json, created_by, created_at)
-       VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+       VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [
         groupId,
         policy.defaultCompensation,
         policy.worldIdRequired,
         canonicalJson(policy.allowedProjectIds),
         canonicalJson(policy.dataClassifications),
+        maximumPrivateSensitivity(policy.dataClassifications),
         policy.exportAllowed,
         canonicalJson(policy.notificationDefaults),
         frozenPolicyHash,
@@ -385,9 +395,9 @@ export async function createPrivateGroupPolicyVersion(input: {
     await client.query(
       `INSERT INTO tokenless_private_group_policy_versions
        (group_id, version, default_compensation, world_id_required, allowed_project_ids_json,
-        data_classifications_json, export_allowed, notification_defaults_json,
+        data_classifications_json, max_private_sensitivity, export_allowed, notification_defaults_json,
         policy_hash, policy_json, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         input.groupId,
         version,
@@ -395,6 +405,7 @@ export async function createPrivateGroupPolicyVersion(input: {
         policy.worldIdRequired,
         canonicalJson(policy.allowedProjectIds),
         canonicalJson(policy.dataClassifications),
+        maximumPrivateSensitivity(policy.dataClassifications),
         policy.exportAllowed,
         canonicalJson(policy.notificationDefaults),
         frozenPolicyHash,
