@@ -435,6 +435,13 @@
       "when": 1784160000000,
       "tag": "0061_private_review_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1784163600000,
+      "tag": "0062_private_unpaid_review_assignments",
+      "breakpoints": true
     }
   ]
 }
