@@ -1,16 +1,16 @@
 const stages = [
   {
     number: "01",
-    title: "Agent prepares",
-    body: "Checks its approved audience, data rules, risk, budget, and decision context.",
-    conciseBody: "Sets audience, data, risk, budget, and context.",
+    title: "Owner sets policy",
+    body: "Sets review rules, risk thresholds, audience, data boundaries, and spending limits.",
+    conciseBody: "Sets review rules, risk thresholds, audience, data boundaries, and spending limits.",
     color: "#359EEE",
   },
   {
     number: "02",
-    title: "RateLoop decides",
-    body: "Each new version and workflow starts at 100%. Risk, missing context, or a maximum gap can force review.",
-    conciseBody: "New scopes start at 100%. Risk, missing context, and review gaps can force checks.",
+    title: "Agent submits work",
+    body: "Submits the work, context, declared risk, and supporting evidence within the owner-approved policy.",
+    conciseBody: "Submits work, context, and evidence within the owner-approved policy.",
     color: "#03CEA4",
   },
   {
@@ -22,9 +22,9 @@ const stages = [
   },
   {
     number: "04",
-    title: "Evidence adapts",
-    body: "Stable agreement can move baseline review 100→50→25→10%. A measured drop restores calibration.",
-    conciseBody: "Stable agreement lowers review. A measured drop restores calibration.",
+    title: "Evaluation",
+    body: "Returns evidence-backed feedback and actionable insights for this workflow.",
+    conciseBody: "Returns evidence-backed feedback and actionable insights for this workflow.",
     color: "#EF476F",
   },
 ] as const;
