@@ -505,6 +505,13 @@
       "when": 1784199600000,
       "tag": "0072_assurance_openmetrics_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1784203200000,
+      "tag": "0073_assurance_event_streaming",
+      "breakpoints": true
     }
   ]
 }
