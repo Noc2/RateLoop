@@ -31,7 +31,7 @@ The active package graph is tokenless-only:
 - `packages/nextjs` implements Better Auth, workspaces, agent OAuth, reviewer access, payments, privacy controls,
   evidence packets, and the Human Assurance Loop.
 
-The ordered application migration journal runs from `0000` through `0051_workspace_agent_setup.sql`. The current
+The ordered application migration journal runs from `0000` through `0053_account_workspace_deletion.sql`. The current
 checked-in Base Sepolia bundle is the disposable `tokenless-v3` deployment at block `44132668`, with complete key:
 
 ```text
@@ -153,6 +153,21 @@ contains commitments and settlement evidence, never private payloads or plaintex
 the one-time vote key to its payout destination; reusing a destination can link rounds. The operator never possesses a
 rater spend key or universal decryption key.
 
+Account and workspace deletion is a first-class authenticated lifecycle, not a support-only operation. Before accepting
+a deletion, RateLoop shows the exact blockers and consequences. A workspace cannot be deleted while it owns available
+or reserved funds, accepted paid work, an unsettled round, or another obligation that would strand assets or prevent an
+earned terminal payment. A principal cannot delete its account while it is the sole owner of a workspace, has accepted
+paid work, or has a managed wallet that still requires recovery. Final account deletion requires a recent primary-auth
+session in addition to the active RateLoop session.
+
+Deletion immediately revokes product and agent access, removes reusable authentication and contact data, and makes the
+workspace or account inaccessible. A later sign-up with the same email creates a new Better Auth user and a new opaque
+RateLoop principal; it never reconnects the deleted identity. Data that can be erased safely is deleted or queued for
+deletion by category. Records required for settlement, fraud prevention, legal claims, accounting, or an active legal
+hold remain under an irreversible tombstone for their documented retention period. Public-chain commitments cannot be
+erased. Every deletion produces category-level evidence stating whether data was erased, retained with a basis and
+deadline, or is externally immutable; the receipt contains no raw personal data.
+
 ## Funding, incentives, and terminal paths
 
 Round terms freeze the bounty, platform fee, accepted-work reserve, minimum reveals, deadlines, audience-policy hash,
@@ -194,7 +209,7 @@ Operational instructions are intentionally separate from product design:
 ## Remaining release phases
 
 1. **Hosted staging:** managed signing, complete paid assignment-to-settlement wiring, signed EU resource evidence,
-   migration verification through `0051`, and deployment-pinned end-to-end exercises.
+   migration verification through `0053`, and deployment-pinned end-to-end exercises.
 2. **Real users and money:** external contract/privacy review, paid eligibility and DAC7 operations, sanctions and B2B
    controls, reviewer appeals/recovery, operational drills, security testing, and evidence-packet verification.
 3. **Hardening at traction:** audit the small immutable core, run a public bounty and soak period, deploy the final
