@@ -841,11 +841,7 @@ export async function ingestOtlpTraces(input: {
       rejectionCodes.add(error.code);
       continue;
     }
-    const client = await dbPool.connect();
     try {
-      await client.query("BEGIN");
-      const stored = await persistMappedTrace(client, input.principal.workspaceId, mapping);
-      await client.query("COMMIT");
       if (mapping.reviewRequest) {
         requireProductPrincipalScope(input.principal, "review:decide");
         await (input.evaluateReview ?? evaluateAdaptiveReviewRequirement)({
@@ -853,6 +849,17 @@ export async function ingestOtlpTraces(input: {
           request: mapping.reviewRequest,
         });
       }
+    } catch (error) {
+      if (!(error instanceof TokenlessServiceError) || error.status >= 500) throw error;
+      rejectedSpans += group.spans.length;
+      rejectionCodes.add(error.code);
+      continue;
+    }
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      const stored = await persistMappedTrace(client, input.principal.workspaceId, mapping);
+      await client.query("COMMIT");
       acceptedSpans += group.spans.length;
       acceptedExecutions += 1;
       if (stored.deduplicated) deduplicatedExecutions += 1;

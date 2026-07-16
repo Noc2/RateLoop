@@ -269,6 +269,11 @@ test("eligible OTLP outputs fail closed without review authority or a complete m
   assert.equal(unauthorized.acceptedExecutions, 0);
   assert.equal(unauthorized.rejectedSpans, 2);
   assert.match(unauthorized.errorMessage, /insufficient_scope/u);
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_agent_executions")).rows[0]?.count),
+    0,
+    "an unauthorized review-bearing trace must not persist telemetry before the scope check",
+  );
 
   const incomplete = fixture();
   bindFixture(incomplete, setupData.agent.agentId, setupData.agent.currentVersion.versionId);
