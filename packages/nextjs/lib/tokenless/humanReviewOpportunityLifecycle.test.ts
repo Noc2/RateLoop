@@ -87,7 +87,21 @@ function transition(
 }
 
 test("the exported graph is lane-neutral and terminal states have no outgoing edges", () => {
-  assert.deepEqual(HUMAN_REVIEW_OPPORTUNITY_TRANSITIONS.pending, ["completed", "inconclusive", "failed_terminal"]);
+  assert.deepEqual(HUMAN_REVIEW_OPPORTUNITY_TRANSITIONS.pending, [
+    "blocked",
+    "completed",
+    "inconclusive",
+    "failed_terminal",
+  ]);
+  assert.deepEqual(HUMAN_REVIEW_OPPORTUNITY_TRANSITIONS.blocked, [
+    "approval_required",
+    "request_ready",
+    "pending",
+    "completed",
+    "inconclusive",
+    "failed_terminal",
+    "cancelled_before_commit",
+  ]);
   for (const terminal of [
     "skipped",
     "completed",

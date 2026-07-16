@@ -1097,6 +1097,97 @@ export type TokenlessAgentReviewOpportunityTransitionEvent =
 export type NewTokenlessAgentReviewOpportunityTransitionEvent =
   typeof tokenlessAgentReviewOpportunityTransitionEvents.$inferInsert;
 
+export const tokenlessAgentReviewOpportunityRecoveryStates = pgTable(
+  "tokenless_agent_review_opportunity_recovery_states",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    status: text("status").notNull(),
+    resumeState: text("resume_state"),
+    failureCount: integer("failure_count").notNull().default(0),
+    maximumFailures: integer("maximum_failures").notNull().default(3),
+    lastSignal: text("last_signal").notNull(),
+    lastErrorCode: text("last_error_code"),
+    firstFailureAt: timestamp("first_failure_at", { mode: "date", withTimezone: true }),
+    lastFailureAt: timestamp("last_failure_at", { mode: "date", withTimezone: true }),
+    nextRetryAt: timestamp("next_retry_at", { mode: "date", withTimezone: true }),
+    terminalState: text("terminal_state"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    lifecycleFk: foreignKey({
+      columns: [table.workspaceId, table.opportunityId],
+      foreignColumns: [
+        tokenlessAgentReviewOpportunityLifecycles.workspaceId,
+        tokenlessAgentReviewOpportunityLifecycles.opportunityId,
+      ],
+      name: "tokenless_agent_review_opportunity_recovery_states_lifecycle_fk",
+    }).onDelete("restrict"),
+    pk: primaryKey({
+      columns: [table.workspaceId, table.opportunityId],
+      name: "tokenless_agent_review_opportunity_recovery_states_pk",
+    }),
+    dueIdx: index("tokenless_agent_review_opportunity_recovery_states_due_idx")
+      .on(table.status, table.nextRetryAt)
+      .where(sql`${table.status} = 'recovery_required'`),
+  }),
+);
+
+export const tokenlessAgentReviewOpportunityRecoveryEvents = pgTable(
+  "tokenless_agent_review_opportunity_recovery_events",
+  {
+    eventId: text("event_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    transitionKey: text("transition_key").notNull(),
+    requestCommitment: text("request_commitment").notNull(),
+    signal: text("signal").notNull(),
+    action: text("action").notNull(),
+    fromState: text("from_state").notNull(),
+    toState: text("to_state").notNull(),
+    fromRevision: integer("from_revision").notNull(),
+    toRevision: integer("to_revision").notNull(),
+    failureCount: integer("failure_count").notNull(),
+    acceptedWorkCount: integer("accepted_work_count").notNull(),
+    committedWorkCount: integer("committed_work_count").notNull(),
+    responseCount: integer("response_count").notNull(),
+    reasonCodesJson: text("reason_codes_json").notNull(),
+    detailsJson: text("details_json").notNull().default("{}"),
+    occurredAt: timestamp("occurred_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    stateFk: foreignKey({
+      columns: [table.workspaceId, table.opportunityId],
+      foreignColumns: [
+        tokenlessAgentReviewOpportunityRecoveryStates.workspaceId,
+        tokenlessAgentReviewOpportunityRecoveryStates.opportunityId,
+      ],
+      name: "tokenless_agent_review_opportunity_recovery_events_state_fk",
+    }).onDelete("restrict"),
+    keyUnique: uniqueIndex("tokenless_agent_review_opportunity_recovery_events_key_unique").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.transitionKey,
+    ),
+    timelineIdx: index("tokenless_agent_review_opportunity_recovery_events_timeline_idx").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.occurredAt,
+      table.eventId,
+    ),
+  }),
+);
+
+export type TokenlessAgentReviewOpportunityRecoveryState =
+  typeof tokenlessAgentReviewOpportunityRecoveryStates.$inferSelect;
+export type NewTokenlessAgentReviewOpportunityRecoveryState =
+  typeof tokenlessAgentReviewOpportunityRecoveryStates.$inferInsert;
+export type TokenlessAgentReviewOpportunityRecoveryEvent =
+  typeof tokenlessAgentReviewOpportunityRecoveryEvents.$inferSelect;
+export type NewTokenlessAgentReviewOpportunityRecoveryEvent =
+  typeof tokenlessAgentReviewOpportunityRecoveryEvents.$inferInsert;
+
 export type TokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferSelect;
 export type NewTokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferInsert;
 
