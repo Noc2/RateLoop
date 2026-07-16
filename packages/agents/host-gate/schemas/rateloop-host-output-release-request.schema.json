@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-host-output-release-request.v1.json",
+  "title": "RateLoop host output release request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "releaseId",
+    "hostId",
+    "sessionId",
+    "turnId",
+    "gateId",
+    "workspaceId",
+    "integrationId",
+    "opportunityId",
+    "decision",
+    "outputCommitment",
+    "policyBindingHash",
+    "scopeCommitment",
+    "nonce",
+    "createdAt",
+    "expiresAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "rateloop.host-output-release-request.v1" },
+    "releaseId": { "$ref": "#/$defs/opaqueId" },
+    "hostId": { "$ref": "#/$defs/opaqueId" },
+    "sessionId": { "$ref": "#/$defs/localId" },
+    "turnId": { "$ref": "#/$defs/localId" },
+    "gateId": { "$ref": "#/$defs/opaqueId" },
+    "workspaceId": { "$ref": "#/$defs/opaqueId" },
+    "integrationId": { "$ref": "#/$defs/opaqueId" },
+    "opportunityId": { "$ref": "#/$defs/opaqueId" },
+    "decision": { "enum": ["satisfied", "skipped"] },
+    "outputCommitment": { "$ref": "#/$defs/commitment" },
+    "policyBindingHash": { "$ref": "#/$defs/commitment" },
+    "scopeCommitment": { "$ref": "#/$defs/commitment" },
+    "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{32,128}$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "localId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+    "opaqueId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,200}$" },
+    "commitment": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

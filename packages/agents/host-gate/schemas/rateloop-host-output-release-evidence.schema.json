@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-host-output-release-evidence.v1.json",
+  "title": "RateLoop signed host output release evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "keyId", "payload", "signature"],
+  "properties": {
+    "schemaVersion": { "const": "rateloop.host-output-release-evidence.v1" },
+    "keyId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "releaseId",
+        "workspaceId",
+        "integrationId",
+        "opportunityId",
+        "decision",
+        "terminalStatus",
+        "outputCommitment",
+        "policyBindingHash",
+        "scopeCommitment",
+        "hostBindingCommitment",
+        "issuedAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "rateloop.host-output-release-payload.v1" },
+        "releaseId": { "$ref": "#/$defs/opaqueId" },
+        "workspaceId": { "$ref": "#/$defs/opaqueId" },
+        "integrationId": { "$ref": "#/$defs/opaqueId" },
+        "opportunityId": { "$ref": "#/$defs/opaqueId" },
+        "decision": { "enum": ["satisfied", "skipped"] },
+        "terminalStatus": { "enum": ["completed", "inconclusive", "skipped"] },
+        "outputCommitment": { "$ref": "#/$defs/commitment" },
+        "policyBindingHash": { "$ref": "#/$defs/commitment" },
+        "scopeCommitment": { "$ref": "#/$defs/commitment" },
+        "hostBindingCommitment": { "$ref": "#/$defs/commitment" },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "decision": { "const": "skipped" } },
+            "required": ["decision"]
+          },
+          "then": { "properties": { "terminalStatus": { "const": "skipped" } } }
+        },
+        {
+          "if": {
+            "properties": { "decision": { "const": "satisfied" } },
+            "required": ["decision"]
+          },
+          "then": {
+            "properties": {
+              "terminalStatus": { "enum": ["completed", "inconclusive"] }
+            }
+          }
+        }
+      ]
+    },
+    "signature": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
+  },
+  "$defs": {
+    "opaqueId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,200}$" },
+    "commitment": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
