@@ -22,7 +22,7 @@
         {
           "name": "mapping-hash",
           "ns": "https://rateloop.ai/ns/oscal",
-          "value": "sha256:629b2cfdecc3a176c5b09ef95f2c65f15cc2428cf6569a797e5d622f43186dbc"
+          "value": "sha256:225fbd3e0e9236e644dc593c345712d656cb8151dcff67353ac9bdaaee1acc88"
         },
         {
           "name": "claim-boundary",
@@ -56,7 +56,7 @@
           {
             "name": "mapping-hash",
             "ns": "https://rateloop.ai/ns/oscal",
-            "value": "sha256:629b2cfdecc3a176c5b09ef95f2c65f15cc2428cf6569a797e5d622f43186dbc"
+            "value": "sha256:225fbd3e0e9236e644dc593c345712d656cb8151dcff67353ac9bdaaee1acc88"
           },
           {
             "name": "claim-boundary",
@@ -685,7 +685,7 @@
               {
                 "uuid": "e4e7b5e2-8c2e-590e-8e9a-2de97fdae8ff",
                 "control-id": "sec-rule-17a-4-f",
-                "description": "The listed RateLoop artifacts support evidence for integrity-checkable review and audit exports that may be delivered into a broker-dealer's separately compliant electronic recordkeeping system. RateLoop does not currently provide the broker-dealer's Rule 17a-4 recordkeeping system, audit-trail alternative, WORM storage, undertakings, or required production process.",
+                "description": "The listed RateLoop artifacts support evidence for integrity-checkable review and audit exports that may be delivered into a broker-dealer's separately compliant electronic recordkeeping system. An S3 Object Lock delivery target does not by itself provide the broker-dealer's Rule 17a-4 recordkeeping system, audit-trail alternative, undertakings, or required production process.",
                 "props": [
                   {
                     "name": "reference",
@@ -706,6 +706,11 @@
                     "name": "evidence-artifact",
                     "ns": "https://rateloop.ai/ns/oscal",
                     "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "s3-object-lock-delivery-receipt"
                   }
                 ],
                 "links": [
@@ -718,6 +723,11 @@
                     "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
                     "rel": "evidence",
                     "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#81852052-5b2e-516a-9578-b9f8f534a378",
+                    "rel": "evidence",
+                    "text": "S3 Object Lock delivery receipt"
                   }
                 ]
               }
@@ -832,7 +842,7 @@
             }
           ],
           "citation": {
-            "text": "Official electronic Code of Federal Regulations text for 17 CFR 240.17a-4. RateLoop does not provide a broker-dealer's required recordkeeping system or WORM storage target."
+            "text": "Official electronic Code of Federal Regulations text for 17 CFR 240.17a-4. RateLoop can deliver exports to a customer-controlled S3 Object Lock target, but does not provide the broker-dealer's required recordkeeping system."
           },
           "rlinks": [
             {
@@ -923,6 +933,23 @@
               "name": "schema-version",
               "ns": "https://rateloop.ai/ns/oscal",
               "value": "rateloop.execution-evidence.v1"
+            }
+          ]
+        },
+        {
+          "uuid": "81852052-5b2e-516a-9578-b9f8f534a378",
+          "title": "S3 Object Lock delivery receipt",
+          "description": "A provider receipt for an integrity-checked export delivered to a customer-controlled S3 Object Lock destination with the configured retention mode and deadline.",
+          "props": [
+            {
+              "name": "artifact-id",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "s3-object-lock-delivery-receipt"
+            },
+            {
+              "name": "schema-version",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "rateloop.assurance-worm-provider-receipt.v1"
             }
           ]
         }

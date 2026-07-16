@@ -55,6 +55,14 @@ export const assuranceComplianceMap = Object.freeze({
         "packages/nextjs/lib/tokenless/agentExecutionProvenance.ts",
       ],
     },
+    {
+      id: "s3-object-lock-delivery-receipt",
+      title: "S3 Object Lock delivery receipt",
+      schemaVersion: "rateloop.assurance-worm-provider-receipt.v1",
+      description:
+        "A provider receipt for an integrity-checked export delivered to a customer-controlled S3 Object Lock destination with the configured retention mode and deadline.",
+      sourceLocations: ["packages/nextjs/lib/tokenless/assuranceWormExports.ts"],
+    },
   ],
   frameworks: [
     {
@@ -121,7 +129,7 @@ export const assuranceComplianceMap = Object.freeze({
       title: "SEC Exchange Act Rule 17a-4",
       namespace: "https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4#",
       citation:
-        "Official electronic Code of Federal Regulations text for 17 CFR 240.17a-4. RateLoop does not provide a broker-dealer's required recordkeeping system or WORM storage target.",
+        "Official electronic Code of Federal Regulations text for 17 CFR 240.17a-4. RateLoop can deliver exports to a customer-controlled S3 Object Lock target, but does not provide the broker-dealer's required recordkeeping system.",
       sources: [
         {
           href: "https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4",
@@ -263,9 +271,13 @@ export const assuranceComplianceMap = Object.freeze({
       reference: "17 CFR 240.17a-4(f)",
       evidencePurpose:
         "integrity-checkable review and audit exports that may be delivered into a broker-dealer's separately compliant electronic recordkeeping system",
-      evidenceArtifactIds: ["workspace-audit-export", "signed-assurance-evidence-packet"],
+      evidenceArtifactIds: [
+        "workspace-audit-export",
+        "signed-assurance-evidence-packet",
+        "s3-object-lock-delivery-receipt",
+      ],
       nonClaim:
-        "RateLoop does not currently provide the broker-dealer's Rule 17a-4 recordkeeping system, audit-trail alternative, WORM storage, undertakings, or required production process.",
+        "An S3 Object Lock delivery target does not by itself provide the broker-dealer's Rule 17a-4 recordkeeping system, audit-trail alternative, undertakings, or required production process.",
     },
   ],
 });
