@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-stop-gate-state.v1.json",
+  "title": "RateLoop Codex Stop gate state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "armed", "sessionId"],
+  "properties": {
+    "schemaVersion": {
+      "const": "rateloop.stop-gate.v1"
+    },
+    "armed": {
+      "type": "boolean"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "turnId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "gateId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+    },
+    "opportunityId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+    },
+    "lifecycle": {
+      "enum": ["approval_required", "request_ready", "pending", "blocked"]
+    },
+    "outputCommitment": {
+      "$ref": "#/$defs/sha256"
+    },
+    "policyBindingHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "armedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "terminalEvidence": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/terminalEvidence"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "armed": {
+            "const": true
+          }
+        },
+        "required": ["armed"]
+      },
+      "then": {
+        "required": [
+          "turnId",
+          "gateId",
+          "opportunityId",
+          "lifecycle",
+          "outputCommitment",
+          "policyBindingHash",
+          "armedAt",
+          "expiresAt",
+          "terminalEvidence"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "required": ["turnId"] },
+            { "required": ["gateId"] },
+            { "required": ["opportunityId"] },
+            { "required": ["lifecycle"] },
+            { "required": ["outputCommitment"] },
+            { "required": ["policyBindingHash"] },
+            { "required": ["armedAt"] },
+            { "required": ["expiresAt"] },
+            { "required": ["terminalEvidence"] }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "terminalEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "gateId",
+        "sessionId",
+        "opportunityId",
+        "terminalStatus",
+        "outputCommitment",
+        "policyBindingHash",
+        "issuedAt",
+        "keyId",
+        "signature"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "rateloop.stop-gate-terminal.v1"
+        },
+        "gateId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+        },
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "opportunityId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+        },
+        "terminalStatus": {
+          "enum": ["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"]
+        },
+        "outputCommitment": {
+          "$ref": "#/$defs/sha256"
+        },
+        "policyBindingHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "issuedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "keyId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      }
+    }
+  }
+}

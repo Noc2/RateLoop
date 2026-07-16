@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "rateloop.stop-gate.v1",
+  "armed": true,
+  "sessionId": "session_fixture_01",
+  "turnId": "turn_fixture_01",
+  "gateId": "gate_fixture_0001",
+  "opportunityId": "opportunity_fixture_0001",
+  "lifecycle": "pending",
+  "outputCommitment": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "policyBindingHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "armedAt": "2025-01-01T00:00:00.000Z",
+  "expiresAt": "2025-01-02T00:00:00.000Z",
+  "terminalEvidence": null
+}
