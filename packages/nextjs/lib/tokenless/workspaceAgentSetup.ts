@@ -47,6 +47,10 @@ function rowNumber(row: Row | undefined, key: string) {
   return Number.isSafeInteger(value) ? value : null;
 }
 
+function rowOptionalNumber(row: Row | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : rowNumber(row, key);
+}
+
 function rowDate(row: Row | undefined, key: string) {
   const value = row?.[key];
   if (value === null || value === undefined) return null;
@@ -485,9 +489,9 @@ export async function confirmWorkspaceSetupAgent(input: {
       await client.query(
         `INSERT INTO tokenless_agent_review_policies
          (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,agreement_threshold_bps,
-          production_floor_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
+          production_floor_bps,fixed_rate_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
           created_by,approved_by,created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,$12,$13,$13,$14)`,
+         VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15)`,
         [
           reviewPolicyId,
           reviewPolicyVersion,
@@ -497,6 +501,7 @@ export async function confirmWorkspaceSetupAgent(input: {
           rowString(policy, "mode"),
           rowNumber(policy, "agreement_threshold_bps"),
           rowNumber(policy, "production_floor_bps"),
+          rowOptionalNumber(policy, "fixed_rate_bps"),
           rowNumber(policy, "maximum_unreviewed_gap"),
           String(policy.rules_json),
           String(policy.audience_policy_json),
@@ -769,9 +774,9 @@ export async function completeWorkspaceAgentSetup(input: {
     await client.query(
       `INSERT INTO tokenless_agent_review_policies
        (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,agreement_threshold_bps,
-        production_floor_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
+        production_floor_bps,fixed_rate_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
         created_by,approved_by,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,NULL,$12,$12,$13)`,
+       VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,CASE WHEN $6='fixed' THEN $9 ELSE NULL END,$10,$11,$12,NULL,$13,$13,$14)`,
       [
         policyId,
         policyVersion,
@@ -781,6 +786,7 @@ export async function completeWorkspaceAgentSetup(input: {
         draft.mode,
         rowNumber(currentPolicy, "agreement_threshold_bps") ?? DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS,
         rowNumber(currentPolicy, "production_floor_bps") ?? 1_000,
+        rowOptionalNumber(currentPolicy, "fixed_rate_bps"),
         rowNumber(currentPolicy, "maximum_unreviewed_gap") ?? 20,
         String(currentPolicy.rules_json),
         JSON.stringify(audiencePolicy),

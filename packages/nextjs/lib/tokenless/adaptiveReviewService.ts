@@ -17,6 +17,7 @@ import {
   type NormalizedAgentExecutionProvenance,
   normalizeAgentExecutionProvenance,
 } from "~~/lib/tokenless/agentExecutionProvenance";
+import { decideFixedReview } from "~~/lib/tokenless/fixedReview";
 import {
   type ProductPrincipal,
   authenticateProductPrincipal,
@@ -38,9 +39,10 @@ type ReviewPolicyRow = {
   policyVersion: number;
   agentId: string;
   agentVersionId: string;
-  mode: "manual" | "always" | "rules" | "adaptive";
+  mode: "manual" | "always" | "rules" | "adaptive" | "fixed";
   agreementThresholdBps: number;
   productionFloorBps: number;
+  fixedRateBps: number | null;
   maximumUnreviewedGap: number;
   rules: ReviewRules;
   audiencePolicyHash: string;
@@ -142,6 +144,10 @@ function rowInteger(row: QueryRow | undefined, key: string) {
   const value = Number(row?.[key]);
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Database returned an invalid ${key}.`);
   return value;
+}
+
+function rowOptionalInteger(row: QueryRow | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : rowInteger(row, key);
 }
 
 function rowBoolean(row: QueryRow | undefined, key: string) {
@@ -315,10 +321,20 @@ function policyFromRow(row: QueryRow | undefined): ReviewPolicyRow {
   const agentId = rowString(row, "agent_id");
   const agentVersionId = rowString(row, "agent_version_id");
   const mode = rowString(row, "mode") as ReviewPolicyRow["mode"] | null;
-  if (!policyId || !agentId || !agentVersionId || !mode || !["manual", "always", "rules", "adaptive"].includes(mode)) {
+  if (
+    !policyId ||
+    !agentId ||
+    !agentVersionId ||
+    !mode ||
+    !["manual", "always", "rules", "adaptive", "fixed"].includes(mode)
+  ) {
     throw new TokenlessServiceError("Review policy not found.", 404, "review_policy_not_found");
   }
   const audiencePolicy = parseJson(row?.audience_policy_json, "audience policy");
+  const fixedRateBps = rowOptionalInteger(row, "fixed_rate_bps");
+  if ((mode === "fixed") !== (fixedRateBps !== null) || (fixedRateBps !== null && fixedRateBps < 1)) {
+    throw new Error("Database returned an invalid fixed review rate.");
+  }
   return {
     policyId,
     policyVersion: rowInteger(row, "version"),
@@ -327,6 +343,7 @@ function policyFromRow(row: QueryRow | undefined): ReviewPolicyRow {
     mode,
     agreementThresholdBps: rowInteger(row, "agreement_threshold_bps"),
     productionFloorBps: rowInteger(row, "production_floor_bps"),
+    fixedRateBps,
     maximumUnreviewedGap: rowInteger(row, "maximum_unreviewed_gap"),
     rules: parseRules(row?.rules_json),
     audiencePolicyHash: sha256(audiencePolicy),
@@ -531,7 +548,7 @@ async function refreshScopeState(
 async function loadPolicy(client: PoolClient, workspaceId: string, request: ReturnType<typeof normalizeRequest>) {
   const result = await client.query(
     `SELECT p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
-            p.agreement_threshold_bps, p.production_floor_bps, p.maximum_unreviewed_gap,
+            p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
             p.rules_json, p.audience_policy_json
      FROM tokenless_agent_review_policies p
      JOIN tokenless_agents a
@@ -570,6 +587,29 @@ function decisionForMode(input: {
   const metadataComplete =
     input.request.metadataComplete &&
     (input.policy.rules.minimumConfidenceBps === null || input.request.declaredConfidenceBps !== null);
+  if (input.policy.mode === "fixed") {
+    if (input.policy.fixedRateBps === null) throw new Error("Fixed review rate is unavailable.");
+    const fixed = decideFixedReview({
+      samplerKey: input.sampler.key,
+      samplerKeyVersion: input.sampler.version,
+      opportunityId: input.request.externalOpportunityId,
+      scopeId: input.scope.scopeId,
+      policy: {
+        policyVersion: input.policy.policyVersion,
+        fixedRateBps: input.policy.fixedRateBps,
+        maximumUnreviewedGap: input.policy.maximumUnreviewedGap,
+      },
+      state: input.scope,
+      criticalRisk,
+      metadataComplete,
+      confidenceBelowMinimum,
+    });
+    return {
+      ...fixed,
+      decision: fixed.required ? ("required" as const) : ("skip" as const),
+      criticalRisk,
+    };
+  }
   const sampledDecision = decideAdaptiveReview({
     samplerKey: input.sampler.key,
     samplerKeyVersion: input.sampler.version,
@@ -706,14 +746,21 @@ async function assuranceState(
     policyId: input.policy.policyId,
     policyVersion: input.policy.policyVersion,
     stage: input.scope.stage,
-    reviewRateBps: input.policy.mode === "always" ? 10_000 : input.policy.mode === "manual" ? 0 : rate,
+    reviewRateBps:
+      input.policy.mode === "always"
+        ? 10_000
+        : input.policy.mode === "fixed"
+          ? (input.policy.fixedRateBps ?? 0)
+          : input.policy.mode === "adaptive"
+            ? rate
+            : 0,
     completedComparableCases: input.scope.completedComparableCases,
     stableCasesSinceStage: input.scope.stableCasesSinceStage,
     reviewedOpportunityCount: metrics.reviewed,
     skippedOpportunityCount: metrics.skipped,
     humanAgreementBps: metrics.humanAgreementBps,
     humanAgreementLower95Bps: metrics.humanAgreementLower95Bps,
-    nextReassessmentAfter: nextReassessmentAfter(input.scope),
+    nextReassessmentAfter: input.policy.mode === "adaptive" ? nextReassessmentAfter(input.scope) : 0,
     executionProfileHash: input.scope.executionProfileHash,
     executionProfile: input.scope.executionProfile,
   };
@@ -989,8 +1036,10 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     );
     if (scopeResult.rowCount !== 1) throw new Error("Adaptive scope could not be locked.");
     let scope = scopeFromRow(scopeResult.rows[0] as QueryRow);
-    const metadataReset = !request.metadataComplete && scope.stage !== "calibrating" ? "missing_metadata" : null;
-    scope = await refreshScopeState(client, { workspaceId, scope, policy, resetReason: metadataReset });
+    if (policy.mode === "adaptive") {
+      const metadataReset = !request.metadataComplete && scope.stage !== "calibrating" ? "missing_metadata" : null;
+      scope = await refreshScopeState(client, { workspaceId, scope, policy, resetReason: metadataReset });
+    }
 
     const existing = await client.query(
       `SELECT * FROM tokenless_agent_review_opportunities
@@ -1113,7 +1162,7 @@ export async function getAdaptiveAssuranceState(input: {
                  s.unreviewed_since_last_sample, s.stage_entered_at,
                  s.execution_profile_hash, s.execution_profile_json,
                  p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
-                 p.agreement_threshold_bps, p.production_floor_bps, p.maximum_unreviewed_gap,
+                 p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
                  p.rules_json, p.audience_policy_json
           FROM tokenless_agent_evaluation_scopes s
           JOIN tokenless_agent_review_policies p

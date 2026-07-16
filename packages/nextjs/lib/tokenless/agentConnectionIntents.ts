@@ -524,9 +524,9 @@ export async function claimAgentConnectionIntent(input: {
     await client.query(
       `INSERT INTO tokenless_agent_review_policies
        (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,agreement_threshold_bps,
-        production_floor_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
+        production_floor_bps,fixed_rate_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
         created_by,approved_by,created_at)
-       VALUES ($1,1,$2,$3,$4,'adaptive',true,${DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS},1000,20,$5,$6,NULL,$7,$7,$8)`,
+       VALUES ($1,1,$2,$3,$4,'adaptive',true,${DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS},1000,NULL,20,$5,$6,NULL,$7,$7,$8)`,
       [
         reviewPolicyId,
         workspaceId,

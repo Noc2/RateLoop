@@ -87,6 +87,10 @@ function integer(row: Row | undefined, key: string) {
   return value;
 }
 
+function optionalInteger(row: Row | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : integer(row, key);
+}
+
 function iso(value: unknown) {
   if (value === null || value === undefined) return null;
   const date = value instanceof Date ? value : new Date(String(value));
@@ -660,7 +664,7 @@ async function insertApproval(
   );
   const audience = JSON.stringify({ reviewerSource: "private_invited" });
   await client.query(
-    `INSERT INTO tokenless_agent_review_policies (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled, agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json, audience_policy_json, publishing_policy_id, created_by, approved_by, created_at) VALUES ($1,1,$2,$3,$4,'adaptive',true,${DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS},1000,20,$5,$6,$7,$8,$8,$9)`,
+    `INSERT INTO tokenless_agent_review_policies (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled, agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap, rules_json, audience_policy_json, publishing_policy_id, created_by, approved_by, created_at) VALUES ($1,1,$2,$3,$4,'adaptive',true,${DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS},1000,NULL,20,$5,$6,$7,$8,$8,$9)`,
     [
       reviewPolicyId,
       input.workspaceId,
@@ -977,9 +981,9 @@ export async function activateAgentIntegrationPublishing(input: {
       await client.query(
         `INSERT INTO tokenless_agent_review_policies
          (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,
-          agreement_threshold_bps,production_floor_bps,maximum_unreviewed_gap,rules_json,
+          agreement_threshold_bps,production_floor_bps,fixed_rate_bps,maximum_unreviewed_gap,rules_json,
           audience_policy_json,publishing_policy_id,created_by,approved_by,created_at,superseded_at)
-         VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,$12,$13,$13,$14,NULL)`,
+         VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,NULL)`,
         [
           reviewPolicyId,
           reviewPolicyVersion,
@@ -989,6 +993,7 @@ export async function activateAgentIntegrationPublishing(input: {
           text(review, "mode"),
           integer(review, "agreement_threshold_bps"),
           integer(review, "production_floor_bps"),
+          optionalInteger(review, "fixed_rate_bps"),
           integer(review, "maximum_unreviewed_gap"),
           String(review.rules_json),
           String(review.audience_policy_json),

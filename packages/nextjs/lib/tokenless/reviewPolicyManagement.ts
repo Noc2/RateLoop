@@ -7,7 +7,7 @@ import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const REVIEW_POLICY_MODES = ["manual", "always", "rules", "adaptive"] as const;
+export const REVIEW_POLICY_MODES = ["manual", "always", "rules", "adaptive", "fixed"] as const;
 export type ReviewPolicyMode = (typeof REVIEW_POLICY_MODES)[number];
 export const REVIEW_ENFORCEMENT_MODES = ["advisory", "host_enforced"] as const;
 export type ReviewEnforcementMode = (typeof REVIEW_ENFORCEMENT_MODES)[number];
@@ -23,6 +23,7 @@ export type ManagedReviewPolicyInput = {
   enforcementMode: ReviewEnforcementMode;
   agreementThresholdBps: number;
   productionFloorBps: number;
+  fixedRateBps?: number | null;
   maximumUnreviewedGap: number;
   requiredRiskTiers: string[];
   criticalRiskTiers: string[];
@@ -54,6 +55,7 @@ export type ManagedReviewPolicy = {
   enabled: boolean;
   agreementThresholdBps: number;
   productionFloorBps: number;
+  fixedRateBps: number | null;
   maximumUnreviewedGap: number;
   requiredRiskTiers: string[];
   criticalRiskTiers: string[];
@@ -91,6 +93,10 @@ function rowInteger(row: QueryRow | undefined, key: string) {
   const value = Number(row?.[key]);
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Database returned an invalid ${key}.`);
   return value;
+}
+
+function rowOptionalInteger(row: QueryRow | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : rowInteger(row, key);
 }
 
 function rowBoolean(row: QueryRow | undefined, key: string) {
@@ -155,6 +161,7 @@ function normalizeInput(value: unknown): ManagedReviewPolicyInput {
     "enforcementMode",
     "agreementThresholdBps",
     "productionFloorBps",
+    "fixedRateBps",
     "maximumUnreviewedGap",
     "requiredRiskTiers",
     "criticalRiskTiers",
@@ -180,7 +187,7 @@ function normalizeInput(value: unknown): ManagedReviewPolicyInput {
   }
   if (mode === "manual" && enforcementMode === "host_enforced") {
     throw new TokenlessServiceError(
-      "Manual handoffs are advisory. Choose always, rules, or adaptive for host enforcement.",
+      "Manual handoffs are advisory. Choose always, rules, fixed, or adaptive for host enforcement.",
       400,
       "invalid_review_policy",
     );
@@ -197,6 +204,17 @@ function normalizeInput(value: unknown): ManagedReviewPolicyInput {
       400,
       "invalid_review_policy",
     );
+  }
+  const requestedFixedRateBps = optionalBps(input.fixedRateBps, "fixedRateBps");
+  if (mode === "fixed" && (requestedFixedRateBps === null || requestedFixedRateBps < 1)) {
+    throw new TokenlessServiceError(
+      "fixedRateBps must be between 1 and 10000 for fixed review.",
+      400,
+      "invalid_review_policy",
+    );
+  }
+  if (mode !== "fixed" && requestedFixedRateBps !== null) {
+    throw new TokenlessServiceError("fixedRateBps is only valid for fixed review.", 400, "invalid_review_policy");
   }
   if (
     !Number.isSafeInteger(input.maximumUnreviewedGap) ||
@@ -220,6 +238,7 @@ function normalizeInput(value: unknown): ManagedReviewPolicyInput {
     enforcementMode,
     agreementThresholdBps,
     productionFloorBps,
+    fixedRateBps: mode === "fixed" ? requestedFixedRateBps : null,
     maximumUnreviewedGap: Number(input.maximumUnreviewedGap),
     requiredRiskTiers: normalizeRiskTiers(input.requiredRiskTiers, "requiredRiskTiers"),
     criticalRiskTiers: normalizeRiskTiers(input.criticalRiskTiers, "criticalRiskTiers"),
@@ -289,7 +308,12 @@ function sha256(value: string) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
-function scopeFromRow(row: QueryRow, mode: ReviewPolicyMode, floorBps: number): ManagedReviewScope {
+function scopeFromRow(
+  row: QueryRow,
+  mode: ReviewPolicyMode,
+  floorBps: number,
+  fixedRateBps: number | null,
+): ManagedReviewScope {
   const stage = rowString(row, "stage") as AdaptiveReviewStage | null;
   const scopeId = rowString(row, "scope_id");
   const workflowKey = rowString(row, "workflow_key");
@@ -309,7 +333,11 @@ function scopeFromRow(row: QueryRow, mode: ReviewPolicyMode, floorBps: number): 
         ? 10_000
         : mode === "manual"
           ? 0
-          : Math.max(STAGE_RATE_BPS[stage], mode === "adaptive" ? floorBps : 0),
+          : mode === "fixed"
+            ? (fixedRateBps ?? 0)
+            : mode === "adaptive"
+              ? Math.max(STAGE_RATE_BPS[stage], floorBps)
+              : 0,
     updatedAt: iso(row.updated_at, "scope update timestamp"),
   };
 }
@@ -334,6 +362,10 @@ function policyFromRow(row: QueryRow, scopeRows: QueryRow[]): ManagedReviewPolic
   }
   if (!REVIEW_AUDIENCES.includes(audience)) throw new Error("Database returned an invalid review audience.");
   const productionFloorBps = rowInteger(row, "production_floor_bps");
+  const fixedRateBps = rowOptionalInteger(row, "fixed_rate_bps");
+  if ((mode === "fixed") !== (fixedRateBps !== null) || (fixedRateBps !== null && fixedRateBps < 1)) {
+    throw new Error("Database returned an invalid fixed review rate.");
+  }
   return {
     policyId,
     version: rowInteger(row, "version"),
@@ -345,6 +377,7 @@ function policyFromRow(row: QueryRow, scopeRows: QueryRow[]): ManagedReviewPolic
     enabled: rowBoolean(row, "enabled"),
     agreementThresholdBps: rowInteger(row, "agreement_threshold_bps"),
     productionFloorBps,
+    fixedRateBps,
     maximumUnreviewedGap: rowInteger(row, "maximum_unreviewed_gap"),
     requiredRiskTiers: stringArray(rules.requiredRiskTiers ?? [], "required risk tiers"),
     criticalRiskTiers: stringArray(rules.criticalRiskTiers ?? [], "critical risk tiers"),
@@ -361,11 +394,18 @@ function policyFromRow(row: QueryRow, scopeRows: QueryRow[]): ManagedReviewPolic
     approvedBy,
     createdAt: iso(row.created_at, "policy creation timestamp"),
     supersededAt: row.superseded_at ? iso(row.superseded_at, "policy supersession timestamp") : null,
-    scopes: scopeRows.map(scope => scopeFromRow(scope, mode, productionFloorBps)),
+    scopes: scopeRows.map(scope => scopeFromRow(scope, mode, productionFloorBps, fixedRateBps)),
     safetyFloors: {
       criticalRiskRequiresReview: mode !== "manual",
       missingMetadataRequiresReview: mode !== "manual",
-      minimumReviewRateBps: mode === "always" ? 10_000 : mode === "adaptive" ? Math.max(1_000, productionFloorBps) : 0,
+      minimumReviewRateBps:
+        mode === "always"
+          ? 10_000
+          : mode === "adaptive"
+            ? Math.max(1_000, productionFloorBps)
+            : mode === "fixed"
+              ? (fixedRateBps ?? 0)
+              : 0,
     },
   };
 }
@@ -374,7 +414,7 @@ async function loadPolicies(workspaceId: string) {
   const [policies, scopes] = await Promise.all([
     dbClient.execute({
       sql: `SELECT policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
-                   agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json,
+                   agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap, rules_json,
                    audience_policy_json, publishing_policy_id, created_by, approved_by, created_at, superseded_at
             FROM tokenless_agent_review_policies
             WHERE workspace_id = ? AND superseded_at IS NULL
@@ -450,9 +490,9 @@ export async function createManagedReviewPolicy(input: {
     await client.query(
       `INSERT INTO tokenless_agent_review_policies
        (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
-        agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json,
+        agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap, rules_json,
         audience_policy_json, publishing_policy_id, created_by, approved_by, created_at, superseded_at)
-       VALUES ($1, 1, $2, $3, $4, $5, true, $6, $7, $8, $9, $10, $11, $12, $12, $13, NULL)`,
+       VALUES ($1, 1, $2, $3, $4, $5, true, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, NULL)`,
       [
         policyId,
         input.workspaceId,
@@ -461,6 +501,7 @@ export async function createManagedReviewPolicy(input: {
         policy.mode,
         policy.agreementThresholdBps,
         policy.productionFloorBps,
+        policy.fixedRateBps,
         policy.maximumUnreviewedGap,
         rulesJson(policy),
         audienceJson(policy),
@@ -534,9 +575,9 @@ export async function updateManagedReviewPolicy(input: {
     await client.query(
       `INSERT INTO tokenless_agent_review_policies
        (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
-        agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json,
+        agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap, rules_json,
         audience_policy_json, publishing_policy_id, created_by, approved_by, created_at, superseded_at)
-       VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $13, $14, NULL)`,
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $14, $14, $15, NULL)`,
       [
         input.policyId,
         nextVersion,
@@ -546,6 +587,7 @@ export async function updateManagedReviewPolicy(input: {
         policy.mode,
         policy.agreementThresholdBps,
         policy.productionFloorBps,
+        policy.fixedRateBps,
         policy.maximumUnreviewedGap,
         rulesJson(policy),
         audienceJson(policy),

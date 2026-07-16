@@ -327,6 +327,32 @@ test("agent registry returns source-derived human-assurance evidence without poo
   });
   assert.equal(legacyEvidence.executionCount, 0);
   assert.equal(legacyEvidence.averageTotalDurationMs, null);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies
+          SET mode = 'fixed', production_floor_bps = 0, fixed_rate_bps = 1234
+          WHERE policy_id = ? AND version = 1`,
+    args: [policyId],
+  });
+  const fixedEvidence = (
+    await listWorkspaceAgents({ accountAddress: OWNER, workspaceId })
+  ).agents[0]?.assuranceScopes.find(scope => scope.scopeId === scopeId);
+  assert.equal(fixedEvidence?.reviewRateBps, 1_234);
+  assert.equal(fixedEvidence?.nextReassessmentAfter, 0);
+
+  for (const mode of ["rules", "manual"] as const) {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_agent_review_policies
+            SET mode = ?, fixed_rate_bps = NULL
+            WHERE policy_id = ? AND version = 1`,
+      args: [mode, policyId],
+    });
+    const nonAdaptiveEvidence = (
+      await listWorkspaceAgents({ accountAddress: OWNER, workspaceId })
+    ).agents[0]?.assuranceScopes.find(scope => scope.scopeId === scopeId);
+    assert.equal(nonAdaptiveEvidence?.reviewRateBps, 0);
+    assert.equal(nonAdaptiveEvidence?.nextReassessmentAfter, 0);
+  }
 });
 
 test("workspace roles permit authorized reads while restricting registry mutations to owners and admins", async () => {

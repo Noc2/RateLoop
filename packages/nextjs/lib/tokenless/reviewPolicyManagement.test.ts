@@ -149,6 +149,68 @@ test("unsafe or misleading policy combinations fail closed", async () => {
   );
 });
 
+test("fixed policies require and persist one exact basis-point rate", async () => {
+  const { workspaceId, agent } = await fixture();
+  const base = adaptivePolicy(agent.agentId, agent.currentVersion.versionId);
+  const fixed = {
+    ...base,
+    mode: "fixed",
+    fixedRateBps: 2_500,
+  };
+
+  const created = await createManagedReviewPolicy({ accountAddress: OWNER, workspaceId, policy: fixed });
+  assert.equal(created.mode, "fixed");
+  assert.equal(created.fixedRateBps, 2_500);
+  assert.equal(created.productionFloorBps, 0);
+  assert.equal(created.safetyFloors.minimumReviewRateBps, 2_500);
+
+  const stored = await dbClient.execute({
+    sql: `SELECT mode, fixed_rate_bps, maximum_unreviewed_gap
+          FROM tokenless_agent_review_policies WHERE workspace_id = ? AND policy_id = ?`,
+    args: [workspaceId, created.policyId],
+  });
+  assert.equal(stored.rows[0]?.mode, "fixed");
+  assert.equal(stored.rows[0]?.fixed_rate_bps, 2_500);
+  assert.equal(stored.rows[0]?.maximum_unreviewed_gap, 20);
+
+  assert.throws(() => __reviewPolicyManagementTestUtils.normalizeInput({ ...base, mode: "fixed" }), /fixedRateBps/);
+  assert.throws(
+    () => __reviewPolicyManagementTestUtils.normalizeInput({ ...base, mode: "fixed", fixedRateBps: 0 }),
+    /between 1 and 10000/,
+  );
+  assert.throws(
+    () => __reviewPolicyManagementTestUtils.normalizeInput({ ...base, fixedRateBps: 2_500 }),
+    /only valid for fixed review/,
+  );
+});
+
+test("the database rejects missing or misplaced fixed rates", async () => {
+  const { workspaceId, agent } = await fixture();
+  const insert = (policyId: string, mode: string, fixedRateBps: number | null) =>
+    dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_policies
+            (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
+             agreement_threshold_bps, production_floor_bps, fixed_rate_bps, maximum_unreviewed_gap,
+             rules_json, audience_policy_json, publishing_policy_id, created_by, approved_by, created_at)
+            VALUES (?, 1, ?, ?, ?, ?, true, 9000, 1000, ?, 20, '{}', ?, NULL, ?, ?, ?)`,
+      args: [
+        policyId,
+        workspaceId,
+        agent.agentId,
+        agent.currentVersion.versionId,
+        mode,
+        fixedRateBps,
+        JSON.stringify({ reviewerSource: "private_invited" }),
+        OWNER,
+        OWNER,
+        new Date(),
+      ],
+    });
+
+  await assert.rejects(() => insert("missing_fixed_rate", "fixed", null));
+  await assert.rejects(() => insert("misplaced_fixed_rate", "adaptive", 2_500));
+});
+
 test("members cannot read, mutate, or disable workspace review policies", async () => {
   const { workspaceId, agent } = await fixture();
   await dbClient.execute({

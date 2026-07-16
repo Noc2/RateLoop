@@ -137,6 +137,10 @@ function rowInteger(row: QueryRow | undefined, key: string) {
   return value;
 }
 
+function rowOptionalInteger(row: QueryRow | undefined, key: string) {
+  return row?.[key] === null || row?.[key] === undefined ? null : rowInteger(row, key);
+}
+
 function rowNullableNumber(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
   if (value === null || value === undefined) return null;
@@ -334,7 +338,7 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
       sql: `SELECT s.scope_id, s.agent_id, s.agent_version_id, s.policy_id, s.policy_version,
                    s.workflow_key, s.risk_tier, s.stage, s.completed_comparable_cases,
                    s.stable_cases_since_stage, s.execution_profile_hash, s.execution_profile_json,
-                   s.updated_at, p.mode, p.production_floor_bps
+                   s.updated_at, p.mode, p.production_floor_bps, p.fixed_rate_bps
             FROM tokenless_agent_evaluation_scopes s
             JOIN tokenless_agent_review_policies p
               ON p.workspace_id = s.workspace_id AND p.policy_id = s.policy_id AND p.version = s.policy_version
@@ -452,6 +456,14 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
     const completedComparableCases = rowInteger(row, "completed_comparable_cases");
     const stableCasesSinceStage = rowInteger(row, "stable_cases_since_stage");
     const productionFloorBps = rowInteger(row, "production_floor_bps");
+    const fixedRateBps = rowOptionalInteger(row, "fixed_rate_bps");
+    if (
+      !["manual", "always", "rules", "adaptive", "fixed"].includes(mode) ||
+      (mode === "fixed") !== (fixedRateBps !== null) ||
+      (fixedRateBps !== null && (fixedRateBps < 1 || fixedRateBps > 10_000))
+    ) {
+      throw new Error("Database returned an invalid assurance policy mode.");
+    }
     const opportunities = opportunityCounts.get(scopeId) ?? { reviewed: 0, skipped: 0 };
     const observations = observationCounts.get(scopeId) ?? { comparable: 0, agreements: 0 };
     const interval =
@@ -468,7 +480,13 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
       riskTier,
       stage,
       reviewRateBps:
-        mode === "always" ? 10_000 : mode === "manual" ? 0 : Math.max(ASSURANCE_STAGE_RATES[stage], productionFloorBps),
+        mode === "always"
+          ? 10_000
+          : mode === "adaptive"
+            ? Math.max(ASSURANCE_STAGE_RATES[stage], productionFloorBps)
+            : mode === "fixed"
+              ? (fixedRateBps ?? 0)
+              : 0,
       completedComparableCases,
       stableCasesSinceStage,
       reviewedOpportunityCount: opportunities.reviewed,
@@ -485,7 +503,8 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
       averageInputTokenTotal: rowNullableNumber(metrics, "average_input_token_total"),
       averageOutputTokenTotal: rowNullableNumber(metrics, "average_output_token_total"),
       averageReasoningOutputTokenTotal: rowNullableNumber(metrics, "average_reasoning_output_token_total"),
-      nextReassessmentAfter: nextReassessmentAfter(stage, completedComparableCases, stableCasesSinceStage),
+      nextReassessmentAfter:
+        mode === "adaptive" ? nextReassessmentAfter(stage, completedComparableCases, stableCasesSinceStage) : 0,
       lastTransition:
         transition && transitionType
           ? {

@@ -25,6 +25,7 @@ type PolicyDraft = {
   enforcementMode: ReviewEnforcementMode;
   agreementThresholdPercent: string;
   productionFloorPercent: string;
+  fixedRatePercent: string;
   maximumUnreviewedGap: string;
   requiredRiskTiers: string;
   criticalRiskTiers: string;
@@ -40,6 +41,7 @@ const INITIAL_DRAFT: PolicyDraft = {
   enforcementMode: "advisory",
   agreementThresholdPercent: String(DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS / 100),
   productionFloorPercent: "10",
+  fixedRatePercent: "10",
   maximumUnreviewedGap: "20",
   requiredRiskTiers: "high",
   criticalRiskTiers: "critical",
@@ -53,12 +55,14 @@ const MODE_COPY: Record<ReviewPolicyMode, string> = {
   always: "Every eligible output gets human review.",
   rules: "Higher-risk or incomplete work gets reviewed.",
   adaptive: "Review coverage falls only after stable human agreement.",
+  fixed: "A fixed percentage of eligible outputs gets reviewed.",
 };
 
 const REVIEW_PRESETS: Array<{ label: string; mode: ReviewPolicyMode }> = [
   { label: "Review everything", mode: "always" },
   { label: "Review higher-risk work", mode: "rules" },
   { label: "Adaptive review", mode: "adaptive" },
+  { label: "Review a fixed percentage", mode: "fixed" },
   { label: "Manual handoff only", mode: "manual" },
 ];
 
@@ -105,6 +109,7 @@ function draftForPolicy(policy: ManagedReviewPolicy): PolicyDraft {
     enforcementMode: policy.enforcementMode,
     agreementThresholdPercent: String(policy.agreementThresholdBps / 100),
     productionFloorPercent: String(policy.productionFloorBps / 100),
+    fixedRatePercent: policy.fixedRateBps === null ? "10" : String(policy.fixedRateBps / 100),
     maximumUnreviewedGap: String(policy.maximumUnreviewedGap),
     requiredRiskTiers: policy.requiredRiskTiers.join(", "),
     criticalRiskTiers: policy.criticalRiskTiers.join(", "),
@@ -222,6 +227,7 @@ export function AgentReviewPolicyPanel({
         enforcementMode: draft.enforcementMode,
         agreementThresholdBps: percentToBps(draft.agreementThresholdPercent, "Agreement threshold"),
         productionFloorBps: percentToBps(draft.productionFloorPercent, "Production floor"),
+        fixedRateBps: draft.mode === "fixed" ? percentToBps(draft.fixedRatePercent, "Fixed review rate") : null,
         maximumUnreviewedGap,
         requiredRiskTiers: riskTiers(draft.requiredRiskTiers),
         criticalRiskTiers: riskTiers(draft.criticalRiskTiers),
@@ -252,7 +258,9 @@ export function AgentReviewPolicyPanel({
       setShowForm(false);
       setStatus(
         editingPolicyId
-          ? "A new immutable policy version was created. New scopes restart at 100% calibration."
+          ? draft.mode === "adaptive"
+            ? "A new immutable policy version was created. New scopes restart at 100% calibration."
+            : "A new immutable policy version was created. New outputs use it immediately."
           : "Review policy created and bound to the exact agent version.",
       );
     } catch (cause) {
@@ -387,6 +395,22 @@ export function AgentReviewPolicyPanel({
                 ))}
               </div>
             </fieldset>
+
+            {draft.mode === "fixed" ? (
+              <label className="block max-w-xl text-sm text-base-content/60">
+                Review rate (%)
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  type="number"
+                  min="0.01"
+                  max="100"
+                  step="0.01"
+                  value={draft.fixedRatePercent}
+                  onChange={event => updateDraft("fixedRatePercent", event.target.value)}
+                  required
+                />
+              </label>
+            ) : null}
 
             {draft.mode !== "manual" ? (
               <label className="block max-w-xl text-sm text-base-content/60">
@@ -588,7 +612,9 @@ export function AgentReviewPolicyPanel({
               </dl>
               {policy.scopes.length ? (
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold">Live adaptive scopes</h4>
+                  <h4 className="text-sm font-semibold">
+                    {policy.mode === "adaptive" ? "Live adaptive scopes" : "Live review scopes"}
+                  </h4>
                   <ul className="mt-3 grid gap-3 lg:grid-cols-2">
                     {policy.scopes.map(scope => (
                       <li key={scope.scopeId} className="surface-card-nested rounded-lg p-4 text-sm">
@@ -597,8 +623,9 @@ export function AgentReviewPolicyPanel({
                           <span>{rateLabel(scope.reviewRateBps)} review</span>
                         </div>
                         <p className="mt-2 text-xs text-base-content/50">
-                          {scope.riskTier} · {scope.stage.replaceAll("_", " ")} · {scope.completedComparableCases}
-                          {" comparable cases"}
+                          {policy.mode === "adaptive"
+                            ? `${scope.riskTier} · ${scope.stage.replaceAll("_", " ")} · ${scope.completedComparableCases} comparable cases`
+                            : scope.riskTier}
                         </p>
                       </li>
                     ))}
@@ -606,7 +633,9 @@ export function AgentReviewPolicyPanel({
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-base-content/50">
-                  No eligible output has used this version yet. Its first adaptive scope starts at 100% review.
+                  {policy.mode === "adaptive"
+                    ? "No eligible output has used this version yet. Its first adaptive scope starts at 100% review."
+                    : "No eligible output has used this version yet."}
                 </p>
               )}
               <details className="mt-4 text-xs text-base-content/45">

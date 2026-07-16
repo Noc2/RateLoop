@@ -264,6 +264,125 @@ test("adaptive review forces suggestions below the configured confidence thresho
   assert.ok(decision.reasonCodes.includes("low_confidence"));
 });
 
+test("fixed review uses its frozen rate while safety overrides record full selection probability", async () => {
+  const setup = await fixture();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies
+          SET mode = 'fixed', production_floor_bps = 0, fixed_rate_bps = 5000,
+              rules_json = ?
+          WHERE workspace_id = ? AND policy_id = ? AND version = 1`,
+    args: [
+      JSON.stringify({
+        criticalRiskTiers: ["critical"],
+        requiredRiskTiers: ["high"],
+        minimumConfidenceBps: 8_000,
+      }),
+      setup.workspaceId,
+      setup.policyId,
+    ],
+  });
+
+  const sampled = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: opportunity(setup, "fixed-deterministic-01"),
+  });
+  const replay = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: opportunity(setup, "fixed-deterministic-01"),
+  });
+  assert.deepEqual(replay, sampled);
+  assert.equal(sampled.required, sampled.sampleBucket < 5_000);
+  assert.equal(sampled.reviewRateBps, 5_000);
+  assert.equal(sampled.selectionProbabilityBps, 5_000);
+  assert.deepEqual(sampled.reasonCodes, [sampled.required ? "sampled" : "not_sampled"]);
+
+  const forced = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: {
+      ...opportunity(setup, "fixed-safety-override-01"),
+      riskTier: "critical",
+      declaredConfidenceBps: 7_999,
+      metadataComplete: false,
+    },
+  });
+  assert.equal(forced.required, true);
+  assert.equal(forced.reviewRateBps, 5_000);
+  assert.equal(forced.selectionProbabilityBps, 10_000);
+  assert.deepEqual(forced.reasonCodes, ["critical_risk", "missing_metadata", "low_confidence"]);
+
+  const persisted = await dbClient.execute({
+    sql: `SELECT review_rate_bps, selection_probability_bps
+          FROM tokenless_agent_review_opportunities
+          WHERE workspace_id = ? AND opportunity_id = ?`,
+    args: [setup.workspaceId, forced.opportunityId],
+  });
+  assert.equal(persisted.rows[0]?.review_rate_bps, 5_000);
+  assert.equal(persisted.rows[0]?.selection_probability_bps, 10_000);
+});
+
+test("fixed and rules policies never advance adaptive stages", async () => {
+  for (const [mode, owner] of [
+    ["fixed", OWNER_A],
+    ["rules", OWNER_B],
+  ] as const) {
+    const setup = await fixture(owner);
+    await dbClient.execute({
+      sql: `UPDATE tokenless_agent_review_policies
+            SET mode = ?, production_floor_bps = 0, fixed_rate_bps = ?
+            WHERE workspace_id = ? AND policy_id = ? AND version = 1`,
+      args: [mode, mode === "fixed" ? 5_000 : null, setup.workspaceId, setup.policyId],
+    });
+
+    let last = await evaluateAdaptiveReviewRequirement({
+      principal: setup.principal,
+      request: opportunity(setup, `${mode}-stable-0000`),
+    });
+    for (let index = 0; index < 30; index += 1) {
+      if (index > 0) {
+        last = await evaluateAdaptiveReviewRequirement({
+          principal: setup.principal,
+          request: opportunity(setup, `${mode}-stable-${String(index).padStart(4, "0")}`),
+        });
+      }
+      const finalizedAt = new Date(Date.now() + index);
+      await dbClient.execute({
+        sql: `INSERT INTO tokenless_agent_evaluation_observations
+              (observation_id, workspace_id, scope_id, opportunity_id, evidence_reference, source_payload_hash,
+               agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
+               responding_human_count, finalized_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'agree', true, 1, ?, ?)`,
+        args: [
+          `obs_${mode}_${index}_${setup.workspaceId}`,
+          setup.workspaceId,
+          last.scopeId,
+          last.opportunityId,
+          `evidence/${mode}/${index}`,
+          __adaptiveReviewServiceTestUtils.sha256({ mode, source: index }),
+          last.suggestionCommitment,
+          __adaptiveReviewServiceTestUtils.sha256({ mode, human: "agree", index }),
+          finalizedAt,
+          finalizedAt,
+        ],
+      });
+    }
+
+    const afterEvidence = await evaluateAdaptiveReviewRequirement({
+      principal: setup.principal,
+      request: opportunity(setup, `${mode}-after-stable-window`),
+    });
+    assert.equal(afterEvidence.stage, "calibrating");
+    assert.equal(afterEvidence.nextReassessmentAfter, 0);
+    assert.equal(afterEvidence.reviewRateBps, mode === "fixed" ? 5_000 : 0);
+
+    const events = await dbClient.execute({
+      sql: `SELECT event_type FROM tokenless_agent_review_policy_events
+            WHERE workspace_id = ? AND scope_id = ? AND event_type IN ('stage_changed', 'reset')`,
+      args: [setup.workspaceId, afterEvidence.scopeId],
+    });
+    assert.equal(events.rowCount, 0);
+  }
+});
+
 test("source-derived observations advance after two stable windows and reset after a measured agreement drop", async () => {
   const setup = await fixture();
   for (let index = 0; index < 30; index += 1) {
