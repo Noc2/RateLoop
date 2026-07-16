@@ -38,7 +38,9 @@ function applySqlStatements(sqlText: string, execute: (statement: string) => voi
 
 function memoryCompatibleMigrationStatement(file: string, statement: string): string | null {
   if (
-    file === "0060_human_review_opportunity_transition_events.sql" &&
+    ["0060_human_review_opportunity_transition_events.sql", "0063_human_review_result_observations.sql"].includes(
+      file,
+    ) &&
     (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
   ) {
     // pg-mem does not implement PostgreSQL trigger functions. The production
