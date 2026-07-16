@@ -23,9 +23,6 @@ export function AgentVersionForm({
   const [externalId, setExternalId] = useState("");
   const [displayName, setDisplayName] = useState(current?.displayName ?? "");
   const [description, setDescription] = useState(current?.description ?? "");
-  const [provider, setProvider] = useState(current?.declaredProvider ?? "");
-  const [model, setModel] = useState(current?.declaredModel ?? "");
-  const [modelVersion, setModelVersion] = useState(current?.declaredModelVersion ?? "");
   const [deploymentName, setDeploymentName] = useState(current?.declaredDeploymentName ?? "");
   const [environment, setEnvironment] = useState<HostedAgentEnvironment>(
     current?.environment === "staging" ? "staging" : "production",
@@ -37,9 +34,9 @@ export function AgentVersionForm({
       ...(externalIdRequired ? { externalId } : {}),
       displayName,
       description: description || null,
-      provider,
-      model,
-      modelVersion: modelVersion || null,
+      provider: "unknown",
+      model: "unknown",
+      modelVersion: null,
       deploymentName: deploymentName || null,
       environment,
     });
@@ -63,7 +60,7 @@ export function AgentVersionForm({
           </label>
         ) : null}
         <label className="text-sm text-base-content/65">
-          Agent display name
+          Workflow name
           <input
             className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
             value={displayName}
@@ -71,38 +68,6 @@ export function AgentVersionForm({
             placeholder="Support quality agent"
             maxLength={120}
             required
-          />
-        </label>
-        <label className="text-sm text-base-content/65">
-          Declared provider
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={provider}
-            onChange={event => setProvider(event.target.value)}
-            placeholder="OpenAI"
-            maxLength={120}
-            required
-          />
-        </label>
-        <label className="text-sm text-base-content/65">
-          Declared model
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={model}
-            onChange={event => setModel(event.target.value)}
-            placeholder="gpt-5"
-            maxLength={160}
-            required
-          />
-        </label>
-        <label className="text-sm text-base-content/65">
-          Model version
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={modelVersion}
-            onChange={event => setModelVersion(event.target.value)}
-            placeholder="Optional provider version"
-            maxLength={160}
           />
         </label>
         <label className="text-sm text-base-content/65">
@@ -133,13 +98,12 @@ export function AgentVersionForm({
           className="textarea mt-2 min-h-24 w-full border-white/10 bg-[var(--rateloop-field)]"
           value={description}
           onChange={event => setDescription(event.target.value)}
-          placeholder="What this agent does and where human assurance is applied."
+          placeholder="What this workflow does and where human assurance is applied."
           maxLength={1_000}
         />
       </label>
       <p className="text-xs leading-5 text-base-content/50">
-        Provider, model, and deployment values are declared by your workspace. Saving creates an immutable version; it
-        does not claim provider attestation.
+        Saving creates an immutable workflow version. Execution model details are reported separately for each run.
       </p>
       <button className="rateloop-gradient-action px-5" disabled={busy}>
         {busy ? "Saving…" : submitLabel}

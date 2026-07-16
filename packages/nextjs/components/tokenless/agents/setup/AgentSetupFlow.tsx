@@ -192,9 +192,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             agent: {
               displayName: form.get("displayName"),
               description: form.get("description") || null,
-              provider: form.get("provider") || "unknown",
-              model: form.get("model") || "unknown",
-              modelVersion: form.get("modelVersion") || null,
+              provider: "unknown",
+              model: "unknown",
+              modelVersion: null,
               deploymentName: form.get("deploymentName") || null,
               environment: form.get("environment"),
             },
@@ -371,14 +371,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         {currentStep === "agent" && setup.agent ? (
           <form onSubmit={confirmAgent}>
             <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Check your agent
+              Name this workflow
             </h1>
             <p className="mt-2 text-sm text-base-content/65">
-              Confirm what RateLoop observed. Declared provider and model details may remain unknown.
+              The connected client stays separate from the model, effort, and timing reported for each eligible run.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
-                Agent name
+                Workflow name
                 <input
                   className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                   name="displayName"
@@ -407,6 +407,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   maxLength={1000}
                 />
               </label>
+              <label className="text-sm sm:col-span-2">
+                Deployment name <span className="text-base-content/50">(optional)</span>
+                <input
+                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  name="deploymentName"
+                  defaultValue={setup.agent.deploymentName ?? ""}
+                  maxLength={160}
+                />
+              </label>
             </div>
             <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
               <p className="font-medium">Observed connection</p>
@@ -419,49 +428,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 artifacts, or workspace administration.
               </p>
             </div>
-            <details className="mt-4 rounded-xl border border-white/10 p-4">
-              <summary className="cursor-pointer font-medium">Declared details</summary>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="text-sm">
-                  Provider
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    name="provider"
-                    defaultValue={setup.agent.provider}
-                    maxLength={120}
-                  />
-                </label>
-                <label className="text-sm">
-                  Model
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    name="model"
-                    defaultValue={setup.agent.model}
-                    maxLength={160}
-                  />
-                </label>
-                <label className="text-sm">
-                  Model version
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    name="modelVersion"
-                    defaultValue={setup.agent.modelVersion ?? ""}
-                    maxLength={160}
-                  />
-                </label>
-                <label className="text-sm">
-                  Deployment name
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    name="deploymentName"
-                    defaultValue={setup.agent.deploymentName ?? ""}
-                    maxLength={160}
-                  />
-                </label>
-              </div>
-            </details>
             <button className="rateloop-gradient-action mt-6 px-5" disabled={busy}>
-              {busy ? "Confirming…" : "Confirm agent"}
+              {busy ? "Confirming…" : "Confirm workflow"}
             </button>
           </form>
         ) : null}

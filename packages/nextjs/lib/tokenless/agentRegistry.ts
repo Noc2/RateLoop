@@ -36,6 +36,29 @@ export type AgentVersionSnapshot = {
   createdAt: string;
 };
 
+export type AgentExecutionModelProfile = {
+  provider: string;
+  requestedModel: string;
+  resolvedModel: string | null;
+  modelVersion: string | null;
+  reasoningEffort: string | null;
+  serviceTier: string | null;
+};
+
+export type AgentExecutionProfile =
+  | {
+      available: true;
+      orchestrationMode: "single_model" | "multi_model";
+      primary: AgentExecutionModelProfile;
+      contributors: AgentExecutionModelProfile[];
+    }
+  | {
+      available: false;
+      orchestrationMode: null;
+      primary: null;
+      contributors: [];
+    };
+
 export type AgentAssuranceScopeSummary = {
   scopeId: string;
   agentVersionId: string;
@@ -53,6 +76,13 @@ export type AgentAssuranceScopeSummary = {
   agreementCount: number;
   humanAgreementBps: number | null;
   humanAgreementLower95Bps: number | null;
+  executionProfileHash: string;
+  executionProfile: AgentExecutionProfile;
+  executionCount: number;
+  averageTotalDurationMs: number | null;
+  averageInputTokenTotal: number | null;
+  averageOutputTokenTotal: number | null;
+  averageReasoningOutputTokenTotal: number | null;
   nextReassessmentAfter: number;
   lastTransition: {
     eventType: "stage_changed" | "reset";
@@ -107,6 +137,14 @@ function rowInteger(row: QueryRow | undefined, key: string) {
   return value;
 }
 
+function rowNullableNumber(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  if (value === null || value === undefined) return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new Error(`Database returned an invalid ${key}.`);
+  return number;
+}
+
 function stringArray(value: unknown, field: string) {
   try {
     const parsed = JSON.parse(String(value ?? "[]")) as unknown;
@@ -114,6 +152,55 @@ function stringArray(value: unknown, field: string) {
     return parsed as string[];
   } catch {
     throw new Error(`Database returned invalid ${field}.`);
+  }
+}
+
+function executionModelProfile(value: unknown): AgentExecutionModelProfile | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const profile = value as Record<string, unknown>;
+  if (typeof profile.provider !== "string" || !profile.provider.trim()) return null;
+  if (typeof profile.requestedModel !== "string" || !profile.requestedModel.trim()) return null;
+  const optionalString = (field: string) => {
+    const fieldValue = profile[field];
+    return typeof fieldValue === "string" && fieldValue.trim() ? fieldValue.trim() : null;
+  };
+  return {
+    provider: profile.provider.trim(),
+    requestedModel: profile.requestedModel.trim(),
+    resolvedModel: optionalString("resolvedModel"),
+    modelVersion: optionalString("modelVersion"),
+    reasoningEffort: optionalString("reasoningEffort"),
+    serviceTier: optionalString("serviceTier"),
+  };
+}
+
+function executionProfile(value: unknown): AgentExecutionProfile {
+  const unavailable: AgentExecutionProfile = {
+    available: false,
+    orchestrationMode: null,
+    primary: null,
+    contributors: [],
+  };
+  try {
+    const parsed = JSON.parse(String(value ?? "{}")) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return unavailable;
+    const record = parsed as Record<string, unknown>;
+    if (record.schemaVersion !== "rateloop.execution-profile.v1") return unavailable;
+    if (record.orchestrationMode !== "single_model" && record.orchestrationMode !== "multi_model") {
+      return unavailable;
+    }
+    const primary = executionModelProfile(record.primary);
+    if (!primary || !Array.isArray(record.contributors)) return unavailable;
+    const contributors = record.contributors.map(executionModelProfile);
+    if (contributors.some(item => item === null)) return unavailable;
+    return {
+      available: true,
+      orchestrationMode: record.orchestrationMode,
+      primary,
+      contributors: contributors as AgentExecutionModelProfile[],
+    };
+  } catch {
+    return unavailable;
   }
 }
 
@@ -242,11 +329,12 @@ function nextReassessmentAfter(stage: AdaptiveReviewStage, completed: number, st
 }
 
 async function loadWorkspaceAssuranceScopes(workspaceId: string) {
-  const [scopesResult, opportunitiesResult, observationsResult, eventsResult] = await Promise.all([
+  const [scopesResult, opportunitiesResult, observationsResult, eventsResult, executionsResult] = await Promise.all([
     dbClient.execute({
       sql: `SELECT s.scope_id, s.agent_id, s.agent_version_id, s.policy_id, s.policy_version,
                    s.workflow_key, s.risk_tier, s.stage, s.completed_comparable_cases,
-                   s.stable_cases_since_stage, s.updated_at, p.mode, p.production_floor_bps
+                   s.stable_cases_since_stage, s.execution_profile_hash, s.execution_profile_json,
+                   s.updated_at, p.mode, p.production_floor_bps
             FROM tokenless_agent_evaluation_scopes s
             JOIN tokenless_agent_review_policies p
               ON p.workspace_id = s.workspace_id AND p.policy_id = s.policy_id AND p.version = s.policy_version
@@ -275,6 +363,24 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
             FROM tokenless_agent_review_policy_events
             WHERE workspace_id = ? AND event_type IN ('stage_changed', 'reset')
             ORDER BY created_at DESC, event_id DESC`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT execution_scope.scope_id,
+                   COUNT(*) AS execution_count,
+                   AVG(execution_scope.total_duration_ms) AS average_total_duration_ms,
+                   AVG(execution_scope.input_token_total) AS average_input_token_total,
+                   AVG(execution_scope.output_token_total) AS average_output_token_total,
+                   AVG(execution_scope.reasoning_output_token_total) AS average_reasoning_output_token_total
+            FROM (
+              SELECT DISTINCT o.scope_id, e.execution_id, e.total_duration_ms, e.input_token_total,
+                              e.output_token_total, e.reasoning_output_token_total
+              FROM tokenless_agent_review_opportunities o
+              JOIN tokenless_agent_executions e
+                ON e.workspace_id = o.workspace_id AND e.execution_id = o.execution_id
+              WHERE o.workspace_id = ? AND o.execution_id IS NOT NULL
+            ) execution_scope
+            GROUP BY execution_scope.scope_id`,
       args: [workspaceId],
     }),
   ]);
@@ -309,6 +415,14 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
     if (!latestTransition.has(scopeId)) latestTransition.set(scopeId, row);
   }
 
+  const executionMetrics = new Map<string, QueryRow>();
+  for (const value of executionsResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    if (!scopeId) throw new Error("Database returned an invalid execution rollup.");
+    executionMetrics.set(scopeId, row);
+  }
+
   const byAgent = new Map<string, AgentAssuranceScopeSummary[]>();
   for (const value of scopesResult.rows) {
     const row = value as QueryRow;
@@ -320,6 +434,7 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
     const riskTier = rowString(row, "risk_tier");
     const stage = rowString(row, "stage") as AdaptiveReviewStage | null;
     const mode = rowString(row, "mode");
+    const executionProfileHash = rowString(row, "execution_profile_hash");
     if (
       !scopeId ||
       !agentId ||
@@ -329,7 +444,8 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
       !riskTier ||
       !stage ||
       !(stage in ASSURANCE_STAGE_RATES) ||
-      !mode
+      !mode ||
+      !executionProfileHash
     ) {
       throw new Error("Database returned an invalid assurance scope.");
     }
@@ -341,6 +457,7 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
     const interval =
       observations.comparable > 0 ? wilsonIntervalBps(observations.agreements, observations.comparable) : null;
     const transition = latestTransition.get(scopeId);
+    const metrics = executionMetrics.get(scopeId);
     const transitionType = rowString(transition, "event_type") as "stage_changed" | "reset" | null;
     const summary: AgentAssuranceScopeSummary = {
       scopeId,
@@ -361,6 +478,13 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
       humanAgreementBps:
         observations.comparable > 0 ? Math.floor((observations.agreements * 10_000) / observations.comparable) : null,
       humanAgreementLower95Bps: interval?.lower ?? null,
+      executionProfileHash,
+      executionProfile: executionProfile(row.execution_profile_json),
+      executionCount: metrics ? rowInteger(metrics, "execution_count") : 0,
+      averageTotalDurationMs: rowNullableNumber(metrics, "average_total_duration_ms"),
+      averageInputTokenTotal: rowNullableNumber(metrics, "average_input_token_total"),
+      averageOutputTokenTotal: rowNullableNumber(metrics, "average_output_token_total"),
+      averageReasoningOutputTokenTotal: rowNullableNumber(metrics, "average_reasoning_output_token_total"),
       nextReassessmentAfter: nextReassessmentAfter(stage, completedComparableCases, stableCasesSinceStage),
       lastTransition:
         transition && transitionType

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
 import type {
   AgentAssuranceScopeSummary,
+  AgentExecutionModelProfile,
   AgentRegistry,
   AgentVersionInput,
   WorkspaceAgent,
@@ -27,6 +28,24 @@ function formatPercent(bps: number | null) {
   if (bps === null) return "—";
   const percent = bps / 100;
   return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
+}
+
+const integerFormatter = new Intl.NumberFormat("en", { maximumFractionDigits: 0 });
+const decimalFormatter = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
+
+function formatDuration(milliseconds: number | null) {
+  if (milliseconds === null) return "—";
+  if (milliseconds < 1_000) return `${integerFormatter.format(milliseconds)} ms`;
+  return `${decimalFormatter.format(milliseconds / 1_000)} s`;
+}
+
+function formatTokens(tokens: number | null) {
+  return tokens === null ? "—" : integerFormatter.format(tokens);
+}
+
+function modelLabel(profile: AgentExecutionModelProfile) {
+  const model = profile.resolvedModel ?? profile.requestedModel;
+  return `${profile.provider} · ${model}${profile.modelVersion ? ` · ${profile.modelVersion}` : ""}`;
 }
 
 function assuranceStageLabel(stage: AgentAssuranceScopeSummary["stage"]) {
@@ -64,12 +83,44 @@ function AssuranceScopeEvidence({
     <div className={compact ? "border-t border-white/10 pt-3" : ""}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">
-          {scope.workflowKey} · <span className="capitalize">{scope.riskTier} risk</span> · v
+          {scope.workflowKey} · <span className="capitalize">{scope.riskTier} risk</span> · Workflow v
           {version?.versionNumber ?? "?"}
         </p>
         <span className="badge border-white/10 bg-white/[0.04] text-xs text-base-content/65">
           {assuranceStageLabel(scope.stage)}
         </span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {scope.executionProfile.available ? (
+          <>
+            <span className="badge h-auto max-w-full break-all border-white/10 bg-white/[0.04] py-1 text-xs whitespace-normal text-base-content/70">
+              {modelLabel(scope.executionProfile.primary)}
+            </span>
+            {scope.executionProfile.primary.resolvedModel &&
+            scope.executionProfile.primary.resolvedModel !== scope.executionProfile.primary.requestedModel ? (
+              <span className="badge h-auto max-w-full break-all border-white/10 bg-white/[0.04] py-1 text-xs whitespace-normal text-base-content/70">
+                Requested {scope.executionProfile.primary.requestedModel}
+              </span>
+            ) : null}
+            {scope.executionProfile.primary.reasoningEffort ? (
+              <span className="badge border-white/10 bg-white/[0.04] text-xs text-base-content/70">
+                {scope.executionProfile.primary.reasoningEffort} effort
+              </span>
+            ) : null}
+            {scope.executionProfile.primary.serviceTier ? (
+              <span className="badge border-white/10 bg-white/[0.04] text-xs text-base-content/70">
+                {scope.executionProfile.primary.serviceTier} service
+              </span>
+            ) : null}
+            {scope.executionProfile.orchestrationMode === "multi_model" ? (
+              <span className="badge border-white/10 bg-white/[0.04] text-xs text-base-content/70">Multi-model</span>
+            ) : null}
+          </>
+        ) : (
+          <span className="badge border-white/10 bg-white/[0.04] text-xs text-base-content/60">
+            Execution model unavailable
+          </span>
+        )}
       </div>
       <dl className={`mt-3 grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
         <div>
@@ -103,6 +154,44 @@ function AssuranceScopeEvidence({
           </>
         ) : null}
       </dl>
+      <details className="mt-3 border-t border-white/10 pt-3">
+        <summary className="cursor-pointer text-xs font-medium text-base-content/60">Execution details</summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-base-content/45">Execution metadata is reported by the connected host.</p>
+          <dl className={`grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-5"}`}>
+            <div>
+              <dt className="text-xs text-base-content/45">Observed runs</dt>
+              <dd className="mt-1 font-semibold">{integerFormatter.format(scope.executionCount)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Average duration</dt>
+              <dd className="mt-1 font-semibold">{formatDuration(scope.averageTotalDurationMs)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Average input tokens</dt>
+              <dd className="mt-1 font-semibold">{formatTokens(scope.averageInputTokenTotal)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Average output tokens</dt>
+              <dd className="mt-1 font-semibold">{formatTokens(scope.averageOutputTokenTotal)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/45">Average reasoning tokens</dt>
+              <dd className="mt-1 font-semibold">{formatTokens(scope.averageReasoningOutputTokenTotal)}</dd>
+            </div>
+          </dl>
+          {scope.executionProfile.available ? (
+            <div>
+              <p className="text-xs text-base-content/45">Models in this profile</p>
+              <p className="mt-1 text-xs text-base-content/65">
+                {scope.executionProfile.contributors.length > 0
+                  ? scope.executionProfile.contributors.map(modelLabel).join(", ")
+                  : "No model details reported."}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </details>
       {!compact ? (
         <div className="mt-3 space-y-1 text-xs text-base-content/50">
           <p>
@@ -132,7 +221,8 @@ function AgentAssuranceSummary({ agent }: { agent: WorkspaceAgent }) {
             Human assurance
           </h3>
           <p className="mt-1 text-xs text-base-content/45">
-            Evidence stays separate by agent version, policy, workflow, risk tier, and reviewer audience.
+            Evidence stays separate by execution profile, workflow version, policy, workflow, risk tier, and reviewer
+            audience. It does not create a global score.
           </p>
         </div>
         {agent.assuranceScopes.length > 0 ? (
@@ -240,9 +330,9 @@ export function AgentRegistryPanel({
       await loadRegistry(workspaceId);
       onAgentsChanged?.();
       setEditingAgent(null);
-      setStatus("A new immutable agent version was created.");
+      setStatus("A new immutable workflow version was created.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the agent version.");
+      setError(cause instanceof Error ? cause.message : "Unable to create the workflow version.");
     } finally {
       setBusy(false);
     }
@@ -301,11 +391,7 @@ export function AgentRegistryPanel({
                     {agent.status}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-base-content/55">
-                  {agent.currentVersion.declaredModel}
-                  {agent.currentVersion.declaredModelVersion ? ` · ${agent.currentVersion.declaredModelVersion}` : ""}
-                  {` · v${agent.currentVersion.versionNumber}`}
-                </p>
+                <p className="mt-1 text-sm text-base-content/55">Workflow v{agent.currentVersion.versionNumber}</p>
               </div>
             </div>
             <AgentAssuranceSummary agent={agent} />
@@ -320,7 +406,7 @@ export function AgentRegistryPanel({
                       disabled={busy}
                       onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
                     >
-                      Change version
+                      Change workflow version
                     </button>
                     <button
                       type="button"
@@ -361,14 +447,14 @@ export function AgentRegistryPanel({
                     aria-labelledby={`new-version-${agent.agentId}`}
                   >
                     <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
-                      Change declared version
+                      Change workflow version
                     </h3>
                     <div className="mt-4">
                       <AgentVersionForm
                         key={editingAgent.currentVersion.versionId}
                         current={editingAgent.currentVersion}
                         busy={busy}
-                        submitLabel="Save new version"
+                        submitLabel="Save workflow version"
                         onSubmit={createVersion}
                       />
                     </div>
@@ -389,12 +475,12 @@ export function AgentRegistryPanel({
                       <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-base-content/45">Declared provider</dt>
-                      <dd className="mt-1">{agent.currentVersion.declaredProvider}</dd>
-                    </div>
-                    <div>
                       <dt className="text-xs text-base-content/45">Environment</dt>
                       <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/45">Deployment</dt>
+                      <dd className="mt-1">{agent.currentVersion.declaredDeploymentName ?? "—"}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-base-content/45">Owner</dt>
@@ -413,13 +499,14 @@ export function AgentRegistryPanel({
                     {agent.versions.map(version => (
                       <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <strong>Version {version.versionNumber}</strong>
+                          <strong>Workflow version {version.versionNumber}</strong>
                           <time dateTime={version.createdAt} className="text-xs text-base-content/45">
                             {new Date(version.createdAt).toLocaleString()}
                           </time>
                         </div>
                         <p className="mt-2 text-base-content/60">
-                          {version.displayName} · declared {version.declaredProvider} / {version.declaredModel}
+                          {version.displayName} · <span className="capitalize">{version.environment}</span>
+                          {version.declaredDeploymentName ? ` · ${version.declaredDeploymentName}` : ""}
                         </p>
                         <code className="mt-2 block break-all text-[11px] text-base-content/40">
                           sha256:{version.configurationCommitment}

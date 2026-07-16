@@ -29,7 +29,7 @@ test("guided setup renders one stage at a time and keeps future authority absent
   for (const heading of [
     "Workspace",
     "Connect your agent",
-    "Check your agent",
+    "Name this workflow",
     "Set review behavior",
     "Add people and finish",
   ]) {
@@ -42,6 +42,16 @@ test("guided setup renders one stage at a time and keeps future authority absent
   assert.match(flowSource, /autonomousAccess: false/);
   assert.match(flowSource, /no autonomous publishing\s+or spending/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
+});
+
+test("setup separates the connected client from per-run model provenance", () => {
+  assert.match(flowSource, /connected client stays separate/i);
+  assert.match(flowSource, /model, effort, and timing reported for each eligible run/i);
+  assert.match(flowSource, /provider: "unknown"/);
+  assert.match(flowSource, /model: "unknown"/);
+  assert.doesNotMatch(flowSource, />Declared details</);
+  assert.doesNotMatch(flowSource, />Provider</);
+  assert.doesNotMatch(flowSource, />Model version</);
 });
 
 test("workspace step remains editable when revisited", () => {

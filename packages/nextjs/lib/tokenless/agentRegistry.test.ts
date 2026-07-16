@@ -93,6 +93,29 @@ test("agent registry returns source-derived human-assurance evidence without poo
   const now = new Date();
   const policyId = "arp_assurance_registry";
   const scopeId = "aesc_assurance_registry";
+  const executionProfileHash = `sha256:${"a".repeat(64)}`;
+  const executionProfileJson = JSON.stringify({
+    schemaVersion: "rateloop.execution-profile.v1",
+    orchestrationMode: "multi_model",
+    primary: {
+      provider: "OpenAI",
+      requestedModel: "sol",
+      resolvedModel: "gpt-5.1-codex",
+      modelVersion: "2026-07-15",
+      reasoningEffort: "high",
+      serviceTier: "priority",
+    },
+    contributors: [
+      {
+        provider: "OpenAI",
+        requestedModel: "terra",
+        resolvedModel: null,
+        modelVersion: null,
+        reasoningEffort: "medium",
+        serviceTier: "standard",
+      },
+    ],
+  });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_policies
           (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
@@ -113,23 +136,67 @@ test("agent registry returns source-derived human-assurance evidence without poo
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_evaluation_scopes
           (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version,
-           workflow_key, risk_tier, audience_policy_hash, partition_commitment, stage,
+           workflow_key, risk_tier, audience_policy_hash, partition_commitment,
+           execution_profile_hash, execution_profile_json, stage,
            completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample,
            stage_entered_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 1, 'support-reply', 'low', 'sha256:audience', 'sha256:partition',
+          VALUES (?, ?, ?, ?, ?, 1, 'support-reply', 'low', 'sha256:audience', 'sha256:partition', ?, ?,
                   'high_coverage', 32, 12, 0, ?, ?)`,
-    args: [scopeId, workspaceId, agent.agentId, agent.currentVersion.versionId, policyId, now, now],
+    args: [
+      scopeId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      policyId,
+      executionProfileHash,
+      executionProfileJson,
+      now,
+      now,
+    ],
   });
+
+  for (const [index, metrics] of [
+    { duration: 1_000, input: 100, output: 20 },
+    { duration: 3_000, input: null, output: 40 },
+  ].entries()) {
+    const executionId = `aexe_registry_${index}`;
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_executions
+            (execution_id, workspace_id, agent_id, agent_version_id, external_execution_id, status,
+             started_at, completed_at, total_duration_ms, tool_call_count, model_call_count,
+             input_token_total, output_token_total, reasoning_output_token_total, primary_span_id,
+             manifest_commitment, execution_profile_hash, execution_profile_json, created_at)
+            VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        executionId,
+        workspaceId,
+        agent.agentId,
+        agent.currentVersion.versionId,
+        `external-execution-${index}`,
+        new Date(now.getTime() + index),
+        new Date(now.getTime() + index + metrics.duration),
+        metrics.duration,
+        metrics.input,
+        metrics.output,
+        null,
+        `span_primary_${index}`,
+        `sha256:${String(index + 1).repeat(64)}`,
+        executionProfileHash,
+        executionProfileJson,
+        new Date(now.getTime() + index),
+      ],
+    });
+  }
 
   for (const [index, status] of ["completed", "completed", "skipped"].entries()) {
     await dbClient.execute({
       sql: `INSERT INTO tokenless_agent_review_opportunities
-            (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
-             external_opportunity_id, suggestion_commitment, declared_confidence_bps, metadata_commitment,
+          (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
+             execution_id, external_opportunity_id, suggestion_commitment, declared_confidence_bps, metadata_commitment,
              metadata_complete, critical_risk, decision, review_rate_bps, selection_probability_bps,
              sample_bucket, sampler_key_version, sampler_commitment, reason_codes_json, status,
              source_evidence_reference, source_evidence_hash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 9000, ?, true, false, ?, 5000, 5000,
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 9000, ?, true, false, ?, 5000, 5000,
                     ?, 'sampler-v1', ?, '[]', ?, ?, ?, ?, ?)`,
       args: [
         `aeop_registry_${index}`,
@@ -138,6 +205,7 @@ test("agent registry returns source-derived human-assurance evidence without poo
         agent.currentVersion.versionId,
         scopeId,
         policyId,
+        status === "skipped" ? null : `aexe_registry_${index}`,
         `external-registry-${index}`,
         `sha256:suggestion-${index}`,
         `sha256:metadata-${index}`,
@@ -184,8 +252,30 @@ test("agent registry returns source-derived human-assurance evidence without poo
     args: [workspaceId, scopeId, policyId, JSON.stringify(["two_stable_windows"]), now],
   });
 
+  const legacyScopeId = "aesc_assurance_registry_legacy";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_evaluation_scopes
+          (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version,
+           workflow_key, risk_tier, audience_policy_hash, partition_commitment,
+           execution_profile_hash, execution_profile_json, stage,
+           completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample,
+           stage_entered_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 1, 'support-reply', 'low', 'sha256:audience', 'sha256:legacy-partition',
+                  ?, '{}', 'calibrating', 0, 0, 0, ?, ?)`,
+    args: [
+      legacyScopeId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      policyId,
+      `sha256:${"b".repeat(64)}`,
+      now,
+      new Date(now.getTime() - 1),
+    ],
+  });
+
   const registry = await listWorkspaceAgents({ accountAddress: OWNER, workspaceId });
-  const evidence = registry.agents[0]?.assuranceScopes[0];
+  const evidence = registry.agents[0]?.assuranceScopes.find(scope => scope.scopeId === scopeId);
   assert.ok(evidence);
   assert.equal(evidence.workflowKey, "support-reply");
   assert.equal(evidence.riskTier, "low");
@@ -196,8 +286,47 @@ test("agent registry returns source-derived human-assurance evidence without poo
   assert.equal(evidence.agreementCount, 1);
   assert.equal(evidence.humanAgreementBps, 5_000);
   assert.ok((evidence.humanAgreementLower95Bps ?? 5_000) < 5_000);
+  assert.equal(evidence.executionProfileHash, executionProfileHash);
+  assert.deepEqual(evidence.executionProfile, {
+    available: true,
+    orchestrationMode: "multi_model",
+    primary: {
+      provider: "OpenAI",
+      requestedModel: "sol",
+      resolvedModel: "gpt-5.1-codex",
+      modelVersion: "2026-07-15",
+      reasoningEffort: "high",
+      serviceTier: "priority",
+    },
+    contributors: [
+      {
+        provider: "OpenAI",
+        requestedModel: "terra",
+        resolvedModel: null,
+        modelVersion: null,
+        reasoningEffort: "medium",
+        serviceTier: "standard",
+      },
+    ],
+  });
+  assert.equal(evidence.executionCount, 2);
+  assert.equal(evidence.averageTotalDurationMs, 2_000);
+  assert.equal(evidence.averageInputTokenTotal, 100);
+  assert.equal(evidence.averageOutputTokenTotal, 30);
+  assert.equal(evidence.averageReasoningOutputTokenTotal, null);
   assert.equal(evidence.nextReassessmentAfter, 38);
   assert.deepEqual(evidence.lastTransition?.reasonCodes, ["two_stable_windows"]);
+
+  const legacyEvidence = registry.agents[0]?.assuranceScopes.find(scope => scope.scopeId === legacyScopeId);
+  assert.ok(legacyEvidence);
+  assert.deepEqual(legacyEvidence.executionProfile, {
+    available: false,
+    orchestrationMode: null,
+    primary: null,
+    contributors: [],
+  });
+  assert.equal(legacyEvidence.executionCount, 0);
+  assert.equal(legacyEvidence.averageTotalDurationMs, null);
 });
 
 test("workspace roles permit authorized reads while restricting registry mutations to owners and admins", async () => {
