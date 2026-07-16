@@ -14,7 +14,13 @@ ALTER TABLE "tokenless_agent_review_request_profiles"
 ALTER TABLE "tokenless_agent_review_request_profiles"
   ADD CONSTRAINT "tokenless_agent_review_request_profiles_compensation_check" CHECK (
     ("compensation_mode" = 'unpaid' AND "bounty_per_seat_atomic" IS NULL)
-    OR ("compensation_mode" = 'usdc' AND "bounty_per_seat_atomic" IS NOT NULL AND "bounty_per_seat_atomic" > 0)
+    OR (
+      "compensation_mode" = 'usdc'
+      AND (
+        ("configuration_status" = 'action_required' AND "bounty_per_seat_atomic" IS NULL)
+        OR ("bounty_per_seat_atomic" IS NOT NULL AND "bounty_per_seat_atomic" > 0)
+      )
+    )
   ),
   ADD CONSTRAINT "tokenless_agent_review_request_profiles_feedback_bonus_check" CHECK (
     (
@@ -35,7 +41,7 @@ ALTER TABLE "tokenless_agent_review_request_profiles"
     OR (
       "feedback_bonus_awarder_kind" = 'designated'
       AND "feedback_bonus_awarder_account" IS NOT NULL
-      AND "feedback_bonus_awarder_account" ~ '^.{1,320}$'
+      AND char_length("feedback_bonus_awarder_account") BETWEEN 1 AND 320
     )
   ),
   ADD CONSTRAINT "tokenless_agent_review_request_profiles_ready_check" CHECK (

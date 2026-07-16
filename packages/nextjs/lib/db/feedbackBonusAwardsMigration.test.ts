@@ -12,6 +12,9 @@ test("0068 freezes an optional USDC-only Feedback Bonus independently from the g
   assert.match(migration, /"feedback_bonus_enabled" = false[\s\S]+"feedback_bonus_pool_atomic" IS NULL/u);
   assert.match(migration, /"feedback_bonus_enabled" = true[\s\S]+"feedback_bonus_pool_atomic" > 0/u);
   assert.match(migration, /"feedback_bonus_awarder_kind" = 'designated'/u);
+  assert.match(migration, /char_length\("feedback_bonus_awarder_account"\) BETWEEN 1 AND 320/u);
+  assert.match(migration, /"configuration_status" = 'action_required' AND "bounty_per_seat_atomic" IS NULL/u);
+  assert.doesNotMatch(migration, /\{1,320\}/u);
   assert.match(migration, /"compensation_mode" = 'unpaid'/u);
 });
 

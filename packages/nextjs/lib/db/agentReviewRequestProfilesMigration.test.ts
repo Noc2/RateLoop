@@ -17,6 +17,12 @@ function migratedDatabase() {
     returns: DataType.bool,
     implementation: (value, pattern) => new RegExp(pattern).test(value),
   });
+  database.public.registerFunction({
+    name: "char_length",
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: value => value.length,
+  });
   database.public.none(`
     CREATE TABLE tokenless_agent_versions (
       workspace_id text NOT NULL,
@@ -131,7 +137,8 @@ test("0055 freezes the question, audience, timing, panel, and economics dimensio
   }
   assert.match(migration, /"rationale_mode" IN \('off', 'optional', 'required'\)/);
   assert.match(migration, /"response_window_seconds" BETWEEN 1200 AND 86400/);
-  assert.match(migration, /"criterion" ~ '\^\.\{1,500\}\$'/);
+  assert.match(migration, /char_length\("criterion"\) BETWEEN 1 AND 500/);
+  assert.doesNotMatch(migration, /\{1,500\}/);
   assert.match(migration, /"positive_label" ~ '\^\.\{1,40\}\$'/);
   assert.match(migration, /"negative_label" ~ '\^\.\{1,40\}\$'/);
   assert.match(migration, /"panel_size" BETWEEN 1 AND 100/);
