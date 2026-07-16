@@ -13,6 +13,17 @@ After the server is installed, paste the complete single-use RateLoop `/connect/
 The agent claims the intent, loads its bound policy, and verifies the connection. Installation, trust, organization policy,
 and OAuth consent remain controls of the agent host; they cannot be bypassed by a prompt.
 
+Installing the server does not start a background reviewer and does not make an already-running task call RateLoop. The
+active task must expose the workspace tools. A new connection calls `rateloop_get_agent_context`, then
+`rateloop_verify_connection`; do not report the workspace connected until verification succeeds. Before every eligible
+output, the agent reloads context and calls `rateloop_evaluate_review_requirement`. A required review then follows
+`rateloop_request_review -> rateloop_wait_for_review -> rateloop_get_review_result` within the exact authority returned
+by the workspace.
+
+Workspace owners inspect and change audience, frequency, response window, panel, compensation, and agent authority on
+**Agents**: open the connected agent's **Manage** section, then **Human review**. A saved policy change does not require a
+new intent; the next context read returns the active version. A new intent is required after deletion or revocation.
+
 The generated Codex message includes both the structured **RateLoop Workspace** plugin mention and an explicit
 `$rateloop-workspace-connection` skill invocation. This dedicated plugin contains only the OAuth-protected workspace MCP
 server, so the host must activate the correct connection instead of silently falling back to RateLoop's separate public
@@ -32,6 +43,10 @@ Do not remove unrelated plugins.
 
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
+
+Generic MCP and ordinary Codex hooks are advisory: the host can bypass them and they do not prove that output remained
+blocked. Only a verified adapter that owns the downstream output boundary and validates RateLoop's signed evidence may
+be described as host-enforced.
 
 Deleting a RateLoop workspace revokes its OAuth token family, access tokens, refresh tokens, connection intent, and agent
 integration. On the next RateLoop Workspace invocation, the protected MCP server should return the standard OAuth

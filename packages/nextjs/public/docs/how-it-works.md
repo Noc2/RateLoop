@@ -32,9 +32,11 @@ audience cannot silently lower review.
    can require World ID Proof of Human plus task-specific eligibility; the exact policy hash is bound into the round.
 4. **Collect blind judgments.** Reviewers answer through one-time vote keys. Commit-reveal and drand/tlock sealing keep
    early answers hidden, while short assignment leases protect private material.
-5. **Settle deterministically.** Base pay rewards accepted work. Robust Bayesian Truth Serum can add a bounded reporting
-   bonus, and a separately funded Surprisingly Popular bounty can reward useful minority signal. Neither changes the
-   panel verdict.
+5. **Settle deterministically.** A guaranteed USDC bounty rewards accepted work. Robust Bayesian Truth Serum can add a
+   bounded response-quality reward, and a separately funded Surprisingly Popular bounty can reward useful minority
+   signal. An optional, separately prefunded Feedback Bonus can instead be awarded afterward by the requester or another
+   designated human to selected written feedback. The agent cannot choose or execute that award. None changes the panel
+   verdict.
 6. **Handle failure paths.** Anyone can continue settlement. Zero-commit rounds refund in full; under-quorum and beacon
    failure paths return unused bounty and fee while preserving compensation for accepted valid work.
 7. **Return a decision packet.** The versioned result combines the verdict, disagreement, written reasons, reviewer
@@ -42,10 +44,18 @@ audience cannot silently lower review.
 
 ## Agent integration
 
-The connected workspace MCP uses `get_agent_context -> evaluate_review_requirement -> skip or request_review ->
-wait_for_review -> get_review_result -> get_assurance_state`. Its safe connection can evaluate review requirements but
-cannot spend or publish. Paid review requires a separate owner-approved publishing step-up with explicit limits. Generic
-MCP is advisory; a host-enforced integration is required when the host must prove that output stayed blocked.
+Workspace owners change audience, frequency, response window, panel, compensation, and authority from the connected
+agent's **Manage → Human review** editor. The connected workspace MCP uses `rateloop_get_agent_context ->
+rateloop_evaluate_review_requirement -> skip or rateloop_request_review -> rateloop_wait_for_review ->
+rateloop_get_review_result -> rateloop_get_assurance_state`. Its basic safe connection can evaluate review requirements
+but cannot spend or publish. Paid or autonomous review requires a separate owner-approved publishing grant with explicit
+limits.
+
+Installing MCP does not create a background check. The tools must be available in the active task, the connection must
+pass `rateloop_verify_connection`, and the agent must call the evaluation flow for each eligible output. A policy edit is
+picked up by the next context read; deletion or revocation requires a fresh connection. Generic MCP and ordinary Codex
+hooks are advisory; a verified adapter that owns the output boundary is required when the host must prove that output
+stayed blocked.
 
 The authenticated API and SDK use `quote -> ask -> wait -> result`. A scoped workspace key supports prepaid automation;
 a self-funded agent can use short-lived x402/EIP-3009 USDC authorizations. The public MCP Adapter remains a separate,

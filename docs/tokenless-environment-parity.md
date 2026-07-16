@@ -9,15 +9,21 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 - Network: Base Sepolia
 - Chain ID: `84532`
 - RPC variable: `BASE_SEPOLIA_RPC_URL`, `PONDER_RPC_URL_84532`, or `RPC_URL`, depending on the package
-- Deployment schema: `rateloop-tokenless-deployment-v3`
-- Deployment key: `tokenless-v3:<chainId>:<panel>:<issuer>:<adapter-or-zero>`
-- Canonical disposable test artifact: `packages/foundry/deployments/tokenless-v3/84532.json`
+- Deployment schema target: `rateloop-tokenless-deployment-v4`
+- Deployment key target: `tokenless-v4:<chainId>:<panel>:<issuer>:<adapter-or-zero>:<feedback-bonus>`
+- Current v4 release status: `unreleased`
+- Current v4 Base Sepolia deployment key and addresses: none
 
-Historical v1 and v2 artifacts must not be used by a live service. The current v3 bundle was deployed at block
-`44132668`; the isolated Vercel app, Ponder, and keeper must be pinned to its complete deployment key. This is a
-Base Sepolia test-profile bundle with unrestricted test currency, not a production release target. Staging must use the
-same persisted assignment, payment, settlement, and result machinery as production. Hosted startup must fail closed until
-the signed resource/provider bundle, managed signer roles, workers, and paid end-to-end path are verified.
+The checked-in v4 registry is intentionally empty until TokenlessPanel, CredentialIssuer, the optional x402 adapter,
+and TokenlessFeedbackBonus are freshly deployed and verified as one bundle. Historical v1-v3 artifacts, including the
+v3 test bundle deployed at block `44132668`, must not be relabelled or used by a v4 app, Ponder, or keeper process. There
+is no canonical current v4 address to copy into a hosted environment.
+
+After a fresh v4 Base Sepolia deployment, the isolated Vercel app, Ponder, and keeper must all be pinned to the same
+complete key and deployment block before any service is promoted. This remains a test-profile bundle, not a production
+release target. Staging must use the same persisted assignment, payment, settlement, and result machinery as production.
+Hosted startup must fail closed until the signed resource/provider bundle, managed signer roles, workers, and paid
+end-to-end path are verified.
 
 Services must fail closed if their chain, addresses, start block, or deployment key disagree. Do not fall back to Base mainnet, an unversioned deployment JSON, or the former production services.
 
@@ -58,7 +64,8 @@ Next.js:
 - `NEXT_PUBLIC_TARGET_NETWORKS=84532`
 - `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
 - `TOKENLESS_DEPLOYMENT_SCHEMA`, `TOKENLESS_CHAIN_ID`, `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
-- `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`, `TOKENLESS_USDC_ADDRESS`
+- `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
+  `TOKENLESS_FEEDBACK_BONUS_ADDRESS`, `TOKENLESS_USDC_ADDRESS`
 - `TOKENLESS_FEE_RECIPIENT`, round timing variables, and optional `NEXT_PUBLIC_BASE_PAYMASTER_URL`
 - distinct `TOKENLESS_X402_RELAYER_PRIVATE_KEY`, `TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY`, and
   `TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY`
@@ -78,21 +85,23 @@ tokenless JWKS URL, and restrict its browser origins to the same isolated hosts.
 
 Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
 human-assurance APIs or enabling a hosted release. The current journal runs from `0000` through
-`0047_agent_oauth_device_authorization.sql`. Isolated Vercel production builds apply and verify pending journal entries
+`0068_feedback_bonus_awards.sql`. Isolated Vercel production builds apply and verify pending journal entries
 before compiling; preview and local builds never mutate a database. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 
 Ponder:
 
 - `PONDER_NETWORK=baseSepolia`, `PONDER_CHAIN_ID=84532`, `PONDER_RPC_URL_84532`
-- `PONDER_TOKENLESS_PANEL_ADDRESS`, `PONDER_CREDENTIAL_ISSUER_ADDRESS`, `PONDER_X402_PANEL_SUBMITTER_ADDRESS`
+- `PONDER_TOKENLESS_PANEL_ADDRESS`, `PONDER_CREDENTIAL_ISSUER_ADDRESS`, `PONDER_X402_PANEL_SUBMITTER_ADDRESS`,
+  `PONDER_FEEDBACK_BONUS_ADDRESS`
 - `PONDER_TOKENLESS_START_BLOCK`, `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY`
 - `DATABASE_URL`, `CORS_ORIGIN`, `PONDER_KEEPER_WORK_TOKEN`
 
 Keeper:
 
 - `CHAIN_ID=84532`, `RPC_URL`
-- `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`
+- `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
+  `TOKENLESS_FEEDBACK_BONUS_ADDRESS`
 - `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
 - `KEEPER_PRIVATE_KEY` or a hosted keystore, plus `METRICS_AUTH_TOKEN`
 

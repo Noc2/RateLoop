@@ -14,12 +14,16 @@ implementation plans; current readers should not need that history to understand
 
 ## Mechanism specifications
 
+- [Agent human-review configuration](tokenless-agent-human-review-configuration.md)
+- [Agent review state machine](tokenless-agent-review-state-machine.md)
+- [Feedback Bonus v1](tokenless-feedback-bonus-v1-spec.md)
 - [RBTS v1](tokenless-rbts-v1-spec.md)
 - [RBTS worked examples](tokenless-rbts-v1-worked-examples.md)
 - [Surprisingly Popular bounty v1](tokenless-surprise-bounty-v1-spec.md)
 
 ## Operations
 
+- [Agent human-review owner guide](tokenless-agent-human-review-owner-guide.md)
 - [Environment parity](tokenless-environment-parity.md)
 - [EU deployment](tokenless-eu-deployment-runbook.md)
 - [Identity and optional wallets](tokenless-identity-and-wallet-runbook-2026-07.md)
