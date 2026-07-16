@@ -171,10 +171,6 @@ export function TokenlessLandingPage({
           <SectionTitle number="01" gradient="Matter" className="mb-6">
             Where Humans
           </SectionTitle>
-          <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
-            Automated checks catch many failures. When they cannot settle a contextual decision, people can judge the
-            actual output.
-          </p>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {useCases.map(useCase => (
               <article
