@@ -17,6 +17,7 @@ import {
   __setHumanReviewGateEvidenceConfigForTests,
   issueHumanReviewAdvisoryTerminalEvidence,
   issueHumanReviewHostReleaseEvidence,
+  projectHumanReviewGateTrustedKeyHistory,
   projectHumanReviewGateTrustedKeyring,
   verifyHumanReviewGateEvidence,
 } from "~~/lib/tokenless/humanReviewGateEvidence";
@@ -255,6 +256,13 @@ test("loads fingerprint-bound current and retired public keys from the verificat
   const keys = __humanReviewGateEvidenceTestUtils.parseConfiguredVerificationKeys();
   assert.deepEqual(
     keys.map(key => ({ keyId: key.keyId, status: key.status })),
+    [
+      { keyId: currentId, status: "current" },
+      { keyId: retiredId, status: "retired" },
+    ],
+  );
+  assert.deepEqual(
+    projectHumanReviewGateTrustedKeyHistory().keys.map(key => ({ keyId: key.keyId, status: key.status })),
     [
       { keyId: currentId, status: "current" },
       { keyId: retiredId, status: "retired" },

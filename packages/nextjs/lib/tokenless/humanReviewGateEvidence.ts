@@ -731,6 +731,18 @@ export function projectHumanReviewGateTrustedKeyring() {
   return trustedKeyring();
 }
 
+export function projectHumanReviewGateTrustedKeyHistory() {
+  const keyring = trustedKeyring();
+  const statuses = verificationKeys();
+  return {
+    ...keyring,
+    keys: keyring.keys.map(key => ({
+      ...key,
+      status: statuses.get(key.keyId)?.status ?? "retired",
+    })),
+  };
+}
+
 function advisoryPayloadBytes(evidence: HumanReviewAdvisoryTerminalEvidence) {
   const payload = evidence.payload;
   return Buffer.from(
