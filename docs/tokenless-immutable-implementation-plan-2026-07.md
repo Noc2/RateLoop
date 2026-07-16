@@ -73,6 +73,9 @@ owner requirements always override the adaptive baseline.
 
 ## Workspace and agent setup
 
+The detailed owner-facing policy choices, audience and material matrix, timing, compensation, and delegation semantics are frozen in
+[`tokenless-agent-human-review-configuration.md`](./tokenless-agent-human-review-configuration.md). If a generic setup or management surface conflicts with that document, the narrower human-review configuration controls.
+
 A first workspace uses one resumable setup flow:
 
 1. name the workspace;

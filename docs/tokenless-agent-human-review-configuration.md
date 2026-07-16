@@ -1,0 +1,87 @@
+# Tokenless agent human-review configuration
+
+Status: design of record for the agent Human review journey. This document refines the agent-connection and adaptive-review sections of
+[`tokenless-immutable-implementation-plan-2026-07.md`](./tokenless-immutable-implementation-plan-2026-07.md).
+
+## Product contract
+
+The owner configures one **Human review** journey. The implementation keeps three independently versioned and auditable objects:
+
+1. a **selection policy** decides whether an eligible output needs review;
+2. a **request profile** freezes who may see the case, what they answer, how long they have, the panel size, and compensation defaults; and
+3. a **delegation grant** decides whether the connected agent may only check policy, prepare an owner-approved request, or publish and spend within exact limits.
+
+Changing one object never widens another. A request is authorized only when the exact active versions are bound to the integration. Active opportunities and funded rounds retain their frozen versions when a future policy is edited.
+
+## Eligible outputs
+
+An eligible output is a completed response in a workflow explicitly bound to the policy. Setup messages, tool chatter, health checks, review-status messages, and resumed delivery of an already-recorded opportunity are not eligible outputs. The host supplies an idempotent external opportunity ID and privacy-safe execution metadata. RateLoop never accepts hidden reasoning, raw prompts, tool payloads, or an unapproved private-to-public projection.
+
+## Selection choices
+
+| Choice | Behavior |
+| --- | --- |
+| Adaptive | Starts at 100% and may move to 50%, 25%, and the 10% monitoring floor only after the frozen evidence windows pass. |
+| Every eligible output | Requires review for every eligible output. |
+| Fixed percentage | Uses deterministic sampling at the configured rate and forces review when the maximum unreviewed gap is reached. |
+| Risk rules | Requires review for configured risk tiers, incomplete metadata, or confidence below the owner threshold. |
+| Owner-approved only | Creates a prepared request for owner approval and never publishes autonomously. |
+| Manual only | Records no automatic opportunity; the owner or host explicitly starts a handoff. |
+
+Critical-risk and incomplete-metadata safety rules override sampling. A request or spend cap never converts a required decision into `skip`; it yields `approval_required` or `blocked`.
+
+## Audience and data matrix
+
+Audience and material sensitivity are separate dimensions.
+
+| Audience | Permitted material | Compensation | Initial availability |
+| --- | --- | --- | --- |
+| Invited reviewers | Private workspace material through encrypted, assignment-bound leases; public-safe material is also allowed | Unpaid or USDC-paid | Unpaid ships first; paid stays hidden until voucher settlement is ready |
+| RateLoop network | Public, synthetic, or owner-confirmed redacted material only | USDC-paid | Available only when public paid-panel readiness passes |
+| Hybrid | Public-safe material only; invited and network cohorts remain separate and deduplicated | USDC-paid | Hidden until both lanes and aggregation pass readiness |
+
+`private`, `internal`, `confidential`, `restricted`, and `regulated` artifacts never enter public question records. Hybrid review cannot autonomously derive a public projection from private material.
+
+## Question and rationale
+
+The adaptive path is a committed binary criterion. The owner supplies a short criterion and optional labels; the agent supplies only the case-specific source and suggestion payloads allowed by the frozen template. Written rationale is independently configured as `off`, `optional`, or `required`. Arbitrary agent-authored questionnaires are outside this release.
+
+## Timing and panel
+
+The owner selects a bounded `responseWindowSeconds` and requested panel size. The response window freezes the commit deadline. Reveal, beacon-failure, claim, and settlement grace windows remain protocol-controlled. Existing policy backfills retain the prior effective defaults: 3,600 seconds for public or hybrid requests and 1,800 seconds for invited requests.
+
+Recommended new-policy presets are 20 minutes, 1 hour, 4 hours, and 24 hours. Production availability checks may reject a window that cannot credibly fill the requested panel. Active rounds never change when policy defaults change.
+
+## Compensation and authority
+
+Invited private review may be unpaid or USDC-paid. Public-network and hybrid review require USDC. Owners choose the per-seat bounty and panel size; RateLoop derives fee, attempt reserve, minimum reveals, and the maximum funded amount before consent.
+
+Paid tokenless responses retain the immutable 80% fixed-base and up-to-20% deterministic RBTS quality allocation. That allocation is described as the automatic **response quality reward**, not as the legacy Feedback Bonus.
+
+A separate owner-funded **written-feedback stipend** is optional and off by default. It may appear only after immutable stipend terms, prefunding, accepted-work liability, receipts, failure behavior, and a fresh fund-core deployment are complete. Eligibility is structural and frozen before work; moderation or a later usefulness judgment cannot remove earned compensation.
+
+Delegation has exactly three owner-visible levels:
+
+- **Check only** — evaluate policy and report the required next action.
+- **Prepare for approval** — persist the exact request for browser approval; no assignment, publication, or spend occurs beforehand.
+- **Ask automatically** — publish and spend only within the exact workflow, audience, material, timing, panel, payment, expiry, and budget limits of the active grant.
+
+## Capability truthfulness
+
+Setup and management query effective hosted readiness. A recognized schema value is not evidence that a lane works. Unavailable lanes are absent from the primary path; an existing policy whose capability becomes unavailable shows the blocking reason and safe recovery action.
+
+Generic MCP and ordinary Codex plugin behavior are advisory. They may never be labelled host-enforced. Host enforcement requires a verified adapter that owns the output boundary, records signed/versioned enforcement evidence, blocks release on a required review, and resumes only from a terminal or owner-authorized result.
+
+## Owner-facing summary
+
+Every connected-agent card exposes, without opening an advanced disclosure:
+
+- effective frequency and current adaptive rate;
+- reviewers and material boundary;
+- response window and panel size;
+- compensation and automatic quality reward;
+- authority, spend cap, and kill-switch state;
+- last policy check, last request, pending review, and last result; and
+- advisory or verified host-enforced status.
+
+Advanced statistical thresholds, immutable version history, technical commitments, and raw audit identifiers remain progressively disclosed.
