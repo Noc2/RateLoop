@@ -125,6 +125,9 @@ export async function putWorkspaceEvidenceRetentionPolicy(input: {
   try {
     await client.query("BEGIN");
     actor = await requireManager(client, input.accountAddress, input.workspaceId);
+    await client.query("SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE", [
+      input.workspaceId,
+    ]);
     const current = await client.query(
       `SELECT version, evidence_retention_months, audit_retention_months, basis_json, effective_at
        FROM tokenless_workspace_evidence_retention_policies

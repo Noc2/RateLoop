@@ -260,6 +260,25 @@ test("an active legal hold defers scheduled deletion without consuming the objec
   );
 });
 
+test("ordinary retention cannot delete encrypted evidence before the active workspace policy ends", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "retain until workspace policy ends");
+  const now = new Date("2026-08-17T14:00:00.000Z");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_artifact_objects SET delete_after = ? WHERE artifact_id = ?",
+    args: [new Date("2026-08-01T00:00:00.000Z"), artifact.artifactId],
+  });
+  const object = await dbClient.execute({
+    sql: "SELECT object_id FROM tokenless_assurance_artifact_objects WHERE artifact_id = ?",
+    args: [artifact.artifactId],
+  });
+  await assert.rejects(
+    () => processArtifactDeletionByObjectId(String(object.rows[0]?.object_id), now),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "deletion_not_due" && error.retryable,
+  );
+  assert.equal(store.objects.size, 1);
+});
+
 test("artifact vault refuses browser-exposed keys and malformed master keys", () => {
   __setArtifactPrivacyRuntimeForTests(null);
   assert.throws(

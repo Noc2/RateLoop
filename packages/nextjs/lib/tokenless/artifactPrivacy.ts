@@ -875,48 +875,107 @@ export async function requestProjectDeletion(input: {
 
 export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
   const runtime = getRuntime();
-  const result = await dbClient.execute({
-    sql: `SELECT o.object_id, o.artifact_id, o.workspace_id, o.project_id, o.storage_ref,
-                 o.status, o.delete_after, h.hold_id
-          FROM tokenless_assurance_artifact_objects o
-          LEFT JOIN tokenless_legal_holds h ON h.project_id = o.project_id AND h.status = 'active'
-          WHERE o.object_id = ? LIMIT 1`,
+  const identity = await dbClient.execute({
+    sql: "SELECT workspace_id FROM tokenless_assurance_artifact_objects WHERE object_id = ? LIMIT 1",
     args: [objectId],
   });
-  const row = result.rows[0] as QueryRow | undefined;
-  if (!row || rowString(row, "status") !== "active") return true;
-  if (rowString(row, "hold_id")) {
-    throw new TokenlessServiceError(
-      "Artifact deletion is deferred by an active legal hold.",
-      409,
-      "deletion_blocked_by_hold",
-      true,
+  const workspaceId = rowString(identity.rows[0] as QueryRow | undefined, "workspace_id");
+  if (!workspaceId) return true;
+  const client = await dbPool.connect();
+  let row: QueryRow | undefined;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE", [
+      workspaceId,
+    ]);
+    const result = await client.query(
+      `SELECT o.object_id, o.artifact_id, o.workspace_id, o.project_id, o.storage_ref,
+                 o.status, o.delete_after, o.created_at, h.hold_id, request.request_id,
+                 policy.evidence_retention_months
+          FROM tokenless_assurance_artifact_objects o
+          LEFT JOIN tokenless_legal_holds h
+            ON h.workspace_id = o.workspace_id AND h.status = 'active'
+           AND (h.project_id IS NULL OR h.project_id = o.project_id)
+          LEFT JOIN tokenless_assurance_deletion_requests request
+            ON request.workspace_id = o.workspace_id AND request.project_id = o.project_id
+           AND request.status = 'pending' AND request.execute_after <= $1
+          LEFT JOIN tokenless_workspace_evidence_retention_policies policy
+            ON policy.workspace_id = o.workspace_id AND policy.superseded_at IS NULL
+          WHERE o.object_id = $2 LIMIT 1`,
+      [now, objectId],
     );
+    row = result.rows[0] as QueryRow | undefined;
+    if (!row || rowString(row, "status") !== "active") {
+      await client.query("COMMIT");
+      return true;
+    }
+    if (rowString(row, "hold_id")) {
+      throw new TokenlessServiceError(
+        "Artifact deletion is deferred by an active legal hold.",
+        409,
+        "deletion_blocked_by_hold",
+        true,
+      );
+    }
+    if (new Date(String(row.delete_after)).getTime() > now.getTime()) {
+      throw new TokenlessServiceError("Artifact deletion is not due yet.", 409, "deletion_not_due", true);
+    }
+    if (!rowString(row, "request_id")) {
+      const retentionMonths = Number(row.evidence_retention_months);
+      if (!Number.isSafeInteger(retentionMonths) || retentionMonths < 6 || retentionMonths > 120) {
+        throw new TokenlessServiceError(
+          "The workspace evidence-retention policy is unavailable.",
+          503,
+          "retention_policy_unavailable",
+          true,
+        );
+      }
+      const createdAt = new Date(String(row.created_at));
+      const originalDay = createdAt.getUTCDate();
+      createdAt.setUTCDate(1);
+      createdAt.setUTCMonth(createdAt.getUTCMonth() + retentionMonths);
+      const lastDay = new Date(Date.UTC(createdAt.getUTCFullYear(), createdAt.getUTCMonth() + 1, 0)).getUTCDate();
+      createdAt.setUTCDate(Math.min(originalDay, lastDay));
+      if (createdAt.getTime() > now.getTime()) {
+        throw new TokenlessServiceError(
+          "Artifact deletion is deferred until the workspace evidence-retention period ends.",
+          409,
+          "deletion_not_due",
+          true,
+        );
+      }
+    }
+    const storageRef = rowString(row, "storage_ref")!;
+    await runtime.store.delete(storageRef);
+    const deleted = await client.query(
+      `UPDATE tokenless_assurance_artifact_objects SET status = 'deleted', deleted_at = $1
+       WHERE object_id = $2 AND status = 'active'`,
+      [now, objectId],
+    );
+    if (deleted.rowCount !== 1) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await client.query(
+      "UPDATE tokenless_assurance_artifacts SET storage_ref = $1, updated_at = $2 WHERE artifact_id = $3",
+      [`deleted://${rowString(row, "artifact_id")}`, now, rowString(row, "artifact_id")],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_deletion_requests SET status = 'completed', completed_at = $1
+       WHERE project_id = $2 AND status = 'pending' AND execute_after <= $1
+         AND NOT EXISTS (
+           SELECT 1 FROM tokenless_assurance_artifact_objects
+           WHERE project_id = $2 AND status = 'active'
+         )`,
+      [now, rowString(row, "project_id")],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  if (new Date(String(row.delete_after)).getTime() > now.getTime()) {
-    throw new TokenlessServiceError("Artifact deletion is not due yet.", 409, "deletion_not_due", true);
-  }
-  const storageRef = rowString(row, "storage_ref")!;
-  await runtime.store.delete(storageRef);
-  const deleted = await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_artifact_objects SET status = 'deleted', deleted_at = ?
-          WHERE object_id = ? AND status = 'active'`,
-    args: [now, objectId],
-  });
-  if (deleted.rowCount !== 1) return false;
-  await dbClient.execute({
-    sql: "UPDATE tokenless_assurance_artifacts SET storage_ref = ?, updated_at = ? WHERE artifact_id = ?",
-    args: [`deleted://${rowString(row, "artifact_id")}`, now, rowString(row, "artifact_id")],
-  });
-  await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_deletion_requests SET status = 'completed', completed_at = ?
-          WHERE project_id = ? AND status = 'pending' AND execute_after <= ?
-            AND NOT EXISTS (
-              SELECT 1 FROM tokenless_assurance_artifact_objects
-              WHERE project_id = ? AND status = 'active'
-            )`,
-    args: [now, rowString(row, "project_id"), now, rowString(row, "project_id")],
-  });
   await appendAuditEvent({
     action: "artifact.retention_delete",
     actorKind: "system",

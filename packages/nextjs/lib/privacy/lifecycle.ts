@@ -72,6 +72,9 @@ export async function createLegalHold(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE", [
+      input.workspaceId,
+    ]);
     await client.query(
       `INSERT INTO tokenless_legal_holds
        (hold_id, workspace_id, project_id, scope, reason, status, created_by, created_at, review_at)
@@ -132,6 +135,9 @@ export async function releaseLegalHold(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE", [
+      input.workspaceId,
+    ]);
     const released = await client.query(
       `UPDATE tokenless_legal_holds
        SET status = 'released', released_by = $1, released_at = $2, release_reason = $3
