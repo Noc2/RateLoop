@@ -315,8 +315,8 @@ describe("host-owned RateLoop output gate", () => {
     ).toThrow("release_time_invalid");
 
     const tampered = fixture();
-    const replacement = tampered.evidence.signature.endsWith("A") ? "B" : "A";
-    tampered.evidence.signature = `${tampered.evidence.signature.slice(0, -1)}${replacement}`;
+    const replacement = tampered.evidence.signature.startsWith("A") ? "B" : "A";
+    tampered.evidence.signature = `${replacement}${tampered.evidence.signature.slice(1)}`;
     expect(() =>
       verifyHostOutputRelease({
         ...tampered,
