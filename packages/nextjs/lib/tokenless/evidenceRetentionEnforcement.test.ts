@@ -154,6 +154,43 @@ test("enforcement uses the effective workspace policy, honors legal holds, and p
   assert.equal(JSON.parse(String(audit.rows[0]?.metadata_json)).policyVersion, 1);
 });
 
+test("a fully held due corpus still produces hold-exception evidence without pruning", async () => {
+  await seedWorkspace();
+  await seedArtifact(HELD_PROJECT, "e".repeat(8));
+  await seedAccessLog(HELD_PROJECT, "only-held");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_legal_holds
+          (hold_id, workspace_id, project_id, scope, reason, status, created_by, created_at, review_at)
+          VALUES ('hold_only_retention_test', ?, ?, 'project', 'active dispute', 'active', 'system:test', ?, ?)`,
+    args: [WORKSPACE, HELD_PROJECT, OLD, new Date("2028-01-01T00:00:00.000Z")],
+  });
+
+  const summary = await processDueEvidenceRetentionEnforcement({ now: NOW, limit: 10, itemLimit: 10 });
+
+  assert.equal(summary.seeded, 1);
+  assert.equal(summary.completed, 1);
+  assert.equal(summary.objectsQueued, 0);
+  assert.equal(summary.accessLogsPruned, 0);
+  assert.equal(summary.objectsHeld, 1);
+  assert.equal(summary.accessLogsHeld, 1);
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_scheduled_work_items")).rows[0]?.count),
+    0,
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_access_logs")).rows[0]?.count),
+    1,
+  );
+  const audit = await dbClient.execute({
+    sql: `SELECT metadata_json FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action = 'evidence.retention.enforced'`,
+    args: [WORKSPACE],
+  });
+  assert.equal(audit.rows.length, 1);
+  assert.equal(JSON.parse(String(audit.rows[0]?.metadata_json)).objectsHeld, 1);
+  assert.equal(JSON.parse(String(audit.rows[0]?.metadata_json)).accessLogsHeld, 1);
+});
+
 test("an audit-write failure retries from the durable pruned checkpoint without deleting twice", async () => {
   await seedWorkspace();
   await seedAccessLog(PROJECT, "retry");
@@ -221,6 +258,129 @@ test("an exhausted stale lease moves to the dead-letter state instead of remaini
   assert.equal(Number(run.rows[0]?.attempt_count), 8);
   assert.equal(run.rows[0]?.lease_expires_at, null);
   assert.ok(run.rows[0]?.dead_at);
+});
+
+test("a pruned dead letter retries only its audit and clears degraded health after recovery", async () => {
+  await seedWorkspace();
+  const runId = `eer_${"9".repeat(40)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_evidence_retention_enforcement_runs
+          (run_id, idempotency_key, workspace_id, policy_version, evidence_retention_months,
+           audit_retention_months, evidence_cutoff_at, audit_cutoff_at, state, attempt_count,
+           next_attempt_at, access_logs_pruned, pruned_at, dead_at, created_at, updated_at)
+          VALUES (?, ?, ?, 1, 12, 12, ?, ?, 'dead', 8, ?, 3, ?, ?, ?, ?)`,
+    args: [runId, `retention:${"a".repeat(64)}`, WORKSPACE, OLD, OLD, OLD, NOW, NOW, OLD, NOW],
+  });
+
+  const summary = await processDueEvidenceRetentionEnforcement({ now: NOW, limit: 10, itemLimit: 10 });
+
+  assert.equal(summary.completed, 1);
+  assert.equal(summary.dead, 0);
+  assert.equal(summary.accessLogsPruned, 3);
+  const run = await dbClient.execute({
+    sql: "SELECT state, attempt_count, access_logs_pruned, dead_at, completed_at FROM tokenless_evidence_retention_enforcement_runs WHERE run_id = ?",
+    args: [runId],
+  });
+  assert.deepEqual(run.rows[0], {
+    access_logs_pruned: 3,
+    attempt_count: 8,
+    completed_at: NOW,
+    dead_at: null,
+    state: "completed",
+  });
+  const audit = await dbClient.execute({
+    sql: `SELECT event_id FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action = 'evidence.retention.enforced' AND target_id = ?`,
+    args: [WORKSPACE, runId],
+  });
+  assert.equal(audit.rows.length, 1);
+});
+
+test("an unresolved pruned dead letter remains visible to every health pass", async () => {
+  await seedWorkspace();
+  const runId = `eer_${"b".repeat(40)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_evidence_retention_enforcement_runs
+          (run_id, idempotency_key, workspace_id, policy_version, evidence_retention_months,
+           audit_retention_months, evidence_cutoff_at, audit_cutoff_at, state, attempt_count,
+           next_attempt_at, pruned_at, dead_at, created_at, updated_at)
+          VALUES (?, ?, ?, 1, 12, 12, ?, ?, 'dead', 8, ?, ?, ?, ?, ?)`,
+    args: [runId, `retention:${"c".repeat(64)}`, WORKSPACE, OLD, OLD, OLD, NOW, NOW, OLD, NOW],
+  });
+  __setEvidenceRetentionAuditWriterForTests(async () => {
+    throw new Error("audit sink remains unavailable");
+  });
+
+  const first = await processDueEvidenceRetentionEnforcement({ now: NOW, limit: 10, itemLimit: 10 });
+  const second = await processDueEvidenceRetentionEnforcement({
+    now: new Date(NOW.getTime() + 300_000),
+    limit: 10,
+    itemLimit: 10,
+  });
+
+  assert.equal(first.dead, 1);
+  assert.equal(second.dead, 1);
+  assert.equal(first.completed, 0);
+  assert.equal(second.completed, 0);
+  const run = await dbClient.execute({
+    sql: "SELECT state, attempt_count, pruned_at, dead_at FROM tokenless_evidence_retention_enforcement_runs WHERE run_id = ?",
+    args: [runId],
+  });
+  assert.equal(run.rows[0]?.state, "dead");
+  assert.equal(Number(run.rows[0]?.attempt_count), 8);
+  assert.ok(run.rows[0]?.pruned_at);
+  assert.ok(run.rows[0]?.dead_at);
+});
+
+test("a stale claim cannot audit, complete, or fail a successor claim", async () => {
+  await seedWorkspace();
+  const runId = `eer_${"d".repeat(40)}`;
+  const oldLease = new Date(NOW.getTime() + 60_000);
+  const successorLease = new Date(NOW.getTime() + 600_000);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_evidence_retention_enforcement_runs
+          (run_id, idempotency_key, workspace_id, policy_version, evidence_retention_months,
+           audit_retention_months, evidence_cutoff_at, audit_cutoff_at, state, attempt_count,
+           next_attempt_at, lease_expires_at, pruned_at, created_at, updated_at)
+          VALUES (?, ?, ?, 1, 12, 12, ?, ?, 'processing', 2, ?, ?, ?, ?, ?)`,
+    args: [runId, `retention:${"e".repeat(64)}`, WORKSPACE, OLD, OLD, OLD, successorLease, NOW, OLD, NOW],
+  });
+
+  await assert.rejects(
+    () =>
+      __evidenceRetentionEnforcementTestUtils.finalizeClaim({
+        attemptCount: 1,
+        leaseExpiresAt: oldLease,
+        now: NOW,
+        runId,
+      }),
+    /claim was replaced before audit/,
+  );
+  assert.equal(
+    await __evidenceRetentionEnforcementTestUtils.failClaim({
+      attemptCount: 1,
+      leaseExpiresAt: oldLease,
+      now: NOW,
+      runId,
+    }),
+    "lost",
+  );
+  const run = await dbClient.execute({
+    sql: "SELECT state, attempt_count, lease_expires_at, last_error FROM tokenless_evidence_retention_enforcement_runs WHERE run_id = ?",
+    args: [runId],
+  });
+  assert.deepEqual(run.rows[0], {
+    attempt_count: 2,
+    last_error: null,
+    lease_expires_at: successorLease,
+    state: "processing",
+  });
+  const audit = await dbClient.execute({
+    sql: `SELECT event_id FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action = 'evidence.retention.enforced' AND target_id = ?`,
+    args: [WORKSPACE, runId],
+  });
+  assert.equal(audit.rows.length, 0);
 });
 
 test("a queued run never prunes after its policy version is superseded", async () => {

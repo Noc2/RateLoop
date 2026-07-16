@@ -307,6 +307,24 @@ test("scheduled maintenance degrades and reports evidence-retention retries", as
   assert.equal(result.summary.evidenceRetention.integrityRecordsPreserved.evidencePackets, 7);
 });
 
+test("scheduled maintenance remains degraded while a retention dead letter is unresolved", async () => {
+  const base = processors(async () => {});
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...base,
+      async processEvidenceRetention() {
+        const summary = await base.processEvidenceRetention();
+        return { ...summary, dead: 1 };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.equal(result.summary.evidenceRetention.dead, 1);
+});
+
 test("scheduled maintenance degrades when dead deletion work leaves a retention backlog", async () => {
   const base = processors(async () => {});
   const result = await runTokenlessScheduledMaintenance({

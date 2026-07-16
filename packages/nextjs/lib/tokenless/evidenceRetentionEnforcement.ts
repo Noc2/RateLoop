@@ -14,6 +14,12 @@ const STALE_LEASE_ERROR = "stale retention-enforcement claim recovered";
 
 class RetentionClaimLostError extends Error {}
 
+type RetentionClaim = {
+  attemptCount: number;
+  leaseExpiresAt: Date;
+  runId: string;
+};
+
 type RetentionAuditWriter = typeof appendAuditEvent;
 let auditWriterOverride: RetentionAuditWriter | null = null;
 
@@ -79,6 +85,22 @@ function scheduledWorkItemId(objectId: string) {
   return `swi_${digest(`delete_artifact:${objectId}`).slice(0, 40)}`;
 }
 
+function retentionClaim(row: Row): RetentionClaim {
+  return {
+    attemptCount: integer(row, "attempt_count"),
+    leaseExpiresAt: new Date(string(row, "lease_expires_at") ?? 0),
+    runId: string(row, "run_id")!,
+  };
+}
+
+function ownsRetentionClaim(row: Row | undefined, claim: RetentionClaim) {
+  return (
+    string(row, "state") === "processing" &&
+    integer(row, "attempt_count") === claim.attemptCount &&
+    new Date(string(row, "lease_expires_at") ?? 0).getTime() === claim.leaseExpiresAt.getTime()
+  );
+}
+
 function unheldClause(alias: string, workspaceParameter = 1) {
   return `NOT EXISTS (
       SELECT 1 FROM tokenless_legal_holds workspace_hold
@@ -115,14 +137,12 @@ async function workspaceHasDueRecords(input: {
     dbPool.query(
       `SELECT o.object_id FROM tokenless_assurance_artifact_objects o
        WHERE o.workspace_id = $1 AND o.status = 'active' AND o.created_at <= $2 AND o.delete_after <= $3
-         AND ${unheldClause("o")}
        LIMIT 1`,
       [input.workspaceId, input.evidenceCutoff, input.now],
     ),
     dbPool.query(
       `SELECT access.log_id FROM tokenless_assurance_access_logs access
        WHERE access.workspace_id = $1 AND access.occurred_at <= $2
-         AND ${unheldClause("access")}
        LIMIT 1`,
       [input.workspaceId, input.auditCutoff],
     ),
@@ -259,7 +279,8 @@ async function queueArtifactDeletion(client: Queryable, objectId: string, now: D
 }
 
 async function pruneRun(row: Row, now: Date, itemLimit: number) {
-  const runId = string(row, "run_id")!;
+  const claimToken = retentionClaim(row);
+  const runId = claimToken.runId;
   const workspaceId = string(row, "workspace_id")!;
   const evidenceCutoff = new Date(string(row, "evidence_cutoff_at")!);
   const auditCutoff = new Date(string(row, "audit_cutoff_at")!);
@@ -267,15 +288,11 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
   try {
     await client.query("BEGIN");
     const claim = await client.query(
-      `SELECT state, lease_expires_at FROM tokenless_evidence_retention_enforcement_runs
+      `SELECT state, attempt_count, lease_expires_at FROM tokenless_evidence_retention_enforcement_runs
        WHERE run_id = $1 FOR UPDATE`,
       [runId],
     );
-    if (
-      string(claim.rows[0], "state") !== "processing" ||
-      new Date(string(claim.rows[0], "lease_expires_at") ?? 0).getTime() !==
-        new Date(string(row, "lease_expires_at") ?? 0).getTime()
-    ) {
+    if (!ownsRetentionClaim(claim.rows[0], claimToken)) {
       throw new RetentionClaimLostError("Retention-enforcement claim was replaced.");
     }
     const workspace = await client.query(
@@ -471,6 +488,33 @@ async function recordRunAudit(row: Row, now: Date) {
   }
 }
 
+async function reconcilePrunedDeadRunAudits(now: Date, limit: number) {
+  const dead = await dbClient.execute({
+    sql: `SELECT * FROM tokenless_evidence_retention_enforcement_runs
+          WHERE state = 'dead' AND pruned_at IS NOT NULL
+          ORDER BY dead_at ASC, created_at ASC LIMIT ?`,
+    args: [limit],
+  });
+  const completed: Row[] = [];
+  for (const value of dead.rows) {
+    const row = value as Row;
+    try {
+      await recordRunAudit(row, now);
+      const updated = await dbClient.execute({
+        sql: `UPDATE tokenless_evidence_retention_enforcement_runs
+              SET state = 'completed', lease_expires_at = NULL, last_error = NULL, dead_at = NULL,
+                  completed_at = ?, updated_at = ?
+              WHERE run_id = ? AND state = 'dead' AND pruned_at IS NOT NULL`,
+        args: [now, now, string(row, "run_id")],
+      });
+      if (updated.rowCount === 1) completed.push(row);
+    } catch {
+      // The durable dead letter remains visible to health checks and is retried by the next maintenance run.
+    }
+  }
+  return completed;
+}
+
 async function refreshedRun(runId: string) {
   const result = await dbClient.execute({
     sql: "SELECT * FROM tokenless_evidence_retention_enforcement_runs WHERE run_id = ? LIMIT 1",
@@ -479,35 +523,77 @@ async function refreshedRun(runId: string) {
   return result.rows[0] as Row;
 }
 
+async function finalizeRunWithAudit(claim: RetentionClaim, row: Row, now: Date) {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT state, attempt_count, lease_expires_at
+       FROM tokenless_evidence_retention_enforcement_runs WHERE run_id = $1 FOR UPDATE`,
+      [claim.runId],
+    );
+    if (!ownsRetentionClaim(locked.rows[0], claim)) {
+      throw new RetentionClaimLostError("Retention-enforcement claim was replaced before audit.");
+    }
+    await recordRunAudit(row, now);
+    const updated = await client.query(
+      `UPDATE tokenless_evidence_retention_enforcement_runs
+       SET state = 'completed', lease_expires_at = NULL, last_error = NULL, completed_at = $1, updated_at = $1
+       WHERE run_id = $2 AND state = 'processing' AND attempt_count = $3 AND lease_expires_at = $4`,
+      [now, claim.runId, claim.attemptCount, claim.leaseExpiresAt],
+    );
+    if (updated.rowCount !== 1) {
+      throw new RetentionClaimLostError("Retention-enforcement claim was replaced during audit.");
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function completeRun(row: Row, now: Date, itemLimit: number) {
-  const runId = string(row, "run_id")!;
+  const claim = retentionClaim(row);
+  const runId = claim.runId;
   if (!row.pruned_at) {
     const result = await pruneRun(row, now, itemLimit);
     if (result.superseded) return { row: await refreshedRun(runId), superseded: true } as const;
   }
   const pruned = await refreshedRun(runId);
-  await recordRunAudit(pruned, now);
-  await dbClient.execute({
-    sql: `UPDATE tokenless_evidence_retention_enforcement_runs
-          SET state = 'completed', lease_expires_at = NULL, last_error = NULL, completed_at = ?, updated_at = ?
-          WHERE run_id = ? AND state = 'processing'`,
-    args: [now, now, runId],
-  });
+  await finalizeRunWithAudit(claim, pruned, now);
   return { row: pruned, superseded: false } as const;
 }
 
 async function failRun(row: Row, error: unknown, now: Date) {
-  const runId = string(row, "run_id")!;
-  const attempt = integer(row, "attempt_count");
+  const claim = retentionClaim(row);
+  const attempt = claim.attemptCount;
   const dead = attempt >= MAX_ATTEMPTS;
   const message = error instanceof Error ? error.message.slice(0, 500) : "Retention enforcement failed";
-  await dbClient.execute({
+  const updated = await dbClient.execute({
     sql: `UPDATE tokenless_evidence_retention_enforcement_runs
           SET state = ?, lease_expires_at = NULL, next_attempt_at = ?, last_error = ?, dead_at = ?, updated_at = ?
-          WHERE run_id = ? AND state = 'processing'`,
-    args: [dead ? "dead" : "retry", retryAt(now, attempt), message, dead ? now : null, now, runId],
+          WHERE run_id = ? AND state = 'processing' AND attempt_count = ? AND lease_expires_at = ?`,
+    args: [
+      dead ? "dead" : "retry",
+      retryAt(now, attempt),
+      message,
+      dead ? now : null,
+      now,
+      claim.runId,
+      claim.attemptCount,
+      claim.leaseExpiresAt,
+    ],
   });
-  return dead;
+  return updated.rowCount === 1 ? (dead ? "dead" : "retry") : "lost";
+}
+
+async function unresolvedDeadRunCount() {
+  const result = await dbClient.execute(
+    "SELECT COUNT(*) AS count FROM tokenless_evidence_retention_enforcement_runs WHERE state = 'dead'",
+  );
+  return integer(result.rows[0] as Row | undefined, "count");
 }
 
 function emptySummary(): EvidenceRetentionEnforcementSummary {
@@ -551,9 +637,11 @@ export async function processDueEvidenceRetentionEnforcement(
   const limit = bounded(input.limit, DEFAULT_RUN_LIMIT, 100);
   const itemLimit = bounded(input.itemLimit, DEFAULT_ITEM_LIMIT, 500);
   const summary = emptySummary();
+  const recoveredDeadAudits = await reconcilePrunedDeadRunAudits(now, limit);
+  summary.completed += recoveredDeadAudits.length;
+  for (const recovered of recoveredDeadAudits) addRun(summary, recovered);
   summary.seeded = await seedRetentionRuns(now);
   const due = await claimDueRuns(now, limit);
-  summary.dead += due.exhausted;
   summary.due = due.claimed.length;
   for (const row of due.claimed) {
     try {
@@ -564,12 +652,14 @@ export async function processDueEvidenceRetentionEnforcement(
     } catch (error) {
       if (error instanceof RetentionClaimLostError) continue;
       const persisted = await refreshedRun(string(row, "run_id")!);
+      const outcome = await failRun(row, error, now);
+      if (outcome === "lost") continue;
       addRun(summary, persisted);
-      const dead = await failRun(persisted, error, now);
-      summary[dead ? "dead" : "retry"] += 1;
+      summary[outcome] += 1;
       summary.retryRunIds.push(string(row, "run_id")!);
     }
   }
+  summary.dead = await unresolvedDeadRunCount();
   return summary;
 }
 
@@ -595,6 +685,24 @@ export const __evidenceRetentionEnforcementTestUtils = {
   },
   async recordRunAudit(runId: string, now: Date) {
     await recordRunAudit(await refreshedRun(runId), now);
+  },
+  async finalizeClaim(input: { attemptCount: number; leaseExpiresAt: Date; now: Date; runId: string }) {
+    await finalizeRunWithAudit(
+      { attemptCount: input.attemptCount, leaseExpiresAt: input.leaseExpiresAt, runId: input.runId },
+      await refreshedRun(input.runId),
+      input.now,
+    );
+  },
+  async failClaim(input: { attemptCount: number; leaseExpiresAt: Date; now: Date; runId: string }) {
+    return failRun(
+      {
+        ...(await refreshedRun(input.runId)),
+        attempt_count: input.attemptCount,
+        lease_expires_at: input.leaseExpiresAt,
+      },
+      new Error("simulated stale worker failure"),
+      input.now,
+    );
   },
   retryAt,
   scheduledWorkItemId,
