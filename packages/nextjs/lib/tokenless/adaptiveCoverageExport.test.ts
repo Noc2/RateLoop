@@ -229,6 +229,22 @@ test("owner export is bounded, canonical, complete, and records its digest in th
     endExclusive: TO.toISOString(),
     snapshotAt: SNAPSHOT.toISOString(),
   });
+  assert.deepEqual(
+    { ...exported.retention, effectiveAt: undefined },
+    {
+      schemaVersion: "rateloop.workspace-evidence-retention.v1",
+      policyVersion: 1,
+      evidenceRetentionMonths: 12,
+      auditRetentionMonths: 12,
+      minimumRetentionMonths: 6,
+      basis: {
+        floor: "six_calendar_months",
+        reasons: ["eu_ai_act_article_26_6_deployer_log_minimum", "workspace_assurance_evidence_policy"],
+      },
+      effectiveAt: undefined,
+    },
+  );
+  assert.ok(Number.isFinite(Date.parse(exported.retention.effectiveAt)));
   assert.deepEqual(exported.counts, {
     scopes: 1,
     decisions: 1,

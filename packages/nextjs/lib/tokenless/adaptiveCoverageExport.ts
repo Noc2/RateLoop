@@ -272,6 +272,18 @@ export async function exportAdaptiveCoverage(input: {
     );
     if (!access.rows[0]) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
 
+    const retentionResult = await client.query(
+      `SELECT version,evidence_retention_months,audit_retention_months,basis_json,effective_at
+       FROM tokenless_workspace_evidence_retention_policies
+       WHERE workspace_id=$1 AND superseded_at IS NULL LIMIT 1`,
+      [input.workspaceId],
+    );
+    const retentionRow = retentionResult.rows[0] as Row | undefined;
+    if (!retentionRow) {
+      throw new TokenlessServiceError("The workspace retention policy is unavailable.", 500, "retention_unavailable");
+    }
+    const retentionBasis = jsonObject(retentionRow, "basis_json");
+
     const scopesResult = await client.query(
       `SELECT s.*,p.mode,p.agreement_threshold_bps,p.production_floor_bps,p.fixed_rate_bps,
               p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,p.publishing_policy_id
@@ -384,6 +396,15 @@ export async function exportAdaptiveCoverage(input: {
         startInclusive: window.start.toISOString(),
         endExclusive: window.end.toISOString(),
         snapshotAt: window.snapshotAt.toISOString(),
+      },
+      retention: {
+        schemaVersion: "rateloop.workspace-evidence-retention.v1" as const,
+        policyVersion: integer(retentionRow, "version"),
+        evidenceRetentionMonths: integer(retentionRow, "evidence_retention_months"),
+        auditRetentionMonths: integer(retentionRow, "audit_retention_months"),
+        minimumRetentionMonths: 6 as const,
+        basis: retentionBasis,
+        effectiveAt: iso(retentionRow, "effective_at"),
       },
       limits: { maximumWindowDays: 366, maximumScopes: MAX_SCOPES, maximumRowsPerSeries: MAX_SERIES_ROWS },
       counts: {
