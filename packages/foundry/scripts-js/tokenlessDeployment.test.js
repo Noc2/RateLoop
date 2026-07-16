@@ -52,6 +52,7 @@ function completeBroadcast({ includeAdapter = false } = {}) {
   const testUsdc = address(1);
   const credentialIssuer = address(2);
   const panel = address(3);
+  const feedbackBonus = address(4);
   const entries = [
     createTransaction(
       "MockERC20",
@@ -66,10 +67,16 @@ function completeBroadcast({ includeAdapter = false } = {}) {
       2,
     ),
     createTransaction("TokenlessPanel", panel, [testUsdc, credentialIssuer], 3),
+    createTransaction(
+      "TokenlessFeedbackBonus",
+      feedbackBonus,
+      [testUsdc, credentialIssuer],
+      4,
+    ),
   ];
   if (includeAdapter) {
     entries.push(
-      createTransaction("X402PanelSubmitter", address(4), [testUsdc, panel], 4),
+      createTransaction("X402PanelSubmitter", address(5), [testUsdc, panel], 5),
     );
   }
   return {
@@ -90,10 +97,11 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.contracts.TestUSDC.artifact, "MockERC20");
   assert.equal(artifact.contracts.CredentialIssuer.address, address(2));
   assert.equal(artifact.contracts.TokenlessPanel.address, address(3));
+  assert.equal(artifact.contracts.TokenlessFeedbackBonus.address, address(4));
   assert.equal(artifact.contracts.X402PanelSubmitter, undefined);
   assert.match(
     artifact.deploymentKey,
-    /^tokenless-v3:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}$/,
+    /^tokenless-v4:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}:0x[0-9a-f]{40}$/,
   );
 });
 
@@ -101,14 +109,14 @@ test("includes X402PanelSubmitter when the optional adapter is deployed", () => 
   const artifact = reconstructTokenlessDeploymentFromBroadcast(
     completeBroadcast({ includeAdapter: true }),
   );
-  assert.equal(artifact.contracts.X402PanelSubmitter.address, address(4));
-  assert.ok(!artifact.deploymentKey.endsWith(`:${address(0)}`));
+  assert.equal(artifact.contracts.X402PanelSubmitter.address, address(5));
+  assert.ok(artifact.deploymentKey.includes(`:${address(5)}:`));
 });
 
 test("resolves Foundry CREATE hash permutations by unique successful receipt address", () => {
   const broadcast = completeBroadcast({ includeAdapter: true });
   const originalHashes = broadcast.transactions.map(
-    transaction => transaction.hash,
+    (transaction) => transaction.hash,
   );
   broadcast.transactions[0].hash = originalHashes[2];
   broadcast.transactions[1].hash = originalHashes[0];
@@ -118,7 +126,8 @@ test("resolves Foundry CREATE hash permutations by unique successful receipt add
   assert.equal(artifact.contracts.TestUSDC.deployedOnBlock, 101);
   assert.equal(artifact.contracts.CredentialIssuer.deployedOnBlock, 102);
   assert.equal(artifact.contracts.TokenlessPanel.deployedOnBlock, 103);
-  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 104);
+  assert.equal(artifact.contracts.TokenlessFeedbackBonus.deployedOnBlock, 104);
+  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 105);
 });
 
 test("rejects missing required contracts and mixed broadcasts", () => {
@@ -129,6 +138,15 @@ test("rejects missing required contracts and mixed broadcasts", () => {
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(missingIssuer),
     /exactly one CredentialIssuer/,
+  );
+
+  const missingFeedbackBonus = completeBroadcast();
+  missingFeedbackBonus.transactions = missingFeedbackBonus.transactions.filter(
+    (transaction) => transaction.contractName !== "TokenlessFeedbackBonus",
+  );
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(missingFeedbackBonus),
+    /exactly one TokenlessFeedbackBonus/,
   );
 
   const mixed = completeBroadcast();
@@ -177,6 +195,18 @@ test("rejects TokenlessPanel constructor wiring that disagrees with exports", ()
   );
 });
 
+test("rejects TokenlessFeedbackBonus constructor wiring that disagrees with exports", () => {
+  const broadcast = completeBroadcast();
+  const bonus = broadcast.transactions.find(
+    (transaction) => transaction.contractName === "TokenlessFeedbackBonus",
+  );
+  bonus.arguments[1] = address(99);
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
+    /TokenlessFeedbackBonus constructor wiring must match/,
+  );
+});
+
 test("rejects X402PanelSubmitter constructor wiring that disagrees with exports", () => {
   const broadcast = completeBroadcast({ includeAdapter: true });
   const adapter = broadcast.transactions.find(
@@ -202,19 +232,29 @@ test("validates deployment keys against contract addresses", () => {
   );
 });
 
-test("export writes tokenless-v3 separately and leaves unrelated artifacts untouched", () => {
+test("export writes tokenless-v4 separately and leaves historical artifacts untouched", () => {
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-export-"));
   try {
     const unrelatedPath = join(root, "deployments", "unrelated.json");
-    const broadcastPath = join(root, "run-latest.json");
-    const tokenlessPath = join(
+    const historicalV3Path = join(
       root,
       "deployments",
       "tokenless-v3",
       "84532.json",
     );
+    const broadcastPath = join(root, "run-latest.json");
+    const tokenlessPath = join(
+      root,
+      "deployments",
+      "tokenless-v4",
+      "84532.json",
+    );
     mkdirSync(join(root, "deployments"), { recursive: true });
+    mkdirSync(join(root, "deployments", "tokenless-v3"), {
+      recursive: true,
+    });
     writeFileSync(unrelatedPath, '{"unrelated":true}\n');
+    writeFileSync(historicalV3Path, '{"historicalV3":true}\n');
     writeFileSync(broadcastPath, JSON.stringify(completeBroadcast()));
 
     exportTokenlessDeploymentFromBroadcast({
@@ -224,6 +264,10 @@ test("export writes tokenless-v3 separately and leaves unrelated artifacts untou
     });
 
     assert.equal(readFileSync(unrelatedPath, "utf8"), '{"unrelated":true}\n');
+    assert.equal(
+      readFileSync(historicalV3Path, "utf8"),
+      '{"historicalV3":true}\n',
+    );
     const exported = JSON.parse(readFileSync(tokenlessPath, "utf8"));
     assert.equal(exported.schemaVersion, TOKENLESS_DEPLOYMENT_SCHEMA);
     assert.equal(exported.chainId, 84532);
@@ -243,12 +287,14 @@ test("generated sources expose required ABIs and omit the absent adapter", () =>
 
   assert.ok(sources.has("abis/CredentialIssuerAbi.ts"));
   assert.ok(sources.has("abis/TokenlessPanelAbi.ts"));
+  assert.ok(sources.has("abis/TokenlessFeedbackBonusAbi.ts"));
   assert.ok(sources.has("abis/TokenlessTestUSDCAbi.ts"));
   assert.equal(sources.has("abis/X402PanelSubmitterAbi.ts"), false);
   assert.match(
     sources.get("deployedContracts.ts"),
-    /rateloop-tokenless-deployment-v3/,
+    /rateloop-tokenless-deployment-v4/,
   );
+  assert.match(sources.get("deployedContracts.ts"), /"status": "released"/);
   assert.doesNotMatch(sources.get("index.ts"), /X402PanelSubmitterAbi/);
   assert.match(sources.get("index.ts"), /from "\.\/historicalDeployments"/);
   assert.equal(sources.has("historicalDeployments.ts"), false);
@@ -262,13 +308,16 @@ test("source-only ABI generation cannot emit or replace deployment metadata", ()
   });
 
   assert.deepEqual([...sources.keys()].sort(), [
+    "abis/CredentialIssuerAbi.ts",
+    "abis/TokenlessFeedbackBonusAbi.ts",
     "abis/TokenlessPanelAbi.ts",
+    "abis/TokenlessTestUSDCAbi.ts",
     "abis/X402PanelSubmitterAbi.ts",
   ]);
   assert.equal(sources.has("deployedContracts.ts"), false);
   assert.equal(sources.has("index.ts"), false);
   for (const source of sources.values()) {
-    assert.match(source, /rateloop-tokenless-deployment-v3/);
+    assert.match(source, /rateloop-tokenless-deployment-v4/);
     assert.doesNotMatch(source, /0x[0-9a-f]{40}/i);
   }
 });
@@ -280,7 +329,7 @@ test("full artifact generation rejects historical v1 deployment metadata", () =>
   historical.schemaVersion = "rateloop-tokenless-deployment-v1";
   historical.version = 1;
   historical.deploymentKey = historical.deploymentKey.replace(
-    "tokenless-v3:",
+    "tokenless-v4:",
     "tokenless-v1:",
   );
 

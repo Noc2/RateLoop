@@ -10,7 +10,10 @@ import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
 import type { Logger } from "./logger.js";
 import { decodeTokenlessRevealPayload } from "./sealed-payload.js";
-import { TokenlessPanelAbi } from "./tokenless-abi.js";
+import {
+  TokenlessFeedbackBonusAbi,
+  TokenlessPanelAbi,
+} from "./tokenless-abi.js";
 import {
   TokenlessRoundState,
   type TokenlessCommit,
@@ -58,10 +61,12 @@ export type RevealDecryptor = (params: {
 
 const revealMaterialCache = new Map<string, TokenlessRevealMaterial>();
 let nextScanRoundId = 1n;
+let nextScanFeedbackBonusPoolId = 1n;
 
 export function resetTokenlessKeeperStateForTests() {
   revealMaterialCache.clear();
   nextScanRoundId = 1n;
+  nextScanFeedbackBonusPoolId = 1n;
 }
 
 function emptyResult(): TokenlessKeeperResult {
@@ -77,6 +82,7 @@ function emptyResult(): TokenlessKeeperResult {
     terminalRoundsAdvanced: 0,
     claimsExecuted: 0,
     staleReturnsExecuted: 0,
+    feedbackBonusRefundsExecuted: 0,
     selfRevealFallbacksPending: 0,
     roundsAwaitingBeaconFailure: 0,
     roundsAwaitingScoringEntropy: 0,
@@ -519,6 +525,77 @@ function scanRoundIds(nextRoundId: bigint, maxRounds: number) {
   return ids;
 }
 
+function scanFeedbackBonusPoolIds(nextPoolId: bigint, maxPools: number) {
+  const total = nextPoolId - 1n;
+  if (total <= 0n) return [];
+  if (nextScanFeedbackBonusPoolId > total) nextScanFeedbackBonusPoolId = 1n;
+  const count = Math.min(maxPools, Number(total));
+  const ids: bigint[] = [];
+  for (let index = 0; index < count; index += 1) {
+    ids.push(nextScanFeedbackBonusPoolId);
+    nextScanFeedbackBonusPoolId =
+      nextScanFeedbackBonusPoolId === total
+        ? 1n
+        : nextScanFeedbackBonusPoolId + 1n;
+  }
+  return ids;
+}
+
+async function reconcileFeedbackBonusRemainders(params: {
+  clients: TokenlessKeeperClients;
+  config: KeeperConfig;
+  logger: Logger;
+  now: bigint;
+  nextPoolId: bigint;
+  result: TokenlessKeeperResult;
+}) {
+  for (const poolId of scanFeedbackBonusPoolIds(
+    params.nextPoolId,
+    params.config.maxFeedbackBonusPoolsPerTick,
+  )) {
+    const pool = (await params.clients.publicClient.readContract({
+      address: params.config.deployment.feedbackBonus,
+      abi: TokenlessFeedbackBonusAbi,
+      functionName: "getPool",
+      args: [poolId],
+    })) as {
+      depositedAmount: bigint;
+      awardedAmount: bigint;
+      awardDeadline: bigint;
+      refunded: boolean;
+    };
+    if (
+      pool.refunded ||
+      params.now <= BigInt(pool.awardDeadline) ||
+      BigInt(pool.depositedAmount) <= BigInt(pool.awardedAmount)
+    ) {
+      continue;
+    }
+    try {
+      const hash = await params.clients.walletClient.writeContract({
+        address: params.config.deployment.feedbackBonus,
+        abi: TokenlessFeedbackBonusAbi,
+        functionName: "refundRemainder",
+        args: [poolId],
+        account: params.clients.account,
+      });
+      await params.clients.publicClient.waitForTransactionReceipt({ hash });
+      params.result.feedbackBonusRefundsExecuted += 1;
+    } catch (error) {
+      if (
+        /NothingToRefund|AwardWindowClosed|InvalidPool/iu.test(String(error))
+      ) {
+        params.logger.debug("Feedback bonus refund lost an on-chain race", {
+          poolId: poolId.toString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 export async function validateTokenlessKeeperDeployment(
   clients: TokenlessKeeperClients,
   config: KeeperConfig,
@@ -532,15 +609,22 @@ export async function validateTokenlessKeeperDeployment(
   const [
     panelCode,
     issuerCode,
+    feedbackBonusCode,
     currentBlock,
     issuer,
     scoringVersion,
     basePayBps,
     maximumCommits,
+    panelUsdc,
+    feedbackBonusUsdc,
+    feedbackBonusIssuer,
   ] = await Promise.all([
     clients.publicClient.getBytecode({ address: config.deployment.panel }),
     clients.publicClient.getBytecode({
       address: config.deployment.credentialIssuer,
+    }),
+    clients.publicClient.getBytecode({
+      address: config.deployment.feedbackBonus,
     }),
     clients.publicClient.getBlockNumber(),
     clients.publicClient.readContract({
@@ -563,6 +647,21 @@ export async function validateTokenlessKeeperDeployment(
       abi: TokenlessPanelAbi,
       functionName: "MAXIMUM_COMMITS",
     }),
+    clients.publicClient.readContract({
+      address: config.deployment.panel,
+      abi: TokenlessPanelAbi,
+      functionName: "usdc",
+    }),
+    clients.publicClient.readContract({
+      address: config.deployment.feedbackBonus,
+      abi: TokenlessFeedbackBonusAbi,
+      functionName: "usdc",
+    }),
+    clients.publicClient.readContract({
+      address: config.deployment.feedbackBonus,
+      abi: TokenlessFeedbackBonusAbi,
+      functionName: "credentialIssuer",
+    }),
   ]);
   if (!panelCode || panelCode === "0x") {
     throw new Error("TOKENLESS_PANEL_ADDRESS has no deployed bytecode.");
@@ -570,6 +669,11 @@ export async function validateTokenlessKeeperDeployment(
   if (!issuerCode || issuerCode === "0x") {
     throw new Error(
       "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS has no deployed bytecode.",
+    );
+  }
+  if (!feedbackBonusCode || feedbackBonusCode === "0x") {
+    throw new Error(
+      "TOKENLESS_FEEDBACK_BONUS_ADDRESS has no deployed bytecode.",
     );
   }
   if (
@@ -581,12 +685,26 @@ export async function validateTokenlessKeeperDeployment(
     );
   }
   if (
+    typeof panelUsdc !== "string" ||
+    typeof feedbackBonusUsdc !== "string" ||
+    !isAddressEqual(panelUsdc as Address, feedbackBonusUsdc as Address) ||
+    typeof feedbackBonusIssuer !== "string" ||
+    !isAddressEqual(
+      feedbackBonusIssuer as Address,
+      config.deployment.credentialIssuer,
+    )
+  ) {
+    throw new Error(
+      "TokenlessFeedbackBonus wiring does not match the versioned deployment identity.",
+    );
+  }
+  if (
     Number(scoringVersion) !== 2 ||
     Number(basePayBps) !== 8_000 ||
     Number(maximumCommits) !== 500
   ) {
     throw new Error(
-      "TokenlessPanel RBTS constants do not match the tokenless-v3 deployment identity.",
+      "TokenlessPanel RBTS constants do not match the tokenless-v4 deployment identity.",
     );
   }
   if (
@@ -616,14 +734,21 @@ export async function runTokenlessKeeper(
   decrypt: RevealDecryptor = decryptTokenlessRevealMaterial,
 ) {
   await validateTokenlessKeeperDeployment(clients, config);
-  const [block, nextRoundIdRaw] = await Promise.all([
-    clients.publicClient.getBlock(),
-    clients.publicClient.readContract({
-      address: config.deployment.panel,
-      abi: TokenlessPanelAbi,
-      functionName: "nextRoundId",
-    }),
-  ]);
+  const [block, nextRoundIdRaw, nextFeedbackBonusPoolIdRaw] = await Promise.all(
+    [
+      clients.publicClient.getBlock(),
+      clients.publicClient.readContract({
+        address: config.deployment.panel,
+        abi: TokenlessPanelAbi,
+        functionName: "nextRoundId",
+      }),
+      clients.publicClient.readContract({
+        address: config.deployment.feedbackBonus,
+        abi: TokenlessFeedbackBonusAbi,
+        functionName: "nextPoolId",
+      }),
+    ],
+  );
   const nextRoundId = BigInt(nextRoundIdRaw as bigint);
   const result = emptyResult();
   for (const roundId of scanRoundIds(nextRoundId, config.maxRoundsPerTick)) {
@@ -637,5 +762,13 @@ export async function runTokenlessKeeper(
       result,
     });
   }
+  await reconcileFeedbackBonusRemainders({
+    clients,
+    config,
+    logger,
+    now: block.timestamp,
+    nextPoolId: BigInt(nextFeedbackBonusPoolIdRaw as bigint),
+    result,
+  });
   return result;
 }

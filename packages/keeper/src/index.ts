@@ -36,7 +36,7 @@ async function main() {
   const metricsServer = startMetricsServer(
     config.metricsPort,
     config.metricsBindAddress,
-    config.metricsAuthToken
+    config.metricsAuthToken,
   );
 
   await validateKeeperConnectivity(publicClient);
@@ -47,6 +47,7 @@ async function main() {
     deploymentBlock: config.deployment.blockNumber.toString(),
     panel: config.deployment.panel,
     credentialIssuer: config.deployment.credentialIssuer,
+    feedbackBonus: config.deployment.feedbackBonus,
     account: account.address,
   });
 

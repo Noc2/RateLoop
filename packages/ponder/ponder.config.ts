@@ -1,11 +1,17 @@
 import { createConfig } from "ponder";
 import { http } from "viem";
-import { credentialIssuerAbi, tokenlessPanelAbi } from "./src/tokenlessAbi";
+import {
+  credentialIssuerAbi,
+  tokenlessFeedbackBonusAbi,
+  tokenlessPanelAbi,
+} from "./src/tokenlessAbi";
 import { resolveTokenlessDeployment } from "./src/protocol-deployment";
 
 const deployment = resolveTokenlessDeployment();
 const rpcKey = `PONDER_RPC_URL_${deployment.chainId}`;
-const rpcUrl = process.env[rpcKey]?.trim() ?? (deployment.network === "hardhat" ? "http://127.0.0.1:8545" : undefined);
+const rpcUrl =
+  process.env[rpcKey]?.trim() ??
+  (deployment.network === "hardhat" ? "http://127.0.0.1:8545" : undefined);
 if (!rpcUrl) throw new Error(`${rpcKey} is required.`);
 const parsedRpc = new URL(rpcUrl);
 if (deployment.network !== "hardhat" && parsedRpc.protocol !== "https:") {
@@ -35,6 +41,15 @@ export default createConfig({
       network: {
         [deployment.network]: {
           address: deployment.issuerAddress,
+          startBlock: deployment.startBlock,
+        },
+      },
+    },
+    TokenlessFeedbackBonus: {
+      abi: tokenlessFeedbackBonusAbi,
+      network: {
+        [deployment.network]: {
+          address: deployment.feedbackBonusAddress,
           startBlock: deployment.startBlock,
         },
       },

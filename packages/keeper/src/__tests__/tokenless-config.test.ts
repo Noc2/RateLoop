@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 const PANEL = "0x0000000000000000000000000000000000000011";
 const ISSUER = "0x0000000000000000000000000000000000000022";
+const FEEDBACK_BONUS = "0x0000000000000000000000000000000000000033";
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 let loadConfig: typeof import("../config.js").loadConfig;
@@ -13,7 +14,8 @@ beforeAll(async () => {
   process.env.RPC_URL = "http://127.0.0.1:8545";
   process.env.TOKENLESS_PANEL_ADDRESS = PANEL;
   process.env.TOKENLESS_CREDENTIAL_ISSUER_ADDRESS = ISSUER;
-  process.env.TOKENLESS_DEPLOYMENT_KEY = `tokenless-v3:31337:${PANEL}:${ISSUER}:${ZERO}`;
+  process.env.TOKENLESS_FEEDBACK_BONUS_ADDRESS = FEEDBACK_BONUS;
+  process.env.TOKENLESS_DEPLOYMENT_KEY = `tokenless-v4:31337:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`;
   process.env.KEEPER_PRIVATE_KEY = `0x${"11".repeat(32)}`;
   ({ loadConfig, buildTokenlessDeploymentKey } = await import("../config.js"));
 });
@@ -31,7 +33,8 @@ function productionEnv(): NodeJS.ProcessEnv {
     RPC_URL: "https://sepolia.base.org",
     TOKENLESS_PANEL_ADDRESS: PANEL,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
-    TOKENLESS_DEPLOYMENT_KEY: `tokenless-v3:84532:${PANEL}:${ISSUER}:${ZERO}`,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
+    TOKENLESS_DEPLOYMENT_KEY: `tokenless-v4:84532:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`,
     TOKENLESS_DEPLOYMENT_BLOCK: "123",
     KEEPER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
     METRICS_BIND_ADDRESS: "0.0.0.0",
@@ -46,8 +49,9 @@ describe("tokenless keeper config", () => {
         chainId: 84532,
         panel: PANEL,
         credentialIssuer: ISSUER,
+        feedbackBonus: FEEDBACK_BONUS,
       }),
-    ).toBe(`tokenless-v3:84532:${PANEL}:${ISSUER}:${ZERO}`);
+    ).toBe(`tokenless-v4:84532:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`);
   });
 
   it("accepts a complete Base Sepolia deployment", () => {
@@ -61,6 +65,15 @@ describe("tokenless keeper config", () => {
     expect(() =>
       loadConfig({ ...productionEnv(), TOKENLESS_DEPLOYMENT_BLOCK: "0" }),
     ).toThrow(/TOKENLESS_DEPLOYMENT_BLOCK must be positive/);
+  });
+
+  it("fails closed when the v4 feedback bonus address is missing", () => {
+    expect(() =>
+      loadConfig({
+        ...productionEnv(),
+        TOKENLESS_FEEDBACK_BONUS_ADDRESS: undefined,
+      }),
+    ).toThrow(/TOKENLESS_FEEDBACK_BONUS_ADDRESS is required/);
   });
 
   it("rejects mainnet and mixed deployment keys", () => {

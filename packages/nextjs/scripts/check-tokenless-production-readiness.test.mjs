@@ -17,7 +17,8 @@ function validFixture() {
   const issuer = address(2);
   const adapter = address(3);
   const usdc = address(4);
-  const deploymentKey = `tokenless-v3:84532:${panel}:${issuer}:${adapter}`;
+  const feedbackBonus = address(6);
+  const deploymentKey = `tokenless-v4:84532:${panel}:${issuer}:${adapter}:${feedbackBonus}`;
   const evidence = generateKeyPairSync("ed25519");
   const provider = generateKeyPairSync("ed25519");
   const deploymentManifestSigner = generateKeyPairSync("ed25519");
@@ -47,13 +48,14 @@ function validFixture() {
     NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
     TOKENLESS_ELIGIBILITY_PROVIDER_START_URL: "https://eligibility.example/start",
     TOKENLESS_PONDER_URL: "https://tokenless-ponder.example",
-    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v3",
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
     TOKENLESS_CHAIN_ID: "84532",
     TOKENLESS_DEPLOYMENT_KEY: deploymentKey,
     TOKENLESS_DEPLOYMENT_BLOCK: "123",
     TOKENLESS_PANEL_ADDRESS: panel,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: issuer,
     TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: adapter,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
     TOKENLESS_USDC_ADDRESS: usdc,
     TOKENLESS_USDC_EIP712_NAME: "RateLoop Tokenless Test USDC",
     TOKENLESS_USDC_EIP712_VERSION: "2",
@@ -125,7 +127,7 @@ function validFixture() {
     ),
     activeRegistry: {
       84532: {
-        schemaVersion: "rateloop-tokenless-deployment-v3",
+        schemaVersion: "rateloop-tokenless-deployment-v4",
         deploymentComplete: true,
         deploymentBlockNumber: 123,
         deploymentKey,
@@ -133,6 +135,7 @@ function validFixture() {
           TokenlessPanel: { address: panel },
           CredentialIssuer: { address: issuer },
           X402PanelSubmitter: { address: adapter },
+          TokenlessFeedbackBonus: { address: feedbackBonus },
           TestUSDC: { address: usdc },
         },
       },
@@ -212,7 +215,7 @@ test("the production preflight runs before hosted migrations", () => {
   assert.ok(build.indexOf("check-tokenless-production-readiness.mjs") < build.indexOf("migrate-hosted-database.mjs"));
 });
 
-test("hosted release accepts only a complete matching v3 bundle", () => {
+test("hosted release accepts only a complete matching v4 bundle", () => {
   const fixture = validFixture();
   assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
 });
@@ -225,12 +228,12 @@ test("hosted release remains blocked while required product capabilities are inc
   assert.match(errors.join("\n"), /paid assignment reservation/i);
 });
 
-test("hosted release rejects an empty active v3 registry", () => {
+test("hosted release rejects an empty active v4 registry", () => {
   const fixture = validFixture();
   fixture.activeRegistry = {};
   assert.match(
     validateTokenlessProductionReadiness(fixture).join("\n"),
-    /active tokenless v3 registry must contain exactly the Base Sepolia deployment/i,
+    /active tokenless v4 registry must contain exactly the Base Sepolia deployment/i,
   );
 });
 
@@ -275,7 +278,7 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY is forbidden/);
   assert.match(output, /NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET is forbidden/);
   assert.match(output, /Production key roles must be distinct/);
-  assert.match(output, /complete active tokenless v3 registry/);
+  assert.match(output, /complete active tokenless v4 registry/);
   assert.doesNotMatch(output, /do-not-print-this/);
   assert.doesNotMatch(output, /also-do-not-print-this/);
   assert.doesNotMatch(output, /unsubscribe-do-not-print-this/);

@@ -99,6 +99,7 @@ export interface TokenlessKeeperResult {
   terminalRoundsAdvanced: number;
   claimsExecuted: number;
   staleReturnsExecuted: number;
+  feedbackBonusRefundsExecuted: number;
   selfRevealFallbacksPending: number;
   roundsAwaitingBeaconFailure: number;
   roundsAwaitingScoringEntropy: number;

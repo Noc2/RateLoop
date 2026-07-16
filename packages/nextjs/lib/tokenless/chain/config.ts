@@ -2,7 +2,7 @@ import "server-only";
 import { type Address, getAddress, isAddress, zeroAddress } from "viem";
 
 export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84_532;
-export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v3";
+export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 export const TOKENLESS_QUICKNET_T_CHAIN_HASH =
   "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const;
 
@@ -14,6 +14,7 @@ export type TokenlessChainConfig = {
   deploymentBlock: bigint;
   deploymentKey: string;
   feeRecipient: Address;
+  feedbackBonusAddress: Address;
   issuerAddress: Address;
   panelAddress: Address;
   prepaidFunderPrivateKey?: `0x${string}`;
@@ -63,13 +64,15 @@ export function buildTokenlessDeploymentKey(input: {
   panelAddress: Address;
   issuerAddress: Address;
   x402SubmitterAddress: Address;
+  feedbackBonusAddress: Address;
 }) {
   return [
-    "tokenless-v3",
+    "tokenless-v4",
     input.chainId,
     input.panelAddress.toLowerCase(),
     input.issuerAddress.toLowerCase(),
     input.x402SubmitterAddress.toLowerCase(),
+    input.feedbackBonusAddress.toLowerCase(),
   ].join(":");
 }
 
@@ -85,6 +88,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   const panelAddress = requiredAddress(env, "TOKENLESS_PANEL_ADDRESS");
   const issuerAddress = requiredAddress(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS");
   const x402SubmitterAddress = requiredAddress(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS");
+  const feedbackBonusAddress = requiredAddress(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS");
   const usdcAddress = requiredAddress(env, "TOKENLESS_USDC_ADDRESS");
   const usdcEip712Name = env.TOKENLESS_USDC_EIP712_NAME?.trim() || "RateLoop Tokenless Test USDC";
   const usdcEip712Version = env.TOKENLESS_USDC_EIP712_VERSION?.trim() || "2";
@@ -97,6 +101,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     panelAddress,
     issuerAddress,
     x402SubmitterAddress,
+    feedbackBonusAddress,
   });
   const deploymentKey = required(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase();
   if (deploymentKey !== expectedKey) {
@@ -144,6 +149,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     deploymentBlock,
     deploymentKey,
     feeRecipient,
+    feedbackBonusAddress,
     issuerAddress,
     panelAddress,
     prepaidFunderPrivateKey,

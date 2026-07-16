@@ -20,12 +20,16 @@ const workspaceRoot = join(foundryRoot, "..", "..");
 
 const ABI_EXPORT_NAMES = {
   CredentialIssuer: "CredentialIssuerAbi",
+  TokenlessFeedbackBonus: "TokenlessFeedbackBonusAbi",
   TokenlessPanel: "TokenlessPanelAbi",
   TestUSDC: "TokenlessTestUSDCAbi",
   X402PanelSubmitter: "X402PanelSubmitterAbi",
 };
 const SOURCE_ABI_CONTRACTS = [
+  ["CredentialIssuer", { artifact: "CredentialIssuer" }],
+  ["TokenlessFeedbackBonus", { artifact: "TokenlessFeedbackBonus" }],
   ["TokenlessPanel", { artifact: "TokenlessPanel" }],
+  ["TestUSDC", { artifact: "MockERC20" }],
   ["X402PanelSubmitter", { artifact: "X402PanelSubmitter" }],
 ];
 
@@ -131,6 +135,15 @@ export function buildTokenlessGeneratedSources(
     "deployedContracts.ts",
     `${generatedHeader()}export const tokenlessDeploymentSchema = ${JSON.stringify(
       deployment.schemaVersion,
+    )} as const;\n\nexport const tokenlessDeploymentStatus = ${JSON.stringify(
+      {
+        schemaVersion: deployment.schemaVersion,
+        status: "released",
+        chainId: deployment.chainId,
+        deploymentKey: deployment.deploymentKey,
+      },
+      null,
+      2,
     )} as const;\n\nexport const tokenlessDeployedContracts = ${JSON.stringify(
       { [deployment.chainId]: deployment },
       null,
@@ -141,7 +154,7 @@ export function buildTokenlessGeneratedSources(
     "index.ts",
     `${generatedHeader()}${exportLines.join(
       "\n",
-    )}\nexport { tokenlessDeployedContracts, tokenlessDeploymentSchema } from "./deployedContracts";\nexport { tokenlessHistoricalDeployments, tokenlessHistoricalDeploymentSchema } from "./historicalDeployments";\n`,
+    )}\nexport { tokenlessDeployedContracts, tokenlessDeploymentSchema, tokenlessDeploymentStatus } from "./deployedContracts";\nexport { tokenlessHistoricalDeployments, tokenlessHistoricalDeploymentSchema } from "./historicalDeployments";\n`,
   );
 
   return files;
@@ -151,7 +164,7 @@ export function generateTokenlessArtifacts({
   deploymentPath = join(
     foundryRoot,
     "deployments",
-    "tokenless-v3",
+    "tokenless-v4",
     `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`,
   ),
   outputDirectory = join(

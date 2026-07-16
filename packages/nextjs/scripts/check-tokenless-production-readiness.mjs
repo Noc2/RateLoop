@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
-const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v3";
+const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
@@ -64,6 +64,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_PANEL_ADDRESS",
   "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS",
   "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
+  "TOKENLESS_FEEDBACK_BONUS_ADDRESS",
   "TOKENLESS_USDC_ADDRESS",
   "TOKENLESS_USDC_EIP712_NAME",
   "TOKENLESS_USDC_EIP712_VERSION",
@@ -202,12 +203,12 @@ function currentKey(env, prefix, encoding, errors) {
 function activeDeployment(activeRegistry, errors) {
   const keys = Object.keys(activeRegistry ?? {});
   if (keys.length !== 1 || keys[0] !== String(BASE_SEPOLIA_CHAIN_ID)) {
-    errors.push("The active tokenless v3 registry must contain exactly the Base Sepolia deployment.");
+    errors.push("The active tokenless v4 registry must contain exactly the Base Sepolia deployment.");
     return null;
   }
   const active = activeRegistry[keys[0]];
   if (!active || active.schemaVersion !== DEPLOYMENT_SCHEMA || active.deploymentComplete !== true) {
-    errors.push("The active Base Sepolia deployment must be a complete tokenless v3 artifact.");
+    errors.push("The active Base Sepolia deployment must be a complete tokenless v4 artifact.");
     return null;
   }
   return active;
@@ -353,6 +354,7 @@ export function validateTokenlessProductionReadiness({
     "TOKENLESS_PANEL_ADDRESS",
     "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS",
     "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
+    "TOKENLESS_FEEDBACK_BONUS_ADDRESS",
     "TOKENLESS_USDC_ADDRESS",
     "TOKENLESS_FEE_RECIPIENT",
   ];
@@ -537,11 +539,12 @@ export function validateTokenlessProductionReadiness({
   const active = activeDeployment(activeRegistry, errors);
   if (active) {
     const expectedKey = [
-      "tokenless-v3",
+      "tokenless-v4",
       BASE_SEPOLIA_CHAIN_ID,
       value(env, "TOKENLESS_PANEL_ADDRESS").toLowerCase(),
       value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
       value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
+      value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
     ].join(":");
     const matches = [
       active.deploymentKey === expectedKey && value(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase() === expectedKey,
@@ -551,10 +554,12 @@ export function validateTokenlessProductionReadiness({
         value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
       active.contracts?.X402PanelSubmitter?.address?.toLowerCase() ===
         value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
+      active.contracts?.TokenlessFeedbackBonus?.address?.toLowerCase() ===
+        value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
       active.contracts?.TestUSDC?.address?.toLowerCase() === value(env, "TOKENLESS_USDC_ADDRESS").toLowerCase(),
     ];
     if (matches.some(match => !match)) {
-      errors.push("The configured chain bundle must exactly match the complete active tokenless v3 registry.");
+      errors.push("The configured chain bundle must exactly match the complete active tokenless v4 registry.");
     }
   }
   return errors;

@@ -182,3 +182,84 @@ export const tokenlessIssuerEpoch = onchainTable(
     signerIdx: index().on(table.signer),
   }),
 );
+
+export const tokenlessFeedbackBonusPool = onchainTable(
+  "tokenless_feedback_bonus_pool",
+  (t) => ({
+    id: t.text().primaryKey(),
+    deploymentKey: t.text().notNull(),
+    poolId: t.bigint().notNull(),
+    reviewId: t.hex().notNull(),
+    contentId: t.hex().notNull(),
+    admissionPolicyHash: t.hex().notNull(),
+    payer: t.hex().notNull(),
+    funder: t.hex().notNull(),
+    awarder: t.hex().notNull(),
+    depositedAmount: t.bigint().notNull(),
+    awardedAmount: t.bigint().notNull().default(0n),
+    feedbackDeadline: t.bigint().notNull(),
+    awardDeadline: t.bigint().notNull(),
+    refunded: t.boolean().notNull().default(false),
+    refundedAmount: t.bigint().notNull().default(0n),
+    createdAt: t.bigint().notNull(),
+    createdBlock: t.bigint().notNull(),
+    createdTxHash: t.hex().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    deploymentPoolIdx: index().on(table.deploymentKey, table.poolId),
+    deploymentReviewIdx: index().on(table.deploymentKey, table.reviewId),
+    awarderDeadlineIdx: index().on(table.awarder, table.awardDeadline),
+  }),
+);
+
+export const tokenlessFeedbackRecord = onchainTable(
+  "tokenless_feedback_record",
+  (t) => ({
+    id: t.text().primaryKey(),
+    deploymentKey: t.text().notNull(),
+    poolId: t.bigint().notNull(),
+    feedbackKey: t.hex().notNull(),
+    responseHash: t.hex().notNull(),
+    voteKey: t.hex().notNull(),
+    payoutCommitment: t.hex().notNull(),
+    awarded: t.boolean().notNull().default(false),
+    awardAmount: t.bigint().notNull().default(0n),
+    payoutAddress: t.hex(),
+    registeredAt: t.bigint().notNull(),
+    registeredBlock: t.bigint().notNull(),
+    registeredTxHash: t.hex().notNull(),
+    registeredLogIndex: t.integer().notNull(),
+    awardedAt: t.bigint(),
+    awardTxHash: t.hex(),
+    awardLogIndex: t.integer(),
+  }),
+  (table) => ({
+    deploymentPoolIdx: index().on(table.deploymentKey, table.poolId),
+    responseIdx: index().on(table.deploymentKey, table.responseHash),
+    voteKeyIdx: index().on(table.voteKey),
+  }),
+);
+
+export const tokenlessFeedbackBonusEvent = onchainTable(
+  "tokenless_feedback_bonus_event",
+  (t) => ({
+    id: t.text().primaryKey(),
+    deploymentKey: t.text().notNull(),
+    eventType: t.text().notNull(),
+    poolId: t.bigint().notNull(),
+    feedbackKey: t.hex(),
+    responseHash: t.hex(),
+    actor: t.hex(),
+    payoutAddress: t.hex(),
+    amount: t.bigint().notNull(),
+    occurredAt: t.bigint().notNull(),
+    blockNumber: t.bigint().notNull(),
+    txHash: t.hex().notNull(),
+    logIndex: t.integer().notNull(),
+  }),
+  (table) => ({
+    deploymentPoolIdx: index().on(table.deploymentKey, table.poolId),
+    eventTypeIdx: index().on(table.deploymentKey, table.eventType),
+  }),
+);

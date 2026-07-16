@@ -23,13 +23,14 @@ const OPERATION = "op_transparency";
 const PANEL = `0x${"aa".repeat(20)}`;
 const ISSUER = `0x${"bb".repeat(20)}`;
 const ADAPTER = `0x${"cc".repeat(20)}`;
+const FEEDBACK_BONUS = `0x${"ff".repeat(20)}`;
 const USDC = `0x${"dd".repeat(20)}`;
 const FEE_RECIPIENT = `0x${"ee".repeat(20)}`;
 const CONTENT_ID = `0x${"61".repeat(32)}`;
 const TERMS_HASH = `0x${"62".repeat(32)}`;
 const POLICY_HASH = `0x${"63".repeat(32)}`;
 const BEACON_HASH = `0x${"64".repeat(32)}`;
-const DEPLOYMENT = `tokenless-v3:84532:${PANEL}:${ISSUER}:${ADAPTER}`;
+const DEPLOYMENT = `tokenless-v4:84532:${PANEL}:${ISSUER}:${ADAPTER}:${FEEDBACK_BONUS}`;
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64url");
 const NOW = new Date("2026-07-12T18:00:00.000Z");
 const resolvePublic = async () => ["203.0.113.10"];
@@ -180,6 +181,7 @@ function ponderFetch(input: { round?: Record<string, unknown>; commits?: Record<
         panelAddress: PANEL,
         issuerAddress: ISSUER,
         adapterAddress: ADAPTER,
+        feedbackBonusAddress: FEEDBACK_BONUS,
         startBlock: 44_050_000,
       });
     }

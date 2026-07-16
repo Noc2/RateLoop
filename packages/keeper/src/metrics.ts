@@ -15,6 +15,7 @@ const counters: Record<string, number> = {
   keeper_terminal_rounds_advanced_total: 0,
   keeper_claims_executed_total: 0,
   keeper_stale_returns_executed_total: 0,
+  keeper_feedback_bonus_refunds_executed_total: 0,
 };
 
 const gauges: Record<string, number> = {
@@ -73,6 +74,8 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
     result.terminalRoundsAdvanced;
   counters.keeper_claims_executed_total += result.claimsExecuted;
   counters.keeper_stale_returns_executed_total += result.staleReturnsExecuted;
+  counters.keeper_feedback_bonus_refunds_executed_total +=
+    result.feedbackBonusRefundsExecuted;
   gauges.keeper_last_run_duration_seconds = durationMs / 1000;
   gauges.keeper_last_successful_run_timestamp = Date.now() / 1000;
   gauges.keeper_rounds_scanned = result.roundsScanned;
@@ -104,13 +107,13 @@ function authorized(header: string | undefined, token: string | null) {
 export function startMetricsServer(
   port: number,
   bindAddress: string,
-  authToken: string | null
+  authToken: string | null,
 ): Server {
   const server = createServer((request, response) => {
     if (request.url === "/live") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
-        JSON.stringify({ status: "live", protocol: "tokenless-v3" })
+        JSON.stringify({ status: "live", protocol: "tokenless-v4" }),
       );
       return;
     }
@@ -134,7 +137,7 @@ export function startMetricsServer(
       response.end(
         JSON.stringify({
           status: healthy ? "ok" : "degraded",
-          protocol: "tokenless-v3",
+          protocol: "tokenless-v4",
           consecutiveErrors,
           lastRunAt: lastRunAt?.toISOString() ?? null,
           walletBalanceWei: walletBalanceWei?.toString() ?? null,
@@ -142,7 +145,7 @@ export function startMetricsServer(
             gauges.keeper_self_reveal_fallbacks_pending,
           roundsAwaitingBeaconFailure:
             gauges.keeper_rounds_awaiting_beacon_failure,
-        })
+        }),
       );
       return;
     }

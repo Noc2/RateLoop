@@ -1,10 +1,11 @@
 import { parseAbi } from "viem";
 
-// Package-local minimal ABI until the first tokenless-v3 deployment generates
+// Package-local minimal ABI until the first tokenless-v4 deployment generates
 // @rateloop/contracts/tokenless. Keep this limited to permissionless keeper calls.
 export const TokenlessPanelAbi = parseAbi([
   "event CommitAccepted(uint256 indexed roundId,bytes32 indexed commitKey,bytes32 indexed nullifier,bytes sealedPayload)",
   "function nextRoundId() view returns (uint256)",
+  "function usdc() view returns (address)",
   "function credentialIssuer() view returns (address)",
   "function SCORING_VERSION() view returns (uint8)",
   "function BASE_PAY_BPS() view returns (uint16)",
@@ -21,4 +22,13 @@ export const TokenlessPanelAbi = parseAbi([
   "function claim(bytes32 commitKey,address payoutAddress,bytes32 salt) returns (uint256 amount)",
   "function claimCompensation(bytes32 commitKey,address payoutAddress,bytes32 salt) returns (uint256 amount)",
   "function returnStaleShares(uint256 roundId) returns (uint256 amount)",
+]);
+
+export const TokenlessFeedbackBonusAbi = parseAbi([
+  "function usdc() view returns (address)",
+  "function credentialIssuer() view returns (address)",
+  "function nextPoolId() view returns (uint256)",
+  "function getPool(uint256 poolId) view returns ((bytes32 reviewId,bytes32 contentId,bytes32 admissionPolicyHash,address funder,address awarder,uint256 depositedAmount,uint256 awardedAmount,uint64 feedbackDeadline,uint64 awardDeadline,bool refunded))",
+  "function remainingAmount(uint256 poolId) view returns (uint256)",
+  "function refundRemainder(uint256 poolId) returns (uint256 amount)",
 ]);

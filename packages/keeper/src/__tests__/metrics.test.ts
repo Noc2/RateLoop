@@ -16,6 +16,7 @@ describe("tokenless keeper liveness metrics", () => {
       terminalRoundsAdvanced: 0,
       claimsExecuted: 0,
       staleReturnsExecuted: 0,
+      feedbackBonusRefundsExecuted: 1,
       selfRevealFallbacksPending: 3,
       roundsAwaitingBeaconFailure: 2,
       roundsAwaitingScoringEntropy: 1,
@@ -30,5 +31,6 @@ describe("tokenless keeper liveness metrics", () => {
     expect(metrics).toContain("keeper_rounds_awaiting_scoring_entropy 1");
     expect(metrics).toContain("keeper_scoring_seeds_finalized_total 1");
     expect(metrics).toContain("keeper_score_batches_processed_total 2");
+    expect(metrics).toContain("keeper_feedback_bonus_refunds_executed_total 1");
   });
 });

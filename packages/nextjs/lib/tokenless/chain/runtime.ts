@@ -1,5 +1,5 @@
 import type { TokenlessChainConfig } from "./config";
-import { TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
+import { TokenlessFeedbackBonusAbi, TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import "server-only";
 import {
   type Account,
@@ -88,6 +88,7 @@ export async function assertLiveTokenlessDeployment(
     config.issuerAddress,
     config.x402SubmitterAddress,
     config.usdcAddress,
+    config.feedbackBonusAddress,
   ] as const;
   const bytecodes = await Promise.all(addresses.map(address => client.getBytecode({ address })));
   if (bytecodes.some(code => !code || code === "0x")) {
@@ -102,6 +103,8 @@ export async function assertLiveTokenlessDeployment(
     adapterPanel,
     adapterUsdc,
     authorizationToken,
+    feedbackBonusUsdc,
+    feedbackBonusIssuer,
   ] = await Promise.all([
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "usdc" }),
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "credentialIssuer" }),
@@ -115,6 +118,16 @@ export async function assertLiveTokenlessDeployment(
       address: config.x402SubmitterAddress,
       functionName: "authorizationToken",
     }),
+    client.readContract({
+      abi: TokenlessFeedbackBonusAbi,
+      address: config.feedbackBonusAddress,
+      functionName: "usdc",
+    }),
+    client.readContract({
+      abi: TokenlessFeedbackBonusAbi,
+      address: config.feedbackBonusAddress,
+      functionName: "credentialIssuer",
+    }),
   ]);
   if (
     !sameAddress(panelUsdc, config.usdcAddress) ||
@@ -122,6 +135,8 @@ export async function assertLiveTokenlessDeployment(
     !sameAddress(adapterPanel, config.panelAddress) ||
     !sameAddress(adapterUsdc, config.usdcAddress) ||
     !sameAddress(authorizationToken, config.usdcAddress) ||
+    !sameAddress(feedbackBonusUsdc, config.usdcAddress) ||
+    !sameAddress(feedbackBonusIssuer, config.issuerAddress) ||
     Number(scoringVersion) !== 2 ||
     Number(basePayBps) !== 8_000 ||
     Number(maximumCommits) !== 500

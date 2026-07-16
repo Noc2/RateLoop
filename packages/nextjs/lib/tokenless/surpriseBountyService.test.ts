@@ -15,6 +15,7 @@ import {
 const PANEL = getAddress("0x1111111111111111111111111111111111111111");
 const ISSUER = getAddress("0x2222222222222222222222222222222222222222");
 const ADAPTER = getAddress("0x3333333333333333333333333333333333333333");
+const FEEDBACK_BONUS = getAddress("0x7777777777777777777777777777777777777777");
 const USDC = getAddress("0x4444444444444444444444444444444444444444");
 const FEE_RECIPIENT = getAddress("0x5555555555555555555555555555555555555555");
 const PAYOUT = getAddress("0x6666666666666666666666666666666666666666");
@@ -37,14 +38,16 @@ function config(): TokenlessChainConfig {
       panelAddress: PANEL,
       issuerAddress: ISSUER,
       x402SubmitterAddress: ADAPTER,
+      feedbackBonusAddress: FEEDBACK_BONUS,
     }),
     feeRecipient: FEE_RECIPIENT,
+    feedbackBonusAddress: FEEDBACK_BONUS,
     issuerAddress: ISSUER,
     panelAddress: PANEL,
     revealWindowSeconds: 120,
     beaconFailureGraceSeconds: 300,
     rpcUrl: "https://sepolia.base.org/",
-    schemaVersion: "rateloop-tokenless-deployment-v3",
+    schemaVersion: "rateloop-tokenless-deployment-v4",
     usdcAddress: USDC,
     usdcEip712Name: "RateLoop Tokenless Test USDC",
     usdcEip712Version: "2",
@@ -65,6 +68,8 @@ function runtime(balance = 100_000_000n): TokenlessChainRuntime {
       if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
       if (address === ADAPTER && functionName === "panel") return PANEL;
       if (address === ADAPTER && (functionName === "usdc" || functionName === "authorizationToken")) return USDC;
+      if (address === FEEDBACK_BONUS && functionName === "usdc") return USDC;
+      if (address === FEEDBACK_BONUS && functionName === "credentialIssuer") return ISSUER;
       if (address === USDC && functionName === "balanceOf") return balance;
       throw new Error(`Unexpected read ${address}:${functionName}`);
     },

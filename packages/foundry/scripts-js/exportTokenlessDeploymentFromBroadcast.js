@@ -18,7 +18,7 @@ export function tokenlessBroadcastPath(root = foundryRoot) {
     "broadcast",
     "DeployTokenless.s.sol",
     String(TOKENLESS_BASE_SEPOLIA_CHAIN_ID),
-    "run-latest.json"
+    "run-latest.json",
   );
 }
 
@@ -26,8 +26,8 @@ export function tokenlessDeploymentPath(root = foundryRoot) {
   return join(
     root,
     "deployments",
-    "tokenless-v3",
-    `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`
+    "tokenless-v4",
+    `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`,
   );
 }
 
@@ -38,7 +38,7 @@ export function exportTokenlessDeploymentFromBroadcast({
 } = {}) {
   if (targetNetwork !== TOKENLESS_BASE_SEPOLIA_NETWORK) {
     throw new Error(
-      `Tokenless deployment export requires DEPLOY_TARGET_NETWORK=${TOKENLESS_BASE_SEPOLIA_NETWORK}.`
+      `Tokenless deployment export requires DEPLOY_TARGET_NETWORK=${TOKENLESS_BASE_SEPOLIA_NETWORK}.`,
     );
   }
   if (!existsSync(broadcastPath)) {
@@ -52,7 +52,7 @@ export function exportTokenlessDeploymentFromBroadcast({
   writeFileSync(
     deploymentPath,
     serializeTokenlessDeploymentArtifact(artifact),
-    "utf8"
+    "utf8",
   );
   return { artifact, deploymentPath };
 }
@@ -60,7 +60,7 @@ export function exportTokenlessDeploymentFromBroadcast({
 async function main() {
   const { artifact, deploymentPath } = exportTokenlessDeploymentFromBroadcast();
   console.log(
-    `Exported ${artifact.schemaVersion} deployment to ${deploymentPath}`
+    `Exported ${artifact.schemaVersion} deployment to ${deploymentPath}`,
   );
 }
 
@@ -71,7 +71,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.error(
       `[export-tokenless-deployment] ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
     process.exitCode = 1;
   }

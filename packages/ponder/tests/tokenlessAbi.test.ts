@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { tokenlessRound } from "../ponder.schema";
-import { tokenlessPanelAbi } from "../src/tokenlessAbi";
+import { tokenlessFeedbackBonusPool, tokenlessRound } from "../ponder.schema";
+import {
+  tokenlessFeedbackBonusAbi,
+  tokenlessPanelAbi,
+} from "../src/tokenlessAbi";
 
 describe("tokenless panel indexing ABI", () => {
   it("includes the complete pull-credit evidence surface", () => {
@@ -20,7 +23,7 @@ describe("tokenless panel indexing ABI", () => {
     expect(functions).toContain("withdrawableCredit");
   });
 
-  it("decodes the exact v3 RBTS creation and settlement evidence", () => {
+  it("decodes the exact v4 RBTS creation and settlement evidence", () => {
     const roundCreated = tokenlessPanelAbi.find(
       (entry) => entry.type === "event" && entry.name === "RoundCreated",
     );
@@ -73,6 +76,26 @@ describe("tokenless panel indexing ABI", () => {
         (component) => component.name === "requiredTier",
       ),
     ).toBe(false);
+  });
+
+  it("indexes all feedback bonus lifecycle events without feedback contents", () => {
+    const events = new Set(
+      tokenlessFeedbackBonusAbi
+        .filter((entry) => entry.type === "event")
+        .map((entry) => entry.name),
+    );
+    expect(events).toEqual(
+      new Set([
+        "PoolCreated",
+        "FeedbackRegistered",
+        "FeedbackAwarded",
+        "RemainderRefunded",
+      ]),
+    );
+    expect(tokenlessFeedbackBonusPool.deploymentKey.columnType).toBe("PgText");
+    expect(tokenlessFeedbackBonusPool.awardedAmount.columnType).toBe(
+      "PgEvmBigint",
+    );
   });
 
   it("stores public RBTS evidence without retaining v0 weighting columns", () => {

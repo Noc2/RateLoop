@@ -1,46 +1,15 @@
 /**
- * Generated from rateloop-tokenless-deployment-v3.
- * Do not edit manually.
+ * Generated deployment metadata for rateloop-tokenless-deployment-v4.
+ * The registry stays empty until a complete v4 bundle is deployed and verified.
  */
-export const tokenlessDeploymentSchema = "rateloop-tokenless-deployment-v3" as const;
+export const tokenlessDeploymentSchema =
+  "rateloop-tokenless-deployment-v4" as const;
 
-export const tokenlessDeployedContracts = {
-  "84532": {
-    "schemaVersion": "rateloop-tokenless-deployment-v3",
-    "version": 3,
-    "deploymentComplete": true,
-    "deploymentProfile": "test",
-    "networkName": "baseSepolia",
-    "chainId": 84532,
-    "deploymentBlockNumber": 44132668,
-    "deploymentKey": "tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9",
-    "contracts": {
-      "TestUSDC": {
-        "address": "0x86a6d51e720549c22a2a4086d04c2c35397e49f9",
-        "artifact": "MockERC20",
-        "deployedOnBlock": 44132668
-      },
-      "CredentialIssuer": {
-        "address": "0x67a89f76ae9a89866a0e62785d7999efe1c5e592",
-        "artifact": "CredentialIssuer",
-        "deployedOnBlock": 44132668
-      },
-      "TokenlessPanel": {
-        "address": "0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a",
-        "artifact": "TokenlessPanel",
-        "deployedOnBlock": 44132668
-      },
-      "X402PanelSubmitter": {
-        "address": "0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9",
-        "artifact": "X402PanelSubmitter",
-        "deployedOnBlock": 44132668
-      }
-    },
-    "testCurrency": {
-      "contract": "TestUSDC",
-      "decimals": 6,
-      "symbol": "tUSDC",
-      "unrestrictedMint": true
-    }
-  }
+export const tokenlessDeploymentStatus = {
+  schemaVersion: tokenlessDeploymentSchema,
+  status: "unreleased",
+  chainId: 84_532,
+  deploymentKey: null,
 } as const;
+
+export const tokenlessDeployedContracts = {} as const;

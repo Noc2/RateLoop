@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CredentialIssuerAbi,
+  TokenlessFeedbackBonusAbi,
   TokenlessPanelAbi,
   TokenlessTestUSDCAbi,
   X402PanelSubmitterAbi,
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
+  tokenlessDeploymentStatus,
   tokenlessHistoricalDeployments,
   tokenlessHistoricalDeploymentSchema,
 } from "./index.js";
@@ -55,19 +57,15 @@ function tupleComponentNames(
   return new Set(parameter.components?.map((component) => component.name));
 }
 
-test("keeps historical v2 separate from the optional complete v3 registry", () => {
-  assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v3");
-  assert.ok([0, 1].includes(Object.keys(tokenlessDeployedContracts).length));
-  const active = (
-    tokenlessDeployedContracts as Record<
-      string,
-      { deploymentKey: string; schemaVersion: string }
-    >
-  )["84532"];
-  if (active) {
-    assert.equal(active.schemaVersion, tokenlessDeploymentSchema);
-    assert.equal(active.deploymentKey.startsWith("tokenless-v3:84532:"), true);
-  }
+test("keeps historical v2 separate from the unreleased v4 registry", () => {
+  assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v4");
+  assert.deepEqual(tokenlessDeployedContracts, {});
+  assert.deepEqual(tokenlessDeploymentStatus, {
+    schemaVersion: "rateloop-tokenless-deployment-v4",
+    status: "unreleased",
+    chainId: 84_532,
+    deploymentKey: null,
+  });
   assert.equal(
     tokenlessHistoricalDeploymentSchema,
     "rateloop-tokenless-deployment-v2",
@@ -75,7 +73,10 @@ test("keeps historical v2 separate from the optional complete v3 registry", () =
   assert.deepEqual(Object.keys(tokenlessHistoricalDeployments), ["84532"]);
   assert.equal(deployment.schemaVersion, tokenlessHistoricalDeploymentSchema);
   assert.equal(deployment.deploymentStatus, "historical");
-  assert.equal(deployment.supersededBySchema, tokenlessDeploymentSchema);
+  assert.equal(
+    deployment.supersededBySchema,
+    "rateloop-tokenless-deployment-v3",
+  );
   assert.equal(deployment.version, 2);
   assert.equal(deployment.chainId, 84532);
   assert.equal(deployment.networkName, "baseSepolia");
@@ -100,6 +101,33 @@ test("keeps historical v2 separate from the optional complete v3 registry", () =
       ),
     ),
   );
+});
+
+test("feedback bonus ABI exposes only immutable pool and award mechanics", () => {
+  const functions = names(TokenlessFeedbackBonusAbi, "function");
+  const events = names(TokenlessFeedbackBonusAbi, "event");
+  for (const functionName of [
+    "createPool",
+    "createPoolFor",
+    "registerFeedback",
+    "award",
+    "refundRemainder",
+    "getPool",
+    "getFeedback",
+  ]) {
+    assert.ok(functions.has(functionName), `missing ${functionName}`);
+  }
+  for (const eventName of [
+    "PoolCreated",
+    "FeedbackRegistered",
+    "FeedbackAwarded",
+    "RemainderRefunded",
+  ]) {
+    assert.ok(events.has(eventName), `missing ${eventName}`);
+  }
+  for (const forbidden of ["owner", "pause", "sweep", "setAwarder"]) {
+    assert.equal(functions.has(forbidden), false, `unexpected ${forbidden}`);
+  }
 });
 
 test("historical deployment key remains immutable evidence", () => {

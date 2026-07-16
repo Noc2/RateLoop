@@ -87,6 +87,7 @@ type PonderDeployment = {
   adapterAddress: string;
   chainId: number;
   deploymentKey: string;
+  feedbackBonusAddress: string;
   issuerAddress: string;
   panelAddress: string;
   startBlock: number;
@@ -682,24 +683,29 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
 }
 
 function exactIndexedIdentity(input: { deployment: PonderDeployment; execution: Row; round: PonderRound; terms: Row }) {
+  const deploymentKey = rowString(input.execution, "deployment_key")!;
+  const deploymentKeyParts = deploymentKey.toLowerCase().split(":");
   const expected = {
-    deploymentKey: rowString(input.execution, "deployment_key")!,
+    deploymentKey,
     chainId: Number(input.execution.chain_id),
     deploymentBlock: rowString(input.execution, "deployment_block")!,
     panelAddress: rowString(input.execution, "panel_address")!.toLowerCase(),
     issuerAddress: rowString(input.execution, "issuer_address")!.toLowerCase(),
     adapterAddress: rowString(input.execution, "x402_submitter_address")!.toLowerCase(),
+    feedbackBonusAddress: exactAddress(deploymentKeyParts[5], "Deployment-key feedback bonus address"),
     roundId: rowString(input.execution, "round_id")!,
     funder: rowString(input.execution, "funder_address")!.toLowerCase(),
   };
   if (
-    !expected.deploymentKey.toLowerCase().startsWith("tokenless-v3:") ||
+    !expected.deploymentKey.toLowerCase().startsWith("tokenless-v4:") ||
     input.deployment.deploymentKey.toLowerCase() !== expected.deploymentKey.toLowerCase() ||
     input.deployment.chainId !== expected.chainId ||
     input.deployment.startBlock !== Number(expected.deploymentBlock) ||
     exactAddress(input.deployment.panelAddress, "Ponder panel address") !== expected.panelAddress ||
     exactAddress(input.deployment.issuerAddress, "Ponder issuer address") !== expected.issuerAddress ||
     exactAddress(input.deployment.adapterAddress, "Ponder adapter address") !== expected.adapterAddress ||
+    exactAddress(input.deployment.feedbackBonusAddress, "Ponder feedback bonus address") !==
+      expected.feedbackBonusAddress ||
     stringValue(input.round.deploymentKey, "Indexed deployment key").toLowerCase() !==
       expected.deploymentKey.toLowerCase() ||
     unsignedValue(input.round.roundId, "Indexed round id") !== expected.roundId ||

@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const originalEnv = { ...process.env };
 const panel = "0x1000000000000000000000000000000000000001";
 const issuer = "0x1000000000000000000000000000000000000002";
-const deploymentKey = `tokenless-v3:84532:${panel}:${issuer}:0x0000000000000000000000000000000000000000`;
+const feedbackBonus = "0x1000000000000000000000000000000000000003";
+const deploymentKey = `tokenless-v4:84532:${panel}:${issuer}:0x0000000000000000000000000000000000000000:${feedbackBonus}`;
 const hostedRuntime = {
   NODE_ENV: "production",
   TOKENLESS_HOME_REGION: "eu",
@@ -20,7 +21,7 @@ afterEach(() => {
 });
 
 describe("tokenless Ponder config", () => {
-  it("registers only the panel and issuer on Base Sepolia", async () => {
+  it("registers the complete v4 bundle on Base Sepolia", async () => {
     process.env = {
       ...originalEnv,
       ...hostedRuntime,
@@ -28,12 +29,14 @@ describe("tokenless Ponder config", () => {
       PONDER_RPC_URL_84532: "https://sepolia.base.org",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
+      PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
       PONDER_TOKENLESS_START_BLOCK: "44051709",
       RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     };
     const { default: config } = await import("./ponder.config");
     expect(Object.keys((config as any).contracts).sort()).toEqual([
       "CredentialIssuer",
+      "TokenlessFeedbackBonus",
       "TokenlessPanel",
     ]);
     expect(
@@ -49,6 +52,7 @@ describe("tokenless Ponder config", () => {
       PONDER_RPC_URL_84532: "http://rpc.example.test",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
+      PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
       PONDER_TOKENLESS_START_BLOCK: "1",
       RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     };

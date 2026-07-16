@@ -1,12 +1,17 @@
 import { isAddress, zeroAddress } from "viem";
 
-export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v3";
-export const TOKENLESS_DEPLOYMENT_VERSION = 3;
-export const TOKENLESS_DEPLOYMENT_KEY_VERSION = "tokenless-v3";
+export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
+export const TOKENLESS_DEPLOYMENT_VERSION = 4;
+export const TOKENLESS_DEPLOYMENT_KEY_VERSION = "tokenless-v4";
 export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84532;
 export const TOKENLESS_BASE_SEPOLIA_NETWORK = "baseSepolia";
 
-const REQUIRED_CONTRACTS = ["TestUSDC", "CredentialIssuer", "TokenlessPanel"];
+const REQUIRED_CONTRACTS = [
+  "TestUSDC",
+  "CredentialIssuer",
+  "TokenlessPanel",
+  "TokenlessFeedbackBonus",
+];
 const OPTIONAL_CONTRACTS = ["X402PanelSubmitter"];
 const ALLOWED_CONTRACTS = new Set([
   ...REQUIRED_CONTRACTS,
@@ -44,10 +49,15 @@ function receiptIndexes(receipts) {
   const byHash = new Map();
   for (const receipt of receipts ?? []) {
     const hash = transactionHash(receipt, "Receipt");
-    if (byHash.has(hash)) throw new Error(`Duplicate receipt transaction hash ${hash}.`);
+    if (byHash.has(hash))
+      throw new Error(`Duplicate receipt transaction hash ${hash}.`);
     byHash.set(hash, receipt);
     if (receipt.status !== "0x1" && receipt.status !== 1) continue;
-    if (receipt.contractAddress === null || receipt.contractAddress === undefined) continue;
+    if (
+      receipt.contractAddress === null ||
+      receipt.contractAddress === undefined
+    )
+      continue;
     const normalizedAddress = normalizeAddress(
       receipt.contractAddress,
       `Receipt ${hash} contractAddress`,
@@ -70,15 +80,21 @@ function artifactName(contractName) {
 function findCreates(broadcast) {
   const receipts = receiptIndexes(broadcast.receipts);
   const createTransactions = (broadcast.transactions ?? []).filter(
-    transaction => transaction.transactionType === "CREATE",
+    (transaction) => transaction.transactionType === "CREATE",
   );
   const createHashes = new Set();
   for (const transaction of createTransactions) {
     const contractName = transaction.contractName ?? "unknown";
-    const hash = transactionHash(transaction, `${contractName} CREATE transaction`);
-    if (createHashes.has(hash)) throw new Error(`Duplicate CREATE transaction hash ${hash}.`);
+    const hash = transactionHash(
+      transaction,
+      `${contractName} CREATE transaction`,
+    );
+    if (createHashes.has(hash))
+      throw new Error(`Duplicate CREATE transaction hash ${hash}.`);
     if (!receipts.byHash.has(hash)) {
-      throw new Error(`Missing receipt for ${contractName} CREATE transaction ${hash}.`);
+      throw new Error(
+        `Missing receipt for ${contractName} CREATE transaction ${hash}.`,
+      );
     }
     createHashes.add(hash);
   }
@@ -95,21 +111,27 @@ function findCreates(broadcast) {
     // Forge can permute CREATE hashes in deployCode broadcasts. The receipt's
     // deployed address is the stable identity, while the complete hash set is
     // still checked above so an unrelated receipt cannot be substituted.
-    const matchingReceipts = receipts.successfulByAddress.get(address.toLowerCase()) ?? [];
+    const matchingReceipts =
+      receipts.successfulByAddress.get(address.toLowerCase()) ?? [];
     if (matchingReceipts.length !== 1) {
       throw new Error(
         `Expected exactly one successful receipt for ${contractName} at ${address}; found ${matchingReceipts.length}.`,
       );
     }
     const receipt = matchingReceipts[0];
-    const receiptHash = transactionHash(receipt, `${contractName} deployment receipt`);
+    const receiptHash = transactionHash(
+      receipt,
+      `${contractName} deployment receipt`,
+    );
     if (!createHashes.has(receiptHash)) {
       throw new Error(
         `Successful receipt ${receiptHash} for ${contractName} at ${address} is not referenced by a CREATE transaction.`,
       );
     }
     if (usedReceiptHashes.has(receiptHash)) {
-      throw new Error(`Deployment receipt ${receiptHash} was reused by multiple CREATE transactions.`);
+      throw new Error(
+        `Deployment receipt ${receiptHash} was reused by multiple CREATE transactions.`,
+      );
     }
     usedReceiptHashes.add(receiptHash);
 
@@ -120,7 +142,7 @@ function findCreates(broadcast) {
         : [],
       blockNumber: normalizeBlockNumber(
         receipt.blockNumber,
-        `${contractName} deployedOnBlock`
+        `${contractName} deployedOnBlock`,
       ),
       contractName: transaction.contractName,
     });
@@ -131,11 +153,11 @@ function findCreates(broadcast) {
 
 function oneDeployment(creates, label) {
   const matches = creates.filter(
-    (deployment) => deploymentLabel(deployment.contractName) === label
+    (deployment) => deploymentLabel(deployment.contractName) === label,
   );
   if (matches.length !== 1) {
     throw new Error(
-      `Tokenless broadcast must deploy exactly one ${label}; found ${matches.length}.`
+      `Tokenless broadcast must deploy exactly one ${label}; found ${matches.length}.`,
     );
   }
   return matches[0];
@@ -143,11 +165,11 @@ function oneDeployment(creates, label) {
 
 function optionalDeployment(creates, label) {
   const matches = creates.filter(
-    (deployment) => deploymentLabel(deployment.contractName) === label
+    (deployment) => deploymentLabel(deployment.contractName) === label,
   );
   if (matches.length > 1) {
     throw new Error(
-      `Tokenless broadcast may deploy at most one ${label}; found ${matches.length}.`
+      `Tokenless broadcast may deploy at most one ${label}; found ${matches.length}.`,
     );
   }
   return matches[0] ?? null;
@@ -166,6 +188,7 @@ export function buildTokenlessDeploymentKey({
   credentialIssuer,
   panel,
   x402PanelSubmitter,
+  feedbackBonus,
 }) {
   return [
     TOKENLESS_DEPLOYMENT_KEY_VERSION,
@@ -173,6 +196,7 @@ export function buildTokenlessDeploymentKey({
     panel.toLowerCase(),
     credentialIssuer.toLowerCase(),
     (x402PanelSubmitter ?? zeroAddress).toLowerCase(),
+    feedbackBonus.toLowerCase(),
   ].join(":");
 }
 
@@ -181,16 +205,16 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   {
     chainId = TOKENLESS_BASE_SEPOLIA_CHAIN_ID,
     networkName = TOKENLESS_BASE_SEPOLIA_NETWORK,
-  } = {}
+  } = {},
 ) {
   if (chainId !== TOKENLESS_BASE_SEPOLIA_CHAIN_ID) {
     throw new Error(
-      `${TOKENLESS_DEPLOYMENT_KEY_VERSION} only supports Base Sepolia (${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}); received ${chainId}.`
+      `${TOKENLESS_DEPLOYMENT_KEY_VERSION} only supports Base Sepolia (${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}); received ${chainId}.`,
     );
   }
   if (networkName !== TOKENLESS_BASE_SEPOLIA_NETWORK) {
     throw new Error(
-      `${TOKENLESS_DEPLOYMENT_KEY_VERSION} networkName must be ${TOKENLESS_BASE_SEPOLIA_NETWORK}.`
+      `${TOKENLESS_DEPLOYMENT_KEY_VERSION} networkName must be ${TOKENLESS_BASE_SEPOLIA_NETWORK}.`,
     );
   }
 
@@ -202,14 +226,25 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     throw new Error(
       `Refusing mixed or unknown tokenless deployment broadcast: ${[
         ...new Set(unexpectedNames),
-      ].join(", ")}.`
+      ].join(", ")}.`,
     );
   }
 
   const testUsdc = oneDeployment(creates, "TestUSDC");
   const credentialIssuer = oneDeployment(creates, "CredentialIssuer");
   const panel = oneDeployment(creates, "TokenlessPanel");
+  const feedbackBonus = oneDeployment(creates, "TokenlessFeedbackBonus");
   const x402PanelSubmitter = optionalDeployment(creates, "X402PanelSubmitter");
+
+  if (
+    feedbackBonus.arguments.length < 2 ||
+    !sameAddress(feedbackBonus.arguments[0], testUsdc.address) ||
+    !sameAddress(feedbackBonus.arguments[1], credentialIssuer.address)
+  ) {
+    throw new Error(
+      "TokenlessFeedbackBonus constructor wiring must match the exported TestUSDC and CredentialIssuer addresses.",
+    );
+  }
 
   if (
     panel.arguments.length < 2 ||
@@ -217,7 +252,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     !sameAddress(panel.arguments[1], credentialIssuer.address)
   ) {
     throw new Error(
-      "TokenlessPanel constructor wiring must match the exported TestUSDC and CredentialIssuer addresses."
+      "TokenlessPanel constructor wiring must match the exported TestUSDC and CredentialIssuer addresses.",
     );
   }
 
@@ -228,7 +263,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       !sameAddress(x402PanelSubmitter.arguments[1], panel.address))
   ) {
     throw new Error(
-      "X402PanelSubmitter constructor wiring must match the exported TestUSDC and TokenlessPanel addresses."
+      "X402PanelSubmitter constructor wiring must match the exported TestUSDC and TokenlessPanel addresses.",
     );
   }
 
@@ -237,6 +272,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     ["TestUSDC", testUsdc],
     ["CredentialIssuer", credentialIssuer],
     ["TokenlessPanel", panel],
+    ["TokenlessFeedbackBonus", feedbackBonus],
     ["X402PanelSubmitter", x402PanelSubmitter],
   ]) {
     if (!deployment) continue;
@@ -248,13 +284,14 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   }
 
   const deploymentBlockNumber = Math.max(
-    ...Object.values(contracts).map((contract) => contract.deployedOnBlock)
+    ...Object.values(contracts).map((contract) => contract.deployedOnBlock),
   );
   const deploymentKey = buildTokenlessDeploymentKey({
     chainId,
     credentialIssuer: credentialIssuer.address,
     panel: panel.address,
     x402PanelSubmitter: x402PanelSubmitter?.address,
+    feedbackBonus: feedbackBonus.address,
   });
 
   return validateTokenlessDeploymentArtifact({
@@ -283,13 +320,13 @@ export function validateTokenlessDeploymentArtifact(artifact) {
   if (artifact.schemaVersion !== TOKENLESS_DEPLOYMENT_SCHEMA) {
     throw new Error(
       `Unsupported tokenless deployment schema ${String(
-        artifact.schemaVersion
-      )}.`
+        artifact.schemaVersion,
+      )}.`,
     );
   }
   if (artifact.version !== TOKENLESS_DEPLOYMENT_VERSION) {
     throw new Error(
-      `Unsupported tokenless deployment version ${String(artifact.version)}.`
+      `Unsupported tokenless deployment version ${String(artifact.version)}.`,
     );
   }
   if (artifact.deploymentComplete !== true) {
@@ -310,7 +347,7 @@ export function validateTokenlessDeploymentArtifact(artifact) {
   for (const name of Object.keys(contracts)) {
     if (!ALLOWED_CONTRACTS.has(name)) {
       throw new Error(
-        `Unexpected contract ${name} in ${TOKENLESS_DEPLOYMENT_KEY_VERSION} deployment artifact.`
+        `Unexpected contract ${name} in ${TOKENLESS_DEPLOYMENT_KEY_VERSION} deployment artifact.`,
       );
     }
   }
@@ -328,23 +365,29 @@ export function validateTokenlessDeploymentArtifact(artifact) {
   if (contracts.X402PanelSubmitter) {
     normalizeAddress(
       contracts.X402PanelSubmitter.address,
-      "X402PanelSubmitter address"
+      "X402PanelSubmitter address",
     );
     normalizeBlockNumber(
       contracts.X402PanelSubmitter.deployedOnBlock,
-      "X402PanelSubmitter deployedOnBlock"
+      "X402PanelSubmitter deployedOnBlock",
     );
   }
+
+  normalizeAddress(
+    contracts.TokenlessFeedbackBonus.address,
+    "TokenlessFeedbackBonus address",
+  );
 
   const expectedKey = buildTokenlessDeploymentKey({
     chainId: artifact.chainId,
     credentialIssuer: contracts.CredentialIssuer.address,
     panel: contracts.TokenlessPanel.address,
     x402PanelSubmitter: contracts.X402PanelSubmitter?.address,
+    feedbackBonus: contracts.TokenlessFeedbackBonus.address,
   });
   if (artifact.deploymentKey !== expectedKey) {
     throw new Error(
-      "Tokenless deployment key does not match the exported contract addresses."
+      "Tokenless deployment key does not match the exported contract addresses.",
     );
   }
 
@@ -355,6 +398,6 @@ export function serializeTokenlessDeploymentArtifact(artifact) {
   return `${JSON.stringify(
     validateTokenlessDeploymentArtifact(artifact),
     null,
-    2
+    2,
   )}\n`;
 }

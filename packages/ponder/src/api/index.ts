@@ -8,6 +8,9 @@ import {
   tokenlessCreditBalance,
   tokenlessCreditEvent,
   tokenlessIssuerEpoch,
+  tokenlessFeedbackBonusEvent,
+  tokenlessFeedbackBonusPool,
+  tokenlessFeedbackRecord,
   tokenlessRound,
 } from "ponder:schema";
 import { isAddress } from "viem";
@@ -74,12 +77,25 @@ app.get("/health/tokenless", async (c) => {
     .from(tokenlessRound)
     .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
     .limit(1);
+  await db
+    .select({ id: tokenlessFeedbackBonusPool.id })
+    .from(tokenlessFeedbackBonusPool)
+    .where(
+      eq(tokenlessFeedbackBonusPool.deploymentKey, deployment.deploymentKey),
+    )
+    .limit(1);
   c.header("cache-control", "no-store");
   return c.json(tokenlessDeploymentHealth(deployment));
 });
 
 app.get("/status/tokenless", async (c) => {
-  const [rows, creditBalances, creditEvents] = await Promise.all([
+  const [
+    rows,
+    creditBalances,
+    creditEvents,
+    feedbackBonusPools,
+    feedbackBonusEvents,
+  ] = await Promise.all([
     db
       .select({ state: tokenlessRound.state })
       .from(tokenlessRound)
@@ -94,6 +110,18 @@ app.get("/status/tokenless", async (c) => {
       .select({ id: tokenlessCreditEvent.id })
       .from(tokenlessCreditEvent)
       .where(eq(tokenlessCreditEvent.deploymentKey, deployment.deploymentKey)),
+    db
+      .select({ id: tokenlessFeedbackBonusPool.id })
+      .from(tokenlessFeedbackBonusPool)
+      .where(
+        eq(tokenlessFeedbackBonusPool.deploymentKey, deployment.deploymentKey),
+      ),
+    db
+      .select({ id: tokenlessFeedbackBonusEvent.id })
+      .from(tokenlessFeedbackBonusEvent)
+      .where(
+        eq(tokenlessFeedbackBonusEvent.deploymentKey, deployment.deploymentKey),
+      ),
   ]);
   const byState: Record<string, number> = {};
   for (const row of rows)
@@ -104,6 +132,8 @@ app.get("/status/tokenless", async (c) => {
     byState,
     creditOwners: creditBalances.length,
     creditEvents: creditEvents.length,
+    feedbackBonusPools: feedbackBonusPools.length,
+    feedbackBonusEvents: feedbackBonusEvents.length,
     totalRemainingCredit: creditBalances
       .reduce((total, row) => total + row.remainingCredit, 0n)
       .toString(),
@@ -264,6 +294,77 @@ app.get("/issuer/epochs", async (c) => {
     .where(eq(tokenlessIssuerEpoch.deploymentKey, deployment.deploymentKey))
     .orderBy(desc(tokenlessIssuerEpoch.epoch))
     .limit(limit(c.req.query("limit"), 20));
+  return c.json(jsonSafe(rows));
+});
+
+app.get("/feedback-bonuses", async (c) => {
+  const rows = await db
+    .select()
+    .from(tokenlessFeedbackBonusPool)
+    .where(
+      eq(tokenlessFeedbackBonusPool.deploymentKey, deployment.deploymentKey),
+    )
+    .orderBy(desc(tokenlessFeedbackBonusPool.poolId))
+    .limit(limit(c.req.query("limit")));
+  return c.json(jsonSafe(rows));
+});
+
+app.get("/feedback-bonuses/:poolId", async (c) => {
+  const poolId = parseRoundId(c.req.param("poolId"));
+  if (poolId === null)
+    return c.json({ error: "poolId must be an unsigned integer" }, 400);
+  const row = await db.query.tokenlessFeedbackBonusPool.findFirst({
+    where: and(
+      eq(
+        tokenlessFeedbackBonusPool.id,
+        `${deployment.deploymentKey}:feedback-bonus:${poolId}`,
+      ),
+      eq(tokenlessFeedbackBonusPool.deploymentKey, deployment.deploymentKey),
+    ),
+  });
+  if (!row) return c.json({ error: "Feedback bonus pool not found" }, 404);
+  return c.json(jsonSafe(row));
+});
+
+app.get("/feedback-bonuses/:poolId/feedback", async (c) => {
+  const poolId = parseRoundId(c.req.param("poolId"));
+  if (poolId === null)
+    return c.json({ error: "poolId must be an unsigned integer" }, 400);
+  const rows = await db
+    .select()
+    .from(tokenlessFeedbackRecord)
+    .where(
+      and(
+        eq(tokenlessFeedbackRecord.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessFeedbackRecord.poolId, poolId),
+      ),
+    )
+    .orderBy(
+      asc(tokenlessFeedbackRecord.registeredBlock),
+      asc(tokenlessFeedbackRecord.registeredLogIndex),
+    )
+    .limit(limit(c.req.query("limit"), 100));
+  return c.json(jsonSafe(rows));
+});
+
+app.get("/feedback-bonuses/:poolId/events", async (c) => {
+  const poolId = parseRoundId(c.req.param("poolId"));
+  if (poolId === null)
+    return c.json({ error: "poolId must be an unsigned integer" }, 400);
+  const rows = await db
+    .select()
+    .from(tokenlessFeedbackBonusEvent)
+    .where(
+      and(
+        eq(tokenlessFeedbackBonusEvent.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessFeedbackBonusEvent.poolId, poolId),
+      ),
+    )
+    .orderBy(
+      asc(tokenlessFeedbackBonusEvent.blockNumber),
+      asc(tokenlessFeedbackBonusEvent.logIndex),
+    )
+    .limit(limit(c.req.query("limit"), 100));
   return c.json(jsonSafe(rows));
 });
 

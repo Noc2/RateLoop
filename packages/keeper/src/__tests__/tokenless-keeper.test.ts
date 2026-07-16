@@ -16,6 +16,8 @@ import {
 const PANEL = "0x0000000000000000000000000000000000000011";
 const ISSUER = "0x0000000000000000000000000000000000000022";
 const ADAPTER = "0x0000000000000000000000000000000000000023";
+const FEEDBACK_BONUS = "0x0000000000000000000000000000000000000024";
+const USDC = "0x0000000000000000000000000000000000000025";
 const VOTE_KEY = "0x0000000000000000000000000000000000000033" as Address;
 const PAYOUT = "0x0000000000000000000000000000000000000044" as Address;
 const COMMIT_KEY = `0x${"55".repeat(32)}` as Hex;
@@ -35,15 +37,17 @@ const logger: Logger = {
 const config = {
   chainId: 84532,
   deployment: {
-    key: `tokenless-v3:84532:${PANEL}:${ISSUER}:0x0000000000000000000000000000000000000000`,
+    key: `tokenless-v4:84532:${PANEL}:${ISSUER}:0x0000000000000000000000000000000000000000:${FEEDBACK_BONUS}`,
     blockNumber: 100n,
     panel: PANEL,
     credentialIssuer: ISSUER,
     x402PanelSubmitter: "0x0000000000000000000000000000000000000000",
+    feedbackBonus: FEEDBACK_BONUS,
   },
   maxRoundsPerTick: 100,
   settlementBatchSize: 25,
   maxCiphertextBytes: 16384,
+  maxFeedbackBonusPoolsPerTick: 100,
 } as any;
 
 function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
@@ -95,6 +99,12 @@ function clients(params: {
   writes?: string[];
   commitClaimed?: boolean;
   currentBlock?: bigint;
+  feedbackBonusPool?: {
+    depositedAmount: bigint;
+    awardedAmount: bigint;
+    awardDeadline: bigint;
+    refunded: boolean;
+  };
 }): TokenlessKeeperClients {
   const writes = params.writes ?? [];
   const currentRound = { ...params.currentRound };
@@ -124,7 +134,11 @@ function clients(params: {
         return { timestamp: params.now ?? 150n };
       },
       async getBytecode({ address }: { address: Address }) {
-        return address === PANEL || address === ISSUER ? "0x6000" : undefined;
+        return address === PANEL ||
+          address === ISSUER ||
+          address === FEEDBACK_BONUS
+          ? "0x6000"
+          : undefined;
       },
       async getBalance() {
         return 1n;
@@ -146,6 +160,8 @@ function clients(params: {
         switch (args.functionName) {
           case "credentialIssuer":
             return ISSUER;
+          case "usdc":
+            return USDC;
           case "SCORING_VERSION":
             return 2;
           case "BASE_PAY_BPS":
@@ -154,6 +170,11 @@ function clients(params: {
             return 500;
           case "nextRoundId":
             return 2n;
+          case "nextPoolId":
+            return params.feedbackBonusPool ? 2n : 1n;
+          case "getPool":
+            if (params.feedbackBonusPool) return params.feedbackBonusPool;
+            throw new Error("unexpected feedback bonus pool read");
           case "getRound":
             return currentRound;
           case "getCommit":
@@ -196,7 +217,7 @@ const decrypt = async () => ({
 beforeEach(() => resetTokenlessKeeperStateForTests());
 
 describe("tokenless keeper orchestration", () => {
-  it("uses the policy-bound v3 RBTS round tuple", () => {
+  it("uses the policy-bound v4 RBTS round tuple", () => {
     const getRound = TokenlessPanelAbi.find(
       (entry) => entry.type === "function" && entry.name === "getRound",
     );
@@ -256,6 +277,32 @@ describe("tokenless keeper orchestration", () => {
         },
       }),
     ).rejects.toThrow(/X402_PANEL_SUBMITTER_ADDRESS has no deployed bytecode/);
+  });
+
+  it("returns an expired unawarded feedback bonus remainder permissionlessly", async () => {
+    const writes: string[] = [];
+    const result = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.Finalized,
+          staleReturned: true,
+          claimDeadline: 300n,
+        }),
+        feedbackBonusPool: {
+          depositedAmount: 1_000_000n,
+          awardedAmount: 250_000n,
+          awardDeadline: 300n,
+          refunded: false,
+        },
+        writes,
+        now: 301n,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(writes).toContain("refundRemainder");
+    expect(result.feedbackBonusRefundsExecuted).toBe(1);
   });
 
   it("opens and reveals without any privileged role", async () => {

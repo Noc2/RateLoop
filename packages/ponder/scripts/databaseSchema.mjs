@@ -4,7 +4,7 @@ const SCHEMA_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
 export function schemaFromTokenlessDeploymentKey(deploymentKey) {
   const key = deploymentKey?.trim().toLowerCase();
-  if (!key?.startsWith("tokenless-v3:")) throw new Error("A tokenless-v3 deployment key is required.");
+  if (!key?.startsWith("tokenless-v4:")) throw new Error("A tokenless-v4 deployment key is required.");
   const digest = createHash("sha256").update(key).digest("hex").slice(0, 16);
   return `rateloop_tokenless_${digest}`;
 }

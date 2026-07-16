@@ -248,3 +248,54 @@ export const credentialIssuerAbi = [
     ],
   },
 ] as const satisfies Abi;
+
+export const tokenlessFeedbackBonusAbi = [
+  {
+    type: "event",
+    name: "PoolCreated",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "reviewId", type: "bytes32", indexed: true },
+      { name: "contentId", type: "bytes32", indexed: true },
+      { name: "admissionPolicyHash", type: "bytes32", indexed: false },
+      { name: "payer", type: "address", indexed: false },
+      { name: "funder", type: "address", indexed: false },
+      { name: "awarder", type: "address", indexed: false },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "feedbackDeadline", type: "uint64", indexed: false },
+      { name: "awardDeadline", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "FeedbackRegistered",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "feedbackKey", type: "bytes32", indexed: true },
+      { name: "responseHash", type: "bytes32", indexed: true },
+      { name: "voteKey", type: "address", indexed: false },
+      { name: "payoutCommitment", type: "bytes32", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "FeedbackAwarded",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "feedbackKey", type: "bytes32", indexed: true },
+      { name: "responseHash", type: "bytes32", indexed: true },
+      { name: "voteKey", type: "address", indexed: false },
+      { name: "payoutAddress", type: "address", indexed: false },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "RemainderRefunded",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "funder", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+] as const satisfies Abi;

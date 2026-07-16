@@ -1,6 +1,6 @@
 import { isAddress, zeroAddress } from "viem";
 
-export const TOKENLESS_SCHEMA_VERSION = "tokenless-v3";
+export const TOKENLESS_SCHEMA_VERSION = "tokenless-v4";
 const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
 export const PONDER_NETWORK_CHAIN_IDS = {
   hardhat: 31_337,
@@ -16,6 +16,7 @@ export interface TokenlessDeployment {
   panelAddress: `0x${string}`;
   issuerAddress: `0x${string}`;
   adapterAddress: `0x${string}`;
+  feedbackBonusAddress: `0x${string}`;
   startBlock: number;
   deploymentKey: string;
 }
@@ -26,6 +27,7 @@ export function tokenlessDeploymentHealth(deployment: TokenlessDeployment) {
     protocol: TOKENLESS_SCHEMA_VERSION,
     chainId: deployment.chainId,
     deploymentKey: deployment.deploymentKey,
+    feedbackBonusAddress: deployment.feedbackBonusAddress,
     startBlock: deployment.startBlock,
   };
 }
@@ -109,6 +111,7 @@ export function buildTokenlessDeploymentKey(params: {
   panelAddress: `0x${string}`;
   issuerAddress: `0x${string}`;
   adapterAddress?: `0x${string}`;
+  feedbackBonusAddress: `0x${string}`;
 }) {
   return [
     TOKENLESS_SCHEMA_VERSION,
@@ -116,6 +119,7 @@ export function buildTokenlessDeploymentKey(params: {
     params.panelAddress.toLowerCase(),
     params.issuerAddress.toLowerCase(),
     (params.adapterAddress ?? zeroAddress).toLowerCase(),
+    params.feedbackBonusAddress.toLowerCase(),
   ].join(":");
 }
 
@@ -153,6 +157,10 @@ export function resolveTokenlessDeployment(
     read(env, "PONDER_X402_PANEL_SUBMITTER_ADDRESS"),
     "PONDER_X402_PANEL_SUBMITTER_ADDRESS",
   );
+  const feedbackBonusAddress = requiredAddress(
+    read(env, "PONDER_FEEDBACK_BONUS_ADDRESS"),
+    "PONDER_FEEDBACK_BONUS_ADDRESS",
+  );
   const startBlock = unsignedInteger(
     read(env, "PONDER_TOKENLESS_START_BLOCK"),
     "PONDER_TOKENLESS_START_BLOCK",
@@ -163,6 +171,7 @@ export function resolveTokenlessDeployment(
     panelAddress,
     issuerAddress,
     adapterAddress,
+    feedbackBonusAddress,
   });
   const configuredKey = read(
     env,
@@ -186,6 +195,7 @@ export function resolveTokenlessDeployment(
     panelAddress,
     issuerAddress,
     adapterAddress,
+    feedbackBonusAddress,
     startBlock,
     deploymentKey,
   };
@@ -201,4 +211,23 @@ export function commitKey(deploymentKey: string, value: `0x${string}`) {
 
 export function creditOwnerKey(deploymentKey: string, owner: `0x${string}`) {
   return `${deploymentKey}:${owner.toLowerCase()}`;
+}
+
+export function feedbackBonusPoolKey(deploymentKey: string, poolId: bigint) {
+  return `${deploymentKey}:feedback-bonus:${poolId}`;
+}
+
+export function feedbackBonusRecordKey(
+  deploymentKey: string,
+  feedbackKey: `0x${string}`,
+) {
+  return `${deploymentKey}:feedback:${feedbackKey.toLowerCase()}`;
+}
+
+export function deploymentEventKey(
+  deploymentKey: string,
+  transactionHash: `0x${string}`,
+  logIndex: number,
+) {
+  return `${deploymentKey}:${transactionHash.toLowerCase()}:${logIndex}`;
 }

@@ -7,7 +7,7 @@ loadDotenv();
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 const LOCAL_CHAIN_ID = 31337;
 const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
-export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v3";
+export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v4";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
@@ -118,6 +118,7 @@ export function buildTokenlessDeploymentKey(params: {
   panel: Address;
   credentialIssuer: Address;
   x402PanelSubmitter?: Address;
+  feedbackBonus: Address;
 }) {
   return [
     TOKENLESS_DEPLOYMENT_VERSION,
@@ -125,6 +126,7 @@ export function buildTokenlessDeploymentKey(params: {
     params.panel.toLowerCase(),
     params.credentialIssuer.toLowerCase(),
     (params.x402PanelSubmitter ?? zeroAddress).toLowerCase(),
+    params.feedbackBonus.toLowerCase(),
   ].join(":");
 }
 
@@ -165,11 +167,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
     errors,
   );
+  const feedbackBonus = requiredAddress(
+    env,
+    "TOKENLESS_FEEDBACK_BONUS_ADDRESS",
+    errors,
+  );
   const expectedDeploymentKey = buildTokenlessDeploymentKey({
     chainId,
     panel,
     credentialIssuer,
     x402PanelSubmitter,
+    feedbackBonus,
   });
   const deploymentKey = required(env, "TOKENLESS_DEPLOYMENT_KEY", errors);
   if (deploymentKey && deploymentKey.toLowerCase() !== expectedDeploymentKey) {
@@ -232,6 +240,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     16_384,
     errors,
   );
+  const maxFeedbackBonusPoolsPerTick = positiveInteger(
+    env,
+    "KEEPER_MAX_FEEDBACK_BONUS_POOLS_PER_TICK",
+    100,
+    errors,
+  );
   const hostedPort = positiveInteger(env, "PORT", 9090, errors);
   const metricsPort = positiveInteger(env, "METRICS_PORT", hostedPort, errors);
   let minGasBalanceWei = 0n;
@@ -260,6 +274,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       panel,
       credentialIssuer,
       x402PanelSubmitter,
+      feedbackBonus,
     },
     privateKey: privateKey as Hex | undefined,
     keystoreAccount,
@@ -267,6 +282,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     maxRoundsPerTick,
     settlementBatchSize,
     maxCiphertextBytes,
+    maxFeedbackBonusPoolsPerTick,
     metricsPort,
     metricsBindAddress,
     metricsAuthToken,

@@ -25,6 +25,7 @@ const PANEL = getAddress("0x1111111111111111111111111111111111111111");
 const ISSUER = getAddress("0x2222222222222222222222222222222222222222");
 const ADAPTER = getAddress("0x3333333333333333333333333333333333333333");
 const USDC = getAddress("0x4444444444444444444444444444444444444444");
+const FEEDBACK_BONUS = getAddress("0x7777777777777777777777777777777777777777");
 const FUNDER = getAddress("0x5555555555555555555555555555555555555555");
 const FEE_RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
 const SURPRISE_BONUS_ACCOUNT = privateKeyToAccount(`0x${"77".repeat(32)}`);
@@ -41,14 +42,16 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
       panelAddress: PANEL,
       issuerAddress: ISSUER,
       x402SubmitterAddress: ADAPTER,
+      feedbackBonusAddress: FEEDBACK_BONUS,
     }),
     feeRecipient: FEE_RECIPIENT,
+    feedbackBonusAddress: FEEDBACK_BONUS,
     issuerAddress: ISSUER,
     panelAddress: PANEL,
     revealWindowSeconds: 120,
     beaconFailureGraceSeconds: 300,
     rpcUrl: "https://sepolia.base.org/",
-    schemaVersion: "rateloop-tokenless-deployment-v3",
+    schemaVersion: "rateloop-tokenless-deployment-v4",
     usdcAddress: USDC,
     usdcEip712Name: "RateLoop Tokenless Test USDC",
     usdcEip712Version: "2",
@@ -73,6 +76,8 @@ function mockRuntime(
       if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
       if (address === ADAPTER && functionName === "panel") return PANEL;
       if (address === ADAPTER && (functionName === "usdc" || functionName === "authorizationToken")) return USDC;
+      if (address === FEEDBACK_BONUS && functionName === "usdc") return USDC;
+      if (address === FEEDBACK_BONUS && functionName === "credentialIssuer") return ISSUER;
       if (address === USDC && functionName === "balanceOf") return 1_000_000_000n;
       if (address === PANEL && functionName === "getRound" && expectedRound) {
         const terms = __chainPaymentTestUtils.toOnchainTerms(expectedRound.roundTerms);
@@ -121,11 +126,12 @@ afterEach(() => {
 test("deployment config binds the complete bundle and forbids credential key reuse", () => {
   const key = `0x${"11".repeat(32)}`;
   const env = {
-    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v3",
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
     TOKENLESS_CHAIN_ID: "84532",
     TOKENLESS_PANEL_ADDRESS: PANEL,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
     TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: ADAPTER,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
     TOKENLESS_USDC_ADDRESS: USDC,
     TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT,
     TOKENLESS_DEPLOYMENT_KEY: config().deploymentKey,
@@ -161,7 +167,7 @@ test("deployment config binds the complete bundle and forbids credential key reu
         TOKENLESS_X402_RELAYER_PRIVATE_KEY: undefined,
         TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
       }),
-    /must be rateloop-tokenless-deployment-v3/,
+    /must be rateloop-tokenless-deployment-v4/,
   );
 });
 

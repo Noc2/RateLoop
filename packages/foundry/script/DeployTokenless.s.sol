@@ -5,11 +5,12 @@ import { Script, console2 } from "forge-std/Script.sol";
 
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../contracts/tokenless/CredentialIssuer.sol";
+import { TokenlessFeedbackBonus } from "../contracts/tokenless/TokenlessFeedbackBonus.sol";
 import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
 import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
-/// @notice Disposable Base Sepolia deployment for the next tokenless-v3 stack.
-/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v3 schema.
+/// @notice Disposable Base Sepolia deployment for the next tokenless-v4 stack.
+/// @dev Tokenless artifacts live under the isolated deployments/tokenless-v4 schema.
 contract DeployTokenlessScript is Script {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84_532;
     uint256 internal constant EIP170_RUNTIME_CODE_SIZE_LIMIT = 24_576;
@@ -17,6 +18,7 @@ contract DeployTokenlessScript is Script {
 
     string internal constant TEST_USDC_ARTIFACT = "MockERC20.sol:MockERC20";
     string internal constant CREDENTIAL_ISSUER_ARTIFACT = "CredentialIssuer.sol:CredentialIssuer";
+    string internal constant FEEDBACK_BONUS_ARTIFACT = "TokenlessFeedbackBonus.sol:TokenlessFeedbackBonus";
     string internal constant TOKENLESS_PANEL_ARTIFACT = "TokenlessPanel.sol:TokenlessPanel";
     string internal constant X402_PANEL_SUBMITTER_ARTIFACT = "X402PanelSubmitter.sol:X402PanelSubmitter";
 
@@ -42,6 +44,7 @@ contract DeployTokenlessScript is Script {
         bytes memory twoAddressArgs = abi.encode(address(0), address(0));
         _assertDeployable(TEST_USDC_ARTIFACT, testUsdcArgs);
         _assertDeployable(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs);
+        _assertDeployable(FEEDBACK_BONUS_ARTIFACT, twoAddressArgs);
         _assertDeployable(TOKENLESS_PANEL_ARTIFACT, twoAddressArgs);
         _assertDeployable(X402_PANEL_SUBMITTER_ARTIFACT, twoAddressArgs);
 
@@ -51,6 +54,9 @@ contract DeployTokenlessScript is Script {
         CredentialIssuer issuer = CredentialIssuer(deployCode(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs));
         TokenlessPanel panel =
             TokenlessPanel(deployCode(TOKENLESS_PANEL_ARTIFACT, abi.encode(address(testUsdc), address(issuer))));
+        TokenlessFeedbackBonus feedbackBonus = TokenlessFeedbackBonus(
+            deployCode(FEEDBACK_BONUS_ARTIFACT, abi.encode(address(testUsdc), address(issuer)))
+        );
         X402PanelSubmitter x402Submitter = X402PanelSubmitter(
             deployCode(X402_PANEL_SUBMITTER_ARTIFACT, abi.encode(address(testUsdc), address(panel)))
         );
@@ -60,8 +66,9 @@ contract DeployTokenlessScript is Script {
         console2.log("TokenlessTestUSDC:", address(testUsdc));
         console2.log("CredentialIssuer:", address(issuer));
         console2.log("TokenlessPanel:", address(panel));
+        console2.log("TokenlessFeedbackBonus:", address(feedbackBonus));
         console2.log("X402PanelSubmitter:", address(x402Submitter));
-        console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v3");
+        console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v4");
     }
 
     function _assertDeployable(string memory artifact, bytes memory constructorArgs) internal view {
