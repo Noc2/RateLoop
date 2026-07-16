@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { createLegalHold } from "~~/lib/privacy/lifecycle";
 import {
   type PrivateArtifactStore,
@@ -23,12 +25,25 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
 const OPAQUE_OWNER = "rlp_artifact_owner_principal_0001";
+const artifactPrivacySource = readFileSync(new URL("./artifactPrivacy.ts", import.meta.url), "utf8");
 
 class MemoryPrivateStore implements PrivateArtifactStore {
+  deleteCalls = 0;
+  failAfterDeleteOnce = false;
+  failBeforeDeleteOnce = false;
   readonly objects = new Map<string, Uint8Array>();
 
   async delete(reference: string) {
+    this.deleteCalls += 1;
+    if (this.failBeforeDeleteOnce) {
+      this.failBeforeDeleteOnce = false;
+      throw new Error("provider unavailable before delete");
+    }
     this.objects.delete(reference);
+    if (this.failAfterDeleteOnce) {
+      this.failAfterDeleteOnce = false;
+      throw new Error("provider response lost after delete");
+    }
   }
 
   async get(reference: string) {
@@ -46,10 +61,31 @@ class MemoryPrivateStore implements PrivateArtifactStore {
 
 let store: MemoryPrivateStore;
 
+type DeletionHookPhase =
+  | "after_provider_delete"
+  | "after_provider_checkpoint"
+  | "before_finalize_commit"
+  | "after_audit_append";
+
+function configureRuntime(
+  input: {
+    auditWriter?: typeof appendAuditEvent;
+    deletionHook?: (phase: DeletionHookPhase) => Promise<void> | void;
+  } = {},
+) {
+  __setArtifactPrivacyRuntimeForTests({
+    auditWriter: input.auditWriter,
+    deletionHook: input.deletionHook,
+    keyVersion: "artifact-test-v1",
+    masterKey: Buffer.alloc(32, 7),
+    store,
+  });
+}
+
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   store = new MemoryPrivateStore();
-  __setArtifactPrivacyRuntimeForTests({ keyVersion: "artifact-test-v1", masterKey: Buffer.alloc(32, 7), store });
+  configureRuntime();
 });
 
 afterEach(() => {
@@ -85,6 +121,47 @@ async function upload(project: { projectId: string; workspaceId: string }, text 
     workspaceId: project.workspaceId,
   });
 }
+
+async function objectIdForArtifact(artifactId: string) {
+  const result = await dbClient.execute({
+    sql: "SELECT object_id FROM tokenless_assurance_artifact_objects WHERE artifact_id = ?",
+    args: [artifactId],
+  });
+  return String(result.rows[0]?.object_id);
+}
+
+async function artifactDeletionJob(objectId: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT state, provider_deleted_at, finalized_at, audit_event_id
+          FROM tokenless_artifact_deletion_jobs WHERE object_id = ?`,
+    args: [objectId],
+  });
+  return result.rows[0];
+}
+
+async function artifactDeletionAuditCount(workspaceId: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action = 'artifact.retention_delete'`,
+    args: [workspaceId],
+  });
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+test("artifact finalization preserves the workspace-before-job lock order", () => {
+  const start = artifactPrivacySource.indexOf("async function finalizeArtifactDeletion");
+  const end = artifactPrivacySource.indexOf("function isUniqueViolation", start);
+  const implementation = artifactPrivacySource.slice(start, end);
+  const identityRead = implementation.indexOf("SELECT workspace_id FROM tokenless_artifact_deletion_jobs");
+  const workspaceLock = implementation.indexOf(
+    "SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE",
+  );
+  const jobLock = implementation.indexOf("artifactDeletionJob(client, objectId, true)");
+
+  assert.ok(start >= 0 && end > start);
+  assert.ok(identityRead >= 0 && identityRead < workspaceLock);
+  assert.ok(workspaceLock < jobLock);
+});
 
 test("artifact plaintext stays out of Postgres and private object storage", async () => {
   const project = await seedProject();
@@ -216,6 +293,212 @@ test("retention deletion removes ciphertext and tombstones the database referenc
     () => readEncryptedArtifact({ accountAddress: OWNER, artifactId: artifact.artifactId, ...project }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_not_found",
   );
+});
+
+test("a provider delete followed by a metadata-finalize rollback resumes from its durable checkpoint", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "finalize after provider delete");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  let failFinalize = true;
+  configureRuntime({
+    deletionHook(phase) {
+      if (phase === "before_finalize_commit" && failFinalize) {
+        failFinalize = false;
+        throw new Error("database commit unavailable");
+      }
+    },
+  });
+
+  await assert.rejects(() => processArtifactDeletionByObjectId(objectId, now), /database commit unavailable/);
+  assert.equal(store.objects.size, 0);
+  assert.equal(store.deleteCalls, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "provider_deleted");
+  assert.equal(
+    String(
+      (
+        await dbClient.execute({
+          sql: "SELECT status FROM tokenless_assurance_artifact_objects WHERE object_id = ?",
+          args: [objectId],
+        })
+      ).rows[0]?.status,
+    ),
+    "active",
+  );
+
+  configureRuntime();
+  assert.deepEqual(await processDueArtifactDeletions(new Date(now.getTime() + 1_000)), { deleted: 1 });
+  assert.equal(store.deleteCalls, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+});
+
+test("an unknown provider outcome retries the idempotent delete without losing completion", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "provider response can disappear");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  store.failAfterDeleteOnce = true;
+
+  await assert.rejects(() => processArtifactDeletionByObjectId(objectId, now), /provider response lost/);
+  assert.equal(store.objects.size, 0);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "provider_pending");
+  assert.equal(await processArtifactDeletionByObjectId(objectId, new Date(now.getTime() + 31_000)), true);
+  assert.equal(store.deleteCalls, 2);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+});
+
+test("a transient canonical-audit failure leaves finalized deletion work retryable", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "audit after deletion");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  configureRuntime({
+    async auditWriter() {
+      throw new Error("audit database temporarily unavailable");
+    },
+  });
+
+  await assert.rejects(
+    () => processArtifactDeletionByObjectId(objectId, now),
+    /audit database temporarily unavailable/,
+  );
+  assert.equal(store.objects.size, 0);
+  assert.equal(store.deleteCalls, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "finalized");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 0);
+
+  configureRuntime();
+  assert.deepEqual(await processDueArtifactDeletions(new Date(now.getTime() + 1_000)), { deleted: 1 });
+  assert.equal(store.deleteCalls, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+});
+
+test("a preseeded event with the deletion correlation cannot complete a different artifact audit", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "reject conflicting deletion evidence");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await appendAuditEvent({
+    action: "artifact.retention_delete",
+    actorKind: "system",
+    actorReference: "system:retention_worker",
+    assuranceMethod: "scheduled_worker",
+    occurredAt: new Date(now.getTime() - 1_000),
+    purpose: "retention_enforcement",
+    reason: "conflicting_preseeded_event",
+    requestCorrelation: `artifact-retention:${objectId}`,
+    result: "success",
+    targetId: "art_conflicting_target",
+    targetKind: "artifact",
+    workspaceId: project.workspaceId,
+  });
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+
+  await assert.rejects(
+    () => processArtifactDeletionByObjectId(objectId, now),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_deletion_audit_conflict",
+  );
+  assert.equal(store.objects.size, 0);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "finalized");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+});
+
+test("retry after audit append reuses the canonical event instead of duplicating it", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "single canonical deletion event");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  let loseCheckpoint = true;
+  configureRuntime({
+    deletionHook(phase) {
+      if (phase === "after_audit_append" && loseCheckpoint) {
+        loseCheckpoint = false;
+        throw new Error("audit checkpoint commit lost");
+      }
+    },
+  });
+
+  await assert.rejects(() => processArtifactDeletionByObjectId(objectId, now), /audit checkpoint commit lost/);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "finalized");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+
+  configureRuntime();
+  assert.equal(await processArtifactDeletionByObjectId(objectId, new Date(now.getTime() + 1_000)), true);
+  assert.equal(await processArtifactDeletionByObjectId(objectId, new Date(now.getTime() + 2_000)), true);
+  assert.equal(store.deleteCalls, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
+  assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+});
+
+test("a hold placed after a failed provider attempt blocks the retry before ciphertext deletion", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "hold pending retry");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  store.failBeforeDeleteOnce = true;
+  await assert.rejects(() => processArtifactDeletionByObjectId(objectId, now), /provider unavailable/);
+  assert.equal(store.objects.size, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "provider_pending");
+
+  await createLegalHold({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "new dispute",
+    reviewAt: new Date(now.getTime() + 86_400_000),
+    workspaceId: project.workspaceId,
+    now: new Date(now.getTime() + 1_000),
+  });
+  await assert.rejects(
+    () => processArtifactDeletionByObjectId(objectId, new Date(now.getTime() + 31_000)),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "deletion_blocked_by_hold",
+  );
+  assert.equal(store.objects.size, 1);
+  assert.equal(store.deleteCalls, 1);
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "provider_pending");
 });
 
 test("an active legal hold defers scheduled deletion without consuming the object", async () => {

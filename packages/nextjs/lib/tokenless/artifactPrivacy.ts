@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -14,6 +15,8 @@ import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenle
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ARTIFACT_KEY_DOMAIN = "customer_artifact";
+const ARTIFACT_DELETION_LEASE_MS = 5 * 60_000;
+const ARTIFACT_DELETION_RETRY_MS = 30_000;
 const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 const MAX_LEASE_MS = 30 * 60_000;
 export const PRIVATE_REVIEW_ARTIFACT_KINDS = ["source", "suggestion"] as const;
@@ -22,18 +25,27 @@ export type PrivateReviewArtifactKind = (typeof PRIVATE_REVIEW_ARTIFACT_KINDS)[n
 type QueryRow = Record<string, unknown>;
 
 export type PrivateArtifactStore = {
+  /** Delete is idempotent: an already-absent reference is a successful outcome. */
   delete(reference: string): Promise<void>;
   get(reference: string): Promise<Uint8Array>;
   put(pathname: string, body: Uint8Array): Promise<string>;
 };
 
 type ArtifactPrivacyRuntime = {
+  auditWriter?: typeof appendAuditEvent;
   commitmentKey?: Uint8Array;
+  deletionHook?: (phase: ArtifactDeletionHookPhase) => Promise<void> | void;
   keyProvider?: KeyWrappingProvider;
   keyVersion: string;
   masterKey?: Uint8Array;
   store: PrivateArtifactStore;
 };
+
+type ArtifactDeletionHookPhase =
+  | "after_provider_delete"
+  | "after_provider_checkpoint"
+  | "before_finalize_commit"
+  | "after_audit_append";
 
 let runtimeOverride: ArtifactPrivacyRuntime | null = null;
 let managedKeyProvider: KeyWrappingProvider | null = null;
@@ -873,41 +885,101 @@ export async function requestProjectDeletion(input: {
   return { requestId, executeAfter: executeAfter.toISOString() };
 }
 
-export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
-  const runtime = getRuntime();
+function artifactDeletionCorrelation(objectId: string) {
+  return `artifact-retention:${objectId}`;
+}
+
+function artifactDeletionError(error: unknown) {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 2_000);
+}
+
+function validRetentionMonths(value: unknown) {
+  const months = Number(value);
+  return Number.isSafeInteger(months) && months >= 6 && months <= 120 ? months : null;
+}
+
+function retentionEnd(createdAtValue: unknown, retentionMonths: number) {
+  const createdAt = new Date(String(createdAtValue));
+  const originalDay = createdAt.getUTCDate();
+  createdAt.setUTCDate(1);
+  createdAt.setUTCMonth(createdAt.getUTCMonth() + retentionMonths);
+  const lastDay = new Date(Date.UTC(createdAt.getUTCFullYear(), createdAt.getUTCMonth() + 1, 0)).getUTCDate();
+  createdAt.setUTCDate(Math.min(originalDay, lastDay));
+  return createdAt;
+}
+
+async function artifactDeletionJob(client: PoolClient, objectId: string, lock = false) {
+  const result = await client.query(
+    `SELECT object_id, workspace_id, project_id, artifact_id, storage_ref, authorization_kind,
+            deletion_request_id, retention_policy_version, state, attempt_count, next_attempt_at,
+            lease_token, lease_expires_at, provider_deleted_at, finalized_at, audit_event_id,
+            audit_event_digest, audited_at
+     FROM tokenless_artifact_deletion_jobs WHERE object_id = $1${lock ? " FOR UPDATE" : ""}`,
+    [objectId],
+  );
+  return result.rows[0] as QueryRow | undefined;
+}
+
+type ArtifactDeletionClaim =
+  | { kind: "done" | "busy" }
+  | { kind: "finalize" | "audit"; row: QueryRow }
+  | { kind: "provider"; leaseToken: string; row: QueryRow };
+
+async function claimArtifactDeletion(objectId: string, now: Date): Promise<ArtifactDeletionClaim> {
   const identity = await dbClient.execute({
     sql: "SELECT workspace_id FROM tokenless_assurance_artifact_objects WHERE object_id = ? LIMIT 1",
     args: [objectId],
   });
   const workspaceId = rowString(identity.rows[0] as QueryRow | undefined, "workspace_id");
-  if (!workspaceId) return true;
+  if (!workspaceId) return { kind: "done" };
+
   const client = await dbPool.connect();
-  let row: QueryRow | undefined;
   try {
     await client.query("BEGIN");
+    // Hold creation and retention-policy updates take this same lock. Committing
+    // the provider lease is the serialized point after which deletion may run.
     await client.query("SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE", [
       workspaceId,
     ]);
+    let job = await artifactDeletionJob(client, objectId, true);
+    const jobState = rowString(job, "state");
+    if (jobState === "completed") {
+      await client.query("COMMIT");
+      return { kind: "done" };
+    }
+    if (jobState === "finalized") {
+      await client.query("COMMIT");
+      return { kind: "audit", row: job! };
+    }
+    if (jobState === "provider_deleted") {
+      await client.query("COMMIT");
+      return { kind: "finalize", row: job! };
+    }
+    if (jobState === "provider_deleting" && new Date(String(job?.lease_expires_at)).getTime() > now.getTime()) {
+      await client.query("COMMIT");
+      return { kind: "busy" };
+    }
+
     const result = await client.query(
       `SELECT o.object_id, o.artifact_id, o.workspace_id, o.project_id, o.storage_ref,
-                 o.status, o.delete_after, o.created_at, h.hold_id, request.request_id,
-                 policy.evidence_retention_months
-          FROM tokenless_assurance_artifact_objects o
-          LEFT JOIN tokenless_legal_holds h
-            ON h.workspace_id = o.workspace_id AND h.status = 'active'
-           AND (h.project_id IS NULL OR h.project_id = o.project_id)
-          LEFT JOIN tokenless_assurance_deletion_requests request
-            ON request.workspace_id = o.workspace_id AND request.project_id = o.project_id
-           AND request.status = 'pending' AND request.execute_after <= $1
-          LEFT JOIN tokenless_workspace_evidence_retention_policies policy
-            ON policy.workspace_id = o.workspace_id AND policy.superseded_at IS NULL
-          WHERE o.object_id = $2 LIMIT 1`,
+              o.status, o.delete_after, o.created_at, h.hold_id, request.request_id,
+              policy.version AS policy_version, policy.evidence_retention_months
+       FROM tokenless_assurance_artifact_objects o
+       LEFT JOIN tokenless_legal_holds h
+         ON h.workspace_id = o.workspace_id AND h.status = 'active'
+        AND (h.project_id IS NULL OR h.project_id = o.project_id)
+       LEFT JOIN tokenless_assurance_deletion_requests request
+         ON request.workspace_id = o.workspace_id AND request.project_id = o.project_id
+        AND request.status = 'pending' AND request.execute_after <= $1
+       LEFT JOIN tokenless_workspace_evidence_retention_policies policy
+         ON policy.workspace_id = o.workspace_id AND policy.superseded_at IS NULL
+       WHERE o.object_id = $2 LIMIT 1`,
       [now, objectId],
     );
-    row = result.rows[0] as QueryRow | undefined;
+    const row = result.rows[0] as QueryRow | undefined;
     if (!row || rowString(row, "status") !== "active") {
       await client.query("COMMIT");
-      return true;
+      return { kind: "done" };
     }
     if (rowString(row, "hold_id")) {
       throw new TokenlessServiceError(
@@ -920,9 +992,12 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
     if (new Date(String(row.delete_after)).getTime() > now.getTime()) {
       throw new TokenlessServiceError("Artifact deletion is not due yet.", 409, "deletion_not_due", true);
     }
-    if (!rowString(row, "request_id")) {
-      const retentionMonths = Number(row.evidence_retention_months);
-      if (!Number.isSafeInteger(retentionMonths) || retentionMonths < 6 || retentionMonths > 120) {
+
+    const requestId = rowString(row, "request_id");
+    const retentionMonths = validRetentionMonths(row.evidence_retention_months);
+    const policyVersion = Number(row.policy_version);
+    if (!requestId) {
+      if (!retentionMonths || !Number.isSafeInteger(policyVersion) || policyVersion < 1) {
         throw new TokenlessServiceError(
           "The workspace evidence-retention policy is unavailable.",
           503,
@@ -930,13 +1005,7 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
           true,
         );
       }
-      const createdAt = new Date(String(row.created_at));
-      const originalDay = createdAt.getUTCDate();
-      createdAt.setUTCDate(1);
-      createdAt.setUTCMonth(createdAt.getUTCMonth() + retentionMonths);
-      const lastDay = new Date(Date.UTC(createdAt.getUTCFullYear(), createdAt.getUTCMonth() + 1, 0)).getUTCDate();
-      createdAt.setUTCDate(Math.min(originalDay, lastDay));
-      if (createdAt.getTime() > now.getTime()) {
+      if (retentionEnd(row.created_at, retentionMonths).getTime() > now.getTime()) {
         throw new TokenlessServiceError(
           "Artifact deletion is deferred until the workspace evidence-retention period ends.",
           409,
@@ -945,20 +1014,159 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
         );
       }
     }
-    const storageRef = rowString(row, "storage_ref")!;
-    await runtime.store.delete(storageRef);
-    const deleted = await client.query(
-      `UPDATE tokenless_assurance_artifact_objects SET status = 'deleted', deleted_at = $1
-       WHERE object_id = $2 AND status = 'active'`,
-      [now, objectId],
+
+    if (!job) {
+      await client.query(
+        `INSERT INTO tokenless_artifact_deletion_jobs
+         (object_id, workspace_id, project_id, artifact_id, storage_ref, authorization_kind,
+          deletion_request_id, retention_policy_version, state, attempt_count, next_attempt_at,
+          created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'provider_pending', 0, $9, $9, $9)`,
+        [
+          objectId,
+          workspaceId,
+          rowString(row, "project_id"),
+          rowString(row, "artifact_id"),
+          rowString(row, "storage_ref"),
+          requestId ? "deletion_request" : "retention_policy",
+          requestId,
+          requestId ? null : policyVersion,
+          now,
+        ],
+      );
+      job = await artifactDeletionJob(client, objectId, true);
+    }
+    if (
+      rowString(job, "workspace_id") !== workspaceId ||
+      rowString(job, "project_id") !== rowString(row, "project_id") ||
+      rowString(job, "artifact_id") !== rowString(row, "artifact_id") ||
+      rowString(job, "storage_ref") !== rowString(row, "storage_ref")
+    ) {
+      throw new TokenlessServiceError(
+        "The artifact deletion checkpoint does not match the stored object.",
+        500,
+        "artifact_deletion_checkpoint_invalid",
+      );
+    }
+    if (new Date(String(job?.next_attempt_at)).getTime() > now.getTime()) {
+      await client.query("COMMIT");
+      return { kind: "busy" };
+    }
+
+    const leaseToken = `adl_${randomUUID().replaceAll("-", "")}`;
+    const leaseExpiresAt = new Date(now.getTime() + ARTIFACT_DELETION_LEASE_MS);
+    const claimed = await client.query(
+      `UPDATE tokenless_artifact_deletion_jobs
+       SET authorization_kind = $1, deletion_request_id = $2, retention_policy_version = $3,
+           state = 'provider_deleting', attempt_count = attempt_count + 1, next_attempt_at = $4,
+           lease_token = $5, lease_expires_at = $6, last_error = NULL, updated_at = $4
+       WHERE object_id = $7 AND state IN ('provider_pending', 'provider_deleting')`,
+      [
+        requestId ? "deletion_request" : "retention_policy",
+        requestId,
+        requestId ? null : policyVersion,
+        now,
+        leaseToken,
+        leaseExpiresAt,
+        objectId,
+      ],
     );
-    if (deleted.rowCount !== 1) {
+    if (claimed.rowCount !== 1) {
       await client.query("ROLLBACK");
+      return { kind: "busy" };
+    }
+    job = await artifactDeletionJob(client, objectId);
+    await client.query("COMMIT");
+    return { kind: "provider", leaseToken, row: job! };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function releaseArtifactDeletionClaim(objectId: string, leaseToken: string, now: Date, error: unknown) {
+  try {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_artifact_deletion_jobs
+            SET state = 'provider_pending', next_attempt_at = ?, lease_token = NULL, lease_expires_at = NULL,
+                last_error = ?, updated_at = ?
+            WHERE object_id = ? AND state = 'provider_deleting' AND lease_token = ?`,
+      args: [
+        new Date(now.getTime() + ARTIFACT_DELETION_RETRY_MS),
+        artifactDeletionError(error),
+        now,
+        objectId,
+        leaseToken,
+      ],
+    });
+  } catch {
+    // A stale provider claim is recovered after its durable lease expires.
+  }
+}
+
+async function checkpointProviderDeletion(objectId: string, leaseToken: string, now: Date) {
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_artifact_deletion_jobs
+          SET state = 'provider_deleted', provider_deleted_at = ?, next_attempt_at = ?,
+              lease_token = NULL, lease_expires_at = NULL, last_error = NULL, updated_at = ?
+          WHERE object_id = ? AND state = 'provider_deleting' AND lease_token = ?`,
+    args: [now, now, now, objectId, leaseToken],
+  });
+  if (result.rowCount === 1) return true;
+  const current = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_artifact_deletion_jobs WHERE object_id = ?",
+    args: [objectId],
+  });
+  return ["provider_deleted", "finalized", "completed"].includes(
+    rowString(current.rows[0] as QueryRow | undefined, "state") ?? "",
+  );
+}
+
+async function finalizeArtifactDeletion(objectId: string, now: Date, runtime: ArtifactPrivacyRuntime) {
+  const identity = await dbClient.execute({
+    sql: "SELECT workspace_id FROM tokenless_artifact_deletion_jobs WHERE object_id = ?",
+    args: [objectId],
+  });
+  const workspaceId = rowString(identity.rows[0] as QueryRow | undefined, "workspace_id");
+  if (!workspaceId) return false;
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 FOR UPDATE", [
+      workspaceId,
+    ]);
+    const job = await artifactDeletionJob(client, objectId, true);
+    if (!job) {
+      await client.query("COMMIT");
       return false;
     }
+    if (rowString(job, "workspace_id") !== workspaceId) {
+      throw new TokenlessServiceError(
+        "The artifact deletion checkpoint changed workspace while being finalized.",
+        500,
+        "artifact_deletion_checkpoint_invalid",
+      );
+    }
+    const state = rowString(job, "state");
+    if (state === "finalized" || state === "completed") {
+      await client.query("COMMIT");
+      return true;
+    }
+    if (state !== "provider_deleted") {
+      await client.query("COMMIT");
+      return false;
+    }
+    await runtime.deletionHook?.("before_finalize_commit");
+    await client.query(
+      `UPDATE tokenless_assurance_artifact_objects SET status = 'deleted', deleted_at = COALESCE(deleted_at, $1)
+       WHERE object_id = $2 AND status IN ('active', 'deleted')`,
+      [now, objectId],
+    );
     await client.query(
       "UPDATE tokenless_assurance_artifacts SET storage_ref = $1, updated_at = $2 WHERE artifact_id = $3",
-      [`deleted://${rowString(row, "artifact_id")}`, now, rowString(row, "artifact_id")],
+      [`deleted://${rowString(job, "artifact_id")}`, now, rowString(job, "artifact_id")],
     );
     await client.query(
       `UPDATE tokenless_assurance_deletion_requests SET status = 'completed', completed_at = $1
@@ -967,36 +1175,142 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
            SELECT 1 FROM tokenless_assurance_artifact_objects
            WHERE project_id = $2 AND status = 'active'
          )`,
-      [now, rowString(row, "project_id")],
+      [now, rowString(job, "project_id")],
+    );
+    await client.query(
+      `UPDATE tokenless_artifact_deletion_jobs
+       SET state = 'finalized', finalized_at = $1, next_attempt_at = $1, last_error = NULL, updated_at = $1
+      WHERE object_id = $2 AND state = 'provider_deleted'`,
+      [now, objectId],
     );
     await client.query("COMMIT");
+    return true;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
   }
-  await appendAuditEvent({
-    action: "artifact.retention_delete",
-    actorKind: "system",
-    actorReference: "system:retention_worker",
-    assuranceMethod: "scheduled_worker",
-    purpose: "retention_enforcement",
-    reason: "delete_after_reached",
-    result: "success",
-    targetId: rowString(row, "artifact_id")!,
-    targetKind: "artifact",
-    workspaceId: rowString(row, "workspace_id")!,
+}
+
+function isUniqueViolation(error: unknown) {
+  return Boolean(
+    error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "23505",
+  );
+}
+
+async function completeArtifactDeletionAudit(objectId: string, now: Date, runtime: ArtifactPrivacyRuntime) {
+  const jobResult = await dbClient.execute({
+    sql: `SELECT workspace_id, artifact_id, authorization_kind, deletion_request_id,
+                 retention_policy_version, state, finalized_at
+          FROM tokenless_artifact_deletion_jobs WHERE object_id = ?`,
+    args: [objectId],
   });
-  return true;
+  const job = jobResult.rows[0] as QueryRow | undefined;
+  if (!job || rowString(job, "state") === "completed") return true;
+  if (rowString(job, "state") !== "finalized") return false;
+  const workspaceId = rowString(job, "workspace_id")!;
+  const occurredAt = new Date(String(job.finalized_at));
+  if (!Number.isFinite(occurredAt.getTime())) {
+    throw new TokenlessServiceError(
+      "The artifact deletion audit checkpoint is invalid.",
+      500,
+      "artifact_deletion_checkpoint_invalid",
+    );
+  }
+  let audit: Awaited<ReturnType<typeof appendAuditEvent>>;
+  try {
+    audit = await (runtime.auditWriter ?? appendAuditEvent)({
+      action: "artifact.retention_delete",
+      actorKind: "system",
+      actorReference: "system:retention_worker",
+      assuranceMethod: "scheduled_worker",
+      idempotencyKey: artifactDeletionCorrelation(objectId),
+      metadata: {
+        basisKind: rowString(job, "authorization_kind"),
+        policyVersion: rowString(job, "retention_policy_version") ? Number(job.retention_policy_version) : null,
+        requestId: rowString(job, "deletion_request_id"),
+      },
+      occurredAt,
+      purpose: "retention_enforcement",
+      reason:
+        rowString(job, "authorization_kind") === "deletion_request"
+          ? "authorized_deletion_request"
+          : "retention_period_elapsed",
+      requestCorrelation: artifactDeletionCorrelation(objectId),
+      result: "success",
+      targetId: rowString(job, "artifact_id")!,
+      targetKind: "artifact",
+      workspaceId,
+    });
+  } catch (error) {
+    const recordedError = isUniqueViolation(error)
+      ? new TokenlessServiceError(
+          "The artifact deletion audit correlation is already bound to different evidence.",
+          409,
+          "artifact_deletion_audit_conflict",
+        )
+      : error;
+    await dbClient.execute({
+      sql: `UPDATE tokenless_artifact_deletion_jobs SET last_error = ?, updated_at = ?
+            WHERE object_id = ? AND state = 'finalized'`,
+      args: [artifactDeletionError(recordedError), now, objectId],
+    });
+    throw recordedError;
+  }
+  await runtime.deletionHook?.("after_audit_append");
+  const completed = await dbClient.execute({
+    sql: `UPDATE tokenless_artifact_deletion_jobs
+          SET state = 'completed', audit_event_id = ?, audit_event_digest = ?, audited_at = ?,
+              next_attempt_at = ?, last_error = NULL, updated_at = ?
+          WHERE object_id = ? AND state = 'finalized'`,
+    args: [audit.eventId, audit.eventDigest, now, now, now, objectId],
+  });
+  if (completed.rowCount === 1) return true;
+  const current = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_artifact_deletion_jobs WHERE object_id = ?",
+    args: [objectId],
+  });
+  return rowString(current.rows[0] as QueryRow | undefined, "state") === "completed";
+}
+
+export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
+  const runtime = getRuntime();
+  const claim = await claimArtifactDeletion(objectId, now);
+  if (claim.kind === "done") return true;
+  if (claim.kind === "busy") return false;
+
+  if (claim.kind === "provider") {
+    try {
+      // The irreversible provider call is deliberately outside every database
+      // transaction; retries are safe because provider deletion is idempotent.
+      await runtime.store.delete(rowString(claim.row, "storage_ref")!);
+      await runtime.deletionHook?.("after_provider_delete");
+    } catch (error) {
+      await releaseArtifactDeletionClaim(objectId, claim.leaseToken, now, error);
+      throw error;
+    }
+    if (!(await checkpointProviderDeletion(objectId, claim.leaseToken, now))) return false;
+    await runtime.deletionHook?.("after_provider_checkpoint");
+  }
+
+  if (!(await finalizeArtifactDeletion(objectId, now, runtime))) return false;
+  return completeArtifactDeletionAudit(objectId, now, runtime);
 }
 
 export async function processDueArtifactDeletions(now = new Date(), limit = 100) {
   const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
   const result = await dbClient.execute({
-    sql: `SELECT object_id FROM tokenless_assurance_artifact_objects
-          WHERE status = 'active' AND delete_after <= ? ORDER BY created_at ASC LIMIT ?`,
-    args: [now, boundedLimit],
+    sql: `SELECT candidate.object_id FROM (
+            SELECT object_id, created_at AS sort_at FROM tokenless_assurance_artifact_objects
+            WHERE status = 'active' AND delete_after <= ?
+            UNION
+            SELECT object_id, created_at AS sort_at FROM tokenless_artifact_deletion_jobs
+            WHERE state <> 'completed' AND next_attempt_at <= ?
+          ) candidate
+          GROUP BY candidate.object_id
+          ORDER BY MIN(candidate.sort_at) ASC LIMIT ?`,
+    args: [now, now, boundedLimit],
   });
   let deleted = 0;
   for (const value of result.rows) {
