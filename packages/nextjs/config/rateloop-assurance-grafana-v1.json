@@ -1,0 +1,108 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [{ "expr": "rateloop_assurance_reviews_requested", "refId": "A" }],
+      "title": "Reviews requested (30d)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "targets": [{ "expr": "rateloop_assurance_reviews_completed", "refId": "A" }],
+      "title": "Reviews completed (30d)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "targets": [{ "expr": "rateloop_assurance_blocked", "refId": "A" }],
+      "title": "Blocked",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "targets": [{ "expr": "rateloop_assurance_approval_required", "refId": "A" }],
+      "title": "Approval required",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "id": 5,
+      "targets": [
+        { "expr": "rateloop_assurance_sampling_rate_ratio", "legendFormat": "{{scope}} / {{stage}}", "refId": "A" }
+      ],
+      "title": "Sampling rate by scope",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "min": 0, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "id": 6,
+      "targets": [
+        { "expr": "rateloop_assurance_verdict_latency_seconds", "legendFormat": "{{scope}} / {{stage}}", "refId": "A" }
+      ],
+      "title": "Mean verdict latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "id": 7,
+      "targets": [
+        { "expr": "rateloop_assurance_disagreement_ratio", "legendFormat": "{{scope}} / {{stage}}", "refId": "A" }
+      ],
+      "title": "Disagreement by scope",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "NaN with state=absent means RateLoop has not persisted an evidence anchor; zero is never inferred.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 12 },
+      "id": 8,
+      "targets": [{ "expr": "rateloop_assurance_evidence_anchor_lag_seconds", "refId": "A" }],
+      "title": "Evidence anchor lag",
+      "type": "stat"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": ["rateloop", "human-assurance", "rateloop-assurance-v1"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "label": "Prometheus",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "browser",
+  "title": "RateLoop Human Assurance v1",
+  "uid": "rateloop-assurance-v1",
+  "version": 1
+}
