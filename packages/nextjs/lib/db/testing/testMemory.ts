@@ -37,6 +37,14 @@ function applySqlStatements(sqlText: string, execute: (statement: string) => voi
 }
 
 function memoryCompatibleMigrationStatement(file: string, statement: string): string | null {
+  if (
+    file === "0060_human_review_opportunity_transition_events.sql" &&
+    (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
+  ) {
+    // pg-mem does not implement PostgreSQL trigger functions. The production
+    // migration installs the append-only guard; migration source tests cover it.
+    return null;
+  }
   if (file !== "0058_human_review_binding_backfill.sql") return statement;
 
   // The in-memory test database applies migrations to a guaranteed-empty schema.
@@ -111,6 +119,12 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     args: [DataType.jsonb],
     returns: DataType.integer,
     implementation: value => (Array.isArray(value) ? value.length : 0),
+  });
+  memoryDb.public.registerFunction({
+    name: "char_length",
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: value => value.length,
   });
   memoryDb.public.registerOperator({
     operator: "<@",

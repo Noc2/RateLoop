@@ -1046,6 +1046,57 @@ export const tokenlessAgentReviewApprovalRequests = pgTable(
 
 export type TokenlessAgentReviewOpportunityLifecycle = typeof tokenlessAgentReviewOpportunityLifecycles.$inferSelect;
 export type NewTokenlessAgentReviewOpportunityLifecycle = typeof tokenlessAgentReviewOpportunityLifecycles.$inferInsert;
+
+export const tokenlessAgentReviewOpportunityTransitionEvents = pgTable(
+  "tokenless_agent_review_opportunity_transition_events",
+  {
+    eventId: text("event_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    transitionKey: text("transition_key").notNull(),
+    fromState: text("from_state").notNull(),
+    toState: text("to_state").notNull(),
+    fromRevision: integer("from_revision").notNull(),
+    toRevision: integer("to_revision").notNull(),
+    reasonCodesJson: text("reason_codes_json").notNull(),
+    actorKind: text("actor_kind").notNull(),
+    actorReference: text("actor_reference").notNull(),
+    detailsJson: text("details_json").notNull().default("{}"),
+    transitionCommitment: text("transition_commitment").notNull(),
+    occurredAt: timestamp("occurred_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    lifecycleFk: foreignKey({
+      columns: [table.workspaceId, table.opportunityId],
+      foreignColumns: [
+        tokenlessAgentReviewOpportunityLifecycles.workspaceId,
+        tokenlessAgentReviewOpportunityLifecycles.opportunityId,
+      ],
+      name: "tokenless_agent_review_opportunity_transition_events_lifecycle_fk",
+    }).onDelete("restrict"),
+    keyUnique: uniqueIndex("tokenless_agent_review_opportunity_transition_events_key_unique").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.transitionKey,
+    ),
+    revisionUnique: uniqueIndex("tokenless_agent_review_opportunity_transition_events_revision_unique").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.toRevision,
+    ),
+    timelineIdx: index("tokenless_agent_review_opportunity_transition_events_timeline_idx").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.toRevision,
+    ),
+  }),
+);
+
+export type TokenlessAgentReviewOpportunityTransitionEvent =
+  typeof tokenlessAgentReviewOpportunityTransitionEvents.$inferSelect;
+export type NewTokenlessAgentReviewOpportunityTransitionEvent =
+  typeof tokenlessAgentReviewOpportunityTransitionEvents.$inferInsert;
+
 export type TokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferSelect;
 export type NewTokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferInsert;
 

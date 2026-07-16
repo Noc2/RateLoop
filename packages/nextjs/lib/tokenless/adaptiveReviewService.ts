@@ -19,12 +19,17 @@ import {
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import { decideFixedReview } from "~~/lib/tokenless/fixedReview";
 import {
+  type HumanReviewOpportunityState,
+  transitionHumanReviewOpportunityLifecycleInTransaction,
+} from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import {
   type ProductPrincipal,
   authenticateProductPrincipal,
   requireProductPrincipalScope,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
+import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
 type QueryRow = Record<string, unknown>;
 type AdaptivePrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
@@ -46,6 +51,7 @@ type ReviewPolicyRow = {
   maximumUnreviewedGap: number;
   rules: ReviewRules;
   audiencePolicyHash: string;
+  publishingPolicyId: string | null;
 };
 
 type ReviewRules = {
@@ -74,7 +80,15 @@ type HumanReviewBindingRow = {
   requestProfileVersion: number;
   requestProfileHash: string;
   configurationStatus: "ready" | "action_required";
+  authority: "check_only" | "prepare_for_approval" | "ask_automatically";
+  publishingPolicyId: string | null;
+  publishingPolicyVersion: number | null;
+  audience: "private_invited" | "public_network" | "hybrid";
+  contentBoundary: "private_workspace" | "public_or_test";
+  compensationMode: "unpaid" | "usdc";
 };
+
+type IntegrationReviewGrant = { active: boolean; reason: string };
 
 export type AdaptiveReviewDecisionRequest = {
   externalOpportunityId: string;
@@ -130,6 +144,13 @@ export type AdaptiveReviewDecision = Omit<AdaptiveAssuranceState, "schemaVersion
   executionId: string;
   executionManifestCommitment: string;
   createdAt: string;
+  lifecycle: {
+    state: HumanReviewOpportunityState;
+    revision: number;
+    terminal: boolean;
+    reasonCodes: string[];
+    stateEnteredAt: string;
+  };
 };
 
 function stableJson(value: unknown): string {
@@ -208,6 +229,17 @@ function parseRules(value: unknown): ReviewRules {
     minimumConfidenceBps: optionalBps("minimumConfidenceBps"),
     maximumLatencyMs: optionalDuration("maximumLatencyMs"),
   };
+}
+
+function parseStringArray(value: unknown, field: string) {
+  if (typeof value !== "string") throw new Error(`Database returned invalid ${field}.`);
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== "string")) throw new Error();
+    return [...new Set(parsed as string[])];
+  } catch {
+    throw new Error(`Database returned invalid ${field}.`);
+  }
 }
 
 function boundedIdentifier(value: unknown, field: string) {
@@ -361,6 +393,7 @@ function policyFromRow(row: QueryRow | undefined): ReviewPolicyRow {
     maximumUnreviewedGap: rowInteger(row, "maximum_unreviewed_gap"),
     rules: parseRules(row?.rules_json),
     audiencePolicyHash: sha256(audiencePolicy),
+    publishingPolicyId: rowString(row, "publishing_policy_id"),
   };
 }
 
@@ -575,7 +608,7 @@ async function loadPolicy(client: PoolClient, workspaceId: string, request: Retu
   const result = await client.query(
     `SELECT p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
             p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
-            p.rules_json, p.audience_policy_json
+            p.rules_json, p.audience_policy_json, p.publishing_policy_id
      FROM tokenless_agent_review_policies p
      JOIN tokenless_agents a
        ON a.workspace_id = p.workspace_id AND a.agent_id = p.agent_id AND a.status = 'active'
@@ -606,7 +639,8 @@ async function loadHumanReviewBinding(
   const result = await client.query(
     `SELECT b.binding_id, b.version AS binding_version,
             b.request_profile_id, b.request_profile_version, b.request_profile_hash,
-            r.configuration_status
+            b.authority, b.publishing_policy_id, b.publishing_policy_version,
+            r.configuration_status, r.audience, r.content_boundary, r.compensation_mode
      FROM tokenless_agent_human_review_bindings b
      JOIN tokenless_agent_review_request_profiles r
        ON r.workspace_id = b.workspace_id
@@ -627,13 +661,24 @@ async function loadHumanReviewBinding(
   const requestProfileId = rowString(row, "request_profile_id");
   const requestProfileHash = rowString(row, "request_profile_hash");
   const configurationStatus = rowString(row, "configuration_status");
+  const authority = rowString(row, "authority");
+  const audience = rowString(row, "audience");
+  const contentBoundary = rowString(row, "content_boundary");
+  const compensationMode = rowString(row, "compensation_mode");
+  const publishingPolicyId = rowString(row, "publishing_policy_id");
+  const publishingPolicyVersion = rowOptionalInteger(row, "publishing_policy_version");
   if (
     result.rowCount !== 1 ||
     !bindingId ||
     !requestProfileId ||
     !requestProfileHash ||
     !HASH_PATTERN.test(requestProfileHash) ||
-    (configurationStatus !== "ready" && configurationStatus !== "action_required")
+    (configurationStatus !== "ready" && configurationStatus !== "action_required") ||
+    !["check_only", "prepare_for_approval", "ask_automatically"].includes(authority ?? "") ||
+    !["private_invited", "public_network", "hybrid"].includes(audience ?? "") ||
+    !["private_workspace", "public_or_test"].includes(contentBoundary ?? "") ||
+    !["unpaid", "usdc"].includes(compensationMode ?? "") ||
+    (publishingPolicyId === null) !== (publishingPolicyVersion === null)
   ) {
     throw new TokenlessServiceError(
       "The exact human-review configuration is unavailable.",
@@ -655,6 +700,12 @@ async function loadHumanReviewBinding(
     requestProfileVersion: rowInteger(row, "request_profile_version"),
     requestProfileHash,
     configurationStatus,
+    authority: authority as HumanReviewBindingRow["authority"],
+    publishingPolicyId,
+    publishingPolicyVersion,
+    audience: audience as HumanReviewBindingRow["audience"],
+    contentBoundary: contentBoundary as HumanReviewBindingRow["contentBoundary"],
+    compensationMode: compensationMode as HumanReviewBindingRow["compensationMode"],
   };
 }
 
@@ -665,16 +716,25 @@ async function verifyIntegrationBinding(
     integrationId: string | null;
     request: ReturnType<typeof normalizeRequest>;
     binding: HumanReviewBindingRow;
+    apiKeyId: string;
   },
-) {
-  if (input.integrationId === null) return;
+): Promise<IntegrationReviewGrant> {
+  if (input.integrationId === null) return { active: false, reason: "integration_not_supplied" };
   const result = await client.query(
-    `SELECT 1
-     FROM tokenless_agent_integrations
-     WHERE workspace_id = $1 AND integration_id = $2 AND status = 'active'
-       AND agent_id = $3 AND agent_version_id = $4
-       AND review_policy_id = $5 AND review_policy_version = $6
-       AND human_review_binding_id = $7 AND human_review_binding_version = $8
+    `SELECT i.activation_mode, i.granted_scopes_json, i.allowed_workflow_keys_json,
+            i.publishing_policy_id, i.publishing_policy_version,
+            i.api_key_id, i.token_family_id, c.status AS connection_status,
+            p.enabled AS publishing_policy_enabled, p.revoked_at AS publishing_policy_revoked_at,
+            p.effective_at AS publishing_policy_effective_at, p.expires_at AS publishing_policy_expires_at
+     FROM tokenless_agent_integrations i
+     LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+     LEFT JOIN tokenless_agent_publishing_policies p
+       ON p.workspace_id = i.workspace_id AND p.policy_id = i.publishing_policy_id
+      AND p.version = i.publishing_policy_version
+     WHERE i.workspace_id = $1 AND i.integration_id = $2 AND i.status = 'active'
+       AND i.agent_id = $3 AND i.agent_version_id = $4
+       AND i.review_policy_id = $5 AND i.review_policy_version = $6
+       AND i.human_review_binding_id = $7 AND i.human_review_binding_version = $8
      FOR SHARE`,
     [
       input.workspaceId,
@@ -694,6 +754,39 @@ async function verifyIntegrationBinding(
       "human_review_integration_binding_mismatch",
     );
   }
+  const row = result.rows[0] as QueryRow;
+  const callerCredentialId = rowString(row, "token_family_id") ?? rowString(row, "api_key_id");
+  if (callerCredentialId !== input.apiKeyId) {
+    throw new TokenlessServiceError(
+      "The agent connection credential does not match this evaluator.",
+      409,
+      "human_review_integration_binding_mismatch",
+    );
+  }
+  const scopes = parseStringArray(row.granted_scopes_json, "integration scopes");
+  const workflows = parseStringArray(row.allowed_workflow_keys_json, "integration workflows");
+  const effectiveAt = new Date(String(row.publishing_policy_effective_at));
+  const expiresAt = row.publishing_policy_expires_at ? new Date(String(row.publishing_policy_expires_at)) : null;
+  const now = Date.now();
+  const policyActive =
+    rowBoolean(row, "publishing_policy_enabled") &&
+    (row.publishing_policy_revoked_at === null || row.publishing_policy_revoked_at === undefined) &&
+    Number.isFinite(effectiveAt.getTime()) &&
+    effectiveAt.getTime() <= now &&
+    (!expiresAt || (Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > now));
+  const exactPolicy =
+    input.binding.publishingPolicyId !== null &&
+    rowString(row, "publishing_policy_id") === input.binding.publishingPolicyId &&
+    rowOptionalInteger(row, "publishing_policy_version") === input.binding.publishingPolicyVersion;
+  const active =
+    rowString(row, "activation_mode") === "owner_approved" &&
+    rowString(row, "connection_status") === "connected" &&
+    exactPolicy &&
+    policyActive &&
+    workflows.includes(input.request.workflowKey) &&
+    scopes.includes("panel:publish") &&
+    scopes.includes("payment:submit");
+  return { active, reason: active ? "active_exact_owner_grant" : "owner_grant_inactive" };
 }
 
 function decisionForMode(input: {
@@ -810,6 +903,76 @@ function parseReasonCodes(value: unknown) {
     throw new Error("Database returned invalid review reasons.");
   }
   return parsed as string[];
+}
+
+function initialLifecycleDisposition(input: {
+  decision: "required" | "recommended" | "skip";
+  binding: HumanReviewBindingRow;
+  policy: ReviewPolicyRow;
+  grant: IntegrationReviewGrant;
+  networkPanelsEnabled: boolean;
+}) {
+  if (input.decision !== "required") {
+    return { state: "skipped" as const, reason: "selection_skipped" };
+  }
+  if (input.binding.authority === "check_only") {
+    return { state: "approval_required" as const, reason: "check_only_owner_action_required" };
+  }
+  if (input.binding.authority === "prepare_for_approval") {
+    return { state: "approval_required" as const, reason: "owner_approval_required" };
+  }
+  if (!input.grant.active) {
+    return { state: "approval_required" as const, reason: input.grant.reason };
+  }
+  const publicPaidLane =
+    input.binding.audience === "public_network" &&
+    input.binding.contentBoundary === "public_or_test" &&
+    input.binding.compensationMode === "usdc" &&
+    input.binding.publishingPolicyId !== null &&
+    input.binding.publishingPolicyId === input.policy.publishingPolicyId;
+  if (!publicPaidLane || !input.networkPanelsEnabled) {
+    return { state: "blocked" as const, reason: "public_paid_lane_unavailable" };
+  }
+  return { state: "request_ready" as const, reason: "public_paid_lane_ready" };
+}
+
+function lifecycleFromRow(row: QueryRow) {
+  const state = rowString(row, "state") as HumanReviewOpportunityState | null;
+  if (
+    !state ||
+    ![
+      "evaluating",
+      "skipped",
+      "approval_required",
+      "request_ready",
+      "pending",
+      "blocked",
+      "completed",
+      "inconclusive",
+      "failed_terminal",
+      "cancelled_before_commit",
+    ].includes(state)
+  ) {
+    throw new Error("Database returned an invalid opportunity lifecycle.");
+  }
+  const stateEnteredAt =
+    row.state_entered_at instanceof Date ? row.state_entered_at : new Date(String(row.state_entered_at));
+  if (!Number.isFinite(stateEnteredAt.getTime())) throw new Error("Database returned an invalid lifecycle timestamp.");
+  return {
+    state,
+    revision: rowInteger(row, "state_revision"),
+    terminal: row.terminal_at !== null && row.terminal_at !== undefined,
+    reasonCodes: parseReasonCodes(row.reason_codes_json),
+    stateEnteredAt: stateEnteredAt.toISOString(),
+  } satisfies AdaptiveReviewDecision["lifecycle"];
+}
+
+function projectedLegacyOpportunityStatus(state: HumanReviewOpportunityState) {
+  if (state === "skipped") return "skipped";
+  if (state === "pending") return "review_requested";
+  if (state === "completed" || state === "inconclusive") return "completed";
+  if (state === "failed_terminal") return "failed";
+  return "decided";
 }
 
 async function stateMetrics(client: PoolClient, workspaceId: string, scopeId: string) {
@@ -1081,7 +1244,13 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     await client.query("BEGIN");
     const policy = await loadPolicy(client, workspaceId, request);
     const binding = await loadHumanReviewBinding(client, workspaceId, request);
-    await verifyIntegrationBinding(client, { workspaceId, integrationId, request, binding });
+    const grant = await verifyIntegrationBinding(client, {
+      workspaceId,
+      integrationId,
+      request,
+      binding,
+      apiKeyId: input.principal.apiKeyId,
+    });
     const scopeId = deterministicId("evs", [
       workspaceId,
       request.agentId,
@@ -1202,6 +1371,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       [workspaceId, request.agentId, request.externalOpportunityId],
     );
     let opportunity = existing.rows[0] as QueryRow | undefined;
+    let lifecycle: AdaptiveReviewDecision["lifecycle"] | undefined;
     const effectiveCriticalRisk = request.criticalRisk || policy.rules.criticalRiskTiers.includes(request.riskTier);
     if (
       opportunity &&
@@ -1215,7 +1385,17 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     }
     if (!opportunity) {
       const decision = decisionForMode({ policy, request, scope, sampler });
-      const status = decision.decision === "skip" ? "skipped" : "decided";
+      const disposition = initialLifecycleDisposition({
+        decision: decision.decision,
+        binding,
+        policy,
+        grant,
+        networkPanelsEnabled:
+          decision.required && binding.authority === "ask_automatically" && grant.active
+            ? isWorldIdAssuranceEnabled()
+            : false,
+      });
+      const status = projectedLegacyOpportunityStatus(disposition.state);
       const inserted = await client.query(
         `INSERT INTO tokenless_agent_review_opportunities
          (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
@@ -1262,6 +1442,46 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         ],
       );
       opportunity = inserted.rows[0] as QueryRow;
+      await client.query(
+        `INSERT INTO tokenless_agent_review_opportunity_lifecycles
+         (workspace_id, opportunity_id, state, state_revision, reason_codes_json,
+          state_entered_at, terminal_at, created_at, updated_at)
+         VALUES ($1, $2, 'evaluating', 1, '[]', $3, NULL, $3, $3)`,
+        [workspaceId, opportunityId, now],
+      );
+      const actor = integrationId
+        ? ({ kind: "agent", reference: integrationId } as const)
+        : ({ kind: "service", reference: input.principal.apiKeyId } as const);
+      const transition = await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
+        workspaceId,
+        opportunityId,
+        transitionKey: `evaluation:${sha256({
+          actor: actor.reference,
+          opportunityId,
+          bindingId: binding.bindingId,
+          bindingVersion: binding.bindingVersion,
+        }).slice("sha256:".length)}`,
+        expectedState: "evaluating",
+        expectedRevision: 1,
+        toState: disposition.state,
+        reasonCodes: [...decision.reasonCodes, disposition.reason],
+        actor,
+        details: {
+          apiKeyId: input.principal.apiKeyId,
+          integrationId,
+          humanReviewBindingId: binding.bindingId,
+          humanReviewBindingVersion: binding.bindingVersion,
+          legacyStatusProjection: status,
+        },
+        occurredAt: now,
+      });
+      lifecycle = {
+        state: transition.toState,
+        revision: transition.toRevision,
+        terminal: transition.toState === "skipped",
+        reasonCodes: transition.reasonCodes,
+        stateEnteredAt: transition.occurredAt,
+      };
       if (integrationId) {
         await client.query(
           `UPDATE tokenless_agent_integrations
@@ -1304,6 +1524,18 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         });
       }
     }
+    if (!lifecycle) {
+      const lifecycleResult = await client.query(
+        `SELECT state, state_revision, reason_codes_json, state_entered_at, terminal_at
+         FROM tokenless_agent_review_opportunity_lifecycles
+         WHERE workspace_id = $1 AND opportunity_id = $2
+         FOR UPDATE`,
+        [workspaceId, opportunityId],
+      );
+      const lifecycleRow = lifecycleResult.rows[0] as QueryRow | undefined;
+      if (!lifecycleRow) throw new Error("Human-review opportunity lifecycle is unavailable.");
+      lifecycle = lifecycleFromRow(lifecycleRow);
+    }
     const state = await assuranceState(client, { workspaceId, policy, scope });
     await client.query("COMMIT");
     const decision = rowString(opportunity, "decision") as AdaptiveReviewDecision["decision"];
@@ -1324,6 +1556,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       executionId,
       executionManifestCommitment: request.execution.manifestCommitment,
       createdAt: new Date(String(opportunity.created_at)).toISOString(),
+      lifecycle,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1368,4 +1601,4 @@ export async function getAdaptiveAssuranceState(input: {
   }
 }
 
-export const __adaptiveReviewServiceTestUtils = { sha256 };
+export const __adaptiveReviewServiceTestUtils = { initialLifecycleDisposition, sha256 };

@@ -139,6 +139,10 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(first.executionProfile?.primary.resolvedModel, "gpt-5.6-sol-2026-07-01");
   assert.equal(first.executionProfile?.primary.reasoningEffort, "medium");
   assert.equal("sourceEvidenceReference" in first, false);
+  assert.equal(first.lifecycle.state, "approval_required");
+  assert.equal(first.lifecycle.revision, 2);
+  assert.equal(first.lifecycle.terminal, false);
+  assert.ok(first.lifecycle.reasonCodes.includes("check_only_owner_action_required"));
 
   const rows = await dbClient.execute(
     `SELECT suggestion_commitment, source_evidence_reference, source_evidence_hash,
@@ -155,6 +159,36 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(rows.rows[0]?.request_profile_id, setup.humanReview.profileId);
   assert.equal(rows.rows[0]?.request_profile_version, setup.humanReview.profileVersion);
   assert.equal(rows.rows[0]?.request_profile_hash, setup.humanReview.profileHash);
+
+  const lifecycle = await dbClient.execute({
+    sql: `SELECT l.state,l.state_revision,l.terminal_at,o.status
+          FROM tokenless_agent_review_opportunity_lifecycles l
+          JOIN tokenless_agent_review_opportunities o
+            ON o.workspace_id=l.workspace_id AND o.opportunity_id=l.opportunity_id
+          WHERE l.workspace_id=? AND l.opportunity_id=?`,
+    args: [setup.workspaceId, first.opportunityId],
+  });
+  assert.deepEqual(lifecycle.rows[0], {
+    state: "approval_required",
+    state_revision: 2,
+    terminal_at: null,
+    status: "decided",
+  });
+  const transitions = await dbClient.execute({
+    sql: `SELECT actor_kind,actor_reference,from_state,to_state,from_revision,to_revision
+          FROM tokenless_agent_review_opportunity_transition_events
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [setup.workspaceId, first.opportunityId],
+  });
+  assert.equal(transitions.rowCount, 1);
+  assert.deepEqual(transitions.rows[0], {
+    actor_kind: "service",
+    actor_reference: setup.principal.apiKeyId,
+    from_state: "evaluating",
+    to_state: "approval_required",
+    from_revision: 1,
+    to_revision: 2,
+  });
 
   const scopes = await dbClient.execute({
     sql: `SELECT human_review_binding_id, human_review_binding_version,
@@ -232,9 +266,93 @@ test("rejects idempotency conflicts and cross-workspace state reads without leak
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_opportunity_conflict",
   );
+  const unchanged = await dbClient.execute({
+    sql: `SELECT l.state,l.state_revision,COUNT(e.event_id) AS event_count
+          FROM tokenless_agent_review_opportunity_lifecycles l
+          LEFT JOIN tokenless_agent_review_opportunity_transition_events e
+            ON e.workspace_id=l.workspace_id AND e.opportunity_id=l.opportunity_id
+          WHERE l.workspace_id=? AND l.opportunity_id=?
+          GROUP BY l.state,l.state_revision`,
+    args: [firstSetup.workspaceId, first.opportunityId],
+  });
+  assert.equal(unchanged.rows[0]?.state, "approval_required");
+  assert.equal(unchanged.rows[0]?.state_revision, 2);
+  assert.equal(Number(unchanged.rows[0]?.event_count), 1);
   await assert.rejects(
     () => getAdaptiveAssuranceState({ principal: secondSetup.principal, scopeId: first.scopeId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_state_not_found",
+  );
+});
+
+test("legitimate negative selection terminates as skipped without an owner or lane prerequisite", async () => {
+  const setup = await fixture();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies
+          SET mode='rules',production_floor_bps=0,rules_json=?
+          WHERE workspace_id=? AND policy_id=? AND version=1`,
+    args: [
+      JSON.stringify({ criticalRiskTiers: ["critical"], requiredRiskTiers: ["high"] }),
+      setup.workspaceId,
+      setup.policyId,
+    ],
+  });
+  const decision = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: opportunity(setup, "rules-legitimate-skip-0001"),
+  });
+  assert.equal(decision.decision, "skip");
+  assert.equal(decision.lifecycle.state, "skipped");
+  assert.equal(decision.lifecycle.terminal, true);
+  const stored = await dbClient.execute({
+    sql: `SELECT o.status,l.terminal_at
+          FROM tokenless_agent_review_opportunities o
+          JOIN tokenless_agent_review_opportunity_lifecycles l
+            ON l.workspace_id=o.workspace_id AND l.opportunity_id=o.opportunity_id
+          WHERE o.workspace_id=? AND o.opportunity_id=?`,
+    args: [setup.workspaceId, decision.opportunityId],
+  });
+  assert.equal(stored.rows[0]?.status, "skipped");
+  assert.ok(stored.rows[0]?.terminal_at);
+});
+
+test("automatic disposition requires both an exact owner grant and a ready public paid lane", () => {
+  const binding = {
+    authority: "ask_automatically",
+    audience: "public_network",
+    contentBoundary: "public_or_test",
+    compensationMode: "usdc",
+    publishingPolicyId: "agpol_exact",
+  };
+  const policy = { publishingPolicyId: "agpol_exact" };
+  const disposition = (grantActive: boolean, networkPanelsEnabled: boolean) =>
+    __adaptiveReviewServiceTestUtils.initialLifecycleDisposition({
+      decision: "required",
+      binding: binding as never,
+      policy: policy as never,
+      grant: { active: grantActive, reason: grantActive ? "active_exact_owner_grant" : "owner_grant_inactive" },
+      networkPanelsEnabled,
+    });
+  assert.deepEqual(disposition(false, true), {
+    state: "approval_required",
+    reason: "owner_grant_inactive",
+  });
+  assert.deepEqual(disposition(true, false), {
+    state: "blocked",
+    reason: "public_paid_lane_unavailable",
+  });
+  assert.deepEqual(disposition(true, true), {
+    state: "request_ready",
+    reason: "public_paid_lane_ready",
+  });
+  assert.deepEqual(
+    __adaptiveReviewServiceTestUtils.initialLifecycleDisposition({
+      decision: "required",
+      binding: { ...binding, authority: "prepare_for_approval" } as never,
+      policy: policy as never,
+      grant: { active: true, reason: "active_exact_owner_grant" },
+      networkPanelsEnabled: true,
+    }),
+    { state: "approval_required", reason: "owner_approval_required" },
   );
 });
 
