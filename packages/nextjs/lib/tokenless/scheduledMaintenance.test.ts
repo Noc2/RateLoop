@@ -79,6 +79,23 @@ function processors(
     async processSurpriseBounties() {
       return { paid: 0, pendingClaim: 0, retry: 0, reconciliationRequired: 0 };
     },
+    async processEvidenceRetention() {
+      return {
+        seeded: 0,
+        due: 0,
+        completed: 0,
+        superseded: 0,
+        retry: 0,
+        dead: 0,
+        objectsQueued: 0,
+        accessLogsPruned: 0,
+        objectsHeld: 0,
+        accessLogsHeld: 0,
+        backlog: 0,
+        integrityRecordsPreserved: { auditEvents: 0, evidencePackets: 0, attestations: 0, wormReceipts: 0 },
+        retryRunIds: [],
+      };
+    },
   };
 }
 
@@ -257,6 +274,55 @@ test("scheduled maintenance reports attestation retry, dead-letter, and adapter-
     dead: 0,
     unavailable: 2,
   });
+});
+
+test("scheduled maintenance degrades and reports evidence-retention retries", async () => {
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => {}),
+      async processEvidenceRetention() {
+        return {
+          seeded: 1,
+          due: 1,
+          completed: 0,
+          superseded: 0,
+          retry: 1,
+          dead: 0,
+          objectsQueued: 1,
+          accessLogsPruned: 2,
+          objectsHeld: 3,
+          accessLogsHeld: 4,
+          backlog: 5,
+          integrityRecordsPreserved: { auditEvents: 6, evidencePackets: 7, attestations: 8, wormReceipts: 9 },
+          retryRunIds: [`eer_${"1".repeat(40)}`],
+        };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.equal(result.summary.evidenceRetention.retry, 1);
+  assert.equal(result.summary.evidenceRetention.integrityRecordsPreserved.evidencePackets, 7);
+});
+
+test("scheduled maintenance degrades when dead deletion work leaves a retention backlog", async () => {
+  const base = processors(async () => {});
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...base,
+      async processEvidenceRetention() {
+        const summary = await base.processEvidenceRetention();
+        return { ...summary, backlog: 1 };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.equal(result.summary.evidenceRetention.backlog, 1);
 });
 
 test("cron authorization fails closed when missing or incorrect", () => {

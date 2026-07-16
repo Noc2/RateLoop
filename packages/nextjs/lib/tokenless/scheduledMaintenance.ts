@@ -11,6 +11,7 @@ import {
 } from "~~/lib/tokenless/assuranceEventStreaming";
 import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
+import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
@@ -122,6 +123,7 @@ type MaintenanceProcessors = {
   processGrcReconciliations: typeof processDueGrcReconciliations;
   processWormExports: typeof processDueAssuranceWormExports;
   processAttestations: typeof processDueAssuranceAttestations;
+  processEvidenceRetention: typeof processDueEvidenceRetentionEnforcement;
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
 };
@@ -141,6 +143,7 @@ const defaultProcessors: MaintenanceProcessors = {
   processGrcReconciliations: processDueGrcReconciliations,
   processWormExports: processDueAssuranceWormExports,
   processAttestations: processDueAssuranceAttestations,
+  processEvidenceRetention: processDueEvidenceRetentionEnforcement,
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
 };
@@ -267,6 +270,11 @@ export async function runTokenlessScheduledMaintenance(input: {
 
   try {
     const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
+    const evidenceRetention = await processors.processEvidenceRetention({
+      now,
+      limit: workLimit,
+      itemLimit: workLimit,
+    });
     const seeded = await seedTokenlessScheduledWork(now);
     const items = await claimDueWork(now, workLimit);
     const work = await processClaimedWork({
@@ -339,6 +347,9 @@ export async function runTokenlessScheduledMaintenance(input: {
       attestations.retry > 0 ||
       attestations.dead > 0 ||
       attestations.unavailable > 0 ||
+      evidenceRetention.retry > 0 ||
+      evidenceRetention.dead > 0 ||
+      evidenceRetention.backlog > 0 ||
       assuranceEvents.projection.retry > 0 ||
       assuranceEvents.delivery.retry > 0 ||
       assuranceEvents.delivery.dead > 0
@@ -355,6 +366,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       grcReconciliations,
       wormExports,
       attestations,
+      evidenceRetention,
       assuranceEvents,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
