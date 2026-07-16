@@ -11,6 +11,12 @@ import {
   reviewAudienceFormValues,
 } from "./reviewAudience";
 import {
+  REVIEW_USDC_DECIMAL_MAX_LENGTH,
+  type ReviewCompensationFormValues,
+  buildReviewCompensationConfiguration,
+  reviewCompensationFormValues,
+} from "./reviewCompensation";
+import {
   REVIEW_ANSWER_LABEL_MAX_LENGTH,
   REVIEW_CRITERION_MAX_LENGTH,
   type ReviewCriterionFormValues,
@@ -61,6 +67,16 @@ const REVIEW_AUDIENCE_OPTIONS = [
   ["hybrid", "Hybrid", "Invited and RateLoop network reviewers."],
 ] as const;
 
+const REVIEW_AUTHORITY_OPTIONS = [
+  ["check_only", "Check only", "Report whether review is required. Do not prepare or send a request."],
+  ["prepare_for_approval", "Prepare for approval", "Prepare a request, then wait for owner approval."],
+  [
+    "ask_automatically",
+    "Ask automatically",
+    "Send requests within the saved limits. Requires a separate owner-approved publishing and funding grant.",
+  ],
+] as const;
+
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "The setup request failed.");
@@ -96,6 +112,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   );
   const [reviewTiming, setReviewTiming] = useState<ReviewTimingFormValues>(() =>
     reviewTimingFormValues(initialSetup.reviewDraft?.requestProfile),
+  );
+  const [reviewCompensation, setReviewCompensation] = useState<ReviewCompensationFormValues>(() =>
+    reviewCompensationFormValues(initialSetup.reviewDraft?.requestProfile, initialSetup.reviewDraft?.authority),
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
@@ -144,6 +163,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   useEffect(
     () => setReviewTiming(reviewTimingFormValues(setup.reviewDraft?.requestProfile)),
     [setup.reviewDraft?.requestProfile],
+  );
+
+  useEffect(
+    () =>
+      setReviewCompensation(
+        reviewCompensationFormValues(setup.reviewDraft?.requestProfile, setup.reviewDraft?.authority),
+      ),
+    [setup.reviewDraft?.authority, setup.reviewDraft?.requestProfile],
   );
 
   useEffect(() => {
@@ -336,7 +363,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
       const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
       const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
-      const requestProfile = buildReviewTimingRequestProfile(criterionProfile, reviewTiming);
+      const timingProfile = buildReviewTimingRequestProfile(criterionProfile, reviewTiming);
+      const { requestProfile, authority } = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
       const audience = requestProfile.audience;
       let privateGroupId =
         audience === "public_network" ? null : (requestProfile.privateGroupId ?? setup.privateGroupId);
@@ -380,7 +408,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               expectedBindingVersion: draft.bindingRevision,
               selection,
               requestProfile: { ...requestProfile, privateGroupId },
-              authority: draft.authority,
+              authority,
             }),
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
@@ -829,7 +857,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               </label>
             ) : (
               <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-base-content/65">
-                Public, synthetic, or safely redacted material only. Network reviewers are paid in USDC.
+                Public, synthetic, or safely redacted material only.
               </p>
             )}
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
@@ -865,6 +893,79 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   />
                 </label>
               </div>
+            </fieldset>
+            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <legend className="px-1 text-sm font-medium">Reviewer payment</legend>
+              {reviewAudience.audience === "private_invited" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
+                    <input
+                      className="radio mt-0.5"
+                      type="radio"
+                      name="compensationMode"
+                      value="unpaid"
+                      checked={reviewCompensation.compensationMode === "unpaid"}
+                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "unpaid" }))}
+                    />
+                    <span>
+                      <span className="font-medium">Unpaid</span>
+                      <span className="mt-1 block text-base-content/60">No reviewer bounty.</span>
+                    </span>
+                  </label>
+                  <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
+                    <input
+                      className="radio mt-0.5"
+                      type="radio"
+                      name="compensationMode"
+                      value="usdc"
+                      checked={reviewCompensation.compensationMode === "usdc"}
+                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }))}
+                    />
+                    <span>
+                      <span className="font-medium">USDC bounty</span>
+                      <span className="mt-1 block text-base-content/60">Pay each accepted reviewer.</span>
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <p className="text-sm text-base-content/65">Network reviewers are paid in USDC.</p>
+              )}
+              {reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc" ? (
+                <label className="mt-4 block text-sm">
+                  USDC per reviewer
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]+([.][0-9]{1,6})?"
+                    maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
+                    value={reviewCompensation.usdcPerReviewer}
+                    onChange={event =>
+                      setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }))
+                    }
+                    required
+                  />
+                </label>
+              ) : null}
+            </fieldset>
+            <fieldset className="mt-5 space-y-3">
+              <legend className="font-medium">Agent authority</legend>
+              {REVIEW_AUTHORITY_OPTIONS.map(([value, label, description]) => (
+                <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
+                  <input
+                    className="radio mt-0.5"
+                    type="radio"
+                    name="authority"
+                    value={value}
+                    checked={reviewCompensation.authority === value}
+                    onChange={() => setReviewCompensation(current => ({ ...current, authority: value }))}
+                  />
+                  <span>
+                    <span className="font-medium">{label}</span>
+                    <span className="mt-1 block text-sm text-base-content/60">{description}</span>
+                  </span>
+                </label>
+              ))}
             </fieldset>
             <p className="mt-4 text-xs text-base-content/55">
               The safe connection does not assign or deliver work to reviewers.

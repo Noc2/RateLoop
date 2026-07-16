@@ -25,7 +25,7 @@ test("progress is semantic, textual, keyboard-operable, and marks only the curre
   assert.match(progressSource, /<button/);
 });
 
-test("guided setup renders one stage at a time and keeps future authority absent", () => {
+test("guided setup renders one stage at a time and keeps implementation details absent", () => {
   for (const heading of [
     "Workspace",
     "Connect your agent",
@@ -119,6 +119,32 @@ test("review setup uses the legacy duration control for an explicit frozen respo
   assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? 1 : 3/);
   assert.match(flowSource, /buildReviewTimingRequestProfile\(criterionProfile, reviewTiming\)/);
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
+});
+
+test("review setup controls base compensation and agent authority without a feedback bonus", () => {
+  for (const label of [
+    "Reviewer payment",
+    "Unpaid",
+    "USDC bounty",
+    "USDC per reviewer",
+    "Agent authority",
+    "Check only",
+    "Prepare for approval",
+    "Ask automatically",
+  ]) {
+    assert.match(flowSource, new RegExp(label));
+  }
+  assert.match(flowSource, /reviewAudience\.audience === "private_invited"/);
+  assert.match(flowSource, /Network reviewers are paid in USDC/);
+  assert.match(flowSource, /checked=\{reviewCompensation\.compensationMode === "unpaid"\}/);
+  assert.match(flowSource, /checked=\{reviewCompensation\.compensationMode === "usdc"\}/);
+  assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
+  assert.match(flowSource, /checked=\{reviewCompensation\.authority === value\}/);
+  assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
+  assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
+  assert.match(flowSource, /\s+authority,\s+/);
+  assert.doesNotMatch(flowSource, /Feedback Bonus|feedback bonus/);
+  assert.doesNotMatch(flowSource, /authority: draft\.authority/);
 });
 
 test("setup separates the connected client from per-run model provenance", () => {
