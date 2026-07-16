@@ -19,6 +19,7 @@ export type AuditEventInput = Readonly<{
   result: "success" | "denied" | "failure";
   metadata?: Record<string, unknown>;
   occurredAt?: Date;
+  idempotencyKey?: string;
 }>;
 
 export type SecurityAuditEventInput = Readonly<{
@@ -130,6 +131,15 @@ function optionalCorrelation(value: string | null | undefined) {
   return normalized;
 }
 
+function optionalIdempotencyKey(value: string | undefined) {
+  if (value === undefined) return null;
+  const normalized = required(value, "Audit idempotency key", 255);
+  if (!/^[A-Za-z0-9._:-]+$/u.test(normalized)) {
+    throw new TokenlessServiceError("Audit idempotency key is invalid.", 400, "invalid_audit_event");
+  }
+  return normalized;
+}
+
 function digest(previousDigest: string, payloadJson: string) {
   return `sha256:${createHash("sha256").update(`${previousDigest}\n${payloadJson}`).digest("hex")}`;
 }
@@ -147,7 +157,11 @@ function securityScope(input: Pick<SecurityAuditEventInput, "scopeId" | "scopeKi
 
 export async function appendAuditEvent(input: AuditEventInput) {
   const occurredAt = input.occurredAt ?? new Date();
-  const eventId = `audit_${randomUUID().replaceAll("-", "")}`;
+  const workspaceId = required(input.workspaceId, "Audit workspace", 160);
+  const idempotencyKey = optionalIdempotencyKey(input.idempotencyKey);
+  const eventId = idempotencyKey
+    ? `audit_${createHash("sha256").update(`${workspaceId}\n${idempotencyKey}`).digest("hex").slice(0, 32)}`
+    : `audit_${randomUUID().replaceAll("-", "")}`;
   const normalized = {
     action: required(input.action, "Audit action", 160),
     actorKind: input.actorKind,
@@ -163,7 +177,7 @@ export async function appendAuditEvent(input: AuditEventInput) {
     result: input.result,
     targetId: required(input.targetId, "Audit target", 255),
     targetKind: required(input.targetKind, "Audit target kind", 120),
-    workspaceId: required(input.workspaceId, "Audit workspace", 160),
+    workspaceId,
   } as const;
   const metadataJson = auditMetadataJson(normalized.metadata);
   const client = await dbPool.connect();
@@ -179,6 +193,49 @@ export async function appendAuditEvent(input: AuditEventInput) {
       [normalized.workspaceId],
     );
     const head = headResult.rows[0] as QueryRow | undefined;
+    if (idempotencyKey) {
+      const existingResult = await client.query(
+        `SELECT event_id,workspace_id,sequence,previous_digest,event_digest,home_region,actor_kind,actor_reference,
+                assurance_method,action,target_kind,target_id,purpose,reason,request_correlation,result,
+                metadata_json,occurred_at
+         FROM tokenless_audit_events WHERE event_id=$1`,
+        [eventId],
+      );
+      const existing = existingResult.rows[0] as QueryRow | undefined;
+      if (existing) {
+        const existingOccurredAt = new Date(String(existing.occurred_at));
+        const matches =
+          rowString(existing, "workspace_id") === normalized.workspaceId &&
+          rowString(existing, "home_region") === normalized.homeRegion &&
+          rowString(existing, "actor_kind") === normalized.actorKind &&
+          rowString(existing, "actor_reference") === normalized.actorReference &&
+          rowString(existing, "assurance_method") === normalized.assuranceMethod &&
+          rowString(existing, "action") === normalized.action &&
+          rowString(existing, "target_kind") === normalized.targetKind &&
+          rowString(existing, "target_id") === normalized.targetId &&
+          rowString(existing, "purpose") === normalized.purpose &&
+          rowString(existing, "reason") === normalized.reason &&
+          rowString(existing, "request_correlation") === normalized.requestCorrelation &&
+          rowString(existing, "result") === normalized.result &&
+          rowString(existing, "metadata_json") === metadataJson &&
+          Number.isFinite(existingOccurredAt.getTime()) &&
+          existingOccurredAt.toISOString() === normalized.occurredAt;
+        if (!matches) {
+          throw new TokenlessServiceError(
+            "Audit idempotency key was already used for a different event.",
+            409,
+            "audit_idempotency_conflict",
+          );
+        }
+        await client.query("COMMIT");
+        return {
+          eventDigest: rowString(existing, "event_digest")!,
+          eventId,
+          previousDigest: rowString(existing, "previous_digest")!,
+          sequence: Number(existing.sequence),
+        };
+      }
+    }
     const sequence = Number(head?.last_sequence ?? 0) + 1;
     const previousDigest = rowString(head, "last_digest") ?? GENESIS_DIGEST;
     const payloadJson = canonicalJson({ ...normalized, metadata: JSON.parse(metadataJson), sequence });

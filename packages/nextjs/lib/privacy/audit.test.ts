@@ -81,6 +81,42 @@ test("canonical audit events form a verifiable tenant chain and export only to a
   assert.deepEqual(await verifyWorkspaceAuditChain(workspaceId), { eventCount: 0, valid: false });
 });
 
+test("canonical audit idempotency is exactly-once and rejects conflicting reuse", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Audit idempotency", ownerAddress: OWNER });
+  const event = {
+    action: "assurance.worm_export.delivered",
+    actorKind: "system" as const,
+    actorReference: "service:assurance-worm-exporter",
+    assuranceMethod: "object_lock_provider_receipt",
+    idempotencyKey: "worm-delivered:job-1:receipt-1",
+    metadata: { providerReceiptHash: `sha256:${"1".repeat(64)}` },
+    occurredAt: new Date("2026-07-16T12:00:00.000Z"),
+    purpose: "assurance_export_delivery",
+    reason: "verified_object_lock_receipt",
+    result: "success" as const,
+    targetId: "job-1",
+    targetKind: "assurance_worm_export_job",
+    workspaceId,
+  };
+  const first = await appendAuditEvent(event);
+  const duplicate = await appendAuditEvent(event);
+  assert.deepEqual(duplicate, first);
+  assert.deepEqual(await verifyWorkspaceAuditChain(workspaceId), {
+    eventCount: 1,
+    headDigest: first.eventDigest,
+    valid: true,
+  });
+  await assert.rejects(
+    () => appendAuditEvent({ ...event, reason: "different_receipt" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "audit_idempotency_conflict",
+  );
+  assert.deepEqual(await verifyWorkspaceAuditChain(workspaceId), {
+    eventCount: 1,
+    headDigest: first.eventDigest,
+    valid: true,
+  });
+});
+
 test("audit exports authorize a Better Auth principal without requiring a wallet", async () => {
   const { workspaceId } = await createWorkspace({ name: "Principal audit", ownerAddress: OPAQUE_OWNER });
   await appendAuditEvent({
