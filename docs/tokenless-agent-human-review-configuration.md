@@ -3,6 +3,9 @@
 Status: design of record for the agent Human review journey. This document refines the agent-connection and adaptive-review sections of
 [`tokenless-immutable-implementation-plan-2026-07.md`](./tokenless-immutable-implementation-plan-2026-07.md).
 
+The normative opportunity lifecycle and terminal behavior are defined in
+[`tokenless-agent-review-state-machine.md`](./tokenless-agent-review-state-machine.md).
+
 ## Product contract
 
 The owner configures one **Human review** journey. The implementation keeps three independently versioned and auditable objects:
