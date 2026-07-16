@@ -109,6 +109,28 @@ automation. A self-funded agent may use short-lived x402/EIP-3009 USDC authoriza
 the gas-only relayer never receives the spend key. The public MCP remains a separate, approval-bound browser handoff and
 cannot silently turn draft content into a funded ask.
 
+## Execution provenance and evaluation
+
+A connection identity such as Codex identifies the client or host. It is not the identity of every model the host may
+run. A logical agent version identifies a versioned workflow and configuration; changing the model for one task does not
+rename the connection or create a new logical agent version.
+
+Every output eligible for assurance evidence records one execution and a trace containing one or more generation spans.
+The trace preserves parent/child relationships for multi-model work, subagents, and tool use. Each generation records
+privacy-safe provenance: provider, requested model or alias, resolved model and provider snapshot when available,
+reasoning-effort setting, service tier, request and response timestamps, time to first output, token usage, and tool count
+and duration. This provenance layer stores no raw prompts, outputs, tool payloads, or hidden reasoning. Metadata is
+host-reported unless a separately identified provider or cryptographic attestation proves otherwise; reported values are
+never presented as independently verified.
+
+Each execution has an exact canonical manifest hash for that run and a stable evaluation-profile hash derived from the
+output-affecting workflow/configuration and normalized generation profile, including the contributing model set and
+orchestration mode. Timing, token, and cost measurements remain observations rather than profile partition keys.
+Adaptive evidence is partitioned by evaluation-profile hash in addition to agent version, policy, workflow, risk tier,
+and reviewer audience. An unknown profile is its own scope and never inherits evidence from a known profile. Quality,
+latency, effort, and cost comparisons remain contextual to comparable work; RateLoop does not produce a global agent or
+model score.
+
 ## Identity, audience, and privacy
 
 Better Auth is the primary browser authentication layer. Email OTP and passkeys are first; Google and Apple appear only
