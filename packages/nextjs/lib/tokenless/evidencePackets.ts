@@ -123,7 +123,11 @@ function primarySelectionTrigger(reasons: string[], automatedTrigger: string | n
   if (reasons.includes("critical_risk")) return "critical_risk";
   if (reasons.includes("maximum_gap")) return "maximum_gap";
   if (reasons.includes("sampled") || reasons.includes("calibrating")) return "adaptive_sample";
-  if (reasons.some(reason => ["low_confidence", "missing_metadata", "policy_reset", "rules_match"].includes(reason))) {
+  if (
+    reasons.some(reason =>
+      ["always_review", "low_confidence", "missing_metadata", "policy_reset", "rules_match"].includes(reason),
+    )
+  ) {
     return "policy_rule";
   }
   return "owner_required";

@@ -896,6 +896,42 @@ test("evidence reports an advisory gate only when the persisted selection policy
   assert.match(packet.payload.reviewContext.gate.statement, /does not itself prove/u);
 });
 
+test("evidence records an always-review decision as a policy rule instead of owner-required", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 1,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 1,
+        responses: [{ choice: "candidate", validity: "valid" }],
+      },
+    ],
+  });
+  const context = await bindPersistedAgentReviewContext({
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    enforcementMode: "advisory",
+    reasonCodes: ["always_review"],
+  });
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    signer: { privateKey: generateKeyPairSync("ed25519").privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+
+  assert.deepEqual(packet.payload.reviewContext.selectionTrigger, {
+    kind: "policy_rule",
+    source: "persisted_agent_review_opportunity",
+    opportunityId: context.opportunityId,
+    reasonCodes: ["always_review"],
+    selectionProbabilityBps: 10_000,
+    sampleBucket: 42,
+  });
+});
+
 test("evidence keeps mixed paid and unpaid source panels separate and links only stored settlement evidence", async () => {
   const fixture = await seedEvidenceFixture({
     compensation: "mixed",
