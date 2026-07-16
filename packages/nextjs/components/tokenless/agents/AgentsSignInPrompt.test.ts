@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const promptSource = readFileSync(new URL("./AgentsSignInPrompt.tsx", import.meta.url), "utf8");
+const sharedSurfaceSource = readFileSync(new URL("../../auth/SignInSurface.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
 
 test("anonymous visitors see the Agents sign-in prompt without exposing workspace controls", () => {
@@ -11,7 +12,8 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.ok(
     pageSource.indexOf("if (!session) return <AgentsSignInPrompt />") < pageSource.indexOf("<AgentWorkspacePanels"),
   );
-  assert.match(promptSource, />\s*Agents/);
+  assert.match(promptSource, /<SignInSurface/);
+  assert.match(promptSource, /title="Agents"/);
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /Sign in to connect an agent/);
   assert.match(promptSource, /<ThirdwebSessionButton\s+compact/);
@@ -23,4 +25,6 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   );
   assert.doesNotMatch(promptSource, /btn-sm|min-h-11 w-full px-4/);
   assert.doesNotMatch(promptSource, /AgentWorkspacePanels|WorkspaceSettingsClient|Agent API keys|Create workspace/);
+  assert.match(sharedSurfaceSource, /flex min-h-\[calc\(100vh-9rem\)\] grow items-center justify-center px-6 py-16/);
+  assert.match(sharedSurfaceSource, /surface-card w-full max-w-md rounded-2xl p-8 text-center/);
 });

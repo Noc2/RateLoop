@@ -57,13 +57,12 @@ export default async function HumanPage({
   }
 
   const session = await findAuthSession((await cookies()).get(AUTH_SESSION_COOKIE)?.value);
+  if (!session) return <HumanAccountSignInPrompt tab={tab} />;
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
       <HumanTabs active={tab} />
-      {!session ? (
-        <HumanAccountSignInPrompt tab={tab} />
-      ) : tab === "profile" ? (
+      {tab === "profile" ? (
         <HumanProfileContent worldIdEnabled={isWorldIdAssuranceEnabled()} />
       ) : (
         <NotificationSettingsPanel />

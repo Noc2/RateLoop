@@ -66,6 +66,7 @@ test("Human Discover discloses source filters only when both queues have work", 
 
 test("Human profile and settings render their controls directly", () => {
   const page = source("../../app/(app)/human/page.tsx");
+  const signInPrompt = source("./human/HumanAccountSignInPrompt.tsx");
   const profileContent = source("./human/HumanProfileContent.tsx");
   const profile = source("./account/ProfileClient.tsx");
   const invitations = source("./account/InvitationRouterPanel.tsx");
@@ -74,6 +75,12 @@ test("Human profile and settings render their controls directly", () => {
   assert.match(page, /<HumanProfileContent worldIdEnabled=\{isWorldIdAssuranceEnabled\(\)\} \/>/);
   assert.match(page, /<NotificationSettingsPanel \/>/);
   assert.match(page, /<HumanAccountSignInPrompt tab=\{tab\} \/>/);
+  assert.match(page, /if \(!session\) return <HumanAccountSignInPrompt tab=\{tab\} \/>/);
+  assert.ok(
+    page.indexOf("if (!session) return <HumanAccountSignInPrompt tab={tab} />") <
+      page.lastIndexOf("<HumanTabs active={tab} />"),
+  );
+  assert.match(signInPrompt, /<SignInSurface/);
   assert.match(page, /findAuthSession/);
   assert.match(profileContent, /InvitationRouterPanel/);
   assert.match(profileContent, /PrivateGroupMembershipsPanel/);

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const signIn = readFileSync(new URL("./BetterAuthSignIn.tsx", import.meta.url), "utf8");
+const signInPage = readFileSync(new URL("../../app/(public)/sign-in/page.tsx", import.meta.url), "utf8");
+const signInSurface = readFileSync(new URL("./SignInSurface.tsx", import.meta.url), "utf8");
 const wallets = readFileSync(new URL("./WalletBindingsClient.tsx", import.meta.url), "utf8");
 const walletSettings = readFileSync(new URL("../../app/(app)/settings/wallets/page.tsx", import.meta.url), "utf8");
 const privacy = readFileSync(new URL("../../app/(public)/legal/privacy/page.tsx", import.meta.url), "utf8");
@@ -13,6 +15,9 @@ test("account sign-in is Better Auth first and explicitly creates no wallet", ()
   assert.match(signIn, /exchangeBetterAuthSession/);
   assert.match(signIn, /does not create a wallet/i);
   assert.doesNotMatch(signIn, /ConnectButton|inAppWallet/);
+  assert.match(signInPage, /<SignInSurface/);
+  assert.match(signInPage, /title="Sign in"/);
+  assert.match(signInSurface, /surface-card w-full max-w-md rounded-2xl p-8 text-center/);
 });
 
 test("wallet setup is explicit, purpose-bound, and supports thirdweb plus self-custody", () => {
