@@ -54,6 +54,126 @@ function assuranceStageLabel(stage: AgentAssuranceScopeSummary["stage"]) {
   return stage === "monitoring" ? "Monitoring" : "Calibrating";
 }
 
+type HumanReviewConfiguration = NonNullable<WorkspaceAgent["humanReview"]["configuration"]>;
+
+function reviewFrequencyLabel(selection: HumanReviewConfiguration["selection"]) {
+  if (selection.mode === "always") return "Every eligible output";
+  if (selection.mode === "manual") return "Only after owner approval";
+  if (selection.mode === "fixed") return `${formatPercent(selection.fixedRateBps)} of eligible outputs`;
+  if (selection.mode === "rules") return "When risk or confidence rules match";
+  const range = selection.effectiveRateRangeBps;
+  if (!range) return "Adaptive review";
+  return range.minimum === range.maximum
+    ? `Adaptive · ${formatPercent(range.minimum)} now`
+    : `Adaptive · ${formatPercent(range.minimum)}–${formatPercent(range.maximum)} now`;
+}
+
+function reviewAudienceLabel(request: HumanReviewConfiguration["request"]) {
+  if (request.audience === "private_invited") return "Invited reviewers · private workspace material";
+  if (request.audience === "public_network") return "RateLoop network · public-safe material";
+  return "Invited + RateLoop network · public-safe material";
+}
+
+function responseWindowLabel(seconds: number | null, panelSize: number | null) {
+  if (seconds === null || panelSize === null) return "Not set";
+  const duration =
+    seconds % 3_600 === 0
+      ? `${seconds / 3_600} ${seconds === 3_600 ? "hour" : "hours"}`
+      : seconds % 60 === 0
+        ? `${seconds / 60} minutes`
+        : `${seconds} seconds`;
+  return `${duration} · ${panelSize} ${panelSize === 1 ? "reviewer" : "reviewers"}`;
+}
+
+function basePaymentLabel(request: HumanReviewConfiguration["request"]) {
+  if (request.compensationMode === "unpaid") return "Unpaid";
+  if (request.bountyPerSeatAtomic === null) return "Not set";
+  const atomic = BigInt(request.bountyPerSeatAtomic);
+  const whole = atomic / 1_000_000n;
+  const fraction = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
+  return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} USDC / reviewer`;
+}
+
+function reviewAuthorityLabel(authority: HumanReviewConfiguration["authority"]) {
+  if (authority === "check_only") return "Check policy only";
+  if (authority === "prepare_for_approval") return "Prepare for owner approval";
+  return "Ask automatically";
+}
+
+function reviewCapability(agent: WorkspaceAgent) {
+  const review = agent.humanReview;
+  if (review.status === "disabled") return { blocked: true, label: "Off · agent inactive" };
+  if (review.status === "configuration_required" || !review.configuration) {
+    return { blocked: true, label: "Blocked · finish review setup" };
+  }
+  if (!review.configuration.connected) return { blocked: true, label: "Blocked · reconnect the agent" };
+  if (review.configuration.killSwitchActive) {
+    return { blocked: true, label: "Blocked · automatic requests are off" };
+  }
+  if (review.workload.blockedCount > 0) {
+    return {
+      blocked: true,
+      label: `${review.workload.blockedCount} blocked ${review.workload.blockedCount === 1 ? "review" : "reviews"}`,
+    };
+  }
+  if (review.configuration.authority === "check_only") return { blocked: false, label: "Policy checks ready" };
+  if (review.configuration.authority === "prepare_for_approval") {
+    return { blocked: false, label: "Owner-approved requests ready" };
+  }
+  return { blocked: false, label: "Automatic requests ready" };
+}
+
+function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent }) {
+  const configuration = agent.humanReview.configuration;
+  const capability = reviewCapability(agent);
+  return (
+    <section className="surface-card-nested mt-4 rounded-xl p-4" aria-labelledby={`review-config-${agent.agentId}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id={`review-config-${agent.agentId}`} className="text-sm font-semibold">
+          Review configuration
+        </h3>
+        <span
+          className={`badge border-0 text-xs ${
+            capability.blocked ? "bg-amber-300/10 text-amber-100" : "bg-emerald-300/10 text-emerald-100"
+          }`}
+        >
+          {capability.label}
+        </span>
+      </div>
+      {configuration ? (
+        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div>
+            <dt className="text-xs text-base-content/45">Frequency</dt>
+            <dd className="mt-1 text-sm font-medium">{reviewFrequencyLabel(configuration.selection)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/45">Reviewers</dt>
+            <dd className="mt-1 text-sm font-medium">{reviewAudienceLabel(configuration.request)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/45">Response window</dt>
+            <dd className="mt-1 text-sm font-medium">
+              {responseWindowLabel(configuration.request.responseWindowSeconds, configuration.request.panelSize)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/45">Base payment</dt>
+            <dd className="mt-1 text-sm font-medium">{basePaymentLabel(configuration.request)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/45">Agent authority</dt>
+            <dd className="mt-1 text-sm font-medium">{reviewAuthorityLabel(configuration.authority)}</dd>
+          </div>
+        </dl>
+      ) : (
+        <p className="mt-3 text-sm text-base-content/55">
+          Choose when review runs, who answers, the response window, payment, and agent authority.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function transitionReason(reason: string) {
   const labels: Record<string, string> = {
     two_stable_windows: "Two stable 15-case windows",
@@ -394,6 +514,7 @@ export function AgentRegistryPanel({
                 <p className="mt-1 text-sm text-base-content/55">Workflow v{agent.currentVersion.versionNumber}</p>
               </div>
             </div>
+            <AgentHumanReviewConfigurationSummary agent={agent} />
             <AgentAssuranceSummary agent={agent} />
             <details className="mt-3 border-t border-white/10 pt-3">
               <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Manage</summary>
