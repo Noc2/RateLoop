@@ -1,10 +1,7 @@
 # Human assurance use cases
 
 Use RateLoop when automated checks can verify the rules, but a person still has to judge whether an AI output is
-appropriate for this situation. These examples describe workflows, not customer results or outcome claims.
-
-A useful check has one bounded artifact, one concrete criterion, an authorized reviewer audience, and a clear action for
-the accountable owner. It can tolerate a human response window.
+appropriate for this situation.
 
 ## Customer replies
 

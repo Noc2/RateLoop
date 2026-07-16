@@ -96,14 +96,7 @@ export default function UseCasesPage() {
       <DocsTitle gradientText="Cases">Use</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Use RateLoop when automated checks can verify the rules, but a person still has to judge whether an AI output is
-        appropriate for this situation. These examples describe workflows, not customer results or outcome claims.
-      </p>
-
-      <h2>Choose a decision people can actually make</h2>
-      <p>
-        A good human-assurance check has one bounded artifact, one concrete criterion, an authorized reviewer audience,
-        and a clear owner action. It can tolerate a human response window, and either repeats often enough to build
-        comparable evidence or matters enough to justify a one-off panel.
+        appropriate for this situation.
       </p>
 
       <div className="not-prose my-8 grid gap-5">

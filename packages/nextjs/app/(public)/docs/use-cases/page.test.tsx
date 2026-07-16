@@ -14,7 +14,9 @@ test("use cases turn concrete problems into bounded human-assurance decisions", 
   const html = renderToStaticMarkup(<UseCasesPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Use.*rateloop-text-gradient.*Cases/i);
-  assert.match(html, /examples describe workflows, not customer results or outcome claims/i);
+  assert.doesNotMatch(html, /examples describe workflows, not customer results or outcome claims/i);
+  assert.doesNotMatch(html, /Choose a decision people can actually make/i);
+  assert.doesNotMatch(html, /one bounded artifact, one concrete criterion, an authorized reviewer audience/i);
   assert.equal(html.match(/data-use-case=/g)?.length, 5);
 
   for (const [id, title, criterion] of [
