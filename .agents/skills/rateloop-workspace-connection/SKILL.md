@@ -33,4 +33,4 @@ Complete the connection from the user's one-time message. Treat installation, ho
 - If the link is invalid, expired, consumed by another installation, or bound to a different workspace, return the tool's display-safe recovery action. Do not improvise a credential or configuration workaround.
 - If organization policy blocks MCP installation or OAuth, say so directly. Do not weaken authentication or route workspace work through the public handoff server.
 
-After connection, evaluate RateLoop review requirements before eligible outputs and complete the bound review flow whenever the returned policy requires it.
+Connection alone does not create a background hook, scheduler, or output interceptor. After connection, use `$rateloop-human-review-loop` to actively evaluate eligible outputs and complete the bound review flow whenever the returned policy requires it.

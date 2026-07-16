@@ -1,0 +1,15 @@
+interface:
+  display_name: "RateLoop Human Review Loop"
+  short_description: "Apply an owner's ongoing human-review policy"
+  default_prompt: "Use $rateloop-human-review-loop to evaluate this eligible output, follow the owner approval or autonomous route, wait, and report the result."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "rateloop-workspace"
+      description: "OAuth-protected RateLoop workspace policy and human-review tools."
+      transport: "streamable_http"
+      url: "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp"
+
+policy:
+  allow_implicit_invocation: true

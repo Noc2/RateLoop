@@ -7,6 +7,8 @@ description: Use RateLoop for public, synthetic, or safely redacted, non-urgent 
 
 Use RateLoop when an AI-enabled workflow needs human judgment that deterministic tests cannot provide. RateLoop complements tests, source inspection, and policy checks; it does not replace them.
 
+This public skill creates one explicitly approved browser handoff. It is not the ongoing policy loop for a connected workspace. Installing or enabling it does not create a background hook, scheduler, output interceptor, or automatic review check. Use `$rateloop-human-review-loop` with the OAuth-protected workspace tools for an owner's recurring review policy.
+
 ## Hard Safety Boundary
 
 - Use hosted judgment only for public, synthetic, or safely redacted material.

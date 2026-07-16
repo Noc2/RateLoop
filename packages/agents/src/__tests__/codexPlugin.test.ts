@@ -13,6 +13,17 @@ const agentSkillRoot = join(
   "skills",
   "rateloop-human-assurance",
 );
+const workspaceReviewSkillRoot = join(
+  workspacePluginRoot,
+  "skills",
+  "rateloop-human-review-loop",
+);
+const agentReviewSkillRoot = join(
+  repoRoot,
+  ".agents",
+  "skills",
+  "rateloop-human-review-loop",
+);
 const tokenlessMcpUrl = "https://rateloop-tokenless.vercel.app/api/mcp";
 const workspaceMcpUrl =
   "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
@@ -107,6 +118,7 @@ describe("RateLoop agent host assets", () => {
     expect(pluginSkill).toBe(agentSkill);
     expect(pluginAgent).toBe(agentAgent);
     expect(pluginSkill.toLowerCase()).toContain("explicit user approval");
+    expect(pluginSkill).toContain("does not create a background hook");
     for (const boundary of ["public", "synthetic", "redacted", "non-urgent"]) {
       expect(pluginSkill.toLowerCase()).toContain(boundary);
     }
@@ -222,6 +234,8 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain("Never create a heartbeat");
     expect(skill).toContain("Never poll registration status");
     expect(skill).toContain("native install/connect flow");
+    expect(skill).toContain("does not create a background hook");
+    expect(skill).toContain("$rateloop-human-review-loop");
     expect(skill).not.toMatch(
       /native MCP reload|MCP-server reload|refresh action exactly once/,
     );
@@ -243,6 +257,83 @@ describe("RateLoop agent host assets", () => {
         mcpServers: "./.mcp.json",
       }),
     );
+  });
+
+  it("packages an ongoing policy-bound human-review loop for connected workspaces", async () => {
+    const [skill, repositorySkill, agent, repositoryAgent] = await Promise.all([
+      readFile(join(workspaceReviewSkillRoot, "SKILL.md"), "utf8"),
+      readFile(join(agentReviewSkillRoot, "SKILL.md"), "utf8"),
+      readFile(join(workspaceReviewSkillRoot, "agents", "openai.yaml"), "utf8"),
+      readFile(join(agentReviewSkillRoot, "agents", "openai.yaml"), "utf8"),
+    ]);
+
+    expect(skill).toBe(repositorySkill);
+    expect(agent).toBe(repositoryAgent);
+    expect(agent).toContain('value: "rateloop-workspace"');
+    expect(agent).toContain(`url: "${workspaceMcpUrl}"`);
+
+    const tools = [
+      ...new Set(
+        [...skill.matchAll(/`(rateloop_[a-z_]+)`/g)].map(
+          match => match[1],
+        ),
+      ),
+    ].sort();
+    expect(tools).toEqual(
+      [
+        "rateloop_evaluate_review_requirement",
+        "rateloop_get_agent_context",
+        "rateloop_get_assurance_state",
+        "rateloop_get_review_result",
+        "rateloop_request_review",
+        "rateloop_wait_for_review",
+      ].sort(),
+    );
+
+    for (const lifecycle of [
+      "skipped",
+      "approval_required",
+      "request_ready",
+      "blocked",
+      "pending",
+      "completed",
+      "inconclusive",
+      "failed_terminal",
+      "cancelled_before_commit",
+    ]) {
+      expect(skill).toContain(`\`${lifecycle}\``);
+    }
+    for (const policy of [
+      "Adaptive",
+      "Every eligible output",
+      "Fixed percentage",
+      "Risk rules",
+      "Manual only",
+    ]) {
+      expect(skill).toContain(`**${policy}**`);
+    }
+    for (const authority of ["Check only", "Prepare for approval", "Ask automatically"]) {
+      expect(skill).toContain(`**${authority}**`);
+    }
+    for (const audience of [
+      "Public RateLoop network",
+      "Private invited",
+      "Hybrid",
+    ]) {
+      expect(skill).toContain(`**${audience}**`);
+    }
+
+    expect(skill).toContain("does not create a background process");
+    expect(skill).toContain("never create an unbounded polling loop");
+    expect(skill).toContain("configured response window freezes");
+    expect(skill).toContain("Never self-approve a prepared request");
+    expect(skill).toContain("base bounty");
+    expect(skill).toContain("Feedback Bonus");
+    expect(skill).toContain("separate, optional, and off by default");
+    expect(skill).toContain("requester or another designated human awarder");
+    expect(skill).toContain("never selected or awarded by the agent");
+    expect(skill).not.toContain("rateloop_create_handoff");
+    expect(skill).not.toContain("rateloop_capabilities");
   });
 
   it("publishes a generic URL-only workspace config without inventing host credentials", async () => {
