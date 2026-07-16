@@ -140,29 +140,31 @@ function VerificationInstructions({
           roots, aggregation, and digest. Never use the public key embedded in the packet as its own trust anchor. The
           audit command recomputes every chain link and the exported head.
         </p>
-        {trustedKey && trustedKeyDownloadUrl ? (
-          <a
-            className="btn btn-sm border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
-            href={trustedKeyDownloadUrl}
-            download={trustedKeyFilename(trustedKey.keyId)}
-          >
-            Download trusted SPKI pin
-          </a>
-        ) : packet ? (
-          <p className="text-sm text-red-100" role="alert">
-            A trusted pin for {packet.signing.keyId} is unavailable to this account or is missing from workspace key
-            history.
-          </p>
-        ) : null}
-        {attestation?.state === "completed" ? (
-          <a
-            className="btn btn-sm ml-2 border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
-            href={`/api/public/assurance/attestations/${encodeURIComponent(attestation.jobId)}`}
-            download={`rateloop-attestation-${attestation.jobId}.json`}
-          >
-            Download attestation witness
-          </a>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {trustedKey && trustedKeyDownloadUrl ? (
+            <a
+              className="btn btn-sm border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
+              href={trustedKeyDownloadUrl}
+              download={trustedKeyFilename(trustedKey.keyId)}
+            >
+              Download trusted SPKI pin
+            </a>
+          ) : packet ? (
+            <p className="w-full text-sm text-red-100" role="alert">
+              A trusted pin for {packet.signing.keyId} is unavailable to this account or is missing from workspace key
+              history.
+            </p>
+          ) : null}
+          {attestation?.state === "completed" ? (
+            <a
+              className="btn btn-sm border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
+              href={`/api/public/assurance/attestations/${encodeURIComponent(attestation.jobId)}`}
+              download={`rateloop-attestation-${attestation.jobId}.json`}
+            >
+              Download attestation witness
+            </a>
+          ) : null}
+        </div>
         <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black/35 p-4 text-xs leading-6 text-base-content/75">
           <code>{instructions}</code>
         </pre>
