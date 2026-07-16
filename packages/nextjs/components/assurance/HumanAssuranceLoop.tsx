@@ -97,9 +97,13 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
               ))}
             </svg>
             <figcaption className="pointer-events-none absolute inset-[29%] flex flex-col items-center justify-center rounded-full border border-white/10 bg-black/70 text-center shadow-[0_0_80px_rgb(3_206_164/0.08)] backdrop-blur-sm">
-              <h3 id="human-assurance-loop-title" className="font-bold leading-[1.08]">
-                <span className="block whitespace-nowrap text-[clamp(0.72rem,3.2vw,1.25rem)]">Human Assurance</span>
-                <span className="rateloop-text-gradient block text-[clamp(1.2rem,4.4vw,1.8rem)]">Loop</span>
+              <h3
+                id="human-assurance-loop-title"
+                className="flex flex-col items-center text-[clamp(0.72rem,3.2vw,1.25rem)] font-bold leading-[1.08]"
+              >
+                <span>Human</span>
+                <span>Assurance</span>
+                <span className="rateloop-text-gradient inline-block">Loop</span>
               </h3>
             </figcaption>
           </div>

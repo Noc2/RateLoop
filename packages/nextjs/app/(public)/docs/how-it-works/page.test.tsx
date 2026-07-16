@@ -14,7 +14,10 @@ test("how-it-works follows the production agent, reviewer, and settlement paths"
   const html = renderToStaticMarkup(<HowItWorksPage />).replace(/\s+/g, " ");
 
   assert.match(html, /How It.*rateloop-text-gradient.*Works/i);
-  assert.match(html, /<h3 id="human-assurance-loop-title"[^>]*>.*Human Assurance.*Loop.*<\/h3>/i);
+  assert.match(
+    html,
+    /<h3 id="human-assurance-loop-title"[^>]*>\s*<span>Human<\/span>\s*<span>Assurance<\/span>\s*<span class="rateloop-text-gradient inline-block">Loop<\/span>\s*<\/h3>/i,
+  );
   assert.match(html, /agent version, review-policy version, workflow, risk tier, and reviewer audience/i);
   assert.match(html, /two independent 15-case windows.*at least 14 comparable/i);
   assert.match(html, /50%.*25%.*10% monitoring floor/i);
