@@ -28,6 +28,10 @@ import {
   freezeAdmissionPolicy,
 } from "~~/lib/tokenless/admissionPolicy";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
+import {
+  requirePaidReviewEligibility,
+  requirePaidReviewEligibilityInTransaction,
+} from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const COUNTRY = /^[A-Z]{2}$/;
@@ -1091,35 +1095,14 @@ async function loadVoucherEligibility(
   reviewerSource: VoucherRequest["reviewerSource"],
   now: Date,
 ) {
+  const preflight = await requirePaidReviewEligibility(accountAddress, now);
   const result = await dbClient.execute({
-    sql: `SELECT p.rater_id, p.nullifier_seed_ciphertext, p.nullifier_key_version,
-                 p.nullifier_key_domain, l.minimum_age_verified, l.age_evidence_expires_at,
-                 l.tax_profile_status, l.dac7_status, l.sanctions_status,
-                 l.sanctions_expires_at, l.eligibility_status,
-                 pe.payout_account, pe.payout_ownership_method, pe.payout_expires_at,
-                 pe.eligibility_status AS payout_eligibility_status
-          FROM tokenless_rater_profiles p
-          JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
-          JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
-          WHERE p.account_address = ? LIMIT 1`,
-    args: [accountAddress.toLowerCase()],
+    sql: `SELECT rater_id, nullifier_seed_ciphertext, nullifier_key_version, nullifier_key_domain
+          FROM tokenless_rater_profiles WHERE rater_id = ? AND account_address = ? LIMIT 1`,
+    args: [preflight.raterId, accountAddress.toLowerCase()],
   });
   const row = result.rows[0] as QueryRow | undefined;
-  if (
-    !row ||
-    stringValue(row, "eligibility_status") !== "eligible" ||
-    Number(row.minimum_age_verified) < 18 ||
-    stringValue(row, "tax_profile_status") !== "complete" ||
-    !["complete", "not_required"].includes(stringValue(row, "dac7_status") ?? "") ||
-    stringValue(row, "sanctions_status") !== "clear" ||
-    new Date(String(row.age_evidence_expires_at)) <= now ||
-    new Date(String(row.sanctions_expires_at)) <= now ||
-    getAddress(String(row.payout_account)) !== accountAddress ||
-    stringValue(row, "payout_ownership_method") !== "siwe_base_account_session" ||
-    stringValue(row, "payout_eligibility_status") !== "ready" ||
-    (row.payout_expires_at !== null && new Date(String(row.payout_expires_at)) <= now) ||
-    stringValue(row, "nullifier_key_domain") !== "vote_mapping"
-  ) {
+  if (!row || stringValue(row, "nullifier_key_domain") !== "vote_mapping") {
     throw new TokenlessServiceError(
       "Paid-task eligibility must be completed before a voucher can be issued.",
       403,
@@ -1181,7 +1164,7 @@ async function loadVoucherEligibility(
       "paid_eligibility_required",
     );
   }
-  return { row, assertions, cohortIds, qualificationRecords, qualifications, reviewerSource };
+  return { row, assertions, cohortIds, qualificationRecords, qualifications, reviewerSource, preflight };
 }
 
 async function loadVoucherIntegrityEvidence(input: {
@@ -1381,11 +1364,11 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
       "voucher_reviewer_source_mismatch",
     );
   }
-  const eligibility = await loadVoucherEligibility(accountAddress, input.request.reviewerSource, now);
-  const raterId = stringValue(eligibility.row, "rater_id")!;
   const previous = await dbClient.execute({
-    sql: "SELECT * FROM tokenless_paid_vouchers WHERE rater_id = ? AND request_idempotency_key = ? LIMIT 1",
-    args: [raterId, input.request.idempotencyKey],
+    sql: `SELECT v.* FROM tokenless_paid_vouchers v
+          JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
+          WHERE p.account_address = ? AND v.request_idempotency_key = ? LIMIT 1`,
+    args: [accountAddress.toLowerCase(), input.request.idempotencyKey],
   });
   const priorRow = previous.rows[0] as QueryRow | undefined;
   if (priorRow) {
@@ -1398,6 +1381,8 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
     }
     return voucherResponse(priorRow);
   }
+  const eligibility = await loadVoucherEligibility(accountAddress, input.request.reviewerSource, now);
+  const raterId = stringValue(eligibility.row, "rater_id")!;
   if (
     stringValue(round, "status") !== "open" ||
     new Date(String(round.voucher_not_before)) > now ||
@@ -1523,6 +1508,17 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   const insertClient = await dbPool.connect();
   try {
     await insertClient.query("BEGIN");
+    const finalPreflight = await requirePaidReviewEligibilityInTransaction(insertClient, accountAddress, now);
+    if (
+      finalPreflight.raterId !== raterId ||
+      finalPreflight.eligibilityCommitment !== eligibility.preflight.eligibilityCommitment
+    ) {
+      throw new TokenlessServiceError(
+        "Paid-task eligibility changed while the voucher was prepared. Retry with current eligibility.",
+        409,
+        "paid_eligibility_changed",
+      );
+    }
     await insertClient.query(
       `INSERT INTO tokenless_paid_vouchers
             (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,

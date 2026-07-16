@@ -12,6 +12,7 @@ import { evaluateFrozenAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy"
 import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
 import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
+import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid"] as const;
@@ -879,39 +880,8 @@ export async function prepareRunAudience(input: {
 }
 
 async function paidEligibility(client: PoolClient, accountAddress: string, now: Date) {
-  const result = await client.query(
-    `SELECT p.rater_id, l.age_evidence_expires_at, l.minimum_age_verified, l.tax_profile_status,
-            l.dac7_status, l.sanctions_status, l.sanctions_expires_at,
-            pe.payout_account, pe.payout_ownership_method, pe.payout_expires_at,
-            pe.eligibility_status AS payout_eligibility_status, l.eligibility_status
-     FROM tokenless_rater_profiles p
-     JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
-     JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
-     WHERE p.account_address = $1 LIMIT 1 FOR UPDATE`,
-    [accountAddress],
-  );
-  const row = result.rows[0] as QueryRow | undefined;
-  if (
-    !row ||
-    rowString(row, "eligibility_status") !== "eligible" ||
-    (rowNumber(row, "minimum_age_verified") ?? 0) < 18 ||
-    rowString(row, "tax_profile_status") !== "complete" ||
-    !["complete", "not_required"].includes(rowString(row, "dac7_status") ?? "") ||
-    rowString(row, "sanctions_status") !== "clear" ||
-    (rowDate(row, "age_evidence_expires_at")?.getTime() ?? 0) <= now.getTime() ||
-    (rowDate(row, "sanctions_expires_at")?.getTime() ?? 0) <= now.getTime() ||
-    (rowDate(row, "payout_expires_at")?.getTime() ?? Number.POSITIVE_INFINITY) <= now.getTime() ||
-    rowString(row, "payout_eligibility_status") !== "ready" ||
-    normalizeAddress(rowString(row, "payout_account") ?? "", "payoutAccount") !== accountAddress ||
-    rowString(row, "payout_ownership_method") !== "siwe_base_account_session"
-  ) {
-    throw new TokenlessServiceError(
-      "Paid-task eligibility must be complete before assignment.",
-      403,
-      "paid_eligibility_required",
-    );
-  }
-  const raterId = rowString(row, "rater_id")!;
+  const preflight = await requirePaidReviewEligibilityInTransaction(client, accountAddress, now);
+  const raterId = preflight.raterId;
   const assertions = await client.query(
     `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
             b.subject_reference_hash, a.capabilities_json, a.evidence_verified_at, a.evidence_expires_at,
@@ -924,6 +894,7 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
   );
   return {
     raterId,
+    preflight,
     assertions: assertions.rows.map(value => {
       const assertion = value as QueryRow;
       return {
