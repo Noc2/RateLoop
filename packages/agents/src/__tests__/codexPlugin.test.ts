@@ -55,7 +55,7 @@ describe("RateLoop agent host assets", () => {
     });
     expect(workspaceManifest.name).toBe("rateloop-workspace");
     expect(workspaceManifest.version).toMatch(
-      /^0\.1\.0\+codex\.[0-9A-Za-z.-]+$/,
+      /^0\.1\.1\+codex\.[0-9A-Za-z.-]+$/,
     );
     expect(workspaceManifest.skills).toBe("./skills/");
     expect(workspaceManifest.mcpServers).toBe("./.mcp.json");
@@ -205,7 +205,8 @@ describe("RateLoop agent host assets", () => {
     );
     expect(skill).toContain("replacement for a deleted workspace");
     expect(skill).toContain("revokes its OAuth token family");
-    expect(skill).toContain("Do not ask the user to remove unrelated plugins");
+    expect(skill).toContain("uninstall every existing RateLoop plugin");
+    expect(skill).toContain("Never tell them to remove unrelated plugins");
     expect(skill).toContain("host actually presents");
     expect(skill).toContain(
       "check the workspace tool inventory once on the next active turn",
@@ -237,7 +238,7 @@ describe("RateLoop agent host assets", () => {
       expect.objectContaining({
         name: "rateloop-workspace",
         displayName: "RateLoop Workspace",
-        version: "0.1.0",
+        version: "0.1.1",
         skills: "./skills/",
         mcpServers: "./.mcp.json",
       }),
@@ -272,7 +273,8 @@ describe("RateLoop agent host assets", () => {
     );
     expect(guide).toContain(workspaceMcpUrl);
     expect(guide).toContain("host-native OAuth");
-    expect(guide).toContain("standard OAuth authorization challenge");
+    expect(guide).toMatch(/standard OAuth\s+authorization challenge/);
+    expect(guide).toContain("Uninstall every existing RateLoop plugin");
     expect(guide).toMatch(/Do not remove unrelated\s+plugins/);
     expect(guide).toContain(
       "native VS Code manifest will be published only after",

@@ -22,7 +22,8 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   );
   assert.match(html, /codex plugin add rateloop@rateloop/);
   assert.match(html, /rateloop-workspace@rateloop/);
-  assert.match(html, /does not need to be removed when a workspace is deleted/);
+  assert.match(html, /uninstall all existing RateLoop plugins/);
+  assert.match(html, /do not remove unrelated plugins/);
   assert.match(html, /Continue/);
   assert.doesNotMatch(html, /codex plugin marketplace add Noc2\/RateLoop(?:\s|<)/);
   assert.match(html, /rateloop_capabilities/);

@@ -25,14 +25,18 @@ reload button or settings path, start a second login or nested runtime, or repor
 claim and verification are closed-domain, non-destructive, idempotent MCP actions; publishing and spending remain
 separately classified and approval-bound.
 
+If the protected workspace tools remain unavailable and the host offers no native action, a stale RateLoop plugin install
+may be blocking activation. Uninstall every existing RateLoop plugin, including `rateloop` and `rateloop-workspace`, then
+resume the same task. Keep the original connection intent in the task and do not paste or generate a replacement link.
+Do not remove unrelated plugins.
+
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
 
 Deleting a RateLoop workspace revokes its OAuth token family, access tokens, refresh tokens, connection intent, and agent
-integration. RateLoop does not uninstall the host plugin: the plugin is reusable for another workspace and Codex does not
-provide an asynchronous plugin-state callback to RateLoop. On the next RateLoop Workspace invocation, the protected MCP
-server returns the standard OAuth authorization challenge and the host can request fresh consent. Do not remove unrelated
-plugins to reconnect.
+integration. On the next RateLoop Workspace invocation, the protected MCP server should return the standard OAuth
+authorization challenge so the host can request fresh consent. If no protected tools or native action appears, use the
+stale-plugin recovery above.
 
 ## Host notes
 

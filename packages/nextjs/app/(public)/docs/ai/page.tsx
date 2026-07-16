@@ -175,8 +175,9 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
       <p>
         A copied workspace connection message targets <code>rateloop-workspace@rateloop</code> directly, so Codex can
         install the protected workspace plugin and start OAuth on use. Select <strong>Continue</strong> when Codex
-        offers it to resume that task. The public RateLoop plugin remains installed and does not need to be removed when
-        a workspace is deleted.
+        offers it to resume that task. If the protected tools stay unavailable and Codex offers no native action,
+        uninstall all existing RateLoop plugins before resuming the same task; do not remove unrelated plugins or create
+        a replacement connection link.
       </p>
 
       <h2>Four-purpose tool surface</h2>

@@ -1,6 +1,6 @@
 {
   "name": "rateloop-workspace",
-  "version": "0.1.0+codex.20260716080606",
+  "version": "0.1.1+codex.20260716092220",
   "description": "Connect Codex to one RateLoop workspace through host-native OAuth.",
   "author": {
     "name": "RateLoop",

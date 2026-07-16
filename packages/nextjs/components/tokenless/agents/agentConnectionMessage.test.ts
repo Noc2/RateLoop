@@ -13,7 +13,8 @@ test("connection message contains one intent URL and no operational credential i
   assert.match(message, /connect this agent to my workspace and finish automatically in this task/);
   assert.match(message, /Treat this as a new connection if a previous RateLoop workspace was deleted/);
   assert.match(message, /Preserve this link privately/);
-  assert.match(message, /Only interrupt me when the host actually presents an install, trust, or OAuth action/);
+  assert.match(message, /Only interrupt me for a host-presented install, trust, or OAuth action/);
+  assert.match(message, /if no workspace tools appear and I must uninstall existing RateLoop plugins/);
   assert.match(message, /host's Continue action when offered/);
   assert.match(message, /check for RateLoop workspace tools on the next active turn/);
   assert.match(message, /never ask me to paste the link or approve the same action again/);
@@ -22,5 +23,5 @@ test("connection message contains one intent URL and no operational credential i
   assert.equal(message.match(/https:\/\//g)?.length, 1);
   assert.match(message, new RegExp(connectionUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(message, /Authorization header|Bearer|rlk_|access token|refresh token|environment variable/i);
-  assert.doesNotMatch(message, /poll|heartbeat|refresh|reload|restart|settings|gear|toggle|uninstall/i);
+  assert.doesNotMatch(message, /poll|heartbeat|refresh|reload|restart|settings|gear|toggle/i);
 });
