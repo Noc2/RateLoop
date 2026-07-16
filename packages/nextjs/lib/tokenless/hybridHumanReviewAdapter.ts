@@ -88,7 +88,11 @@ function candidate(value: HybridReviewCandidate, field: string): HybridReviewCan
   if (!ADDRESS.test(accountAddress) || !value.assignmentReference || !HASH.test(value.assignmentHash)) {
     throw new TokenlessServiceError(`${field} is invalid.`, 409, "hybrid_review_binding_invalid");
   }
-  return { ...value, accountAddress };
+  return {
+    accountAddress,
+    assignmentReference: value.assignmentReference,
+    assignmentHash: value.assignmentHash,
+  };
 }
 
 function validate(split: FrozenHybridReviewSplit) {
@@ -128,14 +132,44 @@ function exactPreparation(value: HybridSubpanelPreparation, field: string) {
   return value;
 }
 
+function canonicalSplit(split: FrozenHybridReviewSplit): FrozenHybridReviewSplit {
+  return {
+    schemaVersion: "rateloop.hybrid-review-split.v1",
+    opportunityId: split.opportunityId,
+    audiencePolicyHash: split.audiencePolicyHash,
+    requestProfileHash: split.requestProfileHash,
+    contentCommitments: {
+      source: split.contentCommitments.source,
+      suggestion: split.contentCommitments.suggestion,
+    },
+    publication: {
+      visibility: "public",
+      dataClassification: split.publication.dataClassification,
+      confirmedNoSensitiveData: true,
+    },
+    economics: {
+      asset: "USDC",
+      invitedMaximumChargeAtomic: split.economics.invitedMaximumChargeAtomic,
+      networkMaximumChargeAtomic: split.economics.networkMaximumChargeAtomic,
+    },
+    invited: {
+      requestedCount: split.invited.requestedCount,
+      candidates: split.invited.candidates.map((value, index) => candidate(value, `Invited candidate ${index + 1}`)),
+    },
+    network: {
+      requestedCount: split.network.requestedCount,
+      candidates: split.network.candidates.map((value, index) => candidate(value, `Network candidate ${index + 1}`)),
+    },
+  };
+}
+
 export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDependencies) {
   return async function requestHybridHumanReview(split: FrozenHybridReviewSplit): Promise<HybridHumanReviewResult> {
     validate(split);
-    const invited = split.invited.candidates.map((value, index) => candidate(value, `Invited candidate ${index + 1}`));
+    const frozenSplit = canonicalSplit(split);
+    const invited = frozenSplit.invited.candidates;
     const invitedAccounts = new Set(invited.map(value => value.accountAddress));
-    const normalizedNetwork = split.network.candidates.map((value, index) =>
-      candidate(value, `Network candidate ${index + 1}`),
-    );
+    const normalizedNetwork = frozenSplit.network.candidates;
     const network = normalizedNetwork.filter(value => !invitedAccounts.has(value.accountAddress));
     const duplicateCount = normalizedNetwork.length - network.length;
     if (network.length !== split.network.requestedCount) {
@@ -158,7 +192,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     const preflightByAccount = new Map(preflightEntries);
     const invitedPreparation = exactPreparation(
       await dependencies.prepareInvited({
-        split,
+        split: frozenSplit,
         candidates: invited,
         preflights: invited.map(value => preflightByAccount.get(value.accountAddress)!),
       }),
@@ -166,14 +200,14 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     );
     const networkPreparation = exactPreparation(
       await dependencies.prepareNetwork({
-        split,
+        split: frozenSplit,
         candidates: network,
         preflights: network.map(value => preflightByAccount.get(value.accountAddress)!),
       }),
       "Network subpanel",
     );
     const splitBindingHash = sha256({
-      split,
+      split: frozenSplit,
       deduplicationRule: "invited_wins",
       invited: { candidates: invited, preparation: invitedPreparation },
       network: { candidates: network, preparation: networkPreparation, removedDuplicateCount: duplicateCount },
