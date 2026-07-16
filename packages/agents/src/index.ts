@@ -42,3 +42,32 @@ export type {
   TokenlessWaitResponse,
   TokenlessWaitUntilReadyOptions,
 } from "./tokenless";
+export { createAutomatedEvalClient } from "./automatedEval";
+export type {
+  AutomatedEvalClient,
+  AutomatedEvalClientOptions,
+  AutomatedEvalIngestResult,
+  AutomatedEvalLabeledDataExport,
+  AutomatedEvalLabeledDataItem,
+  AutomatedEvalOutcome,
+  AutomatedEvalProvider,
+  AutomatedEvalReceipt,
+  AutomatedEvalReviewContext,
+} from "./automatedEval";
+export {
+  RateLoopPromptfooProvider,
+  rateLoopPromptfooAssertion,
+} from "./promptfooAutomatedEval";
+export {
+  adaptInspectEvalLog,
+  ingestInspectEvalLog,
+} from "./inspectAutomatedEval";
+export type {
+  InspectAdapterOptions,
+  InspectRateLoopMetadata,
+} from "./inspectAutomatedEval";
+export { exportHumanLabelsToLangfuse } from "./langfuseHumanLabels";
+export type {
+  LangfuseHumanLabelExportOptions,
+  LangfuseScoreSubject,
+} from "./langfuseHumanLabels";
