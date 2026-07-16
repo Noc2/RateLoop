@@ -263,6 +263,16 @@ export async function createWorkspace(input: { name: string; ownerAddress: strin
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    if (/^rlp_[0-9a-f]{48}$/.test(ownerAddress)) {
+      const principal = await client.query(
+        `SELECT principal_id FROM tokenless_principals
+         WHERE principal_id = $1 AND status = 'active' FOR UPDATE`,
+        [ownerAddress],
+      );
+      if (principal.rowCount !== 1) {
+        throw new TokenlessServiceError("The RateLoop principal is not active.", 403, "principal_inactive");
+      }
+    }
     await client.query(
       `INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at)
        VALUES ($1, $2, 'active', $3, $3)`,

@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const panelSource = readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8");
+const settingsPageSource = readFileSync(new URL("../../../app/(app)/human/page.tsx", import.meta.url), "utf8");
+
+test("account deletion stays collapsed until requested and requires the server preview", () => {
+  assert.match(panelSource, /<details[^>]+onToggle=\{handleToggle\}/);
+  assert.match(panelSource, /fetch\("\/api\/account\/deletion", \{ credentials: "same-origin", cache: "no-store" \}\)/);
+  assert.match(panelSource, /preview\.blockers\.length > 0/);
+});
+
+test("account deletion requires a literal confirmation and clears client authentication", () => {
+  assert.match(panelSource, /confirmation !== "DELETE"/);
+  assert.match(panelSource, /body: JSON\.stringify\(\{ confirmation: "DELETE" \}\)/);
+  assert.match(panelSource, /betterAuthClient\.signOut\(\)/);
+  assert.match(panelSource, /window\.location\.assign\("\/"\)/);
+  assert.match(panelSource, /same email address, creates a new/);
+  assert.match(panelSource, /Public blockchain entries and records required for legal, tax, settlement/);
+});
+
+test("human settings render account deletion after notifications", () => {
+  assert.match(settingsPageSource, /<NotificationSettingsPanel \/>\s*<AccountDeletionPanel \/>/);
+});

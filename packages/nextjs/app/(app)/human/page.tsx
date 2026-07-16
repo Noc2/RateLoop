@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
+import { AccountDeletionPanel } from "~~/components/tokenless/account/AccountDeletionPanel";
 import { NotificationSettingsPanel } from "~~/components/tokenless/account/NotificationSettingsPanel";
 import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClient";
 import { HumanAccountSignInPrompt } from "~~/components/tokenless/human/HumanAccountSignInPrompt";
@@ -61,7 +62,10 @@ export default async function HumanPage({
       {tab === "profile" ? (
         <HumanProfileContent worldIdEnabled={isWorldIdAssuranceEnabled()} />
       ) : (
-        <NotificationSettingsPanel />
+        <>
+          <NotificationSettingsPanel />
+          <AccountDeletionPanel />
+        </>
       )}
     </AppPageShell>
   );
