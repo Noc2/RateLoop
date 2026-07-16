@@ -29,6 +29,7 @@ export function connectedAgentTabs({
   return [
     "overview",
     "agents",
+    "evidence",
     ...(hasGroups ? (["groups"] as const) : []),
     ...(hasEvaluations ? (["evaluations"] as const) : []),
   ];

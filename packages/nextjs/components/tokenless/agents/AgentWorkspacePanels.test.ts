@@ -39,9 +39,9 @@ test("only active, connected, unexpired integrations complete onboarding", () =>
 });
 
 test("connected navigation exposes only sections backed by relevant state", () => {
-  assert.deepEqual(connectedAgentTabs(), ["overview", "agents"]);
-  assert.deepEqual(connectedAgentTabs({ hasGroups: true }), ["overview", "agents", "groups"]);
-  assert.deepEqual(connectedAgentTabs({ hasEvaluations: true }), ["overview", "agents", "evaluations"]);
+  assert.deepEqual(connectedAgentTabs(), ["overview", "agents", "evidence"]);
+  assert.deepEqual(connectedAgentTabs({ hasGroups: true }), ["overview", "agents", "evidence", "groups"]);
+  assert.deepEqual(connectedAgentTabs({ hasEvaluations: true }), ["overview", "agents", "evidence", "evaluations"]);
   assert.equal(resolveAvailableAgentTab("groups", connectedAgentTabs()), "agents");
 });
 
@@ -64,6 +64,7 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents"/);
   assert.match(panelsSource, /resolvedTab === "groups"/);
   assert.match(panelsSource, /resolvedTab === "evaluations"/);
+  assert.match(panelsSource, /resolvedTab === "evidence"/);
 });
 
 test("completed read-only workspaces never render connection or policy mutations", () => {

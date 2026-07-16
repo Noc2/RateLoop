@@ -10,7 +10,7 @@ import { listPrivateGroups } from "~~/lib/tokenless/privateGroups";
 import { listProductWorkspaces } from "~~/lib/tokenless/productCore";
 import { getWorkspaceAgentSetup } from "~~/lib/tokenless/workspaceAgentSetup";
 
-const AGENT_TABS = new Set<AgentTab>(["overview", "agents", "groups", "evaluations"]);
+const AGENT_TABS = new Set<AgentTab>(["overview", "agents", "groups", "evaluations", "evidence"]);
 
 function firstQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;

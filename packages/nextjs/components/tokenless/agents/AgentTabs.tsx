@@ -1,12 +1,13 @@
 import Link from "next/link";
 
-export type AgentTab = "overview" | "agents" | "groups" | "evaluations";
+export type AgentTab = "overview" | "agents" | "groups" | "evaluations" | "evidence";
 
 const tabs: Array<{ value: AgentTab; label: string }> = [
   { value: "overview", label: "Overview" },
   { value: "agents", label: "Agents" },
   { value: "groups", label: "Groups" },
   { value: "evaluations", label: "Evaluations" },
+  { value: "evidence", label: "Evidence" },
 ];
 
 export function AgentTabs({

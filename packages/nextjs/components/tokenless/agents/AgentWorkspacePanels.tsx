@@ -9,6 +9,7 @@ import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
 import { type AgentTab, AgentTabs } from "./AgentTabs";
 import { EvaluationDashboardPanel } from "./EvaluationDashboardPanel";
+import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { PrivateGroupsPanel } from "./PrivateGroupsPanel";
@@ -151,6 +152,9 @@ export function AgentWorkspacePanels({
         ) : null}
         {hasConnectedAgent && resolvedTab === "evaluations" ? (
           <EvaluationDashboardPanel initialWorkspaceId={workspaceId} showWorkspaceSelector={false} />
+        ) : null}
+        {hasConnectedAgent && resolvedTab === "evidence" ? (
+          <EvidenceWorkspacePanel workspaceId={workspaceId} canManage={canManage} />
         ) : null}
       </div>
     </div>
