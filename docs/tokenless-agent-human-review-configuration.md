@@ -59,9 +59,9 @@ Recommended new-policy presets are 20 minutes, 1 hour, 4 hours, and 24 hours. Pr
 
 Invited private review may be unpaid or USDC-paid. Public-network and hybrid review require USDC. Owners choose the per-seat bounty and panel size; RateLoop derives fee, attempt reserve, minimum reveals, and the maximum funded amount before consent.
 
-Paid tokenless responses retain the immutable 80% fixed-base and up-to-20% deterministic RBTS quality allocation. That allocation is described as the automatic **response quality reward**, not as the legacy Feedback Bonus.
+Paid tokenless responses retain the immutable 80% fixed-base and up-to-20% deterministic RBTS quality allocation. That allocation is described as the automatic **response quality reward**, not as the Feedback Bonus.
 
-A separate owner-funded **written-feedback stipend** is optional and off by default. It may appear only after immutable stipend terms, prefunding, accepted-work liability, receipts, failure behavior, and a fresh fund-core deployment are complete. Eligibility is structural and frozen before work; moderation or a later usefulness judgment cannot remove earned compensation.
+The [Feedback Bonus](./tokenless-feedback-bonus-v1-spec.md) is a second, independent control. It is optional, off by default, separately prefunded in USDC, and can be enabled whether the guaranteed bounty is on or off. After the feedback window, the requester or another designated human awarder may pay selected eligible written feedback from that pool. The agent and automatic quality machinery may never select or execute an award. If either control can pay a reviewer, paid eligibility completes before assignment. A later usefulness judgment cannot reduce guaranteed compensation.
 
 Delegation has exactly three owner-visible levels:
 
@@ -82,7 +82,7 @@ Every connected-agent card exposes, without opening an advanced disclosure:
 - effective frequency and current adaptive rate;
 - reviewers and material boundary;
 - response window and panel size;
-- compensation and automatic quality reward;
+- guaranteed compensation, automatic quality reward, and optional Feedback Bonus as separate values;
 - authority, spend cap, and kill-switch state;
 - last policy check, last request, pending review, and last result; and
 - advisory or verified host-enforced status.

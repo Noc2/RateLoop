@@ -181,6 +181,12 @@ Every valid reveal earns fixed base compensation. The current binary
 majority verdict. The separately funded [Surprisingly Popular bounty](tokenless-surprise-bounty-v1-spec.md) may reward
 useful minority signal after finalization; it cannot alter customer-funded settlement or contract state.
 
+The optional [Feedback Bonus](tokenless-feedback-bonus-v1-spec.md) is also separate from those mechanisms and from the
+guaranteed review bounty. It may be configured with or without guaranteed compensation, is prefunded before delivery,
+and can be awarded afterward only by the requester or another designated human to selected eligible written feedback.
+The agent, automatic scoring, moderation, and operator cannot select an award. When either guaranteed compensation or a
+Feedback Bonus is possible, paid eligibility completes before assignment.
+
 Settlement freezes the reveal set, processes deterministic evidence in restart-safe pages, and enables claims only
 after conservation checks pass. Any caller may continue the state machine. Zero-commit rounds refund in full. Under-
 quorum, beacon-failure, takedown, and infrastructure-failure paths preserve compensation for accepted valid work and
