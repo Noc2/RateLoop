@@ -4,6 +4,11 @@ import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
 import { expireDeletedAuthSubjectGuards, reconcileWorkspaceDeletionJobs } from "~~/lib/privacy/deletionReconciliation";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
+import { processDueAssuranceAttestations } from "~~/lib/tokenless/assuranceAttestationRuntime";
+import {
+  deliverPendingAssuranceEvents,
+  projectAssuranceLifecycleEvents,
+} from "~~/lib/tokenless/assuranceEventStreaming";
 import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
@@ -112,8 +117,11 @@ type MaintenanceProcessors = {
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
   processSurpriseBounties: typeof processSurpriseBountyPayments;
+  projectAssuranceEvents: typeof projectAssuranceLifecycleEvents;
+  deliverAssuranceEvents: typeof deliverPendingAssuranceEvents;
   processGrcReconciliations: typeof processDueGrcReconciliations;
   processWormExports: typeof processDueAssuranceWormExports;
+  processAttestations: typeof processDueAssuranceAttestations;
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
 };
@@ -128,8 +136,11 @@ const defaultProcessors: MaintenanceProcessors = {
   deliverWebhooks: deliverPendingWebhooks,
   processNotifications: runTokenlessNotificationCycle,
   processSurpriseBounties: processSurpriseBountyPayments,
+  projectAssuranceEvents: projectAssuranceLifecycleEvents,
+  deliverAssuranceEvents: deliverPendingAssuranceEvents,
   processGrcReconciliations: processDueGrcReconciliations,
   processWormExports: processDueAssuranceWormExports,
+  processAttestations: processDueAssuranceAttestations,
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
 };
@@ -278,6 +289,26 @@ export async function runTokenlessScheduledMaintenance(input: {
       now,
       limit: workLimit,
     });
+    const attestations = await processors.processAttestations({
+      now,
+      limit: workLimit,
+    });
+    const assuranceEventProjection = await processors.projectAssuranceEvents({
+      now,
+      limit: webhookLimit,
+    });
+    const assuranceEventOutcomes = await processors.deliverAssuranceEvents({
+      now,
+      limit: webhookLimit,
+    });
+    const assuranceEvents = {
+      projection: assuranceEventProjection,
+      delivery: {
+        dead: assuranceEventOutcomes.filter(value => value.state === "dead").length,
+        delivered: assuranceEventOutcomes.filter(value => value.state === "delivered").length,
+        retry: assuranceEventOutcomes.filter(value => value.state === "retry").length,
+      },
+    };
     const webhookOutcomes = await processors.deliverWebhooks({
       now,
       limit: webhookLimit,
@@ -304,7 +335,13 @@ export async function runTokenlessScheduledMaintenance(input: {
       grcReconciliations.retry > 0 ||
       grcReconciliations.failed > 0 ||
       wormExports.retry > 0 ||
-      wormExports.dead > 0
+      wormExports.dead > 0 ||
+      attestations.retry > 0 ||
+      attestations.dead > 0 ||
+      attestations.unavailable > 0 ||
+      assuranceEvents.projection.retry > 0 ||
+      assuranceEvents.delivery.retry > 0 ||
+      assuranceEvents.delivery.dead > 0
         ? "degraded"
         : "healthy";
     const summary = {
@@ -317,6 +354,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       surpriseBounties,
       grcReconciliations,
       wormExports,
+      attestations,
+      assuranceEvents,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({

@@ -60,6 +60,19 @@ function processors(
     async deliverWebhooks() {
       return [];
     },
+    async projectAssuranceEvents() {
+      return {
+        scanned: 0,
+        projected: 0,
+        replayed: 0,
+        retry: 0,
+        deferredWithoutPacket: { gateBlocked: 0, reviewCompleted: 0 },
+        retrySources: [],
+      };
+    },
+    async deliverAssuranceEvents() {
+      return [];
+    },
     async processNotifications() {
       return notifications;
     },
@@ -181,6 +194,69 @@ test("scheduled maintenance reports notification retries as degraded health evid
   if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
   assert.equal(result.status, "degraded");
   assert.deepEqual(result.summary.notifications, notificationSummary);
+});
+
+test("scheduled maintenance projects assurance events, delivers them, and degrades on retry evidence", async () => {
+  const base = processors(async () => {});
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...base,
+      async projectAssuranceEvents() {
+        return {
+          scanned: 2,
+          projected: 1,
+          replayed: 0,
+          retry: 1,
+          deferredWithoutPacket: { gateBlocked: 3, reviewCompleted: 0 },
+          retrySources: ["hrtr_retry"],
+        };
+      },
+      async deliverAssuranceEvents() {
+        return [
+          { deliveryId: "aed_delivered", state: "delivered" as const },
+          { deliveryId: "aed_retry", state: "retry" as const },
+        ];
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.assuranceEvents, {
+    projection: {
+      scanned: 2,
+      projected: 1,
+      replayed: 0,
+      retry: 1,
+      deferredWithoutPacket: { gateBlocked: 3, reviewCompleted: 0 },
+      retrySources: ["hrtr_retry"],
+    },
+    delivery: { dead: 0, delivered: 1, retry: 1 },
+  });
+});
+
+test("scheduled maintenance reports attestation retry, dead-letter, and adapter-unavailable health", async () => {
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => {}),
+      async processAttestations() {
+        return { configured: false, due: 2, completed: 0, retry: 0, dead: 0, unavailable: 2 };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.attestations, {
+    configured: false,
+    due: 2,
+    completed: 0,
+    retry: 0,
+    dead: 0,
+    unavailable: 2,
+  });
 });
 
 test("cron authorization fails closed when missing or incorrect", () => {
