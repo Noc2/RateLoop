@@ -27,14 +27,15 @@ test("workspace deletion reveals only relevant impact, warnings, and blockers", 
   assert.match(source, /legal hold delays deletion/);
 });
 
-test("only owners see deletion after incomplete setup and connected Overview", () => {
-  assert.match(
-    panelsSource,
-    /<AgentSetupFlow initialSetup=\{initialSetup\} \/>[\s\S]*?workspace\.role === "owner"[\s\S]*?<WorkspaceDeletionPanel/,
-  );
+test("workspace deletion stays out of setup and appears only for owners on connected Overview", () => {
+  const setupStart = panelsSource.indexOf("if (initialSetup && !initialSetup.complete)");
+  const setupEnd = panelsSource.indexOf("\n  }\n\n  return (", setupStart);
+  const setupBranch = panelsSource.slice(setupStart, setupEnd);
+  assert.ok(setupStart >= 0 && setupEnd > setupStart);
+  assert.doesNotMatch(setupBranch, /WorkspaceDeletionPanel/);
   assert.match(
     panelsSource,
     /resolvedTab === "overview" && workspace\.role === "owner"[\s\S]*?<WorkspaceDeletionPanel/,
   );
-  assert.equal(panelsSource.match(/<WorkspaceDeletionPanel/g)?.length, 2);
+  assert.equal(panelsSource.match(/<WorkspaceDeletionPanel/g)?.length, 1);
 });

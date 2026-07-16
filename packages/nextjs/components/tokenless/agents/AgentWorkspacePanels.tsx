@@ -75,9 +75,6 @@ export function AgentWorkspacePanels({
           </div>
         ) : null}
         <AgentSetupFlow initialSetup={initialSetup} />
-        {workspace.role === "owner" ? (
-          <WorkspaceDeletionPanel workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
-        ) : null}
       </div>
     );
   }
