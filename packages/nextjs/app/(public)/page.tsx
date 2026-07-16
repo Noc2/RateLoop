@@ -187,6 +187,14 @@ export function TokenlessLandingPage({
               </article>
             ))}
           </div>
+          <div className="mt-8 text-center">
+            <Link
+              href="/docs/use-cases"
+              className="text-sm font-semibold text-base-content underline decoration-base-content/35 underline-offset-4 hover:decoration-base-content"
+            >
+              Explore example workflows
+            </Link>
+          </div>
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />

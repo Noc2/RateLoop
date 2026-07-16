@@ -134,6 +134,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
     assert.match(html, new RegExp(body.replace(/[?.]/g, "\\$&"), "i"));
     assert.match(html, new RegExp(`href="${href}"`));
   }
+  assert.match(html, /href="\/docs\/use-cases"[^>]*>Explore example workflows<\/a>/i);
   assert.match(html, /id="faq"/);
   assert.match(html, /Common/);
   assert.doesNotMatch(html, /What Does RateLoop Do\?|What Can I Evaluate\?/);
