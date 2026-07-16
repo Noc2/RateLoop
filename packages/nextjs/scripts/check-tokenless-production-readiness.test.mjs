@@ -317,6 +317,7 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   fixture.env.NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET = "unsubscribe-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY = "pseudonym-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_WORM_S3_CREDENTIALS_JSON = "worm-do-not-print-this";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON = "grc-do-not-print-this";
   fixture.env.NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET = "whsec_do-not-print-this";
   fixture.env.TOKENLESS_X402_RELAYER_PRIVATE_KEY = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY;
   fixture.env.TOKENLESS_DEPLOYMENT_BLOCK = "124";
@@ -327,6 +328,7 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_WORM_S3_CREDENTIALS_JSON is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON is forbidden/);
   assert.match(output, /NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET is forbidden/);
   assert.match(output, /Production key roles must be distinct/);
   assert.match(output, /complete active tokenless v4 registry/);
@@ -335,6 +337,7 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.doesNotMatch(output, /unsubscribe-do-not-print-this/);
   assert.doesNotMatch(output, /pseudonym-do-not-print-this/);
   assert.doesNotMatch(output, /worm-do-not-print-this/);
+  assert.doesNotMatch(output, /grc-do-not-print-this/);
   assert.doesNotMatch(output, /whsec_do-not-print-this/);
   assert.doesNotMatch(output, /0x11111111/);
 });
