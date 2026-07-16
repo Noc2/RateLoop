@@ -8,6 +8,8 @@ import { tokenlessAgentReviewRequestProfiles } from "~~/lib/db/schema";
 const migration = readFileSync(join(process.cwd(), "drizzle", "0058_human_review_binding_backfill.sql"), "utf8");
 
 test("0058 permits incomplete timing only for action-required profiles", () => {
+  assert.match(migration, /DROP CONSTRAINT "tokenless_agent_review_request_profiles_criterion_check"/);
+  assert.match(migration, /char_length\("criterion"\) BETWEEN 1 AND 500/);
   assert.match(migration, /ALTER COLUMN "response_window_seconds" DROP NOT NULL/);
   assert.match(migration, /ALTER COLUMN "panel_size" DROP NOT NULL/);
   assert.match(migration, /"response_window_seconds" IS NULL AND "configuration_status" = 'action_required'/);

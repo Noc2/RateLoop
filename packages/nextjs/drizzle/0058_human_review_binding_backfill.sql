@@ -1,6 +1,12 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;--> statement-breakpoint
 
 ALTER TABLE "tokenless_agent_review_request_profiles"
+  DROP CONSTRAINT "tokenless_agent_review_request_profiles_criterion_check";--> statement-breakpoint
+ALTER TABLE "tokenless_agent_review_request_profiles"
+  ADD CONSTRAINT "tokenless_agent_review_request_profiles_criterion_check"
+  CHECK (char_length("criterion") BETWEEN 1 AND 500);--> statement-breakpoint
+
+ALTER TABLE "tokenless_agent_review_request_profiles"
   ALTER COLUMN "response_window_seconds" DROP NOT NULL,
   ALTER COLUMN "panel_size" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "tokenless_agent_review_request_profiles"

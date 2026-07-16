@@ -37,7 +37,7 @@ CREATE TABLE "tokenless_agent_review_request_profiles" (
   CONSTRAINT "tokenless_agent_review_request_profiles_hash_unique" UNIQUE ("workspace_id", "profile_hash"),
   CONSTRAINT "tokenless_agent_review_request_profiles_version_check" CHECK ("version" >= 1),
   CONSTRAINT "tokenless_agent_review_request_profiles_criterion_check"
-    CHECK (char_length("criterion") BETWEEN 1 AND 500),
+    CHECK ("criterion" ~ '^.{1,500}$'),
   CONSTRAINT "tokenless_agent_review_request_profiles_labels_check" CHECK (
     "positive_label" ~ '^.{1,40}$'
     AND "negative_label" ~ '^.{1,40}$'
