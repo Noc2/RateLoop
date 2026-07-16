@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
+import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
+import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
+import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 
 type EvidencePacket = {
@@ -464,6 +468,24 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               ))}
             </div>
           )}
+        </section>
+      ) : null}
+
+      {canManage ? (
+        <section className="surface-card rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Delivery</p>
+          <h2 id="enterprise-delivery-heading" className="mt-2 text-xl font-semibold">
+            Enterprise evidence delivery
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
+            Connect evidence to systems your security and compliance teams already operate.
+          </p>
+          <div className="mt-5 grid items-start gap-3 lg:grid-cols-2">
+            <WormEvidenceDelivery workspaceId={workspaceId} />
+            <SiemEvidenceDelivery workspaceId={workspaceId} />
+            <GrcEvidenceDelivery workspaceId={workspaceId} />
+            <MetricsEvidenceAccess workspaceId={workspaceId} />
+          </div>
         </section>
       ) : null}
     </div>
