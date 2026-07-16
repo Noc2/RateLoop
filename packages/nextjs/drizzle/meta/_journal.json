@@ -526,6 +526,13 @@
       "when": 1784210400000,
       "tag": "0075_assurance_worm_exports",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1784214000000,
+      "tag": "0076_assurance_grc_connectors",
+      "breakpoints": true
     }
   ]
 }
