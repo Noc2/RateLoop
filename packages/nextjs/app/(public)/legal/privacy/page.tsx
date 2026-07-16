@@ -81,9 +81,18 @@ export default function PrivacyPage() {
       <p>
         Workspace and project retention settings control private artifact deletion and access logging. Subscription
         cancellation does not override an agreed evidence-retention setting or erase records required for audit, dispute
-        handling, accounting, legal holds, or statutory retention. You may request access, correction, deletion where
-        available, restriction, or object to processing by contacting the address above; public blockchain records
-        remain outside the operator&apos;s ability to erase.
+        handling, accounting, legal holds, or statutory retention. A workspace owner can delete a workspace in the
+        product once its funds, subscription, open work, and unsettled billing obligations are resolved. A signed-in
+        user can delete their account after deleting owned workspaces, resolving accepted work, and deactivating any
+        managed wallet. Deletion revokes access and erases or anonymizes eligible off-chain account and workspace data;
+        retained categories remain subject to their applicable purpose and schedule.
+      </p>
+      <p>
+        RateLoop temporarily retains a revoked sign-in binding for 35 days to prevent an in-flight sign-in from
+        recreating a deleted account. A later sign-up starts a new account. Backup copies expire under the applicable
+        backup schedule, and public blockchain records remain outside the operator&apos;s ability to erase. You may also
+        request access, correction, deletion where available, restriction, or object to processing by contacting the
+        address above.
       </p>
     </article>
   );

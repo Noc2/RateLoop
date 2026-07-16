@@ -15,10 +15,34 @@ replace a controller/processor determination, statutory retention schedule, tran
   itself added to the workspace audit chain after the returned snapshot boundary.
 - Workspace owners and administrators create or release project legal holds through the project-scoped legal-hold
   routes. Same-origin and service-layer workspace/project authorization are required.
+- A signed-in user previews and confirms account deletion through `GET` and `POST /api/account/deletion`. Confirmation
+  requires the literal word `DELETE`, the active RateLoop session, and a recent Better Auth session bound to the same
+  principal. A workspace owner previews and confirms workspace deletion through
+  `GET` and `POST /api/account/workspaces/{workspaceId}/deletion`; confirmation requires the current workspace name.
 
-The service layer implements explicit request transitions and category-level completion evidence. A production
-operator console and authenticated operator principal are not yet available; do not process real requests until an
-approved operator procedure, role, and evidence owner exist.
+The self-service account and workspace paths implement their own authorization, blockers, request transitions, and
+category-level completion evidence and may process real requests. A production operator console and authenticated
+operator principal are not yet available, so other request types and manual overrides still require an approved
+operator procedure, role, and evidence owner.
+
+## Self-service deletion
+
+- Account deletion is blocked while the principal owns a workspace, has accepted work that has not reached its terminal
+  path, or has an active managed wallet. Reserved but unaccepted assignments are released. The service revokes sessions,
+  API and OAuth access, memberships, identity/contact data, and wallet proof state, then tombstones the opaque principal.
+- Workspace deletion is owner-only and is blocked by any settled, reserved, or available funds; an active subscription;
+  reserved or accepted assignments; open asks; or unsettled billing, policy, or usage reservations. On confirmation, the
+  service revokes workspace credentials and integrations, removes access, archives private groups, queues private
+  objects for deletion, and tombstones the workspace.
+- Public-chain records and records subject to accounting, payment, fraud/security, dispute, audit, or legal-hold duties
+  are retained or anonymized under their applicable schedule. Each retained category must record the reason and review
+  or expiry deadline; the deletion result must not describe retained evidence as erased.
+- A revoked Better Auth binding is retained for 35 days to prevent an in-flight authentication exchange from recreating
+  a deleted principal. Scheduled reconciliation erases the binding after the guard period and records the category
+  transition. A later sign-up creates a new principal and does not restore the deleted account.
+- Private object and public-question-media workers delete the blob before tombstoning its database reference. Legal
+  holds and not-yet-due retention deadlines keep work retryable. Reconciliation completes the deletion job and subject
+  request only after all queued media is gone and records category-level evidence exactly once.
 
 ## Request procedure
 
@@ -38,8 +62,8 @@ approved operator procedure, role, and evidence owner exist.
 
 - A hold requires project scope, a reason, the author, a review date, and an eventual release record. Overdue holds
   must be escalated; a hold is not an undeclared indefinite-retention policy.
-- Project deletion must stop while an active hold exists. When released, delete private object ciphertext first,
-  tombstone the database reference, and record category-level completion evidence.
+- Project and workspace object deletion must stop while an active hold exists. When released, delete private object
+  ciphertext first, tombstone the database reference, and record category-level completion evidence.
 - Public Base Sepolia addresses, commitments, and settlement records cannot be deleted by RateLoop. The response must
   identify that exception without implying that off-chain copies are also exempt.
 - Backups and processor copies remain incomplete until their documented expiry/deletion evidence is attached.
