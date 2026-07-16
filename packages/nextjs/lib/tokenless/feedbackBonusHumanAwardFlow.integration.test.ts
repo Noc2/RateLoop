@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import type { Address, Hex } from "viem";
 import {
   type FeedbackBonusAwardRepository,
   type PreparedFeedbackBonusAward,
@@ -13,7 +12,6 @@ import {
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import { projectPrivateHumanReviewResultEnvelope } from "~~/lib/tokenless/humanReviewResultProjection";
 import { paidReviewRequiresEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
-import { tokenlessPayoutCommitment } from "~~/lib/tokenless/rater/material";
 import {
   type ReviewRequestProfileInput,
   hashReviewRequestProfile,
@@ -124,34 +122,14 @@ type AwardRepositoryState = {
 function inMemoryAwardRepository(awarderAccount: string): {
   repository: FeedbackBonusAwardRepository;
   state: AwardRepositoryState;
-  resolveRecipientPreimage(input: { feedbackId: string }): Promise<{ payoutAddress: Address; payoutSalt: Hex }>;
 } {
-  const recipients = new Map([
-    [
-      "feedback_one",
-      {
-        payoutAddress: "0x7777777777777777777777777777777777777777" as Address,
-        payoutSalt: `0x${"8".repeat(64)}` as Hex,
-      },
-    ],
-    [
-      "feedback_two",
-      {
-        payoutAddress: "0x9999999999999999999999999999999999999999" as Address,
-        payoutSalt: `0x${"a".repeat(64)}` as Hex,
-      },
-    ],
-  ]);
   const feedback = new Map([
     [
       "feedback_one",
       {
         responseHash: digest("response-one"),
         voteKey: "0x5555555555555555555555555555555555555555",
-        payoutCommitment: tokenlessPayoutCommitment(
-          recipients.get("feedback_one")!.payoutAddress,
-          recipients.get("feedback_one")!.payoutSalt,
-        ),
+        payoutCommitment: `0x${"8".repeat(64)}`,
         bodyReference: "feedback-body:one",
       },
     ],
@@ -160,10 +138,7 @@ function inMemoryAwardRepository(awarderAccount: string): {
       {
         responseHash: digest("response-two"),
         voteKey: "0x6666666666666666666666666666666666666666",
-        payoutCommitment: tokenlessPayoutCommitment(
-          recipients.get("feedback_two")!.payoutAddress,
-          recipients.get("feedback_two")!.payoutSalt,
-        ),
+        payoutCommitment: `0x${"a".repeat(64)}`,
         bodyReference: "feedback-body:two",
       },
     ],
@@ -218,6 +193,7 @@ function inMemoryAwardRepository(awarderAccount: string): {
         responseHash: selected.responseHash,
         voteKey: selected.voteKey,
         payoutCommitment: selected.payoutCommitment,
+        awarderWallet: DESIGNATED_AWARDER,
         amountAtomic: input.amountAtomic,
         pool: { chainId: "84532", contractAddress: FEEDBACK_BONUS_CONTRACT, poolId: "41" },
         confirmedReceipt: null,
@@ -239,11 +215,6 @@ function inMemoryAwardRepository(awarderAccount: string): {
 
   return {
     repository,
-    resolveRecipientPreimage: async input => {
-      const recipient = recipients.get(input.feedbackId);
-      if (!recipient) throw new Error("Recipient preimage not found.");
-      return recipient;
-    },
     state: {
       awardedFeedback,
       confirmed,
@@ -266,18 +237,30 @@ test("requester-default and designated humans can make partial, multiple, idempo
     });
     assert.equal(preparedRequest.feedbackBonusEconomics.agentMayAward, false);
 
-    const { repository, resolveRecipientPreimage, state } = inMemoryAwardRepository(humanAwarder);
+    const { repository, state } = inMemoryAwardRepository(humanAwarder);
     let executions = 0;
     const service = createFeedbackBonusAwardService({
       repository,
       readFeedbackBody: async input => `Written ${input.bodyReference}`,
-      resolveRecipientPreimage,
-      reconcileHumanAward: async () => null,
-      executeHumanAward: async () => ({
+      prepareHumanAward: async () => ({
+        chainId: 84_532,
+        contractAddress: FEEDBACK_BONUS_CONTRACT,
+        awarderAddress: humanAwarder,
+        transactionData: "0x1234",
+      }),
+      confirmHumanAward: async () => ({
         transactionHash: `0x${String(++executions).padStart(64, "0")}`,
         confirmedAt: NOW,
       }),
     });
+    const award = async (input: Parameters<typeof service.prepareAward>[0]) => {
+      const prepared = await service.prepareAward(input);
+      if (prepared.status === "confirmed") return prepared;
+      return service.confirmAward({
+        ...input,
+        transactionHash: `0x${String(executions + 1).padStart(64, "0")}`,
+      });
+    };
 
     assert.equal(
       (await service.list({ accountAddress: AGENT_ACCOUNT, workspaceId: "workspace_flow", now: NOW })).items.length,
@@ -288,7 +271,7 @@ test("requester-default and designated humans can make partial, multiple, idempo
       2,
     );
     await assert.rejects(
-      service.award({
+      service.prepareAward({
         accountAddress: AGENT_ACCOUNT,
         workspaceId: "workspace_flow",
         feedbackId: "feedback_one",
@@ -300,7 +283,7 @@ test("requester-default and designated humans can make partial, multiple, idempo
     );
     assert.equal(executions, 0);
 
-    const first = await service.award({
+    const first = await award({
       accountAddress: humanAwarder,
       workspaceId: "workspace_flow",
       feedbackId: "feedback_one",
@@ -308,7 +291,7 @@ test("requester-default and designated humans can make partial, multiple, idempo
       idempotencyKey: `human-award-one:${awarderKind}`,
       now: NOW,
     });
-    await service.award({
+    await award({
       accountAddress: humanAwarder,
       workspaceId: "workspace_flow",
       feedbackId: "feedback_two",
@@ -316,7 +299,7 @@ test("requester-default and designated humans can make partial, multiple, idempo
       idempotencyKey: `human-award-two:${awarderKind}`,
       now: NOW,
     });
-    const replay = await service.award({
+    const replay = await award({
       accountAddress: humanAwarder,
       workspaceId: "workspace_flow",
       feedbackId: "feedback_one",

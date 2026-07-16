@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { type Address, type Hex, getAddress } from "viem";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
-import { tokenlessPayoutCommitment } from "~~/lib/tokenless/rater/material";
+import { getLiveFeedbackBonusAwardDependencies } from "~~/lib/tokenless/feedbackBonusAwardLiveDependencies";
+import type { FeedbackBonusHumanWalletAuthorization } from "~~/lib/tokenless/feedbackBonusHumanWalletExecution";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -30,11 +30,6 @@ export type FeedbackBonusAwardReceipt = {
   confirmedAt: Date;
 };
 
-export type FeedbackBonusRecipientPreimage = {
-  payoutAddress: Address;
-  payoutSalt: Hex;
-};
-
 export type PreparedFeedbackBonusAward = {
   intentId: string;
   workspaceId: string;
@@ -43,6 +38,7 @@ export type PreparedFeedbackBonusAward = {
   responseHash: string;
   voteKey: string;
   payoutCommitment: string;
+  awarderWallet: string;
   amountAtomic: string;
   pool: { chainId: string; contractAddress: string; poolId: string };
   confirmedReceipt: FeedbackBonusAwardReceipt | null;
@@ -65,16 +61,10 @@ export type FeedbackBonusAwardRepository = {
 export type FeedbackBonusAwardDependencies = {
   repository: FeedbackBonusAwardRepository;
   readFeedbackBody(input: { bodyReference: string; workspaceId: string; awarderAccount: string }): Promise<string>;
-  resolveRecipientPreimage(input: {
-    workspaceId: string;
-    opportunityId: string;
-    feedbackId: string;
-    payoutCommitment: string;
-  }): Promise<FeedbackBonusRecipientPreimage>;
-  reconcileHumanAward(input: PreparedFeedbackBonusAward): Promise<FeedbackBonusAwardReceipt | null>;
-  executeHumanAward(input: {
+  prepareHumanAward(input: PreparedFeedbackBonusAward): Promise<FeedbackBonusHumanWalletAuthorization>;
+  confirmHumanAward(input: {
     award: PreparedFeedbackBonusAward;
-    recipient: FeedbackBonusRecipientPreimage;
+    transactionHash: string;
   }): Promise<FeedbackBonusAwardReceipt>;
 };
 
@@ -121,6 +111,7 @@ function exactPrepared(row: Row): PreparedFeedbackBonusAward {
     responseHash: text(row, "response_hash")!,
     voteKey: text(row, "vote_key")!,
     payoutCommitment: text(row, "payout_commitment")!,
+    awarderWallet: text(row, "awarder_wallet")!,
     amountAtomic: text(row, "amount_atomic")!,
     pool: {
       chainId: text(row, "chain_id")!,
@@ -159,6 +150,7 @@ export const databaseFeedbackBonusAwardRepository: FeedbackBonusAwardRepository 
        LEFT JOIN tokenless_feedback_bonus_award_intents i
          ON i.workspace_id = f.workspace_id AND i.opportunity_id = f.opportunity_id AND i.feedback_id = f.feedback_id
        WHERE p.workspace_id = $1 AND p.awarder_account = $2
+         AND p.awarder_wallet IS NOT NULL
          AND p.status IN ('funded','award_open')
          AND p.feedback_deadline < $3 AND p.award_deadline >= $3
          AND p.awarded_amount_atomic < p.deposited_amount_atomic
@@ -172,7 +164,8 @@ export const databaseFeedbackBonusAwardRepository: FeedbackBonusAwardRepository 
   async prepare(input) {
     return withTransaction(async client => {
       const previous = await client.query(
-        `SELECT i.*, p.chain_id, p.contract_address, p.pool_id, f.response_hash, f.vote_key, f.payout_commitment,
+        `SELECT i.*, p.chain_id, p.contract_address, p.pool_id, p.awarder_wallet,
+                f.response_hash, f.vote_key, f.payout_commitment,
                 r.transaction_hash AS confirmed_transaction_hash, r.confirmed_at
          FROM tokenless_feedback_bonus_award_intents i
          JOIN tokenless_feedback_bonus_pools p
@@ -180,7 +173,7 @@ export const databaseFeedbackBonusAwardRepository: FeedbackBonusAwardRepository 
          JOIN tokenless_feedback_bonus_feedback f
            ON f.workspace_id = i.workspace_id AND f.opportunity_id = i.opportunity_id AND f.feedback_id = i.feedback_id
          LEFT JOIN tokenless_feedback_bonus_award_receipts r ON r.intent_id = i.intent_id
-         WHERE i.workspace_id = $1 AND i.idempotency_key = $2 FOR UPDATE`,
+         WHERE i.workspace_id = $1 AND i.idempotency_key = $2 FOR UPDATE OF i`,
         [input.workspaceId, input.idempotencyKey],
       );
       const existing = previous.rows[0] as Row | undefined;
@@ -216,7 +209,13 @@ export const databaseFeedbackBonusAwardRepository: FeedbackBonusAwardRepository 
         [input.workspaceId, input.feedbackId],
       );
       const row = locked.rows[0] as Row | undefined;
-      if (!row) throw new TokenlessServiceError("Feedback not found.", 404, "feedback_bonus_feedback_not_found");
+      if (!row || !text(row, "awarder_wallet")) {
+        throw new TokenlessServiceError(
+          "Feedback Bonus award authority is not frozen for this pool.",
+          409,
+          "feedback_bonus_awarder_wallet_unavailable",
+        );
+      }
       const remaining = BigInt(text(row, "deposited_amount_atomic")!) - BigInt(text(row, "awarded_amount_atomic")!);
       if (
         text(row, "awarder_account") !== input.awarderAccount ||
@@ -385,7 +384,7 @@ export function createFeedbackBonusAwardService(dependencies: FeedbackBonusAward
       return { items };
     },
 
-    async award(input: {
+    async prepareAward(input: {
       accountAddress: string;
       workspaceId: string;
       feedbackId: string;
@@ -405,48 +404,40 @@ export function createFeedbackBonusAwardService(dependencies: FeedbackBonusAward
       if (prepared.confirmedReceipt) {
         return { intentId: prepared.intentId, status: "confirmed" as const, receipt: prepared.confirmedReceipt };
       }
-      const reconciled = await dependencies.reconcileHumanAward(prepared);
-      if (reconciled) return confirmOrRequireReconciliation(prepared, reconciled);
+      const authorization = await dependencies.prepareHumanAward(prepared);
+      return {
+        intentId: prepared.intentId,
+        status: "human_wallet_required" as const,
+        authorization,
+      };
+    },
 
-      const recipient = await dependencies.resolveRecipientPreimage({
-        workspaceId: prepared.workspaceId,
-        opportunityId: prepared.opportunityId,
-        feedbackId: prepared.feedbackId,
-        payoutCommitment: prepared.payoutCommitment,
+    async confirmAward(input: {
+      accountAddress: string;
+      workspaceId: string;
+      feedbackId: string;
+      amountAtomic: string;
+      idempotencyKey: string;
+      transactionHash: string;
+      now?: Date;
+    }) {
+      const awarderAccount = normalizeAccountSubject(input.accountAddress);
+      const prepared = await dependencies.repository.prepare({
+        workspaceId: input.workspaceId,
+        awarderAccount,
+        feedbackId: input.feedbackId,
+        amountAtomic: atomic(input.amountAtomic, "Award amount"),
+        idempotencyKey: idempotencyKey(input.idempotencyKey),
+        now: input.now ?? new Date(),
       });
-      let normalizedAddress: Address;
-      try {
-        normalizedAddress = getAddress(recipient.payoutAddress);
-      } catch {
-        throw new TokenlessServiceError(
-          "The selected feedback has no valid payout recipient.",
-          409,
-          "feedback_bonus_payout_preimage_invalid",
-        );
+      if (prepared.confirmedReceipt) {
+        return { intentId: prepared.intentId, status: "confirmed" as const, receipt: prepared.confirmedReceipt };
       }
-      if (
-        tokenlessPayoutCommitment(normalizedAddress, recipient.payoutSalt).toLowerCase() !== prepared.payoutCommitment
-      ) {
-        throw new TokenlessServiceError(
-          "The selected feedback payout material does not match its immutable commitment.",
-          409,
-          "feedback_bonus_payout_preimage_mismatch",
-        );
-      }
-
-      try {
-        const receipt = await dependencies.executeHumanAward({
-          award: prepared,
-          recipient: { payoutAddress: normalizedAddress, payoutSalt: recipient.payoutSalt },
-        });
-        return await confirmOrRequireReconciliation(prepared, receipt);
-      } catch (error) {
-        const recovered = await dependencies.reconcileHumanAward(prepared);
-        if (recovered) return confirmOrRequireReconciliation(prepared, recovered);
-        // Do not mark an ambiguous send as failed. A retry must reconcile the
-        // immutable pool/feedback pair before attempting another transaction.
-        throw error;
-      }
+      const receipt = await dependencies.confirmHumanAward({
+        award: prepared,
+        transactionHash: input.transactionHash,
+      });
+      return confirmOrRequireReconciliation(prepared, receipt);
     },
   };
 }
@@ -460,30 +451,35 @@ export function installFeedbackBonusAwardDependencies(
 }
 
 export function feedbackBonusAwardDependenciesInstalled() {
-  return liveDependencies !== null;
+  return true;
 }
 
 function liveService() {
-  if (!liveDependencies) {
-    throw new TokenlessServiceError(
-      "Feedback Bonus award execution is not configured.",
-      503,
-      "feedback_bonus_award_unavailable",
-    );
-  }
-  return createFeedbackBonusAwardService({ repository: databaseFeedbackBonusAwardRepository, ...liveDependencies });
+  const dependencies = liveDependencies ?? getLiveFeedbackBonusAwardDependencies();
+  return createFeedbackBonusAwardService({ repository: databaseFeedbackBonusAwardRepository, ...dependencies });
 }
 
 export function listFeedbackBonusAwardInbox(input: { accountAddress: string; workspaceId: string }) {
   return liveService().list(input);
 }
 
-export function awardFeedbackBonusForHuman(input: {
+export function prepareFeedbackBonusAwardForHuman(input: {
   accountAddress: string;
   workspaceId: string;
   feedbackId: string;
   amountAtomic: string;
   idempotencyKey: string;
 }) {
-  return liveService().award(input);
+  return liveService().prepareAward(input);
+}
+
+export function confirmFeedbackBonusAwardForHuman(input: {
+  accountAddress: string;
+  workspaceId: string;
+  feedbackId: string;
+  amountAtomic: string;
+  idempotencyKey: string;
+  transactionHash: string;
+}) {
+  return liveService().confirmAward(input);
 }

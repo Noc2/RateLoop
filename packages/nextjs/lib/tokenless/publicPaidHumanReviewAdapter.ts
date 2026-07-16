@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
+import { ensureFeedbackBonusPoolForDelivery } from "~~/lib/tokenless/feedbackBonusPoolProjection";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
@@ -227,7 +228,9 @@ async function loadFrozenOpportunity(
                  rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
                  rrp.private_group_policy_version, rrp.private_group_policy_hash,
                  rrp.response_window_seconds, rrp.panel_size, rrp.compensation_mode,
-                 rrp.bounty_per_seat_atomic,
+                 rrp.bounty_per_seat_atomic,rrp.feedback_bonus_enabled,rrp.feedback_bonus_pool_atomic,
+                 rrp.feedback_bonus_awarder_kind,rrp.feedback_bonus_awarder_account,
+                 rrp.feedback_bonus_award_window_seconds,
                  pp.enabled AS publishing_policy_enabled, pp.revoked_at AS publishing_policy_revoked_at,
                  pp.effective_at AS publishing_policy_effective_at, pp.expires_at AS publishing_policy_expires_at,
                  pp.allowed_admission_policy_hashes_json,
@@ -299,6 +302,14 @@ async function loadFrozenOpportunity(
     panelSize: integer(row, "panel_size", 1, 100),
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
+    feedbackBonusEnabled: bool(row, "feedback_bonus_enabled"),
+    feedbackBonusPoolAtomic: text(row, "feedback_bonus_pool_atomic"),
+    feedbackBonusAwarderKind: oneOf(row, "feedback_bonus_awarder_kind", ["requester", "designated"] as const),
+    feedbackBonusAwarderAccount: text(row, "feedback_bonus_awarder_account"),
+    feedbackBonusAwardWindowSeconds:
+      row.feedback_bonus_award_window_seconds === null || row.feedback_bonus_award_window_seconds === undefined
+        ? null
+        : integer(row, "feedback_bonus_award_window_seconds", 3_600, 31_536_000),
   };
   const expectedProfileHash = hashReviewRequestProfile({
     agentId: profile.agentId,
@@ -320,6 +331,11 @@ async function loadFrozenOpportunity(
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,
     bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+    feedbackBonusEnabled: profile.feedbackBonusEnabled,
+    feedbackBonusPoolAtomic: profile.feedbackBonusPoolAtomic,
+    feedbackBonusAwarderKind: profile.feedbackBonusAwarderKind,
+    feedbackBonusAwarderAccount: profile.feedbackBonusAwarderAccount,
+    feedbackBonusAwardWindowSeconds: profile.feedbackBonusAwardWindowSeconds,
   });
   const authority = oneOf(row, "binding_authority", [
     "check_only",
@@ -675,7 +691,7 @@ async function finalizePublicPaidAsk(input: {
       input.opportunity.lifecycle.state === "pending"
         ? input.opportunity.lifecycle.revision - 1
         : input.opportunity.lifecycle.revision;
-    await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
+    const transition = await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
       workspaceId,
       opportunityId: input.opportunity.opportunityId,
       transitionKey: `public-paid:${input.idempotencyKey.slice("adaptive-public-paid:".length)}`,
@@ -710,19 +726,21 @@ async function finalizePublicPaidAsk(input: {
         "review_binding_conflict",
       );
     }
-    await client.query(
-      `UPDATE tokenless_agent_integrations
-       SET last_request_at = CASE WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1 ELSE last_request_at END,
-           updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
-       WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
-      [
-        now,
-        input.principal.integration.integrationId,
-        workspaceId,
-        input.principal.integration.agentId,
-        input.principal.integration.agentVersionId,
-      ],
-    );
+    if (!transition.replayed) {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET last_request_at = CASE WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1 ELSE last_request_at END,
+             updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
+         WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
+        [
+          now,
+          input.principal.integration.integrationId,
+          workspaceId,
+          input.principal.integration.agentId,
+          input.principal.integration.agentVersionId,
+        ],
+      );
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -758,6 +776,14 @@ export async function requestPublicPaidHumanReview(
   }
   const approval = await loadFrozenApproval(input.principal.integration.workspaceId, opportunity.opportunityId);
   const preparation = prepareExactRequest({ opportunity, approval, sourcePayload, suggestionPayload });
+  await ensureFeedbackBonusPoolForDelivery({
+    workspaceId: input.principal.integration.workspaceId,
+    agentId: input.principal.integration.agentId,
+    opportunityId: opportunity.opportunityId,
+    admissionPolicyHash: opportunity.admissionPolicyHash,
+    preparation,
+    feedbackDeadline: new Date(preparation.preparedRequest.timing.expiresAt),
+  });
   const idempotencyKey = deterministicAdapterKey(opportunity, preparation);
   if (opportunity.lifecycle.state === "pending" && opportunity.operationIdempotencyKey !== idempotencyKey) {
     throw new TokenlessServiceError(

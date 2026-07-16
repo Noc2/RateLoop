@@ -247,6 +247,7 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
       rationale: { mode: "optional" },
     },
     requestedPanelSize: 15,
+    responseWindowSeconds: 1_200,
     visibility: "public",
   });
   await recordPrepaidLedgerEntry({
@@ -322,6 +323,7 @@ test("workspace API keys stage and bind the same canonical descriptor without pu
       rationale: { mode: "optional" },
     },
     requestedPanelSize: 15,
+    responseWindowSeconds: 1_200,
   });
   await recordPrepaidLedgerEntry({
     amountAtomic: quote.economics.totalFundedAtomic,

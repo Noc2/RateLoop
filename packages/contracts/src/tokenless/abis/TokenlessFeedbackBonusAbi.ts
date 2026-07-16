@@ -73,6 +73,29 @@ export const TokenlessFeedbackBonusAbi = [
         "internalType": "address"
       },
       {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimAward",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "voteKey",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "payoutAddress",
         "type": "address",
         "internalType": "address"
@@ -81,14 +104,15 @@ export const TokenlessFeedbackBonusAbi = [
         "name": "payoutSalt",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
+      }
+    ],
+    "outputs": [
       {
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -364,7 +388,17 @@ export const TokenlessFeedbackBonusAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "awardAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "awarded",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "claimed",
             "type": "bool",
             "internalType": "bool"
           }
@@ -738,6 +772,37 @@ export const TokenlessFeedbackBonusAbi = [
   },
   {
     "type": "event",
+    "name": "FeedbackAwardClaimed",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "feedbackKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "payoutAddress",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "FeedbackAwarded",
     "inputs": [
       {
@@ -765,10 +830,10 @@ export const TokenlessFeedbackBonusAbi = [
         "internalType": "address"
       },
       {
-        "name": "payoutAddress",
-        "type": "address",
+        "name": "payoutCommitment",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "address"
+        "internalType": "bytes32"
       },
       {
         "name": "amount",
@@ -911,6 +976,11 @@ export const TokenlessFeedbackBonusAbi = [
   {
     "type": "error",
     "name": "AlreadyAwarded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AwardNotClaimable",
     "inputs": []
   },
   {

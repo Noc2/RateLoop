@@ -205,6 +205,8 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
             r.audience, r.content_boundary, r.private_sensitivity,
             r.private_group_id, r.private_group_policy_version, r.private_group_policy_hash,
             r.response_window_seconds, r.panel_size, r.compensation_mode, r.bounty_per_seat_atomic,
+            r.feedback_bonus_enabled,r.feedback_bonus_pool_atomic,r.feedback_bonus_awarder_kind,
+            r.feedback_bonus_awarder_account,r.feedback_bonus_award_window_seconds,
             pp.enabled AS publishing_policy_enabled, pp.revoked_at AS publishing_policy_revoked_at,
             pp.effective_at AS publishing_policy_effective_at, pp.expires_at AS publishing_policy_expires_at
           FROM tokenless_agent_integrations i
@@ -453,11 +455,25 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     invalidContext("The ready request profile is incomplete.");
   }
   const bountyPerSeatAtomic = text(row, "bounty_per_seat_atomic");
+  const feedbackBonusEnabled = boolean(row, "feedback_bonus_enabled");
+  const feedbackBonusPoolAtomic = text(row, "feedback_bonus_pool_atomic");
+  const feedbackBonusAwarderKind = text(row, "feedback_bonus_awarder_kind");
+  const feedbackBonusAwarderAccount = text(row, "feedback_bonus_awarder_account");
+  const feedbackBonusAwardWindowSeconds = optionalInteger(row, "feedback_bonus_award_window_seconds");
   if (
     (compensationMode === "unpaid" && bountyPerSeatAtomic !== null) ||
     (compensationMode === "usdc" && (bountyPerSeatAtomic === null || !/^[1-9][0-9]*$/u.test(bountyPerSeatAtomic))) ||
     ((audience === "public_network" || audience === "hybrid") && compensationMode !== "usdc") ||
-    ((audience === "public_network" || audience === "hybrid") && profileStatus === "ready" && panelSize! < 3)
+    ((audience === "public_network" || audience === "hybrid") && profileStatus === "ready" && panelSize! < 3) ||
+    !["requester", "designated"].includes(feedbackBonusAwarderKind ?? "") ||
+    (feedbackBonusAwarderKind === "requester") !== (feedbackBonusAwarderAccount === null) ||
+    (feedbackBonusEnabled &&
+      (feedbackBonusPoolAtomic === null ||
+        !/^[1-9][0-9]*$/u.test(feedbackBonusPoolAtomic) ||
+        feedbackBonusAwardWindowSeconds === null ||
+        feedbackBonusAwardWindowSeconds < 3_600 ||
+        feedbackBonusAwardWindowSeconds > 31_536_000)) ||
+    (!feedbackBonusEnabled && (feedbackBonusPoolAtomic !== null || feedbackBonusAwardWindowSeconds !== null))
   ) {
     invalidContext("Stored review compensation is invalid.");
   }
@@ -512,6 +528,14 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     responseWindowSeconds,
     panelSize,
     compensation: { mode: compensationMode, bountyPerSeatAtomic },
+    feedbackBonus: {
+      enabled: feedbackBonusEnabled,
+      poolAtomic: feedbackBonusPoolAtomic,
+      awarderKind: feedbackBonusAwarderKind as "requester" | "designated",
+      awarderAccount: feedbackBonusAwarderAccount,
+      awardWindowSeconds: feedbackBonusAwardWindowSeconds,
+      agentMayAward: false as const,
+    },
   };
   const readiness: HumanReviewReadiness = {
     evaluation: canEvaluate,
@@ -533,7 +557,10 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     exactGrantActive &&
     effectiveLane.available &&
     grantedScopes.includes(REQUIRED_PUBLISHING_SCOPE);
-  const canSpend = canPublish && compensationMode === "usdc" && grantedScopes.includes(REQUIRED_SPENDING_SCOPE);
+  const canSpend =
+    canPublish &&
+    (compensationMode === "usdc" || feedbackBonusEnabled) &&
+    grantedScopes.includes(REQUIRED_SPENDING_SCOPE);
 
   return {
     schemaVersion: "rateloop.agent-context.v2",

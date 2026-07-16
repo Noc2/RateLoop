@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { tokenlessFeedbackBonusPool, tokenlessRound } from "../ponder.schema";
+import {
+  tokenlessFeedbackBonusPool,
+  tokenlessFeedbackRecord,
+  tokenlessRound,
+} from "../ponder.schema";
 import {
   tokenlessFeedbackBonusAbi,
   tokenlessPanelAbi,
@@ -89,6 +93,7 @@ describe("tokenless panel indexing ABI", () => {
         "PoolCreated",
         "FeedbackRegistered",
         "FeedbackAwarded",
+        "FeedbackAwardClaimed",
         "RemainderRefunded",
       ]),
     );
@@ -96,6 +101,7 @@ describe("tokenless panel indexing ABI", () => {
     expect(tokenlessFeedbackBonusPool.awardedAmount.columnType).toBe(
       "PgEvmBigint",
     );
+    expect(tokenlessFeedbackRecord.claimed.columnType).toBe("PgBoolean");
   });
 
   it("stores public RBTS evidence without retaining v0 weighting columns", () => {

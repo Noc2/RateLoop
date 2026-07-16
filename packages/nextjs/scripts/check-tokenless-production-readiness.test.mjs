@@ -168,7 +168,8 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
-  const { VERCEL_GIT_COMMIT_REF: _gitRef, ...cliDeploymentEnv } = env;
+  const cliDeploymentEnv = { ...env };
+  delete cliDeploymentEnv.VERCEL_GIT_COMMIT_REF;
   assert.deepEqual(validateTokenlessProductionReadiness({ env: cliDeploymentEnv, activeRegistry: {} }), []);
 
   for (const [name, invalidValue, expected] of [

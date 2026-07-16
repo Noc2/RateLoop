@@ -25,6 +25,7 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
         uint64 feedbackDeadline;
         uint64 awardDeadline;
         bool awarded;
+        bool claimed;
     }
 
     MockERC20 public immutable usdc;
@@ -35,6 +36,7 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
     Scenario[] internal _scenarios;
     uint256 public totalBonusDeposited;
     uint256 public totalBonusAwarded;
+    uint256 public totalBonusClaimed;
     uint256 public totalBonusRefunded;
     uint256 public totalPanelDeposited;
 
@@ -118,7 +120,8 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
                 salt: salt,
                 feedbackDeadline: terms.feedbackDeadline,
                 awardDeadline: terms.awardDeadline,
-                awarded: false
+                awarded: false,
+                claimed: false
             })
         );
         totalPanelDeposited += PANEL_TOTAL;
@@ -133,9 +136,17 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
         uint256 remaining = bonus.remainingAmount(scenario.poolId);
         if (remaining == 0) return;
         uint256 amount = bound(amountSeed, 1, remaining);
-        bonus.award(scenario.poolId, scenario.voteKey, scenario.payout, scenario.salt, amount);
+        bonus.award(scenario.poolId, scenario.voteKey, amount);
         scenario.awarded = true;
         totalBonusAwarded += amount;
+    }
+
+    function claimFeedback(uint256 seed) external {
+        if (_scenarios.length == 0) return;
+        Scenario storage scenario = _scenarios[seed % _scenarios.length];
+        if (!scenario.awarded || scenario.claimed) return;
+        totalBonusClaimed += bonus.claimAward(scenario.poolId, scenario.voteKey, scenario.payout, scenario.salt);
+        scenario.claimed = true;
     }
 
     function refundRemainder(uint256 seed) external {
@@ -155,6 +166,10 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
         return _scenarios[index].poolId;
     }
 
+    function voteKeyAt(uint256 index) external view returns (address) {
+        return _scenarios[index].voteKey;
+    }
+
     function _sign(uint256 privateKey, bytes32 digest) private pure returns (bytes memory signature) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         signature = abi.encodePacked(r, s, v);
@@ -166,10 +181,11 @@ contract TokenlessFeedbackBonusInvariantTest is StdInvariant, Test {
 
     function setUp() external {
         handler = new TokenlessFeedbackBonusInvariantHandler();
-        bytes4[] memory selectors = new bytes4[](3);
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = handler.createScenario.selector;
         selectors[1] = handler.awardFeedback.selector;
-        selectors[2] = handler.refundRemainder.selector;
+        selectors[2] = handler.claimFeedback.selector;
+        selectors[3] = handler.refundRemainder.selector;
         targetSelector(FuzzSelector({ addr: address(handler), selectors: selectors }));
         targetContract(address(handler));
     }
@@ -177,7 +193,7 @@ contract TokenlessFeedbackBonusInvariantTest is StdInvariant, Test {
     function invariant_AllFeedbackBonusFundsRemainConserved() external view {
         assertEq(
             handler.usdc().balanceOf(address(handler.bonus())),
-            handler.totalBonusDeposited() - handler.totalBonusAwarded() - handler.totalBonusRefunded()
+            handler.totalBonusDeposited() - handler.totalBonusClaimed() - handler.totalBonusRefunded()
         );
     }
 
@@ -185,7 +201,11 @@ contract TokenlessFeedbackBonusInvariantTest is StdInvariant, Test {
         uint256 liability;
         uint256 count = handler.scenarioCount();
         for (uint256 i = 0; i < count; ++i) {
-            liability += handler.bonus().remainingAmount(handler.poolIdAt(i));
+            uint256 poolId = handler.poolIdAt(i);
+            liability += handler.bonus().remainingAmount(poolId);
+            TokenlessFeedbackBonus.FeedbackRecord memory feedback =
+                handler.bonus().getFeedback(poolId, handler.voteKeyAt(i));
+            if (feedback.awarded && !feedback.claimed) liability += feedback.awardAmount;
         }
         assertEq(liability, handler.usdc().balanceOf(address(handler.bonus())));
     }
@@ -198,7 +218,9 @@ contract TokenlessFeedbackBonusInvariantTest is StdInvariant, Test {
         handler.createScenario(30e6);
         handler.awardFeedback(0, 7e6);
         handler.refundRemainder(0);
+        handler.claimFeedback(0);
         assertEq(handler.totalBonusAwarded(), 7e6);
+        assertEq(handler.totalBonusClaimed(), 7e6);
         assertEq(handler.totalBonusRefunded(), 23e6);
         assertEq(handler.usdc().balanceOf(address(handler.bonus())), 0);
         assertEq(handler.usdc().balanceOf(address(handler.panel())), 90e6 + (24e6 * 3));

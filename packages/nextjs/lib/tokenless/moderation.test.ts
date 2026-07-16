@@ -45,6 +45,7 @@ async function prepaidAsk() {
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Is this safe?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
+    responseWindowSeconds: 1_200,
   });
   const request = {
     idempotencyKey: "moderation:test:12345678",

@@ -285,7 +285,17 @@ export const tokenlessFeedbackBonusAbi = [
       { name: "feedbackKey", type: "bytes32", indexed: true },
       { name: "responseHash", type: "bytes32", indexed: true },
       { name: "voteKey", type: "address", indexed: false },
-      { name: "payoutAddress", type: "address", indexed: false },
+      { name: "payoutCommitment", type: "bytes32", indexed: false },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "FeedbackAwardClaimed",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "feedbackKey", type: "bytes32", indexed: true },
+      { name: "payoutAddress", type: "address", indexed: true },
       { name: "amount", type: "uint256", indexed: false },
     ],
   },

@@ -10,7 +10,12 @@ test("Feedback Bonus inbox preserves the legacy human award interaction", () => 
   assert.match(source, /eligible written feedback/u);
   assert.match(source, /The agent cannot make this decision/u);
   assert.match(source, /immutable\s+payout commitment/u);
+  assert.match(source, /Connect awarder wallet/u);
+  assert.match(source, /sendTransaction/u);
+  assert.match(source, /human_wallet_required/u);
+  assert.match(source, /method: "PUT"/u);
   assert.doesNotMatch(source, /auto(?:matic)? award/iu);
+  assert.doesNotMatch(source, /payoutSalt|payoutAddress/u);
 });
 
 test("Feedback Bonus amounts use exact USDC atomic formatting", () => {

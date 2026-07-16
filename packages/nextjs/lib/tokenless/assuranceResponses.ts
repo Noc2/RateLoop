@@ -1,5 +1,5 @@
 import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@rateloop/sdk";
-import { createCipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
@@ -143,6 +143,71 @@ function encryptRationale(
     )}`,
     keyRef: `${RATIONALE_KEY_DOMAIN}:${keyring.currentVersion}`,
   };
+}
+
+function decryptRationale(row: QueryRow) {
+  const keyRef = rowString(row, "rationale_key_ref") ?? "";
+  const keyVersion = keyRef.startsWith(`${RATIONALE_KEY_DOMAIN}:`) ? keyRef.slice(RATIONALE_KEY_DOMAIN.length + 1) : "";
+  const key = getKeyrings().rationale.keys.get(keyVersion);
+  if (!key) throw new Error(`Assurance rationale vault key ${keyVersion} is unavailable.`);
+  const parts = (rowString(row, "rationale_ciphertext") ?? "").split(".");
+  if (parts.length !== 4 || parts[0] !== "v1") throw new Error("Assurance rationale ciphertext is invalid.");
+  const digest = rowString(row, "rationale_digest");
+  if (!digest || !/^sha256:[0-9a-f]{64}$/u.test(digest)) {
+    throw new Error("Assurance rationale digest is unavailable.");
+  }
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(parts[1]!, "base64url"));
+  decipher.setAAD(
+    Buffer.from(
+      `${RATIONALE_KEY_DOMAIN}:${rowString(row, "run_id")}:${rowString(row, "case_id")}:${rowString(row, "reviewer_key")}:${digest}`,
+    ),
+  );
+  decipher.setAuthTag(Buffer.from(parts[2]!, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(parts[3]!, "base64url")), decipher.final()]).toString("utf8");
+}
+
+/**
+ * Resolve exactly one private assurance rationale after the Feedback Bonus
+ * service has authorized its pool and awarder. This is deliberately not a
+ * generic response-vault read: the response must belong to the opportunity's
+ * frozen run in the requested workspace.
+ */
+export async function readFeedbackBonusAssuranceResponse(input: {
+  responseId: string;
+  workspaceId: string;
+  opportunityId: string;
+}) {
+  const result = await dbPool.query(
+    `SELECT response.*
+     FROM tokenless_assurance_responses response
+     JOIN tokenless_agent_review_opportunities opportunity
+       ON opportunity.run_id = response.run_id
+      AND opportunity.workspace_id = $2
+      AND opportunity.opportunity_id = $3
+     WHERE response.response_id = $1
+       AND response.validity = 'valid'
+       AND response.rationale_ciphertext IS NOT NULL
+       AND response.rationale_key_ref IS NOT NULL
+       AND response.rationale_digest IS NOT NULL
+     LIMIT 2`,
+    [input.responseId, input.workspaceId, input.opportunityId],
+  );
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The selected private feedback body is unavailable.",
+      409,
+      "feedback_bonus_body_unavailable",
+    );
+  }
+  const body = decryptRationale(result.rows[0] as QueryRow).trim();
+  if (!body) {
+    throw new TokenlessServiceError(
+      "The selected private response has no awardable written feedback.",
+      409,
+      "feedback_bonus_body_unavailable",
+    );
+  }
+  return body;
 }
 
 function validateResponseBatch(responses: AssuranceCaseResponseInput[]) {
@@ -323,7 +388,12 @@ function buildResponseRecord(input: {
           },
           input.rationaleKeyring,
         );
-  return { canonicalChoice, responseDigest, ...encrypted };
+  return {
+    canonicalChoice,
+    responseDigest,
+    rationaleDigest: encrypted.ciphertext === null ? null : digest,
+    ...encrypted,
+  };
 }
 
 async function verifyReplay(input: {
@@ -492,10 +562,10 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       await client.query(
         `INSERT INTO tokenless_assurance_responses
          (response_id, run_id, case_id, reviewer_key, reviewer_source, choice,
-          failure_tag_keys_json, rationale_ciphertext, rationale_key_ref,
+          failure_tag_keys_json, rationale_ciphertext, rationale_key_ref, rationale_digest,
           qualification_keys_json, assurance_capabilities_json, response_digest,
           settlement_reference, validity, submitted_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL, $13, $14, $14)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULL, $14, $15, $15)`,
         [
           `hares_${randomUUID().replaceAll("-", "")}`,
           rowString(assignment, "run_id"),
@@ -506,6 +576,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
           canonicalizeHumanAssuranceDocument(record.failureTagKeys),
           record.ciphertext,
           record.keyRef,
+          record.rationaleDigest,
           canonicalizeHumanAssuranceDocument(qualificationKeys),
           canonicalizeHumanAssuranceDocument(assuranceCapabilities),
           record.responseDigest,

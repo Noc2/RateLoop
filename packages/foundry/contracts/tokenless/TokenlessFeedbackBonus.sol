@@ -62,7 +62,9 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         bytes32 responseHash;
         bytes32 payoutCommitment;
         uint64 registeredAt;
+        uint256 awardAmount;
         bool awarded;
+        bool claimed;
     }
 
     IERC20 public immutable usdc;
@@ -99,8 +101,11 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         bytes32 indexed feedbackKey,
         bytes32 indexed responseHash,
         address voteKey,
-        address payoutAddress,
+        bytes32 payoutCommitment,
         uint256 amount
+    );
+    event FeedbackAwardClaimed(
+        uint256 indexed poolId, bytes32 indexed feedbackKey, address indexed payoutAddress, uint256 amount
     );
     event RemainderRefunded(uint256 indexed poolId, address indexed funder, uint256 amount);
 
@@ -120,6 +125,7 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
     error NullifierAlreadyUsed();
     error FeedbackAlreadyRegistered();
     error AlreadyAwarded();
+    error AwardNotClaimable();
     error NothingToRefund();
     error TransferAmountMismatch();
 
@@ -234,38 +240,54 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
             responseHash: responseHash,
             payoutCommitment: payoutCommitment,
             registeredAt: uint64(block.timestamp),
-            awarded: false
+            awardAmount: 0,
+            awarded: false,
+            claimed: false
         });
         emit FeedbackRegistered(voucher.poolId, feedbackKey, responseHash, voucher.voteKey, payoutCommitment);
     }
 
     /// @notice Award any selected eligible feedback after the response window closes.
-    function award(uint256 poolId, address voteKey, address payoutAddress, bytes32 payoutSalt, uint256 amount)
-        external
-        nonReentrant
-    {
+    function award(uint256 poolId, address voteKey, uint256 amount) external nonReentrant {
         Pool storage pool = _pools[poolId];
         if (pool.funder == address(0)) revert InvalidPool();
         if (msg.sender != pool.awarder) revert Unauthorized();
         if (block.timestamp <= pool.feedbackDeadline) revert FeedbackWindowOpen();
         if (block.timestamp > pool.awardDeadline || pool.refunded) revert AwardWindowClosed();
         if (amount == 0 || amount > pool.depositedAmount - pool.awardedAmount) revert InvalidAmount();
-        if (payoutAddress == address(0)) revert InvalidAddress();
 
         bytes32 feedbackKey = feedbackKeyFor(poolId, voteKey);
         FeedbackRecord storage feedback = _feedback[feedbackKey];
-        if (
-            feedback.voteKey != voteKey || feedback.responseHash == bytes32(0)
-                || feedback.payoutCommitment != payoutCommitmentFor(payoutAddress, payoutSalt)
-        ) revert InvalidFeedback();
+        if (feedback.voteKey != voteKey || feedback.responseHash == bytes32(0)) revert InvalidFeedback();
         if (feedback.awarded || responseAwarded[poolId][feedback.responseHash]) revert AlreadyAwarded();
 
         feedback.awarded = true;
+        feedback.awardAmount = amount;
         responseAwarded[poolId][feedback.responseHash] = true;
         pool.awardedAmount += amount;
-        _transferExact(payoutAddress, amount);
 
-        emit FeedbackAwarded(poolId, feedbackKey, feedback.responseHash, voteKey, payoutAddress, amount);
+        emit FeedbackAwarded(poolId, feedbackKey, feedback.responseHash, voteKey, feedback.payoutCommitment, amount);
+    }
+
+    /// @notice Resolve an awarded payout to the address committed by the feedback author.
+    /// @dev Anyone may relay the claim after learning the preimage. Award selection never exposes the
+    ///      payout address or salt to the awarder, agent, or platform and an award remains claimable
+    ///      after the pool's award/refund windows close.
+    function claimAward(uint256 poolId, address voteKey, address payoutAddress, bytes32 payoutSalt)
+        external
+        nonReentrant
+        returns (uint256 amount)
+    {
+        if (payoutAddress == address(0)) revert InvalidAddress();
+        bytes32 feedbackKey = feedbackKeyFor(poolId, voteKey);
+        FeedbackRecord storage feedback = _feedback[feedbackKey];
+        if (!feedback.awarded || feedback.claimed || feedback.awardAmount == 0) revert AwardNotClaimable();
+        if (feedback.payoutCommitment != payoutCommitmentFor(payoutAddress, payoutSalt)) revert InvalidFeedback();
+
+        feedback.claimed = true;
+        amount = feedback.awardAmount;
+        _transferExact(payoutAddress, amount);
+        emit FeedbackAwardClaimed(poolId, feedbackKey, payoutAddress, amount);
     }
 
     /// @notice Return the unawarded remainder to the immutable funder after the disclosed deadline.

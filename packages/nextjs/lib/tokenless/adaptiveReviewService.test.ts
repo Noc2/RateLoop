@@ -394,7 +394,7 @@ test("fails closed for an incomplete request profile or a mismatched integration
   await dbClient.execute({
     sql: `UPDATE tokenless_agent_review_request_profiles
           SET configuration_status = 'action_required', response_window_seconds = NULL, panel_size = NULL,
-              bounty_per_seat_atomic = NULL, approved_by = NULL, approved_at = NULL
+              approved_by = NULL, approved_at = NULL
           WHERE workspace_id = ? AND profile_id = ? AND version = 1`,
     args: [incomplete.workspaceId, incomplete.humanReview.profileId],
   });

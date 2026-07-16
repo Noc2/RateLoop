@@ -9,7 +9,8 @@ function source(name: string) {
 
 test("review activity timestamps advance only on new lifecycle transitions", () => {
   const decision = source("adaptiveReviewService.ts");
-  const request = source("adaptiveReviewOrchestration.ts");
+  const publicRequest = source("publicPaidHumanReviewAdapter.ts");
+  const privateRequest = source("privateUnpaidReviewAdapter.ts");
   const result = source("adaptiveReviewEvidence.ts");
 
   const newOpportunity = decision.slice(
@@ -19,10 +20,12 @@ test("review activity timestamps advance only on new lifecycle transitions", () 
   assert.match(newOpportunity, /SET last_decision_at = CASE/);
   assert.match(newOpportunity, /human_review_binding_id = \$6 AND human_review_binding_version = \$7/);
 
-  assert.match(request, /if \(status === "decided"\) \{[\s\S]*SET last_request_at = CASE/);
+  for (const request of [publicRequest, privateRequest]) {
+    assert.match(request, /if \(!transition\.replayed\) \{[\s\S]*SET last_request_at = CASE/);
+  }
   assert.match(result, /rowString\(row, "status"\) === "review_requested"[\s\S]*SET last_result_at = CASE/);
 
-  for (const text of [newOpportunity, request, result]) {
+  for (const text of [newOpportunity, publicRequest, privateRequest, result]) {
     assert.match(text, /IS NULL OR last_(?:decision|request|result)_at < \$1 THEN \$1/);
   }
 });

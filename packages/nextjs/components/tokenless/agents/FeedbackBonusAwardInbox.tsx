@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { prepareTransaction, sendTransaction } from "thirdweb";
+import { baseSepolia } from "thirdweb/chains";
+import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
+import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import type { FeedbackBonusAwardInboxItem } from "~~/lib/tokenless/feedbackBonusAwards";
+import type { FeedbackBonusHumanWalletAuthorization } from "~~/lib/tokenless/feedbackBonusHumanWalletExecution";
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -29,12 +34,14 @@ function decimalToAtomic(value: string) {
 }
 
 function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onAwarded: () => Promise<void> }) {
+  const account = useActiveAccount();
   const [amount, setAmount] = useState(() => {
     const remaining = BigInt(item.remainingPoolAtomic);
     return formatFeedbackBonusUsdc(remaining < 1_000_000n ? remaining.toString() : "1000000").replace(" USDC", "");
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingTransactionHash, setPendingTransactionHash] = useState<string | null>(null);
 
   async function award() {
     setBusy(true);
@@ -44,22 +51,54 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
       if (BigInt(amountAtomic) > BigInt(item.remainingPoolAtomic)) {
         throw new Error(`This pool has ${formatFeedbackBonusUsdc(item.remainingPoolAtomic)} left.`);
       }
-      await readJson(
-        await fetch(
-          `/api/account/workspaces/${encodeURIComponent(item.workspaceId)}/feedback-bonus/${encodeURIComponent(
-            item.feedbackId,
-          )}`,
-          {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              amountAtomic,
-              idempotencyKey: `feedback-bonus:${item.feedbackId}:${crypto.randomUUID()}`,
-            }),
-          },
-        ),
+      if (!account || !thirdwebBrowserClient) throw new Error("Connect the human awarder wallet first.");
+      const idempotencyKey = `feedback-bonus:${item.opportunityId}:${item.feedbackId}`;
+      const endpoint = `/api/account/workspaces/${encodeURIComponent(
+        item.workspaceId,
+      )}/feedback-bonus/${encodeURIComponent(item.feedbackId)}`;
+      const prepared = await readJson(
+        await fetch(endpoint, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ amountAtomic, idempotencyKey }),
+        }),
       );
+      if (prepared.status === "confirmed") {
+        await onAwarded();
+        return;
+      }
+      if (prepared.status !== "human_wallet_required") {
+        throw new Error("RateLoop did not return a human-wallet award authorization.");
+      }
+      const authorization = prepared.authorization as FeedbackBonusHumanWalletAuthorization;
+      if (account.address.toLowerCase() !== authorization.awarderAddress.toLowerCase()) {
+        throw new Error(`Connect the designated awarder wallet ${authorization.awarderAddress}.`);
+      }
+      if (authorization.chainId !== baseSepolia.id) throw new Error("The Feedback Bonus is on an unsupported chain.");
+      const transactionHash =
+        pendingTransactionHash ??
+        (
+          await sendTransaction({
+            account,
+            transaction: prepareTransaction({
+              client: thirdwebBrowserClient,
+              chain: baseSepolia,
+              to: authorization.contractAddress,
+              data: authorization.transactionData,
+            }),
+          })
+        ).transactionHash;
+      setPendingTransactionHash(transactionHash);
+      await readJson(
+        await fetch(endpoint, {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ amountAtomic, idempotencyKey, transactionHash }),
+        }),
+      );
+      setPendingTransactionHash(null);
       await onAwarded();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to award this feedback.");
@@ -99,7 +138,7 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
           </div>
         </label>
         <button type="button" className="rateloop-gradient-action px-5" disabled={busy} onClick={() => void award()}>
-          {busy ? "Awarding…" : "Award this feedback"}
+          {busy ? "Confirming…" : "Award this feedback"}
         </button>
       </div>
       <p className="mt-3 text-xs text-base-content/50">
@@ -115,7 +154,8 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
   );
 }
 
-export function FeedbackBonusAwardInbox({ workspaceId }: { workspaceId: string }) {
+function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string }) {
+  const account = useActiveAccount();
   const [items, setItems] = useState<FeedbackBonusAwardInboxItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +191,19 @@ export function FeedbackBonusAwardInbox({ workspaceId }: { workspaceId: string }
           Choose eligible written feedback and an amount. The agent cannot make this decision.
         </p>
       </div>
+      {!account && thirdwebBrowserClient ? (
+        <div className="surface-card flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4">
+          <p className="text-sm text-base-content/60">Connect the human awarder wallet to make a final award.</p>
+          <ConnectButton
+            client={thirdwebBrowserClient}
+            chain={baseSepolia}
+            chains={[baseSepolia]}
+            wallets={rateLoopThirdwebWallets}
+            connectButton={{ label: "Connect awarder wallet" }}
+            connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect the awarder wallet" }}
+          />
+        </div>
+      ) : null}
       {error ? (
         <p className="rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error" role="alert">
           {error}
@@ -160,5 +213,14 @@ export function FeedbackBonusAwardInbox({ workspaceId }: { workspaceId: string }
         <AwardCard key={`${item.opportunityId}:${item.feedbackId}`} item={item} onAwarded={load} />
       ))}
     </section>
+  );
+}
+
+export function FeedbackBonusAwardInbox({ workspaceId }: { workspaceId: string }) {
+  if (!thirdwebBrowserClient) return null;
+  return (
+    <ThirdwebProvider>
+      <FeedbackBonusAwardInboxControls workspaceId={workspaceId} />
+    </ThirdwebProvider>
   );
 }

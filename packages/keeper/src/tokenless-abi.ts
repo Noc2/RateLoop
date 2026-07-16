@@ -29,6 +29,8 @@ export const TokenlessFeedbackBonusAbi = parseAbi([
   "function credentialIssuer() view returns (address)",
   "function nextPoolId() view returns (uint256)",
   "function getPool(uint256 poolId) view returns ((bytes32 reviewId,bytes32 contentId,bytes32 admissionPolicyHash,address funder,address awarder,uint256 depositedAmount,uint256 awardedAmount,uint64 feedbackDeadline,uint64 awardDeadline,bool refunded))",
+  "function getFeedback(uint256 poolId,address voteKey) view returns ((address voteKey,bytes32 responseHash,bytes32 payoutCommitment,uint64 registeredAt,uint256 awardAmount,bool awarded,bool claimed))",
   "function remainingAmount(uint256 poolId) view returns (uint256)",
+  "function claimAward(uint256 poolId,address voteKey,address payoutAddress,bytes32 payoutSalt) returns (uint256 amount)",
   "function refundRemainder(uint256 poolId) returns (uint256 amount)",
 ]);

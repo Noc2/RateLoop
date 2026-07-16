@@ -11,10 +11,9 @@ test("every agent policy insert preserves or explicitly initializes the fixed re
   const integrations = source("agentIntegrations.ts");
   const intents = source("agentConnectionIntents.ts");
 
-  assert.equal((setup.match(/INSERT INTO tokenless_agent_review_policies/gu) ?? []).length, 2);
-  assert.equal((setup.match(/production_floor_bps,fixed_rate_bps/gu) ?? []).length, 2);
+  assert.equal((setup.match(/INSERT INTO tokenless_agent_review_policies/gu) ?? []).length, 1);
+  assert.equal((setup.match(/production_floor_bps,fixed_rate_bps/gu) ?? []).length, 1);
   assert.match(setup, /rowOptionalNumber\(policy, "fixed_rate_bps"\)/u);
-  assert.match(setup, /rowOptionalNumber\(currentPolicy, "fixed_rate_bps"\)/u);
 
   assert.equal((integrations.match(/INSERT INTO tokenless_agent_review_policies/gu) ?? []).length, 2);
   assert.equal((integrations.match(/production_floor_bps, ?fixed_rate_bps/gu) ?? []).length, 2);

@@ -292,6 +292,7 @@ export const tokenlessAssuranceResponses = pgTable(
     failureTagKeysJson: text("failure_tag_keys_json").notNull(),
     rationaleCiphertext: text("rationale_ciphertext"),
     rationaleKeyRef: text("rationale_key_ref"),
+    rationaleDigest: text("rationale_digest"),
     qualificationKeysJson: text("qualification_keys_json").notNull(),
     assuranceCapabilitiesJson: text("assurance_capabilities_json").notNull(),
     responseDigest: text("response_digest").notNull(),

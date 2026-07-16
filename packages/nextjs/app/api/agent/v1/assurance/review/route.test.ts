@@ -7,6 +7,7 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
@@ -42,7 +43,7 @@ async function setup() {
     externalId: "rest-agent",
     version: { displayName: "REST Agent", provider: "OpenAI", model: "gpt-test", environment: "production" },
   });
-  const audience = { source: "customer_invited", group: "rest-test" };
+  const audience = { reviewerSource: "public_network" };
   const audiencePolicyHash = __adaptiveReviewServiceTestUtils.sha256(audience);
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_policies
@@ -59,6 +60,13 @@ async function setup() {
       OWNER.toLowerCase(),
       new Date(),
     ],
+  });
+  await seedReadyHumanReviewBinding({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    policyId: "arp_rest",
+    actor: OWNER.toLowerCase(),
   });
   const key = await createWorkspaceApiKey({
     workspaceId,

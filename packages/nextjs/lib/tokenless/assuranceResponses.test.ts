@@ -274,6 +274,7 @@ test("unpaid assigned responses persist atomically with encrypted rationale, pse
     assert.doesNotMatch(String(row.rationale_ciphertext), new RegExp(response.rationale));
     assert.equal(decryptStoredRationale(row, response.rationale), response.rationale);
     assert.equal(row.rationale_key_ref, "assurance_rationale:rationale-test-v1");
+    assert.equal(row.rationale_digest, `sha256:${createHash("sha256").update(response.rationale).digest("hex")}`);
     assert.equal(row.settlement_reference, null);
     assert.equal(row.validity, "valid");
     assert.deepEqual(JSON.parse(String(row.qualification_keys_json)), ["customer_invitation"]);
@@ -409,10 +410,14 @@ test("rationale off accepts empty feedback and stores no ciphertext or key refer
     responses,
   });
   const stored = await dbClient.execute(
-    "SELECT rationale_ciphertext,rationale_key_ref FROM tokenless_assurance_responses",
+    "SELECT rationale_ciphertext,rationale_key_ref,rationale_digest FROM tokenless_assurance_responses",
   );
   assert.equal(stored.rowCount, 2);
-  assert.ok(stored.rows.every(row => row.rationale_ciphertext === null && row.rationale_key_ref === null));
+  assert.ok(
+    stored.rows.every(
+      row => row.rationale_ciphertext === null && row.rationale_key_ref === null && row.rationale_digest === null,
+    ),
+  );
 });
 
 test("paid assurance responses fail closed before assignments can claim a terminal state", async () => {

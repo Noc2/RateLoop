@@ -589,7 +589,7 @@ async function requestPrivateHumanReviewAssignments(input: {
       throw new TokenlessServiceError("Private reviewer capacity changed.", 409, "audience_capacity_exhausted");
     }
     await beforeDeliveryCommitForTests?.();
-    await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
+    const transition = await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
       workspaceId: input.principal.workspaceId,
       opportunityId: input.opportunityId,
       transitionKey: `${laneSlug}:${operationHash.slice("sha256:".length)}`,
@@ -619,13 +619,15 @@ async function requestPrivateHumanReviewAssignments(input: {
     if (opportunity.rowCount !== 1) {
       throw new TokenlessServiceError("Private review opportunity changed.", 409, "review_binding_conflict");
     }
-    await client.query(
-      `UPDATE tokenless_agent_integrations
-       SET last_request_at = CASE WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1 ELSE last_request_at END,
-           updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
-       WHERE integration_id = $2 AND workspace_id = $3`,
-      [now, text(row, "integration_id"), input.principal.workspaceId],
-    );
+    if (!transition.replayed) {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET last_request_at = CASE WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1 ELSE last_request_at END,
+             updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
+         WHERE integration_id = $2 AND workspace_id = $3`,
+        [now, text(row, "integration_id"), input.principal.workspaceId],
+      );
+    }
     const response = await responseForDelivery(client, deliveryId, false, input.compensationMode);
     await client.query("COMMIT");
     return response;

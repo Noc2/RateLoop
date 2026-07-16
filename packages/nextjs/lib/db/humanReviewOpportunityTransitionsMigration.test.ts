@@ -74,13 +74,16 @@ function validInsert(overrides: Record<string, string | number> = {}) {
 }
 
 test("0060 journals a lane-neutral append-only opportunity transition log", () => {
-  assert.deepEqual(journal.entries.at(-1), {
-    idx: 60,
-    version: "7",
-    when: 1784156400000,
-    tag: "0060_human_review_opportunity_transition_events",
-    breakpoints: true,
-  });
+  assert.deepEqual(
+    journal.entries.find(entry => entry.tag === "0060_human_review_opportunity_transition_events"),
+    {
+      idx: 60,
+      version: "7",
+      when: 1784156400000,
+      tag: "0060_human_review_opportunity_transition_events",
+      breakpoints: true,
+    },
+  );
   assert.match(migration, /CREATE TABLE "tokenless_agent_review_opportunity_transition_events"/);
   assert.match(
     migration,

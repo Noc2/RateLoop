@@ -154,15 +154,16 @@ contract TokenlessFeedbackBonusTest is Test {
 
         vm.prank(outsider);
         vm.expectRevert(TokenlessFeedbackBonus.Unauthorized.selector);
-        bonus.award(poolId, alice.voteKey, alice.payout, alice.salt, 7e6);
-        vm.prank(awarder);
-        vm.expectRevert(TokenlessFeedbackBonus.InvalidFeedback.selector);
-        bonus.award(poolId, alice.voteKey, outsider, alice.salt, 7e6);
+        bonus.award(poolId, alice.voteKey, 7e6);
 
         vm.prank(awarder);
-        bonus.award(poolId, alice.voteKey, alice.payout, alice.salt, 7e6);
+        bonus.award(poolId, alice.voteKey, 7e6);
         vm.prank(awarder);
-        bonus.award(poolId, bob.voteKey, bob.payout, bob.salt, 11e6);
+        bonus.award(poolId, bob.voteKey, 11e6);
+        assertEq(usdc.balanceOf(alice.payout), 0);
+        assertEq(usdc.balanceOf(bob.payout), 0);
+        bonus.claimAward(poolId, alice.voteKey, alice.payout, alice.salt);
+        bonus.claimAward(poolId, bob.voteKey, bob.payout, bob.salt);
         assertEq(usdc.balanceOf(alice.payout), 7e6);
         assertEq(usdc.balanceOf(bob.payout), 11e6);
         assertEq(bonus.remainingAmount(poolId), 12e6);
@@ -179,30 +180,45 @@ contract TokenlessFeedbackBonusTest is Test {
         _register(bob, poolId);
         vm.warp(bonus.getPool(poolId).feedbackDeadline + 1);
         vm.prank(awarder);
-        bonus.award(poolId, alice.voteKey, alice.payout, alice.salt, 5e6);
+        bonus.award(poolId, alice.voteKey, 5e6);
         vm.prank(awarder);
         vm.expectRevert(TokenlessFeedbackBonus.AlreadyAwarded.selector);
-        bonus.award(poolId, alice.voteKey, alice.payout, alice.salt, 1e6);
+        bonus.award(poolId, alice.voteKey, 1e6);
         vm.prank(awarder);
         vm.expectRevert(TokenlessFeedbackBonus.AlreadyAwarded.selector);
-        bonus.award(poolId, bob.voteKey, bob.payout, bob.salt, 1e6);
+        bonus.award(poolId, bob.voteKey, 1e6);
     }
 
-    function test_UnawardedRemainderReturnsOnlyToFunderAndTransferFailuresRollBack() public {
+    function test_AwardPayoutPreimageRemainsWithRecipientAndClaimsAreExactlyOnce() public {
         uint256 poolId = _createPool(awarder);
         Rater memory alice = _rater(0xA11, "alice", poolId);
         _register(alice, poolId);
         TokenlessFeedbackBonus.Pool memory pool = bonus.getPool(poolId);
         vm.warp(pool.feedbackDeadline + 1);
-        usdc.setBlockedRecipient(alice.payout, true);
         vm.prank(awarder);
-        vm.expectRevert();
-        bonus.award(poolId, alice.voteKey, alice.payout, alice.salt, 7e6);
-        assertFalse(bonus.getFeedback(poolId, alice.voteKey).awarded);
+        bonus.award(poolId, alice.voteKey, 7e6);
+        TokenlessFeedbackBonus.FeedbackRecord memory awarded = bonus.getFeedback(poolId, alice.voteKey);
+        assertTrue(awarded.awarded);
+        assertFalse(awarded.claimed);
+        assertEq(awarded.awardAmount, 7e6);
 
-        usdc.setBlockedRecipient(alice.payout, false);
+        vm.expectRevert(TokenlessFeedbackBonus.InvalidFeedback.selector);
+        bonus.claimAward(poolId, alice.voteKey, outsider, alice.salt);
+        bonus.claimAward(poolId, alice.voteKey, alice.payout, alice.salt);
+        assertEq(usdc.balanceOf(alice.payout), 7e6);
+        assertTrue(bonus.getFeedback(poolId, alice.voteKey).claimed);
+        vm.expectRevert(TokenlessFeedbackBonus.AwardNotClaimable.selector);
+        bonus.claimAward(poolId, alice.voteKey, alice.payout, alice.salt);
+    }
+
+    function test_UnawardedRemainderReturnsOnlyToFunderWithoutStrandingAwardedClaims() public {
+        uint256 poolId = _createPool(awarder);
+        Rater memory alice = _rater(0xA11, "alice", poolId);
+        _register(alice, poolId);
+        TokenlessFeedbackBonus.Pool memory pool = bonus.getPool(poolId);
+        vm.warp(pool.feedbackDeadline + 1);
         vm.prank(awarder);
-        bonus.award(poolId, alice.voteKey, alice.payout, alice.salt, 7e6);
+        bonus.award(poolId, alice.voteKey, 7e6);
         vm.warp(pool.awardDeadline + 1);
         uint256 before = usdc.balanceOf(funder);
         vm.prank(outsider);
@@ -210,6 +226,10 @@ contract TokenlessFeedbackBonusTest is Test {
         assertEq(usdc.balanceOf(funder) - before, BONUS_POOL - 7e6);
         vm.expectRevert(TokenlessFeedbackBonus.NothingToRefund.selector);
         bonus.refundRemainder(poolId);
+
+        bonus.claimAward(poolId, alice.voteKey, alice.payout, alice.salt);
+        assertEq(usdc.balanceOf(alice.payout), 7e6);
+        assertEq(usdc.balanceOf(address(bonus)), 0);
     }
 
     function _terms(bytes32 reviewId) internal view returns (TokenlessFeedbackBonus.PoolTerms memory) {

@@ -10,12 +10,17 @@ import { dbClient } from "~~/lib/db";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
 import {
+  type FeedbackBonusPoolBinding,
+  ensureFeedbackBonusPoolForDelivery,
+} from "~~/lib/tokenless/feedbackBonusPoolProjection";
+import {
   type PreparedOwnerApproval,
   prepareHumanReviewForOwnerApproval,
 } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
   type PrivatePaidHumanReviewDelivery,
   requestPrivatePaidHumanReview,
@@ -62,6 +67,7 @@ export type FrozenHumanReviewRoutingContext = {
   workspaceId: string;
   integrationId: string;
   opportunityId: string;
+  createdAt: Date;
   workflowKey: string;
   agent: { id: string; versionId: string };
   selectionPolicy: { id: string; version: number; audiencePolicyHash: `sha256:${string}` };
@@ -87,6 +93,11 @@ export type FrozenHumanReviewRoutingContext = {
     panelSize: number;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
+    feedbackBonusEnabled: boolean;
+    feedbackBonusPoolAtomic: string | null;
+    feedbackBonusAwarderKind: "requester" | "designated";
+    feedbackBonusAwarderAccount: string | null;
+    feedbackBonusAwardWindowSeconds: number | null;
     criterion: string;
     positiveLabel: string;
     negativeLabel: string;
@@ -200,6 +211,8 @@ type RouterDependencies = {
   assignPrivateUnpaid: typeof requestPrivateUnpaidHumanReview;
   assignPrivatePaid: typeof requestPrivatePaidHumanReview;
   assignHybrid?: (split: FrozenHybridReviewSplit) => Promise<HybridHumanReviewResult>;
+  ensureFeedbackBonus?: typeof ensureFeedbackBonusPoolForDelivery;
+  requireFeedbackBonusEligibility?: typeof requirePaidReviewEligibility;
 };
 
 const NO_SIDE_EFFECTS = Object.freeze({
@@ -337,7 +350,7 @@ async function loadFrozenContext(
     sql: `SELECT o.opportunity_id,o.agent_id,o.agent_version_id,o.policy_id,o.policy_version,
                  o.human_review_binding_id,o.human_review_binding_version,
                  o.request_profile_id,o.request_profile_version,o.request_profile_hash,o.decision,
-                 o.source_evidence_hash,o.suggestion_commitment,
+                 o.source_evidence_hash,o.suggestion_commitment,o.created_at,
                  l.state AS lifecycle_state,l.state_revision AS lifecycle_revision,l.terminal_at,
                  s.workflow_key,
                  pp.allowed_project_ids_json,pp.allowed_reviewer_sources_json,
@@ -426,6 +439,7 @@ async function loadFrozenContext(
     workspaceId: principal.integration.workspaceId,
     integrationId: principal.integration.integrationId,
     opportunityId: text(row, "opportunity_id")!,
+    createdAt: new Date(String(row.created_at)),
     workflowKey,
     agent: { id: principal.integration.agentId, versionId: principal.integration.agentVersionId },
     selectionPolicy: {
@@ -465,6 +479,11 @@ async function loadFrozenContext(
       panelSize: profile.panelSize!,
       compensationMode: profile.compensation.mode,
       bountyPerSeatAtomic: profile.compensation.bountyPerSeatAtomic,
+      feedbackBonusEnabled: profile.feedbackBonus.enabled,
+      feedbackBonusPoolAtomic: profile.feedbackBonus.poolAtomic,
+      feedbackBonusAwarderKind: profile.feedbackBonus.awarderKind,
+      feedbackBonusAwarderAccount: profile.feedbackBonus.awarderAccount,
+      feedbackBonusAwardWindowSeconds: profile.feedbackBonus.awardWindowSeconds,
       criterion: profile.criterion,
       positiveLabel: profile.labels.positive,
       negativeLabel: profile.labels.negative,
@@ -686,6 +705,90 @@ function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
   return true;
 }
 
+function prepareFrozenRoutingRequest(
+  context: FrozenHumanReviewRoutingContext,
+  input: HumanReviewRoutingRequest,
+  now: Date,
+) {
+  const profile = context.requestProfile;
+  const preparedAt = profile.lane === "public_paid_network" ? context.createdAt : now;
+  return prepareHumanReviewRequest({
+    opportunityId: context.opportunityId,
+    workflowKey: context.workflowKey,
+    requestProfile: {
+      id: profile.id,
+      version: profile.version,
+      hash: profile.hash,
+      agentId: context.agent.id,
+      agentVersionId: context.agent.versionId,
+      criterion: profile.criterion,
+      positiveLabel: profile.positiveLabel,
+      negativeLabel: profile.negativeLabel,
+      rationaleMode: profile.rationaleMode,
+      audience: profile.audience,
+      contentBoundary: profile.contentBoundary,
+      privateSensitivity: profile.privateSensitivity,
+      privateGroupId: profile.privateGroup?.id ?? null,
+      responseWindowSeconds: profile.responseWindowSeconds,
+      panelSize: profile.panelSize,
+      compensationMode: profile.compensationMode,
+      bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+      feedbackBonusEnabled: profile.feedbackBonusEnabled,
+      feedbackBonusPoolAtomic: profile.feedbackBonusPoolAtomic,
+      feedbackBonusAwarderKind: profile.feedbackBonusAwarderKind,
+      feedbackBonusAwarderAccount: profile.feedbackBonusAwarderAccount,
+      feedbackBonusAwardWindowSeconds: profile.feedbackBonusAwardWindowSeconds,
+    },
+    selectionPolicy: { id: context.selectionPolicy.id, version: context.selectionPolicy.version },
+    contentCommitments: context.contentCommitments,
+    preparedAt,
+    expiresAt: new Date(preparedAt.getTime() + profile.responseWindowSeconds * 1_000),
+    sourcePayload: input.sourcePayload,
+    suggestionPayload: input.suggestionPayload,
+  });
+}
+
+async function ensureRoutingFeedbackBonus(
+  dependencies: RouterDependencies,
+  context: FrozenHumanReviewRoutingContext,
+  input: HumanReviewRoutingRequest,
+  now: Date,
+  reviewerAccounts: readonly string[] = [],
+): Promise<FeedbackBonusPoolBinding | null> {
+  if (!context.requestProfile.feedbackBonusEnabled) return null;
+  if (!dependencies.ensureFeedbackBonus) {
+    throw new TokenlessServiceError(
+      "Feedback Bonus delivery is unavailable without exact pool execution.",
+      503,
+      "feedback_bonus_pool_execution_unavailable",
+      true,
+    );
+  }
+  if (reviewerAccounts.length > 0) {
+    if (!dependencies.requireFeedbackBonusEligibility) {
+      throw new TokenlessServiceError(
+        "Feedback Bonus delivery requires paid eligibility before funding.",
+        503,
+        "feedback_bonus_eligibility_unavailable",
+        true,
+      );
+    }
+    for (const account of [...new Set(reviewerAccounts.map(value => value.toLowerCase()))].sort()) {
+      await dependencies.requireFeedbackBonusEligibility(account, now);
+    }
+  }
+  const preparation = prepareFrozenRoutingRequest(context, input, now);
+  const feedbackDeadline = new Date(preparation.preparedRequest.timing.expiresAt);
+  return dependencies.ensureFeedbackBonus({
+    workspaceId: context.workspaceId,
+    agentId: context.agent.id,
+    opportunityId: context.opportunityId,
+    admissionPolicyHash: context.selectionPolicy.audiencePolicyHash,
+    preparation,
+    feedbackDeadline,
+  });
+}
+
 const DEFAULT_DEPENDENCIES: RouterDependencies = {
   loadContext: loadFrozenContext,
   prepareApproval: prepareHumanReviewForOwnerApproval,
@@ -695,6 +798,8 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   preparePrivateFoundation: preparePrivateReviewFoundation,
   assignPrivateUnpaid: requestPrivateUnpaidHumanReview,
   assignPrivatePaid: requestPrivatePaidHumanReview,
+  ensureFeedbackBonus: ensureFeedbackBonusPoolForDelivery,
+  requireFeedbackBonusEligibility: requirePaidReviewEligibility,
 };
 
 export function createHumanReviewRequestRouter(dependencies: RouterDependencies = DEFAULT_DEPENDENCIES) {
@@ -774,6 +879,13 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
           sideEffects: NO_SIDE_EFFECTS,
         };
       }
+      await ensureRoutingFeedbackBonus(
+        dependencies,
+        context,
+        input,
+        now,
+        [...split.invited.candidates, ...split.network.candidates].map(candidate => candidate.accountAddress),
+      );
       await dependencies.activateAutonomousLane(context, null, now);
       return {
         schemaVersion: "rateloop.human-review-route.v1",
@@ -787,6 +899,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     if (context.requestProfile.lane === "public_paid_network") {
       const material = input.material!;
       if (material.kind !== "public") throw new Error("Public material was checked before routing.");
+      await ensureRoutingFeedbackBonus(dependencies, context, input, now);
       await dependencies.activateAutonomousLane(context, null, now);
       const requested = await dependencies.publishPublicPaid({
         principal: input.principal,
@@ -817,6 +930,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         sideEffects: NO_SIDE_EFFECTS,
       };
     }
+    await ensureRoutingFeedbackBonus(dependencies, context, input, now, privateBinding.reviewerAccountAddresses);
     await dependencies.activateAutonomousLane(context, privateBinding, now);
     const request: HumanAssurancePrivateReviewCreateRequest = {
       idempotencyKey: deterministicPrivateIdempotencyKey(context, privateBinding),
@@ -851,35 +965,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       );
     }
     if (context.requestProfile.lane === "private_invited_paid") {
-      const prepared = prepareHumanReviewRequest({
-        opportunityId: context.opportunityId,
-        workflowKey: context.workflowKey,
-        requestProfile: {
-          id: context.requestProfile.id,
-          version: context.requestProfile.version,
-          hash: context.requestProfile.hash,
-          agentId: context.agent.id,
-          agentVersionId: context.agent.versionId,
-          criterion: context.requestProfile.criterion,
-          positiveLabel: context.requestProfile.positiveLabel,
-          negativeLabel: context.requestProfile.negativeLabel,
-          rationaleMode: context.requestProfile.rationaleMode,
-          audience: "private_invited",
-          contentBoundary: "private_workspace",
-          privateSensitivity: context.requestProfile.privateSensitivity,
-          privateGroupId: context.requestProfile.privateGroup!.id,
-          responseWindowSeconds: context.requestProfile.responseWindowSeconds,
-          panelSize: context.requestProfile.panelSize,
-          compensationMode: "usdc",
-          bountyPerSeatAtomic: context.requestProfile.bountyPerSeatAtomic,
-        },
-        selectionPolicy: { id: context.selectionPolicy.id, version: context.selectionPolicy.version },
-        contentCommitments: context.contentCommitments,
-        preparedAt: now,
-        expiresAt: new Date(now.getTime() + context.requestProfile.responseWindowSeconds * 1_000),
-        sourcePayload: input.sourcePayload,
-        suggestionPayload: input.suggestionPayload,
-      });
+      const prepared = prepareFrozenRoutingRequest(context, input, now);
       const delivery = await dependencies.assignPrivatePaid({
         principal: input.principal.principal,
         integrationId: context.integrationId,

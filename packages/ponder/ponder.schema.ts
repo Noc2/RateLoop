@@ -225,6 +225,7 @@ export const tokenlessFeedbackRecord = onchainTable(
     payoutCommitment: t.hex().notNull(),
     awarded: t.boolean().notNull().default(false),
     awardAmount: t.bigint().notNull().default(0n),
+    claimed: t.boolean().notNull().default(false),
     payoutAddress: t.hex(),
     registeredAt: t.bigint().notNull(),
     registeredBlock: t.bigint().notNull(),
@@ -233,6 +234,9 @@ export const tokenlessFeedbackRecord = onchainTable(
     awardedAt: t.bigint(),
     awardTxHash: t.hex(),
     awardLogIndex: t.integer(),
+    claimedAt: t.bigint(),
+    claimTxHash: t.hex(),
+    claimLogIndex: t.integer(),
   }),
   (table) => ({
     deploymentPoolIdx: index().on(table.deploymentKey, table.poolId),

@@ -111,6 +111,7 @@ test("feedback bonus ABI exposes only immutable pool and award mechanics", () =>
     "createPoolFor",
     "registerFeedback",
     "award",
+    "claimAward",
     "refundRemainder",
     "getPool",
     "getFeedback",
@@ -121,6 +122,7 @@ test("feedback bonus ABI exposes only immutable pool and award mechanics", () =>
     "PoolCreated",
     "FeedbackRegistered",
     "FeedbackAwarded",
+    "FeedbackAwardClaimed",
     "RemainderRefunded",
   ]) {
     assert.ok(events.has(eventName), `missing ${eventName}`);
@@ -128,6 +130,10 @@ test("feedback bonus ABI exposes only immutable pool and award mechanics", () =>
   for (const forbidden of ["owner", "pause", "sweep", "setAwarder"]) {
     assert.equal(functions.has(forbidden), false, `unexpected ${forbidden}`);
   }
+  assert.deepEqual(
+    findEntry(TokenlessFeedbackBonusAbi, "function", "award").inputs?.map(input => input.name),
+    ["poolId", "voteKey", "amount"],
+  );
 });
 
 test("historical deployment key remains immutable evidence", () => {

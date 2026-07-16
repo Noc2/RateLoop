@@ -43,6 +43,7 @@ async function pendingAsk() {
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary", prompt: "Ship this?", rationale: { mode: "optional" } },
     requestedPanelSize: 15,
+    responseWindowSeconds: 1_200,
   });
   const askRequest = {
     idempotencyKey: "wait:route:12345678",

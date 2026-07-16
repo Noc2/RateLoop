@@ -10,6 +10,12 @@ export async function seedReadyHumanReviewBinding(input: {
   policyId: string;
   policyVersion?: number;
   actor: string;
+  feedbackBonus?: {
+    poolAtomic: string;
+    awarderKind?: "requester" | "designated";
+    awarderAccount?: string | null;
+    awardWindowSeconds: number;
+  };
 }) {
   const policyVersion = input.policyVersion ?? 1;
   const suffix = createHash("sha256")
@@ -18,6 +24,7 @@ export async function seedReadyHumanReviewBinding(input: {
     .slice(0, 32);
   const profileId = `rrp_test_${suffix}`;
   const bindingId = `hrb_test_${suffix}`;
+  const feedbackBonus = input.feedbackBonus ?? null;
   const profileHash = hashReviewRequestProfile({
     agentId: input.agentId,
     agentVersionId: input.agentVersionId,
@@ -35,6 +42,11 @@ export async function seedReadyHumanReviewBinding(input: {
     panelSize: 3,
     compensationMode: "usdc",
     bountyPerSeatAtomic: "1000000",
+    feedbackBonusEnabled: feedbackBonus !== null,
+    feedbackBonusPoolAtomic: feedbackBonus?.poolAtomic ?? null,
+    feedbackBonusAwarderKind: feedbackBonus?.awarderKind ?? "requester",
+    feedbackBonusAwarderAccount: feedbackBonus?.awarderAccount ?? null,
+    feedbackBonusAwardWindowSeconds: feedbackBonus?.awardWindowSeconds ?? null,
   });
   const canonicalHash = hashHumanReviewConfiguration({
     workspaceId: input.workspaceId,
@@ -51,15 +63,22 @@ export async function seedReadyHumanReviewBinding(input: {
           (profile_id,version,workspace_id,agent_id,agent_version_id,criterion,positive_label,negative_label,
            rationale_mode,audience,content_boundary,private_sensitivity,private_group_id,
            private_group_policy_version,private_group_policy_hash,response_window_seconds,panel_size,
-           compensation_mode,bounty_per_seat_atomic,configuration_status,profile_hash,created_by,created_at,
+           compensation_mode,bounty_per_seat_atomic,feedback_bonus_enabled,feedback_bonus_pool_atomic,
+           feedback_bonus_awarder_kind,feedback_bonus_awarder_account,feedback_bonus_award_window_seconds,
+           configuration_status,profile_hash,created_by,created_at,
            approved_by,approved_at)
           VALUES (?,1,?,?,?,'Is this output correct and safe to use','Approve','Reject','optional',
-                  'public_network','public_or_test',NULL,NULL,NULL,NULL,1200,3,'usdc','1000000','ready',?,?,?,?,?)`,
+                  'public_network','public_or_test',NULL,NULL,NULL,NULL,1200,3,'usdc','1000000',?,?,?,?,?,'ready',?,?,?,?,?)`,
     args: [
       profileId,
       input.workspaceId,
       input.agentId,
       input.agentVersionId,
+      feedbackBonus !== null,
+      feedbackBonus?.poolAtomic ?? null,
+      feedbackBonus?.awarderKind ?? "requester",
+      feedbackBonus?.awarderAccount ?? null,
+      feedbackBonus?.awardWindowSeconds ?? null,
       profileHash,
       input.actor,
       now,

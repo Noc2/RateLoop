@@ -49,6 +49,7 @@ function context(input?: {
   authority?: FrozenHumanReviewRoutingContext["binding"]["authority"];
   decision?: FrozenHumanReviewRoutingContext["decision"];
   grantActive?: boolean;
+  feedbackBonus?: boolean;
   lane?: FrozenHumanReviewRoutingContext["requestProfile"]["lane"];
   lifecycleState?: string;
 }): FrozenHumanReviewRoutingContext {
@@ -59,6 +60,7 @@ function context(input?: {
     workspaceId: "workspace_router",
     integrationId: "integration_router",
     opportunityId: "opportunity_router",
+    createdAt: NOW,
     workflowKey: "support-reply",
     agent: { id: "agent_router", versionId: "agent_version_router" },
     selectionPolicy: { id: "review_policy_router", version: 4, audiencePolicyHash: HASH },
@@ -84,6 +86,11 @@ function context(input?: {
       panelSize: privateLane ? 2 : 3,
       compensationMode: lane === "private_invited_unpaid" ? "unpaid" : "usdc",
       bountyPerSeatAtomic: lane === "private_invited_unpaid" ? null : "1000000",
+      feedbackBonusEnabled: input?.feedbackBonus ?? false,
+      feedbackBonusPoolAtomic: input?.feedbackBonus ? "5000000" : null,
+      feedbackBonusAwarderKind: "requester",
+      feedbackBonusAwarderAccount: null,
+      feedbackBonusAwardWindowSeconds: input?.feedbackBonus ? 604_800 : null,
       criterion: "Is the reply accurate?",
       positiveLabel: "Accurate",
       negativeLabel: "Needs changes",
@@ -159,6 +166,8 @@ function dependencies(
     assign: 0,
     assignPaid: 0,
     hybrid: 0,
+    feedbackBonus: 0,
+    feedbackBonusEligibility: 0,
     order: [] as string[],
     foundationInput: null as null | Record<string, unknown>,
     assignmentInput: null as null | Record<string, unknown>,
@@ -238,6 +247,29 @@ function dependencies(
         splitBindingHash: HASH,
       } as const;
     },
+    ensureFeedbackBonus: async () => {
+      calls.feedbackBonus += 1;
+      calls.order.push("feedback_bonus");
+      return {
+        schemaVersion: "rateloop.feedback-bonus-pool-binding.v1",
+        workspaceId: frozen.workspaceId,
+        opportunityId: frozen.opportunityId,
+        chainId: 84_532,
+        contractAddress: "0x3333333333333333333333333333333333333333",
+        poolId: "7",
+        reviewId: `0x${"44".repeat(32)}`,
+        contentId: `0x${"55".repeat(32)}`,
+        depositedAmountAtomic: "5000000",
+        feedbackDeadline: "2026-07-16T13:00:00.000Z",
+        awardDeadline: "2026-07-23T13:00:00.000Z",
+        replayed: false,
+      } as const;
+    },
+    requireFeedbackBonusEligibility: async (accountAddress: string) => {
+      calls.feedbackBonusEligibility += 1;
+      calls.order.push(`eligibility:${accountAddress.toLowerCase()}`);
+      return {} as never;
+    },
   } as unknown as Parameters<typeof createHumanReviewRequestRouter>[0];
   return { calls, router: createHumanReviewRequestRouter(deps) };
 }
@@ -316,6 +348,21 @@ test("public paid automatic routing activates the exact frozen opportunity befor
   assert.deepEqual(calls.order, ["activate", "public"]);
 });
 
+test("a bonus-enabled route binds the exact pool before reporting public delivery", async () => {
+  const { calls, router } = dependencies(context({ feedbackBonus: true, lifecycleState: "approval_required" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: publicMaterial,
+    now: NOW,
+  });
+  assert.equal(result.action, "public_review_requested");
+  assert.equal(calls.feedbackBonus, 1);
+  assert.deepEqual(calls.order, ["feedback_bonus", "activate", "public"]);
+});
+
 test("a private material declaration cannot cross into the public lane", async () => {
   const { calls, router } = dependencies(context());
   await assert.rejects(
@@ -390,6 +437,31 @@ test("private unpaid automatic routing activates a blocked opportunity then free
   assert.equal(assignmentInput.opportunityId, "opportunity_router");
   assert.equal(assignmentInput.privateReviewId, "private_review_router");
   assert.deepEqual(assignmentInput.reviewerAccountAddresses, privateBinding.reviewerAccountAddresses);
+});
+
+test("private unpaid plus optional bonus preflights every invited human before pool funding and delivery", async () => {
+  const { calls, router } = dependencies(
+    context({ lane: "private_invited_unpaid", lifecycleState: "blocked", feedbackBonus: true }),
+  );
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(result.action, "private_review_assigned");
+  assert.equal(calls.feedbackBonusEligibility, 2);
+  assert.deepEqual(calls.order, [
+    "resolve_private",
+    `eligibility:${privateBinding.reviewerAccountAddresses[0]}`,
+    `eligibility:${privateBinding.reviewerAccountAddresses[1]}`,
+    "feedback_bonus",
+    "activate",
+    "foundation",
+    "assign",
+  ]);
 });
 
 test("private paid automatic routing uses the distinct paid adapter with frozen private economics", async () => {

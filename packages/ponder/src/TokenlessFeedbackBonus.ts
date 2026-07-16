@@ -106,6 +106,7 @@ ponder.on(
       payoutCommitment,
       awarded: false,
       awardAmount: 0n,
+      claimed: false,
       payoutAddress: null,
       registeredAt: event.block.timestamp,
       registeredBlock: event.block.number,
@@ -114,6 +115,9 @@ ponder.on(
       awardedAt: null,
       awardTxHash: null,
       awardLogIndex: null,
+      claimedAt: null,
+      claimTxHash: null,
+      claimLogIndex: null,
     });
     await context.db.insert(tokenlessFeedbackBonusEvent).values({
       id: eventId,
@@ -147,7 +151,7 @@ ponder.on(
       feedbackKey,
       responseHash,
       voteKey,
-      payoutAddress,
+      payoutCommitment,
       amount,
     } = event.args;
     const poolIdKey = feedbackBonusPoolKey(deployment.deploymentKey, poolId);
@@ -167,7 +171,8 @@ ponder.on(
     if (
       feedback.poolId !== poolId ||
       feedback.responseHash !== responseHash ||
-      feedback.voteKey.toLowerCase() !== voteKey.toLowerCase()
+      feedback.voteKey.toLowerCase() !== voteKey.toLowerCase() ||
+      feedback.payoutCommitment !== payoutCommitment
     ) {
       throw new Error(
         `Feedback award does not match registered feedback ${feedbackKey}.`,
@@ -176,7 +181,6 @@ ponder.on(
     await context.db.update(tokenlessFeedbackRecord, { id: feedbackId }).set({
       awarded: true,
       awardAmount: amount,
-      payoutAddress,
       awardedAt: event.block.timestamp,
       awardTxHash: event.transaction.hash,
       awardLogIndex: event.log.logIndex,
@@ -193,6 +197,59 @@ ponder.on(
       feedbackKey,
       responseHash,
       actor: voteKey,
+      payoutAddress: null,
+      amount,
+      occurredAt: event.block.timestamp,
+      blockNumber: event.block.number,
+      txHash: event.transaction.hash,
+      logIndex: event.log.logIndex,
+    });
+  },
+);
+
+ponder.on(
+  "TokenlessFeedbackBonus:FeedbackAwardClaimed",
+  async ({ event, context }) => {
+    const eventId = deploymentEventKey(
+      deployment.deploymentKey,
+      event.transaction.hash,
+      event.log.logIndex,
+    );
+    if (await eventWasIndexed(context, eventId)) return;
+    const { poolId, feedbackKey, payoutAddress, amount } = event.args;
+    const feedbackId = feedbackBonusRecordKey(
+      deployment.deploymentKey,
+      feedbackKey,
+    );
+    const feedback = await context.db.find(tokenlessFeedbackRecord, {
+      id: feedbackId,
+    });
+    if (
+      !feedback ||
+      feedback.poolId !== poolId ||
+      !feedback.awarded ||
+      feedback.claimed ||
+      feedback.awardAmount !== amount
+    ) {
+      throw new Error(
+        `Feedback claim references unknown or non-claimable feedback ${feedbackKey}.`,
+      );
+    }
+    await context.db.update(tokenlessFeedbackRecord, { id: feedbackId }).set({
+      claimed: true,
+      payoutAddress,
+      claimedAt: event.block.timestamp,
+      claimTxHash: event.transaction.hash,
+      claimLogIndex: event.log.logIndex,
+    });
+    await context.db.insert(tokenlessFeedbackBonusEvent).values({
+      id: eventId,
+      deploymentKey: deployment.deploymentKey,
+      eventType: "feedback_award_claimed",
+      poolId,
+      feedbackKey,
+      responseHash: feedback.responseHash,
+      actor: event.transaction.from,
       payoutAddress,
       amount,
       occurredAt: event.block.timestamp,

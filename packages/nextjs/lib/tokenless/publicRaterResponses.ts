@@ -96,6 +96,51 @@ function decryptPayload(row: Row): CanonicalPublicRaterResponse {
   ) as CanonicalPublicRaterResponse;
 }
 
+/**
+ * Resolve one already-authorized Feedback Bonus body without exposing a
+ * general-purpose response-vault decrypt primitive. The opportunity join is
+ * the tenant and lane binding; callers cannot use a response id from another
+ * workspace, opportunity, or public operation.
+ */
+export async function readFeedbackBonusPublicRaterResponse(input: {
+  responseId: string;
+  workspaceId: string;
+  opportunityId: string;
+  expectedResponseHash: string;
+}) {
+  const result = await dbPool.query(
+    `SELECT response.*
+     FROM tokenless_public_rater_responses response
+     JOIN tokenless_agent_review_opportunities opportunity
+       ON opportunity.operation_key = response.operation_key
+      AND opportunity.workspace_id = $2
+      AND opportunity.opportunity_id = $3
+     WHERE response.response_id = $1
+       AND response.response_hash = $4
+       AND response.hash_verified_at IS NOT NULL
+       AND response.moderation_status = 'approved'
+     LIMIT 2`,
+    [input.responseId, input.workspaceId, input.opportunityId, input.expectedResponseHash.toLowerCase()],
+  );
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The selected public feedback body is unavailable.",
+      409,
+      "feedback_bonus_body_unavailable",
+    );
+  }
+  const feedback = decryptPayload(result.rows[0] as Row).feedback;
+  const body = feedback?.body.trim() ?? "";
+  if (!body) {
+    throw new TokenlessServiceError(
+      "The selected public response has no awardable written feedback.",
+      409,
+      "feedback_bonus_body_unavailable",
+    );
+  }
+  return body;
+}
+
 export async function preparePublicRaterResponse(
   client: PoolClient,
   input: {
