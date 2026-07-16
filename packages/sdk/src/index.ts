@@ -3,6 +3,8 @@ export * from "./humanAssuranceApiSchema";
 export * from "./humanAssuranceApiTypes";
 export * from "./humanAssuranceSchema";
 export * from "./humanAssuranceTypes";
+export * from "./humanReviewResultEnvelopeSchema";
+export * from "./humanReviewResultEnvelopeTypes";
 export * from "./tokenless";
 export * from "./tokenlessMedia";
 export * from "./tokenlessSchema";
