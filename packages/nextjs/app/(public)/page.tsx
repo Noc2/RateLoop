@@ -40,6 +40,12 @@ const whyItWorksFeatures = [
       ["Fund Core", "/docs/smart-contracts#tokenless-panel"],
     ],
   },
+  {
+    title: "Evidence your auditors can check",
+    body: "Trace review policy, human judgments, coverage, and settlement references.",
+    color: "var(--rateloop-yellow)",
+    links: [["Evidence guide", "/docs/evidence"]],
+  },
 ] as const;
 
 const useCases = [
@@ -212,7 +218,7 @@ export function TokenlessLandingPage({
           <SectionTitle number="03" gradient="Works">
             Why It
           </SectionTitle>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-10 gap-y-12 md:grid-cols-2 xl:grid-cols-4">
             {whyItWorksFeatures.map((feature, index) => (
               <article
                 key={feature.title}

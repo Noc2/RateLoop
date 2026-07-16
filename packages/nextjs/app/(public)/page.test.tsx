@@ -60,6 +60,9 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Agent-native/);
   assert.match(html, /Verified and blind/);
   assert.match(html, /Useful signal, auditable pay/);
+  assert.match(html, /Evidence your auditors can check/);
+  assert.match(html, /Trace review policy, human judgments, coverage, and settlement references\./i);
+  assert.match(html, /href="\/docs\/evidence"[^>]*>Evidence guide<\/a>/i);
   for (const term of [
     "MCP Adapter",
     "x402",
@@ -85,6 +88,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
     "/docs/tech-stack#surprisingly-popular",
     "/docs/tech-stack#base-usdc",
     "/docs/smart-contracts#tokenless-panel",
+    "/docs/evidence",
   ]) {
     assert.match(html, new RegExp(`href="${href}"`));
   }
