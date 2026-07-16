@@ -475,7 +475,12 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
   if (!integrity.valid) {
     throw new TokenlessServiceError("The workspace audit chain failed integrity verification.", 409, "audit_invalid");
   }
-  const exportedEvents = events.map(({ head_last_sequence: _sequence, head_last_digest: _digest, ...event }) => event);
+  const exportedEvents = events.map(event => {
+    const exportedEvent = { ...event };
+    delete exportedEvent.head_last_sequence;
+    delete exportedEvent.head_last_digest;
+    return exportedEvent;
+  });
   const exported = {
     exportedAt: new Date().toISOString(),
     format: "rateloop-audit-v1",
