@@ -249,21 +249,99 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   async function configureReviews(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const connectedAgent = setup.agent;
+    if (!connectedAgent) {
+      setError("The connected agent details are unavailable. Reconnect the agent and try again.");
+      return;
+    }
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
     try {
+      const draft = setup.reviewDraft;
+      if (!draft) throw new Error("Review behavior is unavailable. Reload setup and try again.");
+      if (
+        draft.requestProfile.configurationStatus !== "ready" ||
+        !Number.isSafeInteger(draft.requestProfile.responseWindowSeconds) ||
+        Number(draft.requestProfile.responseWindowSeconds) < 1_200 ||
+        !Number.isSafeInteger(draft.requestProfile.panelSize) ||
+        Number(draft.requestProfile.panelSize) < 1
+      ) {
+        throw new Error("Choose a response window and panel size before saving review behavior.");
+      }
+      const requestedMode = form.get("mode");
+      const mode =
+        typeof requestedMode === "string" && ["adaptive", "always", "manual", "rules", "fixed"].includes(requestedMode)
+          ? requestedMode
+          : draft.selection.mode;
+      const requestProfile = {
+        criterion: draft.requestProfile.criterion,
+        positiveLabel: draft.requestProfile.positiveLabel,
+        negativeLabel: draft.requestProfile.negativeLabel,
+        rationaleMode: draft.requestProfile.rationaleMode,
+        audience: draft.requestProfile.audience,
+        contentBoundary: draft.requestProfile.contentBoundary,
+        privateSensitivity: draft.requestProfile.privateSensitivity,
+        responseWindowSeconds: draft.requestProfile.responseWindowSeconds,
+        panelSize: draft.requestProfile.panelSize,
+        compensationMode: draft.requestProfile.compensationMode,
+        bountyPerSeatAtomic: draft.requestProfile.bountyPerSeatAtomic,
+      };
+      const audience = draft.requestProfile.audience;
+      let privateGroupId = draft.requestProfile.privateGroupId ?? setup.privateGroupId;
+      if ((audience === "private_invited" || audience === "hybrid") && !privateGroupId) {
+        const groupsBody = await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/private-groups`, {
+            cache: "no-store",
+            credentials: "same-origin",
+          }),
+        );
+        const groups = Array.isArray(groupsBody.groups) ? (groupsBody.groups as Record<string, unknown>[]) : [];
+        const existing = groups.find(group => group.name === "Reviewers" && group.status === "active");
+        if (typeof existing?.groupId === "string") privateGroupId = existing.groupId;
+        else {
+          const created = await readJson(
+            await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/private-groups`, {
+              method: "POST",
+              body: JSON.stringify({
+                name: "Reviewers",
+                purpose: "People invited to review this workspace's private material.",
+                policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
+              }),
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+          const group = created.group as Record<string, unknown> | undefined;
+          if (typeof group?.groupId !== "string") throw new Error("The reviewer group could not be prepared.");
+          privateGroupId = group.groupId;
+        }
+      }
+      const ownerView = await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agents/${encodeURIComponent(connectedAgent.agentId)}/human-review`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              expectedBindingVersion: draft.bindingRevision,
+              selection: { ...draft.selection, mode },
+              requestProfile: { ...requestProfile, privateGroupId },
+              authority: draft.authority,
+            }),
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+      if (!Number.isSafeInteger(ownerView.bindingRevision) || Number(ownerView.bindingRevision) < 1) {
+        throw new Error("The saved review configuration could not be confirmed.");
+      }
       await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/configure-reviews`, {
           method: "POST",
           body: JSON.stringify({
             revision: setup.revision,
-            review: {
-              mode: form.get("mode"),
-              reviewerAudience: "private_invited",
-              contentBoundary: "private_workspace",
-              autonomousAccess: false,
-            },
+            bindingRevision: ownerView.bindingRevision,
           }),
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -498,6 +576,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <fieldset className="mt-5 space-y-3">
               <legend className="font-medium">When should RateLoop require human review?</legend>
               {[
+                ...(setup.reviewDraft?.selection.mode === "fixed"
+                  ? [["fixed", "Use the saved fixed review frequency", "Current"]]
+                  : setup.reviewDraft?.selection.mode === "rules"
+                    ? [["rules", "Use the saved rule-based frequency", "Current"]]
+                    : []),
                 ["adaptive", "When RateLoop’s adaptive policy requires it", "Recommended"],
                 ["always", "For every eligible output", ""],
                 ["manual", "Manual handoffs only", ""],
@@ -508,7 +591,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     type="radio"
                     name="mode"
                     value={value}
-                    defaultChecked={(setup.reviewDraft?.mode ?? "adaptive") === value}
+                    defaultChecked={(setup.reviewDraft?.selection.mode ?? "adaptive") === value}
                   />
                   <span>
                     <span className="font-medium">{label}</span>
@@ -600,9 +683,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </p>
                   <p className="mt-2">
                     <span className="text-base-content/55">Review:</span>{" "}
-                    {setup.reviewDraft?.mode === "always"
+                    {setup.reviewDraft?.selection.mode === "always"
                       ? "Every eligible output"
-                      : setup.reviewDraft?.mode === "manual"
+                      : setup.reviewDraft?.selection.mode === "manual"
                         ? "Manual handoffs only"
                         : "When RateLoop’s adaptive policy requires it"}
                   </p>

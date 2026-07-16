@@ -40,3 +40,10 @@ test("setup routes delegate mutations to the coordinator instead of management-p
     );
   }
 });
+
+test("review progress confirms an exact owner-saved binding instead of accepting a second policy draft", () => {
+  const source = routeSource("configure-reviews");
+  assert.match(source, /\["revision", "bindingRevision"\]/);
+  assert.match(source, /bindingRevision: body\.bindingRevision/);
+  assert.doesNotMatch(source, /reviewerAudience|contentBoundary|autonomousAccess/);
+});

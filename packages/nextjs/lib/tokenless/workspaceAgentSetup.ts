@@ -2,9 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
+import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroup, createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -17,7 +17,7 @@ type Row = Record<string, unknown>;
 export const AGENT_SETUP_STEPS = ["connect", "agent", "reviews", "people", "complete"] as const;
 export type AgentSetupStep = (typeof AGENT_SETUP_STEPS)[number];
 export type AgentSetupStatus = "in_progress" | "completed" | "grandfathered";
-export type AgentSetupReviewMode = "adaptive" | "always" | "manual";
+export type AgentSetupReviewMode = "adaptive" | "always" | "manual" | "rules" | "fixed";
 
 type AgentIdentityInput = {
   displayName: string;
@@ -29,12 +29,78 @@ type AgentIdentityInput = {
   environment?: "staging" | "production";
 };
 
-type ReviewDraft = {
+type LegacyReviewDraft = {
   schemaVersion: "rateloop.workspace-agent-setup-review.v1";
   mode: AgentSetupReviewMode;
   reviewerAudience: "private_invited";
   contentBoundary: "private_workspace";
   autonomousAccess: false;
+};
+
+export type AgentSetupReviewDraft = {
+  schemaVersion: "rateloop.workspace-agent-setup-review.v2";
+  bindingRevision: number | null;
+  selection: {
+    mode: AgentSetupReviewMode;
+    enforcementMode: "advisory" | "host_enforced";
+    agreementThresholdBps: number;
+    productionFloorBps: number;
+    fixedRateBps: number | null;
+    maximumUnreviewedGap: number;
+    requiredRiskTiers: string[];
+    criticalRiskTiers: string[];
+    minimumConfidenceBps: number | null;
+    maximumLatencyMs: number | null;
+  };
+  requestProfile: {
+    criterion: string;
+    positiveLabel: string;
+    negativeLabel: string;
+    rationaleMode: "off" | "optional" | "required";
+    audience: "private_invited" | "public_network" | "hybrid";
+    contentBoundary: "public_or_test" | "private_workspace";
+    privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
+    privateGroupId: string | null;
+    responseWindowSeconds: number | null;
+    panelSize: number | null;
+    compensationMode: "unpaid" | "usdc";
+    bountyPerSeatAtomic: string | null;
+    configurationStatus: "ready" | "action_required";
+  };
+  authority: "check_only" | "prepare_for_approval" | "ask_automatically";
+};
+
+const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
+  schemaVersion: "rateloop.workspace-agent-setup-review.v2",
+  bindingRevision: null,
+  selection: {
+    mode: "adaptive",
+    enforcementMode: "advisory",
+    agreementThresholdBps: 8_000,
+    productionFloorBps: 1_000,
+    fixedRateBps: null,
+    maximumUnreviewedGap: 20,
+    requiredRiskTiers: ["high"],
+    criticalRiskTiers: ["critical"],
+    minimumConfidenceBps: 7_000,
+    maximumLatencyMs: 120_000,
+  },
+  requestProfile: {
+    criterion: "Is this response safe and correct?",
+    positiveLabel: "Approve",
+    negativeLabel: "Reject",
+    rationaleMode: "required",
+    audience: "private_invited",
+    contentBoundary: "private_workspace",
+    privateSensitivity: "confidential",
+    privateGroupId: null,
+    responseWindowSeconds: 3_600,
+    panelSize: 2,
+    compensationMode: "unpaid",
+    bountyPerSeatAtomic: null,
+    configurationStatus: "ready",
+  },
+  authority: "check_only",
 };
 
 function rowString(row: Row | undefined, key: string) {
@@ -119,38 +185,110 @@ function normalizeIdentity(input: AgentIdentityInput) {
   return { ...normalized, configurationCommitment: digest(stableJson(normalized)) };
 }
 
-function normalizeReviewDraft(input: unknown): ReviewDraft {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new TokenlessServiceError("Review behavior is invalid.", 400, "invalid_agent_setup_review");
-  }
-  const body = input as Record<string, unknown>;
-  if (body.autonomousAccess === true) {
-    throw new TokenlessServiceError(
-      "Autonomous review sending is not available for the current reviewer lane.",
-      409,
-      "agent_setup_lane_unavailable",
-    );
-  }
-  if (!(["adaptive", "always", "manual"] as unknown[]).includes(body.mode)) {
-    throw new TokenlessServiceError("Review mode is invalid.", 400, "invalid_agent_setup_review");
-  }
-  if (body.reviewerAudience !== undefined && body.reviewerAudience !== "private_invited") {
-    throw new TokenlessServiceError(
-      "The selected reviewer lane is not available.",
-      409,
-      "agent_setup_lane_unavailable",
-    );
-  }
-  if (body.contentBoundary !== undefined && body.contentBoundary !== "private_workspace") {
-    throw new TokenlessServiceError("The selected content lane is not available.", 409, "agent_setup_lane_unavailable");
+function defaultReviewDraft(mode: AgentSetupReviewMode = "adaptive"): AgentSetupReviewDraft {
+  return {
+    ...DEFAULT_REVIEW_DRAFT,
+    selection: { ...DEFAULT_REVIEW_DRAFT.selection, mode },
+    requestProfile: { ...DEFAULT_REVIEW_DRAFT.requestProfile },
+  };
+}
+
+function legacyReviewMode(input: unknown): AgentSetupReviewMode | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const body = input as Partial<LegacyReviewDraft>;
+  if (body.schemaVersion !== "rateloop.workspace-agent-setup-review.v1") return null;
+  return (["adaptive", "always", "manual"] as unknown[]).includes(body.mode) ? body.mode! : null;
+}
+
+function migrateReviewDraft(input: unknown): AgentSetupReviewDraft {
+  const legacyMode = legacyReviewMode(input);
+  if (legacyMode) return defaultReviewDraft(legacyMode);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return defaultReviewDraft();
+  const body = input as Partial<AgentSetupReviewDraft>;
+  if (body.schemaVersion !== "rateloop.workspace-agent-setup-review.v2") return defaultReviewDraft();
+  const mode = body.selection?.mode;
+  if (!(["adaptive", "always", "manual", "rules", "fixed"] as unknown[]).includes(mode)) {
+    return defaultReviewDraft();
   }
   return {
-    schemaVersion: "rateloop.workspace-agent-setup-review.v1",
-    mode: body.mode as AgentSetupReviewMode,
-    reviewerAudience: "private_invited",
-    contentBoundary: "private_workspace",
-    autonomousAccess: false,
+    ...defaultReviewDraft(mode!),
+    ...body,
+    schemaVersion: "rateloop.workspace-agent-setup-review.v2",
+    bindingRevision:
+      body.bindingRevision === null || (Number.isSafeInteger(body.bindingRevision) && Number(body.bindingRevision) > 0)
+        ? (body.bindingRevision ?? null)
+        : null,
+    selection: { ...DEFAULT_REVIEW_DRAFT.selection, ...body.selection, mode: mode! },
+    requestProfile: { ...DEFAULT_REVIEW_DRAFT.requestProfile, ...body.requestProfile },
   };
+}
+
+type OwnerReviewView = Awaited<ReturnType<typeof getHumanReviewConfigurationForOwner>>;
+
+function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft | null {
+  const configuration = view.configuration;
+  if (!configuration) return null;
+  const selection = configuration.selection.value;
+  const profile = configuration.requestProfile.value;
+  if (
+    !(["adaptive", "always", "manual", "rules", "fixed"] as unknown[]).includes(selection.mode) ||
+    !(["advisory", "host_enforced"] as unknown[]).includes(selection.enforcementMode) ||
+    !(["off", "optional", "required"] as unknown[]).includes(profile.rationaleMode) ||
+    !(["private_invited", "public_network", "hybrid"] as unknown[]).includes(profile.audience) ||
+    !(["public_or_test", "private_workspace"] as unknown[]).includes(profile.contentBoundary) ||
+    !([null, "internal", "confidential", "restricted", "regulated"] as unknown[]).includes(
+      profile.privateSensitivity,
+    ) ||
+    !(["unpaid", "usdc"] as unknown[]).includes(profile.compensationMode) ||
+    !(["ready", "action_required"] as unknown[]).includes(profile.configurationStatus)
+  ) {
+    throw new Error("Saved human-review configuration is invalid.");
+  }
+  return {
+    schemaVersion: "rateloop.workspace-agent-setup-review.v2",
+    bindingRevision: view.bindingRevision,
+    selection: {
+      mode: selection.mode as AgentSetupReviewMode,
+      enforcementMode: selection.enforcementMode as AgentSetupReviewDraft["selection"]["enforcementMode"],
+      agreementThresholdBps: selection.agreementThresholdBps,
+      productionFloorBps: selection.productionFloorBps,
+      fixedRateBps: selection.fixedRateBps ?? null,
+      maximumUnreviewedGap: selection.maximumUnreviewedGap,
+      requiredRiskTiers: selection.requiredRiskTiers,
+      criticalRiskTiers: selection.criticalRiskTiers,
+      minimumConfidenceBps: selection.minimumConfidenceBps ?? null,
+      maximumLatencyMs: selection.maximumLatencyMs ?? null,
+    },
+    requestProfile: {
+      criterion: profile.criterion,
+      positiveLabel: profile.positiveLabel,
+      negativeLabel: profile.negativeLabel,
+      rationaleMode: profile.rationaleMode as AgentSetupReviewDraft["requestProfile"]["rationaleMode"],
+      audience: profile.audience as AgentSetupReviewDraft["requestProfile"]["audience"],
+      contentBoundary: profile.contentBoundary as AgentSetupReviewDraft["requestProfile"]["contentBoundary"],
+      privateSensitivity: profile.privateSensitivity as AgentSetupReviewDraft["requestProfile"]["privateSensitivity"],
+      privateGroupId: profile.privateGroupId,
+      responseWindowSeconds: profile.responseWindowSeconds,
+      panelSize: profile.panelSize,
+      compensationMode: profile.compensationMode as AgentSetupReviewDraft["requestProfile"]["compensationMode"],
+      bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+      configurationStatus:
+        profile.configurationStatus as AgentSetupReviewDraft["requestProfile"]["configurationStatus"],
+    },
+    authority: configuration.authority,
+  };
+}
+
+function isReviewDraftReady(draft: AgentSetupReviewDraft | null): draft is AgentSetupReviewDraft {
+  return Boolean(
+    draft &&
+      draft.bindingRevision !== null &&
+      draft.requestProfile.configurationStatus === "ready" &&
+      Number.isSafeInteger(draft.requestProfile.responseWindowSeconds) &&
+      Number(draft.requestProfile.responseWindowSeconds) >= 1_200 &&
+      Number.isSafeInteger(draft.requestProfile.panelSize) &&
+      Number(draft.requestProfile.panelSize) >= 1,
+  );
 }
 
 async function workspaceAccess(accountAddress: string, workspaceId: string) {
@@ -237,7 +375,20 @@ export async function getWorkspaceAgentSetup(input: {
     connected &&
     Boolean(rowString(row, "agent_confirmed_at")) &&
     rowString(row, "confirmed_agent_version_id") === rowString(row, "agent_version_id");
-  const reviewsConfirmed = confirmed && Boolean(rowString(row, "reviews_confirmed_at"));
+  const ownerReviewView =
+    access.canManage && confirmed && rowString(row, "agent_id")
+      ? await getHumanReviewConfigurationForOwner({
+          accountAddress: access.actor,
+          workspaceId: input.workspaceId,
+          agentId: rowString(row, "agent_id")!,
+        })
+      : null;
+  const savedReviewDraft =
+    ownerReviewView?.agent.agentVersionId === rowString(row, "confirmed_agent_version_id")
+      ? reviewDraftFromOwnerView(ownerReviewView)
+      : null;
+  const reviewsConfirmed =
+    confirmed && Boolean(rowString(row, "reviews_confirmed_at")) && isReviewDraftReady(savedReviewDraft);
   const peopleDecided = reviewsConfirmed && Boolean(rowString(row, "people_decided_at"));
   const resumeStep: AgentSetupStep =
     status !== "in_progress"
@@ -252,7 +403,7 @@ export async function getWorkspaceAgentSetup(input: {
               ? "people"
               : "people";
   const currentStep = clampAgentSetupStep(input.requestedStep, resumeStep);
-  const reviewDraft = parseJson<ReviewDraft | null>(row.review_draft_json, null);
+  const reviewDraft = savedReviewDraft ?? migrateReviewDraft(parseJson<unknown>(row.review_draft_json, {}));
   const safeConnection = {
     canCheckReviewRequirement: true,
     canSpend: false,
@@ -547,20 +698,79 @@ export async function configureWorkspaceSetupReviews(input: {
   accountAddress: string;
   workspaceId: string;
   revision: unknown;
-  review: unknown;
+  bindingRevision: unknown;
 }) {
   const access = await requireManager(input.accountAddress, input.workspaceId);
   const expectedRevision = requiredRevision(input.revision);
-  const review = normalizeReviewDraft(input.review);
+  const bindingRevision = Number(input.bindingRevision);
+  if (!Number.isSafeInteger(bindingRevision) || bindingRevision < 1) {
+    throw new TokenlessServiceError(
+      "Save the human-review configuration before continuing.",
+      409,
+      "agent_setup_review_configuration_required",
+    );
+  }
+  const current = await dbClient.execute({
+    sql: `SELECT s.revision,s.confirmed_agent_version_id,s.people_decision,s.private_group_id,
+                 s.people_decided_at,s.people_decided_by,i.agent_id
+          FROM tokenless_workspace_agent_setups s
+          JOIN tokenless_agent_integrations i
+            ON i.integration_id=s.primary_integration_id AND i.workspace_id=s.workspace_id AND i.status='active'
+          WHERE s.workspace_id=? AND s.status='in_progress' LIMIT 1`,
+    args: [input.workspaceId],
+  });
+  const setup = current.rows[0] as Row | undefined;
+  const agentId = rowString(setup, "agent_id");
+  if (rowNumber(setup, "revision") !== expectedRevision || !agentId) {
+    throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
+  }
+  const ownerView = await getHumanReviewConfigurationForOwner({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    agentId,
+  });
+  const review = reviewDraftFromOwnerView(ownerView);
+  if (
+    !isReviewDraftReady(review) ||
+    review.bindingRevision !== bindingRevision ||
+    ownerView.agent.agentVersionId !== rowString(setup, "confirmed_agent_version_id") ||
+    review.requestProfile.responseWindowSeconds === null ||
+    review.requestProfile.panelSize === null
+  ) {
+    throw new TokenlessServiceError(
+      "The saved human-review configuration does not match this setup.",
+      409,
+      "agent_setup_review_configuration_mismatch",
+    );
+  }
+  const preservePeople =
+    Boolean(rowString(setup, "people_decision")) &&
+    rowString(setup, "private_group_id") === review.requestProfile.privateGroupId;
   const now = new Date();
   const result = await dbClient.execute({
     sql: `UPDATE tokenless_workspace_agent_setups
           SET review_draft_json=?,reviews_confirmed_at=?,reviews_confirmed_by=?,
-              people_decision=NULL,private_group_id=NULL,people_decided_at=NULL,people_decided_by=NULL,
+              people_decision=?,private_group_id=?,people_decided_at=?,people_decided_by=?,
               current_step='people',revision=?,updated_at=?
           WHERE workspace_id=? AND status='in_progress' AND revision=?
-            AND confirmed_agent_version_id IS NOT NULL AND agent_confirmed_at IS NOT NULL`,
-    args: [JSON.stringify(review), now, access.actor, expectedRevision + 1, now, input.workspaceId, expectedRevision],
+            AND confirmed_agent_version_id=? AND agent_confirmed_at IS NOT NULL
+            AND human_review_binding_id=? AND human_review_binding_version=?`,
+    args: [
+      JSON.stringify(review),
+      now,
+      access.actor,
+      preservePeople ? rowString(setup, "people_decision") : null,
+      preservePeople ? rowString(setup, "private_group_id") : null,
+      preservePeople ? setup?.people_decided_at : null,
+      preservePeople ? rowString(setup, "people_decided_by") : null,
+      expectedRevision + 1,
+      now,
+      input.workspaceId,
+      expectedRevision,
+      ownerView.agent.agentVersionId,
+      ownerView.configuration!.binding.id,
+      bindingRevision,
+    ],
   });
   if (result.rowCount !== 1) {
     throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
@@ -727,73 +937,55 @@ export async function completeWorkspaceAgentSetup(input: {
         "agent_setup_prerequisite_mismatch",
       );
     }
-    const draft = normalizeReviewDraft(parseJson(setup.review_draft_json, null));
     const groupId = rowString(setup, "private_group_id");
     if (!groupId) throw new TokenlessServiceError("Choose a reviewer group first.", 409, "agent_setup_group_required");
-    const groupResult = await client.query(
-      `SELECT g.current_policy_version,g.status,p.policy_hash
-       FROM tokenless_private_groups g
-       JOIN tokenless_private_group_policy_versions p
-         ON p.group_id=g.group_id AND p.version=g.current_policy_version
-       WHERE g.workspace_id=$1 AND g.group_id=$2 FOR SHARE`,
-      [input.workspaceId, groupId],
-    );
-    const group = groupResult.rows[0] as Row | undefined;
-    if (!group || rowString(group, "status") !== "active") {
-      throw new TokenlessServiceError("Reviewer group is unavailable.", 409, "agent_setup_group_unavailable");
-    }
-    policyId = rowString(integration, "review_policy_id")!;
-    const currentPolicyVersion = rowNumber(integration, "review_policy_version")!;
-    const policyResult = await client.query(
-      `SELECT * FROM tokenless_agent_review_policies
-       WHERE workspace_id=$1 AND policy_id=$2 AND version=$3 AND enabled=true FOR UPDATE`,
-      [input.workspaceId, policyId, currentPolicyVersion],
-    );
-    const currentPolicy = policyResult.rows[0] as Row | undefined;
-    if (!currentPolicy) {
-      throw new TokenlessServiceError("Review policy is unavailable.", 409, "agent_setup_policy_mismatch");
-    }
-    await client.query(
-      `UPDATE tokenless_agent_review_policies SET enabled=false,superseded_at=$1
-       WHERE workspace_id=$2 AND policy_id=$3 AND version=$4`,
-      [now, input.workspaceId, policyId, currentPolicyVersion],
-    );
-    policyVersion = currentPolicyVersion + 1;
-    const audiencePolicy = {
-      schemaVersion: "rateloop.agent-audience-policy.v1",
-      reviewerSource: "private_invited",
-      contentVisibility: "private",
-      maximumPrivateSensitivity: "confidential",
-      group: {
-        groupId,
-        policyVersion: rowNumber(group, "current_policy_version"),
-        policyHash: rowString(group, "policy_hash"),
-      },
-      autonomousAccess: false,
-    };
-    await client.query(
-      `INSERT INTO tokenless_agent_review_policies
-       (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,agreement_threshold_bps,
-        production_floor_bps,fixed_rate_bps,maximum_unreviewed_gap,rules_json,audience_policy_json,publishing_policy_id,
-        created_by,approved_by,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,true,$7,$8,CASE WHEN $6='fixed' THEN $9 ELSE NULL END,$10,$11,$12,NULL,$13,$13,$14)`,
+    const bindingId = rowString(setup, "human_review_binding_id");
+    const bindingVersion = rowNumber(setup, "human_review_binding_version");
+    const bindingResult = await client.query(
+      `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.authority,
+              r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,g.status AS group_status
+       FROM tokenless_agent_human_review_bindings b
+       JOIN tokenless_agent_review_policies p
+         ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
+        AND p.version=b.selection_policy_version AND p.enabled=true AND p.superseded_at IS NULL
+       JOIN tokenless_agent_review_request_profiles r
+         ON r.workspace_id=b.workspace_id AND r.profile_id=b.request_profile_id
+        AND r.version=b.request_profile_version AND r.profile_hash=b.request_profile_hash
+        AND r.superseded_at IS NULL
+       LEFT JOIN tokenless_private_groups g
+         ON g.workspace_id=b.workspace_id AND g.group_id=r.private_group_id
+       WHERE b.workspace_id=$1 AND b.binding_id=$2 AND b.version=$3
+         AND b.agent_id=$4 AND b.agent_version_id=$5 AND b.enabled=true AND b.superseded_at IS NULL
+       FOR SHARE`,
       [
-        policyId,
-        policyVersion,
         input.workspaceId,
+        bindingId,
+        bindingVersion,
         rowString(integration, "agent_id"),
         rowString(integration, "agent_version_id"),
-        draft.mode,
-        rowNumber(currentPolicy, "agreement_threshold_bps") ?? DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS,
-        rowNumber(currentPolicy, "production_floor_bps") ?? 1_000,
-        rowOptionalNumber(currentPolicy, "fixed_rate_bps"),
-        rowNumber(currentPolicy, "maximum_unreviewed_gap") ?? 20,
-        String(currentPolicy.rules_json),
-        JSON.stringify(audiencePolicy),
-        access.actor,
-        now,
       ],
     );
+    const binding = bindingResult.rows[0] as Row | undefined;
+    if (
+      !binding ||
+      rowString(binding, "authority") !== "check_only" ||
+      rowString(binding, "publishing_policy_id") !== null ||
+      rowString(binding, "configuration_status") !== "ready" ||
+      rowOptionalNumber(binding, "response_window_seconds") === null ||
+      rowOptionalNumber(binding, "panel_size") === null ||
+      rowString(binding, "private_group_id") !== groupId ||
+      rowString(binding, "group_status") !== "active" ||
+      rowString(integration, "human_review_binding_id") !== bindingId ||
+      rowNumber(integration, "human_review_binding_version") !== bindingVersion
+    ) {
+      throw new TokenlessServiceError(
+        "The saved human-review configuration no longer matches this setup.",
+        409,
+        "agent_setup_review_configuration_mismatch",
+      );
+    }
+    policyId = rowString(binding, "selection_policy_id")!;
+    policyVersion = rowNumber(binding, "selection_policy_version")!;
     await client.query(
       `UPDATE tokenless_agent_integrations
        SET review_policy_id=$1,review_policy_version=$2,publishing_policy_id=NULL,

@@ -39,7 +39,9 @@ test("guided setup renders one stage at a time and keeps future authority absent
   assert.match(flowSource, /currentStep === "agent"/);
   assert.match(flowSource, /currentStep === "reviews"/);
   assert.match(flowSource, /currentStep === "people"/);
-  assert.match(flowSource, /autonomousAccess: false/);
+  assert.match(flowSource, /\/agents\/\$\{encodeURIComponent\(connectedAgent\.agentId\)\}\/human-review/);
+  assert.match(flowSource, /expectedBindingVersion: draft\.bindingRevision/);
+  assert.match(flowSource, /bindingRevision: ownerView\.bindingRevision/);
   assert.match(flowSource, /no autonomous publishing\s+or spending/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
 });
@@ -47,12 +49,15 @@ test("guided setup renders one stage at a time and keeps future authority absent
 test("review setup distinguishes a saved policy decision from delivery authority", () => {
   assert.match(flowSource, /mark an eligible output for human review/i);
   assert.match(flowSource, /This saves a review policy/i);
-  assert.match(flowSource, /safe connection does not send requests or pay reviewers/i);
+  assert.match(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
   assert.match(flowSource, /RateLoop’s adaptive policy requires it/i);
   assert.match(flowSource, /Manual handoffs only/i);
+  assert.match(flowSource, /saved fixed review frequency/i);
+  assert.match(flowSource, /saved rule-based frequency/i);
   assert.doesNotMatch(flowSource, /Only after I approve a request/i);
   assert.match(flowSource, /safe connection\s+does not assign or deliver work to reviewers/i);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
+  assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
 });
 
 test("setup separates the connected client from per-run model provenance", () => {

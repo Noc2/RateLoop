@@ -16,13 +16,9 @@ export async function POST(request: NextRequest, context: Context) {
     if (
       !body ||
       Array.isArray(body) ||
-      Object.keys(body).some(key => !["revision", "review"].includes(key)) ||
-      !body.review ||
-      typeof body.review !== "object" ||
-      Array.isArray(body.review) ||
-      Object.keys(body.review).some(
-        key => !["mode", "reviewerAudience", "contentBoundary", "autonomousAccess"].includes(key),
-      )
+      Object.keys(body).some(key => !["revision", "bindingRevision"].includes(key)) ||
+      !("revision" in body) ||
+      !("bindingRevision" in body)
     ) {
       throw new TokenlessServiceError("Review behavior is invalid.", 400, "invalid_agent_setup_review");
     }
@@ -31,7 +27,7 @@ export async function POST(request: NextRequest, context: Context) {
         accountAddress: session.principalId,
         workspaceId,
         revision: body.revision,
-        review: body.review,
+        bindingRevision: body.bindingRevision,
       }),
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );

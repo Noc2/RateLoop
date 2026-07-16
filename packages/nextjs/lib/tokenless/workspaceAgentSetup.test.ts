@@ -7,7 +7,9 @@ import {
   claimAgentConnectionIntent,
   verifyAgentConnection,
 } from "~~/lib/tokenless/agentConnectionIntents";
+import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
@@ -90,6 +92,49 @@ async function connectedSetup() {
   return { workspaceId, integrationId: claimed.connection.integrationId };
 }
 
+async function saveSetupReviewConfiguration(input: {
+  workspaceId: string;
+  agentId: string;
+  groupId: string;
+  mode?: "adaptive" | "always";
+}) {
+  return putHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: input.mode ?? "adaptive",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 1_000,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        criterion: "Is this response safe and correct?",
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        rationaleMode: "required",
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "confidential",
+        privateGroupId: input.groupId,
+        responseWindowSeconds: 3_600,
+        panelSize: 2,
+        compensationMode: "unpaid",
+        bountyPerSeatAtomic: null,
+      },
+      authority: "check_only",
+    },
+  });
+}
+
 test("setup binds one verified connection and completes without publishing or spending authority", async () => {
   const { workspaceId, integrationId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
@@ -114,13 +159,28 @@ test("setup binds one verified connection and completes without publishing or sp
   });
   assert.equal(confirmed.revision, 3);
 
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Reviewers",
+    purpose: "People invited to review this workspace's private material.",
+    policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
+  });
+  const savedReview = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    groupId: group.groupId,
+  });
+
   const reviews = await configureWorkspaceSetupReviews({
     accountAddress: OWNER,
     workspaceId,
     revision: confirmed.revision,
-    review: { mode: "adaptive", reviewerAudience: "private_invited", contentBoundary: "private_workspace" },
+    bindingRevision: savedReview.configuration.version,
   });
   assert.equal(reviews.revision, 4);
+  assert.equal(reviews.review.schemaVersion, "rateloop.workspace-agent-setup-review.v2");
+  assert.equal(reviews.review.bindingRevision, savedReview.configuration.version);
 
   const people = await configureWorkspaceSetupPeople({
     accountAddress: OWNER,
@@ -130,6 +190,11 @@ test("setup binds one verified connection and completes without publishing or sp
   });
   assert.equal(people.revision, 5);
   assert.match(people.groupId, /^pgrp_/);
+  const policyVersionsBeforeCompletion = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_agent_review_policies
+          WHERE workspace_id=? AND policy_id=?`,
+    args: [workspaceId, savedReview.configuration.selectionPolicy.id],
+  });
 
   const completed = await completeWorkspaceAgentSetup({
     accountAddress: OWNER,
@@ -156,8 +221,22 @@ test("setup binds one verified connection and completes without publishing or sp
   });
   const audiencePolicy = JSON.parse(String(audience.rows[0]?.audience_policy_json));
   assert.equal(audiencePolicy.reviewerSource, "private_invited");
-  assert.equal(audiencePolicy.autonomousAccess, false);
-  assert.equal(audiencePolicy.group.groupId, people.groupId);
+  const profile = await dbClient.execute({
+    sql: `SELECT private_group_id FROM tokenless_agent_review_request_profiles
+          WHERE profile_id=? AND version=?`,
+    args: [savedReview.configuration.requestProfile.id, savedReview.configuration.requestProfile.version],
+  });
+  assert.equal(profile.rows[0]?.private_group_id, people.groupId);
+  const policyVersions = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_agent_review_policies
+          WHERE workspace_id=? AND policy_id=?`,
+    args: [workspaceId, savedReview.configuration.selectionPolicy.id],
+  });
+  assert.equal(
+    Number(policyVersions.rows[0]?.count),
+    Number(policyVersionsBeforeCompletion.rows[0]?.count),
+    "completion must not create a parallel selection policy",
+  );
   const funnel = await loadWorkspaceOnboardingFunnel(workspaceId);
   assert.deepEqual(
     funnel.events
@@ -168,7 +247,7 @@ test("setup binds one verified connection and completes without publishing or sp
   assert.doesNotMatch(JSON.stringify(funnel), /Setup workspace|Setup client|pgrp_|confidential/u);
 });
 
-test("setup rejects future steps, stale revisions, and unavailable autonomous lanes", async () => {
+test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {
   assert.equal(clampAgentSetupStep("people", "agent"), "agent");
   assert.equal(clampAgentSetupStep("connect", "agent"), "connect");
   assert.equal(agentSetupUrl("ws a", "reviews"), "/agents?workspace=ws%20a&step=reviews");
@@ -179,9 +258,10 @@ test("setup rejects future steps, stale revisions, and unavailable autonomous la
       accountAddress: OWNER,
       workspaceId,
       revision: 2,
-      review: { mode: "adaptive", autonomousAccess: true },
+      bindingRevision: null,
     }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_lane_unavailable",
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "agent_setup_review_configuration_required",
   );
   await assert.rejects(
     createWorkspaceAgentSetupConnection({
@@ -192,6 +272,97 @@ test("setup rejects future steps, stale revisions, and unavailable autonomous la
     }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_conflict",
   );
+});
+
+test("setup resumes a legacy v1 review choice as one unsaved v2 draft", async () => {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      deploymentName: connected.agent!.deploymentName,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Reviewers",
+    purpose: "People invited to review this workspace's private material.",
+    policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
+  });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_agent_setups
+          SET review_draft_json=?,reviews_confirmed_at=?,reviews_confirmed_by=?,
+              people_decision='later',private_group_id=?,people_decided_at=?,people_decided_by=?,current_step='people'
+          WHERE workspace_id=?`,
+    args: [
+      JSON.stringify({
+        schemaVersion: "rateloop.workspace-agent-setup-review.v1",
+        mode: "always",
+        reviewerAudience: "private_invited",
+        contentBoundary: "private_workspace",
+        autonomousAccess: false,
+      }),
+      now,
+      OWNER,
+      group.groupId,
+      now,
+      OWNER,
+      workspaceId,
+    ],
+  });
+
+  const resumed = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  assert.equal(resumed.resumeStep, "reviews");
+  assert.ok(resumed.reviewDraft);
+  assert.equal(resumed.reviewDraft!.schemaVersion, "rateloop.workspace-agent-setup-review.v2");
+  assert.equal(resumed.reviewDraft!.selection.mode, "always");
+  assert.equal(resumed.reviewDraft!.bindingRevision, null);
+  assert.equal(resumed.reviewDraft!.requestProfile.privateGroupId, null);
+  const bindings = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_agent_human_review_bindings WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.equal(Number(bindings.rows[0]?.count), 0);
+
+  const savedReview = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    groupId: group.groupId,
+    mode: "always",
+  });
+  await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: savedReview.configuration.version,
+  });
+  const migrated = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  assert.equal(migrated.resumeStep, "people");
+  assert.equal(migrated.reviewDraft?.selection.mode, "always");
+  assert.equal(migrated.peopleDecision, "later");
+  assert.equal(migrated.privateGroupId, group.groupId);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_request_profiles
+          SET configuration_status='action_required',response_window_seconds=NULL,panel_size=NULL
+          WHERE workspace_id=? AND profile_id=? AND version=?`,
+    args: [workspaceId, savedReview.configuration.requestProfile.id, savedReview.configuration.requestProfile.version],
+  });
+  const incomplete = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  assert.equal(incomplete.resumeStep, "reviews");
+  assert.equal(incomplete.reviewDraft?.requestProfile.configurationStatus, "action_required");
+  assert.equal(incomplete.reviewDraft?.requestProfile.responseWindowSeconds, null);
+  assert.equal(incomplete.reviewDraft?.requestProfile.panelSize, null);
 });
 
 test("workspace setup can rename the workspace without losing progress", async () => {
