@@ -3,6 +3,7 @@ import {
   foreignKey,
   index,
   integer,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -808,6 +809,60 @@ export const tokenlessAgentReviewPolicies = pgTable(
 
 export type TokenlessAgentReviewPolicy = typeof tokenlessAgentReviewPolicies.$inferSelect;
 export type NewTokenlessAgentReviewPolicy = typeof tokenlessAgentReviewPolicies.$inferInsert;
+
+export const tokenlessAgentReviewRequestProfiles = pgTable(
+  "tokenless_agent_review_request_profiles",
+  {
+    profileId: text("profile_id").notNull(),
+    version: integer("version").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    agentVersionId: text("agent_version_id").notNull(),
+    criterion: text("criterion").notNull(),
+    positiveLabel: text("positive_label").notNull(),
+    negativeLabel: text("negative_label").notNull(),
+    rationaleMode: text("rationale_mode").notNull(),
+    audience: text("audience").notNull(),
+    contentBoundary: text("content_boundary").notNull(),
+    privateSensitivity: text("private_sensitivity"),
+    privateGroupId: text("private_group_id"),
+    privateGroupPolicyVersion: integer("private_group_policy_version"),
+    privateGroupPolicyHash: text("private_group_policy_hash"),
+    responseWindowSeconds: integer("response_window_seconds").notNull(),
+    panelSize: integer("panel_size").notNull(),
+    compensationMode: text("compensation_mode").notNull(),
+    bountyPerSeatAtomic: numeric("bounty_per_seat_atomic", { precision: 78, scale: 0 }),
+    configurationStatus: text("configuration_status").notNull().default("action_required"),
+    profileHash: text("profile_hash").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { mode: "date", withTimezone: true }),
+    supersededAt: timestamp("superseded_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.profileId, table.version] }),
+    workspaceAgentIdx: index("tokenless_agent_review_request_profiles_workspace_agent_idx").on(
+      table.workspaceId,
+      table.agentId,
+      table.agentVersionId,
+      table.configurationStatus,
+      table.createdAt,
+    ),
+    workspaceHashUnique: uniqueIndex("tokenless_agent_review_request_profiles_hash_unique").on(
+      table.workspaceId,
+      table.profileHash,
+    ),
+    workspaceUnique: uniqueIndex("tokenless_agent_review_request_profiles_workspace_unique").on(
+      table.workspaceId,
+      table.profileId,
+      table.version,
+    ),
+  }),
+);
+
+export type TokenlessAgentReviewRequestProfile = typeof tokenlessAgentReviewRequestProfiles.$inferSelect;
+export type NewTokenlessAgentReviewRequestProfile = typeof tokenlessAgentReviewRequestProfiles.$inferInsert;
 
 export const tokenlessAgentExecutions = pgTable(
   "tokenless_agent_executions",
