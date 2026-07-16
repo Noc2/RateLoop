@@ -10,15 +10,6 @@ type Profile = {
   updatedAt: string | null;
 };
 
-type Session = {
-  authenticated: boolean;
-  address?: string;
-  authProvider?: string;
-  email?: string | null;
-  displayName?: string | null;
-  expiresAt?: string;
-};
-
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
   if (!response.ok) {
@@ -31,21 +22,18 @@ async function readJson(response: Response) {
 
 export function ProfileClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [profileBody, sessionBody] = await Promise.all([
-      readJson(await fetch("/api/account/profile", { cache: "no-store", credentials: "same-origin" })),
-      readJson(await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" })),
-    ]);
+    const profileBody = await readJson(
+      await fetch("/api/account/profile", { cache: "no-store", credentials: "same-origin" }),
+    );
     const nextProfile = profileBody as unknown as Profile;
     setProfile(nextProfile);
     setDisplayName(nextProfile.profileDisplayName ?? "");
-    setSession(sessionBody as unknown as Session);
   }, []);
 
   useEffect(() => {
@@ -98,25 +86,6 @@ export function ProfileClient() {
           </button>
         </form>
         {saved ? <p className="mt-3 text-sm text-emerald-100">Profile saved.</p> : null}
-        <div className="mt-6 border-t border-white/10 pt-5 text-sm">
-          <h3 className="font-medium text-base-content/70">Sign-in details</h3>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-base-content/45">Provider</dt>
-              <dd className="mt-1 text-base-content/80">{session?.authProvider ?? "Checking…"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-base-content/45">Email</dt>
-              <dd className="mt-1 break-all text-base-content/80">{session?.email ?? "Not provided"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-base-content/45">Account ID</dt>
-              <dd className="mt-1 break-all font-mono text-xs text-base-content/65">
-                {session?.address ?? "Checking…"}
-              </dd>
-            </div>
-          </dl>
-        </div>
         {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
       </section>
     </div>

@@ -91,7 +91,7 @@ test("Human profile and settings render their controls directly", () => {
   assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
   assert.doesNotMatch(page, /section ===/);
   assert.doesNotMatch(profile, /<details|<summary/);
-  assert.match(profile, /Sign-in details/);
+  assert.doesNotMatch(profile, /Sign-in details|Provider|Not provided|Account ID|\/api\/auth\/session/);
   assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);
   assert.match(invitations, /startsWith\("rli_"\)/);
   assert.match(invitations, /startsWith\("rlgi_"\)/);
